@@ -1,32 +1,64 @@
-# DEPRECATED — the kanban dispatcher now runs inside the gateway by
-# default (config key: kanban.dispatch_in_gateway, default true). To
-# migrate:
-#
-#     systemctl --user disable --now clawk-kanban-dispatcher.service
-#     # then make sure a gateway is running; e.g. a systemd user unit
-#     # for `clawk gateway start`. The gateway hosts the dispatcher.
-#
-# This unit is kept for users who truly cannot run the gateway (host
-# policy forbids long-lived services, etc.). It now invokes the
-# standalone dispatcher via the explicit --force flag, so nobody
-# accidentally keeps two dispatchers racing against the same
-# kanban.db. Running this unit AND a gateway with
-# dispatch_in_gateway=true is NOT supported.
-
-[Unit]
-Description=Clawksis Kanban dispatcher (DEPRECATED standalone daemon — prefer gateway-embedded dispatch)
-Documentation=https://clawksis-agent.nousresearch.com/docs/user-guide/features/kanban
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/env clawk kanban daemon --force --interval 60 --pidfile %t/clawk-kanban-dispatcher.pid
-Restart=on-failure
-RestartSec=5
-# Log to the journal via stdout/stderr; the dispatcher also writes per-task
-# worker output to $CLAWK_HOME/kanban/logs/<task>.log.
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=default.target
+# DEPRECATED — the kanban dispatcher now runs inside the gateway by
+
+# default (config key: kanban.dispatch_in_gateway, default true). To
+
+# migrate:
+
+#
+
+#     systemctl --user disable --now clawk-kanban-dispatcher.service
+
+#     # then make sure a gateway is running; e.g. a systemd user unit
+
+#     # for `clawk gateway start`. The gateway hosts the dispatcher.
+
+#
+
+# This unit is kept for users who truly cannot run the gateway (host
+
+# policy forbids long-lived services, etc.). It now invokes the
+
+# standalone dispatcher via the explicit --force flag, so nobody
+
+# accidentally keeps two dispatchers racing against the same
+
+# kanban.db. Running this unit AND a gateway with
+
+# dispatch_in_gateway=true is NOT supported.
+
+
+
+[Unit]
+
+Description=Clawksis Kanban dispatcher (DEPRECATED standalone daemon — prefer gateway-embedded dispatch)
+
+Documentation=https://github.com/samuelgradientai-sys/clawksis-agent
+
+After=network.target
+
+
+
+[Service]
+
+Type=simple
+
+ExecStart=/usr/bin/env clawk kanban daemon --force --interval 60 --pidfile %t/clawk-kanban-dispatcher.pid
+
+Restart=on-failure
+
+RestartSec=5
+
+# Log to the journal via stdout/stderr; the dispatcher also writes per-task
+
+# worker output to $CLAWK_HOME/kanban/logs/<task>.log.
+
+StandardOutput=journal
+
+StandardError=journal
+
+
+
+[Install]
+
+WantedBy=default.target
+

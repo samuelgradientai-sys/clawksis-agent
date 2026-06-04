@@ -3,7 +3,7 @@
   "updated_at": "2026-06-01T08:20:18Z",
   "metadata": {
     "source": "clawksis-agent repo",
-    "docs": "https://clawksis-agent.nousresearch.com/docs/reference/model-catalog"
+    "docs": "https://github.com/samuelgradientai-sys/clawksis-agent"
   },
   "providers": {
     "openrouter": {
