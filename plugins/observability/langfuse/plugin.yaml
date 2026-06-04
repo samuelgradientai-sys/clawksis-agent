@@ -1,0 +1,14 @@
+name: langfuse
+version: "1.0.0"
+description: "Optional Langfuse observability for Clawksis — traces conversations, LLM calls, and tool usage. Opt-in via `clawk plugins enable observability/langfuse` or `clawk tools → Langfuse Observability`."
+author: NousResearch
+requires_env:
+  - CLAWK_LANGFUSE_PUBLIC_KEY
+  - CLAWK_LANGFUSE_SECRET_KEY
+hooks:
+  - pre_api_request
+  - post_api_request
+  - pre_llm_call
+  - post_llm_call
+  - pre_tool_call
+  - post_tool_call

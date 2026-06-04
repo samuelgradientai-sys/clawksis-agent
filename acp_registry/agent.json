@@ -1,0 +1,16 @@
+{
+  "id": "clawksis-agent",
+  "name": "Clawksis",
+  "version": "0.15.1",
+  "description": "Self-improving open-source AI agent by Nous Research with ACP editor integration, persistent memory, skills, and rich tool support.",
+  "repository": "https://github.com/samuelgradientai-sys/clawksis-agent",
+  "website": "https://clawksis-agent.nousresearch.com/docs/user-guide/features/acp",
+  "authors": ["Nous Research"],
+  "license": "MIT",
+  "distribution": {
+    "uvx": {
+      "package": "clawksis-agent[acp]==0.15.1",
+      "args": ["clawk-acp"]
+    }
+  }
+}
