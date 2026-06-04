@@ -330,23 +330,23 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 
         "name": "default",
 
-        "description": "Classic Clawksis — gold and kawaii",
+        "description": "Clawksis — vinotinto (Gradient AI)",
 
         "colors": {
 
-            "banner_border": "#CD7F32",
+            "banner_border": "#800000",
 
-            "banner_title": "#FFD700",
+            "banner_title": "#C01010",
 
-            "banner_accent": "#FFBF00",
+            "banner_accent": "#A80000",
 
-            "banner_dim": "#B8860B",
+            "banner_dim": "#6B0000",
 
-            "banner_text": "#FFF8DC",
+            "banner_text": "#FFE0E0",
 
-            "ui_accent": "#FFBF00",
+            "ui_accent": "#A80000",
 
-            "ui_label": "#DAA520",
+            "ui_label": "#8B0000",
 
             "ui_ok": "#4caf50",
 
@@ -354,15 +354,15 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 
             "ui_warn": "#ffa726",
 
-            "prompt": "#FFF8DC",
+            "prompt": "#FFE0E0",
 
-            "input_rule": "#CD7F32",
+            "input_rule": "#800000",
 
-            "response_border": "#FFD700",
+            "response_border": "#C01010",
 
-            "status_bar_bg": "#1a1a2e",
+            "status_bar_bg": "#1a0000",
 
-            "session_label": "#DAA520",
+            "session_label": "#8B0000",
 
             "session_border": "#8B8682",
 
