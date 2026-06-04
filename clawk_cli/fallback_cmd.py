@@ -375,7 +375,6 @@ def cmd_fallback_add(args) -> None:
     primary_entry = _extract_fallback_from_model_cfg(model_before)
 
     if primary_entry and primary_entry["provider"] == new_entry["provider"] \
-
             and primary_entry["model"] == new_entry["model"]:
 
         _restore_model_cfg(model_before)
@@ -417,7 +416,6 @@ def cmd_fallback_add(args) -> None:
     for existing in chain:
 
         if existing.get("provider") == new_entry["provider"] \
-
                 and existing.get("model") == new_entry["model"]:
 
             print()

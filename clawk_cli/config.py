@@ -931,7 +931,6 @@ def recommended_update_command() -> str:
 #     persistence so users don't get blindsided.
 
 _DOCKER_UPDATE_MESSAGE = """\
-
 ✗ ``clawk update`` doesn't apply inside the Docker container.
 
 

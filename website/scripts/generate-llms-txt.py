@@ -561,7 +561,6 @@ def emit_llms_full() -> str:
         parts = rel.parts
 
         if len(parts) >= 3 and parts[0] == "user-guide" and parts[1] == "skills" \
-
                 and parts[2] in {"bundled", "optional"}:
 
             continue

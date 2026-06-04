@@ -5461,7 +5461,6 @@ def _cmd_gc(args: argparse.Namespace) -> int:
 
 
 _SLASH_KANBAN_HELP = """\
-
 **/kanban** — manage the shared task board.
 
 
@@ -5497,9 +5496,7 @@ Common subcommands:
 
 
 Run `/kanban <subcommand> -h` for arguments. \
-
 Read-only commands are safe while an agent is running.\
-
 """
 
 

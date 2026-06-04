@@ -3323,7 +3323,6 @@ def _query_osc11_background() -> str | None:
 
 
     Most modern terminals reply with \x1b]11;rgb:RRRR/GGGG/BBBB\x1b\\
-
     within a few ms.  We wait up to 100ms total before giving up.
 
     Returns "#RRGGBB" or None on timeout / non-tty.
@@ -3419,7 +3418,6 @@ def _query_osc11_background() -> str | None:
                 break
 
         # Parse: \x1b]11;rgb:RRRR/GGGG/BBBB\x1b\\
-
         m = re.search(rb"rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)", buf)
 
         if not m:

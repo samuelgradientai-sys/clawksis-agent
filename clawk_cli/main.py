@@ -17995,7 +17995,6 @@ def _schedule_replace_on_reboot(shim: Path, quarantine_target: Path) -> bool:
     MOVEFILE_DELAY_UNTIL_REBOOT``. The OS persists the rename in
 
     ``HKLM\\System\\CurrentControlSet\\Control\\Session Manager\\
-
     PendingFileRenameOperations`` and applies it before any user-mode code
 
     runs on next boot — at which point no process can hold the .exe.
@@ -27813,7 +27812,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
 
         epilog="""\
-
 Examples:
 
     clawk debug share              Upload debug report and print URL
@@ -31589,7 +31587,6 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
 
         epilog="""\
-
 Examples:
 
     clawk logs                    Show last 50 lines of agent.log

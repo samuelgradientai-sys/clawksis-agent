@@ -1821,7 +1821,6 @@ def switch_model(
         if _user_pdef is not None and _user_pdef.base_url:
 
             _ucfg = (user_providers or {}).get(explicit_provider.strip().lower()) \
-
                 or (user_providers or {}).get(target_provider) or {}
 
             _ukey = str(_ucfg.get("api_key", "") or "").strip()
@@ -2863,7 +2862,6 @@ def list_authenticated_providers(
                 cc_creds = read_claude_code_credentials()
 
                 if (clawk_creds and clawk_creds.get("accessToken")) or \
-
                    (cc_creds and cc_creds.get("accessToken")):
 
                     has_creds = True
