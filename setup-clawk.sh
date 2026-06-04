@@ -460,3 +460,12 @@ if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
     # Run directly with venv Python (no activation needed)
     "$SCRIPT_DIR/venv/bin/python" -m clawk_cli.main setup
 fi
+
+# Build dashboard web UI
+if [ -f "web/package.json" ]; then
+    echo "Building dashboard web UI..."
+    cd web
+    npm install --silent 2>/dev/null
+    npm run build && echo "Dashboard built. Run: clawk dashboard" || echo "Dashboard build failed."
+    cd ..
+fi
