@@ -117,3 +117,6 @@ scripts/out/
 # stores the published notes. They are not a build artifact and must never be
 # committed to the repo root. See the clawk-release skill.
 RELEASE_v*.md
+
+web/node_modules/
+node_modules/
