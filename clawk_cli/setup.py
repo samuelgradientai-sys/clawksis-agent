@@ -354,7 +354,7 @@ def print_noninteractive_setup_guidance(reason: str | None = None) -> None:
 
     print()
 
-    print(color("⚕ Clawksis Setup — Non-interactive mode", Colors.CYAN, Colors.BOLD))
+    print(color("Clawksis Setup — Non-interactive mode", Colors.CYAN, Colors.BOLD))
 
     print()
 
@@ -1154,6 +1154,30 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # Done banner
 
+    print()
+
+
+    # ── Banner Clawksis ──────────────────────────────────────────────────────
+    WINE  = "\033[38;5;124m"
+    WINE2 = "\033[38;5;160m"
+    WINE3 = "\033[38;5;88m"
+    BOLD  = "\033[1m"
+    RST   = "\033[0m"
+    art = [
+        "  \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557      \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557    \u2588\u2588\u2557\u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557",
+        " \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551    \u2588\u2588\u2551\u2588\u2588\u2551 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d",
+        " \u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551 \u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557",
+        " \u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551\u2588\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2588\u2588\u2557 \u2554\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551\u2554\u2550\u2550\u2550\u2550\u2588\u2588\u2551",
+        " \u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2554\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551",
+        "  \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u255d\u255a\u2550\u2550\u255d  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d",
+    ]
+    colors_art = [WINE2, WINE2, WINE, WINE, WINE3, WINE3]
+    if should_use_color():
+        for i, line in enumerate(art):
+            print(f"{BOLD}{colors_art[i]}{line}{RST}")
+    else:
+        for line in art:
+            print(line)
     print()
 
     print(
@@ -5494,7 +5518,7 @@ def _run_portal_one_shot(config: dict) -> None:
 
     )
 
-    print(color("│     ⚕ Clawksis Setup — Nous Portal (one-shot)             │", Colors.MAGENTA))
+    print(color("│     Clawksis Setup — Proveedor Externo             │", Colors.MAGENTA))
 
     print(
 
@@ -5518,7 +5542,7 @@ def _run_portal_one_shot(config: dict) -> None:
 
     print()
 
-    print_info("  Sign up: https://portal.nousresearch.com/manage-subscription")
+    print_info("  Sign up: https://github.com/samuelgradientai-sys/clawksis-agent/manage-subscription")
 
     print()
 
@@ -5754,7 +5778,7 @@ def run_setup_wizard(args):
 
                 )
 
-                print(color(f"│     ⚕ Clawksis Setup — {label:<34s} │", Colors.MAGENTA))
+                print(color(f"│     Clawksis Setup — {label:<34s} │", Colors.MAGENTA))
 
                 print(
 
@@ -5826,7 +5850,7 @@ def run_setup_wizard(args):
 
         color(
 
-            "│             ⚕ Clawksis Setup Wizard                │", Colors.MAGENTA
+            "│             Clawksis Setup Wizard                │", Colors.MAGENTA
 
         )
 
@@ -6104,13 +6128,13 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
 
     print()
 
-    print_header("Nous Portal")
+    print_header("Proveedor Externo")
 
     print_info("One subscription, 300+ models, plus the Tool Gateway:")
 
     print_info("  web search, image generation, TTS, browser automation.")
 
-    print_info("Sign up: https://portal.nousresearch.com/manage-subscription")
+    print_info("Sign up: https://github.com/samuelgradientai-sys/clawksis-agent/manage-subscription")
 
     print()
 
