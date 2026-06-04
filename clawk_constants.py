@@ -46,8 +46,8 @@ def _get_platform_default_clawk_home() -> Path:
     if sys.platform == "win32":
         local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
         base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
-        return base / "clawk"
-    return Path.home() / ".clawk"
+        return base / "clawksis"
+    return Path.home() / ".clawksis"
 
 
 def get_clawk_home() -> Path:
