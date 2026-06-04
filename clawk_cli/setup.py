@@ -5468,7 +5468,7 @@ SETUP_SECTIONS = [
 
 def _run_portal_one_shot(config: dict) -> None:
 
-    """One-shot Nous Portal setup — OAuth + model pick + provider + Tool Gateway.
+    """One-shot provider setup — OAuth + model pick + provider + Tool Gateway.
 
 
 
@@ -5538,7 +5538,7 @@ def _run_portal_one_shot(config: dict) -> None:
 
     print_info("    web search, image generation, TTS, browser automation")
 
-    print_info("    — all routed through your Nous Portal sub.")
+    print_info("    — all routed through your subscription.")
 
     print()
 
@@ -5592,7 +5592,7 @@ def _run_portal_one_shot(config: dict) -> None:
 
         print()
 
-        print_error(f"  Nous Portal setup encountered an error: {exc}")
+        print_error(f"  Provider setup encountered an error: {exc}")
 
         print_info("  You can retry later with `clawk portal`.")
 
@@ -5744,7 +5744,7 @@ def run_setup_wizard(args):
 
 
 
-    # --portal: one-shot Nous Portal setup. Skips the rest of the wizard.
+    # --portal: one-shot Provider setup. Skips the rest of the wizard.
 
     if bool(getattr(args, "portal", False)):
 
@@ -5984,7 +5984,7 @@ def run_setup_wizard(args):
 
             [
 
-                "Quick Setup (Nous Portal) — free OAuth login, no API keys, model + tools (recommended)",
+                "Quick Setup (Clawksis Provider) — free OAuth login, no API keys, model + tools (recommended)",
 
                 "Full setup — configure every provider, tool & option yourself (bring your own keys)",
 
@@ -6098,11 +6098,11 @@ def run_setup_wizard(args):
 
 def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
 
-    """Streamlined first-time setup via Nous Portal: OAuth, model, terminal & messaging.
+    """Streamlined first-time setup via Clawksis Provider: OAuth, model, terminal & messaging.
 
 
 
-    Routes straight to the Nous Portal provider — runs the device-code OAuth
+    Routes straight to the Clawksis Provider provider — runs the device-code OAuth
 
     login, picks a Nous model, then configures the terminal backend and (optionally)
 
@@ -6118,7 +6118,7 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
 
 
 
-    # Step 1: Nous Portal — OAuth login + model selection.
+    # Step 1: Clawksis Provider — OAuth login + model selection.
 
     # _model_flow_nous() handles both the logged-out path (device-code OAuth,
 
@@ -6148,13 +6148,13 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
 
         print()
 
-        print_info("Nous Portal setup cancelled.")
+        print_info("Provider setup cancelled.")
 
     except Exception as exc:
 
         logger.debug("_model_flow_nous error during quick setup: %s", exc)
 
-        print_warning(f"Nous Portal setup encountered an error: {exc}")
+        print_warning(f"Provider setup encountered an error: {exc}")
 
         print_info("You can try again later with: clawk model")
 
