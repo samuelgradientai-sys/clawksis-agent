@@ -6648,7 +6648,7 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
 
         total = len(_get_effective_configurable_toolsets())
 
-        print(color("⚕ Tool Summary", Colors.CYAN, Colors.BOLD))
+        print(color("∇ Tool Summary", Colors.CYAN, Colors.BOLD))
 
         print()
 
@@ -6680,7 +6680,7 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
 
         return
 
-    print(color("⚕ Clawksis Tool Configuration", Colors.CYAN, Colors.BOLD))
+    print(color("∇ Clawksis Tool Configuration", Colors.CYAN, Colors.BOLD))
 
     print(color("  Enable or disable tools per platform.", Colors.DIM))
 

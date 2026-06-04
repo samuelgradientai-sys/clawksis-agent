@@ -1023,7 +1023,7 @@ def run_uninstall(args):
 
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.MAGENTA, Colors.BOLD))
 
-    print(color("│            ⚕ Clawksis Uninstaller                  │", Colors.MAGENTA, Colors.BOLD))
+    print(color("│            ∇ Clawksis Uninstaller                  │", Colors.MAGENTA, Colors.BOLD))
 
     print(color("└─────────────────────────────────────────────────────────┘", Colors.MAGENTA, Colors.BOLD))
 
@@ -1493,7 +1493,7 @@ def run_uninstall(args):
 
     print()
 
-    print("Thank you for using Clawksis! ⚕")
+    print("Thank you for using Clawksis! ∇")
 
     print()
 

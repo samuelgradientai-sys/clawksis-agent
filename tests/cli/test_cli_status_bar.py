@@ -433,7 +433,7 @@ class TestCLIStatusBar:
 
 
 
-        assert "⚕" in text
+        assert "∇" in text
 
         assert "$0.06" not in text  # cost hidden by default
 
@@ -453,7 +453,7 @@ class TestCLIStatusBar:
 
 
 
-        assert "⚕" in text
+        assert "∇" in text
 
         assert "claude-sonnet-4-20250514" in text
 

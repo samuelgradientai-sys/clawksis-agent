@@ -7003,7 +7003,7 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
 
     print("┌─────────────────────────────────────────────────────────┐")
 
-    print("│           ⚕ Clawksis Gateway Starting...                 │")
+    print("│           ∇ Clawksis Gateway Starting...                 │")
 
     print("├─────────────────────────────────────────────────────────┤")
 
@@ -10879,7 +10879,7 @@ def gateway_setup():
 
         color(
 
-            "│             ⚕ Gateway Setup                            │", Colors.MAGENTA
+            "│             ∇ Gateway Setup                            │", Colors.MAGENTA
 
         )
 

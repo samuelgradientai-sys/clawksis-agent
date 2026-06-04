@@ -3693,7 +3693,7 @@ DEFAULT_CONFIG = {
 
         # Reply prefix prepended to every outgoing WhatsApp message.
 
-        # Default (None) uses the built-in "⚕ *Clawksis*" header.
+        # Default (None) uses the built-in "∇ *Clawksis*" header.
 
         # Set to "" (empty string) to disable the header entirely.
 
@@ -11345,7 +11345,7 @@ def show_config():
 
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
 
-    print(color("│              ⚕ Clawksis Configuration                    │", Colors.CYAN))
+    print(color("│              ∇ Clawksis Configuration                    │", Colors.CYAN))
 
     print(color("└─────────────────────────────────────────────────────────┘", Colors.CYAN))
 

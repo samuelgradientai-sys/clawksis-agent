@@ -7910,7 +7910,7 @@ class ClawksisCLI:
 
             if width < 52:
 
-                text = f"⚕ {snapshot['model_short']} · {duration_label}"
+                text = f"∇ {snapshot['model_short']} · {duration_label}"
 
                 if yolo_active:
 
@@ -7920,7 +7920,7 @@ class ClawksisCLI:
 
             if width < 76:
 
-                parts = [f"⚕ {snapshot['model_short']}", percent_label]
+                parts = [f"∇ {snapshot['model_short']}", percent_label]
 
                 compressions = snapshot.get("compressions", 0)
 
@@ -7966,7 +7966,7 @@ class ClawksisCLI:
 
             compressions = snapshot.get("compressions", 0)
 
-            parts = [f"⚕ {snapshot['model_short']}", context_label, percent_label]
+            parts = [f"∇ {snapshot['model_short']}", context_label, percent_label]
 
             if compressions:
 
@@ -8000,7 +8000,7 @@ class ClawksisCLI:
 
         except Exception:
 
-            return f"⚕ {self.model if getattr(self, 'model', None) else 'Clawksis'}"
+            return f"∇ {self.model if getattr(self, 'model', None) else 'Clawksis'}"
 
 
 
@@ -8036,7 +8036,7 @@ class ClawksisCLI:
 
                 frags = [
 
-                    ("class:status-bar", " ⚕ "),
+                    ("class:status-bar", " ∇ "),
 
                     ("class:status-bar-strong", snapshot["model_short"]),
 
@@ -8070,7 +8070,7 @@ class ClawksisCLI:
 
                     frags = [
 
-                        ("class:status-bar", " ⚕ "),
+                        ("class:status-bar", " ∇ "),
 
                         ("class:status-bar-strong", snapshot["model_short"]),
 
@@ -8140,7 +8140,7 @@ class ClawksisCLI:
 
                     frags = [
 
-                        ("class:status-bar", " ⚕ "),
+                        ("class:status-bar", " ∇ "),
 
                         ("class:status-bar-strong", snapshot["model_short"]),
 
@@ -9198,13 +9198,13 @@ class ClawksisCLI:
 
                 _skin = get_active_skin()
 
-                label = _skin.get_branding("response_label", "⚕ Clawksis")
+                label = _skin.get_branding("response_label", "∇ Clawksis")
 
                 _text_hex = _skin.get_color("banner_text", "#FFF8DC")
 
             except Exception:
 
-                label = "⚕ Clawksis"
+                label = "∇ Clawksis"
 
                 _text_hex = "#FFF8DC"
 
@@ -18678,7 +18678,7 @@ class ClawksisCLI:
 
                         _skin = get_active_skin()
 
-                        label = _skin.get_branding("response_label", "⚕ Clawksis")
+                        label = _skin.get_branding("response_label", "∇ Clawksis")
 
                         _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#CD7F32"))
 
@@ -18686,7 +18686,7 @@ class ClawksisCLI:
 
                     except Exception:
 
-                        label = "⚕ Clawksis"
+                        label = "∇ Clawksis"
 
                         _resp_color = "#CD7F32"
 
@@ -20982,7 +20982,7 @@ class ClawksisCLI:
 
         raw = self._prompt_text_input_modal(
 
-            title="⚕  Update Clawksis",
+            title="∇  Update Clawksis",
 
             detail="This will exit the current session and run `clawk update`.",
 
@@ -21008,7 +21008,7 @@ class ClawksisCLI:
 
         print()
 
-        print("  ⚕ Launching update...")
+        print("  ∇ Launching update...")
 
         print()
 
@@ -24584,7 +24584,7 @@ class ClawksisCLI:
 
                         w = self._scrollback_box_width(getattr(self.console, "width", 80))
 
-                        label = " ⚕ Clawksis "
+                        label = " ∇ Clawksis "
 
                         if self.show_timestamps:
 
@@ -25252,7 +25252,7 @@ class ClawksisCLI:
 
                     _skin = get_active_skin()
 
-                    label = _skin.get_branding("response_label", "⚕ Clawksis")
+                    label = _skin.get_branding("response_label", "∇ Clawksis")
 
                     _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#CD7F32"))
 
@@ -25260,7 +25260,7 @@ class ClawksisCLI:
 
                 except Exception:
 
-                    label = "⚕ Clawksis"
+                    label = "∇ Clawksis"
 
                     _resp_color = _maybe_remap_for_light_mode("#CD7F32")
 
@@ -25656,11 +25656,11 @@ class ClawksisCLI:
 
                 from clawk_cli.skin_engine import get_active_goodbye
 
-                goodbye = get_active_goodbye("Goodbye! ⚕")
+                goodbye = get_active_goodbye("Goodbye! ∇")
 
             except Exception:
 
-                goodbye = "Goodbye! ⚕"
+                goodbye = "Goodbye! ∇"
 
             print(goodbye)
 
@@ -25838,7 +25838,7 @@ class ClawksisCLI:
 
         if self._agent_running:
 
-            return _state_fragment("class:prompt-working", "⚕")
+            return _state_fragment("class:prompt-working", "∇")
 
         if self._voice_mode:
 

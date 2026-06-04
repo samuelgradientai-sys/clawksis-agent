@@ -3702,7 +3702,7 @@ def _launch_tui(
 
         print()
 
-        print("⚕ Launching update...")
+        print("∇ Launching update...")
 
         print()
 
@@ -4270,7 +4270,7 @@ def cmd_whatsapp(args):
 
     print()
 
-    print("⚕ WhatsApp Setup")
+    print("∇ WhatsApp Setup")
 
     print("=" * 50)
 
@@ -4672,7 +4672,7 @@ def cmd_whatsapp(args):
 
             print()
 
-            print("  Tip: Agent responses are prefixed with '⚕ Clawksis'")
+            print("  Tip: Agent responses are prefixed with '∇ Clawksis'")
 
         else:
 
@@ -4686,7 +4686,7 @@ def cmd_whatsapp(args):
 
             print()
 
-            print("  Tip: Agent responses are prefixed with '⚕ Clawksis'")
+            print("  Tip: Agent responses are prefixed with '∇ Clawksis'")
 
             print("  so you can tell them apart from your own messages.")
 
@@ -4730,7 +4730,7 @@ def cmd_postinstall(args):
 
 
 
-    print("⚕ Clawksis post-install bootstrap")
+    print("∇ Clawksis post-install bootstrap")
 
     print()
 
@@ -19487,7 +19487,7 @@ def _cmd_update_check(branch: str = "main", *, branch_explicit: bool = False):
 
         else:
 
-            print("⚕ Update available on PyPI.")
+            print("∇ Update available on PyPI.")
 
             print(f"  Run '{recommended_update_command()}' to install.")
 
@@ -19667,7 +19667,7 @@ def _cmd_update_check(branch: str = "main", *, branch_explicit: bool = False):
 
         commits_word = "commit" if behind == 1 else "commits"
 
-        print(f"⚕ Update available: {behind} {commits_word} behind {compare_branch}.")
+        print(f"∇ Update available: {behind} {commits_word} behind {compare_branch}.")
 
         from clawk_cli.config import recommended_update_command
 
@@ -20367,7 +20367,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
 
 
-    print("⚕ Updating Clawksis...")
+    print("∇ Updating Clawksis...")
 
     print()
 
