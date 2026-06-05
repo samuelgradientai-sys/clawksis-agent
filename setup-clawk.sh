@@ -459,9 +459,7 @@ else
     _try_install() {
 
         $UV_CMD pip install -e ".[all]" \
-
             || $UV_CMD pip install -e "$_SAFE_SPEC" \
-
             || $UV_CMD pip install -e "."
 
     }
