@@ -6998,13 +6998,31 @@ async def get_logs(
 
 
 class CronJobCreate(BaseModel):
-    prompt: str
+    prompt: str = ""
 
     schedule: str
 
     name: str = ""
 
     deliver: str = "local"
+
+    repeat: Optional[int] = None
+
+    skills: List[str] = []
+
+    model: Optional[str] = None
+
+    provider: Optional[str] = None
+
+    script: Optional[str] = None
+
+    context_from: List[str] = []
+
+    enabled_toolsets: List[str] = []
+
+    workdir: Optional[str] = None
+
+    no_agent: bool = False
 
 
 class CronJobUpdate(BaseModel):
@@ -7183,10 +7201,19 @@ async def create_cron_job(body: CronJobCreate, profile: str = "default"):
         return _call_cron_for_profile(
             profile,
             "create_job",
-            prompt=body.prompt,
+            prompt=body.prompt or None,
             schedule=body.schedule,
             name=body.name,
             deliver=body.deliver,
+            repeat=body.repeat,
+            skills=body.skills or None,
+            model=body.model or None,
+            provider=body.provider or None,
+            script=body.script or None,
+            context_from=body.context_from or None,
+            enabled_toolsets=body.enabled_toolsets or None,
+            workdir=body.workdir or None,
+            no_agent=body.no_agent,
         )
 
     except Exception as e:

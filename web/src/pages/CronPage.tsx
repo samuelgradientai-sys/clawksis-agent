@@ -158,6 +158,17 @@ export default function CronPage() {
   });
   const [deliver, setDeliver] = useState("local");
   const [creating, setCreating] = useState(false);
+  // Advanced create fields (collapsed by default)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState("");
+  const [skills, setSkills] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [script, setScript] = useState("");
+  const [noAgent, setNoAgent] = useState(false);
+  const [contextFrom, setContextFrom] = useState("");
+  const [enabledToolsets, setEnabledToolsets] = useState("");
+  const [workdir, setWorkdir] = useState("");
   const createProfile = selectedProfile === "all" ? "default" : selectedProfile;
 
   // Edit job modal state
@@ -205,18 +216,46 @@ export default function CronPage() {
   const scheduleString = buildScheduleString(scheduleState);
 
   const handleCreate = async () => {
-    if (!prompt.trim() || !scheduleString) {
-      showToast(`${t.cron.prompt} & ${t.cron.schedule} required`, "error");
+    const csv = (s: string) =>
+      s
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+    const skillsList = csv(skills);
+    const contextList = csv(contextFrom);
+    const toolsetsList = csv(enabledToolsets);
+    const repeatNum = repeat.trim() ? Number(repeat.trim()) : null;
+    if (!scheduleString) {
+      showToast(`${t.cron.schedule} required`, "error");
+      return;
+    }
+    // A normal agent job needs a prompt; a no-agent script job runs the
+    // script directly, so the prompt is optional in that case.
+    if (!prompt.trim() && !(noAgent && script.trim())) {
+      showToast(`${t.cron.prompt} required`, "error");
+      return;
+    }
+    if (repeatNum !== null && (!Number.isInteger(repeatNum) || repeatNum < 1)) {
+      showToast("Repeat must be a positive whole number", "error");
       return;
     }
     setCreating(true);
     try {
       await api.createCronJob(
         {
-          prompt: prompt.trim(),
+          prompt: prompt.trim() || undefined,
           schedule: scheduleString,
           name: name.trim() || undefined,
           deliver,
+          repeat: repeatNum,
+          skills: skillsList.length ? skillsList : undefined,
+          model: model.trim() || undefined,
+          provider: provider.trim() || undefined,
+          script: script.trim() || undefined,
+          context_from: contextList.length ? contextList : undefined,
+          enabled_toolsets: toolsetsList.length ? toolsetsList : undefined,
+          workdir: workdir.trim() || undefined,
+          no_agent: noAgent || undefined,
         },
         createProfile,
       );
@@ -225,6 +264,16 @@ export default function CronPage() {
       setScheduleState(DEFAULT_SCHEDULE_STATE);
       setName("");
       setDeliver("local");
+      setModel("");
+      setProvider("");
+      setSkills("");
+      setRepeat("");
+      setScript("");
+      setNoAgent(false);
+      setContextFrom("");
+      setEnabledToolsets("");
+      setWorkdir("");
+      setShowAdvanced(false);
       setCreateModalOpen(false);
       loadJobs();
     } catch (e) {
@@ -462,7 +511,114 @@ export default function CronPage() {
                   <SelectOption value="email">
                     {t.cron.delivery.email}
                   </SelectOption>
+                  <SelectOption value="origin">
+                    Origin (reply where created)
+                  </SelectOption>
                 </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="flex items-center gap-1 self-start text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                >
+                  {showAdvanced ? "▾ Advanced" : "▸ Advanced"}
+                </button>
+                {showAdvanced && (
+                  <div className="grid gap-3 border-l border-border pl-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="cron-model">Model (optional)</Label>
+                        <Input
+                          id="cron-model"
+                          placeholder="e.g. claude-opus-4-8"
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="cron-provider">Provider (optional)</Label>
+                        <Input
+                          id="cron-provider"
+                          placeholder="e.g. anthropic"
+                          value={provider}
+                          onChange={(e) => setProvider(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="cron-skills">Skills (optional)</Label>
+                      <Input
+                        id="cron-skills"
+                        placeholder="comma-separated skills to load"
+                        value={skills}
+                        onChange={(e) => setSkills(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="cron-repeat">Repeat (optional)</Label>
+                        <Input
+                          id="cron-repeat"
+                          type="number"
+                          min={1}
+                          placeholder="blank = forever, 1 = once"
+                          value={repeat}
+                          onChange={(e) => setRepeat(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="cron-workdir">Working dir (optional)</Label>
+                        <Input
+                          id="cron-workdir"
+                          placeholder="run from this directory"
+                          value={workdir}
+                          onChange={(e) => setWorkdir(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="cron-script">Script (optional)</Label>
+                      <Input
+                        id="cron-script"
+                        placeholder="script under ~/.clawksis/scripts/ (.sh or .py)"
+                        value={script}
+                        onChange={(e) => setScript(e.target.value)}
+                      />
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={noAgent}
+                          onChange={(e) => setNoAgent(e.target.checked)}
+                        />
+                        No-agent: run the script directly (its output is the result)
+                      </label>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="cron-context-from">
+                        Context from (optional)
+                      </Label>
+                      <Input
+                        id="cron-context-from"
+                        placeholder="comma-separated job IDs to chain output from"
+                        value={contextFrom}
+                        onChange={(e) => setContextFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="cron-toolsets">
+                        Enabled toolsets (optional)
+                      </Label>
+                      <Input
+                        id="cron-toolsets"
+                        placeholder="comma-separated toolsets (e.g. web, search)"
+                        value={enabledToolsets}
+                        onChange={(e) => setEnabledToolsets(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end">

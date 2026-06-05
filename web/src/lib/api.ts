@@ -782,7 +782,24 @@ export const api = {
 
     fetchJSON<CronJob[]>(`/api/cron/jobs?profile=${encodeURIComponent(profile)}`),
 
-  createCronJob: (job: { prompt: string; schedule: string; name?: string; deliver?: string }, profile = "default") =>
+  createCronJob: (
+    job: {
+      prompt?: string;
+      schedule: string;
+      name?: string;
+      deliver?: string;
+      repeat?: number | null;
+      skills?: string[];
+      model?: string;
+      provider?: string;
+      script?: string;
+      context_from?: string[];
+      enabled_toolsets?: string[];
+      workdir?: string;
+      no_agent?: boolean;
+    },
+    profile = "default",
+  ) =>
 
     fetchJSON<CronJob>(`/api/cron/jobs?profile=${encodeURIComponent(profile)}`, {
 
