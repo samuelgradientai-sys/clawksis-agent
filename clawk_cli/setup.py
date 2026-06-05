@@ -45,6 +45,7 @@ from typing import Optional, Dict, Any
 
 
 from clawk_cli.nous_subscription import get_nous_subscription_features
+from clawk_cli.banner import print_clawksis_banner
 
 from tools.tool_backend_helpers import managed_nous_tools_enabled
 
@@ -1155,10 +1156,6 @@ def _print_setup_summary(config: dict, clawk_home):
     # Done banner
 
     print()
-
-
-
-    print_clawksis_banner()
 
     print(
 
@@ -5485,7 +5482,7 @@ def _run_portal_one_shot(config: dict) -> None:
 
 
 
-    print()
+    print_clawksis_banner()
 
     print(
 
