@@ -478,7 +478,7 @@ def get_cross_profile_warning(path: str) -> Optional[str]:
 
 
 def _find_sandbox_mirror_segments(parts: tuple) -> Optional[int]:
-    """Return the index of the inner ``.clawk`` part in a sandbox-mirror path.
+    """Return the index of the inner ``.clawksis`` part in a sandbox-mirror path.
 
     Matches ``…/sandboxes/<backend>/<task>/home/.clawksis/…`` and returns the
     index where the inner Clawksis-state portion starts. Returns ``None`` for
@@ -487,10 +487,10 @@ def _find_sandbox_mirror_segments(parts: tuple) -> Optional[int]:
     for i, part in enumerate(parts):
         if part != "sandboxes":
             continue
-        # Need at least: sandboxes / <backend> / <task> / home / .clawk / <thing>
+        # Need at least: sandboxes / <backend> / <task> / home / .clawksis / <thing>
         if i + 5 >= len(parts):
             continue
-        if parts[i + 3] == "home" and parts[i + 4] == ".clawk":
+        if parts[i + 3] == "home" and parts[i + 4] == ".clawksis":
             return i + 4
     return None
 
@@ -504,7 +504,7 @@ def classify_sandbox_mirror_target(path: str) -> Optional[dict]:
       * ``target_path``: the resolved path string
       * ``mirror_root``: the ``…/sandboxes/<backend>/<task>/home/.clawksis``
         prefix (so callers can show users which sandbox owns the mirror)
-      * ``inner_path``: the portion under the mirror's ``.clawk`` (what the
+      * ``inner_path``: the portion under the mirror's ``.clawksis`` (what the
         agent likely meant to address on the host)
 
     Detection is path-shape-only — does not require any Clawksis resolver to

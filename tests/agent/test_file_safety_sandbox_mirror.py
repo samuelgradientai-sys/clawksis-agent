@@ -6,7 +6,7 @@ The guard fires when a tool tries to write into the per-task mirror
 
 directory created by a non-local terminal backend (Docker, Daytona, etc.).
 
-Those paths look like ``…/sandboxes/<backend>/<task>/home/.clawksissis/…`` and
+Those paths look like ``…/sandboxes/<backend>/<task>/home/.clawksis/…`` and
 
 they accumulate divergent copies of authoritative profile state (SOUL.md,
 
@@ -86,7 +86,7 @@ class TestClassifySandboxMirrorTarget:
 
         assert result["mirror_root"].endswith(
 
-            "sandboxes/docker/default/home/.clawksissis"
+            "sandboxes/docker/default/home/.clawksis"
 
         )
 
@@ -220,7 +220,7 @@ class TestClassifySandboxMirrorTarget:
 
     def test_truncated_sandbox_path_returns_none(self, tmp_path):
 
-        """``…/sandboxes/<backend>/<task>`` without ``home/.clawksissis/<thing>`` is not a mirror."""
+        """``…/sandboxes/<backend>/<task>`` without ``home/.clawksis/<thing>`` is not a mirror."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
@@ -338,7 +338,7 @@ class TestGetSandboxMirrorWarning:
 
         # Must name the mirror root so the user can locate the sandbox.
 
-        assert "sandboxes/docker/default/home/.clawksissis" in warn
+        assert "sandboxes/docker/default/home/.clawksis" in warn
 
         # Must hint at what the agent likely meant.
 
