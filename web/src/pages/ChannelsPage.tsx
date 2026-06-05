@@ -7,6 +7,7 @@ import {
   Radio,
   RotateCw,
   Settings2,
+  Trash2,
   WifiOff,
   X,
 } from "lucide-react";
@@ -58,6 +59,7 @@ export default function ChannelsPage() {
   const [editing, setEditing] = useState<MessagingPlatform | null>(null);
   const [draftEnv, setDraftEnv] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState<string | null>(null);
   const closeEdit = useCallback(() => setEditing(null), []);
   const editModalRef = useModalBehavior({ open: editing !== null, onClose: closeEdit });
 
@@ -120,6 +122,24 @@ export default function ChannelsPage() {
       showToast(`Failed to save: ${e}`, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClearCredential = async (key: string) => {
+    if (!editing) return;
+    setClearing(key);
+    try {
+      await api.updateMessagingPlatform(editing.id, { clear_env: [key] });
+      const res = await api.getMessagingPlatforms();
+      setPlatforms(res.platforms);
+      setEditing(res.platforms.find((p) => p.id === editing.id) ?? null);
+      setDraftEnv((prev) => ({ ...prev, [key]: "" }));
+      setRestartNeeded(true);
+      showToast(`${key} cleared`, "success");
+    } catch (e) {
+      showToast(`Failed to clear: ${e}`, "error");
+    } finally {
+      setClearing(null);
     }
   };
 
@@ -318,6 +338,17 @@ export default function ChannelsPage() {
                       setDraftEnv((prev) => ({ ...prev, [field.key]: e.target.value }))
                     }
                   />
+                  {field.is_set && (
+                    <button
+                      type="button"
+                      onClick={() => void handleClearCredential(field.key)}
+                      disabled={clearing === field.key}
+                      className="inline-flex items-center gap-1 self-start text-xs text-destructive hover:underline disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {clearing === field.key ? "Clearing…" : "Clear saved value"}
+                    </button>
+                  )}
                 </div>
               ))}
 
