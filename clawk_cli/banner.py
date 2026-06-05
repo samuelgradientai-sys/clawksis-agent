@@ -807,6 +807,108 @@ def format_banner_version_label() -> str:
     return f"{base} · upstream {upstream} · local {local} (+{ahead} carried {carried_word})"
 
 
+# =========================================================================
+
+# What's new — recent commits panel
+
+# =========================================================================
+
+
+def get_recent_commits(
+    repo_dir: Optional[Path] = None, limit: int = 5
+) -> Optional[List[dict]]:
+    """Return the most recent commits for the startup "what's new" panel.
+
+    Each entry is ``{"hash": <short>, "subject": <str>, "date": <relative>}``.
+    Returns ``None`` when there is no git checkout (the published Docker image
+    excludes ``.git``) or git is unavailable, so callers skip the panel
+    silently. Local-only and best-effort — the changelog is a nice-to-have, so
+    any failure degrades to ``None`` rather than disrupting startup.
+    """
+    repo_dir = repo_dir or _resolve_repo_dir()
+    if repo_dir is None or limit <= 0:
+        return None
+    # %h <US> %s <US> %cr, one commit per line. The Unit Separator (0x1f) keeps
+    # subjects that contain commas or pipes intact when we split the fields.
+    fmt = "%h\x1f%s\x1f%cr"
+    try:
+        result = subprocess.run(
+            ["git", "log", f"-n{limit}", "--no-merges", f"--pretty=format:{fmt}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            cwd=str(repo_dir),
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    commits: List[dict] = []
+    for line in (result.stdout or "").splitlines():
+        parts = line.split("\x1f")
+        if len(parts) != 3:
+            continue
+        sha, subject, date = (p.strip() for p in parts)
+        if not subject:
+            continue
+        commits.append({"hash": sha, "subject": subject, "date": date})
+    return commits or None
+
+
+def print_recent_changes(console: "Console", limit: int = 5) -> None:
+    """Print a compact "what's new" panel listing the latest commits.
+
+    Shown once at interactive startup, just after the welcome banner, so users
+    see what changed in the build they are running. No-op (and never raises)
+    when there is no git history, when rich is unavailable, or when the user
+    opts out via ``CLAWK_HIDE_CHANGELOG=1`` — startup must not depend on the
+    changelog rendering.
+    """
+    try:
+        if os.getenv("CLAWK_HIDE_CHANGELOG"):
+            return
+        commits = get_recent_commits(limit=limit)
+        if not commits:
+            return
+        from rich.markup import escape
+        from rich.panel import Panel
+        from rich.table import Table
+
+        accent = _skin_color("banner_accent", "#FFBF00")
+        dim = _skin_color("banner_dim", "#B8860B")
+        text = _skin_color("banner_text", "#FFF8DC")
+
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(justify="right")   # short hash
+        grid.add_column(justify="left")    # subject
+        grid.add_column(justify="left")    # relative date
+        for c in commits:
+            subject = c["subject"]
+            if len(subject) > 70:
+                subject = subject[:69].rstrip() + "…"
+            grid.add_row(
+                f"[dim {dim}]{c['hash']}[/]",
+                f"[{text}]{escape(subject)}[/]",
+                f"[dim {dim}]{escape(c['date'])}[/]",
+            )
+
+        console.print(
+            Panel(
+                grid,
+                title=f"[bold {accent}]✦ Novedades · últimos cambios[/]",
+                title_align="left",
+                border_style=f"dim {dim}",
+                padding=(0, 1),
+            )
+        )
+    except Exception:
+        # Best-effort: the changelog panel must never break startup.
+        return
+
+
+
 
 
 

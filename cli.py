@@ -1640,7 +1640,7 @@ def get_toolset_for_tool(*args, **kwargs):
 
 # Extracted CLI modules (Phase 3)
 
-from clawk_cli.banner import build_welcome_banner
+from clawk_cli.banner import build_welcome_banner, print_recent_changes
 
 from clawk_cli.commands import SlashCommandCompleter, SlashCommandAutoSuggest
 
@@ -10589,6 +10589,10 @@ class ClawksisCLI:
                 context_length=ctx_len,
 
             )
+
+            # Show what changed in the last few commits (best-effort; a
+            # no-op outside a git checkout). Opt out with CLAWK_HIDE_CHANGELOG=1.
+            print_recent_changes(self.console)
 
         
 
