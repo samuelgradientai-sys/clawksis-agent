@@ -235,6 +235,10 @@ export default function CronPage() {
       showToast(`${t.cron.prompt} required`, "error");
       return;
     }
+    if (noAgent && !script.trim()) {
+      showToast("No-agent jobs need a script to run", "error");
+      return;
+    }
     if (repeatNum !== null && (!Number.isInteger(repeatNum) || repeatNum < 1)) {
       showToast("Repeat must be a positive whole number", "error");
       return;
