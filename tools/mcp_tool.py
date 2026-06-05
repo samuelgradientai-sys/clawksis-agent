@@ -708,7 +708,9 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
 
         elif resolved_command in {"npx", "npm", "node"}:
             clawk_home = os.path.expanduser(
-                os.getenv("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis"))
+                os.getenv(
+                    "CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis")
+                )
             )
 
             candidates = [

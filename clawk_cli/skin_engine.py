@@ -1179,11 +1179,11 @@ def get_prompt_toolkit_style_overrides() -> Dict[str, str]:
 
     prompt = skin.get_color("prompt", "")
 
-    input_rule = skin.get_color("input_rule", "#CD7F32")
+    input_rule = skin.get_color("input_rule", "#4A3496")
 
-    title = skin.get_color("banner_title", "#FFD700")
+    title = skin.get_color("banner_title", "#8D70F0")
 
-    text = skin.get_color("banner_text", "#FFF8DC")
+    text = skin.get_color("banner_text", "#E8E0FF")
 
     dim = skin.get_color("banner_dim", "#555555")
 

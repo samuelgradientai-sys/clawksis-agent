@@ -514,17 +514,17 @@ export const DARK_THEME: Theme = {
 
   color: {
 
-    primary: '#FFD700',
+    primary: '#8D70F0',
 
-    accent: '#FFBF00',
+    accent: '#6C4FD6',
 
-    border: '#CD7F32',
+    border: '#4A3496',
 
-    text: '#FFF8DC',
+    text: '#E8E0FF',
 
-    muted: '#CC9B1F',
+    muted: '#4A3496',
 
-    // Bumped from the old `#B8860B` darkgoldenrod (~53% luminance) which
+    // Bumped from the old `#4A3496` darkgoldenrod (~53% luminance) which
 
     // read as barely-visible on dark terminals for long body text.  The
 
@@ -544,7 +544,7 @@ export const DARK_THEME: Theme = {
 
 
 
-    label: '#DAA520',
+    label: '#6C4FD6',
 
     ok: '#4caf50',
 
@@ -554,7 +554,7 @@ export const DARK_THEME: Theme = {
 
 
 
-    prompt: '#FFF8DC',
+    prompt: '#E8E0FF',
 
     // sessionLabel/sessionBorder intentionally track the `dim` value — they
 
@@ -562,9 +562,9 @@ export const DARK_THEME: Theme = {
 
     // relies on this pairing (#11300).
 
-    sessionLabel: '#CC9B1F',
+    sessionLabel: '#4A3496',
 
-    sessionBorder: '#CC9B1F',
+    sessionBorder: '#4A3496',
 
 
 
@@ -574,7 +574,7 @@ export const DARK_THEME: Theme = {
 
     statusGood: '#8FBC8F',
 
-    statusWarn: '#FFD700',
+    statusWarn: '#8D70F0',
 
     statusBad: '#FF8C00',
 
@@ -620,27 +620,27 @@ export const LIGHT_THEME: Theme = {
 
   color: {
 
-    primary: '#8B6914',
+    primary: '#4A2E8C',
 
-    accent: '#A0651C',
+    accent: '#5C3A9E',
 
     border: '#7A4F1F',
 
     text: '#3D2F13',
 
-    muted: '#7A5A0F',
+    muted: '#3A2070',
 
     completionBg: '#F5F5F5',
 
-    completionCurrentBg: mix('#F5F5F5', '#A0651C', 0.25),
+    completionCurrentBg: mix('#F5F5F5', '#5C3A9E', 0.25),
 
     completionMetaBg: '#F5F5F5',
 
-    completionMetaCurrentBg: mix('#F5F5F5', '#A0651C', 0.25),
+    completionMetaCurrentBg: mix('#F5F5F5', '#5C3A9E', 0.25),
 
 
 
-    label: '#7A5A0F',
+    label: '#3A2070',
 
     ok: '#2E7D32',
 
@@ -652,9 +652,9 @@ export const LIGHT_THEME: Theme = {
 
     prompt: '#2B2014',
 
-    sessionLabel: '#7A5A0F',
+    sessionLabel: '#3A2070',
 
-    sessionBorder: '#7A5A0F',
+    sessionBorder: '#3A2070',
 
 
 
@@ -664,7 +664,7 @@ export const LIGHT_THEME: Theme = {
 
     statusGood: '#2E7D32',
 
-    statusWarn: '#8B6914',
+    statusWarn: '#4A2E8C',
 
     statusBad: '#D84315',
 

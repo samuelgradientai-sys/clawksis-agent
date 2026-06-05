@@ -30,7 +30,7 @@ class TestSkinConfig:
         from clawk_cli.skin_engine import load_skin
 
         skin = load_skin("default")
-        assert skin.get_color("banner_title") == "#FFD700"
+        assert skin.get_color("banner_title") == "#8D70F0"
         assert skin.get_color("nonexistent", "#000") == "#000"
 
     def test_get_branding_with_fallback(self):

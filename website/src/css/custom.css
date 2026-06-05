@@ -20,7 +20,7 @@
 
   /* Dark amber palette for light mode — readable on white (WCAG AA compliant)
 
-     Current gold #FFD700 has only 1.4:1 contrast on white; these tones pass 4.5:1+ */
+     Current gold #8D70F0 has only 1.4:1 contrast on white; these tones pass 4.5:1+ */
 
   --ifm-color-primary: #8B6508;
 
@@ -62,7 +62,7 @@
 
 [data-theme='dark'] {
 
-  --ifm-color-primary: #FFD700;
+  --ifm-color-primary: #8D70F0;
 
   --ifm-color-primary-dark: #E6C200;
 
@@ -98,9 +98,9 @@
 
 
 
-  --ifm-link-color: #FFD700;
+  --ifm-link-color: #8D70F0;
 
-  --ifm-link-hover-color: #FFBF00;
+  --ifm-link-hover-color: #6C4FD6;
 
 
 
@@ -184,7 +184,7 @@
 
   background-color: rgba(255, 215, 0, 0.08);
 
-  border-left: 3px solid #FFD700;
+  border-left: 3px solid #8D70F0;
 
   padding-left: calc(var(--ifm-menu-link-padding-horizontal) - 3px);
 
@@ -400,7 +400,7 @@ pre.prism-code.language-ascii code {
 
 [data-theme='dark'] .footer a:hover {
 
-  color: #FFD700;
+  color: #8D70F0;
 
   text-decoration: none;
 

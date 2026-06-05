@@ -5566,7 +5566,9 @@ class TelegramAdapter(BasePlatformAdapter):
 
         script_name, extra_args, success_label, is_state_verb = entry
 
-        script_path = _Path.home() / ".clawksis" / "scripts" / "gmail-triage" / script_name
+        script_path = (
+            _Path.home() / ".clawksis" / "scripts" / "gmail-triage" / script_name
+        )
 
         if not script_path.exists():
             await query.answer(text=f"❌ {script_name} missing")

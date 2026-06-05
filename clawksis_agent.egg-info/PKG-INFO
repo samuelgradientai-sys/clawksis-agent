@@ -1,0 +1,353 @@
+Metadata-Version: 2.4
+Name: clawksis-agent
+Version: 0.15.1
+Summary: The self-improving AI agent — creates skills from experience, improves them during use, and runs anywhere
+Author: Nous Research
+License-Expression: MIT
+Requires-Python: <3.14,>=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: openai==2.24.0
+Requires-Dist: python-dotenv==1.2.2
+Requires-Dist: fire==0.7.1
+Requires-Dist: httpx[socks]==0.28.1
+Requires-Dist: rich==14.3.3
+Requires-Dist: tenacity==9.1.4
+Requires-Dist: pyyaml==6.0.3
+Requires-Dist: ruamel.yaml==0.18.17
+Requires-Dist: requests==2.33.0
+Requires-Dist: jinja2==3.1.6
+Requires-Dist: pydantic==2.13.4
+Requires-Dist: prompt_toolkit==3.0.52
+Requires-Dist: croniter==6.0.0
+Requires-Dist: PyJWT[crypto]==2.12.1
+Requires-Dist: tzdata==2025.3; sys_platform == "win32"
+Requires-Dist: psutil==7.2.2
+Requires-Dist: pathspec==1.1.1
+Requires-Dist: fastapi<1,>=0.104.0
+Requires-Dist: uvicorn[standard]<1,>=0.24.0
+Requires-Dist: ptyprocess<1,>=0.7.0; sys_platform != "win32"
+Requires-Dist: pywinpty<3,>=2.0.0; sys_platform == "win32"
+Provides-Extra: anthropic
+Requires-Dist: anthropic==0.86.0; extra == "anthropic"
+Provides-Extra: exa
+Requires-Dist: exa-py==2.10.2; extra == "exa"
+Provides-Extra: firecrawl
+Requires-Dist: firecrawl-py==4.17.0; extra == "firecrawl"
+Provides-Extra: parallel-web
+Requires-Dist: parallel-web==0.4.2; extra == "parallel-web"
+Provides-Extra: fal
+Requires-Dist: fal-client==0.13.1; extra == "fal"
+Provides-Extra: edge-tts
+Requires-Dist: edge-tts==7.2.7; extra == "edge-tts"
+Provides-Extra: modal
+Requires-Dist: modal==1.3.4; extra == "modal"
+Provides-Extra: daytona
+Requires-Dist: daytona==0.155.0; extra == "daytona"
+Provides-Extra: hindsight
+Requires-Dist: hindsight-client==0.6.1; extra == "hindsight"
+Provides-Extra: dev
+Requires-Dist: debugpy==1.8.20; extra == "dev"
+Requires-Dist: pytest==9.0.2; extra == "dev"
+Requires-Dist: pytest-asyncio==1.3.0; extra == "dev"
+Requires-Dist: pytest-timeout==2.4.0; extra == "dev"
+Requires-Dist: mcp==1.26.0; extra == "dev"
+Requires-Dist: starlette==1.0.1; extra == "dev"
+Requires-Dist: ty==0.0.21; extra == "dev"
+Requires-Dist: ruff==0.15.10; extra == "dev"
+Requires-Dist: setuptools==82.0.1; extra == "dev"
+Provides-Extra: messaging
+Requires-Dist: python-telegram-bot[webhooks]==22.6; extra == "messaging"
+Requires-Dist: discord.py[voice]==2.7.1; extra == "messaging"
+Requires-Dist: aiohttp==3.13.3; extra == "messaging"
+Requires-Dist: brotlicffi==1.2.0.1; extra == "messaging"
+Requires-Dist: slack-bolt==1.27.0; extra == "messaging"
+Requires-Dist: slack-sdk==3.40.1; extra == "messaging"
+Requires-Dist: qrcode==7.4.2; extra == "messaging"
+Provides-Extra: cron
+Provides-Extra: slack
+Requires-Dist: slack-bolt==1.27.0; extra == "slack"
+Requires-Dist: slack-sdk==3.40.1; extra == "slack"
+Requires-Dist: aiohttp==3.13.3; extra == "slack"
+Provides-Extra: matrix
+Requires-Dist: mautrix[encryption]==0.21.0; extra == "matrix"
+Requires-Dist: Markdown==3.10.2; extra == "matrix"
+Requires-Dist: aiosqlite==0.22.1; extra == "matrix"
+Requires-Dist: asyncpg==0.31.0; extra == "matrix"
+Requires-Dist: aiohttp-socks==0.11.0; extra == "matrix"
+Provides-Extra: wecom
+Requires-Dist: defusedxml==0.7.1; extra == "wecom"
+Provides-Extra: cli
+Requires-Dist: simple-term-menu==1.6.6; extra == "cli"
+Provides-Extra: tts-premium
+Requires-Dist: elevenlabs==1.59.0; extra == "tts-premium"
+Provides-Extra: voice
+Requires-Dist: faster-whisper==1.2.1; extra == "voice"
+Requires-Dist: sounddevice==0.5.5; extra == "voice"
+Requires-Dist: numpy==2.4.3; extra == "voice"
+Provides-Extra: pty
+Provides-Extra: honcho
+Requires-Dist: honcho-ai==2.0.1; extra == "honcho"
+Provides-Extra: vision
+Requires-Dist: Pillow==12.2.0; extra == "vision"
+Provides-Extra: mcp
+Requires-Dist: mcp==1.26.0; extra == "mcp"
+Requires-Dist: starlette==1.0.1; extra == "mcp"
+Provides-Extra: nemo-relay
+Requires-Dist: nemo-relay==0.3; extra == "nemo-relay"
+Provides-Extra: homeassistant
+Requires-Dist: aiohttp==3.13.3; extra == "homeassistant"
+Provides-Extra: sms
+Requires-Dist: aiohttp==3.13.3; extra == "sms"
+Provides-Extra: computer-use
+Requires-Dist: mcp==1.26.0; extra == "computer-use"
+Requires-Dist: starlette==1.0.1; extra == "computer-use"
+Provides-Extra: acp
+Requires-Dist: agent-client-protocol==0.9.0; extra == "acp"
+Provides-Extra: mistral
+Requires-Dist: mistralai==2.4.8; extra == "mistral"
+Provides-Extra: bedrock
+Requires-Dist: boto3==1.42.89; extra == "bedrock"
+Provides-Extra: azure-identity
+Requires-Dist: azure-identity==1.25.3; extra == "azure-identity"
+Provides-Extra: termux
+Requires-Dist: python-telegram-bot[webhooks]==22.6; extra == "termux"
+Requires-Dist: clawksis-agent[cron]; extra == "termux"
+Requires-Dist: clawksis-agent[cli]; extra == "termux"
+Requires-Dist: clawksis-agent[pty]; extra == "termux"
+Requires-Dist: clawksis-agent[mcp]; extra == "termux"
+Requires-Dist: clawksis-agent[honcho]; extra == "termux"
+Requires-Dist: clawksis-agent[acp]; extra == "termux"
+Provides-Extra: termux-all
+Requires-Dist: clawksis-agent[termux]; extra == "termux-all"
+Requires-Dist: clawksis-agent[google]; extra == "termux-all"
+Requires-Dist: clawksis-agent[homeassistant]; extra == "termux-all"
+Requires-Dist: clawksis-agent[sms]; extra == "termux-all"
+Requires-Dist: clawksis-agent[web]; extra == "termux-all"
+Provides-Extra: dingtalk
+Requires-Dist: dingtalk-stream==0.24.3; extra == "dingtalk"
+Requires-Dist: alibabacloud-dingtalk==2.2.42; extra == "dingtalk"
+Requires-Dist: qrcode==7.4.2; extra == "dingtalk"
+Provides-Extra: feishu
+Requires-Dist: lark-oapi==1.5.3; extra == "feishu"
+Requires-Dist: qrcode==7.4.2; extra == "feishu"
+Provides-Extra: google
+Requires-Dist: google-api-python-client==2.194.0; extra == "google"
+Requires-Dist: google-auth-oauthlib==1.3.1; extra == "google"
+Requires-Dist: google-auth-httplib2==0.3.1; extra == "google"
+Provides-Extra: youtube
+Requires-Dist: youtube-transcript-api==1.2.4; extra == "youtube"
+Provides-Extra: web
+Requires-Dist: fastapi==0.133.1; extra == "web"
+Requires-Dist: uvicorn[standard]==0.41.0; extra == "web"
+Requires-Dist: starlette==1.0.1; extra == "web"
+Provides-Extra: all
+Requires-Dist: clawksis-agent[cron]; extra == "all"
+Requires-Dist: clawksis-agent[cli]; extra == "all"
+Requires-Dist: clawksis-agent[pty]; extra == "all"
+Requires-Dist: clawksis-agent[mcp]; extra == "all"
+Requires-Dist: clawksis-agent[homeassistant]; extra == "all"
+Requires-Dist: clawksis-agent[sms]; extra == "all"
+Requires-Dist: clawksis-agent[acp]; extra == "all"
+Requires-Dist: clawksis-agent[google]; extra == "all"
+Requires-Dist: clawksis-agent[web]; extra == "all"
+Requires-Dist: clawksis-agent[youtube]; extra == "all"
+Dynamic: license-file
+
+<p align="center">
+  <img src="assets/banner.png" alt="Clawksis" width="80%">
+</p>
+
+# Clawksis
+
+Agente de IA autónomo que corre en tu propio servidor. Habla con él desde Telegram, WhatsApp o Discord mientras trabaja en un VPS. Aprende de cada sesión, crea skills propias y mejora con el uso.
+
+<p align="center">
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT"></a>
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/issues"><img src="https://img.shields.io/badge/Issues-GitHub-red?style=for-the-badge" alt="Issues"></a>
+</p>
+
+---
+
+## Instalación
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
+```
+
+> **Windows:** `iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)`
+>
+> **Android/Termux:** el mismo `curl` detecta Termux automáticamente.
+
+El instalador descarga el código, crea un virtualenv Python, instala dependencias de Node, construye el dashboard web y enlaza `clawk` en tu PATH.
+
+---
+
+## Primeros pasos
+
+```bash
+# 1. Configurar proveedor LLM y API key
+clawk setup
+
+# 2. Hablar con el agente
+clawk
+
+# 3. Verificar instalación
+clawk doctor
+```
+
+`clawk setup` te pregunta qué proveedor usar (OpenAI, Anthropic, OpenRouter, DeepSeek, Gemini u otro), te pide la API key y configura el modelo. Todo queda en `~/.clawksis/.env` y `~/.clawksis/config.yaml`.
+
+---
+
+## Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `clawk` | Chat interactivo en la terminal |
+| `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
+| `clawk -z "mensaje"` | Respuesta directa sin modo interactivo |
+| `clawk -m gpt-4o` | Override de modelo para esa sesión |
+| `clawk model` | Cambiar modelo de forma interactiva |
+| `clawk tools` | Activar/desactivar herramientas |
+| `clawk config edit` | Editar configuración en tu editor |
+| `clawk doctor` | Diagnóstico completo del sistema |
+| `clawk doctor --fix` | Autocorregir problemas detectados |
+| `clawk update` | Actualizar a la última versión |
+| `clawk gateway run` | Correr el gateway de mensajería en primer plano |
+| `clawk gateway install` | Instalar gateway como servicio del sistema |
+| `clawk gateway status` | Ver si el gateway está corriendo |
+| `clawk dashboard` | Abrir el dashboard web en el browser |
+| `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
+
+---
+
+## Self-hosted: acceso por dominio
+
+### 1. Instalar y configurar
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
+clawk setup
+```
+
+### 2. Gateway como servicio (arranca solo al reiniciar)
+
+```bash
+sudo clawk gateway install --system
+clawk gateway status
+```
+
+### 3. Reverse proxy con nginx + HTTPS
+
+El dashboard corre en `127.0.0.1:9119` por defecto. Config nginx:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name tudominio.com;
+
+    ssl_certificate     /etc/letsencrypt/live/tudominio.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tudominio.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:9119;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d tudominio.com
+```
+
+### 4. Login y dashboard
+
+Configura la contraseña del dashboard en `~/.clawksis/config.yaml`:
+
+```yaml
+dashboard:
+  password: "tu-password-aqui"
+```
+
+Luego entra a `https://tudominio.com` — verás el login y después el dashboard.
+
+---
+
+## Mensajería (Telegram, WhatsApp, Discord)
+
+```bash
+# Telegram — requiere bot token de @BotFather
+clawk gateway install --telegram --token TU_BOT_TOKEN
+
+# Ver estado
+clawk gateway status
+```
+
+Agrega tokens en `~/.clawksis/.env`:
+
+```bash
+TELEGRAM_BOT_TOKEN=tu_token
+DISCORD_BOT_TOKEN=tu_token
+```
+
+---
+
+## Problemas comunes
+
+**`clawk` no se encuentra después de instalar:**
+```bash
+source ~/.bashrc   # o ~/.zshrc / ~/.config/fish/config.fish
+clawk doctor --fix
+```
+
+**Error de API key:**
+```bash
+clawk setup        # reconfigurar desde el wizard
+# o editar directamente:
+nano ~/.clawksis/.env
+```
+
+**Gateway no arranca:**
+```bash
+clawk gateway status   # ver el error específico
+clawk doctor           # diagnóstico completo
+```
+
+**Diagnóstico completo:**
+```bash
+clawk doctor
+```
+Muestra Python version, configuración, herramientas disponibles y qué configurar para activar funciones opcionales (búsqueda web, generación de imágenes, etc.).
+
+---
+
+## Actualizar
+
+```bash
+clawk update
+```
+
+Actualiza desde el repositorio y preserva tu configuración en `~/.clawksis/`.
+
+---
+
+## Desinstalar
+
+```bash
+clawk uninstall
+```
+
+Elimina el código y el comando `clawk`. Tu configuración en `~/.clawksis/` no se toca.
+
+---
+
+## Licencia
+
+MIT. Basado en [hermes-agent](https://github.com/NousResearch/hermes-agent) de Nous Research — copyright original conservado en `LICENSE`.
+
+Modificaciones adicionales © 2026 Gradient AI / Samuel Gomez.

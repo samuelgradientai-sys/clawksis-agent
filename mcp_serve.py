@@ -115,7 +115,9 @@ def _get_sessions_dir() -> Path:
         return get_clawk_home() / "sessions"
 
     except ImportError:
-        return Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis")) / "sessions"
+        return (
+            Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis")) / "sessions"
+        )
 
 
 def _get_session_db():
@@ -549,7 +551,8 @@ class EventBridge:
 
         except ImportError:
             db_file = (
-                Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis")) / "state.db"
+                Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis"))
+                / "state.db"
             )
 
         try:

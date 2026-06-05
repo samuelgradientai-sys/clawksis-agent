@@ -104,7 +104,7 @@ describe('DEFAULT_THEME', () => {
 
 
 
-    expect(DEFAULT_THEME.color.primary).toBe('#FFD700')
+    expect(DEFAULT_THEME.color.primary).toBe('#8D70F0')
 
     expect(DEFAULT_THEME.color.error).toBe('#ef5350')
 
@@ -122,13 +122,13 @@ describe('LIGHT_THEME', () => {
 
 
 
-    expect(LIGHT_THEME.color.primary).not.toBe('#FFD700')
+    expect(LIGHT_THEME.color.primary).not.toBe('#8D70F0')
 
-    expect(LIGHT_THEME.color.accent).not.toBe('#FFBF00')
+    expect(LIGHT_THEME.color.accent).not.toBe('#6C4FD6')
 
-    expect(LIGHT_THEME.color.muted).not.toBe('#B8860B')
+    expect(LIGHT_THEME.color.muted).not.toBe('#4A3496')
 
-    expect(LIGHT_THEME.color.statusWarn).not.toBe('#FFD700')
+    expect(LIGHT_THEME.color.statusWarn).not.toBe('#8D70F0')
 
   })
 
