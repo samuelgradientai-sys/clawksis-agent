@@ -1,82 +1,161 @@
----
-title: "Qdrant Vector Search — 用于 RAG 和语义搜索的高性能向量相似度搜索引擎"
-sidebar_label: "Qdrant Vector Search"
-description: "用于 RAG 和语义搜索的高性能向量相似度搜索引擎"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Qdrant Vector Search
-
-用于 RAG 和语义搜索的高性能向量相似度搜索引擎。适用于构建需要快速最近邻搜索、带过滤的混合搜索，或基于 Rust 高性能的可扩展向量存储的生产级 RAG 系统。
-
-## Skill 元数据
-
-| | |
-|---|---|
-| 来源 | 可选 — 使用 `clawk skills install official/mlops/qdrant` 安装 |
-| 路径 | `optional-skills/mlops/qdrant` |
-| 版本 | `1.0.0` |
-| 作者 | Orchestra Research |
-| 许可证 | MIT |
-| 依赖 | `qdrant-client>=1.12.0` |
-| 平台 | linux, macos, windows |
-| 标签 | `RAG`, `Vector Search`, `Qdrant`, `Semantic Search`, `Embeddings`, `Similarity Search`, `HNSW`, `Production`, `Distributed` |
-
-## 参考：完整 SKILL.md
-
-:::info
-以下是 Clawksis 在触发此 skill 时加载的完整 skill 定义。这是 skill 激活时 agent 所看到的指令内容。
-:::
-
-# Qdrant - 向量相似度搜索引擎
-
-用 Rust 编写的高性能向量数据库，适用于生产级 RAG 和语义搜索。
-
-## 何时使用 Qdrant
-
-**在以下情况下使用 Qdrant：**
-- 构建需要低延迟的生产级 RAG 系统
-- 需要混合搜索（向量 + 元数据过滤）
-- 需要通过分片/副本实现水平扩展
-- 希望本地部署并完全掌控数据
-- 每条记录需要多向量存储（稠密 + 稀疏）
-- 构建实时推荐系统
-
-**核心特性：**
-- **Rust 驱动**：内存安全，高性能
-- **丰富过滤**：在搜索时按任意 payload 字段过滤
-- **多向量**：每个点支持稠密、稀疏、多稠密向量
-- **量化**：标量、乘积、二值量化，节省内存
-- **分布式**：Raft 共识、分片、副本
-- **REST + gRPC**：两套 API 功能完全对等
-
-**以下情况请使用替代方案：**
-- **Chroma**：更简单的配置，嵌入式使用场景
-- **FAISS**：追求极致原始速度，研究/批处理场景
-- **Pinecone**：完全托管，零运维偏好
-- **Weaviate**：偏好 GraphQL，内置向量化器
-
-## 快速开始
-
-### 安装
-
-```bash
-# Python 客户端
-pip install qdrant-client
-
-# Docker（推荐用于开发）
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-
-# Docker 持久化存储
-docker run -p 6333:6333 -p 6334:6334 \
-    -v $(pwd)/qdrant_storage:/qdrant/storage \
-    qdrant/qdrant
-```
-
-### 基本用法
-
-```pythonfrom qdrant_client import QdrantClient
+---
+
+title: "Qdrant Vector Search — 用于 RAG 和语义搜索的高性能向量相似度搜索引擎"
+
+sidebar_label: "Qdrant Vector Search"
+
+description: "用于 RAG 和语义搜索的高性能向量相似度搜索引擎"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Qdrant Vector Search
+
+
+
+用于 RAG 和语义搜索的高性能向量相似度搜索引擎。适用于构建需要快速最近邻搜索、带过滤的混合搜索，或基于 Rust 高性能的可扩展向量存储的生产级 RAG 系统。
+
+
+
+## Skill 元数据
+
+
+
+| | |
+
+|---|---|
+
+| 来源 | 可选 — 使用 `clawk skills install official/mlops/qdrant` 安装 |
+
+| 路径 | `optional-skills/mlops/qdrant` |
+
+| 版本 | `1.0.0` |
+
+| 作者 | Orchestra Research |
+
+| 许可证 | MIT |
+
+| 依赖 | `qdrant-client>=1.12.0` |
+
+| 平台 | linux, macos, windows |
+
+| 标签 | `RAG`, `Vector Search`, `Qdrant`, `Semantic Search`, `Embeddings`, `Similarity Search`, `HNSW`, `Production`, `Distributed` |
+
+
+
+## 参考：完整 SKILL.md
+
+
+
+:::info
+
+以下是 Clawksis 在触发此 skill 时加载的完整 skill 定义。这是 skill 激活时 agent 所看到的指令内容。
+
+:::
+
+
+
+# Qdrant - 向量相似度搜索引擎
+
+
+
+用 Rust 编写的高性能向量数据库，适用于生产级 RAG 和语义搜索。
+
+
+
+## 何时使用 Qdrant
+
+
+
+**在以下情况下使用 Qdrant：**
+
+- 构建需要低延迟的生产级 RAG 系统
+
+- 需要混合搜索（向量 + 元数据过滤）
+
+- 需要通过分片/副本实现水平扩展
+
+- 希望本地部署并完全掌控数据
+
+- 每条记录需要多向量存储（稠密 + 稀疏）
+
+- 构建实时推荐系统
+
+
+
+**核心特性：**
+
+- **Rust 驱动**：内存安全，高性能
+
+- **丰富过滤**：在搜索时按任意 payload 字段过滤
+
+- **多向量**：每个点支持稠密、稀疏、多稠密向量
+
+- **量化**：标量、乘积、二值量化，节省内存
+
+- **分布式**：Raft 共识、分片、副本
+
+- **REST + gRPC**：两套 API 功能完全对等
+
+
+
+**以下情况请使用替代方案：**
+
+- **Chroma**：更简单的配置，嵌入式使用场景
+
+- **FAISS**：追求极致原始速度，研究/批处理场景
+
+- **Pinecone**：完全托管，零运维偏好
+
+- **Weaviate**：偏好 GraphQL，内置向量化器
+
+
+
+## 快速开始
+
+
+
+### 安装
+
+
+
+```bash
+
+# Python 客户端
+
+pip install qdrant-client
+
+
+
+# Docker（推荐用于开发）
+
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+
+
+
+# Docker 持久化存储
+
+docker run -p 6333:6333 -p 6334:6334 \
+
+    -v $(pwd)/qdrant_storage:/qdrant/storage \
+
+    qdrant/qdrant
+
+```
+
+
+
+### 基本用法
+
+
+
+```python
+from qdrant_client import QdrantClient
 
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
@@ -125,13 +204,20 @@ results = client.search(
 
 for point in results:
     print(f"ID: {point.id}, Score: {point.score}, Payload: {point.payload}")
-```
-
-## 核心概念
-
-### Points（点）— 基本数据单元
-
-```pythonfrom qdrant_client.models import PointStruct
+```
+
+
+
+## 核心概念
+
+
+
+### Points（点）— 基本数据单元
+
+
+
+```python
+from qdrant_client.models import PointStruct
 
 
 # Point = ID + 向量 + Payload
@@ -155,11 +241,16 @@ client.upsert(
     points=[point1, point2, point3],
     wait=True,  # 等待索引完成
 )
-```
-
-### Collections（集合）— 向量容器
-
-```pythonfrom qdrant_client.models import VectorParams, Distance, HnswConfigDiff
+```
+
+
+
+### Collections（集合）— 向量容器
+
+
+
+```python
+from qdrant_client.models import VectorParams, Distance, HnswConfigDiff
 
 
 # 使用 HNSW 配置创建集合
@@ -184,22 +275,38 @@ client.create_collection(
 info = client.get_collection("documents")
 
 print(f"Points: {info.points_count}, Vectors: {info.vectors_count}")
-```
-
-### 距离度量
-
-| 度量 | 使用场景 | 范围 |
-|--------|----------|-------|
-| `COSINE` | 文本 embedding、归一化向量 | 0 到 2 |
-| `EUCLID` | 空间数据、图像特征 | 0 到 ∞ |
-| `DOT` | 推荐系统、非归一化向量 | -∞ 到 ∞ |
-| `MANHATTAN` | 稀疏特征、离散数据 | 0 到 ∞ |
-
-## 搜索操作
-
-### 基本搜索
-
-```python# 简单最近邻搜索
+```
+
+
+
+### 距离度量
+
+
+
+| 度量 | 使用场景 | 范围 |
+
+|--------|----------|-------|
+
+| `COSINE` | 文本 embedding、归一化向量 | 0 到 2 |
+
+| `EUCLID` | 空间数据、图像特征 | 0 到 ∞ |
+
+| `DOT` | 推荐系统、非归一化向量 | -∞ 到 ∞ |
+
+| `MANHATTAN` | 稀疏特征、离散数据 | 0 到 ∞ |
+
+
+
+## 搜索操作
+
+
+
+### 基本搜索
+
+
+
+```python
+# 简单最近邻搜索
 
 results = client.search(
     collection_name="documents",
@@ -208,11 +315,16 @@ results = client.search(
     with_payload=True,
     with_vectors=False,  # 不返回向量（更快）
 )
-```
-
-### 带过滤的搜索
-
-```pythonfrom qdrant_client.models import Filter, FieldCondition, MatchValue, Range
+```
+
+
+
+### 带过滤的搜索
+
+
+
+```python
+from qdrant_client.models import Filter, FieldCondition, MatchValue, Range
 
 
 # 复杂过滤
@@ -244,11 +356,16 @@ results = client.search(
     },
     limit=10,
 )
-```
-
-### 批量搜索
-
-```pythonfrom qdrant_client.models import SearchRequest
+```
+
+
+
+### 批量搜索
+
+
+
+```python
+from qdrant_client.models import SearchRequest
 
 
 # 单次请求中执行多个查询
@@ -261,13 +378,20 @@ results = client.search_batch(
         SearchRequest(vector=[0.3, ...], limit=10),
     ],
 )
-```
-
-## RAG 集成
-
-### 与 sentence-transformers 集成
-
-```pythonfrom sentence_transformers import SentenceTransformer
+```
+
+
+
+## RAG 集成
+
+
+
+### 与 sentence-transformers 集成
+
+
+
+```python
+from sentence_transformers import SentenceTransformer
 
 from qdrant_client import QdrantClient
 
@@ -328,11 +452,16 @@ def retrieve(query: str, top_k: int = 5) -> list[dict]:
 context = retrieve("What is Python?")
 
 prompt = f"Context: {context}\n\nQuestion: What is Python?"
-```
-
-### 与 LangChain 集成
-
-```pythonfrom langchain_community.vectorstores import Qdrant
+```
+
+
+
+### 与 LangChain 集成
+
+
+
+```python
+from langchain_community.vectorstores import Qdrant
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
@@ -344,11 +473,16 @@ vectorstore = Qdrant.from_documents(
 )
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-```
-
-### 与 LlamaIndex 集成
-
-```pythonfrom llama_index.vector_stores.qdrant import QdrantVectorStore
+```
+
+
+
+### 与 LlamaIndex 集成
+
+
+
+```python
+from llama_index.vector_stores.qdrant import QdrantVectorStore
 
 from llama_index.core import VectorStoreIndex, StorageContext
 
@@ -360,13 +494,20 @@ storage_context = StorageContext.from_defaults(vector_store=vector_store)
 index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
 
 query_engine = index.as_query_engine()
-```
-
-## 多向量支持
-
-### 命名向量（不同 embedding 模型）
-
-```pythonfrom qdrant_client.models import VectorParams, Distance
+```
+
+
+
+## 多向量支持
+
+
+
+### 命名向量（不同 embedding 模型）
+
+
+
+```python
+from qdrant_client.models import VectorParams, Distance
 
 
 # 包含多种向量类型的集合
@@ -401,11 +542,16 @@ results = client.search(
     query_vector=("dense", query_dense),  # 指定使用哪个向量
     limit=10,
 )
-```
-
-### 稀疏向量（BM25、SPLADE）
-
-```pythonfrom qdrant_client.models import SparseVectorParams, SparseIndexParams, SparseVector
+```
+
+
+
+### 稀疏向量（BM25、SPLADE）
+
+
+
+```python
+from qdrant_client.models import SparseVectorParams, SparseIndexParams, SparseVector
 
 
 # 包含稀疏向量的集合
@@ -431,11 +577,16 @@ client.upsert(
         )
     ],
 )
-```
-
-## 量化（内存优化）
-
-```pythonfrom qdrant_client.models import (
+```
+
+
+
+## 量化（内存优化）
+
+
+
+```python
+from qdrant_client.models import (
     ScalarQuantization,
     ScalarQuantizationConfig,
     ScalarType,
@@ -465,11 +616,16 @@ results = client.search(
     search_params={"quantization": {"rescore": True}},  # 对 top 结果重新评分
     limit=10,
 )
-```
-
-## Payload 索引
-
-```pythonfrom qdrant_client.models import PayloadSchemaType
+```
+
+
+
+## Payload 索引
+
+
+
+```python
+from qdrant_client.models import PayloadSchemaType
 
 
 # 创建 payload 索引以加速过滤
@@ -489,13 +645,20 @@ client.create_payload_index(
 
 
 # 索引类型：KEYWORD、INTEGER、FLOAT、GEO、TEXT（全文）、BOOL
-```
-
-## 生产部署
-
-### Qdrant Cloud
-
-```pythonfrom qdrant_client import QdrantClient
+```
+
+
+
+## 生产部署
+
+
+
+### Qdrant Cloud
+
+
+
+```python
+from qdrant_client import QdrantClient
 
 
 # 连接到 Qdrant Cloud
@@ -503,11 +666,16 @@ client.create_payload_index(
 client = QdrantClient(
     url="https://your-cluster.cloud.qdrant.io", api_key="your-api-key"
 )
-```
-
-### 性能调优
-
-```python# 优化搜索速度（更高召回率）
+```
+
+
+
+### 性能调优
+
+
+
+```python
+# 优化搜索速度（更高召回率）
 
 client.update_collection(
     collection_name="documents", hnsw_config=HnswConfigDiff(ef_construct=200, m=32)
@@ -519,31 +687,50 @@ client.update_collection(
 client.update_collection(
     collection_name="documents", optimizer_config={"indexing_threshold": 20000}
 )
-```
-
-## 最佳实践
-
-1. **批量操作** — 使用批量 upsert/search 提升效率
-2. **Payload 索引** — 对过滤中使用的字段建立索引
-3. **量化** — 对大型集合（>100 万向量）启用量化
-4. **分片** — 对超过 1000 万向量的集合使用分片
-5. **磁盘存储** — 对大型 payload 启用 `on_disk_payload`
-6. **连接池** — 复用客户端实例
-
-## 常见问题
-
-**带过滤的搜索速度慢：**
-```python# 为过滤字段创建 payload 索引
+```
+
+
+
+## 最佳实践
+
+
+
+1. **批量操作** — 使用批量 upsert/search 提升效率
+
+2. **Payload 索引** — 对过滤中使用的字段建立索引
+
+3. **量化** — 对大型集合（>100 万向量）启用量化
+
+4. **分片** — 对超过 1000 万向量的集合使用分片
+
+5. **磁盘存储** — 对大型 payload 启用 `on_disk_payload`
+
+6. **连接池** — 复用客户端实例
+
+
+
+## 常见问题
+
+
+
+**带过滤的搜索速度慢：**
+
+```python
+# 为过滤字段创建 payload 索引
 
 client.create_payload_index(
     collection_name="docs",
     field_name="category",
     field_schema=PayloadSchemaType.KEYWORD,
 )
-```
-
-**内存不足：**
-```python# 启用量化和磁盘存储
+```
+
+
+
+**内存不足：**
+
+```python
+# 启用量化和磁盘存储
 
 client.create_collection(
     collection_name="large_collection",
@@ -551,10 +738,14 @@ client.create_collection(
     quantization_config=ScalarQuantization(...),
     on_disk_payload=True,
 )
-```
-
-**连接问题：**
-```python# 使用超时和重试
+```
+
+
+
+**连接问题：**
+
+```python
+# 使用超时和重试
 
 client = QdrantClient(
     host="localhost",
@@ -562,18 +753,32 @@ client = QdrantClient(
     timeout=30,
     prefer_grpc=True,  # gRPC 性能更佳
 )
-```
-
-## 参考资料
-
-- **[高级用法](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** — 分布式模式、混合搜索、推荐系统
-- **[故障排查](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** — 常见问题、调试、性能调优
-
-## 资源
-
-- **GitHub**：https://github.com/qdrant/qdrant（22k+ stars）
-- **文档**：https://qdrant.tech/documentation/
-- **Python 客户端**：https://github.com/qdrant/qdrant-client
-- **Cloud**：https://cloud.qdrant.io
-- **版本**：1.12.0+
+```
+
+
+
+## 参考资料
+
+
+
+- **[高级用法](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** — 分布式模式、混合搜索、推荐系统
+
+- **[故障排查](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** — 常见问题、调试、性能调优
+
+
+
+## 资源
+
+
+
+- **GitHub**：https://github.com/qdrant/qdrant（22k+ stars）
+
+- **文档**：https://qdrant.tech/documentation/
+
+- **Python 客户端**：https://github.com/qdrant/qdrant-client
+
+- **Cloud**：https://cloud.qdrant.io
+
+- **版本**：1.12.0+
+
 - **许可证**：Apache 2.0

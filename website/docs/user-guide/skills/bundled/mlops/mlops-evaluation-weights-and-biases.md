@@ -1,67 +1,131 @@
----
-title: "Weights And Biases — W&B: log ML experiments, sweeps, model registry, dashboards"
-sidebar_label: "Weights And Biases"
-description: "W&B: log ML experiments, sweeps, model registry, dashboards"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Weights And Biases
-
-W&B: log ML experiments, sweeps, model registry, dashboards.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Bundled (installed by default) |
-| Path | `skills/mlops/evaluation/weights-and-biases` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `wandb` |
-| Platforms | linux, macos, windows |
-| Tags | `MLOps`, `Weights And Biases`, `WandB`, `Experiment Tracking`, `Hyperparameter Tuning`, `Model Registry`, `Collaboration`, `Real-Time Visualization`, `PyTorch`, `TensorFlow`, `HuggingFace` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# Weights & Biases: ML Experiment Tracking & MLOps
-
-## When to Use This Skill
-
-Use Weights & Biases (W&B) when you need to:
-- **Track ML experiments** with automatic metric logging
-- **Visualize training** in real-time dashboards
-- **Compare runs** across hyperparameters and configurations
-- **Optimize hyperparameters** with automated sweeps
-- **Manage model registry** with versioning and lineage
-- **Collaborate on ML projects** with team workspaces
-- **Track artifacts** (datasets, models, code) with lineage
-
-**Users**: 200,000+ ML practitioners | **GitHub Stars**: 10.5k+ | **Integrations**: 100+
-
-## Installation
-
-```bash
-# Install W&B
-pip install wandb
-
-# Login (creates API key)
-wandb login
-
-# Or set API key programmatically
-export WANDB_API_KEY=your_api_key_here
-```
-
-## Quick Start
-
-### Basic Experiment Tracking
-
-```pythonimport wandb
+---
+
+title: "Weights And Biases — W&B: log ML experiments, sweeps, model registry, dashboards"
+
+sidebar_label: "Weights And Biases"
+
+description: "W&B: log ML experiments, sweeps, model registry, dashboards"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Weights And Biases
+
+
+
+W&B: log ML experiments, sweeps, model registry, dashboards.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Bundled (installed by default) |
+
+| Path | `skills/mlops/evaluation/weights-and-biases` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `wandb` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `MLOps`, `Weights And Biases`, `WandB`, `Experiment Tracking`, `Hyperparameter Tuning`, `Model Registry`, `Collaboration`, `Real-Time Visualization`, `PyTorch`, `TensorFlow`, `HuggingFace` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# Weights & Biases: ML Experiment Tracking & MLOps
+
+
+
+## When to Use This Skill
+
+
+
+Use Weights & Biases (W&B) when you need to:
+
+- **Track ML experiments** with automatic metric logging
+
+- **Visualize training** in real-time dashboards
+
+- **Compare runs** across hyperparameters and configurations
+
+- **Optimize hyperparameters** with automated sweeps
+
+- **Manage model registry** with versioning and lineage
+
+- **Collaborate on ML projects** with team workspaces
+
+- **Track artifacts** (datasets, models, code) with lineage
+
+
+
+**Users**: 200,000+ ML practitioners | **GitHub Stars**: 10.5k+ | **Integrations**: 100+
+
+
+
+## Installation
+
+
+
+```bash
+
+# Install W&B
+
+pip install wandb
+
+
+
+# Login (creates API key)
+
+wandb login
+
+
+
+# Or set API key programmatically
+
+export WANDB_API_KEY=your_api_key_here
+
+```
+
+
+
+## Quick Start
+
+
+
+### Basic Experiment Tracking
+
+
+
+```python
+import wandb
 
 
 # Initialize a run
@@ -100,11 +164,16 @@ for epoch in range(run.config.epochs):
 # Finish the run
 
 wandb.finish()
-```
-
-### With PyTorch
-
-```pythonimport torch
+```
+
+
+
+### With PyTorch
+
+
+
+```python
+import torch
 
 import wandb
 
@@ -151,16 +220,26 @@ wandb.save("model.pth")  # Upload to W&B
 
 
 wandb.finish()
-```
-
-## Core Concepts
-
-### 1. Projects and Runs
-
-**Project**: Collection of related experiments
-**Run**: Single execution of your training script
-
-```python# Create/use project
+```
+
+
+
+## Core Concepts
+
+
+
+### 1. Projects and Runs
+
+
+
+**Project**: Collection of related experiments
+
+**Run**: Single execution of your training script
+
+
+
+```python
+# Create/use project
 
 run = wandb.init(
     project="image-classification",
@@ -175,13 +254,20 @@ run = wandb.init(
 print(f"Run ID: {run.id}")
 
 print(f"Run URL: {run.url}")
-```
-
-### 2. Configuration Tracking
-
-Track hyperparameters automatically:
-
-```pythonconfig = {
+```
+
+
+
+### 2. Configuration Tracking
+
+
+
+Track hyperparameters automatically:
+
+
+
+```python
+config = {
     # Model architecture
     "model": "ResNet50",
     "pretrained": True,
@@ -204,11 +290,16 @@ wandb.init(project="my-project", config=config)
 lr = wandb.config.learning_rate
 
 batch_size = wandb.config.batch_size
-```
-
-### 3. Metric Logging
-
-```python# Log scalars
+```
+
+
+
+### 3. Metric Logging
+
+
+
+```python
+# Log scalars
 
 wandb.log({"loss": 0.5, "accuracy": 0.92})
 
@@ -245,11 +336,16 @@ wandb.log({"gradients": wandb.Histogram(gradients)})
 table = wandb.Table(columns=["id", "prediction", "ground_truth"])
 
 wandb.log({"predictions": table})
-```
-
-### 4. Model Checkpointing
-
-```pythonimport torch
+```
+
+
+
+### 4. Model Checkpointing
+
+
+
+```python
+import torch
 
 import wandb
 
@@ -279,15 +375,24 @@ artifact = wandb.Artifact("model", type="model")
 artifact.add_file("checkpoint.pth")
 
 wandb.log_artifact(artifact)
-```
-
-## Hyperparameter Sweeps
-
-Automatically search for optimal hyperparameters.
-
-### Define Sweep Configuration
-
-```pythonsweep_config = {
+```
+
+
+
+## Hyperparameter Sweeps
+
+
+
+Automatically search for optimal hyperparameters.
+
+
+
+### Define Sweep Configuration
+
+
+
+```python
+sweep_config = {
     "method": "bayes",  # or 'grid', 'random'
     "metric": {"name": "val/accuracy", "goal": "maximize"},
     "parameters": {
@@ -302,11 +407,16 @@ Automatically search for optimal hyperparameters.
 # Initialize sweep
 
 sweep_id = wandb.sweep(sweep_config, project="my-project")
-```
-
-### Define Training Function
-
-```pythondef train():
+```
+
+
+
+### Define Training Function
+
+
+
+```python
+def train():
 
     # Initialize run
 
@@ -341,11 +451,16 @@ sweep_id = wandb.sweep(sweep_config, project="my-project")
 # Run sweep
 
 wandb.agent(sweep_id, function=train, count=50)  # Run 50 trials
-```
-
-### Sweep Strategies
-
-```python# Grid search - exhaustive
+```
+
+
+
+### Sweep Strategies
+
+
+
+```python
+# Grid search - exhaustive
 
 sweep_config = {
     "method": "grid",
@@ -374,15 +489,24 @@ sweep_config = {
     "metric": {"name": "val/loss", "goal": "minimize"},
     "parameters": {"lr": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1}},
 }
-```
-
-## Artifacts
-
-Track datasets, models, and other files with lineage.
-
-### Log Artifacts
-
-```python# Create artifact
+```
+
+
+
+## Artifacts
+
+
+
+Track datasets, models, and other files with lineage.
+
+
+
+### Log Artifacts
+
+
+
+```python
+# Create artifact
 
 artifact = wandb.Artifact(
     name="training-dataset",
@@ -402,11 +526,16 @@ artifact.add_dir("data/images/")
 # Log artifact
 
 wandb.log_artifact(artifact)
-```
-
-### Use Artifacts
-
-```python# Download and use artifact
+```
+
+
+
+### Use Artifacts
+
+
+
+```python
+# Download and use artifact
 
 run = wandb.init(project="my-project")
 
@@ -421,11 +550,16 @@ artifact_dir = artifact.download()
 # Use the data
 
 data = load_data(f"{artifact_dir}/train.csv")
-```
-
-### Model Registry
-
-```python# Log model as artifact
+```
+
+
+
+### Model Registry
+
+
+
+```python
+# Log model as artifact
 
 model_artifact = wandb.Artifact(
     name="resnet50-model",
@@ -442,13 +576,20 @@ wandb.log_artifact(model_artifact, aliases=["best", "production"])
 # Link to model registry
 
 run.link_artifact(model_artifact, "model-registry/production-models")
-```
-
-## Integration Examples
-
-### HuggingFace Transformers
-
-```pythonfrom transformers import Trainer, TrainingArguments
+```
+
+
+
+## Integration Examples
+
+
+
+### HuggingFace Transformers
+
+
+
+```python
+from transformers import Trainer, TrainingArguments
 
 import wandb
 
@@ -480,11 +621,16 @@ trainer = Trainer(
 
 
 trainer.train()
-```
-
-### PyTorch Lightning
-
-```pythonfrom pytorch_lightning import Trainer
+```
+
+
+
+### PyTorch Lightning
+
+
+
+```python
+from pytorch_lightning import Trainer
 
 from pytorch_lightning.loggers import WandbLogger
 
@@ -505,11 +651,16 @@ trainer = Trainer(logger=wandb_logger, max_epochs=10)
 
 
 trainer.fit(model, datamodule=dm)
-```
-
-### Keras/TensorFlow
-
-```pythonimport wandb
+```
+
+
+
+### Keras/TensorFlow
+
+
+
+```python
+import wandb
 
 from wandb.keras import WandbCallback
 
@@ -528,13 +679,20 @@ model.fit(
     epochs=10,
     callbacks=[WandbCallback()],  # Auto-logs metrics
 )
-```
-
-## Visualization & Analysis
-
-### Custom Charts
-
-```python# Log custom visualizations
+```
+
+
+
+## Visualization & Analysis
+
+
+
+### Custom Charts
+
+
+
+```python
+# Log custom visualizations
 
 import matplotlib.pyplot as plt
 
@@ -553,31 +711,51 @@ wandb.log({
         probs=None, y_true=ground_truth, preds=predictions, class_names=class_names
     )
 })
-```
-
-### Reports
-
-Create shareable reports in W&B UI:
-- Combine runs, charts, and text
-- Markdown support
-- Embeddable visualizations
-- Team collaboration
-
-## Best Practices
-
-### 1. Organize with Tags and Groups
-
-```pythonwandb.init(
+```
+
+
+
+### Reports
+
+
+
+Create shareable reports in W&B UI:
+
+- Combine runs, charts, and text
+
+- Markdown support
+
+- Embeddable visualizations
+
+- Team collaboration
+
+
+
+## Best Practices
+
+
+
+### 1. Organize with Tags and Groups
+
+
+
+```python
+wandb.init(
     project="my-project",
     tags=["baseline", "resnet50", "imagenet"],
     group="resnet-experiments",  # Group related runs
     job_type="train",  # Type of job
 )
-```
-
-### 2. Log Everything Relevant
-
-```python# Log system metrics
+```
+
+
+
+### 2. Log Everything Relevant
+
+
+
+```python
+# Log system metrics
 
 wandb.log({
     "gpu/util": gpu_utilization,
@@ -594,11 +772,16 @@ wandb.log({"git_commit": git_commit_hash})
 # Log data splits
 
 wandb.log({"data/train_size": len(train_dataset), "data/val_size": len(val_dataset)})
-```
-
-### 3. Use Descriptive Names
-
-```python# ✅ Good: Descriptive run names
+```
+
+
+
+### 3. Use Descriptive Names
+
+
+
+```python
+# ✅ Good: Descriptive run names
 
 wandb.init(project="nlp-classification", name="bert-base-lr0.001-bs32-epoch10")
 
@@ -606,11 +789,16 @@ wandb.init(project="nlp-classification", name="bert-base-lr0.001-bs32-epoch10")
 # ❌ Bad: Generic names
 
 wandb.init(project="nlp", name="run1")
-```
-
-### 4. Save Important Artifacts
-
-```python# Save final model
+```
+
+
+
+### 4. Save Important Artifacts
+
+
+
+```python
+# Save final model
 
 artifact = wandb.Artifact("final-model", type="model")
 
@@ -626,11 +814,16 @@ predictions_table = wandb.Table(
 )
 
 wandb.log({"predictions": predictions_table})
-```
-
-### 5. Use Offline Mode for Unstable Connections
-
-```pythonimport os
+```
+
+
+
+### 5. Use Offline Mode for Unstable Connections
+
+
+
+```python
+import os
 
 
 # Enable offline mode
@@ -646,43 +839,79 @@ wandb.init(project="my-project")
 # Sync later
 
 # wandb sync <run_directory>
-```
-
-## Team Collaboration
-
-### Share Runs
-
-```python# Runs are automatically shareable via URL
+```
+
+
+
+## Team Collaboration
+
+
+
+### Share Runs
+
+
+
+```python
+# Runs are automatically shareable via URL
 
 run = wandb.init(project="team-project")
 
 print(f"Share this URL: {run.url}")
-```
-
-### Team Projects
-
-- Create team account at wandb.ai
-- Add team members
-- Set project visibility (private/public)
-- Use team-level artifacts and model registry
-
-## Pricing
-
-- **Free**: Unlimited public projects, 100GB storage
-- **Academic**: Free for students/researchers
-- **Teams**: $50/seat/month, private projects, unlimited storage
-- **Enterprise**: Custom pricing, on-prem options
-
-## Resources
-
-- **Documentation**: https://docs.wandb.ai
-- **GitHub**: https://github.com/wandb/wandb (10.5k+ stars)
-- **Examples**: https://github.com/wandb/examples
-- **Community**: https://wandb.ai/community
-- **Discord**: https://wandb.me/discord
-
-## See Also
-
-- `references/sweeps.md` - Comprehensive hyperparameter optimization guide
-- `references/artifacts.md` - Data and model versioning patterns
-- `references/integrations.md` - Framework-specific examples
+```
+
+
+
+### Team Projects
+
+
+
+- Create team account at wandb.ai
+
+- Add team members
+
+- Set project visibility (private/public)
+
+- Use team-level artifacts and model registry
+
+
+
+## Pricing
+
+
+
+- **Free**: Unlimited public projects, 100GB storage
+
+- **Academic**: Free for students/researchers
+
+- **Teams**: $50/seat/month, private projects, unlimited storage
+
+- **Enterprise**: Custom pricing, on-prem options
+
+
+
+## Resources
+
+
+
+- **Documentation**: https://docs.wandb.ai
+
+- **GitHub**: https://github.com/wandb/wandb (10.5k+ stars)
+
+- **Examples**: https://github.com/wandb/examples
+
+- **Community**: https://wandb.ai/community
+
+- **Discord**: https://wandb.me/discord
+
+
+
+## See Also
+
+
+
+- `references/sweeps.md` - Comprehensive hyperparameter optimization guide
+
+- `references/artifacts.md` - Data and model versioning patterns
+
+- `references/integrations.md` - Framework-specific examples
+

@@ -1,72 +1,141 @@
----
-title: "Huggingface Tokenizers — Fast tokenizers optimized for research and production"
-sidebar_label: "Huggingface Tokenizers"
-description: "Fast tokenizers optimized for research and production"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Huggingface Tokenizers
-
-Fast tokenizers optimized for research and production. Rust-based implementation tokenizes 1GB in &lt;20 seconds. Supports BPE, WordPiece, and Unigram algorithms. Train custom vocabularies, track alignments, handle padding/truncation. Integrates seamlessly with transformers. Use when you need high-performance tokenization or custom tokenizer training.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Optional — install with `clawk skills install official/mlops/huggingface-tokenizers` |
-| Path | `optional-skills/mlops/huggingface-tokenizers` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `tokenizers`, `transformers`, `datasets` |
-| Platforms | linux, macos, windows |
-| Tags | `Tokenization`, `HuggingFace`, `BPE`, `WordPiece`, `Unigram`, `Fast Tokenization`, `Rust`, `Custom Tokenizer`, `Alignment Tracking`, `Production` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# HuggingFace Tokenizers - Fast Tokenization for NLP
-
-Fast, production-ready tokenizers with Rust performance and Python ease-of-use.
-
-## When to use HuggingFace Tokenizers
-
-**Use HuggingFace Tokenizers when:**
-- Need extremely fast tokenization (&lt;20s per GB of text)
-- Training custom tokenizers from scratch
-- Want alignment tracking (token → original text position)
-- Building production NLP pipelines
-- Need to tokenize large corpora efficiently
-
-**Performance**:
-- **Speed**: &lt;20 seconds to tokenize 1GB on CPU
-- **Implementation**: Rust core with Python/Node.js bindings
-- **Efficiency**: 10-100× faster than pure Python implementations
-
-**Use alternatives instead**:
-- **SentencePiece**: Language-independent, used by T5/ALBERT
-- **tiktoken**: OpenAI's BPE tokenizer for GPT models
-- **transformers AutoTokenizer**: Loading pretrained only (uses this library internally)
-
-## Quick start
-
-### Installation
-
-```bash
-# Install tokenizers
-pip install tokenizers
-
-# With transformers integration
-pip install tokenizers transformers
-```
-
-### Load pretrained tokenizer
-
-```pythonfrom tokenizers import Tokenizer
+---
+
+title: "Huggingface Tokenizers — Fast tokenizers optimized for research and production"
+
+sidebar_label: "Huggingface Tokenizers"
+
+description: "Fast tokenizers optimized for research and production"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Huggingface Tokenizers
+
+
+
+Fast tokenizers optimized for research and production. Rust-based implementation tokenizes 1GB in &lt;20 seconds. Supports BPE, WordPiece, and Unigram algorithms. Train custom vocabularies, track alignments, handle padding/truncation. Integrates seamlessly with transformers. Use when you need high-performance tokenization or custom tokenizer training.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Optional — install with `clawk skills install official/mlops/huggingface-tokenizers` |
+
+| Path | `optional-skills/mlops/huggingface-tokenizers` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `tokenizers`, `transformers`, `datasets` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `Tokenization`, `HuggingFace`, `BPE`, `WordPiece`, `Unigram`, `Fast Tokenization`, `Rust`, `Custom Tokenizer`, `Alignment Tracking`, `Production` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# HuggingFace Tokenizers - Fast Tokenization for NLP
+
+
+
+Fast, production-ready tokenizers with Rust performance and Python ease-of-use.
+
+
+
+## When to use HuggingFace Tokenizers
+
+
+
+**Use HuggingFace Tokenizers when:**
+
+- Need extremely fast tokenization (&lt;20s per GB of text)
+
+- Training custom tokenizers from scratch
+
+- Want alignment tracking (token → original text position)
+
+- Building production NLP pipelines
+
+- Need to tokenize large corpora efficiently
+
+
+
+**Performance**:
+
+- **Speed**: &lt;20 seconds to tokenize 1GB on CPU
+
+- **Implementation**: Rust core with Python/Node.js bindings
+
+- **Efficiency**: 10-100× faster than pure Python implementations
+
+
+
+**Use alternatives instead**:
+
+- **SentencePiece**: Language-independent, used by T5/ALBERT
+
+- **tiktoken**: OpenAI's BPE tokenizer for GPT models
+
+- **transformers AutoTokenizer**: Loading pretrained only (uses this library internally)
+
+
+
+## Quick start
+
+
+
+### Installation
+
+
+
+```bash
+
+# Install tokenizers
+
+pip install tokenizers
+
+
+
+# With transformers integration
+
+pip install tokenizers transformers
+
+```
+
+
+
+### Load pretrained tokenizer
+
+
+
+```python
+from tokenizers import Tokenizer
 
 
 # Load from HuggingFace Hub
@@ -88,11 +157,16 @@ print(output.ids)  # [7592, 1010, 2129, 2024, 2017, 1029]
 text = tokenizer.decode(output.ids)
 
 print(text)  # "hello, how are you?"
-```
-
-### Train custom BPE tokenizer
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+### Train custom BPE tokenizer
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from tokenizers.models import BPE
 
@@ -127,13 +201,20 @@ tokenizer.train(files, trainer)
 # Save
 
 tokenizer.save("my-tokenizer.json")
-```
-
-**Training time**: ~1-2 minutes for 100MB corpus, ~10-20 minutes for 1GB
-
-### Batch encoding with padding
-
-```python# Enable padding
+```
+
+
+
+**Training time**: ~1-2 minutes for 100MB corpus, ~10-20 minutes for 1GB
+
+
+
+### Batch encoding with padding
+
+
+
+```python
+# Enable padding
 
 tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
 
@@ -151,21 +232,36 @@ for encoding in encodings:
 # [101, 7592, 2088, 102, 3, 3, 3]
 
 # [101, 2023, 2003, 1037, 2936, 6251, 102]
-```
-
-## Tokenization algorithms
-
-### BPE (Byte-Pair Encoding)
-
-**How it works**:
-1. Start with character-level vocabulary
-2. Find most frequent character pair
-3. Merge into new token, add to vocabulary
-4. Repeat until vocabulary size reached
-
-**Used by**: GPT-2, GPT-3, RoBERTa, BART, DeBERTa
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+## Tokenization algorithms
+
+
+
+### BPE (Byte-Pair Encoding)
+
+
+
+**How it works**:
+
+1. Start with character-level vocabulary
+
+2. Find most frequent character pair
+
+3. Merge into new token, add to vocabulary
+
+4. Repeat until vocabulary size reached
+
+
+
+**Used by**: GPT-2, GPT-3, RoBERTa, BART, DeBERTa
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from tokenizers.models import BPE
 
@@ -185,28 +281,50 @@ trainer = BpeTrainer(
 
 
 tokenizer.train(files=["data.txt"], trainer=trainer)
-```
-
-**Advantages**:
-- Handles OOV words well (breaks into subwords)
-- Flexible vocabulary size
-- Good for morphologically rich languages
-
-**Trade-offs**:
-- Tokenization depends on merge order
-- May split common words unexpectedly
-
-### WordPiece
-
-**How it works**:
-1. Start with character vocabulary
-2. Score merge pairs: `frequency(pair) / (frequency(first) × frequency(second))`
-3. Merge highest scoring pair
-4. Repeat until vocabulary size reached
-
-**Used by**: BERT, DistilBERT, MobileBERT
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+**Advantages**:
+
+- Handles OOV words well (breaks into subwords)
+
+- Flexible vocabulary size
+
+- Good for morphologically rich languages
+
+
+
+**Trade-offs**:
+
+- Tokenization depends on merge order
+
+- May split common words unexpectedly
+
+
+
+### WordPiece
+
+
+
+**How it works**:
+
+1. Start with character vocabulary
+
+2. Score merge pairs: `frequency(pair) / (frequency(first) × frequency(second))`
+
+3. Merge highest scoring pair
+
+4. Repeat until vocabulary size reached
+
+
+
+**Used by**: BERT, DistilBERT, MobileBERT
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from tokenizers.models import WordPiece
 
@@ -232,27 +350,48 @@ trainer = WordPieceTrainer(
 
 
 tokenizer.train(files=["corpus.txt"], trainer=trainer)
-```
-
-**Advantages**:
-- Prioritizes meaningful merges (high score = semantically related)
-- Used successfully in BERT (state-of-the-art results)
-
-**Trade-offs**:
-- Unknown words become `[UNK]` if no subword match
-- Saves vocabulary, not merge rules (larger files)
-
-### Unigram
-
-**How it works**:
-1. Start with large vocabulary (all substrings)
-2. Compute loss for corpus with current vocabulary
-3. Remove tokens with minimal impact on loss
-4. Repeat until vocabulary size reached
-
-**Used by**: ALBERT, T5, mBART, XLNet (via SentencePiece)
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+**Advantages**:
+
+- Prioritizes meaningful merges (high score = semantically related)
+
+- Used successfully in BERT (state-of-the-art results)
+
+
+
+**Trade-offs**:
+
+- Unknown words become `[UNK]` if no subword match
+
+- Saves vocabulary, not merge rules (larger files)
+
+
+
+### Unigram
+
+
+
+**How it works**:
+
+1. Start with large vocabulary (all substrings)
+
+2. Compute loss for corpus with current vocabulary
+
+3. Remove tokens with minimal impact on loss
+
+4. Repeat until vocabulary size reached
+
+
+
+**Used by**: ALBERT, T5, mBART, XLNet (via SentencePiece)
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from tokenizers.models import Unigram
 
@@ -268,26 +407,46 @@ trainer = UnigramTrainer(
 
 
 tokenizer.train(files=["data.txt"], trainer=trainer)
-```
-
-**Advantages**:
-- Probabilistic (finds most likely tokenization)
-- Works well for languages without word boundaries
-- Handles diverse linguistic contexts
-
-**Trade-offs**:
-- Computationally expensive to train
-- More hyperparameters to tune
-
-## Tokenization pipeline
-
-Complete pipeline: **Normalization → Pre-tokenization → Model → Post-processing**
-
-### Normalization
-
-Clean and standardize text:
-
-```pythonfrom tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
+```
+
+
+
+**Advantages**:
+
+- Probabilistic (finds most likely tokenization)
+
+- Works well for languages without word boundaries
+
+- Handles diverse linguistic contexts
+
+
+
+**Trade-offs**:
+
+- Computationally expensive to train
+
+- More hyperparameters to tune
+
+
+
+## Tokenization pipeline
+
+
+
+Complete pipeline: **Normalization → Pre-tokenization → Model → Post-processing**
+
+
+
+### Normalization
+
+
+
+Clean and standardize text:
+
+
+
+```python
+from tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
 
 
 tokenizer.normalizer = Sequence([
@@ -300,20 +459,34 @@ tokenizer.normalizer = Sequence([
 # Input: "Héllo WORLD"
 
 # After normalization: "hello world"
-```
-
-**Common normalizers**:
-- `NFD`, `NFC`, `NFKD`, `NFKC` - Unicode normalization forms
-- `Lowercase()` - Convert to lowercase
-- `StripAccents()` - Remove accents (é → e)
-- `Strip()` - Remove whitespace
-- `Replace(pattern, content)` - Regex replacement
-
-### Pre-tokenization
-
-Split text into word-like units:
-
-```pythonfrom tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
+```
+
+
+
+**Common normalizers**:
+
+- `NFD`, `NFC`, `NFKD`, `NFKC` - Unicode normalization forms
+
+- `Lowercase()` - Convert to lowercase
+
+- `StripAccents()` - Remove accents (é → e)
+
+- `Strip()` - Remove whitespace
+
+- `Replace(pattern, content)` - Regex replacement
+
+
+
+### Pre-tokenization
+
+
+
+Split text into word-like units:
+
+
+
+```python
+from tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
 
 
 # Split on whitespace and punctuation
@@ -324,20 +497,34 @@ tokenizer.pre_tokenizer = Sequence([Whitespace(), Punctuation()])
 # Input: "Hello, world!"
 
 # After pre-tokenization: ["Hello", ",", "world", "!"]
-```
-
-**Common pre-tokenizers**:
-- `Whitespace()` - Split on spaces, tabs, newlines
-- `ByteLevel()` - GPT-2 style byte-level splitting
-- `Punctuation()` - Isolate punctuation
-- `Digits(individual_digits=True)` - Split digits individually
-- `Metaspace()` - Replace spaces with ▁ (SentencePiece style)
-
-### Post-processing
-
-Add special tokens for model input:
-
-```pythonfrom tokenizers.processors import TemplateProcessing
+```
+
+
+
+**Common pre-tokenizers**:
+
+- `Whitespace()` - Split on spaces, tabs, newlines
+
+- `ByteLevel()` - GPT-2 style byte-level splitting
+
+- `Punctuation()` - Isolate punctuation
+
+- `Digits(individual_digits=True)` - Split digits individually
+
+- `Metaspace()` - Replace spaces with ▁ (SentencePiece style)
+
+
+
+### Post-processing
+
+
+
+Add special tokens for model input:
+
+
+
+```python
+from tokenizers.processors import TemplateProcessing
 
 
 # BERT-style: [CLS] sentence [SEP]
@@ -350,10 +537,14 @@ tokenizer.post_processor = TemplateProcessing(
         ("[SEP]", 2),
     ],
 )
-```
-
-**Common patterns**:
-```python# GPT-2: sentence <|endoftext|>
+```
+
+
+
+**Common patterns**:
+
+```python
+# GPT-2: sentence <|endoftext|>
 
 TemplateProcessing(single="$A <|endoftext|>", special_tokens=[("<|endoftext|>", 50256)])
 
@@ -365,13 +556,20 @@ TemplateProcessing(
     pair="<s> $A </s> </s> $B </s>",
     special_tokens=[("<s>", 0), ("</s>", 2)],
 )
-```
-
-## Alignment tracking
-
-Track token positions in original text:
-
-```pythonoutput = tokenizer.encode("Hello, world!")
+```
+
+
+
+## Alignment tracking
+
+
+
+Track token positions in original text:
+
+
+
+```python
+output = tokenizer.encode("Hello, world!")
 
 
 # Get token offsets
@@ -391,18 +589,30 @@ for token, offset in zip(output.tokens, output.offsets):
 # world      → [ 7, 12): 'world'
 
 # !          → [12, 13): '!'
-```
-
-**Use cases**:
-- Named entity recognition (map predictions back to text)
-- Question answering (extract answer spans)
-- Token classification (align labels to original positions)
-
-## Integration with transformers
-
-### Load with AutoTokenizer
-
-```pythonfrom transformers import AutoTokenizer
+```
+
+
+
+**Use cases**:
+
+- Named entity recognition (map predictions back to text)
+
+- Question answering (extract answer spans)
+
+- Token classification (align labels to original positions)
+
+
+
+## Integration with transformers
+
+
+
+### Load with AutoTokenizer
+
+
+
+```python
+from transformers import AutoTokenizer
 
 
 # AutoTokenizer automatically uses fast tokenizers
@@ -420,11 +630,16 @@ print(tokenizer.is_fast)  # True
 fast_tokenizer = tokenizer.backend_tokenizer
 
 print(type(fast_tokenizer))  # <class 'tokenizers.Tokenizer'>
-```
-
-### Convert custom tokenizer to transformers
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+### Convert custom tokenizer to transformers
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from transformers import PreTrainedTokenizerFast
 
@@ -455,13 +670,20 @@ transformers_tokenizer = PreTrainedTokenizerFast(
 outputs = transformers_tokenizer(
     "Hello world", padding=True, truncation=True, max_length=512, return_tensors="pt"
 )
-```
-
-## Common patterns
-
-### Train from iterator (large datasets)
-
-```pythonfrom datasets import load_dataset
+```
+
+
+
+## Common patterns
+
+
+
+### Train from iterator (large datasets)
+
+
+
+```python
+from datasets import load_dataset
 
 
 # Load dataset
@@ -485,13 +707,20 @@ tokenizer.train_from_iterator(
     trainer=trainer,
     length=len(dataset),  # For progress bar
 )
-```
-
-**Performance**: Processes 1GB in ~10-20 minutes
-
-### Enable truncation and padding
-
-```python# Enable truncation
+```
+
+
+
+**Performance**: Processes 1GB in ~10-20 minutes
+
+
+
+### Enable truncation and padding
+
+
+
+```python
+# Enable truncation
 
 tokenizer.enable_truncation(max_length=512)
 
@@ -510,11 +739,16 @@ tokenizer.enable_padding(
 output = tokenizer.encode("This is a long sentence that will be truncated...")
 
 print(len(output.ids))  # 512
-```
-
-### Multi-processing
-
-```pythonfrom tokenizers import Tokenizer
+```
+
+
+
+### Multi-processing
+
+
+
+```python
+from tokenizers import Tokenizer
 
 from multiprocessing import Pool
 
@@ -541,75 +775,147 @@ with Pool(8) as pool:
     # Encode in parallel
 
     results = pool.map(encode_batch, chunks)
-```
-
-**Speedup**: 5-8× with 8 cores
-
-## Performance benchmarks
-
-### Training speed
-
-| Corpus Size | BPE (30k vocab) | WordPiece (30k) | Unigram (8k) |
-|-------------|-----------------|-----------------|--------------|
-| 10 MB       | 15 sec          | 18 sec          | 25 sec       |
-| 100 MB      | 1.5 min         | 2 min           | 4 min        |
-| 1 GB        | 15 min          | 20 min          | 40 min       |
-
-**Hardware**: 16-core CPU, tested on English Wikipedia
-
-### Tokenization speed
-
-| Implementation | 1 GB corpus | Throughput    |
-|----------------|-------------|---------------|
-| Pure Python    | ~20 minutes | ~50 MB/min    |
-| HF Tokenizers  | ~15 seconds | ~4 GB/min     |
-| **Speedup**    | **80×**     | **80×**       |
-
-**Test**: English text, average sentence length 20 words
-
-### Memory usage
-
-| Task                    | Memory  |
-|-------------------------|---------|
-| Load tokenizer          | ~10 MB  |
-| Train BPE (30k vocab)   | ~200 MB |
-| Encode 1M sentences     | ~500 MB |
-
-## Supported models
-
-Pre-trained tokenizers available via `from_pretrained()`:
-
-**BERT family**:
-- `bert-base-uncased`, `bert-large-cased`
-- `distilbert-base-uncased`
-- `roberta-base`, `roberta-large`
-
-**GPT family**:
-- `gpt2`, `gpt2-medium`, `gpt2-large`
-- `distilgpt2`
-
-**T5 family**:
-- `t5-small`, `t5-base`, `t5-large`
-- `google/flan-t5-xxl`
-
-**Other**:
-- `facebook/bart-base`, `facebook/mbart-large-cc25`
-- `albert-base-v2`, `albert-xlarge-v2`
-- `xlm-roberta-base`, `xlm-roberta-large`
-
-Browse all: https://huggingface.co/models?library=tokenizers
-
-## References
-
-- **[Training Guide](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/training.md)** - Train custom tokenizers, configure trainers, handle large datasets
-- **[Algorithms Deep Dive](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/algorithms.md)** - BPE, WordPiece, Unigram explained in detail
-- **[Pipeline Components](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/pipeline.md)** - Normalizers, pre-tokenizers, post-processors, decoders
-- **[Transformers Integration](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/integration.md)** - AutoTokenizer, PreTrainedTokenizerFast, special tokens
-
-## Resources
-
-- **Docs**: https://huggingface.co/docs/tokenizers
-- **GitHub**: https://github.com/huggingface/tokenizers ⭐ 9,000+
-- **Version**: 0.20.0+
-- **Course**: https://huggingface.co/learn/nlp-course/chapter6/1
-- **Paper**: BPE (Sennrich et al., 2016), WordPiece (Schuster & Nakajima, 2012)
+```
+
+
+
+**Speedup**: 5-8× with 8 cores
+
+
+
+## Performance benchmarks
+
+
+
+### Training speed
+
+
+
+| Corpus Size | BPE (30k vocab) | WordPiece (30k) | Unigram (8k) |
+
+|-------------|-----------------|-----------------|--------------|
+
+| 10 MB       | 15 sec          | 18 sec          | 25 sec       |
+
+| 100 MB      | 1.5 min         | 2 min           | 4 min        |
+
+| 1 GB        | 15 min          | 20 min          | 40 min       |
+
+
+
+**Hardware**: 16-core CPU, tested on English Wikipedia
+
+
+
+### Tokenization speed
+
+
+
+| Implementation | 1 GB corpus | Throughput    |
+
+|----------------|-------------|---------------|
+
+| Pure Python    | ~20 minutes | ~50 MB/min    |
+
+| HF Tokenizers  | ~15 seconds | ~4 GB/min     |
+
+| **Speedup**    | **80×**     | **80×**       |
+
+
+
+**Test**: English text, average sentence length 20 words
+
+
+
+### Memory usage
+
+
+
+| Task                    | Memory  |
+
+|-------------------------|---------|
+
+| Load tokenizer          | ~10 MB  |
+
+| Train BPE (30k vocab)   | ~200 MB |
+
+| Encode 1M sentences     | ~500 MB |
+
+
+
+## Supported models
+
+
+
+Pre-trained tokenizers available via `from_pretrained()`:
+
+
+
+**BERT family**:
+
+- `bert-base-uncased`, `bert-large-cased`
+
+- `distilbert-base-uncased`
+
+- `roberta-base`, `roberta-large`
+
+
+
+**GPT family**:
+
+- `gpt2`, `gpt2-medium`, `gpt2-large`
+
+- `distilgpt2`
+
+
+
+**T5 family**:
+
+- `t5-small`, `t5-base`, `t5-large`
+
+- `google/flan-t5-xxl`
+
+
+
+**Other**:
+
+- `facebook/bart-base`, `facebook/mbart-large-cc25`
+
+- `albert-base-v2`, `albert-xlarge-v2`
+
+- `xlm-roberta-base`, `xlm-roberta-large`
+
+
+
+Browse all: https://huggingface.co/models?library=tokenizers
+
+
+
+## References
+
+
+
+- **[Training Guide](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/training.md)** - Train custom tokenizers, configure trainers, handle large datasets
+
+- **[Algorithms Deep Dive](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/algorithms.md)** - BPE, WordPiece, Unigram explained in detail
+
+- **[Pipeline Components](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/pipeline.md)** - Normalizers, pre-tokenizers, post-processors, decoders
+
+- **[Transformers Integration](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/huggingface-tokenizers/references/integration.md)** - AutoTokenizer, PreTrainedTokenizerFast, special tokens
+
+
+
+## Resources
+
+
+
+- **Docs**: https://huggingface.co/docs/tokenizers
+
+- **GitHub**: https://github.com/huggingface/tokenizers ⭐ 9,000+
+
+- **Version**: 0.20.0+
+
+- **Course**: https://huggingface.co/learn/nlp-course/chapter6/1
+
+- **Paper**: BPE (Sennrich et al., 2016), WordPiece (Schuster & Nakajima, 2012)
+

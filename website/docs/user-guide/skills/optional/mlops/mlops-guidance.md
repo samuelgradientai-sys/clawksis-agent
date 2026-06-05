@@ -1,64 +1,125 @@
----
-title: "Guidance"
-sidebar_label: "Guidance"
-description: "Control LLM output with regex and grammars, guarantee valid JSON/XML/code generation, enforce structured formats, and build multi-step workflows with Guidanc..."
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Guidance
-
-Control LLM output with regex and grammars, guarantee valid JSON/XML/code generation, enforce structured formats, and build multi-step workflows with Guidance - Microsoft Research's constrained generation framework
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Optional — install with `clawk skills install official/mlops/guidance` |
-| Path | `optional-skills/mlops/guidance` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `guidance`, `transformers` |
-| Platforms | linux, macos, windows |
-| Tags | `Prompt Engineering`, `Guidance`, `Constrained Generation`, `Structured Output`, `JSON Validation`, `Grammar`, `Microsoft Research`, `Format Enforcement`, `Multi-Step Workflows` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# Guidance: Constrained LLM Generation
-
-## When to Use This Skill
-
-Use Guidance when you need to:
-- **Control LLM output syntax** with regex or grammars
-- **Guarantee valid JSON/XML/code** generation
-- **Reduce latency** vs traditional prompting approaches
-- **Enforce structured formats** (dates, emails, IDs, etc.)
-- **Build multi-step workflows** with Pythonic control flow
-- **Prevent invalid outputs** through grammatical constraints
-
-**GitHub Stars**: 18,000+ | **From**: Microsoft Research
-
-## Installation
-
-```bash
-# Base installation
-pip install guidance
-
-# With specific backends
-pip install guidance[transformers]  # Hugging Face models
-pip install guidance[llama_cpp]     # llama.cpp models
-```
-
-## Quick Start
-
-### Basic Example: Structured Generation
-
-```pythonfrom guidance import models, gen
+---
+
+title: "Guidance"
+
+sidebar_label: "Guidance"
+
+description: "Control LLM output with regex and grammars, guarantee valid JSON/XML/code generation, enforce structured formats, and build multi-step workflows with Guidanc..."
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Guidance
+
+
+
+Control LLM output with regex and grammars, guarantee valid JSON/XML/code generation, enforce structured formats, and build multi-step workflows with Guidance - Microsoft Research's constrained generation framework
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Optional — install with `clawk skills install official/mlops/guidance` |
+
+| Path | `optional-skills/mlops/guidance` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `guidance`, `transformers` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `Prompt Engineering`, `Guidance`, `Constrained Generation`, `Structured Output`, `JSON Validation`, `Grammar`, `Microsoft Research`, `Format Enforcement`, `Multi-Step Workflows` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# Guidance: Constrained LLM Generation
+
+
+
+## When to Use This Skill
+
+
+
+Use Guidance when you need to:
+
+- **Control LLM output syntax** with regex or grammars
+
+- **Guarantee valid JSON/XML/code** generation
+
+- **Reduce latency** vs traditional prompting approaches
+
+- **Enforce structured formats** (dates, emails, IDs, etc.)
+
+- **Build multi-step workflows** with Pythonic control flow
+
+- **Prevent invalid outputs** through grammatical constraints
+
+
+
+**GitHub Stars**: 18,000+ | **From**: Microsoft Research
+
+
+
+## Installation
+
+
+
+```bash
+
+# Base installation
+
+pip install guidance
+
+
+
+# With specific backends
+
+pip install guidance[transformers]  # Hugging Face models
+
+pip install guidance[llama_cpp]     # llama.cpp models
+
+```
+
+
+
+## Quick Start
+
+
+
+### Basic Example: Structured Generation
+
+
+
+```python
+from guidance import models, gen
 
 
 # Load model (supports OpenAI, Transformers, llama.cpp)
@@ -72,11 +133,16 @@ result = lm + "The capital of France is " + gen("capital", max_tokens=5)
 
 
 print(result["capital"])  # "Paris"
-```
-
-### With Anthropic Claude
-
-```pythonfrom guidance import models, gen, system, user, assistant
+```
+
+
+
+### With Anthropic Claude
+
+
+
+```python
+from guidance import models, gen, system, user, assistant
 
 
 # Configure Claude
@@ -96,15 +162,24 @@ with user():
 
 with assistant():
     lm += gen(max_tokens=20)
-```
-
-## Core Concepts
-
-### 1. Context Managers
-
-Guidance uses Pythonic context managers for chat-style interactions.
-
-```pythonfrom guidance import system, user, assistant, gen
+```
+
+
+
+## Core Concepts
+
+
+
+### 1. Context Managers
+
+
+
+Guidance uses Pythonic context managers for chat-style interactions.
+
+
+
+```python
+from guidance import system, user, assistant, gen
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -129,20 +204,34 @@ with assistant():
 
 
 print(lm["response"])
-```
-
-**Benefits:**
-- Natural chat flow
-- Clear role separation
-- Easy to read and maintain
-
-### 2. Constrained Generation
-
-Guidance ensures outputs match specified patterns using regex or grammars.
-
-#### Regex Constraints
-
-```pythonfrom guidance import models, gen
+```
+
+
+
+**Benefits:**
+
+- Natural chat flow
+
+- Clear role separation
+
+- Easy to read and maintain
+
+
+
+### 2. Constrained Generation
+
+
+
+Guidance ensures outputs match specified patterns using regex or grammars.
+
+
+
+#### Regex Constraints
+
+
+
+```python
+from guidance import models, gen
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -166,16 +255,26 @@ lm += "Phone: " + gen("phone", regex=r"\d{3}-\d{3}-\d{4}")
 print(lm["email"])  # Guaranteed valid email
 
 print(lm["date"])  # Guaranteed YYYY-MM-DD format
-```
-
-**How it works:**
-- Regex converted to grammar at token level
-- Invalid tokens filtered during generation
-- Model can only produce matching outputs
-
-#### Selection Constraints
-
-```pythonfrom guidance import models, gen, select
+```
+
+
+
+**How it works:**
+
+- Regex converted to grammar at token level
+
+- Invalid tokens filtered during generation
+
+- Model can only produce matching outputs
+
+
+
+#### Selection Constraints
+
+
+
+```python
+from guidance import models, gen, select
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -196,15 +295,24 @@ lm += "Best answer: " + select(
 print(lm["sentiment"])  # One of: positive, negative, neutral
 
 print(lm["answer"])  # One of: A, B, C, or D
-```
-
-### 3. Token Healing
-
-Guidance automatically "heals" token boundaries between prompt and generation.
-
-**Problem:** Tokenization creates unnatural boundaries.
-
-```python# Without token healing
+```
+
+
+
+### 3. Token Healing
+
+
+
+Guidance automatically "heals" token boundaries between prompt and generation.
+
+
+
+**Problem:** Tokenization creates unnatural boundaries.
+
+
+
+```python
+# Without token healing
 
 prompt = "The capital of France is "
 
@@ -213,11 +321,16 @@ prompt = "The capital of France is "
 # First generated token might be " Par" (with leading space)
 
 # Result: "The capital of France is  Paris" (double space!)
-```
-
-**Solution:** Guidance backs up one token and regenerates.
-
-```pythonfrom guidance import models, gen
+```
+
+
+
+**Solution:** Guidance backs up one token and regenerates.
+
+
+
+```python
+from guidance import models, gen
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -228,18 +341,30 @@ lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm += "The capital of France is " + gen("capital", max_tokens=5)
 
 # Result: "The capital of France is Paris" (correct spacing)
-```
-
-**Benefits:**
-- Natural text boundaries
-- No awkward spacing issues
-- Better model performance (sees natural token sequences)
-
-### 4. Grammar-Based Generation
-
-Define complex structures using context-free grammars.
-
-```pythonfrom guidance import models, gen
+```
+
+
+
+**Benefits:**
+
+- Natural text boundaries
+
+- No awkward spacing issues
+
+- Better model performance (sees natural token sequences)
+
+
+
+### 4. Grammar-Based Generation
+
+
+
+Define complex structures using context-free grammars.
+
+
+
+```python
+from guidance import models, gen
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -268,19 +393,32 @@ lm += gen("person", grammar=json_grammar)
 
 
 print(lm["person"])  # Guaranteed valid JSON structure
-```
-
-**Use cases:**
-- Complex structured outputs
-- Nested data structures
-- Programming language syntax
-- Domain-specific languages
-
-### 5. Guidance Functions
-
-Create reusable generation patterns with the `@guidance` decorator.
-
-```pythonfrom guidance import guidance, gen, models
+```
+
+
+
+**Use cases:**
+
+- Complex structured outputs
+
+- Nested data structures
+
+- Programming language syntax
+
+- Domain-specific languages
+
+
+
+### 5. Guidance Functions
+
+
+
+Create reusable generation patterns with the `@guidance` decorator.
+
+
+
+```python
+from guidance import guidance, gen, models
 
 
 @guidance
@@ -304,11 +442,16 @@ lm = generate_person(lm)
 print(lm["name"])
 
 print(lm["age"])
-```
-
-**Stateful Functions:**
-
-```python@guidance(stateless=False)
+```
+
+
+
+**Stateful Functions:**
+
+
+
+```python
+@guidance(stateless=False)
 def react_agent(lm, question, tools, max_rounds=5):
     """ReAct agent with tool use."""
 
@@ -341,53 +484,82 @@ def react_agent(lm, question, tools, max_rounds=5):
     lm += "\nFinal Answer: " + gen("answer", max_tokens=100)
 
     return lm
-```
-
-## Backend Configuration
-
-### Anthropic Claude
-
-```pythonfrom guidance import models
+```
+
+
+
+## Backend Configuration
+
+
+
+### Anthropic Claude
+
+
+
+```python
+from guidance import models
 
 
 lm = models.Anthropic(
     model="claude-sonnet-4-5-20250929",
     api_key="your-api-key",  # Or set ANTHROPIC_API_KEY env var
 )
-```
-
-### OpenAI
-
-```pythonlm = models.OpenAI(
+```
+
+
+
+### OpenAI
+
+
+
+```python
+lm = models.OpenAI(
     model="gpt-4o-mini",
     api_key="your-api-key",  # Or set OPENAI_API_KEY env var
 )
-```
-
-### Local Models (Transformers)
-
-```pythonfrom guidance.models import Transformers
+```
+
+
+
+### Local Models (Transformers)
+
+
+
+```python
+from guidance.models import Transformers
 
 
 lm = Transformers(
     "microsoft/Phi-4-mini-instruct",
     device="cuda",  # Or "cpu"
 )
-```
-
-### Local Models (llama.cpp)
-
-```pythonfrom guidance.models import LlamaCpp
+```
+
+
+
+### Local Models (llama.cpp)
+
+
+
+```python
+from guidance.models import LlamaCpp
 
 
 lm = LlamaCpp(model_path="/path/to/model.gguf", n_ctx=4096, n_gpu_layers=35)
-```
-
-## Common Patterns
-
-### Pattern 1: JSON Generation
-
-```pythonfrom guidance import models, gen, system, user, assistant
+```
+
+
+
+## Common Patterns
+
+
+
+### Pattern 1: JSON Generation
+
+
+
+```python
+from guidance import models, gen, system, user, assistant
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -426,11 +598,16 @@ with assistant():
 
 
 print(lm)  # Valid JSON guaranteed
-```
-
-### Pattern 2: Classification
-
-```pythonfrom guidance import models, gen, select
+```
+
+
+
+### Pattern 2: Classification
+
+
+
+```python
+from guidance import models, gen, select
 
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -449,11 +626,16 @@ lm += "\nConfidence: " + gen("confidence", regex=r"[0-9]+", max_tokens=3) + "%"
 print(f"Sentiment: {lm['sentiment']}")
 
 print(f"Confidence: {lm['confidence']}%")
-```
-
-### Pattern 3: Multi-Step Reasoning
-
-```pythonfrom guidance import models, gen, guidance
+```
+
+
+
+### Pattern 3: Multi-Step Reasoning
+
+
+
+```python
+from guidance import models, gen, guidance
 
 
 @guidance
@@ -480,11 +662,16 @@ lm = chain_of_thought(lm, "What is 15% of 200?")
 
 
 print(lm["answer"])
-```
-
-### Pattern 4: ReAct Agent
-
-```pythonfrom guidance import models, gen, select, guidance
+```
+
+
+
+### Pattern 4: ReAct Agent
+
+
+
+```python
+from guidance import models, gen, select, guidance
 
 
 @guidance(stateless=False)
@@ -531,11 +718,16 @@ lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = react_agent(lm, "What is 25 * 4 + 10?")
 
 print(lm["answer"])
-```
-
-### Pattern 5: Data Extraction
-
-```pythonfrom guidance import models, gen, guidance
+```
+
+
+
+### Pattern 5: Data Extraction
+
+
+
+```python
+from guidance import models, gen, guidance
 
 
 @guidance
@@ -578,13 +770,20 @@ print(f"Organization: {lm['organization']}")
 print(f"Date: {lm['date']}")
 
 print(f"Location: {lm['location']}")
-```
-
-## Best Practices
-
-### 1. Use Regex for Format Validation
-
-```python# ✅ Good: Regex ensures valid format
+```
+
+
+
+## Best Practices
+
+
+
+### 1. Use Regex for Format Validation
+
+
+
+```python
+# ✅ Good: Regex ensures valid format
 
 lm += "Email: " + gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 
@@ -592,11 +791,16 @@ lm += "Email: " + gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z
 # ❌ Bad: Free generation may produce invalid emails
 
 lm += "Email: " + gen("email", max_tokens=50)
-```
-
-### 2. Use select() for Fixed Categories
-
-```python# ✅ Good: Guaranteed valid category
+```
+
+
+
+### 2. Use select() for Fixed Categories
+
+
+
+```python
+# ✅ Good: Guaranteed valid category
 
 lm += "Status: " + select(["pending", "approved", "rejected"], name="status")
 
@@ -604,20 +808,30 @@ lm += "Status: " + select(["pending", "approved", "rejected"], name="status")
 # ❌ Bad: May generate typos or invalid values
 
 lm += "Status: " + gen("status", max_tokens=20)
-```
-
-### 3. Leverage Token Healing
-
-```python# Token healing is enabled by default
+```
+
+
+
+### 3. Leverage Token Healing
+
+
+
+```python
+# Token healing is enabled by default
 
 # No special action needed - just concatenate naturally
 
 lm += "The capital is " + gen("capital")  # Automatic healing
-```
-
-### 4. Use stop Sequences
-
-```python# ✅ Good: Stop at newline for single-line outputs
+```
+
+
+
+### 4. Use stop Sequences
+
+
+
+```python
+# ✅ Good: Stop at newline for single-line outputs
 
 lm += "Name: " + gen("name", stop="\n")
 
@@ -625,11 +839,16 @@ lm += "Name: " + gen("name", stop="\n")
 # ❌ Bad: May generate multiple lines
 
 lm += "Name: " + gen("name", max_tokens=50)
-```
-
-### 5. Create Reusable Functions
-
-```python# ✅ Good: Reusable pattern
+```
+
+
+
+### 5. Create Reusable Functions
+
+
+
+```python
+# ✅ Good: Reusable pattern
 
 
 @guidance
@@ -649,11 +868,16 @@ lm = generate_person(lm)
 lm += "\n\n"
 
 lm = generate_person(lm)
-```
-
-### 6. Balance Constraints
-
-```python# ✅ Good: Reasonable constraints
+```
+
+
+
+### 6. Balance Constraints
+
+
+
+```python
+# ✅ Good: Reasonable constraints
 
 lm += gen("name", regex=r"[A-Za-z ]+", max_tokens=30)
 
@@ -661,59 +885,115 @@ lm += gen("name", regex=r"[A-Za-z ]+", max_tokens=30)
 # ❌ Too strict: May fail or be very slow
 
 lm += gen("name", regex=r"^(John|Jane)$", max_tokens=10)
-```
-
-## Comparison to Alternatives
-
-| Feature | Guidance | Instructor | Outlines | LMQL |
-|---------|----------|------------|----------|------|
-| Regex Constraints | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
-| Grammar Support | ✅ CFG | ❌ No | ✅ CFG | ✅ CFG |
-| Pydantic Validation | ❌ No | ✅ Yes | ✅ Yes | ❌ No |
-| Token Healing | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
-| Local Models | ✅ Yes | ⚠️ Limited | ✅ Yes | ✅ Yes |
-| API Models | ✅ Yes | ✅ Yes | ⚠️ Limited | ✅ Yes |
-| Pythonic Syntax | ✅ Yes | ✅ Yes | ✅ Yes | ❌ SQL-like |
-| Learning Curve | Low | Low | Medium | High |
-
-**When to choose Guidance:**
-- Need regex/grammar constraints
-- Want token healing
-- Building complex workflows with control flow
-- Using local models (Transformers, llama.cpp)
-- Prefer Pythonic syntax
-
-**When to choose alternatives:**
-- Instructor: Need Pydantic validation with automatic retrying
-- Outlines: Need JSON schema validation
-- LMQL: Prefer declarative query syntax
-
-## Performance Characteristics
-
-**Latency Reduction:**
-- 30-50% faster than traditional prompting for constrained outputs
-- Token healing reduces unnecessary regeneration
-- Grammar constraints prevent invalid token generation
-
-**Memory Usage:**
-- Minimal overhead vs unconstrained generation
-- Grammar compilation cached after first use
-- Efficient token filtering at inference time
-
-**Token Efficiency:**
-- Prevents wasted tokens on invalid outputs
-- No need for retry loops
-- Direct path to valid outputs
-
-## Resources
-
-- **Documentation**: https://guidance.readthedocs.io
-- **GitHub**: https://github.com/guidance-ai/guidance (18k+ stars)
-- **Notebooks**: https://github.com/guidance-ai/guidance/tree/main/notebooks
-- **Discord**: Community support available
-
-## See Also
-
-- `references/constraints.md` - Comprehensive regex and grammar patterns
-- `references/backends.md` - Backend-specific configuration
-- `references/examples.md` - Production-ready examples
+```
+
+
+
+## Comparison to Alternatives
+
+
+
+| Feature | Guidance | Instructor | Outlines | LMQL |
+
+|---------|----------|------------|----------|------|
+
+| Regex Constraints | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
+
+| Grammar Support | ✅ CFG | ❌ No | ✅ CFG | ✅ CFG |
+
+| Pydantic Validation | ❌ No | ✅ Yes | ✅ Yes | ❌ No |
+
+| Token Healing | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
+
+| Local Models | ✅ Yes | ⚠️ Limited | ✅ Yes | ✅ Yes |
+
+| API Models | ✅ Yes | ✅ Yes | ⚠️ Limited | ✅ Yes |
+
+| Pythonic Syntax | ✅ Yes | ✅ Yes | ✅ Yes | ❌ SQL-like |
+
+| Learning Curve | Low | Low | Medium | High |
+
+
+
+**When to choose Guidance:**
+
+- Need regex/grammar constraints
+
+- Want token healing
+
+- Building complex workflows with control flow
+
+- Using local models (Transformers, llama.cpp)
+
+- Prefer Pythonic syntax
+
+
+
+**When to choose alternatives:**
+
+- Instructor: Need Pydantic validation with automatic retrying
+
+- Outlines: Need JSON schema validation
+
+- LMQL: Prefer declarative query syntax
+
+
+
+## Performance Characteristics
+
+
+
+**Latency Reduction:**
+
+- 30-50% faster than traditional prompting for constrained outputs
+
+- Token healing reduces unnecessary regeneration
+
+- Grammar constraints prevent invalid token generation
+
+
+
+**Memory Usage:**
+
+- Minimal overhead vs unconstrained generation
+
+- Grammar compilation cached after first use
+
+- Efficient token filtering at inference time
+
+
+
+**Token Efficiency:**
+
+- Prevents wasted tokens on invalid outputs
+
+- No need for retry loops
+
+- Direct path to valid outputs
+
+
+
+## Resources
+
+
+
+- **Documentation**: https://guidance.readthedocs.io
+
+- **GitHub**: https://github.com/guidance-ai/guidance (18k+ stars)
+
+- **Notebooks**: https://github.com/guidance-ai/guidance/tree/main/notebooks
+
+- **Discord**: Community support available
+
+
+
+## See Also
+
+
+
+- `references/constraints.md` - Comprehensive regex and grammar patterns
+
+- `references/backends.md` - Backend-specific configuration
+
+- `references/examples.md` - Production-ready examples
+

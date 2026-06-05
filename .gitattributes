@@ -1,2 +1,36 @@
+# Normalize all text files to LF in the repo (Clawksis is deployed on Linux;
+# CRLF/CR endings from the rebrand broke shell scripts and muddied diffs).
+# Git auto-detects binary files via `text=auto` and leaves them untouched.
+* text=auto eol=lf
+
+# Explicit binary types — never apply EOL conversion to these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.db binary
+*.sqlite binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.bz2 binary
+*.xz binary
+*.pdf binary
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+*.webm binary
+*.so binary
+*.dylib binary
+*.dll binary
+*.pyc binary
+
 # Auto-generated files — collapse diffs and exclude from language stats
 web/package-lock.json linguist-generated=true

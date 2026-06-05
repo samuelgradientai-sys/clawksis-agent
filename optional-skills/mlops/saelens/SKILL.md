@@ -1,78 +1,153 @@
----
-name: sparse-autoencoder-training
-description: Provides guidance for training and analyzing Sparse Autoencoders (SAEs) using SAELens to decompose neural network activations into interpretable features. Use when discovering interpretable features, analyzing superposition, or studying monosemantic representations in language models.
-version: 1.0.0
-author: Orchestra Research
-license: MIT
-dependencies: [sae-lens>=6.0.0, transformer-lens>=2.0.0, torch>=2.0.0]
-platforms: [linux, macos, windows]
-metadata:
-  clawk:
-    tags: [Sparse Autoencoders, SAE, Mechanistic Interpretability, Feature Discovery, Superposition]
-
----
-
-# SAELens: Sparse Autoencoders for Mechanistic Interpretability
-
-SAELens is the primary library for training and analyzing Sparse Autoencoders (SAEs) - a technique for decomposing polysemantic neural network activations into sparse, interpretable features. Based on Anthropic's groundbreaking research on monosemanticity.
-
-**GitHub**: [jbloomAus/SAELens](https://github.com/jbloomAus/SAELens) (1,100+ stars)
-
-## The Problem: Polysemanticity & Superposition
-
-Individual neurons in neural networks are **polysemantic** - they activate in multiple, semantically distinct contexts. This happens because models use **superposition** to represent more features than they have neurons, making interpretability difficult.
-
-**SAEs solve this** by decomposing dense activations into sparse, monosemantic features - typically only a small number of features activate for any given input, and each feature corresponds to an interpretable concept.
-
-## When to Use SAELens
-
-**Use SAELens when you need to:**
-- Discover interpretable features in model activations
-- Understand what concepts a model has learned
-- Study superposition and feature geometry
-- Perform feature-based steering or ablation
-- Analyze safety-relevant features (deception, bias, harmful content)
-
-**Consider alternatives when:**
-- You need basic activation analysis → Use **TransformerLens** directly
-- You want causal intervention experiments → Use **pyvene** or **TransformerLens**
-- You need production steering → Consider direct activation engineering
-
-## Installation
-
-```bash
-pip install sae-lens
-```
-
-Requirements: Python 3.10+, transformer-lens>=2.0.0
-
-## Core Concepts
-
-### What SAEs Learn
-
-SAEs are trained to reconstruct model activations through a sparse bottleneck:
-
-```
-Input Activation → Encoder → Sparse Features → Decoder → Reconstructed Activation
-    (d_model)       ↓        (d_sae >> d_model)    ↓         (d_model)
-                 sparsity                      reconstruction
-                 penalty                          loss
-```
-
-**Loss Function**: `MSE(original, reconstructed) + L1_coefficient × L1(features)`
-
-### Key Validation (Anthropic Research)
-
-In "Towards Monosemanticity", human evaluators found **70% of SAE features genuinely interpretable**. Features discovered include:
-- DNA sequences, legal language, HTTP requests
-- Hebrew text, nutrition statements, code syntax
-- Sentiment, named entities, grammatical structures
-
-## Workflow 1: Loading and Analyzing Pre-trained SAEs
-
-### Step-by-Step
-
-```pythonfrom transformer_lens import HookedTransformer
+---
+
+name: sparse-autoencoder-training
+
+description: Provides guidance for training and analyzing Sparse Autoencoders (SAEs) using SAELens to decompose neural network activations into interpretable features. Use when discovering interpretable features, analyzing superposition, or studying monosemantic representations in language models.
+
+version: 1.0.0
+
+author: Orchestra Research
+
+license: MIT
+
+dependencies: [sae-lens>=6.0.0, transformer-lens>=2.0.0, torch>=2.0.0]
+
+platforms: [linux, macos, windows]
+
+metadata:
+
+  clawk:
+
+    tags: [Sparse Autoencoders, SAE, Mechanistic Interpretability, Feature Discovery, Superposition]
+
+
+
+---
+
+
+
+# SAELens: Sparse Autoencoders for Mechanistic Interpretability
+
+
+
+SAELens is the primary library for training and analyzing Sparse Autoencoders (SAEs) - a technique for decomposing polysemantic neural network activations into sparse, interpretable features. Based on Anthropic's groundbreaking research on monosemanticity.
+
+
+
+**GitHub**: [jbloomAus/SAELens](https://github.com/jbloomAus/SAELens) (1,100+ stars)
+
+
+
+## The Problem: Polysemanticity & Superposition
+
+
+
+Individual neurons in neural networks are **polysemantic** - they activate in multiple, semantically distinct contexts. This happens because models use **superposition** to represent more features than they have neurons, making interpretability difficult.
+
+
+
+**SAEs solve this** by decomposing dense activations into sparse, monosemantic features - typically only a small number of features activate for any given input, and each feature corresponds to an interpretable concept.
+
+
+
+## When to Use SAELens
+
+
+
+**Use SAELens when you need to:**
+
+- Discover interpretable features in model activations
+
+- Understand what concepts a model has learned
+
+- Study superposition and feature geometry
+
+- Perform feature-based steering or ablation
+
+- Analyze safety-relevant features (deception, bias, harmful content)
+
+
+
+**Consider alternatives when:**
+
+- You need basic activation analysis → Use **TransformerLens** directly
+
+- You want causal intervention experiments → Use **pyvene** or **TransformerLens**
+
+- You need production steering → Consider direct activation engineering
+
+
+
+## Installation
+
+
+
+```bash
+
+pip install sae-lens
+
+```
+
+
+
+Requirements: Python 3.10+, transformer-lens>=2.0.0
+
+
+
+## Core Concepts
+
+
+
+### What SAEs Learn
+
+
+
+SAEs are trained to reconstruct model activations through a sparse bottleneck:
+
+
+
+```
+
+Input Activation → Encoder → Sparse Features → Decoder → Reconstructed Activation
+
+    (d_model)       ↓        (d_sae >> d_model)    ↓         (d_model)
+
+                 sparsity                      reconstruction
+
+                 penalty                          loss
+
+```
+
+
+
+**Loss Function**: `MSE(original, reconstructed) + L1_coefficient × L1(features)`
+
+
+
+### Key Validation (Anthropic Research)
+
+
+
+In "Towards Monosemanticity", human evaluators found **70% of SAE features genuinely interpretable**. Features discovered include:
+
+- DNA sequences, legal language, HTTP requests
+
+- Hebrew text, nutrition statements, code syntax
+
+- Sentiment, named entities, grammatical structures
+
+
+
+## Workflow 1: Loading and Analyzing Pre-trained SAEs
+
+
+
+### Step-by-Step
+
+
+
+```python
+from transformer_lens import HookedTransformer
 
 from sae_lens import SAE
 
@@ -117,28 +192,50 @@ for pos in range(tokens.shape[1]):
 reconstructed = sae.decode(sae_features)
 
 reconstruction_error = (activations - reconstructed).norm()
-```
-
-### Available Pre-trained SAEs
-
-| Release | Model | Layers |
-|---------|-------|--------|
-| `gpt2-small-res-jb` | GPT-2 Small | Multiple residual streams |
-| `gemma-2b-res` | Gemma 2B | Residual streams |
-| Various on HuggingFace | Search tag `saelens` | Various |
-
-### Checklist
-- [ ] Load model with TransformerLens
-- [ ] Load matching SAE for target layer
-- [ ] Encode activations to sparse features
-- [ ] Identify top-activating features per token
-- [ ] Validate reconstruction quality
-
-## Workflow 2: Training a Custom SAE
-
-### Step-by-Step
-
-```pythonfrom sae_lens import SAE, LanguageModelSAERunnerConfig, SAETrainingRunner
+```
+
+
+
+### Available Pre-trained SAEs
+
+
+
+| Release | Model | Layers |
+
+|---------|-------|--------|
+
+| `gpt2-small-res-jb` | GPT-2 Small | Multiple residual streams |
+
+| `gemma-2b-res` | Gemma 2B | Residual streams |
+
+| Various on HuggingFace | Search tag `saelens` | Various |
+
+
+
+### Checklist
+
+- [ ] Load model with TransformerLens
+
+- [ ] Load matching SAE for target layer
+
+- [ ] Encode activations to sparse features
+
+- [ ] Identify top-activating features per token
+
+- [ ] Validate reconstruction quality
+
+
+
+## Workflow 2: Training a Custom SAE
+
+
+
+### Step-by-Step
+
+
+
+```python
+from sae_lens import SAE, LanguageModelSAERunnerConfig, SAETrainingRunner
 
 
 # 1. Configure training
@@ -183,40 +280,74 @@ sae = trainer.run()
 print(f"L0 (avg active features): {trainer.metrics['l0']}")
 
 print(f"CE Loss Recovered: {trainer.metrics['ce_loss_score']}")
-```
-
-### Key Hyperparameters
-
-| Parameter | Typical Value | Effect |
-|-----------|---------------|--------|
-| `d_sae` | 4-16× d_model | More features, higher capacity |
-| `l1_coefficient` | 5e-5 to 1e-4 | Higher = sparser, less accurate |
-| `lr` | 1e-4 to 1e-3 | Standard optimizer LR |
-| `l1_warm_up_steps` | 500-2000 | Prevents early feature death |
-
-### Evaluation Metrics
-
-| Metric | Target | Meaning |
-|--------|--------|---------|
-| **L0** | 50-200 | Average active features per token |
-| **CE Loss Score** | 80-95% | Cross-entropy recovered vs original |
-| **Dead Features** | <5% | Features that never activate |
-| **Explained Variance** | >90% | Reconstruction quality |
-
-### Checklist
-- [ ] Choose target layer and hook point
-- [ ] Set expansion factor (d_sae = 4-16× d_model)
-- [ ] Tune L1 coefficient for desired sparsity
-- [ ] Enable L1 warm-up to prevent dead features
-- [ ] Monitor metrics during training (W&B)
-- [ ] Validate L0 and CE loss recovery
-- [ ] Check dead feature ratio
-
-## Workflow 3: Feature Analysis and Steering
-
-### Analyzing Individual Features
-
-```pythonfrom transformer_lens import HookedTransformer
+```
+
+
+
+### Key Hyperparameters
+
+
+
+| Parameter | Typical Value | Effect |
+
+|-----------|---------------|--------|
+
+| `d_sae` | 4-16× d_model | More features, higher capacity |
+
+| `l1_coefficient` | 5e-5 to 1e-4 | Higher = sparser, less accurate |
+
+| `lr` | 1e-4 to 1e-3 | Standard optimizer LR |
+
+| `l1_warm_up_steps` | 500-2000 | Prevents early feature death |
+
+
+
+### Evaluation Metrics
+
+
+
+| Metric | Target | Meaning |
+
+|--------|--------|---------|
+
+| **L0** | 50-200 | Average active features per token |
+
+| **CE Loss Score** | 80-95% | Cross-entropy recovered vs original |
+
+| **Dead Features** | <5% | Features that never activate |
+
+| **Explained Variance** | >90% | Reconstruction quality |
+
+
+
+### Checklist
+
+- [ ] Choose target layer and hook point
+
+- [ ] Set expansion factor (d_sae = 4-16× d_model)
+
+- [ ] Tune L1 coefficient for desired sparsity
+
+- [ ] Enable L1 warm-up to prevent dead features
+
+- [ ] Monitor metrics during training (W&B)
+
+- [ ] Validate L0 and CE loss recovery
+
+- [ ] Check dead feature ratio
+
+
+
+## Workflow 3: Feature Analysis and Steering
+
+
+
+### Analyzing Individual Features
+
+
+
+```python
+from transformer_lens import HookedTransformer
 
 from sae_lens import SAE
 
@@ -252,11 +383,16 @@ for text in test_texts:
     activation = features[0, :, feature_idx].max().item()
 
     print(f"{activation:.3f}: {text}")
-```
-
-### Feature Steering
-
-```pythondef steer_with_feature(model, sae, prompt, feature_idx, strength=5.0):
+```
+
+
+
+### Feature Steering
+
+
+
+```python
+def steer_with_feature(model, sae, prompt, feature_idx, strength=5.0):
     """Add SAE feature direction to residual stream."""
 
     tokens = model.to_tokens(prompt)
@@ -282,11 +418,16 @@ for text in test_texts:
     )
 
     return model.to_string(output[0])
-```
-
-### Feature Attribution
-
-```python# Which features most affect a specific output?
+```
+
+
+
+### Feature Attribution
+
+
+
+```python
+# Which features most affect a specific output?
 
 tokens = model.to_tokens("The capital of France is")
 
@@ -320,12 +461,18 @@ print("Top features for 'Paris' prediction:")
 
 for idx, val in zip(top_features.indices, top_features.values):
     print(f"  Feature {idx.item()}: {val.item():.3f}")
-```
-
-## Common Issues & Solutions
-
-### Issue: High dead feature ratio
-```python# WRONG: No warm-up, features die early
+```
+
+
+
+## Common Issues & Solutions
+
+
+
+### Issue: High dead feature ratio
+
+```python
+# WRONG: No warm-up, features die early
 
 cfg = LanguageModelSAERunnerConfig(
     l1_coefficient=1e-4,
@@ -340,19 +487,27 @@ cfg = LanguageModelSAERunnerConfig(
     l1_warm_up_steps=1000,  # Gradually increase
     use_ghost_grads=True,  # Revive dead features
 )
-```
-
-### Issue: Poor reconstruction (low CE recovery)
-```python# Reduce sparsity penalty
+```
+
+
+
+### Issue: Poor reconstruction (low CE recovery)
+
+```python
+# Reduce sparsity penalty
 
 cfg = LanguageModelSAERunnerConfig(
     l1_coefficient=5e-5,  # Lower = better reconstruction
     d_sae=768 * 16,  # More capacity
 )
-```
-
-### Issue: Features not interpretable
-```python# Increase sparsity (higher L1)
+```
+
+
+
+### Issue: Features not interpretable
+
+```python
+# Increase sparsity (higher L1)
 
 cfg = LanguageModelSAERunnerConfig(
     l1_coefficient=1e-4,  # Higher = sparser, more interpretable
@@ -364,77 +519,136 @@ cfg = LanguageModelSAERunnerConfig(
     architecture="topk",
     activation_fn_kwargs={"k": 50},  # Exactly 50 active features
 )
-```
-
-### Issue: Memory errors during training
-```pythoncfg = LanguageModelSAERunnerConfig(
+```
+
+
+
+### Issue: Memory errors during training
+
+```python
+cfg = LanguageModelSAERunnerConfig(
     train_batch_size_tokens=2048,  # Reduce batch size
     store_batch_size_prompts=4,  # Fewer prompts in buffer
     n_batches_in_buffer=8,  # Smaller activation buffer
 )
-```
-
-## Integration with Neuronpedia
-
-Browse pre-trained SAE features at [neuronpedia.org](https://neuronpedia.org):
-
-```python# Features are indexed by SAE ID
+```
+
+
+
+## Integration with Neuronpedia
+
+
+
+Browse pre-trained SAE features at [neuronpedia.org](https://neuronpedia.org):
+
+
+
+```python
+# Features are indexed by SAE ID
 
 # Example: gpt2-small layer 8 feature 1234
 
 # → neuronpedia.org/gpt2-small/8-res-jb/1234
 
-```
-
-## Key Classes Reference
-
-| Class | Purpose |
-|-------|---------|
-| `SAE` | Sparse Autoencoder model |
-| `LanguageModelSAERunnerConfig` | Training configuration |
-| `SAETrainingRunner` | Training loop manager |
-| `ActivationsStore` | Activation collection and batching |
-| `HookedSAETransformer` | TransformerLens + SAE integration |
-
-## Reference Documentation
-
-For detailed API documentation, tutorials, and advanced usage, see the `references/` folder:
-
-| File | Contents |
-|------|----------|
-| [references/README.md](references/README.md) | Overview and quick start guide |
-| [references/api.md](references/api.md) | Complete API reference for SAE, TrainingSAE, configurations |
-| [references/tutorials.md](references/tutorials.md) | Step-by-step tutorials for training, analysis, steering |
-
-## External Resources
-
-### Tutorials
-- [Basic Loading & Analysis](https://github.com/jbloomAus/SAELens/blob/main/tutorials/basic_loading_and_analysing.ipynb)
-- [Training a Sparse Autoencoder](https://github.com/jbloomAus/SAELens/blob/main/tutorials/training_a_sparse_autoencoder.ipynb)
-- [ARENA SAE Curriculum](https://www.lesswrong.com/posts/LnHowHgmrMbWtpkxx/intro-to-superposition-and-sparse-autoencoders-colab)
-
-### Papers
-- [Towards Monosemanticity](https://transformer-circuits.pub/2023/monosemantic-features) - Anthropic (2023)
-- [Scaling Monosemanticity](https://transformer-circuits.pub/2024/scaling-monosemanticity/) - Anthropic (2024)
-- [Sparse Autoencoders Find Highly Interpretable Features](https://arxiv.org/abs/2309.08600) - Cunningham et al. (ICLR 2024)
-
-### Official Documentation
-- [SAELens Docs](https://jbloomaus.github.io/SAELens/)
-- [Neuronpedia](https://neuronpedia.org) - Feature browser
-
-## SAE Architectures
-
-| Architecture | Description | Use Case |
-|--------------|-------------|----------|
-| **Standard** | ReLU + L1 penalty | General purpose |
-| **Gated** | Learned gating mechanism | Better sparsity control |
-| **TopK** | Exactly K active features | Consistent sparsity |
-
-```python# TopK SAE (exactly 50 features active)
+```
+
+
+
+## Key Classes Reference
+
+
+
+| Class | Purpose |
+
+|-------|---------|
+
+| `SAE` | Sparse Autoencoder model |
+
+| `LanguageModelSAERunnerConfig` | Training configuration |
+
+| `SAETrainingRunner` | Training loop manager |
+
+| `ActivationsStore` | Activation collection and batching |
+
+| `HookedSAETransformer` | TransformerLens + SAE integration |
+
+
+
+## Reference Documentation
+
+
+
+For detailed API documentation, tutorials, and advanced usage, see the `references/` folder:
+
+
+
+| File | Contents |
+
+|------|----------|
+
+| [references/README.md](references/README.md) | Overview and quick start guide |
+
+| [references/api.md](references/api.md) | Complete API reference for SAE, TrainingSAE, configurations |
+
+| [references/tutorials.md](references/tutorials.md) | Step-by-step tutorials for training, analysis, steering |
+
+
+
+## External Resources
+
+
+
+### Tutorials
+
+- [Basic Loading & Analysis](https://github.com/jbloomAus/SAELens/blob/main/tutorials/basic_loading_and_analysing.ipynb)
+
+- [Training a Sparse Autoencoder](https://github.com/jbloomAus/SAELens/blob/main/tutorials/training_a_sparse_autoencoder.ipynb)
+
+- [ARENA SAE Curriculum](https://www.lesswrong.com/posts/LnHowHgmrMbWtpkxx/intro-to-superposition-and-sparse-autoencoders-colab)
+
+
+
+### Papers
+
+- [Towards Monosemanticity](https://transformer-circuits.pub/2023/monosemantic-features) - Anthropic (2023)
+
+- [Scaling Monosemanticity](https://transformer-circuits.pub/2024/scaling-monosemanticity/) - Anthropic (2024)
+
+- [Sparse Autoencoders Find Highly Interpretable Features](https://arxiv.org/abs/2309.08600) - Cunningham et al. (ICLR 2024)
+
+
+
+### Official Documentation
+
+- [SAELens Docs](https://jbloomaus.github.io/SAELens/)
+
+- [Neuronpedia](https://neuronpedia.org) - Feature browser
+
+
+
+## SAE Architectures
+
+
+
+| Architecture | Description | Use Case |
+
+|--------------|-------------|----------|
+
+| **Standard** | ReLU + L1 penalty | General purpose |
+
+| **Gated** | Learned gating mechanism | Better sparsity control |
+
+| **TopK** | Exactly K active features | Consistent sparsity |
+
+
+
+```python
+# TopK SAE (exactly 50 features active)
 
 cfg = LanguageModelSAERunnerConfig(
     architecture="topk",
     activation_fn="topk",
     activation_fn_kwargs={"k": 50},
 )
-```
+```
+

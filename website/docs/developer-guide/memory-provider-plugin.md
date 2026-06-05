@@ -1,33 +1,63 @@
----
-sidebar_position: 8
-title: "Memory Provider Plugins"
-description: "How to build a memory provider plugin for Clawksis"
----
-
-# Building a Memory Provider Plugin
-
-Memory provider plugins give Clawksis persistent, cross-session knowledge beyond the built-in MEMORY.md and USER.md. This guide covers how to build one.
-
-:::tip
-Memory providers are one of two **provider plugin** types. The other is [Context Engine Plugins](/developer-guide/context-engine-plugin), which replace the built-in context compressor. Both follow the same pattern: single-select, config-driven, managed via `clawk plugins`.
-:::
-
-## Directory Structure
-
-Each memory provider lives in `plugins/memory/<name>/`:
-
-```
-plugins/memory/my-provider/
-├── __init__.py      # MemoryProvider implementation + register() entry point
-├── plugin.yaml      # Metadata (name, description, hooks)
-└── README.md        # Setup instructions, config reference, tools
-```
-
-## The MemoryProvider ABC
-
-Your plugin implements the `MemoryProvider` abstract base class from `agent/memory_provider.py`:
-
-```pythonfrom agent.memory_provider import MemoryProvider
+---
+
+sidebar_position: 8
+
+title: "Memory Provider Plugins"
+
+description: "How to build a memory provider plugin for Clawksis"
+
+---
+
+
+
+# Building a Memory Provider Plugin
+
+
+
+Memory provider plugins give Clawksis persistent, cross-session knowledge beyond the built-in MEMORY.md and USER.md. This guide covers how to build one.
+
+
+
+:::tip
+
+Memory providers are one of two **provider plugin** types. The other is [Context Engine Plugins](/developer-guide/context-engine-plugin), which replace the built-in context compressor. Both follow the same pattern: single-select, config-driven, managed via `clawk plugins`.
+
+:::
+
+
+
+## Directory Structure
+
+
+
+Each memory provider lives in `plugins/memory/<name>/`:
+
+
+
+```
+
+plugins/memory/my-provider/
+
+├── __init__.py      # MemoryProvider implementation + register() entry point
+
+├── plugin.yaml      # Metadata (name, description, hooks)
+
+└── README.md        # Setup instructions, config reference, tools
+
+```
+
+
+
+## The MemoryProvider ABC
+
+
+
+Your plugin implements the `MemoryProvider` abstract base class from `agent/memory_provider.py`:
+
+
+
+```python
+from agent.memory_provider import MemoryProvider
 
 
 class MyMemoryProvider(MemoryProvider):
@@ -57,45 +87,84 @@ class MyMemoryProvider(MemoryProvider):
         self._session_id = session_id
 
     # ... implement remaining methods
-```
-
-## Required Methods
-
-### Core Lifecycle
-
-| Method | When Called | Must Implement? |
-|--------|-----------|-----------------|
-| `name` (property) | Always | **Yes** |
-| `is_available()` | Agent init, before activation | **Yes** — no network calls |
-| `initialize(session_id, **kwargs)` | Agent startup | **Yes** |
-| `get_tool_schemas()` | After init, for tool injection | **Yes** |
-| `handle_tool_call(tool_name, args, **kwargs)` | When agent uses your tools | **Yes** (if you have tools) |
-
-### Config
-
-| Method | Purpose | Must Implement? |
-|--------|---------|-----------------|
-| `get_config_schema()` | Declare config fields for `clawk memory setup` | **Yes** |
-| `save_config(values, clawk_home)` | Write non-secret config to native location | **Yes** (unless env-var-only) |
-
-### Optional Hooks
-
-| Method | When Called | Use Case |
-|--------|-----------|----------|
-| `system_prompt_block()` | System prompt assembly | Static provider info |
-| `prefetch(query, *, session_id="")` | Before each API call | Return recalled context |
-| `queue_prefetch(query)` | After each turn | Pre-warm for next turn |
-| `sync_turn(user, assistant, *, session_id="")` | After each completed turn | Persist conversation |
-| `on_session_end(messages)` | Conversation ends | Final extraction/flush |
-| `on_pre_compress(messages)` | Before context compression | Save insights before discard |
-| `on_memory_write(action, target, content)` | Built-in memory writes | Mirror to your backend |
-| `shutdown()` | Process exit | Clean up connections |
-
-## Config Schema
-
-`get_config_schema()` returns a list of field descriptors used by `clawk memory setup`:
-
-```pythondef get_config_schema(self):
+```
+
+
+
+## Required Methods
+
+
+
+### Core Lifecycle
+
+
+
+| Method | When Called | Must Implement? |
+
+|--------|-----------|-----------------|
+
+| `name` (property) | Always | **Yes** |
+
+| `is_available()` | Agent init, before activation | **Yes** — no network calls |
+
+| `initialize(session_id, **kwargs)` | Agent startup | **Yes** |
+
+| `get_tool_schemas()` | After init, for tool injection | **Yes** |
+
+| `handle_tool_call(tool_name, args, **kwargs)` | When agent uses your tools | **Yes** (if you have tools) |
+
+
+
+### Config
+
+
+
+| Method | Purpose | Must Implement? |
+
+|--------|---------|-----------------|
+
+| `get_config_schema()` | Declare config fields for `clawk memory setup` | **Yes** |
+
+| `save_config(values, clawk_home)` | Write non-secret config to native location | **Yes** (unless env-var-only) |
+
+
+
+### Optional Hooks
+
+
+
+| Method | When Called | Use Case |
+
+|--------|-----------|----------|
+
+| `system_prompt_block()` | System prompt assembly | Static provider info |
+
+| `prefetch(query, *, session_id="")` | Before each API call | Return recalled context |
+
+| `queue_prefetch(query)` | After each turn | Pre-warm for next turn |
+
+| `sync_turn(user, assistant, *, session_id="")` | After each completed turn | Persist conversation |
+
+| `on_session_end(messages)` | Conversation ends | Final extraction/flush |
+
+| `on_pre_compress(messages)` | Before context compression | Save insights before discard |
+
+| `on_memory_write(action, target, content)` | Built-in memory writes | Mirror to your backend |
+
+| `shutdown()` | Process exit | Clean up connections |
+
+
+
+## Config Schema
+
+
+
+`get_config_schema()` returns a list of field descriptors used by `clawk memory setup`:
+
+
+
+```python
+def get_config_schema(self):
 
     return [
         {
@@ -118,17 +187,28 @@ class MyMemoryProvider(MemoryProvider):
             "default": "clawk",
         },
     ]
-```
-
-Fields with `secret: True` and `env_var` go to `.env`. Non-secret fields are passed to `save_config()`.
-
-:::tip Minimal vs Full Schema
-Every field in `get_config_schema()` is prompted during `clawk memory setup`. Providers with many options should keep the schema minimal — only include fields the user **must** configure (API key, required credentials). Document optional settings in a config file reference (e.g. `$CLAWK_HOME/myprovider.json`) rather than prompting for them all during setup. This keeps the setup wizard fast while still supporting advanced configuration. See the Supermemory provider for an example — it only prompts for the API key; all other options live in `supermemory.json`.
-:::
-
-## Save Config
-
-```pythondef save_config(self, values: dict, clawk_home: str) -> None:
+```
+
+
+
+Fields with `secret: True` and `env_var` go to `.env`. Non-secret fields are passed to `save_config()`.
+
+
+
+:::tip Minimal vs Full Schema
+
+Every field in `get_config_schema()` is prompted during `clawk memory setup`. Providers with many options should keep the schema minimal — only include fields the user **must** configure (API key, required credentials). Document optional settings in a config file reference (e.g. `$CLAWK_HOME/myprovider.json`) rather than prompting for them all during setup. This keeps the setup wizard fast while still supporting advanced configuration. See the Supermemory provider for an example — it only prompts for the API key; all other options live in `supermemory.json`.
+
+:::
+
+
+
+## Save Config
+
+
+
+```python
+def save_config(self, values: dict, clawk_home: str) -> None:
     """Write non-secret config to your native location."""
 
     import json
@@ -138,33 +218,57 @@ Every field in `get_config_schema()` is prompted during `clawk memory setup`. Pr
     config_path = Path(clawk_home) / "my-provider.json"
 
     config_path.write_text(json.dumps(values, indent=2))
-```
-
-For env-var-only providers, leave the default no-op.
-
-## Plugin Entry Point
-
-```pythondef register(ctx) -> None:
+```
+
+
+
+For env-var-only providers, leave the default no-op.
+
+
+
+## Plugin Entry Point
+
+
+
+```python
+def register(ctx) -> None:
     """Called by the memory plugin discovery system."""
 
     ctx.register_memory_provider(MyMemoryProvider())
-```
-
-## plugin.yaml
-
-```yaml
-name: my-provider
-version: 1.0.0
-description: "Short description of what this provider does."
-hooks:
-  - on_session_end    # list hooks you implement
-```
-
-## Threading Contract
-
-**`sync_turn()` MUST be non-blocking.** If your backend has latency (API calls, LLM processing), run the work in a daemon thread:
-
-```pythondef sync_turn(self, user_content, assistant_content, *, session_id="", messages=None):
+```
+
+
+
+## plugin.yaml
+
+
+
+```yaml
+
+name: my-provider
+
+version: 1.0.0
+
+description: "Short description of what this provider does."
+
+hooks:
+
+  - on_session_end    # list hooks you implement
+
+```
+
+
+
+## Threading Contract
+
+
+
+**`sync_turn()` MUST be non-blocking.** If your backend has latency (API calls, LLM processing), run the work in a daemon thread:
+
+
+
+```python
+def sync_turn(self, user_content, assistant_content, *, session_id="", messages=None):
 
     def _sync():
 
@@ -185,23 +289,40 @@ hooks:
     self._sync_thread = threading.Thread(target=_sync, daemon=True)
 
     self._sync_thread.start()
-```
-
-`messages` is optional OpenAI-style conversation context as of the completed
-turn. When present, it includes user/assistant messages, assistant tool calls,
-and tool result messages. Providers that do not need raw turn context can omit
-the `messages` parameter; Clawksis will continue calling them with the legacy
-signature.
-
-Cloud providers should document what parts of `messages` are sent off-device.
-Tool calls and tool results may contain file paths, command output, or other
-workspace data.
-
-## Profile Isolation
-
-All storage paths **must** use the `clawk_home` kwarg from `initialize()`, not hardcoded `~/.clawksis`:
-
-```python# CORRECT — profile-scoped
+```
+
+
+
+`messages` is optional OpenAI-style conversation context as of the completed
+
+turn. When present, it includes user/assistant messages, assistant tool calls,
+
+and tool result messages. Providers that do not need raw turn context can omit
+
+the `messages` parameter; Clawksis will continue calling them with the legacy
+
+signature.
+
+
+
+Cloud providers should document what parts of `messages` are sent off-device.
+
+Tool calls and tool results may contain file paths, command output, or other
+
+workspace data.
+
+
+
+## Profile Isolation
+
+
+
+All storage paths **must** use the `clawk_home` kwarg from `initialize()`, not hardcoded `~/.clawksis`:
+
+
+
+```python
+# CORRECT — profile-scoped
 
 from clawk_constants import get_clawk_home
 
@@ -211,13 +332,20 @@ data_dir = get_clawk_home() / "my-provider"
 # WRONG — shared across all profiles
 
 data_dir = Path("~/.clawksis/my-provider").expanduser()
-```
-
-## Testing
-
-See `tests/agent/test_memory_provider.py` and adjacent memory tests (`tests/agent/test_memory_session_switch.py`, `tests/agent/test_memory_user_id.py`, `tests/run_agent/test_memory_provider_init.py`) for end-to-end patterns.
-
-```pythonfrom agent.memory_manager import MemoryManager
+```
+
+
+
+## Testing
+
+
+
+See `tests/agent/test_memory_provider.py` and adjacent memory tests (`tests/agent/test_memory_session_switch.py`, `tests/agent/test_memory_user_id.py`, `tests/run_agent/test_memory_provider_init.py`) for end-to-end patterns.
+
+
+
+```python
+from agent.memory_manager import MemoryManager
 
 
 mgr = MemoryManager()
@@ -239,24 +367,42 @@ mgr.sync_all("user msg", "assistant msg")
 mgr.on_session_end([])
 
 mgr.shutdown_all()
-```
-
-## Adding CLI Commands
-
-Memory provider plugins can register their own CLI subcommand tree (e.g. `clawk my-provider status`, `clawk my-provider config`). This uses a convention-based discovery system — no changes to core files needed.
-
-### How it works
-
-1. Add a `cli.py` file to your plugin directory
-2. Define a `register_cli(subparser)` function that builds the argparse tree
-3. The memory plugin system discovers it at startup via `discover_plugin_cli_commands()`
-4. Your commands appear under `clawk <provider-name> <subcommand>`
-
-**Active-provider gating:** Your CLI commands only appear when your provider is the active `memory.provider` in config. If a user hasn't configured your provider, your commands won't show in `clawk --help`.
-
-### Example
-
-```python# plugins/memory/my-provider/cli.py
+```
+
+
+
+## Adding CLI Commands
+
+
+
+Memory provider plugins can register their own CLI subcommand tree (e.g. `clawk my-provider status`, `clawk my-provider config`). This uses a convention-based discovery system — no changes to core files needed.
+
+
+
+### How it works
+
+
+
+1. Add a `cli.py` file to your plugin directory
+
+2. Define a `register_cli(subparser)` function that builds the argparse tree
+
+3. The memory plugin system discovers it at startup via `discover_plugin_cli_commands()`
+
+4. Your commands appear under `clawk <provider-name> <subcommand>`
+
+
+
+**Active-provider gating:** Your CLI commands only appear when your provider is the active `memory.provider` in config. If a user hasn't configured your provider, your commands won't show in `clawk --help`.
+
+
+
+### Example
+
+
+
+```python
+# plugins/memory/my-provider/cli.py
 
 
 def my_command(args):
@@ -290,22 +436,41 @@ def register_cli(subparser) -> None:
     subs.add_parser("config", help="Show provider config")
 
     subparser.set_defaults(func=my_command)
-```
-
-### Reference implementation
-
-See `plugins/memory/honcho/cli.py` for a full example with 13 subcommands, cross-profile management (`--target-profile`), and config read/write.
-
-### Directory structure with CLI
-
-```
-plugins/memory/my-provider/
-├── __init__.py      # MemoryProvider implementation + register()
-├── plugin.yaml      # Metadata
-├── cli.py           # register_cli(subparser) — CLI commands
-└── README.md        # Setup instructions
-```
-
-## Single Provider Rule
-
-Only **one** external memory provider can be active at a time. If a user tries to register a second, the MemoryManager rejects it with a warning. This prevents tool schema bloat and conflicting backends.
+```
+
+
+
+### Reference implementation
+
+
+
+See `plugins/memory/honcho/cli.py` for a full example with 13 subcommands, cross-profile management (`--target-profile`), and config read/write.
+
+
+
+### Directory structure with CLI
+
+
+
+```
+
+plugins/memory/my-provider/
+
+├── __init__.py      # MemoryProvider implementation + register()
+
+├── plugin.yaml      # Metadata
+
+├── cli.py           # register_cli(subparser) — CLI commands
+
+└── README.md        # Setup instructions
+
+```
+
+
+
+## Single Provider Rule
+
+
+
+Only **one** external memory provider can be active at a time. If a user tries to register a second, the MemoryManager rejects it with a warning. This prevents tool schema bloat and conflicting backends.
+

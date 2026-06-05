@@ -1,71 +1,139 @@
----
-title: "Clip — OpenAI's model connecting vision and language"
-sidebar_label: "Clip"
-description: "OpenAI's model connecting vision and language"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Clip
-
-OpenAI's model connecting vision and language. Enables zero-shot image classification, image-text matching, and cross-modal retrieval. Trained on 400M image-text pairs. Use for image search, content moderation, or vision-language tasks without fine-tuning. Best for general-purpose image understanding.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Optional — install with `clawk skills install official/mlops/clip` |
-| Path | `optional-skills/mlops/clip` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `transformers`, `torch`, `pillow` |
-| Platforms | linux, macos, windows |
-| Tags | `Multimodal`, `CLIP`, `Vision-Language`, `Zero-Shot`, `Image Classification`, `OpenAI`, `Image Search`, `Cross-Modal Retrieval`, `Content Moderation` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# CLIP - Contrastive Language-Image Pre-Training
-
-OpenAI's model that understands images from natural language.
-
-## When to use CLIP
-
-**Use when:**
-- Zero-shot image classification (no training data needed)
-- Image-text similarity/matching
-- Semantic image search
-- Content moderation (detect NSFW, violence)
-- Visual question answering
-- Cross-modal retrieval (image→text, text→image)
-
-**Metrics**:
-- **25,300+ GitHub stars**
-- Trained on 400M image-text pairs
-- Matches ResNet-50 on ImageNet (zero-shot)
-- MIT License
-
-**Use alternatives instead**:
-- **BLIP-2**: Better captioning
-- **LLaVA**: Vision-language chat
-- **Segment Anything**: Image segmentation
-
-## Quick start
-
-### Installation
-
-```bash
-pip install git+https://github.com/openai/CLIP.git
-pip install torch torchvision ftfy regex tqdm
-```
-
-### Zero-shot classification
-
-```pythonimport torch
+---
+
+title: "Clip — OpenAI's model connecting vision and language"
+
+sidebar_label: "Clip"
+
+description: "OpenAI's model connecting vision and language"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Clip
+
+
+
+OpenAI's model connecting vision and language. Enables zero-shot image classification, image-text matching, and cross-modal retrieval. Trained on 400M image-text pairs. Use for image search, content moderation, or vision-language tasks without fine-tuning. Best for general-purpose image understanding.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Optional — install with `clawk skills install official/mlops/clip` |
+
+| Path | `optional-skills/mlops/clip` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `transformers`, `torch`, `pillow` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `Multimodal`, `CLIP`, `Vision-Language`, `Zero-Shot`, `Image Classification`, `OpenAI`, `Image Search`, `Cross-Modal Retrieval`, `Content Moderation` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# CLIP - Contrastive Language-Image Pre-Training
+
+
+
+OpenAI's model that understands images from natural language.
+
+
+
+## When to use CLIP
+
+
+
+**Use when:**
+
+- Zero-shot image classification (no training data needed)
+
+- Image-text similarity/matching
+
+- Semantic image search
+
+- Content moderation (detect NSFW, violence)
+
+- Visual question answering
+
+- Cross-modal retrieval (image→text, text→image)
+
+
+
+**Metrics**:
+
+- **25,300+ GitHub stars**
+
+- Trained on 400M image-text pairs
+
+- Matches ResNet-50 on ImageNet (zero-shot)
+
+- MIT License
+
+
+
+**Use alternatives instead**:
+
+- **BLIP-2**: Better captioning
+
+- **LLaVA**: Vision-language chat
+
+- **Segment Anything**: Image segmentation
+
+
+
+## Quick start
+
+
+
+### Installation
+
+
+
+```bash
+
+pip install git+https://github.com/openai/CLIP.git
+
+pip install torch torchvision ftfy regex tqdm
+
+```
+
+
+
+### Zero-shot classification
+
+
+
+```python
+import torch
 
 import clip
 
@@ -109,11 +177,16 @@ labels = ["a dog", "a cat", "a bird", "a car"]
 
 for label, prob in zip(labels, probs[0]):
     print(f"{label}: {prob:.2%}")
-```
-
-## Available models
-
-```python# Models (sorted by size)
+```
+
+
+
+## Available models
+
+
+
+```python
+# Models (sorted by size)
 
 models = [
     "RN50",  # ResNet-50
@@ -125,17 +198,28 @@ models = [
 
 
 model, preprocess = clip.load("ViT-B/32")
-```
-
-| Model | Parameters | Speed | Quality |
-|-------|------------|-------|---------|
-| RN50 | 102M | Fast | Good |
-| ViT-B/32 | 151M | Medium | Better |
-| ViT-L/14 | 428M | Slow | Best |
-
-## Image-text similarity
-
-```python# Compute embeddings
+```
+
+
+
+| Model | Parameters | Speed | Quality |
+
+|-------|------------|-------|---------|
+
+| RN50 | 102M | Fast | Good |
+
+| ViT-B/32 | 151M | Medium | Better |
+
+| ViT-L/14 | 428M | Slow | Best |
+
+
+
+## Image-text similarity
+
+
+
+```python
+# Compute embeddings
 
 image_features = model.encode_image(image)
 
@@ -154,11 +238,16 @@ text_features /= text_features.norm(dim=-1, keepdim=True)
 similarity = (image_features @ text_features.T).item()
 
 print(f"Similarity: {similarity:.4f}")
-```
-
-## Semantic image search
-
-```python# Index images
+```
+
+
+
+## Semantic image search
+
+
+
+```python
+# Index images
 
 image_paths = ["img1.jpg", "img2.jpg", "img3.jpg"]
 
@@ -200,11 +289,16 @@ top_k = similarities.topk(3)
 
 for idx, score in zip(top_k.indices, top_k.values):
     print(f"{image_paths[idx]}: {score:.3f}")
-```
-
-## Content moderation
-
-```python# Define categories
+```
+
+
+
+## Content moderation
+
+
+
+```python
+# Define categories
 
 categories = [
     "safe for work",
@@ -233,11 +327,16 @@ max_prob = probs[0, max_idx].item()
 
 
 print(f"Category: {categories[max_idx]} ({max_prob:.2%})")
-```
-
-## Batch processing
-
-```python# Process multiple images
+```
+
+
+
+## Batch processing
+
+
+
+```python
+# Process multiple images
 
 images = [preprocess(Image.open(f"img{i}.jpg")) for i in range(10)]
 
@@ -268,11 +367,16 @@ with torch.no_grad():
 similarities = image_features @ text_features.T
 
 print(similarities.shape)  # (10, 3)
-```
-
-## Integration with vector databases
-
-```python# Store CLIP embeddings in Chroma/FAISS
+```
+
+
+
+## Integration with vector databases
+
+
+
+```python
+# Store CLIP embeddings in Chroma/FAISS
 
 import chromadb
 
@@ -301,37 +405,71 @@ text_embedding = model.encode_text(clip.tokenize([query]))
 results = collection.query(
     query_embeddings=[text_embedding.cpu().numpy().tolist()], n_results=5
 )
-```
-
-## Best practices
-
-1. **Use ViT-B/32 for most cases** - Good balance
-2. **Normalize embeddings** - Required for cosine similarity
-3. **Batch processing** - More efficient
-4. **Cache embeddings** - Expensive to recompute
-5. **Use descriptive labels** - Better zero-shot performance
-6. **GPU recommended** - 10-50× faster
-7. **Preprocess images** - Use provided preprocess function
-
-## Performance
-
-| Operation | CPU | GPU (V100) |
-|-----------|-----|------------|
-| Image encoding | ~200ms | ~20ms |
-| Text encoding | ~50ms | ~5ms |
-| Similarity compute | &lt;1ms | &lt;1ms |
-
-## Limitations
-
-1. **Not for fine-grained tasks** - Best for broad categories
-2. **Requires descriptive text** - Vague labels perform poorly
-3. **Biased on web data** - May have dataset biases
-4. **No bounding boxes** - Whole image only
-5. **Limited spatial understanding** - Position/counting weak
-
-## Resources
-
-- **GitHub**: https://github.com/openai/CLIP ⭐ 25,300+
-- **Paper**: https://arxiv.org/abs/2103.00020
-- **Colab**: https://colab.research.google.com/github/openai/clip/
-- **License**: MIT
+```
+
+
+
+## Best practices
+
+
+
+1. **Use ViT-B/32 for most cases** - Good balance
+
+2. **Normalize embeddings** - Required for cosine similarity
+
+3. **Batch processing** - More efficient
+
+4. **Cache embeddings** - Expensive to recompute
+
+5. **Use descriptive labels** - Better zero-shot performance
+
+6. **GPU recommended** - 10-50× faster
+
+7. **Preprocess images** - Use provided preprocess function
+
+
+
+## Performance
+
+
+
+| Operation | CPU | GPU (V100) |
+
+|-----------|-----|------------|
+
+| Image encoding | ~200ms | ~20ms |
+
+| Text encoding | ~50ms | ~5ms |
+
+| Similarity compute | &lt;1ms | &lt;1ms |
+
+
+
+## Limitations
+
+
+
+1. **Not for fine-grained tasks** - Best for broad categories
+
+2. **Requires descriptive text** - Vague labels perform poorly
+
+3. **Biased on web data** - May have dataset biases
+
+4. **No bounding boxes** - Whole image only
+
+5. **Limited spatial understanding** - Position/counting weak
+
+
+
+## Resources
+
+
+
+- **GitHub**: https://github.com/openai/CLIP ⭐ 25,300+
+
+- **Paper**: https://arxiv.org/abs/2103.00020
+
+- **Colab**: https://colab.research.google.com/github/openai/clip/
+
+- **License**: MIT
+

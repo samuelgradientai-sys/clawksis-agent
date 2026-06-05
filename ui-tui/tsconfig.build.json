@@ -1,9 +1,18 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@clawk/ink": ["src/types/clawk-ink.d.ts"]
-    }
-  }
-}
+{
+
+  "extends": "./tsconfig.json",
+
+  "compilerOptions": {
+
+    "baseUrl": ".",
+
+    "paths": {
+
+      "@clawk/ink": ["src/types/clawk-ink.d.ts"]
+
+    }
+
+  }
+
+}
+

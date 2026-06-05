@@ -1,30 +1,57 @@
----
-sidebar_position: 8
-title: "Extending the CLI"
-description: "Build wrapper CLIs that extend the Clawksis TUI with custom widgets, keybindings, and layout changes"
----
-
-# Extending the CLI
-
-Clawksis exposes protected extension hooks on `ClawksisCLI` so wrapper CLIs can add widgets, keybindings, and layout customizations without overriding the 1000+ line `run()` method. This keeps your extension decoupled from internal changes.
-
-## Extension points
-
-There are five extension seams available:
-
-| Hook | Purpose | Override when... |
-|------|---------|------------------|
-| `_get_extra_tui_widgets()` | Inject widgets into the layout | You need a persistent UI element (panel, status line, mini-player) |
-| `_register_extra_tui_keybindings(kb, *, input_area)` | Add keyboard shortcuts | You need hotkeys (toggle panels, transport controls, modal shortcuts) |
-| `_build_tui_layout_children(**widgets)` | Full control over widget ordering | You need to reorder or wrap existing widgets (rare) |
-| `process_command()` | Add custom slash commands | You need `/mycommand` handling (pre-existing hook) |
-| `_build_tui_style_dict()` | Custom prompt_toolkit styles | You need custom colors or styling (pre-existing hook) |
-
-The first three are new protected hooks. The last two already existed.
-
-## Quick start: a wrapper CLI
-
-```python#!/usr/bin/env python3
+---
+
+sidebar_position: 8
+
+title: "Extending the CLI"
+
+description: "Build wrapper CLIs that extend the Clawksis TUI with custom widgets, keybindings, and layout changes"
+
+---
+
+
+
+# Extending the CLI
+
+
+
+Clawksis exposes protected extension hooks on `ClawksisCLI` so wrapper CLIs can add widgets, keybindings, and layout customizations without overriding the 1000+ line `run()` method. This keeps your extension decoupled from internal changes.
+
+
+
+## Extension points
+
+
+
+There are five extension seams available:
+
+
+
+| Hook | Purpose | Override when... |
+
+|------|---------|------------------|
+
+| `_get_extra_tui_widgets()` | Inject widgets into the layout | You need a persistent UI element (panel, status line, mini-player) |
+
+| `_register_extra_tui_keybindings(kb, *, input_area)` | Add keyboard shortcuts | You need hotkeys (toggle panels, transport controls, modal shortcuts) |
+
+| `_build_tui_layout_children(**widgets)` | Full control over widget ordering | You need to reorder or wrap existing widgets (rare) |
+
+| `process_command()` | Add custom slash commands | You need `/mycommand` handling (pre-existing hook) |
+
+| `_build_tui_style_dict()` | Custom prompt_toolkit styles | You need custom colors or styling (pre-existing hook) |
+
+
+
+The first three are new protected hooks. The last two already existed.
+
+
+
+## Quick start: a wrapper CLI
+
+
+
+```python
+#!/usr/bin/env python3
 
 """my_cli.py — Example wrapper CLI that extends Clawksis."""
 
@@ -84,30 +111,52 @@ if __name__ == "__main__":
     cli = MyCLI()
 
     cli.run()
-```
-
-Run it:
-
-```bash
-cd ~/.clawksis/clawksis-agent
-source .venv/bin/activate
-python my_cli.py
-```
-
-## Hook reference
-
-### `_get_extra_tui_widgets()`
-
-Returns a list of prompt_toolkit widgets to insert into the TUI layout. Widgets appear **between the spacer and the status bar** — above the input area but below the main output.
-
-```pythondef _get_extra_tui_widgets(self) -> list:
+```
+
+
+
+Run it:
+
+
+
+```bash
+
+cd ~/.clawksis/clawksis-agent
+
+source .venv/bin/activate
+
+python my_cli.py
+
+```
+
+
+
+## Hook reference
+
+
+
+### `_get_extra_tui_widgets()`
+
+
+
+Returns a list of prompt_toolkit widgets to insert into the TUI layout. Widgets appear **between the spacer and the status bar** — above the input area but below the main output.
+
+
+
+```python
+def _get_extra_tui_widgets(self) -> list:
 
     return []  # default: no extra widgets
-```
-
-Each widget should be a prompt_toolkit container (e.g., `Window`, `ConditionalContainer`, `HSplit`). Use `ConditionalContainer` or `filter=Condition(...)` to make widgets toggleable.
-
-```pythonfrom prompt_toolkit.layout import ConditionalContainer, Window, FormattedTextControl
+```
+
+
+
+Each widget should be a prompt_toolkit container (e.g., `Window`, `ConditionalContainer`, `HSplit`). Use `ConditionalContainer` or `filter=Condition(...)` to make widgets toggleable.
+
+
+
+```python
+from prompt_toolkit.layout import ConditionalContainer, Window, FormattedTextControl
 
 from prompt_toolkit.filters import Condition
 
@@ -120,22 +169,36 @@ def _get_extra_tui_widgets(self):
             filter=Condition(lambda: self._show_status),
         ),
     ]
-```
-
-### `_register_extra_tui_keybindings(kb, *, input_area)`
-
-Called after Clawksis registers its own keybindings and before the layout is built. Add your keybindings to `kb`.
-
-```pythondef _register_extra_tui_keybindings(self, kb, *, input_area):
+```
+
+
+
+### `_register_extra_tui_keybindings(kb, *, input_area)`
+
+
+
+Called after Clawksis registers its own keybindings and before the layout is built. Add your keybindings to `kb`.
+
+
+
+```python
+def _register_extra_tui_keybindings(self, kb, *, input_area):
 
     pass  # default: no extra keybindings
-```
-
-Parameters:
-- **`kb`** — The `KeyBindings` instance for the prompt_toolkit application
-- **`input_area`** — The main `TextArea` widget, if you need to read or manipulate user input
-
-```pythondef _register_extra_tui_keybindings(self, kb, *, input_area):
+```
+
+
+
+Parameters:
+
+- **`kb`** — The `KeyBindings` instance for the prompt_toolkit application
+
+- **`input_area`** — The main `TextArea` widget, if you need to read or manipulate user input
+
+
+
+```python
+def _register_extra_tui_keybindings(self, kb, *, input_area):
 
     cli_ref = self
 
@@ -148,25 +211,44 @@ Parameters:
     def _insert_template(event):
 
         input_area.text = "/search "
-```
-
-**Avoid conflicts** with built-in keybindings: `Enter` (submit), `Escape Enter` (newline), `Ctrl-C` (interrupt), `Ctrl-D` (exit), `Tab` (auto-suggest accept). Function keys F2+ and Ctrl-combinations are generally safe.
-
-### `_build_tui_layout_children(**widgets)`
-
-Override this only when you need full control over widget ordering. Most extensions should use `_get_extra_tui_widgets()` instead.
-
-```python
-def _build_tui_layout_children(self, *, sudo_widget, secret_widget,
-    approval_widget, clarify_widget, model_picker_widget=None,
-    spinner_widget=None, spacer, status_bar, input_rule_top,
-    image_bar, input_area, input_rule_bot, voice_status_bar,
-    completions_menu) -> list:
-```
-
-The default implementation returns (any `None` widgets are filtered out):
-
-```python[
+```
+
+
+
+**Avoid conflicts** with built-in keybindings: `Enter` (submit), `Escape Enter` (newline), `Ctrl-C` (interrupt), `Ctrl-D` (exit), `Tab` (auto-suggest accept). Function keys F2+ and Ctrl-combinations are generally safe.
+
+
+
+### `_build_tui_layout_children(**widgets)`
+
+
+
+Override this only when you need full control over widget ordering. Most extensions should use `_get_extra_tui_widgets()` instead.
+
+
+
+```python
+
+def _build_tui_layout_children(self, *, sudo_widget, secret_widget,
+
+    approval_widget, clarify_widget, model_picker_widget=None,
+
+    spinner_widget=None, spacer, status_bar, input_rule_top,
+
+    image_bar, input_area, input_rule_bot, voice_status_bar,
+
+    completions_menu) -> list:
+
+```
+
+
+
+The default implementation returns (any `None` widgets are filtered out):
+
+
+
+```python
+[
     Window(height=0),  # anchor
     sudo_widget,  # sudo password prompt (conditional)
     secret_widget,  # secret input prompt (conditional)
@@ -184,25 +266,47 @@ The default implementation returns (any `None` widgets are filtered out):
     voice_status_bar,  # voice mode status (conditional)
     completions_menu,  # autocomplete dropdown
 ]
-```
-
-## Layout diagram
-
-The default layout from top to bottom:
-
-1. **Output area** — scrolling conversation history
-2. **Spacer**
-3. **Extra widgets** — from `_get_extra_tui_widgets()`
-4. **Status bar** — model, context %, elapsed time
-5. **Image bar** — attached image count
-6. **Input area** — user prompt
-7. **Voice status** — recording indicator
-8. **Completions menu** — autocomplete suggestions
-
-## Tips
-
-- **Invalidate the display** after state changes: call `self._invalidate()` to trigger a prompt_toolkit redraw.
-- **Access agent state**: `self.agent`, `self.model`, `self.conversation_history` are all available.
-- **Custom styles**: Override `_build_tui_style_dict()` and add entries for your custom style classes.
-- **Slash commands**: Override `process_command()`, handle your commands, and call `super().process_command(cmd)` for everything else.
-- **Don't override `run()`** unless absolutely necessary — the extension hooks exist specifically to avoid that coupling.
+```
+
+
+
+## Layout diagram
+
+
+
+The default layout from top to bottom:
+
+
+
+1. **Output area** — scrolling conversation history
+
+2. **Spacer**
+
+3. **Extra widgets** — from `_get_extra_tui_widgets()`
+
+4. **Status bar** — model, context %, elapsed time
+
+5. **Image bar** — attached image count
+
+6. **Input area** — user prompt
+
+7. **Voice status** — recording indicator
+
+8. **Completions menu** — autocomplete suggestions
+
+
+
+## Tips
+
+
+
+- **Invalidate the display** after state changes: call `self._invalidate()` to trigger a prompt_toolkit redraw.
+
+- **Access agent state**: `self.agent`, `self.model`, `self.conversation_history` are all available.
+
+- **Custom styles**: Override `_build_tui_style_dict()` and add entries for your custom style classes.
+
+- **Slash commands**: Override `process_command()`, handle your commands, and call `super().process_command(cmd)` for everything else.
+
+- **Don't override `run()`** unless absolutely necessary — the extension hooks exist specifically to avoid that coupling.
+

@@ -1,80 +1,157 @@
----
-title: "Audiocraft Audio Generation — AudioCraft: MusicGen text-to-music, AudioGen text-to-sound"
-sidebar_label: "Audiocraft Audio Generation"
-description: "AudioCraft: MusicGen text-to-music, AudioGen text-to-sound"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Audiocraft Audio Generation
-
-AudioCraft: MusicGen text-to-music, AudioGen text-to-sound.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Bundled (installed by default) |
-| Path | `skills/mlops/models/audiocraft` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `audiocraft`, `torch>=2.0.0`, `transformers>=4.30.0` |
-| Platforms | linux, macos |
-| Tags | `Multimodal`, `Audio Generation`, `Text-to-Music`, `Text-to-Audio`, `MusicGen` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# AudioCraft: Audio Generation
-
-Comprehensive guide to using Meta's AudioCraft for text-to-music and text-to-audio generation with MusicGen, AudioGen, and EnCodec.
-
-## When to use AudioCraft
-
-**Use AudioCraft when:**
-- Need to generate music from text descriptions
-- Creating sound effects and environmental audio
-- Building music generation applications
-- Need melody-conditioned music generation
-- Want stereo audio output
-- Require controllable music generation with style transfer
-
-**Key features:**
-- **MusicGen**: Text-to-music generation with melody conditioning
-- **AudioGen**: Text-to-sound effects generation
-- **EnCodec**: High-fidelity neural audio codec
-- **Multiple model sizes**: Small (300M) to Large (3.3B)
-- **Stereo support**: Full stereo audio generation
-- **Style conditioning**: MusicGen-Style for reference-based generation
-
-**Use alternatives instead:**
-- **Stable Audio**: For longer commercial music generation
-- **Bark**: For text-to-speech with music/sound effects
-- **Riffusion**: For spectogram-based music generation
-- **OpenAI Jukebox**: For raw audio generation with lyrics
-
-## Quick start
-
-### Installation
-
-```bash
-# From PyPI
-pip install audiocraft
-
-# From GitHub (latest)
-pip install git+https://github.com/facebookresearch/audiocraft.git
-
-# Or use HuggingFace Transformers
-pip install transformers torch torchaudio
-```
-
-### Basic text-to-music (AudioCraft)
-
-```pythonimport torchaudio
+---
+
+title: "Audiocraft Audio Generation — AudioCraft: MusicGen text-to-music, AudioGen text-to-sound"
+
+sidebar_label: "Audiocraft Audio Generation"
+
+description: "AudioCraft: MusicGen text-to-music, AudioGen text-to-sound"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Audiocraft Audio Generation
+
+
+
+AudioCraft: MusicGen text-to-music, AudioGen text-to-sound.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Bundled (installed by default) |
+
+| Path | `skills/mlops/models/audiocraft` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `audiocraft`, `torch>=2.0.0`, `transformers>=4.30.0` |
+
+| Platforms | linux, macos |
+
+| Tags | `Multimodal`, `Audio Generation`, `Text-to-Music`, `Text-to-Audio`, `MusicGen` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# AudioCraft: Audio Generation
+
+
+
+Comprehensive guide to using Meta's AudioCraft for text-to-music and text-to-audio generation with MusicGen, AudioGen, and EnCodec.
+
+
+
+## When to use AudioCraft
+
+
+
+**Use AudioCraft when:**
+
+- Need to generate music from text descriptions
+
+- Creating sound effects and environmental audio
+
+- Building music generation applications
+
+- Need melody-conditioned music generation
+
+- Want stereo audio output
+
+- Require controllable music generation with style transfer
+
+
+
+**Key features:**
+
+- **MusicGen**: Text-to-music generation with melody conditioning
+
+- **AudioGen**: Text-to-sound effects generation
+
+- **EnCodec**: High-fidelity neural audio codec
+
+- **Multiple model sizes**: Small (300M) to Large (3.3B)
+
+- **Stereo support**: Full stereo audio generation
+
+- **Style conditioning**: MusicGen-Style for reference-based generation
+
+
+
+**Use alternatives instead:**
+
+- **Stable Audio**: For longer commercial music generation
+
+- **Bark**: For text-to-speech with music/sound effects
+
+- **Riffusion**: For spectogram-based music generation
+
+- **OpenAI Jukebox**: For raw audio generation with lyrics
+
+
+
+## Quick start
+
+
+
+### Installation
+
+
+
+```bash
+
+# From PyPI
+
+pip install audiocraft
+
+
+
+# From GitHub (latest)
+
+pip install git+https://github.com/facebookresearch/audiocraft.git
+
+
+
+# Or use HuggingFace Transformers
+
+pip install transformers torch torchaudio
+
+```
+
+
+
+### Basic text-to-music (AudioCraft)
+
+
+
+```python
+import torchaudio
 
 from audiocraft.models import MusicGen
 
@@ -103,11 +180,16 @@ wav = model.generate(descriptions)
 # Save audio
 
 torchaudio.save("output.wav", wav[0].cpu(), sample_rate=32000)
-```
-
-### Using HuggingFace Transformers
-
-```pythonfrom transformers import AutoProcessor, MusicgenForConditionalGeneration
+```
+
+
+
+### Using HuggingFace Transformers
+
+
+
+```python
+from transformers import AutoProcessor, MusicgenForConditionalGeneration
 
 import scipy
 
@@ -140,11 +222,16 @@ sampling_rate = model.config.audio_encoder.sampling_rate
 scipy.io.wavfile.write(
     "output.wav", rate=sampling_rate, data=audio_values[0, 0].cpu().numpy()
 )
-```
-
-### Text-to-sound with AudioGen
-
-```pythonfrom audiocraft.models import AudioGen
+```
+
+
+
+### Text-to-sound with AudioGen
+
+
+
+```python
+from audiocraft.models import AudioGen
 
 
 # Load AudioGen
@@ -163,62 +250,118 @@ wav = model.generate(descriptions)
 
 
 torchaudio.save("sound.wav", wav[0].cpu(), sample_rate=16000)
-```
-
-## Core concepts
-
-### Architecture overview
-
-<!-- ascii-guard-ignore -->
-```
-AudioCraft Architecture:
-┌──────────────────────────────────────────────────────────────┐
-│                    Text Encoder (T5)                          │
-│                         │                                     │
-│                    Text Embeddings                            │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────────┐
-│              Transformer Decoder (LM)                         │
-│     Auto-regressively generates audio tokens                  │
-│     Using efficient token interleaving patterns               │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────────┐
-│                EnCodec Audio Decoder                          │
-│        Converts tokens back to audio waveform                 │
-└──────────────────────────────────────────────────────────────┘
-```
-<!-- ascii-guard-ignore-end -->
-
-### Model variants
-
-| Model | Size | Description | Use Case |
-|-------|------|-------------|----------|
-| `musicgen-small` | 300M | Text-to-music | Quick generation |
-| `musicgen-medium` | 1.5B | Text-to-music | Balanced |
-| `musicgen-large` | 3.3B | Text-to-music | Best quality |
-| `musicgen-melody` | 1.5B | Text + melody | Melody conditioning |
-| `musicgen-melody-large` | 3.3B | Text + melody | Best melody |
-| `musicgen-stereo-*` | Varies | Stereo output | Stereo generation |
-| `musicgen-style` | 1.5B | Style transfer | Reference-based |
-| `audiogen-medium` | 1.5B | Text-to-sound | Sound effects |
-
-### Generation parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `duration` | 8.0 | Length in seconds (1-120) |
-| `top_k` | 250 | Top-k sampling |
-| `top_p` | 0.0 | Nucleus sampling (0 = disabled) |
-| `temperature` | 1.0 | Sampling temperature |
-| `cfg_coef` | 3.0 | Classifier-free guidance |
-
-## MusicGen usage
-
-### Text-to-music generation
-
-```pythonfrom audiocraft.models import MusicGen
+```
+
+
+
+## Core concepts
+
+
+
+### Architecture overview
+
+
+
+<!-- ascii-guard-ignore -->
+
+```
+
+AudioCraft Architecture:
+
+┌──────────────────────────────────────────────────────────────┐
+
+│                    Text Encoder (T5)                          │
+
+│                         │                                     │
+
+│                    Text Embeddings                            │
+
+└────────────────────────┬─────────────────────────────────────┘
+
+                         │
+
+┌────────────────────────▼─────────────────────────────────────┐
+
+│              Transformer Decoder (LM)                         │
+
+│     Auto-regressively generates audio tokens                  │
+
+│     Using efficient token interleaving patterns               │
+
+└────────────────────────┬─────────────────────────────────────┘
+
+                         │
+
+┌────────────────────────▼─────────────────────────────────────┐
+
+│                EnCodec Audio Decoder                          │
+
+│        Converts tokens back to audio waveform                 │
+
+└──────────────────────────────────────────────────────────────┘
+
+```
+
+<!-- ascii-guard-ignore-end -->
+
+
+
+### Model variants
+
+
+
+| Model | Size | Description | Use Case |
+
+|-------|------|-------------|----------|
+
+| `musicgen-small` | 300M | Text-to-music | Quick generation |
+
+| `musicgen-medium` | 1.5B | Text-to-music | Balanced |
+
+| `musicgen-large` | 3.3B | Text-to-music | Best quality |
+
+| `musicgen-melody` | 1.5B | Text + melody | Melody conditioning |
+
+| `musicgen-melody-large` | 3.3B | Text + melody | Best melody |
+
+| `musicgen-stereo-*` | Varies | Stereo output | Stereo generation |
+
+| `musicgen-style` | 1.5B | Style transfer | Reference-based |
+
+| `audiogen-medium` | 1.5B | Text-to-sound | Sound effects |
+
+
+
+### Generation parameters
+
+
+
+| Parameter | Default | Description |
+
+|-----------|---------|-------------|
+
+| `duration` | 8.0 | Length in seconds (1-120) |
+
+| `top_k` | 250 | Top-k sampling |
+
+| `top_p` | 0.0 | Nucleus sampling (0 = disabled) |
+
+| `temperature` | 1.0 | Sampling temperature |
+
+| `cfg_coef` | 3.0 | Classifier-free guidance |
+
+
+
+## MusicGen usage
+
+
+
+### Text-to-music generation
+
+
+
+```python
+from audiocraft.models import MusicGen
 
 import torchaudio
 
@@ -255,11 +398,16 @@ wav = model.generate(descriptions)
 
 for i, audio in enumerate(wav):
     torchaudio.save(f"music_{i}.wav", audio.cpu(), sample_rate=32000)
-```
-
-### Melody-conditioned generation
-
-```pythonfrom audiocraft.models import MusicGen
+```
+
+
+
+### Melody-conditioned generation
+
+
+
+```python
+from audiocraft.models import MusicGen
 
 import torchaudio
 
@@ -284,11 +432,16 @@ wav = model.generate_with_chroma(descriptions, melody, sr)
 
 
 torchaudio.save("melody_conditioned.wav", wav[0].cpu(), sample_rate=32000)
-```
-
-### Stereo generation
-
-```pythonfrom audiocraft.models import MusicGen
+```
+
+
+
+### Stereo generation
+
+
+
+```python
+from audiocraft.models import MusicGen
 
 
 # Load stereo model
@@ -308,11 +461,16 @@ wav = model.generate(descriptions)
 print(f"Stereo shape: {wav.shape}")  # [1, 2, 480000]
 
 torchaudio.save("stereo.wav", wav[0].cpu(), sample_rate=32000)
-```
-
-### Audio continuation
-
-```pythonfrom transformers import AutoProcessor, MusicgenForConditionalGeneration
+```
+
+
+
+### Audio continuation
+
+
+
+```python
+from transformers import AutoProcessor, MusicgenForConditionalGeneration
 
 
 processor = AutoProcessor.from_pretrained("facebook/musicgen-medium")
@@ -343,13 +501,20 @@ inputs = processor(
 audio_values = model.generate(
     **inputs, do_sample=True, guidance_scale=3, max_new_tokens=512
 )
-```
-
-## MusicGen-Style usage
-
-### Style-conditioned generation
-
-```pythonfrom audiocraft.models import MusicGen
+```
+
+
+
+## MusicGen-Style usage
+
+
+
+### Style-conditioned generation
+
+
+
+```python
+from audiocraft.models import MusicGen
 
 
 # Load style model
@@ -384,11 +549,16 @@ style_audio, sr = torchaudio.load("reference_style.wav")
 descriptions = ["upbeat dance track"]
 
 wav = model.generate_with_style(descriptions, style_audio, sr)
-```
-
-### Style-only generation (no text)
-
-```python# Generate matching style without text prompt
+```
+
+
+
+### Style-only generation (no text)
+
+
+
+```python
+# Generate matching style without text prompt
 
 model.set_generation_params(
     duration=30,
@@ -398,13 +568,20 @@ model.set_generation_params(
 
 
 wav = model.generate_with_style([None], style_audio, sr)
-```
-
-## AudioGen usage
-
-### Sound effect generation
-
-```pythonfrom audiocraft.models import AudioGen
+```
+
+
+
+## AudioGen usage
+
+
+
+### Sound effect generation
+
+
+
+```python
+from audiocraft.models import AudioGen
 
 import torchaudio
 
@@ -429,13 +606,20 @@ wav = model.generate(descriptions)
 
 for i, audio in enumerate(wav):
     torchaudio.save(f"sound_{i}.wav", audio.cpu(), sample_rate=16000)
-```
-
-## EnCodec usage
-
-### Audio compression
-
-```pythonfrom audiocraft.models import CompressionModel
+```
+
+
+
+## EnCodec usage
+
+
+
+### Audio compression
+
+
+
+```python
+from audiocraft.models import CompressionModel
 
 import torch
 
@@ -475,13 +659,20 @@ with torch.no_grad():
 
 
 torchaudio.save("reconstructed.wav", decoded[0].cpu(), sample_rate=32000)
-```
-
-## Common workflows
-
-### Workflow 1: Music generation pipeline
-
-```pythonimport torch
+```
+
+
+
+## Common workflows
+
+
+
+### Workflow 1: Music generation pipeline
+
+
+
+```python
+import torch
 
 import torchaudio
 
@@ -529,11 +720,16 @@ audio = generator.generate(
 )
 
 generator.save(audio, "epic_music.wav")
-```
-
-### Workflow 2: Sound design batch processing
-
-```pythonimport json
+```
+
+
+
+### Workflow 2: Sound design batch processing
+
+
+
+```python
+import json
 
 from pathlib import Path
 
@@ -597,11 +793,16 @@ sounds = [
 
 
 results = batch_generate_sounds(sounds, "sound_effects/")
-```
-
-### Workflow 3: Gradio demo
-
-```pythonimport gradio as gr
+```
+
+
+
+### Workflow 3: Gradio demo
+
+
+
+```python
+import gradio as gr
 
 import torch
 
@@ -647,13 +848,20 @@ demo = gr.Interface(
 
 
 demo.launch()
-```
-
-## Performance optimization
-
-### Memory optimization
-
-```python# Use smaller model
+```
+
+
+
+## Performance optimization
+
+
+
+### Memory optimization
+
+
+
+```python
+# Use smaller model
 
 model = MusicGen.get_pretrained("facebook/musicgen-small")
 
@@ -671,11 +879,16 @@ model.set_generation_params(duration=10)  # Instead of 30
 # Use half precision
 
 model = model.half()
-```
-
-### Batch processing efficiency
-
-```python# Process multiple prompts at once (more efficient)
+```
+
+
+
+### Batch processing efficiency
+
+
+
+```python
+# Process multiple prompts at once (more efficient)
 
 descriptions = ["prompt1", "prompt2", "prompt3", "prompt4"]
 
@@ -686,35 +899,67 @@ wav = model.generate(descriptions)  # Single batch
 
 for desc in descriptions:
     wav = model.generate([desc])  # Multiple batches (slower)
-```
-
-### GPU memory requirements
-
-| Model | FP32 VRAM | FP16 VRAM |
-|-------|-----------|-----------|
-| musicgen-small | ~4GB | ~2GB |
-| musicgen-medium | ~8GB | ~4GB |
-| musicgen-large | ~16GB | ~8GB |
-
-## Common issues
-
-| Issue | Solution |
-|-------|----------|
-| CUDA OOM | Use smaller model, reduce duration |
-| Poor quality | Increase cfg_coef, better prompts |
-| Generation too short | Check max duration setting |
-| Audio artifacts | Try different temperature |
-| Stereo not working | Use stereo model variant |
-
-## References
-
-- **[Advanced Usage](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/skills/mlops/models/audiocraft/references/advanced-usage.md)** - Training, fine-tuning, deployment
-- **[Troubleshooting](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/skills/mlops/models/audiocraft/references/troubleshooting.md)** - Common issues and solutions
-
-## Resources
-
-- **GitHub**: https://github.com/facebookresearch/audiocraft
-- **Paper (MusicGen)**: https://arxiv.org/abs/2306.05284
-- **Paper (AudioGen)**: https://arxiv.org/abs/2209.15352
-- **HuggingFace**: https://huggingface.co/facebook/musicgen-small
-- **Demo**: https://huggingface.co/spaces/facebook/MusicGen
+```
+
+
+
+### GPU memory requirements
+
+
+
+| Model | FP32 VRAM | FP16 VRAM |
+
+|-------|-----------|-----------|
+
+| musicgen-small | ~4GB | ~2GB |
+
+| musicgen-medium | ~8GB | ~4GB |
+
+| musicgen-large | ~16GB | ~8GB |
+
+
+
+## Common issues
+
+
+
+| Issue | Solution |
+
+|-------|----------|
+
+| CUDA OOM | Use smaller model, reduce duration |
+
+| Poor quality | Increase cfg_coef, better prompts |
+
+| Generation too short | Check max duration setting |
+
+| Audio artifacts | Try different temperature |
+
+| Stereo not working | Use stereo model variant |
+
+
+
+## References
+
+
+
+- **[Advanced Usage](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/skills/mlops/models/audiocraft/references/advanced-usage.md)** - Training, fine-tuning, deployment
+
+- **[Troubleshooting](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/skills/mlops/models/audiocraft/references/troubleshooting.md)** - Common issues and solutions
+
+
+
+## Resources
+
+
+
+- **GitHub**: https://github.com/facebookresearch/audiocraft
+
+- **Paper (MusicGen)**: https://arxiv.org/abs/2306.05284
+
+- **Paper (AudioGen)**: https://arxiv.org/abs/2209.15352
+
+- **HuggingFace**: https://huggingface.co/facebook/musicgen-small
+
+- **Demo**: https://huggingface.co/spaces/facebook/MusicGen
+

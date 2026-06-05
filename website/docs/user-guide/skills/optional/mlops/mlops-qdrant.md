@@ -1,82 +1,161 @@
----
-title: "Qdrant Vector Search — High-performance vector similarity search engine for RAG and semantic search"
-sidebar_label: "Qdrant Vector Search"
-description: "High-performance vector similarity search engine for RAG and semantic search"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Qdrant Vector Search
-
-High-performance vector similarity search engine for RAG and semantic search. Use when building production RAG systems requiring fast nearest neighbor search, hybrid search with filtering, or scalable vector storage with Rust-powered performance.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Optional — install with `clawk skills install official/mlops/qdrant` |
-| Path | `optional-skills/mlops/qdrant` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `qdrant-client>=1.12.0` |
-| Platforms | linux, macos, windows |
-| Tags | `RAG`, `Vector Search`, `Qdrant`, `Semantic Search`, `Embeddings`, `Similarity Search`, `HNSW`, `Production`, `Distributed` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# Qdrant - Vector Similarity Search Engine
-
-High-performance vector database written in Rust for production RAG and semantic search.
-
-## When to use Qdrant
-
-**Use Qdrant when:**
-- Building production RAG systems requiring low latency
-- Need hybrid search (vectors + metadata filtering)
-- Require horizontal scaling with sharding/replication
-- Want on-premise deployment with full data control
-- Need multi-vector storage per record (dense + sparse)
-- Building real-time recommendation systems
-
-**Key features:**
-- **Rust-powered**: Memory-safe, high performance
-- **Rich filtering**: Filter by any payload field during search
-- **Multiple vectors**: Dense, sparse, multi-dense per point
-- **Quantization**: Scalar, product, binary for memory efficiency
-- **Distributed**: Raft consensus, sharding, replication
-- **REST + gRPC**: Both APIs with full feature parity
-
-**Use alternatives instead:**
-- **Chroma**: Simpler setup, embedded use cases
-- **FAISS**: Maximum raw speed, research/batch processing
-- **Pinecone**: Fully managed, zero ops preferred
-- **Weaviate**: GraphQL preference, built-in vectorizers
-
-## Quick start
-
-### Installation
-
-```bash
-# Python client
-pip install qdrant-client
-
-# Docker (recommended for development)
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-
-# Docker with persistent storage
-docker run -p 6333:6333 -p 6334:6334 \
-    -v $(pwd)/qdrant_storage:/qdrant/storage \
-    qdrant/qdrant
-```
-
-### Basic usage
-
-```pythonfrom qdrant_client import QdrantClient
+---
+
+title: "Qdrant Vector Search — High-performance vector similarity search engine for RAG and semantic search"
+
+sidebar_label: "Qdrant Vector Search"
+
+description: "High-performance vector similarity search engine for RAG and semantic search"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Qdrant Vector Search
+
+
+
+High-performance vector similarity search engine for RAG and semantic search. Use when building production RAG systems requiring fast nearest neighbor search, hybrid search with filtering, or scalable vector storage with Rust-powered performance.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Optional — install with `clawk skills install official/mlops/qdrant` |
+
+| Path | `optional-skills/mlops/qdrant` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `qdrant-client>=1.12.0` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `RAG`, `Vector Search`, `Qdrant`, `Semantic Search`, `Embeddings`, `Similarity Search`, `HNSW`, `Production`, `Distributed` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# Qdrant - Vector Similarity Search Engine
+
+
+
+High-performance vector database written in Rust for production RAG and semantic search.
+
+
+
+## When to use Qdrant
+
+
+
+**Use Qdrant when:**
+
+- Building production RAG systems requiring low latency
+
+- Need hybrid search (vectors + metadata filtering)
+
+- Require horizontal scaling with sharding/replication
+
+- Want on-premise deployment with full data control
+
+- Need multi-vector storage per record (dense + sparse)
+
+- Building real-time recommendation systems
+
+
+
+**Key features:**
+
+- **Rust-powered**: Memory-safe, high performance
+
+- **Rich filtering**: Filter by any payload field during search
+
+- **Multiple vectors**: Dense, sparse, multi-dense per point
+
+- **Quantization**: Scalar, product, binary for memory efficiency
+
+- **Distributed**: Raft consensus, sharding, replication
+
+- **REST + gRPC**: Both APIs with full feature parity
+
+
+
+**Use alternatives instead:**
+
+- **Chroma**: Simpler setup, embedded use cases
+
+- **FAISS**: Maximum raw speed, research/batch processing
+
+- **Pinecone**: Fully managed, zero ops preferred
+
+- **Weaviate**: GraphQL preference, built-in vectorizers
+
+
+
+## Quick start
+
+
+
+### Installation
+
+
+
+```bash
+
+# Python client
+
+pip install qdrant-client
+
+
+
+# Docker (recommended for development)
+
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+
+
+
+# Docker with persistent storage
+
+docker run -p 6333:6333 -p 6334:6334 \
+
+    -v $(pwd)/qdrant_storage:/qdrant/storage \
+
+    qdrant/qdrant
+
+```
+
+
+
+### Basic usage
+
+
+
+```python
+from qdrant_client import QdrantClient
 
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
@@ -125,13 +204,20 @@ results = client.search(
 
 for point in results:
     print(f"ID: {point.id}, Score: {point.score}, Payload: {point.payload}")
-```
-
-## Core concepts
-
-### Points - Basic data unit
-
-```pythonfrom qdrant_client.models import PointStruct
+```
+
+
+
+## Core concepts
+
+
+
+### Points - Basic data unit
+
+
+
+```python
+from qdrant_client.models import PointStruct
 
 
 # Point = ID + Vector(s) + Payload
@@ -155,11 +241,16 @@ client.upsert(
     points=[point1, point2, point3],
     wait=True,  # Wait for indexing
 )
-```
-
-### Collections - Vector containers
-
-```pythonfrom qdrant_client.models import VectorParams, Distance, HnswConfigDiff
+```
+
+
+
+### Collections - Vector containers
+
+
+
+```python
+from qdrant_client.models import VectorParams, Distance, HnswConfigDiff
 
 
 # Create with HNSW configuration
@@ -184,22 +275,38 @@ client.create_collection(
 info = client.get_collection("documents")
 
 print(f"Points: {info.points_count}, Vectors: {info.vectors_count}")
-```
-
-### Distance metrics
-
-| Metric | Use Case | Range |
-|--------|----------|-------|
-| `COSINE` | Text embeddings, normalized vectors | 0 to 2 |
-| `EUCLID` | Spatial data, image features | 0 to ∞ |
-| `DOT` | Recommendations, unnormalized | -∞ to ∞ |
-| `MANHATTAN` | Sparse features, discrete data | 0 to ∞ |
-
-## Search operations
-
-### Basic search
-
-```python# Simple nearest neighbor search
+```
+
+
+
+### Distance metrics
+
+
+
+| Metric | Use Case | Range |
+
+|--------|----------|-------|
+
+| `COSINE` | Text embeddings, normalized vectors | 0 to 2 |
+
+| `EUCLID` | Spatial data, image features | 0 to ∞ |
+
+| `DOT` | Recommendations, unnormalized | -∞ to ∞ |
+
+| `MANHATTAN` | Sparse features, discrete data | 0 to ∞ |
+
+
+
+## Search operations
+
+
+
+### Basic search
+
+
+
+```python
+# Simple nearest neighbor search
 
 results = client.search(
     collection_name="documents",
@@ -208,11 +315,16 @@ results = client.search(
     with_payload=True,
     with_vectors=False,  # Don't return vectors (faster)
 )
-```
-
-### Filtered search
-
-```pythonfrom qdrant_client.models import Filter, FieldCondition, MatchValue, Range
+```
+
+
+
+### Filtered search
+
+
+
+```python
+from qdrant_client.models import Filter, FieldCondition, MatchValue, Range
 
 
 # Complex filtering
@@ -244,11 +356,16 @@ results = client.search(
     },
     limit=10,
 )
-```
-
-### Batch search
-
-```pythonfrom qdrant_client.models import SearchRequest
+```
+
+
+
+### Batch search
+
+
+
+```python
+from qdrant_client.models import SearchRequest
 
 
 # Multiple queries in one request
@@ -261,13 +378,20 @@ results = client.search_batch(
         SearchRequest(vector=[0.3, ...], limit=10),
     ],
 )
-```
-
-## RAG integration
-
-### With sentence-transformers
-
-```pythonfrom sentence_transformers import SentenceTransformer
+```
+
+
+
+## RAG integration
+
+
+
+### With sentence-transformers
+
+
+
+```python
+from sentence_transformers import SentenceTransformer
 
 from qdrant_client import QdrantClient
 
@@ -328,11 +452,16 @@ def retrieve(query: str, top_k: int = 5) -> list[dict]:
 context = retrieve("What is Python?")
 
 prompt = f"Context: {context}\n\nQuestion: What is Python?"
-```
-
-### With LangChain
-
-```pythonfrom langchain_community.vectorstores import Qdrant
+```
+
+
+
+### With LangChain
+
+
+
+```python
+from langchain_community.vectorstores import Qdrant
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
@@ -344,11 +473,16 @@ vectorstore = Qdrant.from_documents(
 )
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-```
-
-### With LlamaIndex
-
-```pythonfrom llama_index.vector_stores.qdrant import QdrantVectorStore
+```
+
+
+
+### With LlamaIndex
+
+
+
+```python
+from llama_index.vector_stores.qdrant import QdrantVectorStore
 
 from llama_index.core import VectorStoreIndex, StorageContext
 
@@ -360,13 +494,20 @@ storage_context = StorageContext.from_defaults(vector_store=vector_store)
 index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
 
 query_engine = index.as_query_engine()
-```
-
-## Multi-vector support
-
-### Named vectors (different embedding models)
-
-```pythonfrom qdrant_client.models import VectorParams, Distance
+```
+
+
+
+## Multi-vector support
+
+
+
+### Named vectors (different embedding models)
+
+
+
+```python
+from qdrant_client.models import VectorParams, Distance
 
 
 # Collection with multiple vector types
@@ -401,11 +542,16 @@ results = client.search(
     query_vector=("dense", query_dense),  # Specify which vector
     limit=10,
 )
-```
-
-### Sparse vectors (BM25, SPLADE)
-
-```pythonfrom qdrant_client.models import SparseVectorParams, SparseIndexParams, SparseVector
+```
+
+
+
+### Sparse vectors (BM25, SPLADE)
+
+
+
+```python
+from qdrant_client.models import SparseVectorParams, SparseIndexParams, SparseVector
 
 
 # Collection with sparse vectors
@@ -431,11 +577,16 @@ client.upsert(
         )
     ],
 )
-```
-
-## Quantization (memory optimization)
-
-```pythonfrom qdrant_client.models import (
+```
+
+
+
+## Quantization (memory optimization)
+
+
+
+```python
+from qdrant_client.models import (
     ScalarQuantization,
     ScalarQuantizationConfig,
     ScalarType,
@@ -465,11 +616,16 @@ results = client.search(
     search_params={"quantization": {"rescore": True}},  # Rescore top results
     limit=10,
 )
-```
-
-## Payload indexing
-
-```pythonfrom qdrant_client.models import PayloadSchemaType
+```
+
+
+
+## Payload indexing
+
+
+
+```python
+from qdrant_client.models import PayloadSchemaType
 
 
 # Create payload index for faster filtering
@@ -489,13 +645,20 @@ client.create_payload_index(
 
 
 # Index types: KEYWORD, INTEGER, FLOAT, GEO, TEXT (full-text), BOOL
-```
-
-## Production deployment
-
-### Qdrant Cloud
-
-```pythonfrom qdrant_client import QdrantClient
+```
+
+
+
+## Production deployment
+
+
+
+### Qdrant Cloud
+
+
+
+```python
+from qdrant_client import QdrantClient
 
 
 # Connect to Qdrant Cloud
@@ -503,11 +666,16 @@ client.create_payload_index(
 client = QdrantClient(
     url="https://your-cluster.cloud.qdrant.io", api_key="your-api-key"
 )
-```
-
-### Performance tuning
-
-```python# Optimize for search speed (higher recall)
+```
+
+
+
+### Performance tuning
+
+
+
+```python
+# Optimize for search speed (higher recall)
 
 client.update_collection(
     collection_name="documents", hnsw_config=HnswConfigDiff(ef_construct=200, m=32)
@@ -519,31 +687,50 @@ client.update_collection(
 client.update_collection(
     collection_name="documents", optimizer_config={"indexing_threshold": 20000}
 )
-```
-
-## Best practices
-
-1. **Batch operations** - Use batch upsert/search for efficiency
-2. **Payload indexing** - Index fields used in filters
-3. **Quantization** - Enable for large collections (>1M vectors)
-4. **Sharding** - Use for collections >10M vectors
-5. **On-disk storage** - Enable `on_disk_payload` for large payloads
-6. **Connection pooling** - Reuse client instances
-
-## Common issues
-
-**Slow search with filters:**
-```python# Create payload index for filtered fields
+```
+
+
+
+## Best practices
+
+
+
+1. **Batch operations** - Use batch upsert/search for efficiency
+
+2. **Payload indexing** - Index fields used in filters
+
+3. **Quantization** - Enable for large collections (>1M vectors)
+
+4. **Sharding** - Use for collections >10M vectors
+
+5. **On-disk storage** - Enable `on_disk_payload` for large payloads
+
+6. **Connection pooling** - Reuse client instances
+
+
+
+## Common issues
+
+
+
+**Slow search with filters:**
+
+```python
+# Create payload index for filtered fields
 
 client.create_payload_index(
     collection_name="docs",
     field_name="category",
     field_schema=PayloadSchemaType.KEYWORD,
 )
-```
-
-**Out of memory:**
-```python# Enable quantization and on-disk storage
+```
+
+
+
+**Out of memory:**
+
+```python
+# Enable quantization and on-disk storage
 
 client.create_collection(
     collection_name="large_collection",
@@ -551,10 +738,14 @@ client.create_collection(
     quantization_config=ScalarQuantization(...),
     on_disk_payload=True,
 )
-```
-
-**Connection issues:**
-```python# Use timeout and retry
+```
+
+
+
+**Connection issues:**
+
+```python
+# Use timeout and retry
 
 client = QdrantClient(
     host="localhost",
@@ -562,18 +753,33 @@ client = QdrantClient(
     timeout=30,
     prefer_grpc=True,  # gRPC for better performance
 )
-```
-
-## References
-
-- **[Advanced Usage](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** - Distributed mode, hybrid search, recommendations
-- **[Troubleshooting](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** - Common issues, debugging, performance tuning
-
-## Resources
-
-- **GitHub**: https://github.com/qdrant/qdrant (22k+ stars)
-- **Docs**: https://qdrant.tech/documentation/
-- **Python Client**: https://github.com/qdrant/qdrant-client
-- **Cloud**: https://cloud.qdrant.io
-- **Version**: 1.12.0+
-- **License**: Apache 2.0
+```
+
+
+
+## References
+
+
+
+- **[Advanced Usage](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** - Distributed mode, hybrid search, recommendations
+
+- **[Troubleshooting](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** - Common issues, debugging, performance tuning
+
+
+
+## Resources
+
+
+
+- **GitHub**: https://github.com/qdrant/qdrant (22k+ stars)
+
+- **Docs**: https://qdrant.tech/documentation/
+
+- **Python Client**: https://github.com/qdrant/qdrant-client
+
+- **Cloud**: https://cloud.qdrant.io
+
+- **Version**: 1.12.0+
+
+- **License**: Apache 2.0
+

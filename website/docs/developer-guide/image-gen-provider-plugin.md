@@ -1,44 +1,85 @@
----
-sidebar_position: 11
-title: "Image Generation Provider Plugins"
-description: "How to build an image-generation backend plugin for Clawksis"
----
-
-# Building an Image Generation Provider Plugin
-
-Image-gen provider plugins register a backend that services every `image_generate` tool call — DALL·E, gpt-image, Grok, Flux, Imagen, Stable Diffusion, fal, Replicate, a local ComfyUI rig, anything. Built-in providers (OpenAI, OpenAI-Codex, xAI) all ship as plugins. You can add a new one, or override a bundled one, by dropping a directory into `plugins/image_gen/<name>/`.
-
-:::tip
-Image-gen is one of several **backend plugins** Clawksis supports. The others (with more specialized ABCs) are [Memory Provider Plugins](/developer-guide/memory-provider-plugin), [Context Engine Plugins](/developer-guide/context-engine-plugin), and [Model Provider Plugins](/developer-guide/model-provider-plugin). General tool/hook/CLI plugins live in [Build a Clawksis Plugin](/guides/build-a-clawk-plugin).
-:::
-
-## How discovery works
-
-Clawksis scans for image-gen backends in three places:
-
-1. **Bundled** — `<repo>/plugins/image_gen/<name>/` (auto-loaded with `kind: backend`, always available)
-2. **User** — `~/.clawksis/plugins/image_gen/<name>/` (opt-in via `plugins.enabled`)
-3. **Pip** — packages declaring a `clawk_agent.plugins` entry point
-
-Each plugin's `register(ctx)` function calls `ctx.register_image_gen_provider(...)` — that puts it into the registry in `agent/image_gen_registry.py`. The active provider is picked by `image_gen.provider` in `config.yaml`; `clawk tools` walks users through selection.
-
-The `image_generate` tool wrapper asks the registry for the active provider and dispatches there. If no provider is registered, the tool surfaces a helpful error pointing at `clawk tools`.
-
-## Directory structure
-
-```
-plugins/image_gen/my-backend/
-├── __init__.py      # ImageGenProvider subclass + register()
-└── plugin.yaml      # Manifest with kind: backend
-```
-
-A bundled plugin is complete at this point. User plugins at `~/.clawksis/plugins/image_gen/<name>/` need to be added to `plugins.enabled` in `config.yaml` (or run `clawk plugins enable <name>`).
-
-## The ImageGenProvider ABC
-
-Subclass `agent.image_gen_provider.ImageGenProvider`. The only required members are the `name` property and the `generate()` method — everything else has sane defaults:
-
-```python# plugins/image_gen/my-backend/__init__.py
+---
+
+sidebar_position: 11
+
+title: "Image Generation Provider Plugins"
+
+description: "How to build an image-generation backend plugin for Clawksis"
+
+---
+
+
+
+# Building an Image Generation Provider Plugin
+
+
+
+Image-gen provider plugins register a backend that services every `image_generate` tool call — DALL·E, gpt-image, Grok, Flux, Imagen, Stable Diffusion, fal, Replicate, a local ComfyUI rig, anything. Built-in providers (OpenAI, OpenAI-Codex, xAI) all ship as plugins. You can add a new one, or override a bundled one, by dropping a directory into `plugins/image_gen/<name>/`.
+
+
+
+:::tip
+
+Image-gen is one of several **backend plugins** Clawksis supports. The others (with more specialized ABCs) are [Memory Provider Plugins](/developer-guide/memory-provider-plugin), [Context Engine Plugins](/developer-guide/context-engine-plugin), and [Model Provider Plugins](/developer-guide/model-provider-plugin). General tool/hook/CLI plugins live in [Build a Clawksis Plugin](/guides/build-a-clawk-plugin).
+
+:::
+
+
+
+## How discovery works
+
+
+
+Clawksis scans for image-gen backends in three places:
+
+
+
+1. **Bundled** — `<repo>/plugins/image_gen/<name>/` (auto-loaded with `kind: backend`, always available)
+
+2. **User** — `~/.clawksis/plugins/image_gen/<name>/` (opt-in via `plugins.enabled`)
+
+3. **Pip** — packages declaring a `clawk_agent.plugins` entry point
+
+
+
+Each plugin's `register(ctx)` function calls `ctx.register_image_gen_provider(...)` — that puts it into the registry in `agent/image_gen_registry.py`. The active provider is picked by `image_gen.provider` in `config.yaml`; `clawk tools` walks users through selection.
+
+
+
+The `image_generate` tool wrapper asks the registry for the active provider and dispatches there. If no provider is registered, the tool surfaces a helpful error pointing at `clawk tools`.
+
+
+
+## Directory structure
+
+
+
+```
+
+plugins/image_gen/my-backend/
+
+├── __init__.py      # ImageGenProvider subclass + register()
+
+└── plugin.yaml      # Manifest with kind: backend
+
+```
+
+
+
+A bundled plugin is complete at this point. User plugins at `~/.clawksis/plugins/image_gen/<name>/` need to be added to `plugins.enabled` in `config.yaml` (or run `clawk plugins enable <name>`).
+
+
+
+## The ImageGenProvider ABC
+
+
+
+Subclass `agent.image_gen_provider.ImageGenProvider`. The only required members are the `name` property and the `generate()` method — everything else has sane defaults:
+
+
+
+```python
+# plugins/image_gen/my-backend/__init__.py
 
 from typing import Any, Dict, List, Optional
 
@@ -207,112 +248,221 @@ def register(ctx) -> None:
     """Plugin entry point — called once at load time."""
 
     ctx.register_image_gen_provider(MyBackendImageGenProvider())
-```
-
-## plugin.yaml
-
-```yaml
-name: my-backend
-version: 1.0.0
-description: My image backend — text-to-image via My Backend SDK
-author: Your Name
-kind: backend
-requires_env:
-  - MY_BACKEND_API_KEY
-```
-
-`kind: backend` is what routes the plugin to the image-gen registration path. `requires_env` is prompted during `clawk plugins install`.
-
-## ABC reference
-
-Full contract in `agent/image_gen_provider.py`. The methods you'll typically override:
-
-| Member | Required | Default | Purpose |
-|---|---|---|---|
-| `name` | ✅ | — | Stable id used in `image_gen.provider` config |
-| `display_name` | — | `name.title()` | Label shown in `clawk tools` |
-| `is_available()` | — | `True` | Gate for missing creds/deps |
-| `list_models()` | — | `[]` | Catalog for `clawk tools` model picker |
-| `default_model()` | — | first from `list_models()` | Fallback when no model is configured |
-| `get_setup_schema()` | — | minimal | Picker metadata + env-var prompts |
-| `generate(prompt, aspect_ratio, **kwargs)` | ✅ | — | The call |
-
-## Response format
-
-`generate()` must return a dict built via `success_response()` or `error_response()`. Both live in `agent/image_gen_provider.py`.
-
-**Success:**
-```python
-success_response(
-    image=<url-or-absolute-path>,
-    model=<model-id>,
-    prompt=<echoed-prompt>,
-    aspect_ratio="landscape" | "square" | "portrait",
-    provider=<your-provider-name>,
-    extra={...},  # optional backend-specific fields
-)
-```
-
-**Error:**
-```python
-error_response(
-    error="human-readable message",
-    error_type="provider_error" | "invalid_input" | "<exception class name>",
-    provider=<your-provider-name>,
-    model=<model-id>,
-    prompt=<prompt>,
-    aspect_ratio=<resolved aspect>,
-)
-```
-
-The tool wrapper JSON-serializes the dict and hands it to the LLM. Errors are surfaced as the tool result; the LLM decides how to explain them to the user.
-
-## Handling base64 vs URL output
-
-Some backends return image URLs (fal, Replicate); others return base64 payloads (OpenAI gpt-image-2). For the base64 case, use `save_b64_image()` — it writes to `$CLAWK_HOME/cache/images/<prefix>_<timestamp>_<uuid>.<ext>` and returns the absolute `Path`. Pass that path (as `str`) as `image=` in `success_response()`. Gateway delivery (Telegram photo bubble, Discord attachment) recognizes both URLs and absolute paths.
-
-## User overrides
-
-Drop a user plugin at `~/.clawksis/plugins/image_gen/<name>/` with the same `name` property as a bundled one and enable it via `clawk plugins enable <name>` — the registry is last-writer-wins, so your version replaces the built-in. Useful for pointing an `openai` plugin at a private proxy, or swapping in a custom model catalog.
-
-## Testing
-
-```bash
-export CLAWK_HOME=/tmp/clawk-imggen-test
-mkdir -p $CLAWK_HOME/plugins/image_gen/my-backend
-# …copy __init__.py + plugin.yaml into that dir…
-
-export MY_BACKEND_API_KEY=your-test-key
-clawk plugins enable my-backend
-
-# Pick it as the active provider
-echo "image_gen:" >> $CLAWK_HOME/config.yaml
-echo "  provider: my-backend" >> $CLAWK_HOME/config.yaml
-
-# Exercise it
-clawk -z "Generate an image of a corgi in a spacesuit"
-```
-
-Or interactively: `clawk tools` → "Image Generation" → select `my-backend` → enter API key if prompted.
-
-## Reference implementations
-
-- **`plugins/image_gen/openai/__init__.py`** — gpt-image-2 at low/medium/high tiers as three virtual model IDs sharing one API model with different `quality` params. Good example of tiered models under a single backend + config.yaml precedence chain.
-- **`plugins/image_gen/xai/__init__.py`** — Grok Imagine via xAI. Different shape (URL output, simpler catalog).
-- **`plugins/image_gen/openai-codex/__init__.py`** — Codex-style Responses API variant reusing the OpenAI SDK with a different routing base URL.
-
-## Distribute via pip
-
-```toml
-# pyproject.toml
-[project.entry-points."clawk_agent.plugins"]
-my-backend-imggen = "my_backend_imggen_package"
-```
-
-`my_backend_imggen_package` must expose a top-level `register` function. See [Distribute via pip](/guides/build-a-clawk-plugin#distribute-via-pip) in the general plugin guide for the full setup.
-
-## Related pages
-
-- [Image Generation](/user-guide/features/image-generation) — user-facing feature documentation
-- [Plugins overview](/user-guide/features/plugins) — all plugin types at a glance
-- [Build a Clawksis Plugin](/guides/build-a-clawk-plugin) — general tools/hooks/slash commands guide
+```
+
+
+
+## plugin.yaml
+
+
+
+```yaml
+
+name: my-backend
+
+version: 1.0.0
+
+description: My image backend — text-to-image via My Backend SDK
+
+author: Your Name
+
+kind: backend
+
+requires_env:
+
+  - MY_BACKEND_API_KEY
+
+```
+
+
+
+`kind: backend` is what routes the plugin to the image-gen registration path. `requires_env` is prompted during `clawk plugins install`.
+
+
+
+## ABC reference
+
+
+
+Full contract in `agent/image_gen_provider.py`. The methods you'll typically override:
+
+
+
+| Member | Required | Default | Purpose |
+
+|---|---|---|---|
+
+| `name` | ✅ | — | Stable id used in `image_gen.provider` config |
+
+| `display_name` | — | `name.title()` | Label shown in `clawk tools` |
+
+| `is_available()` | — | `True` | Gate for missing creds/deps |
+
+| `list_models()` | — | `[]` | Catalog for `clawk tools` model picker |
+
+| `default_model()` | — | first from `list_models()` | Fallback when no model is configured |
+
+| `get_setup_schema()` | — | minimal | Picker metadata + env-var prompts |
+
+| `generate(prompt, aspect_ratio, **kwargs)` | ✅ | — | The call |
+
+
+
+## Response format
+
+
+
+`generate()` must return a dict built via `success_response()` or `error_response()`. Both live in `agent/image_gen_provider.py`.
+
+
+
+**Success:**
+
+```python
+
+success_response(
+
+    image=<url-or-absolute-path>,
+
+    model=<model-id>,
+
+    prompt=<echoed-prompt>,
+
+    aspect_ratio="landscape" | "square" | "portrait",
+
+    provider=<your-provider-name>,
+
+    extra={...},  # optional backend-specific fields
+
+)
+
+```
+
+
+
+**Error:**
+
+```python
+
+error_response(
+
+    error="human-readable message",
+
+    error_type="provider_error" | "invalid_input" | "<exception class name>",
+
+    provider=<your-provider-name>,
+
+    model=<model-id>,
+
+    prompt=<prompt>,
+
+    aspect_ratio=<resolved aspect>,
+
+)
+
+```
+
+
+
+The tool wrapper JSON-serializes the dict and hands it to the LLM. Errors are surfaced as the tool result; the LLM decides how to explain them to the user.
+
+
+
+## Handling base64 vs URL output
+
+
+
+Some backends return image URLs (fal, Replicate); others return base64 payloads (OpenAI gpt-image-2). For the base64 case, use `save_b64_image()` — it writes to `$CLAWK_HOME/cache/images/<prefix>_<timestamp>_<uuid>.<ext>` and returns the absolute `Path`. Pass that path (as `str`) as `image=` in `success_response()`. Gateway delivery (Telegram photo bubble, Discord attachment) recognizes both URLs and absolute paths.
+
+
+
+## User overrides
+
+
+
+Drop a user plugin at `~/.clawksis/plugins/image_gen/<name>/` with the same `name` property as a bundled one and enable it via `clawk plugins enable <name>` — the registry is last-writer-wins, so your version replaces the built-in. Useful for pointing an `openai` plugin at a private proxy, or swapping in a custom model catalog.
+
+
+
+## Testing
+
+
+
+```bash
+
+export CLAWK_HOME=/tmp/clawk-imggen-test
+
+mkdir -p $CLAWK_HOME/plugins/image_gen/my-backend
+
+# …copy __init__.py + plugin.yaml into that dir…
+
+
+
+export MY_BACKEND_API_KEY=your-test-key
+
+clawk plugins enable my-backend
+
+
+
+# Pick it as the active provider
+
+echo "image_gen:" >> $CLAWK_HOME/config.yaml
+
+echo "  provider: my-backend" >> $CLAWK_HOME/config.yaml
+
+
+
+# Exercise it
+
+clawk -z "Generate an image of a corgi in a spacesuit"
+
+```
+
+
+
+Or interactively: `clawk tools` → "Image Generation" → select `my-backend` → enter API key if prompted.
+
+
+
+## Reference implementations
+
+
+
+- **`plugins/image_gen/openai/__init__.py`** — gpt-image-2 at low/medium/high tiers as three virtual model IDs sharing one API model with different `quality` params. Good example of tiered models under a single backend + config.yaml precedence chain.
+
+- **`plugins/image_gen/xai/__init__.py`** — Grok Imagine via xAI. Different shape (URL output, simpler catalog).
+
+- **`plugins/image_gen/openai-codex/__init__.py`** — Codex-style Responses API variant reusing the OpenAI SDK with a different routing base URL.
+
+
+
+## Distribute via pip
+
+
+
+```toml
+
+# pyproject.toml
+
+[project.entry-points."clawk_agent.plugins"]
+
+my-backend-imggen = "my_backend_imggen_package"
+
+```
+
+
+
+`my_backend_imggen_package` must expose a top-level `register` function. See [Distribute via pip](/guides/build-a-clawk-plugin#distribute-via-pip) in the general plugin guide for the full setup.
+
+
+
+## Related pages
+
+
+
+- [Image Generation](/user-guide/features/image-generation) — user-facing feature documentation
+
+- [Plugins overview](/user-guide/features/plugins) — all plugin types at a glance
+
+- [Build a Clawksis Plugin](/guides/build-a-clawk-plugin) — general tools/hooks/slash commands guide
+

@@ -1,48 +1,93 @@
----
-name: instructor
-description: Extract structured data from LLM responses with Pydantic validation, retry failed extractions automatically, parse complex JSON with type safety, and stream partial results with Instructor - battle-tested structured output library
-version: 1.0.0
-author: Orchestra Research
-license: MIT
-dependencies: [instructor, pydantic, openai, anthropic]
-platforms: [linux, macos, windows]
-metadata:
-  clawk:
-    tags: [Prompt Engineering, Instructor, Structured Output, Pydantic, Data Extraction, JSON Parsing, Type Safety, Validation, Streaming, OpenAI, Anthropic]
-
----
-
-# Instructor: Structured LLM Outputs
-
-## When to Use This Skill
-
-Use Instructor when you need to:
-- **Extract structured data** from LLM responses reliably
-- **Validate outputs** against Pydantic schemas automatically
-- **Retry failed extractions** with automatic error handling
-- **Parse complex JSON** with type safety and validation
-- **Stream partial results** for real-time processing
-- **Support multiple LLM providers** with consistent API
-
-**GitHub Stars**: 15,000+ | **Battle-tested**: 100,000+ developers
-
-## Installation
-
-```bash
-# Base installation
-pip install instructor
-
-# With specific providers
-pip install "instructor[anthropic]"  # Anthropic Claude
-pip install "instructor[openai]"     # OpenAI
-pip install "instructor[all]"        # All providers
-```
-
-## Quick Start
-
-### Basic Example: Extract User Data
-
-```pythonimport instructor
+---
+
+name: instructor
+
+description: Extract structured data from LLM responses with Pydantic validation, retry failed extractions automatically, parse complex JSON with type safety, and stream partial results with Instructor - battle-tested structured output library
+
+version: 1.0.0
+
+author: Orchestra Research
+
+license: MIT
+
+dependencies: [instructor, pydantic, openai, anthropic]
+
+platforms: [linux, macos, windows]
+
+metadata:
+
+  clawk:
+
+    tags: [Prompt Engineering, Instructor, Structured Output, Pydantic, Data Extraction, JSON Parsing, Type Safety, Validation, Streaming, OpenAI, Anthropic]
+
+
+
+---
+
+
+
+# Instructor: Structured LLM Outputs
+
+
+
+## When to Use This Skill
+
+
+
+Use Instructor when you need to:
+
+- **Extract structured data** from LLM responses reliably
+
+- **Validate outputs** against Pydantic schemas automatically
+
+- **Retry failed extractions** with automatic error handling
+
+- **Parse complex JSON** with type safety and validation
+
+- **Stream partial results** for real-time processing
+
+- **Support multiple LLM providers** with consistent API
+
+
+
+**GitHub Stars**: 15,000+ | **Battle-tested**: 100,000+ developers
+
+
+
+## Installation
+
+
+
+```bash
+
+# Base installation
+
+pip install instructor
+
+
+
+# With specific providers
+
+pip install "instructor[anthropic]"  # Anthropic Claude
+
+pip install "instructor[openai]"     # OpenAI
+
+pip install "instructor[all]"        # All providers
+
+```
+
+
+
+## Quick Start
+
+
+
+### Basic Example: Extract User Data
+
+
+
+```python
+import instructor
 
 from pydantic import BaseModel
 
@@ -85,11 +130,16 @@ print(user.name)  # "John Doe"
 print(user.age)  # 30
 
 print(user.email)  # "john@example.com"
-```
-
-### With OpenAI
-
-```pythonfrom openai import OpenAI
+```
+
+
+
+### With OpenAI
+
+
+
+```python
+from openai import OpenAI
 
 
 client = instructor.from_openai(OpenAI())
@@ -100,17 +150,28 @@ user = client.chat.completions.create(
     response_model=User,
     messages=[{"role": "user", "content": "Extract: Alice, 25, alice@email.com"}],
 )
-```
-
-## Core Concepts
-
-### 1. Response Models (Pydantic)
-
-Response models define the structure and validation rules for LLM outputs.
-
-#### Basic Model
-
-```pythonfrom pydantic import BaseModel, Field
+```
+
+
+
+## Core Concepts
+
+
+
+### 1. Response Models (Pydantic)
+
+
+
+Response models define the structure and validation rules for LLM outputs.
+
+
+
+#### Basic Model
+
+
+
+```python
+from pydantic import BaseModel, Field
 
 
 class Article(BaseModel):
@@ -129,17 +190,28 @@ article = client.messages.create(
     messages=[{"role": "user", "content": "Analyze this article: [article text]"}],
     response_model=Article,
 )
-```
-
-**Benefits:**
-- Type safety with Python type hints
-- Automatic validation (word_count > 0)
-- Self-documenting with Field descriptions
-- IDE autocomplete support
-
-#### Nested Models
-
-```pythonclass Address(BaseModel):
+```
+
+
+
+**Benefits:**
+
+- Type safety with Python type hints
+
+- Automatic validation (word_count > 0)
+
+- Self-documenting with Field descriptions
+
+- IDE autocomplete support
+
+
+
+#### Nested Models
+
+
+
+```python
+class Address(BaseModel):
     street: str
 
     city: str
@@ -164,11 +236,16 @@ person = client.messages.create(
 
 
 print(person.address.city)  # "Boston"
-```
-
-#### Optional Fields
-
-```pythonfrom typing import Optional
+```
+
+
+
+#### Optional Fields
+
+
+
+```python
+from typing import Optional
 
 
 class Product(BaseModel):
@@ -182,11 +259,16 @@ class Product(BaseModel):
 
 
 # LLM doesn't need to provide discount or description
-```
-
-#### Enums for Constraints
-
-```pythonfrom enum import Enum
+```
+
+
+
+#### Enums for Constraints
+
+
+
+```python
+from enum import Enum
 
 
 class Sentiment(str, Enum):
@@ -212,15 +294,24 @@ review = client.messages.create(
 
 
 print(review.sentiment)  # Sentiment.POSITIVE
-```
-
-### 2. Validation
-
-Pydantic validates LLM outputs automatically. If validation fails, Instructor retries.
-
-#### Built-in Validators
-
-```pythonfrom pydantic import Field, EmailStr, HttpUrl
+```
+
+
+
+### 2. Validation
+
+
+
+Pydantic validates LLM outputs automatically. If validation fails, Instructor retries.
+
+
+
+#### Built-in Validators
+
+
+
+```python
+from pydantic import Field, EmailStr, HttpUrl
 
 
 class Contact(BaseModel):
@@ -234,11 +325,16 @@ class Contact(BaseModel):
 
 
 # If LLM provides invalid data, Instructor retries automatically
-```
-
-#### Custom Validators
-
-```pythonfrom pydantic import field_validator
+```
+
+
+
+#### Custom Validators
+
+
+
+```python
+from pydantic import field_validator
 
 
 class Event(BaseModel):
@@ -267,11 +363,16 @@ class Event(BaseModel):
             raise ValueError("Must have at least 1 attendee")
 
         return v
-```
-
-#### Model-Level Validation
-
-```pythonfrom pydantic import model_validator
+```
+
+
+
+#### Model-Level Validation
+
+
+
+```python
+from pydantic import model_validator
 
 
 class DateRange(BaseModel):
@@ -293,13 +394,20 @@ class DateRange(BaseModel):
             raise ValueError("end_date must be after start_date")
 
         return self
-```
-
-### 3. Automatic Retrying
-
-Instructor retries automatically when validation fails, providing error feedback to the LLM.
-
-```python# Retries up to 3 times if validation fails
+```
+
+
+
+### 3. Automatic Retrying
+
+
+
+Instructor retries automatically when validation fails, providing error feedback to the LLM.
+
+
+
+```python
+# Retries up to 3 times if validation fails
 
 user = client.messages.create(
     model="claude-sonnet-4-5-20250929",
@@ -315,22 +423,38 @@ user = client.messages.create(
 # "Validation error: age - field required"
 
 # LLM tries again with better extraction
-```
-
-**How it works:**
-1. LLM generates output
-2. Pydantic validates
-3. If invalid: Error message sent back to LLM
-4. LLM tries again with error feedback
-5. Repeats up to max_retries
-
-### 4. Streaming
-
-Stream partial results for real-time processing.
-
-#### Streaming Partial Objects
-
-```pythonfrom instructor import Partial
+```
+
+
+
+**How it works:**
+
+1. LLM generates output
+
+2. Pydantic validates
+
+3. If invalid: Error message sent back to LLM
+
+4. LLM tries again with error feedback
+
+5. Repeats up to max_retries
+
+
+
+### 4. Streaming
+
+
+
+Stream partial results for real-time processing.
+
+
+
+#### Streaming Partial Objects
+
+
+
+```python
+from instructor import Partial
 
 
 class Story(BaseModel):
@@ -354,11 +478,16 @@ for partial_story in client.messages.create_partial(
     print(f"Content so far: {partial_story.content[:100]}...")
 
     # Update UI in real-time
-```
-
-#### Streaming Iterables
-
-```pythonclass Task(BaseModel):
+```
+
+
+
+#### Streaming Iterables
+
+
+
+```python
+class Task(BaseModel):
     title: str
 
     priority: str
@@ -378,13 +507,20 @@ for task in tasks:
     print(f"- {task.title} ({task.priority})")
 
     # Process each task as it arrives
-```
-
-## Provider Configuration
-
-### Anthropic Claude
-
-```pythonimport instructor
+```
+
+
+
+## Provider Configuration
+
+
+
+### Anthropic Claude
+
+
+
+```python
+import instructor
 
 from anthropic import Anthropic
 
@@ -400,11 +536,16 @@ response = client.messages.create(
     messages=[...],
     response_model=YourModel,
 )
-```
-
-### OpenAI
-
-```pythonfrom openai import OpenAI
+```
+
+
+
+### OpenAI
+
+
+
+```python
+from openai import OpenAI
 
 
 client = instructor.from_openai(OpenAI(api_key="your-api-key"))
@@ -413,11 +554,16 @@ client = instructor.from_openai(OpenAI(api_key="your-api-key"))
 response = client.chat.completions.create(
     model="gpt-4o-mini", response_model=YourModel, messages=[...]
 )
-```
-
-### Local Models (Ollama)
-
-```pythonfrom openai import OpenAI
+```
+
+
+
+### Local Models (Ollama)
+
+
+
+```python
+from openai import OpenAI
 
 
 # Point to local Ollama server
@@ -434,13 +580,20 @@ client = instructor.from_openai(
 response = client.chat.completions.create(
     model="llama3.1", response_model=YourModel, messages=[...]
 )
-```
-
-## Common Patterns
-
-### Pattern 1: Data Extraction from Text
-
-```pythonclass CompanyInfo(BaseModel):
+```
+
+
+
+## Common Patterns
+
+
+
+### Pattern 1: Data Extraction from Text
+
+
+
+```python
+class CompanyInfo(BaseModel):
     name: str
 
     founded_year: int
@@ -469,11 +622,16 @@ company = client.messages.create(
     messages=[{"role": "user", "content": f"Extract company information from: {text}"}],
     response_model=CompanyInfo,
 )
-```
-
-### Pattern 2: Classification
-
-```pythonclass Category(str, Enum):
+```
+
+
+
+### Pattern 2: Classification
+
+
+
+```python
+class Category(str, Enum):
     TECHNOLOGY = "technology"
 
     FINANCE = "finance"
@@ -499,11 +657,16 @@ classification = client.messages.create(
     messages=[{"role": "user", "content": "Classify this article: [article text]"}],
     response_model=ArticleClassification,
 )
-```
-
-### Pattern 3: Multi-Entity Extraction
-
-```pythonclass Person(BaseModel):
+```
+
+
+
+### Pattern 3: Multi-Entity Extraction
+
+
+
+```python
+class Person(BaseModel):
     name: str
 
     role: str
@@ -536,11 +699,16 @@ entities = client.messages.create(
 
 for person in entities.people:
     print(f"{person.name} - {person.role}")
-```
-
-### Pattern 4: Structured Analysis
-
-```pythonclass SentimentAnalysis(BaseModel):
+```
+
+
+
+### Pattern 4: Structured Analysis
+
+
+
+```python
+class SentimentAnalysis(BaseModel):
     overall_sentiment: Sentiment
 
     positive_aspects: list[str]
@@ -561,11 +729,16 @@ analysis = client.messages.create(
     messages=[{"role": "user", "content": f"Analyze this review: {review}"}],
     response_model=SentimentAnalysis,
 )
-```
-
-### Pattern 5: Batch Processing
-
-```pythondef extract_person(text: str) -> Person:
+```
+
+
+
+### Pattern 5: Batch Processing
+
+
+
+```python
+def extract_person(text: str) -> Person:
 
     return client.messages.create(
         model="claude-sonnet-4-5-20250929",
@@ -583,13 +756,20 @@ texts = [
 
 
 people = [extract_person(text) for text in texts]
-```
-
-## Advanced Features
-
-### Union Types
-
-```pythonfrom typing import Union
+```
+
+
+
+## Advanced Features
+
+
+
+### Union Types
+
+
+
+```python
+from typing import Union
 
 
 class TextContent(BaseModel):
@@ -613,11 +793,16 @@ class Post(BaseModel):
 
 
 # LLM chooses appropriate type based on content
-```
-
-### Dynamic Models
-
-```pythonfrom pydantic import create_model
+```
+
+
+
+### Dynamic Models
+
+
+
+```python
+from pydantic import create_model
 
 
 # Create model at runtime
@@ -633,11 +818,16 @@ user = client.messages.create(
     messages=[...],
     response_model=DynamicUser,
 )
-```
-
-### Custom Modes
-
-```python# For providers without native structured outputs
+```
+
+
+
+### Custom Modes
+
+
+
+```python
+# For providers without native structured outputs
 
 client = instructor.from_anthropic(
     Anthropic(),
@@ -652,11 +842,16 @@ client = instructor.from_anthropic(
 # - Mode.JSON (fallback)
 
 # - Mode.TOOLS (OpenAI tools)
-```
-
-### Context Management
-
-```python# Single-use client
+```
+
+
+
+### Context Management
+
+
+
+```python
+# Single-use client
 
 with instructor.from_anthropic(Anthropic()) as client:
     result = client.messages.create(
@@ -667,13 +862,20 @@ with instructor.from_anthropic(Anthropic()) as client:
     )
 
     # Client closed automatically
-```
-
-## Error Handling
-
-### Handling Validation Errors
-
-```pythonfrom pydantic import ValidationError
+```
+
+
+
+## Error Handling
+
+
+
+### Handling Validation Errors
+
+
+
+```python
+from pydantic import ValidationError
 
 
 try:
@@ -693,11 +895,16 @@ except ValidationError as e:
 
 except Exception as e:
     print(f"API error: {e}")
-```
-
-### Custom Error Messages
-
-```pythonclass ValidatedUser(BaseModel):
+```
+
+
+
+### Custom Error Messages
+
+
+
+```python
+class ValidatedUser(BaseModel):
     name: str = Field(description="Full name, 2-100 characters")
 
     age: int = Field(description="Age between 0 and 120", ge=0, le=120)
@@ -710,13 +917,20 @@ except Exception as e:
         json_schema_extra = {
             "examples": [{"name": "John Doe", "age": 30, "email": "john@example.com"}]
         }
-```
-
-## Best Practices
-
-### 1. Clear Field Descriptions
-
-```python# ❌ Bad: Vague
+```
+
+
+
+## Best Practices
+
+
+
+### 1. Clear Field Descriptions
+
+
+
+```python
+# ❌ Bad: Vague
 
 
 class Product(BaseModel):
@@ -732,22 +946,32 @@ class Product(BaseModel):
     name: str = Field(description="Product name from the text")
 
     price: float = Field(description="Price in USD, without currency symbol")
-```
-
-### 2. Use Appropriate Validation
-
-```python# ✅ Good: Constrain values
+```
+
+
+
+### 2. Use Appropriate Validation
+
+
+
+```python
+# ✅ Good: Constrain values
 
 
 class Rating(BaseModel):
     score: int = Field(ge=1, le=5, description="Rating from 1 to 5 stars")
 
     review: str = Field(min_length=10, description="Review text, at least 10 chars")
-```
-
-### 3. Provide Examples in Prompts
-
-```pythonmessages = [
+```
+
+
+
+### 3. Provide Examples in Prompts
+
+
+
+```python
+messages = [
     {
         "role": "user",
         "content": """Extract person info from: "John, 30, engineer"
@@ -767,11 +991,16 @@ Example format:
 }""",
     }
 ]
-```
-
-### 4. Use Enums for Fixed Categories
-
-```python# ✅ Good: Enum ensures valid values
+```
+
+
+
+### 4. Use Enums for Fixed Categories
+
+
+
+```python
+# ✅ Good: Enum ensures valid values
 
 
 class Status(str, Enum):
@@ -784,11 +1013,16 @@ class Status(str, Enum):
 
 class Application(BaseModel):
     status: Status  # LLM must choose from enum
-```
-
-### 5. Handle Missing Data Gracefully
-
-```pythonclass PartialData(BaseModel):
+```
+
+
+
+### 5. Handle Missing Data Gracefully
+
+
+
+```python
+class PartialData(BaseModel):
     required_field: str
 
     optional_field: Optional[str] = None
@@ -797,41 +1031,79 @@ class Application(BaseModel):
 
 
 # LLM only needs to provide required_field
-```
-
-## Comparison to Alternatives
-
-| Feature | Instructor | Manual JSON | LangChain | DSPy |
-|---------|------------|-------------|-----------|------|
-| Type Safety | ✅ Yes | ❌ No | ⚠️ Partial | ✅ Yes |
-| Auto Validation | ✅ Yes | ❌ No | ❌ No | ⚠️ Limited |
-| Auto Retry | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
-| Streaming | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
-| Multi-Provider | ✅ Yes | ⚠️ Manual | ✅ Yes | ✅ Yes |
-| Learning Curve | Low | Low | Medium | High |
-
-**When to choose Instructor:**
-- Need structured, validated outputs
-- Want type safety and IDE support
-- Require automatic retries
-- Building data extraction systems
-
-**When to choose alternatives:**
-- DSPy: Need prompt optimization
-- LangChain: Building complex chains
-- Manual: Simple, one-off extractions
-
-## Resources
-
-- **Documentation**: https://python.useinstructor.com
-- **GitHub**: https://github.com/jxnl/instructor (15k+ stars)
-- **Cookbook**: https://python.useinstructor.com/examples
-- **Discord**: Community support available
-
-## See Also
-
-- `references/validation.md` - Advanced validation patterns
-- `references/providers.md` - Provider-specific configuration
-- `references/examples.md` - Real-world use cases
-
-
+```
+
+
+
+## Comparison to Alternatives
+
+
+
+| Feature | Instructor | Manual JSON | LangChain | DSPy |
+
+|---------|------------|-------------|-----------|------|
+
+| Type Safety | ✅ Yes | ❌ No | ⚠️ Partial | ✅ Yes |
+
+| Auto Validation | ✅ Yes | ❌ No | ❌ No | ⚠️ Limited |
+
+| Auto Retry | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+
+| Streaming | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
+
+| Multi-Provider | ✅ Yes | ⚠️ Manual | ✅ Yes | ✅ Yes |
+
+| Learning Curve | Low | Low | Medium | High |
+
+
+
+**When to choose Instructor:**
+
+- Need structured, validated outputs
+
+- Want type safety and IDE support
+
+- Require automatic retries
+
+- Building data extraction systems
+
+
+
+**When to choose alternatives:**
+
+- DSPy: Need prompt optimization
+
+- LangChain: Building complex chains
+
+- Manual: Simple, one-off extractions
+
+
+
+## Resources
+
+
+
+- **Documentation**: https://python.useinstructor.com
+
+- **GitHub**: https://github.com/jxnl/instructor (15k+ stars)
+
+- **Cookbook**: https://python.useinstructor.com/examples
+
+- **Discord**: Community support available
+
+
+
+## See Also
+
+
+
+- `references/validation.md` - Advanced validation patterns
+
+- `references/providers.md` - Provider-specific configuration
+
+- `references/examples.md` - Real-world use cases
+
+
+
+
+

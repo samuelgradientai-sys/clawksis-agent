@@ -1,51 +1,99 @@
----
-name: dspy
-description: "DSPy: declarative LM programs, auto-optimize prompts, RAG."
-version: 1.0.0
-author: Orchestra Research
-license: MIT
-dependencies: [dspy, openai, anthropic]
-platforms: [linux, macos, windows]
-metadata:
-  clawk:
-    tags: [Prompt Engineering, DSPy, Declarative Programming, RAG, Agents, Prompt Optimization, LM Programming, Stanford NLP, Automatic Optimization, Modular AI]
-
----
-
-# DSPy: Declarative Language Model Programming
-
-## When to Use This Skill
-
-Use DSPy when you need to:
-- **Build complex AI systems** with multiple components and workflows
-- **Program LMs declaratively** instead of manual prompt engineering
-- **Optimize prompts automatically** using data-driven methods
-- **Create modular AI pipelines** that are maintainable and portable
-- **Improve model outputs systematically** with optimizers
-- **Build RAG systems, agents, or classifiers** with better reliability
-
-**GitHub Stars**: 22,000+ | **Created By**: Stanford NLP
-
-## Installation
-
-```bash
-# Stable release
-pip install dspy
-
-# Latest development version
-pip install git+https://github.com/stanfordnlp/dspy.git
-
-# With specific LM providers
-pip install dspy[openai]        # OpenAI
-pip install dspy[anthropic]     # Anthropic Claude
-pip install dspy[all]           # All providers
-```
-
-## Quick Start
-
-### Basic Example: Question Answering
-
-```pythonimport dspy
+---
+
+name: dspy
+
+description: "DSPy: declarative LM programs, auto-optimize prompts, RAG."
+
+version: 1.0.0
+
+author: Orchestra Research
+
+license: MIT
+
+dependencies: [dspy, openai, anthropic]
+
+platforms: [linux, macos, windows]
+
+metadata:
+
+  clawk:
+
+    tags: [Prompt Engineering, DSPy, Declarative Programming, RAG, Agents, Prompt Optimization, LM Programming, Stanford NLP, Automatic Optimization, Modular AI]
+
+
+
+---
+
+
+
+# DSPy: Declarative Language Model Programming
+
+
+
+## When to Use This Skill
+
+
+
+Use DSPy when you need to:
+
+- **Build complex AI systems** with multiple components and workflows
+
+- **Program LMs declaratively** instead of manual prompt engineering
+
+- **Optimize prompts automatically** using data-driven methods
+
+- **Create modular AI pipelines** that are maintainable and portable
+
+- **Improve model outputs systematically** with optimizers
+
+- **Build RAG systems, agents, or classifiers** with better reliability
+
+
+
+**GitHub Stars**: 22,000+ | **Created By**: Stanford NLP
+
+
+
+## Installation
+
+
+
+```bash
+
+# Stable release
+
+pip install dspy
+
+
+
+# Latest development version
+
+pip install git+https://github.com/stanfordnlp/dspy.git
+
+
+
+# With specific LM providers
+
+pip install dspy[openai]        # OpenAI
+
+pip install dspy[anthropic]     # Anthropic Claude
+
+pip install dspy[all]           # All providers
+
+```
+
+
+
+## Quick Start
+
+
+
+### Basic Example: Question Answering
+
+
+
+```python
+import dspy
 
 
 # Configure your language model
@@ -76,11 +124,16 @@ qa = dspy.Predict(QA)
 response = qa(question="What is the capital of France?")
 
 print(response.answer)  # "Paris"
-```
-
-### Chain of Thought Reasoning
-
-```pythonimport dspy
+```
+
+
+
+### Chain of Thought Reasoning
+
+
+
+```python
+import dspy
 
 
 lm = dspy.Claude(model="claude-sonnet-4-5-20250929")
@@ -111,15 +164,24 @@ response = cot(
 print(response.rationale)  # Shows reasoning steps
 
 print(response.answer)  # "3"
-```
-
-## Core Concepts
-
-### 1. Signatures
-
-Signatures define the structure of your AI task (inputs → outputs):
-
-```python# Inline signature (simple)
+```
+
+
+
+## Core Concepts
+
+
+
+### 1. Signatures
+
+
+
+Signatures define the structure of your AI task (inputs → outputs):
+
+
+
+```python
+# Inline signature (simple)
 
 qa = dspy.Predict("question -> answer")
 
@@ -136,42 +198,68 @@ class Summarize(dspy.Signature):
 
 
 summarizer = dspy.ChainOfThought(Summarize)
-```
-
-**When to use each:**
-- **Inline**: Quick prototyping, simple tasks
-- **Class**: Complex tasks, type hints, better documentation
-
-### 2. Modules
-
-Modules are reusable components that transform inputs to outputs:
-
-#### dspy.Predict
-Basic prediction module:
-
-```pythonpredictor = dspy.Predict("context, question -> answer")
+```
+
+
+
+**When to use each:**
+
+- **Inline**: Quick prototyping, simple tasks
+
+- **Class**: Complex tasks, type hints, better documentation
+
+
+
+### 2. Modules
+
+
+
+Modules are reusable components that transform inputs to outputs:
+
+
+
+#### dspy.Predict
+
+Basic prediction module:
+
+
+
+```python
+predictor = dspy.Predict("context, question -> answer")
 
 result = predictor(
     context="Paris is the capital of France", question="What is the capital?"
 )
-```
-
-#### dspy.ChainOfThought
-Generates reasoning steps before answering:
-
-```pythoncot = dspy.ChainOfThought("question -> answer")
+```
+
+
+
+#### dspy.ChainOfThought
+
+Generates reasoning steps before answering:
+
+
+
+```python
+cot = dspy.ChainOfThought("question -> answer")
 
 result = cot(question="Why is the sky blue?")
 
 print(result.rationale)  # Reasoning steps
 
 print(result.answer)  # Final answer
-```
-
-#### dspy.ReAct
-Agent-like reasoning with tools:
-
-```pythonfrom dspy.predict import ReAct
+```
+
+
+
+#### dspy.ReAct
+
+Agent-like reasoning with tools:
+
+
+
+```python
+from dspy.predict import ReAct
 
 
 class SearchQA(dspy.Signature):
@@ -193,26 +281,42 @@ def search_tool(query: str) -> str:
 react = ReAct(SearchQA, tools=[search_tool])
 
 result = react(question="When was Python created?")
-```
-
-#### dspy.ProgramOfThought
-Generates and executes code for reasoning:
-
-```pythonpot = dspy.ProgramOfThought("question -> answer")
+```
+
+
+
+#### dspy.ProgramOfThought
+
+Generates and executes code for reasoning:
+
+
+
+```python
+pot = dspy.ProgramOfThought("question -> answer")
 
 result = pot(question="What is 15% of 240?")
 
 # Generates: answer = 240 * 0.15
-```
-
-### 3. Optimizers
-
-Optimizers improve your modules automatically using training data:
-
-#### BootstrapFewShot
-Learns from examples:
-
-```pythonfrom dspy.teleprompt import BootstrapFewShot
+```
+
+
+
+### 3. Optimizers
+
+
+
+Optimizers improve your modules automatically using training data:
+
+
+
+#### BootstrapFewShot
+
+Learns from examples:
+
+
+
+```python
+from dspy.teleprompt import BootstrapFewShot
 
 
 # Training data
@@ -239,24 +343,36 @@ optimized_qa = optimizer.compile(qa, trainset=trainset)
 
 
 # Now optimized_qa performs better!
-```
-
-#### MIPRO (Most Important Prompt Optimization)
-Iteratively improves prompts:
-
-```pythonfrom dspy.teleprompt import MIPRO
+```
+
+
+
+#### MIPRO (Most Important Prompt Optimization)
+
+Iteratively improves prompts:
+
+
+
+```python
+from dspy.teleprompt import MIPRO
 
 
 optimizer = MIPRO(metric=validate_answer, num_candidates=10, init_temperature=1.0)
 
 
 optimized_cot = optimizer.compile(cot, trainset=trainset, num_trials=100)
-```
-
-#### BootstrapFinetune
-Creates datasets for model fine-tuning:
-
-```pythonfrom dspy.teleprompt import BootstrapFinetune
+```
+
+
+
+#### BootstrapFinetune
+
+Creates datasets for model fine-tuning:
+
+
+
+```python
+from dspy.teleprompt import BootstrapFinetune
 
 
 optimizer = BootstrapFinetune(metric=validate_answer)
@@ -265,13 +381,20 @@ optimized_module = optimizer.compile(qa, trainset=trainset)
 
 
 # Exports training data for fine-tuning
-```
-
-### 4. Building Complex Systems
-
-#### Multi-Stage Pipeline
-
-```pythonimport dspy
+```
+
+
+
+### 4. Building Complex Systems
+
+
+
+#### Multi-Stage Pipeline
+
+
+
+```python
+import dspy
 
 
 class MultiHopQA(dspy.Module):
@@ -309,11 +432,16 @@ class MultiHopQA(dspy.Module):
 qa_system = MultiHopQA()
 
 result = qa_system(question="Who wrote the book that inspired the movie Blade Runner?")
-```
-
-#### RAG System with Optimization
-
-```pythonimport dspy
+```
+
+
+
+#### RAG System with Optimization
+
+
+
+```python
+import dspy
 
 from dspy.retrieve.chromadb_rm import ChromadbRM
 
@@ -352,13 +480,20 @@ from dspy.teleprompt import BootstrapFewShot
 optimizer = BootstrapFewShot(metric=validate_answer)
 
 optimized_rag = optimizer.compile(rag, trainset=trainset)
-```
-
-## LM Provider Configuration
-
-### Anthropic Claude
-
-```pythonimport dspy
+```
+
+
+
+## LM Provider Configuration
+
+
+
+### Anthropic Claude
+
+
+
+```python
+import dspy
 
 
 lm = dspy.Claude(
@@ -369,25 +504,40 @@ lm = dspy.Claude(
 )
 
 dspy.settings.configure(lm=lm)
-```
-
-### OpenAI
-
-```pythonlm = dspy.OpenAI(model="gpt-4", api_key="your-api-key", max_tokens=1000)
+```
+
+
+
+### OpenAI
+
+
+
+```python
+lm = dspy.OpenAI(model="gpt-4", api_key="your-api-key", max_tokens=1000)
 
 dspy.settings.configure(lm=lm)
-```
-
-### Local Models (Ollama)
-
-```pythonlm = dspy.OllamaLocal(model="llama3.1", base_url="http://localhost:11434")
+```
+
+
+
+### Local Models (Ollama)
+
+
+
+```python
+lm = dspy.OllamaLocal(model="llama3.1", base_url="http://localhost:11434")
 
 dspy.settings.configure(lm=lm)
-```
-
-### Multiple Models
-
-```python# Different models for different tasks
+```
+
+
+
+### Multiple Models
+
+
+
+```python
+# Different models for different tasks
 
 cheap_lm = dspy.OpenAI(model="gpt-3.5-turbo")
 
@@ -402,13 +552,20 @@ with dspy.settings.context(lm=cheap_lm):
 
 with dspy.settings.context(lm=strong_lm):
     answer = generator(context=context, question=question)
-```
-
-## Common Patterns
-
-### Pattern 1: Structured Output
-
-```pythonfrom pydantic import BaseModel, Field
+```
+
+
+
+## Common Patterns
+
+
+
+### Pattern 1: Structured Output
+
+
+
+```python
+from pydantic import BaseModel, Field
 
 
 class PersonInfo(BaseModel):
@@ -434,11 +591,16 @@ result = extractor(text="John Doe is a 35-year-old software engineer.")
 print(result.person.name)  # "John Doe"
 
 print(result.person.age)  # 35
-```
-
-### Pattern 2: Assertion-Driven Optimization
-
-```pythonimport dspy
+```
+
+
+
+### Pattern 2: Assertion-Driven Optimization
+
+
+
+```python
+import dspy
 
 from dspy.primitives.assertions import assert_transform_module, backtrack_handler
 
@@ -463,11 +625,16 @@ class MathQA(dspy.Module):
         )
 
         return dspy.Prediction(solution=solution)
-```
-
-### Pattern 3: Self-Consistency
-
-```pythonimport dspy
+```
+
+
+
+### Pattern 3: Self-Consistency
+
+
+
+```python
+import dspy
 
 from collections import Counter
 
@@ -497,11 +664,16 @@ class ConsistentQA(dspy.Module):
         most_common = Counter(answers).most_common(1)[0][0]
 
         return dspy.Prediction(answer=most_common)
-```
-
-### Pattern 4: Retrieval with Reranking
-
-```pythonclass RerankedRAG(dspy.Module):
+```
+
+
+
+### Pattern 4: Retrieval with Reranking
+
+
+
+```python
+class RerankedRAG(dspy.Module):
     def __init__(self):
 
         super().__init__()
@@ -538,13 +710,20 @@ class ConsistentQA(dspy.Module):
         # Generate answer
 
         return self.answer(context=context, question=question)
-```
-
-## Evaluation and Metrics
-
-### Custom Metrics
-
-```pythondef exact_match(example, pred, trace=None):
+```
+
+
+
+## Evaluation and Metrics
+
+
+
+### Custom Metrics
+
+
+
+```python
+def exact_match(example, pred, trace=None):
     """Exact match metric."""
 
     return example.answer.lower() == pred.answer.lower()
@@ -568,11 +747,16 @@ def f1_score(example, pred, trace=None):
         return 0.0
 
     return 2 * (precision * recall) / (precision + recall)
-```
-
-### Evaluation
-
-```pythonfrom dspy.evaluate import Evaluate
+```
+
+
+
+### Evaluation
+
+
+
+```python
+from dspy.evaluate import Evaluate
 
 
 # Create evaluator
@@ -596,13 +780,20 @@ score_before = evaluator(qa)
 score_after = evaluator(optimized_qa)
 
 print(f"Improvement: {score_after - score_before:.2%}")
-```
-
-## Best Practices
-
-### 1. Start Simple, Iterate
-
-```python# Start with Predict
+```
+
+
+
+## Best Practices
+
+
+
+### 1. Start Simple, Iterate
+
+
+
+```python
+# Start with Predict
 
 qa = dspy.Predict("question -> answer")
 
@@ -615,11 +806,16 @@ qa = dspy.ChainOfThought("question -> answer")
 # Add optimization when you have data
 
 optimized_qa = optimizer.compile(qa, trainset=data)
-```
-
-### 2. Use Descriptive Signatures
-
-```python# ❌ Bad: Vague
+```
+
+
+
+### 2. Use Descriptive Signatures
+
+
+
+```python
+# ❌ Bad: Vague
 
 
 class Task(dspy.Signature):
@@ -637,26 +833,46 @@ class SummarizeArticle(dspy.Signature):
     article = dspy.InputField(desc="full article text")
 
     summary = dspy.OutputField(desc="bullet points, 3-5 items")
-```
-
-### 3. Optimize with Representative Data
-
-```python
-# Create diverse training examples
-trainset = [
-    dspy.Example(question="factual", answer="...).with_inputs("question"),
-    dspy.Example(question="reasoning", answer="...").with_inputs("question"),
-    dspy.Example(question="calculation", answer="...").with_inputs("question"),
-]
-
-# Use validation set for metric
-def metric(example, pred, trace=None):
-    return example.answer in pred.answer
-```
-
-### 4. Save and Load Optimized Models
-
-```python# Save
+```
+
+
+
+### 3. Optimize with Representative Data
+
+
+
+```python
+
+# Create diverse training examples
+
+trainset = [
+
+    dspy.Example(question="factual", answer="...).with_inputs("question"),
+
+    dspy.Example(question="reasoning", answer="...").with_inputs("question"),
+
+    dspy.Example(question="calculation", answer="...").with_inputs("question"),
+
+]
+
+
+
+# Use validation set for metric
+
+def metric(example, pred, trace=None):
+
+    return example.answer in pred.answer
+
+```
+
+
+
+### 4. Save and Load Optimized Models
+
+
+
+```python
+# Save
 
 optimized_qa.save("models/qa_v1.json")
 
@@ -666,11 +882,16 @@ optimized_qa.save("models/qa_v1.json")
 loaded_qa = dspy.ChainOfThought("question -> answer")
 
 loaded_qa.load("models/qa_v1.json")
-```
-
-### 5. Monitor and Debug
-
-```python# Enable tracing
+```
+
+
+
+### 5. Monitor and Debug
+
+
+
+```python
+# Enable tracing
 
 dspy.settings.configure(lm=lm, trace=[])
 
@@ -686,42 +907,81 @@ for call in dspy.settings.trace:
     print(f"Prompt: {call['prompt']}")
 
     print(f"Response: {call['response']}")
-```
-
-## Comparison to Other Approaches
-
-| Feature | Manual Prompting | LangChain | DSPy |
-|---------|-----------------|-----------|------|
-| Prompt Engineering | Manual | Manual | Automatic |
-| Optimization | Trial & error | None | Data-driven |
-| Modularity | Low | Medium | High |
-| Type Safety | No | Limited | Yes (Signatures) |
-| Portability | Low | Medium | High |
-| Learning Curve | Low | Medium | Medium-High |
-
-**When to choose DSPy:**
-- You have training data or can generate it
-- You need systematic prompt improvement
-- You're building complex multi-stage systems
-- You want to optimize across different LMs
-
-**When to choose alternatives:**
-- Quick prototypes (manual prompting)
-- Simple chains with existing tools (LangChain)
-- Custom optimization logic needed
-
-## Resources
-
-- **Documentation**: https://dspy.ai
-- **GitHub**: https://github.com/stanfordnlp/dspy (22k+ stars)
-- **Discord**: https://discord.gg/XCGy2WDCQB
-- **Twitter**: @DSPyOSS
-- **Paper**: "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines"
-
-## See Also
-
-- `references/modules.md` - Detailed module guide (Predict, ChainOfThought, ReAct, ProgramOfThought)
-- `references/optimizers.md` - Optimization algorithms (BootstrapFewShot, MIPRO, BootstrapFinetune)
-- `references/examples.md` - Real-world examples (RAG, agents, classifiers)
-
-
+```
+
+
+
+## Comparison to Other Approaches
+
+
+
+| Feature | Manual Prompting | LangChain | DSPy |
+
+|---------|-----------------|-----------|------|
+
+| Prompt Engineering | Manual | Manual | Automatic |
+
+| Optimization | Trial & error | None | Data-driven |
+
+| Modularity | Low | Medium | High |
+
+| Type Safety | No | Limited | Yes (Signatures) |
+
+| Portability | Low | Medium | High |
+
+| Learning Curve | Low | Medium | Medium-High |
+
+
+
+**When to choose DSPy:**
+
+- You have training data or can generate it
+
+- You need systematic prompt improvement
+
+- You're building complex multi-stage systems
+
+- You want to optimize across different LMs
+
+
+
+**When to choose alternatives:**
+
+- Quick prototypes (manual prompting)
+
+- Simple chains with existing tools (LangChain)
+
+- Custom optimization logic needed
+
+
+
+## Resources
+
+
+
+- **Documentation**: https://dspy.ai
+
+- **GitHub**: https://github.com/stanfordnlp/dspy (22k+ stars)
+
+- **Discord**: https://discord.gg/XCGy2WDCQB
+
+- **Twitter**: @DSPyOSS
+
+- **Paper**: "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines"
+
+
+
+## See Also
+
+
+
+- `references/modules.md` - Detailed module guide (Predict, ChainOfThought, ReAct, ProgramOfThought)
+
+- `references/optimizers.md` - Optimization algorithms (BootstrapFewShot, MIPRO, BootstrapFinetune)
+
+- `references/examples.md` - Real-world examples (RAG, agents, classifiers)
+
+
+
+
+

@@ -1,47 +1,91 @@
----
-title: "Fine Tuning With Trl — TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF"
-sidebar_label: "Fine Tuning With Trl"
-description: "TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Fine Tuning With Trl
-
-TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF.
-
-## Skill metadata
-
-| | |
-|---|---|
-| Source | Optional — install with `clawk skills install official/mlops/trl-fine-tuning` |
-| Path | `optional-skills/mlops/training/trl-fine-tuning` |
-| Version | `1.0.0` |
-| Author | Orchestra Research |
-| License | MIT |
-| Dependencies | `trl`, `transformers`, `datasets`, `peft`, `accelerate`, `torch` |
-| Platforms | linux, macos, windows |
-| Tags | `Post-Training`, `TRL`, `Reinforcement Learning`, `Fine-Tuning`, `SFT`, `DPO`, `PPO`, `GRPO`, `RLHF`, `Preference Alignment`, `HuggingFace` |
-
-## Reference: full SKILL.md
-
-:::info
-The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-:::
-
-# TRL - Transformer Reinforcement Learning
-
-## Quick start
-
-TRL provides post-training methods for aligning language models with human preferences.
-
-**Installation**:
-```bash
-pip install trl transformers datasets peft accelerate
-```
-
-**Supervised Fine-Tuning** (instruction tuning):
-```pythonfrom trl import SFTTrainer
+---
+
+title: "Fine Tuning With Trl — TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF"
+
+sidebar_label: "Fine Tuning With Trl"
+
+description: "TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Fine Tuning With Trl
+
+
+
+TRL: SFT, DPO, PPO, GRPO, reward modeling for LLM RLHF.
+
+
+
+## Skill metadata
+
+
+
+| | |
+
+|---|---|
+
+| Source | Optional — install with `clawk skills install official/mlops/trl-fine-tuning` |
+
+| Path | `optional-skills/mlops/training/trl-fine-tuning` |
+
+| Version | `1.0.0` |
+
+| Author | Orchestra Research |
+
+| License | MIT |
+
+| Dependencies | `trl`, `transformers`, `datasets`, `peft`, `accelerate`, `torch` |
+
+| Platforms | linux, macos, windows |
+
+| Tags | `Post-Training`, `TRL`, `Reinforcement Learning`, `Fine-Tuning`, `SFT`, `DPO`, `PPO`, `GRPO`, `RLHF`, `Preference Alignment`, `HuggingFace` |
+
+
+
+## Reference: full SKILL.md
+
+
+
+:::info
+
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+
+:::
+
+
+
+# TRL - Transformer Reinforcement Learning
+
+
+
+## Quick start
+
+
+
+TRL provides post-training methods for aligning language models with human preferences.
+
+
+
+**Installation**:
+
+```bash
+
+pip install trl transformers datasets peft accelerate
+
+```
+
+
+
+**Supervised Fine-Tuning** (instruction tuning):
+
+```python
+from trl import SFTTrainer
 
 
 trainer = SFTTrainer(
@@ -50,10 +94,14 @@ trainer = SFTTrainer(
 )
 
 trainer.train()
-```
-
-**DPO** (align with preferences):
-```pythonfrom trl import DPOTrainer, DPOConfig
+```
+
+
+
+**DPO** (align with preferences):
+
+```python
+from trl import DPOTrainer, DPOConfig
 
 
 config = DPOConfig(output_dir="model-dpo", beta=0.1)
@@ -66,29 +114,52 @@ trainer = DPOTrainer(
 )
 
 trainer.train()
-```
-
-## Common workflows
-
-### Workflow 1: Full RLHF pipeline (SFT → Reward Model → PPO)
-
-Complete pipeline from base model to human-aligned model.
-
-Copy this checklist:
-
-```
-RLHF Training:
-- [ ] Step 1: Supervised fine-tuning (SFT)
-- [ ] Step 2: Train reward model
-- [ ] Step 3: PPO reinforcement learning
-- [ ] Step 4: Evaluate aligned model
-```
-
-**Step 1: Supervised fine-tuning**
-
-Train base model on instruction-following data:
-
-```pythonfrom transformers import AutoModelForCausalLM, AutoTokenizer
+```
+
+
+
+## Common workflows
+
+
+
+### Workflow 1: Full RLHF pipeline (SFT → Reward Model → PPO)
+
+
+
+Complete pipeline from base model to human-aligned model.
+
+
+
+Copy this checklist:
+
+
+
+```
+
+RLHF Training:
+
+- [ ] Step 1: Supervised fine-tuning (SFT)
+
+- [ ] Step 2: Train reward model
+
+- [ ] Step 3: PPO reinforcement learning
+
+- [ ] Step 4: Evaluate aligned model
+
+```
+
+
+
+**Step 1: Supervised fine-tuning**
+
+
+
+Train base model on instruction-following data:
+
+
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from trl import SFTTrainer, SFTConfig
 
@@ -128,13 +199,20 @@ trainer = SFTTrainer(
 trainer.train()
 
 trainer.save_model()
-```
-
-**Step 2: Train reward model**
-
-Train model to predict human preferences:
-
-```pythonfrom transformers import AutoModelForSequenceClassification
+```
+
+
+
+**Step 2: Train reward model**
+
+
+
+Train model to predict human preferences:
+
+
+
+```python
+from transformers import AutoModelForSequenceClassification
 
 from trl import RewardTrainer, RewardConfig
 
@@ -173,26 +251,46 @@ trainer = RewardTrainer(
 trainer.train()
 
 trainer.save_model()
-```
-
-**Step 3: PPO reinforcement learning**
-
-Optimize policy using reward model:
-
-```bash
-python -m trl.scripts.ppo \
-    --model_name_or_path Qwen2.5-0.5B-SFT \
-    --reward_model_path Qwen2.5-0.5B-Reward \
-    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
-    --output_dir Qwen2.5-0.5B-PPO \
-    --learning_rate 3e-6 \
-    --per_device_train_batch_size 64 \
-    --total_episodes 10000
-```
-
-**Step 4: Evaluate**
-
-```pythonfrom transformers import pipeline
+```
+
+
+
+**Step 3: PPO reinforcement learning**
+
+
+
+Optimize policy using reward model:
+
+
+
+```bash
+
+python -m trl.scripts.ppo \
+
+    --model_name_or_path Qwen2.5-0.5B-SFT \
+
+    --reward_model_path Qwen2.5-0.5B-Reward \
+
+    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
+
+    --output_dir Qwen2.5-0.5B-PPO \
+
+    --learning_rate 3e-6 \
+
+    --per_device_train_batch_size 64 \
+
+    --total_episodes 10000
+
+```
+
+
+
+**Step 4: Evaluate**
+
+
+
+```python
+from transformers import pipeline
 
 
 # Load aligned model
@@ -207,35 +305,64 @@ prompt = "Explain quantum computing to a 10-year-old"
 output = generator(prompt, max_length=200)[0]["generated_text"]
 
 print(output)
-```
-
-### Workflow 2: Simple preference alignment with DPO
-
-Align model with preferences without reward model.
-
-Copy this checklist:
-
-```
-DPO Training:
-- [ ] Step 1: Prepare preference dataset
-- [ ] Step 2: Configure DPO
-- [ ] Step 3: Train with DPOTrainer
-- [ ] Step 4: Evaluate alignment
-```
-
-**Step 1: Prepare preference dataset**
-
-Dataset format:
-```json
-{
-  "prompt": "What is the capital of France?",
-  "chosen": "The capital of France is Paris.",
-  "rejected": "I don't know."
-}
-```
-
-Load dataset:
-```pythonfrom datasets import load_dataset
+```
+
+
+
+### Workflow 2: Simple preference alignment with DPO
+
+
+
+Align model with preferences without reward model.
+
+
+
+Copy this checklist:
+
+
+
+```
+
+DPO Training:
+
+- [ ] Step 1: Prepare preference dataset
+
+- [ ] Step 2: Configure DPO
+
+- [ ] Step 3: Train with DPOTrainer
+
+- [ ] Step 4: Evaluate alignment
+
+```
+
+
+
+**Step 1: Prepare preference dataset**
+
+
+
+Dataset format:
+
+```json
+
+{
+
+  "prompt": "What is the capital of France?",
+
+  "chosen": "The capital of France is Paris.",
+
+  "rejected": "I don't know."
+
+}
+
+```
+
+
+
+Load dataset:
+
+```python
+from datasets import load_dataset
 
 
 dataset = load_dataset("trl-lib/ultrafeedback_binarized", split="train")
@@ -243,11 +370,16 @@ dataset = load_dataset("trl-lib/ultrafeedback_binarized", split="train")
 # Or load your own
 
 # dataset = load_dataset("json", data_files="preferences.json")
-```
-
-**Step 2: Configure DPO**
-
-```pythonfrom trl import DPOConfig
+```
+
+
+
+**Step 2: Configure DPO**
+
+
+
+```python
+from trl import DPOConfig
 
 
 config = DPOConfig(
@@ -260,11 +392,16 @@ config = DPOConfig(
     max_length=1024,
     logging_steps=10,
 )
-```
-
-**Step 3: Train with DPOTrainer**
-
-```pythonfrom transformers import AutoModelForCausalLM, AutoTokenizer
+```
+
+
+
+**Step 3: Train with DPOTrainer**
+
+
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from trl import DPOTrainer
 
@@ -282,37 +419,68 @@ trainer = DPOTrainer(
 trainer.train()
 
 trainer.save_model()
-```
-
-**CLI alternative**:
-```bash
-trl dpo \
-    --model_name_or_path Qwen/Qwen2.5-0.5B-Instruct \
-    --dataset_name argilla/Capybara-Preferences \
-    --output_dir Qwen2.5-0.5B-DPO \
-    --per_device_train_batch_size 4 \
-    --learning_rate 5e-7 \
-    --beta 0.1
-```
-
-### Workflow 3: Memory-efficient online RL with GRPO
-
-Train with reinforcement learning using minimal memory.
-
-For in-depth GRPO guidance — reward function design, critical training insights (loss behavior, mode collapse, tuning), and advanced multi-stage patterns — see **[references/grpo-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)**. A production-ready training script is in **[templates/basic_grpo_training.py](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)**.
-
-Copy this checklist:
-
-```
-GRPO Training:
-- [ ] Step 1: Define reward function
-- [ ] Step 2: Configure GRPO
-- [ ] Step 3: Train with GRPOTrainer
-```
-
-**Step 1: Define reward function**
-
-```pythondef reward_function(completions, **kwargs):
+```
+
+
+
+**CLI alternative**:
+
+```bash
+
+trl dpo \
+
+    --model_name_or_path Qwen/Qwen2.5-0.5B-Instruct \
+
+    --dataset_name argilla/Capybara-Preferences \
+
+    --output_dir Qwen2.5-0.5B-DPO \
+
+    --per_device_train_batch_size 4 \
+
+    --learning_rate 5e-7 \
+
+    --beta 0.1
+
+```
+
+
+
+### Workflow 3: Memory-efficient online RL with GRPO
+
+
+
+Train with reinforcement learning using minimal memory.
+
+
+
+For in-depth GRPO guidance — reward function design, critical training insights (loss behavior, mode collapse, tuning), and advanced multi-stage patterns — see **[references/grpo-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)**. A production-ready training script is in **[templates/basic_grpo_training.py](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)**.
+
+
+
+Copy this checklist:
+
+
+
+```
+
+GRPO Training:
+
+- [ ] Step 1: Define reward function
+
+- [ ] Step 2: Configure GRPO
+
+- [ ] Step 3: Train with GRPOTrainer
+
+```
+
+
+
+**Step 1: Define reward function**
+
+
+
+```python
+def reward_function(completions, **kwargs):
     """
 
     Compute rewards for completions.
@@ -343,10 +511,14 @@ GRPO Training:
         rewards.append(score)
 
     return rewards
-```
-
-Or use a reward model:
-```pythonfrom transformers import pipeline
+```
+
+
+
+Or use a reward model:
+
+```python
+from transformers import pipeline
 
 
 reward_model = pipeline("text-classification", model="reward-model-path")
@@ -363,11 +535,16 @@ def reward_from_model(completions, prompts, **kwargs):
     results = reward_model(full_texts)
 
     return [r["score"] for r in results]
-```
-
-**Step 2: Configure GRPO**
-
-```pythonfrom trl import GRPOConfig
+```
+
+
+
+**Step 2: Configure GRPO**
+
+
+
+```python
+from trl import GRPOConfig
 
 
 config = GRPOConfig(
@@ -378,11 +555,16 @@ config = GRPOConfig(
     num_generations=4,  # Generate 4 completions per prompt
     max_new_tokens=128,
 )
-```
-
-**Step 3: Train with GRPOTrainer**
-
-```pythonfrom datasets import load_dataset
+```
+
+
+
+**Step 3: Train with GRPOTrainer**
+
+
+
+```python
+from datasets import load_dataset
 
 from trl import GRPOTrainer
 
@@ -401,59 +583,108 @@ trainer = GRPOTrainer(
 
 
 trainer.train()
-```
-
-**CLI**:
-```bash
-trl grpo \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name trl-lib/tldr \
-    --output_dir Qwen2-GRPO \
-    --num_generations 4
-```
-
-## When to use vs alternatives
-
-**Use TRL when:**
-- Need to align model with human preferences
-- Have preference data (chosen/rejected pairs)
-- Want to use reinforcement learning (PPO, GRPO)
-- Need reward model training
-- Doing RLHF (full pipeline)
-
-**Method selection**:
-- **SFT**: Have prompt-completion pairs, want basic instruction following
-- **DPO**: Have preferences, want simple alignment (no reward model needed)
-- **PPO**: Have reward model, need maximum control over RL
-- **GRPO**: Memory-constrained, want online RL
-- **Reward Model**: Building RLHF pipeline, need to score generations
-
-**Use alternatives instead:**
-- **HuggingFace Trainer**: Basic fine-tuning without RL
-- **Axolotl**: YAML-based training configuration
-- **LitGPT**: Educational, minimal fine-tuning
-- **Unsloth**: Fast LoRA training
-
-## Common issues
-
-**Issue: OOM during DPO training**
-
-Reduce batch size and sequence length:
-```pythonconfig = DPOConfig(
+```
+
+
+
+**CLI**:
+
+```bash
+
+trl grpo \
+
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+
+    --dataset_name trl-lib/tldr \
+
+    --output_dir Qwen2-GRPO \
+
+    --num_generations 4
+
+```
+
+
+
+## When to use vs alternatives
+
+
+
+**Use TRL when:**
+
+- Need to align model with human preferences
+
+- Have preference data (chosen/rejected pairs)
+
+- Want to use reinforcement learning (PPO, GRPO)
+
+- Need reward model training
+
+- Doing RLHF (full pipeline)
+
+
+
+**Method selection**:
+
+- **SFT**: Have prompt-completion pairs, want basic instruction following
+
+- **DPO**: Have preferences, want simple alignment (no reward model needed)
+
+- **PPO**: Have reward model, need maximum control over RL
+
+- **GRPO**: Memory-constrained, want online RL
+
+- **Reward Model**: Building RLHF pipeline, need to score generations
+
+
+
+**Use alternatives instead:**
+
+- **HuggingFace Trainer**: Basic fine-tuning without RL
+
+- **Axolotl**: YAML-based training configuration
+
+- **LitGPT**: Educational, minimal fine-tuning
+
+- **Unsloth**: Fast LoRA training
+
+
+
+## Common issues
+
+
+
+**Issue: OOM during DPO training**
+
+
+
+Reduce batch size and sequence length:
+
+```python
+config = DPOConfig(
     per_device_train_batch_size=1,  # Reduce from 4
     max_length=512,  # Reduce from 1024
     gradient_accumulation_steps=8,  # Maintain effective batch
 )
-```
-
-Or use gradient checkpointing:
-```pythonmodel.gradient_checkpointing_enable()
-```
-
-**Issue: Poor alignment quality**
-
-Tune beta parameter:
-```python# Higher beta = more conservative (stays closer to reference)
+```
+
+
+
+Or use gradient checkpointing:
+
+```python
+model.gradient_checkpointing_enable()
+```
+
+
+
+**Issue: Poor alignment quality**
+
+
+
+Tune beta parameter:
+
+```python
+# Higher beta = more conservative (stays closer to reference)
 
 config = DPOConfig(beta=0.5)  # Default 0.1
 
@@ -461,68 +692,123 @@ config = DPOConfig(beta=0.5)  # Default 0.1
 # Lower beta = more aggressive alignment
 
 config = DPOConfig(beta=0.01)
-```
-
-**Issue: Reward model not learning**
-
-Check loss type and learning rate:
-```pythonconfig = RewardConfig(
+```
+
+
+
+**Issue: Reward model not learning**
+
+
+
+Check loss type and learning rate:
+
+```python
+config = RewardConfig(
     learning_rate=1e-5,  # Try different LR
     num_train_epochs=3,  # Train longer
 )
-```
-
-Ensure preference dataset has clear winners:
-```python# Verify dataset
+```
+
+
+
+Ensure preference dataset has clear winners:
+
+```python
+# Verify dataset
 
 print(dataset[0])
 
 # Should have clear chosen > rejected
-```
-
-**Issue: PPO training unstable**
-
-Adjust KL coefficient:
-```pythonconfig = PPOConfig(
+```
+
+
+
+**Issue: PPO training unstable**
+
+
+
+Adjust KL coefficient:
+
+```python
+config = PPOConfig(
     kl_coef=0.1,  # Increase from 0.05
     cliprange=0.1,  # Reduce from 0.2
 )
-```
-
-## Advanced topics
-
-**SFT training guide**: See [references/sft-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/sft-training.md) for dataset formats, chat templates, packing strategies, and multi-GPU training.
-
-**DPO variants**: See [references/dpo-variants.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/dpo-variants.md) for IPO, cDPO, RPO, and other DPO loss functions with recommended hyperparameters.
-
-**Reward modeling**: See [references/reward-modeling.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/reward-modeling.md) for outcome vs process rewards, Bradley-Terry loss, and reward model evaluation.
-
-**Online RL methods**: See [references/online-rl.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/online-rl.md) for PPO, GRPO, RLOO, and OnlineDPO with detailed configurations.
-
-**GRPO deep dive**: See [references/grpo-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md) for expert-level GRPO patterns — reward function design philosophy, training insights (why loss increases, mode collapse detection), hyperparameter tuning, multi-stage training, and troubleshooting. Production-ready template in [templates/basic_grpo_training.py](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py).
-
-## Hardware requirements
-
-- **GPU**: NVIDIA (CUDA required)
-- **VRAM**: Depends on model and method
-  - SFT 7B: 16GB (with LoRA)
-  - DPO 7B: 24GB (stores reference model)
-  - PPO 7B: 40GB (policy + reward model)
-  - GRPO 7B: 24GB (more memory efficient)
-- **Multi-GPU**: Supported via `accelerate`
-- **Mixed precision**: BF16 recommended (A100/H100)
-
-**Memory optimization**:
-- Use LoRA/QLoRA for all methods
-- Enable gradient checkpointing
-- Use smaller batch sizes with gradient accumulation
-
-## Resources
-
-- Docs: https://huggingface.co/docs/trl/
-- GitHub: https://github.com/huggingface/trl
-- Papers:
-  - "Training language models to follow instructions with human feedback" (InstructGPT, 2022)
-  - "Direct Preference Optimization: Your Language Model is Secretly a Reward Model" (DPO, 2023)
-  - "Group Relative Policy Optimization" (GRPO, 2024)
-- Examples: https://github.com/huggingface/trl/tree/main/examples/scripts
+```
+
+
+
+## Advanced topics
+
+
+
+**SFT training guide**: See [references/sft-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/sft-training.md) for dataset formats, chat templates, packing strategies, and multi-GPU training.
+
+
+
+**DPO variants**: See [references/dpo-variants.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/dpo-variants.md) for IPO, cDPO, RPO, and other DPO loss functions with recommended hyperparameters.
+
+
+
+**Reward modeling**: See [references/reward-modeling.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/reward-modeling.md) for outcome vs process rewards, Bradley-Terry loss, and reward model evaluation.
+
+
+
+**Online RL methods**: See [references/online-rl.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/online-rl.md) for PPO, GRPO, RLOO, and OnlineDPO with detailed configurations.
+
+
+
+**GRPO deep dive**: See [references/grpo-training.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md) for expert-level GRPO patterns — reward function design philosophy, training insights (why loss increases, mode collapse detection), hyperparameter tuning, multi-stage training, and troubleshooting. Production-ready template in [templates/basic_grpo_training.py](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py).
+
+
+
+## Hardware requirements
+
+
+
+- **GPU**: NVIDIA (CUDA required)
+
+- **VRAM**: Depends on model and method
+
+  - SFT 7B: 16GB (with LoRA)
+
+  - DPO 7B: 24GB (stores reference model)
+
+  - PPO 7B: 40GB (policy + reward model)
+
+  - GRPO 7B: 24GB (more memory efficient)
+
+- **Multi-GPU**: Supported via `accelerate`
+
+- **Mixed precision**: BF16 recommended (A100/H100)
+
+
+
+**Memory optimization**:
+
+- Use LoRA/QLoRA for all methods
+
+- Enable gradient checkpointing
+
+- Use smaller batch sizes with gradient accumulation
+
+
+
+## Resources
+
+
+
+- Docs: https://huggingface.co/docs/trl/
+
+- GitHub: https://github.com/huggingface/trl
+
+- Papers:
+
+  - "Training language models to follow instructions with human feedback" (InstructGPT, 2022)
+
+  - "Direct Preference Optimization: Your Language Model is Secretly a Reward Model" (DPO, 2023)
+
+  - "Group Relative Policy Optimization" (GRPO, 2024)
+
+- Examples: https://github.com/huggingface/trl/tree/main/examples/scripts
+

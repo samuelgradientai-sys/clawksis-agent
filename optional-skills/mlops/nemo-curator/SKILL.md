@@ -1,58 +1,113 @@
----
-name: nemo-curator
-description: GPU-accelerated data curation for LLM training. Supports text/image/video/audio. Features fuzzy deduplication (16× faster), quality filtering (30+ heuristics), semantic deduplication, PII redaction, NSFW detection. Scales across GPUs with RAPIDS. Use for preparing high-quality training datasets, cleaning web data, or deduplicating large corpora.
-version: 1.0.0
-author: Orchestra Research
-license: MIT
-dependencies: [nemo-curator, cudf, dask, rapids]
-platforms: [linux, macos]
-metadata:
-  clawk:
-    tags: [Data Processing, NeMo Curator, Data Curation, GPU Acceleration, Deduplication, Quality Filtering, NVIDIA, RAPIDS, PII Redaction, Multimodal, LLM Training Data]
-
----
-
-# NeMo Curator - GPU-Accelerated Data Curation
-
-NVIDIA's toolkit for preparing high-quality training data for LLMs.
-
-## When to use NeMo Curator
-
-**Use NeMo Curator when:**
-- Preparing LLM training data from web scrapes (Common Crawl)
-- Need fast deduplication (16× faster than CPU)
-- Curating multi-modal datasets (text, images, video, audio)
-- Filtering low-quality or toxic content
-- Scaling data processing across GPU cluster
-
-**Performance**:
-- **16× faster** fuzzy deduplication (8TB RedPajama v2)
-- **40% lower TCO** vs CPU alternatives
-- **Near-linear scaling** across GPU nodes
-
-**Use alternatives instead**:
-- **datatrove**: CPU-based, open-source data processing
-- **dolma**: Allen AI's data toolkit
-- **Ray Data**: General ML data processing (no curation focus)
-
-## Quick start
-
-### Installation
-
-```bash
-# Text curation (CUDA 12)
-uv pip install "nemo-curator[text_cuda12]"
-
-# All modalities
-uv pip install "nemo-curator[all_cuda12]"
-
-# CPU-only (slower)
-uv pip install "nemo-curator[cpu]"
-```
-
-### Basic text curation pipeline
-
-```pythonfrom nemo_curator import ScoreFilter, Modify
+---
+
+name: nemo-curator
+
+description: GPU-accelerated data curation for LLM training. Supports text/image/video/audio. Features fuzzy deduplication (16× faster), quality filtering (30+ heuristics), semantic deduplication, PII redaction, NSFW detection. Scales across GPUs with RAPIDS. Use for preparing high-quality training datasets, cleaning web data, or deduplicating large corpora.
+
+version: 1.0.0
+
+author: Orchestra Research
+
+license: MIT
+
+dependencies: [nemo-curator, cudf, dask, rapids]
+
+platforms: [linux, macos]
+
+metadata:
+
+  clawk:
+
+    tags: [Data Processing, NeMo Curator, Data Curation, GPU Acceleration, Deduplication, Quality Filtering, NVIDIA, RAPIDS, PII Redaction, Multimodal, LLM Training Data]
+
+
+
+---
+
+
+
+# NeMo Curator - GPU-Accelerated Data Curation
+
+
+
+NVIDIA's toolkit for preparing high-quality training data for LLMs.
+
+
+
+## When to use NeMo Curator
+
+
+
+**Use NeMo Curator when:**
+
+- Preparing LLM training data from web scrapes (Common Crawl)
+
+- Need fast deduplication (16× faster than CPU)
+
+- Curating multi-modal datasets (text, images, video, audio)
+
+- Filtering low-quality or toxic content
+
+- Scaling data processing across GPU cluster
+
+
+
+**Performance**:
+
+- **16× faster** fuzzy deduplication (8TB RedPajama v2)
+
+- **40% lower TCO** vs CPU alternatives
+
+- **Near-linear scaling** across GPU nodes
+
+
+
+**Use alternatives instead**:
+
+- **datatrove**: CPU-based, open-source data processing
+
+- **dolma**: Allen AI's data toolkit
+
+- **Ray Data**: General ML data processing (no curation focus)
+
+
+
+## Quick start
+
+
+
+### Installation
+
+
+
+```bash
+
+# Text curation (CUDA 12)
+
+uv pip install "nemo-curator[text_cuda12]"
+
+
+
+# All modalities
+
+uv pip install "nemo-curator[all_cuda12]"
+
+
+
+# CPU-only (slower)
+
+uv pip install "nemo-curator[cpu]"
+
+```
+
+
+
+### Basic text curation pipeline
+
+
+
+```python
+from nemo_curator import ScoreFilter, Modify
 
 from nemo_curator.datasets import DocumentDataset
 
@@ -87,13 +142,20 @@ deduped = ExactDuplicates()(filtered)
 # Save
 
 deduped.to_parquet("curated_data/")
-```
-
-## Data curation pipeline
-
-### Stage 1: Quality filtering
-
-```pythonfrom nemo_curator.filters import (
+```
+
+
+
+## Data curation pipeline
+
+
+
+### Stage 1: Quality filtering
+
+
+
+```python
+from nemo_curator.filters import (
     WordCountFilter,
     RepeatedLinesFilter,
     UrlRatioFilter,
@@ -119,21 +181,31 @@ dataset = dataset.filter(RepeatedLinesFilter(max_repeated_line_fraction=0.3))
 # URL ratio filter
 
 dataset = dataset.filter(UrlRatioFilter(max_url_ratio=0.2))
-```
-
-### Stage 2: Deduplication
-
-**Exact deduplication**:
-```pythonfrom nemo_curator.modules import ExactDuplicates
+```
+
+
+
+### Stage 2: Deduplication
+
+
+
+**Exact deduplication**:
+
+```python
+from nemo_curator.modules import ExactDuplicates
 
 
 # Remove exact duplicates
 
 deduped = ExactDuplicates(id_field="id", text_field="text")(dataset)
-```
-
-**Fuzzy deduplication** (16× faster on GPU):
-```pythonfrom nemo_curator.modules import FuzzyDuplicates
+```
+
+
+
+**Fuzzy deduplication** (16× faster on GPU):
+
+```python
+from nemo_curator.modules import FuzzyDuplicates
 
 
 # MinHash + LSH deduplication
@@ -148,10 +220,14 @@ fuzzy_dedup = FuzzyDuplicates(
 
 
 deduped = fuzzy_dedup(dataset)
-```
-
-**Semantic deduplication**:
-```pythonfrom nemo_curator.modules import SemanticDuplicates
+```
+
+
+
+**Semantic deduplication**:
+
+```python
+from nemo_curator.modules import SemanticDuplicates
 
 
 # Embedding-based deduplication
@@ -165,11 +241,16 @@ semantic_dedup = SemanticDuplicates(
 
 
 deduped = semantic_dedup(dataset)
-```
-
-### Stage 3: PII redaction
-
-```pythonfrom nemo_curator.modules import Modify
+```
+
+
+
+### Stage 3: PII redaction
+
+
+
+```python
+from nemo_curator.modules import Modify
 
 from nemo_curator.modifiers import PIIRedactor
 
@@ -183,11 +264,16 @@ pii_redactor = PIIRedactor(
 
 
 redacted = Modify(pii_redactor)(dataset)
-```
-
-### Stage 4: Classifier filtering
-
-```pythonfrom nemo_curator.classifiers import QualityClassifier
+```
+
+
+
+### Stage 4: Classifier filtering
+
+
+
+```python
+from nemo_curator.classifiers import QualityClassifier
 
 
 # Quality classification
@@ -200,21 +286,36 @@ quality_clf = QualityClassifier(
 # Filter low-quality documents
 
 high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
-```
-
-## GPU acceleration
-
-### GPU vs CPU performance
-
-| Operation | CPU (16 cores) | GPU (A100) | Speedup |
-|-----------|----------------|------------|---------|
-| Fuzzy dedup (8TB) | 120 hours | 7.5 hours | 16× |
-| Exact dedup (1TB) | 8 hours | 0.5 hours | 16× |
-| Quality filtering | 2 hours | 0.2 hours | 10× |
-
-### Multi-GPU scaling
-
-```pythonfrom nemo_curator import get_client
+```
+
+
+
+## GPU acceleration
+
+
+
+### GPU vs CPU performance
+
+
+
+| Operation | CPU (16 cores) | GPU (A100) | Speedup |
+
+|-----------|----------------|------------|---------|
+
+| Fuzzy dedup (8TB) | 120 hours | 7.5 hours | 16× |
+
+| Exact dedup (1TB) | 8 hours | 0.5 hours | 16× |
+
+| Quality filtering | 2 hours | 0.2 hours | 10× |
+
+
+
+### Multi-GPU scaling
+
+
+
+```python
+from nemo_curator import get_client
 
 import dask_cuda
 
@@ -227,13 +328,20 @@ client = get_client(cluster_type="gpu", n_workers=8)
 # Process with 8 GPUs
 
 deduped = FuzzyDuplicates(...)(dataset)
-```
-
-## Multi-modal curation
-
-### Image curation
-
-```pythonfrom nemo_curator.image import AestheticFilter, NSFWFilter, CLIPEmbedder
+```
+
+
+
+## Multi-modal curation
+
+
+
+### Image curation
+
+
+
+```python
+from nemo_curator.image import AestheticFilter, NSFWFilter, CLIPEmbedder
 
 
 # Aesthetic scoring
@@ -255,11 +363,16 @@ safe_images = nsfw_filter(filtered_images)
 clip_embedder = CLIPEmbedder(model="openai/clip-vit-base-patch32")
 
 image_embeddings = clip_embedder(safe_images)
-```
-
-### Video curation
-
-```pythonfrom nemo_curator.video import SceneDetector, ClipExtractor, InternVideo2Embedder
+```
+
+
+
+### Video curation
+
+
+
+```python
+from nemo_curator.video import SceneDetector, ClipExtractor, InternVideo2Embedder
 
 
 # Detect scenes
@@ -281,11 +394,16 @@ clips = clip_extractor(scenes)
 video_embedder = InternVideo2Embedder()
 
 video_embeddings = video_embedder(clips)
-```
-
-### Audio curation
-
-```pythonfrom nemo_curator.audio import ASRInference, WERFilter, DurationFilter
+```
+
+
+
+### Audio curation
+
+
+
+```python
+from nemo_curator.audio import ASRInference, WERFilter, DurationFilter
 
 
 # ASR transcription
@@ -307,13 +425,20 @@ high_quality_audio = wer_filter(transcribed)
 duration_filter = DurationFilter(min_duration=1.0, max_duration=30.0)
 
 filtered_audio = duration_filter(high_quality_audio)
-```
-
-## Common patterns
-
-### Web scrape curation (Common Crawl)
-
-```pythonfrom nemo_curator import ScoreFilter, Modify
+```
+
+
+
+## Common patterns
+
+
+
+### Web scrape curation (Common Crawl)
+
+
+
+```python
+from nemo_curator import ScoreFilter, Modify
 
 from nemo_curator.filters import *
 
@@ -356,11 +481,16 @@ for stage in pipeline:
 # Save
 
 dataset.to_parquet("curated_common_crawl/")
-```
-
-### Distributed processing
-
-```pythonfrom nemo_curator import get_client
+```
+
+
+
+### Distributed processing
+
+
+
+```python
+from nemo_curator import get_client
 
 from dask_cuda import LocalCUDACluster
 
@@ -384,65 +514,127 @@ deduped = FuzzyDuplicates(...)(dataset)
 client.close()
 
 cluster.close()
-```
-
-## Performance benchmarks
-
-### Fuzzy deduplication (8TB RedPajama v2)
-
-- **CPU (256 cores)**: 120 hours
-- **GPU (8× A100)**: 7.5 hours
-- **Speedup**: 16×
-
-### Exact deduplication (1TB)
-
-- **CPU (64 cores)**: 8 hours
-- **GPU (4× A100)**: 0.5 hours
-- **Speedup**: 16×
-
-### Quality filtering (100GB)
-
-- **CPU (32 cores)**: 2 hours
-- **GPU (2× A100)**: 0.2 hours
-- **Speedup**: 10×
-
-## Cost comparison
-
-**CPU-based curation** (AWS c5.18xlarge × 10):
-- Cost: $3.60/hour × 10 = $36/hour
-- Time for 8TB: 120 hours
-- **Total**: $4,320
-
-**GPU-based curation** (AWS p4d.24xlarge × 2):
-- Cost: $32.77/hour × 2 = $65.54/hour
-- Time for 8TB: 7.5 hours
-- **Total**: $491.55
-
-**Savings**: 89% reduction ($3,828 saved)
-
-## Supported data formats
-
-- **Input**: Parquet, JSONL, CSV
-- **Output**: Parquet (recommended), JSONL
-- **WebDataset**: TAR archives for multi-modal
-
-## Use cases
-
-**Production deployments**:
-- NVIDIA used NeMo Curator to prepare Nemotron-4 training data
-- Open-source datasets curated: RedPajama v2, The Pile
-
-## References
-
-- **[Filtering Guide](references/filtering.md)** - 30+ quality filters, heuristics
-- **[Deduplication Guide](references/deduplication.md)** - Exact, fuzzy, semantic methods
-
-## Resources
-
-- **GitHub**: https://github.com/NVIDIA/NeMo-Curator ⭐ 500+
-- **Docs**: https://docs.nvidia.com/nemo-framework/user-guide/latest/datacuration/
-- **Version**: 0.4.0+
-- **License**: Apache 2.0
-
-
-
+```
+
+
+
+## Performance benchmarks
+
+
+
+### Fuzzy deduplication (8TB RedPajama v2)
+
+
+
+- **CPU (256 cores)**: 120 hours
+
+- **GPU (8× A100)**: 7.5 hours
+
+- **Speedup**: 16×
+
+
+
+### Exact deduplication (1TB)
+
+
+
+- **CPU (64 cores)**: 8 hours
+
+- **GPU (4× A100)**: 0.5 hours
+
+- **Speedup**: 16×
+
+
+
+### Quality filtering (100GB)
+
+
+
+- **CPU (32 cores)**: 2 hours
+
+- **GPU (2× A100)**: 0.2 hours
+
+- **Speedup**: 10×
+
+
+
+## Cost comparison
+
+
+
+**CPU-based curation** (AWS c5.18xlarge × 10):
+
+- Cost: $3.60/hour × 10 = $36/hour
+
+- Time for 8TB: 120 hours
+
+- **Total**: $4,320
+
+
+
+**GPU-based curation** (AWS p4d.24xlarge × 2):
+
+- Cost: $32.77/hour × 2 = $65.54/hour
+
+- Time for 8TB: 7.5 hours
+
+- **Total**: $491.55
+
+
+
+**Savings**: 89% reduction ($3,828 saved)
+
+
+
+## Supported data formats
+
+
+
+- **Input**: Parquet, JSONL, CSV
+
+- **Output**: Parquet (recommended), JSONL
+
+- **WebDataset**: TAR archives for multi-modal
+
+
+
+## Use cases
+
+
+
+**Production deployments**:
+
+- NVIDIA used NeMo Curator to prepare Nemotron-4 training data
+
+- Open-source datasets curated: RedPajama v2, The Pile
+
+
+
+## References
+
+
+
+- **[Filtering Guide](references/filtering.md)** - 30+ quality filters, heuristics
+
+- **[Deduplication Guide](references/deduplication.md)** - Exact, fuzzy, semantic methods
+
+
+
+## Resources
+
+
+
+- **GitHub**: https://github.com/NVIDIA/NeMo-Curator ⭐ 500+
+
+- **Docs**: https://docs.nvidia.com/nemo-framework/user-guide/latest/datacuration/
+
+- **Version**: 0.4.0+
+
+- **License**: Apache 2.0
+
+
+
+
+
+
+

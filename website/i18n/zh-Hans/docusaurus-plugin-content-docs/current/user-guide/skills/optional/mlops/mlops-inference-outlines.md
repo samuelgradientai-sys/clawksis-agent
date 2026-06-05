@@ -1,65 +1,127 @@
----
-title: "Outlines — Outlines：结构化 JSON/regex/Pydantic LLM 生成"
-sidebar_label: "Outlines"
-description: "Outlines：结构化 JSON/regex/Pydantic LLM 生成"
----
-
-{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
-
-# Outlines
-
-Outlines：结构化 JSON/regex/Pydantic LLM 生成。
-
-## Skill 元数据
-
-| | |
-|---|---|
-| 来源 | 可选 — 使用 `clawk skills install official/mlops/outlines` 安装 |
-| 路径 | `optional-skills/mlops/inference/outlines` |
-| 版本 | `1.0.0` |
-| 作者 | Orchestra Research |
-| 许可证 | MIT |
-| 依赖项 | `outlines`, `transformers`, `vllm`, `pydantic` |
-| 平台 | linux, macos, windows |
-| 标签 | `Prompt Engineering`, `Outlines`, `Structured Generation`, `JSON Schema`, `Pydantic`, `Local Models`, `Grammar-Based Generation`, `vLLM`, `Transformers`, `Type Safety` |
-
-## 参考：完整 SKILL.md
-
-:::info
-以下是 Clawksis 在触发此 skill 时加载的完整 skill 定义。这是 agent 在 skill 激活时看到的指令内容。
-:::
-
-# Outlines：结构化文本生成
-
-## 何时使用此 Skill
-
-在以下情况下使用 Outlines：
-- **保证有效的 JSON/XML/代码**结构化生成
-- **使用 Pydantic 模型**获得类型安全的输出
-- **支持本地模型**（Transformers、llama.cpp、vLLM）
-- **通过零开销结构化生成最大化推理速度**
-- **自动根据 JSON schema 生成**
-- **在 grammar（语法）层面控制 token 采样**
-
-**GitHub Stars**：8,000+ | **来自**：dottxt.ai（前身为 .txt）
-
-## 安装
-
-```bash
-# 基础安装
-pip install outlines
-
-# 安装特定后端
-pip install outlines transformers  # Hugging Face 模型
-pip install outlines llama-cpp-python  # llama.cpp
-pip install outlines vllm  # vLLM 用于高吞吐量
-```
-
-## 快速开始
-
-### 基础示例：分类
-
-```pythonimport outlines
+---
+
+title: "Outlines — Outlines：结构化 JSON/regex/Pydantic LLM 生成"
+
+sidebar_label: "Outlines"
+
+description: "Outlines：结构化 JSON/regex/Pydantic LLM 生成"
+
+---
+
+
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+
+
+# Outlines
+
+
+
+Outlines：结构化 JSON/regex/Pydantic LLM 生成。
+
+
+
+## Skill 元数据
+
+
+
+| | |
+
+|---|---|
+
+| 来源 | 可选 — 使用 `clawk skills install official/mlops/outlines` 安装 |
+
+| 路径 | `optional-skills/mlops/inference/outlines` |
+
+| 版本 | `1.0.0` |
+
+| 作者 | Orchestra Research |
+
+| 许可证 | MIT |
+
+| 依赖项 | `outlines`, `transformers`, `vllm`, `pydantic` |
+
+| 平台 | linux, macos, windows |
+
+| 标签 | `Prompt Engineering`, `Outlines`, `Structured Generation`, `JSON Schema`, `Pydantic`, `Local Models`, `Grammar-Based Generation`, `vLLM`, `Transformers`, `Type Safety` |
+
+
+
+## 参考：完整 SKILL.md
+
+
+
+:::info
+
+以下是 Clawksis 在触发此 skill 时加载的完整 skill 定义。这是 agent 在 skill 激活时看到的指令内容。
+
+:::
+
+
+
+# Outlines：结构化文本生成
+
+
+
+## 何时使用此 Skill
+
+
+
+在以下情况下使用 Outlines：
+
+- **保证有效的 JSON/XML/代码**结构化生成
+
+- **使用 Pydantic 模型**获得类型安全的输出
+
+- **支持本地模型**（Transformers、llama.cpp、vLLM）
+
+- **通过零开销结构化生成最大化推理速度**
+
+- **自动根据 JSON schema 生成**
+
+- **在 grammar（语法）层面控制 token 采样**
+
+
+
+**GitHub Stars**：8,000+ | **来自**：dottxt.ai（前身为 .txt）
+
+
+
+## 安装
+
+
+
+```bash
+
+# 基础安装
+
+pip install outlines
+
+
+
+# 安装特定后端
+
+pip install outlines transformers  # Hugging Face 模型
+
+pip install outlines llama-cpp-python  # llama.cpp
+
+pip install outlines vllm  # vLLM 用于高吞吐量
+
+```
+
+
+
+## 快速开始
+
+
+
+### 基础示例：分类
+
+
+
+```python
+import outlines
 
 from typing import Literal
 
@@ -79,11 +141,16 @@ sentiment = generator(prompt)
 
 
 print(sentiment)  # "positive"（保证为其中之一）
-```
-
-### 使用 Pydantic 模型
-
-```pythonfrom pydantic import BaseModel
+```
+
+
+
+### 使用 Pydantic 模型
+
+
+
+```python
+from pydantic import BaseModel
 
 import outlines
 
@@ -113,26 +180,46 @@ print(user.name)  # "John Doe"
 print(user.age)  # 30
 
 print(user.email)  # "john@example.com"
-```
-
-## 核心概念
-
-### 1. 受约束的 Token 采样
-
-Outlines 使用有限状态机（FSM）在 logit 层面约束 token 生成。
-
-**工作原理：**
-1. 将 schema（JSON/Pydantic/regex）转换为上下文无关文法（CFG）
-2. 将 CFG 转换为有限状态机（FSM）
-3. 在生成的每一步过滤无效 token
-4. 当只有一个有效 token 时快速前进
-
-**优势：**
-- **零开销**：过滤在 token 层面进行
-- **速度提升**：通过确定性路径快速前进
-- **保证有效性**：无效输出不可能产生
-
-```pythonimport outlines
+```
+
+
+
+## 核心概念
+
+
+
+### 1. 受约束的 Token 采样
+
+
+
+Outlines 使用有限状态机（FSM）在 logit 层面约束 token 生成。
+
+
+
+**工作原理：**
+
+1. 将 schema（JSON/Pydantic/regex）转换为上下文无关文法（CFG）
+
+2. 将 CFG 转换为有限状态机（FSM）
+
+3. 在生成的每一步过滤无效 token
+
+4. 当只有一个有效 token 时快速前进
+
+
+
+**优势：**
+
+- **零开销**：过滤在 token 层面进行
+
+- **速度提升**：通过确定性路径快速前进
+
+- **保证有效性**：无效输出不可能产生
+
+
+
+```python
+import outlines
 
 
 # Pydantic 模型 -> JSON schema -> CFG -> FSM
@@ -161,15 +248,24 @@ model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, Person)
 
 result = generator("Generate person: Alice, 25")
-```
-
-### 2. 结构化生成器
-
-Outlines 为不同输出类型提供专用生成器。
-
-#### Choice 生成器
-
-```python# 多项选择
+```
+
+
+
+### 2. 结构化生成器
+
+
+
+Outlines 为不同输出类型提供专用生成器。
+
+
+
+#### Choice 生成器
+
+
+
+```python
+# 多项选择
 
 generator = outlines.generate.choice(model, ["positive", "negative", "neutral"])
 
@@ -177,11 +273,16 @@ generator = outlines.generate.choice(model, ["positive", "negative", "neutral"])
 sentiment = generator("Review: This is great!")
 
 # 结果：三个选项之一
-```
-
-#### JSON 生成器
-
-```pythonfrom pydantic import BaseModel
+```
+
+
+
+#### JSON 生成器
+
+
+
+```python
+from pydantic import BaseModel
 
 
 class Product(BaseModel):
@@ -202,11 +303,16 @@ product = generator("Extract: iPhone 15, $999, available")
 # 保证为有效的 Product 实例
 
 print(type(product))  # <class '__main__.Product'>
-```
-
-#### Regex 生成器
-
-```python# 生成匹配 regex 的文本
+```
+
+
+
+#### Regex 生成器
+
+
+
+```python
+# 生成匹配 regex 的文本
 
 generator = outlines.generate.regex(
     model,
@@ -217,11 +323,16 @@ generator = outlines.generate.regex(
 phone = generator("Generate phone number:")
 
 # 结果："555-123-4567"（保证匹配模式）
-```
-
-#### 整数/浮点数生成器
-
-```python# 生成特定数值类型
+```
+
+
+
+#### 整数/浮点数生成器
+
+
+
+```python
+# 生成特定数值类型
 
 int_generator = outlines.generate.integer(model)
 
@@ -231,15 +342,24 @@ age = int_generator("Person's age:")  # 保证为整数
 float_generator = outlines.generate.float(model)
 
 price = float_generator("Product price:")  # 保证为浮点数
-```
-
-### 3. 模型后端
-
-Outlines 支持多种本地及基于 API 的后端。
-
-#### Transformers（Hugging Face）
-
-```pythonimport outlines
+```
+
+
+
+### 3. 模型后端
+
+
+
+Outlines 支持多种本地及基于 API 的后端。
+
+
+
+#### Transformers（Hugging Face）
+
+
+
+```python
+import outlines
 
 
 # 从 Hugging Face 加载
@@ -253,11 +373,16 @@ model = outlines.models.transformers(
 # 与任意生成器配合使用
 
 generator = outlines.generate.json(model, YourModel)
-```
-
-#### llama.cpp
-
-```python# 加载 GGUF 模型
+```
+
+
+
+#### llama.cpp
+
+
+
+```python
+# 加载 GGUF 模型
 
 model = outlines.models.llamacpp(
     "./models/llama-3.1-8b-instruct.Q4_K_M.gguf", n_gpu_layers=35
@@ -265,11 +390,16 @@ model = outlines.models.llamacpp(
 
 
 generator = outlines.generate.json(model, YourModel)
-```
-
-#### vLLM（高吞吐量）
-
-```python# 用于生产部署
+```
+
+
+
+#### vLLM（高吞吐量）
+
+
+
+```python
+# 用于生产部署
 
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-8B-Instruct",
@@ -278,11 +408,16 @@ model = outlines.models.vllm(
 
 
 generator = outlines.generate.json(model, YourModel)
-```
-
-#### OpenAI（有限支持）
-
-```python# 基础 OpenAI 支持
+```
+
+
+
+#### OpenAI（有限支持）
+
+
+
+```python
+# 基础 OpenAI 支持
 
 model = outlines.models.openai("gpt-4o-mini", api_key="your-api-key")
 
@@ -290,15 +425,24 @@ model = outlines.models.openai("gpt-4o-mini", api_key="your-api-key")
 # 注意：API 模型部分功能受限
 
 generator = outlines.generate.json(model, YourModel)
-```
-
-### 4. Pydantic 集成
-
-Outlines 对 Pydantic 提供一流支持，可自动进行 schema 转换。
-
-#### 基础模型
-
-```pythonfrom pydantic import BaseModel, Field
+```
+
+
+
+### 4. Pydantic 集成
+
+
+
+Outlines 对 Pydantic 提供一流支持，可自动进行 schema 转换。
+
+
+
+#### 基础模型
+
+
+
+```python
+from pydantic import BaseModel, Field
 
 
 class Article(BaseModel):
@@ -321,11 +465,16 @@ article = generator("Generate article about AI")
 print(article.title)
 
 print(article.word_count)  # 保证 > 0
-```
-
-#### 嵌套模型
-
-```pythonclass Address(BaseModel):
+```
+
+
+
+#### 嵌套模型
+
+
+
+```python
+class Address(BaseModel):
     street: str
 
     city: str
@@ -347,11 +496,16 @@ person = generator("Generate person in New York")
 
 
 print(person.address.city)  # "New York"
-```
-
-#### Enum 与 Literal
-
-```pythonfrom enum import Enum
+```
+
+
+
+#### Enum 与 Literal
+
+
+
+```python
+from enum import Enum
 
 from typing import Literal
 
@@ -378,13 +532,20 @@ app = generator("Generate application")
 
 
 print(app.status)  # Status.PENDING（或 APPROVED/REJECTED）
-```
-
-## 常见模式
-
-### 模式 1：数据提取
-
-```pythonfrom pydantic import BaseModel
+```
+
+
+
+## 常见模式
+
+
+
+### 模式 1：数据提取
+
+
+
+```python
+from pydantic import BaseModel
 
 import outlines
 
@@ -425,11 +586,16 @@ print(f"Founded: {company.founded_year}")
 print(f"Industry: {company.industry}")
 
 print(f"Employees: {company.employees}")
-```
-
-### 模式 2：分类
-
-```pythonfrom typing import Literal
+```
+
+
+
+### 模式 2：分类
+
+
+
+```python
+from typing import Literal
 
 import outlines
 
@@ -465,11 +631,16 @@ class Classification(BaseModel):
 classifier = outlines.generate.json(model, Classification)
 
 result = classifier("Review: This product is okay, nothing special")
-```
-
-### 模式 3：结构化表单
-
-```pythonclass UserProfile(BaseModel):
+```
+
+
+
+### 模式 3：结构化表单
+
+
+
+```python
+class UserProfile(BaseModel):
     full_name: str
 
     age: int
@@ -512,11 +683,16 @@ profile = generator(prompt)
 print(profile.full_name)
 
 print(profile.interests)  # ["hiking", "photography", "cooking"]
-```
-
-### 模式 4：多实体提取
-
-```pythonclass Entity(BaseModel):
+```
+
+
+
+### 模式 4：多实体提取
+
+
+
+```python
+class Entity(BaseModel):
     name: str
 
     type: Literal["PERSON", "ORGANIZATION", "LOCATION"]
@@ -540,11 +716,16 @@ result = generator(prompt)
 
 for entity in result.entities:
     print(f"{entity.name} ({entity.type})")
-```
-
-### 模式 5：代码生成
-
-```pythonclass PythonFunction(BaseModel):
+```
+
+
+
+### 模式 5：代码生成
+
+
+
+```python
+class PythonFunction(BaseModel):
     function_name: str
 
     parameters: list[str]
@@ -569,11 +750,16 @@ print(f"def {func.function_name}({', '.join(func.parameters)}):")
 print(f'    """{func.docstring}"""')
 
 print(f"    {func.body}")
-```
-
-### 模式 6：批量处理
-
-```pythondef batch_extract(texts: list[str], schema: type[BaseModel]):
+```
+
+
+
+### 模式 6：批量处理
+
+
+
+```python
+def batch_extract(texts: list[str], schema: type[BaseModel]):
     """从多段文本中提取结构化数据。"""
 
     model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
@@ -603,13 +789,20 @@ people = batch_extract(texts, Person)
 
 for person in people:
     print(f"{person.name}: {person.age}")
-```
-
-## 后端配置
-
-### Transformers
-
-```pythonimport outlines
+```
+
+
+
+## 后端配置
+
+
+
+### Transformers
+
+
+
+```python
+import outlines
 
 
 # 基础用法
@@ -633,11 +826,16 @@ model = outlines.models.transformers("meta-llama/Llama-3.1-8B-Instruct")
 model = outlines.models.transformers("mistralai/Mistral-7B-Instruct-v0.3")
 
 model = outlines.models.transformers("Qwen/Qwen2.5-7B-Instruct")
-```
-
-### llama.cpp
-
-```python# 加载 GGUF 模型
+```
+
+
+
+### llama.cpp
+
+
+
+```python
+# 加载 GGUF 模型
 
 model = outlines.models.llamacpp(
     "./models/llama-3.1-8b.Q4_K_M.gguf",
@@ -653,11 +851,16 @@ model = outlines.models.llamacpp(
     "./models/model.gguf",
     n_gpu_layers=-1,  # 所有层在 GPU 上
 )
-```
-
-### vLLM（生产环境）
-
-```python# 单 GPU
+```
+
+
+
+### vLLM（生产环境）
+
+
+
+```python
+# 单 GPU
 
 model = outlines.models.vllm("meta-llama/Llama-3.1-8B-Instruct")
 
@@ -676,13 +879,20 @@ model = outlines.models.vllm(
     "meta-llama/Llama-3.1-8B-Instruct",
     quantization="awq",  # 或 "gptq"
 )
-```
-
-## 最佳实践
-
-### 1. 使用具体类型
-
-```python# ✅ 好：具体类型
+```
+
+
+
+## 最佳实践
+
+
+
+### 1. 使用具体类型
+
+
+
+```python
+# ✅ 好：具体类型
 
 
 class Product(BaseModel):
@@ -704,11 +914,16 @@ class Product(BaseModel):
     price: str  # 应为 float
 
     quantity: str  # 应为 int
-```
-
-### 2. 添加约束
-
-```pythonfrom pydantic import Field
+```
+
+
+
+### 2. 添加约束
+
+
+
+```python
+from pydantic import Field
 
 
 # ✅ 好：带约束
@@ -731,11 +946,16 @@ class User(BaseModel):
     age: int
 
     email: str
-```
-
-### 3. 对分类使用 Enum
-
-```python# ✅ 好：固定集合使用 Enum
+```
+
+
+
+### 3. 对分类使用 Enum
+
+
+
+```python
+# ✅ 好：固定集合使用 Enum
 
 
 class Priority(str, Enum):
@@ -759,11 +979,16 @@ class Task(BaseModel):
     title: str
 
     priority: str  # 可以是任意值
-```
-
-### 4. 在 Prompt 中提供上下文
-
-```python# ✅ 好：清晰的上下文
+```
+
+
+
+### 4. 在 Prompt 中提供上下文
+
+
+
+```python
+# ✅ 好：清晰的上下文
 
 prompt = """
 
@@ -779,11 +1004,16 @@ Product:
 # ❌ 差：上下文不足
 
 prompt = "iPhone 15 Pro costs $999 and is currently in stock."
-```
-
-### 5. 处理可选字段
-
-```pythonfrom typing import Optional
+```
+
+
+
+### 5. 处理可选字段
+
+
+
+```python
+from typing import Optional
 
 
 # ✅ 好：对不完整数据使用可选字段
@@ -800,59 +1030,114 @@ class Article(BaseModel):
 
 
 # 即使 author/date 缺失也能成功
-```
-
-## 与替代方案的对比
-
-| 特性 | Outlines | Instructor | Guidance | LMQL |
-|---------|----------|------------|----------|------|
-| Pydantic 支持 | ✅ 原生 | ✅ 原生 | ❌ 无 | ❌ 无 |
-| JSON Schema | ✅ 支持 | ✅ 支持 | ⚠️ 有限 | ✅ 支持 |
-| Regex 约束 | ✅ 支持 | ❌ 无 | ✅ 支持 | ✅ 支持 |
-| 本地模型 | ✅ 完整 | ⚠️ 有限 | ✅ 完整 | ✅ 完整 |
-| API 模型 | ⚠️ 有限 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
-| 零开销 | ✅ 支持 | ❌ 无 | ⚠️ 部分 | ✅ 支持 |
-| 自动重试 | ❌ 无 | ✅ 支持 | ❌ 无 | ❌ 无 |
-| 学习曲线 | 低 | 低 | 低 | 高 |
-
-**何时选择 Outlines：**
-- 使用本地模型（Transformers、llama.cpp、vLLM）
-- 需要最大推理速度
-- 需要 Pydantic 模型支持
-- 需要零开销结构化生成
-- 需要控制 token 采样过程
-
-**何时选择替代方案：**
-- Instructor：需要 API 模型并支持自动重试
-- Guidance：需要 token healing 和复杂工作流
-- LMQL：偏好声明式查询语法
-
-## 性能特性
-
-**速度：**
-- **零开销**：结构化生成与无约束生成同样快速
-- **快速前进优化**：跳过确定性 token
-- **比生成后验证方案快 1.2–2 倍**
-
-**内存：**
-- FSM 每个 schema 编译一次（已缓存）
-- 极低的运行时开销
-- 配合 vLLM 可实现高吞吐量
-
-**准确性：**
-- **100% 有效输出**（由 FSM 保证）
-- 无需重试循环
-- 确定性 token 过滤
-
-## 资源
-
-- **文档**：https://outlines-dev.github.io/outlines
-- **GitHub**：https://github.com/outlines-dev/outlines（8k+ stars）
-- **Discord**：https://discord.gg/R9DSu34mGd
-- **博客**：https://blog.dottxt.co
-
-## 另请参阅
-
-- `references/json_generation.md` — 全面的 JSON 与 Pydantic 模式
-- `references/backends.md` — 后端专项配置
+```
+
+
+
+## 与替代方案的对比
+
+
+
+| 特性 | Outlines | Instructor | Guidance | LMQL |
+
+|---------|----------|------------|----------|------|
+
+| Pydantic 支持 | ✅ 原生 | ✅ 原生 | ❌ 无 | ❌ 无 |
+
+| JSON Schema | ✅ 支持 | ✅ 支持 | ⚠️ 有限 | ✅ 支持 |
+
+| Regex 约束 | ✅ 支持 | ❌ 无 | ✅ 支持 | ✅ 支持 |
+
+| 本地模型 | ✅ 完整 | ⚠️ 有限 | ✅ 完整 | ✅ 完整 |
+
+| API 模型 | ⚠️ 有限 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+
+| 零开销 | ✅ 支持 | ❌ 无 | ⚠️ 部分 | ✅ 支持 |
+
+| 自动重试 | ❌ 无 | ✅ 支持 | ❌ 无 | ❌ 无 |
+
+| 学习曲线 | 低 | 低 | 低 | 高 |
+
+
+
+**何时选择 Outlines：**
+
+- 使用本地模型（Transformers、llama.cpp、vLLM）
+
+- 需要最大推理速度
+
+- 需要 Pydantic 模型支持
+
+- 需要零开销结构化生成
+
+- 需要控制 token 采样过程
+
+
+
+**何时选择替代方案：**
+
+- Instructor：需要 API 模型并支持自动重试
+
+- Guidance：需要 token healing 和复杂工作流
+
+- LMQL：偏好声明式查询语法
+
+
+
+## 性能特性
+
+
+
+**速度：**
+
+- **零开销**：结构化生成与无约束生成同样快速
+
+- **快速前进优化**：跳过确定性 token
+
+- **比生成后验证方案快 1.2–2 倍**
+
+
+
+**内存：**
+
+- FSM 每个 schema 编译一次（已缓存）
+
+- 极低的运行时开销
+
+- 配合 vLLM 可实现高吞吐量
+
+
+
+**准确性：**
+
+- **100% 有效输出**（由 FSM 保证）
+
+- 无需重试循环
+
+- 确定性 token 过滤
+
+
+
+## 资源
+
+
+
+- **文档**：https://outlines-dev.github.io/outlines
+
+- **GitHub**：https://github.com/outlines-dev/outlines（8k+ stars）
+
+- **Discord**：https://discord.gg/R9DSu34mGd
+
+- **博客**：https://blog.dottxt.co
+
+
+
+## 另请参阅
+
+
+
+- `references/json_generation.md` — 全面的 JSON 与 Pydantic 模式
+
+- `references/backends.md` — 后端专项配置
+
 - `references/examples.md` — 生产就绪示例
