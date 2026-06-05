@@ -372,6 +372,7 @@ class TestCmdUpdateBranchFallback:
             "--no-fund",
             "--no-audit",
             "--progress=false",
+            "--loglevel=error",
             "--workspaces=false",
         ]
 
@@ -381,6 +382,7 @@ class TestCmdUpdateBranchFallback:
             "--no-fund",
             "--no-audit",
             "--progress=false",
+            "--loglevel=error",
             "--workspace",
             "ui-tui",
             "--workspace",
