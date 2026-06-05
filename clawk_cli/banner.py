@@ -747,13 +747,15 @@ def get_update_result(timeout: float = 0.5) -> Optional[int]:
 
 
 def print_clawksis_banner():
-    """Imprime el banner CLAWKSIS vinotinto solido. Robusto a cualquier terminal UTF-8."""
+    """Imprime el banner CLAWKSIS morado solido. Robusto a cualquier terminal UTF-8."""
     import sys
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
     from clawk_cli.colors import should_use_color
+
     rows = [
         "  ██████████ ██         ██████████ ██      ██ ██      ██ ██████████   ██████   ██████████",
         "  ██         ██         ██      ██ ██      ██ ██    ██   ██             ██     ██",
@@ -761,7 +763,13 @@ def print_clawksis_banner():
         "  ██         ██         ██      ██ ████  ████ ██    ██           ██     ██             ██",
         "  ██████████ ██████████ ██      ██ ██      ██ ██      ██ ██████████   ██████   ██████████",
     ]
-    ansi = ["[38;5;160m", "[38;5;124m", "[38;5;124m", "[38;5;88m", "[38;5;52m"]
+    ansi = [
+        "[38;2;141;112;240m",
+        "[38;2;108;79;208m",
+        "[38;2;108;79;208m",
+        "[38;2;74;52;150m",
+        "[38;2;52;36;110m",
+    ]
     BOLD = "[1m"
     RST = "[0m"
     print()

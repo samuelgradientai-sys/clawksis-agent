@@ -286,9 +286,7 @@ model:
         monkeypatch.setattr(
             _models_dev,
             "get_model_capabilities",
-            lambda provider, model: (
-                _text_only_caps if provider == "deepseek" else None
-            ),
+            lambda provider, model: _text_only_caps if provider == "deepseek" else None,
         )
 
         from agent.auxiliary_client import resolve_vision_provider_client
