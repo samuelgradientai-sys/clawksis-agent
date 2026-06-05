@@ -698,7 +698,7 @@ class TestWsHostOriginGuardOrigins:
 
     def test_loopback_app_scheme_origin_allowed(self, loopback_app):
 
-        ws = self._ws(origin="app://clawk", host="127.0.0.1:8080")
+        ws = self._ws(origin="app://clawksis", host="127.0.0.1:8080")
 
         assert web_server._ws_host_origin_is_allowed(ws) is True
 

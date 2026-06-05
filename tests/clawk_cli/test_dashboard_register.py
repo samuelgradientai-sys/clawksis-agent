@@ -208,13 +208,13 @@ class TestHappyPath:
         captured: dict = {}
 
         self._run(
-            args=_ns(redirect_uri="https://clawk.example.com/auth/callback"),
+            args=_ns(redirect_uri="https://clawksis.example.com/auth/callback"),
             captured=captured,
         )
 
         assert (
             captured["body"]["custom_redirect_uri"]
-            == "https://clawk.example.com/auth/callback"
+            == "https://clawksis.example.com/auth/callback"
         )
 
     def test_non_default_portal_is_persisted(self, capsys):

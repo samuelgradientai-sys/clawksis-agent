@@ -6,7 +6,7 @@ Mission-control style deployments reverse-proxy the dashboard at a path
 
 prefix (e.g. ``mission-control.tilos.com/clawksis/*`` -> local Caddy ->
 
-:9119), injecting ``X-Forwarded-Prefix: /clawk`` on every request.
+:9119), injecting ``X-Forwarded-Prefix: /clawksis`` on every request.
 
 
 
@@ -36,7 +36,7 @@ honour it too:
 
      ``/clawksis/auth/callback`` and the user gets 404.
 
-  4. Cookies must use ``Path=/clawk`` when behind a prefix so they
+  4. Cookies must use ``Path=/clawksis`` when behind a prefix so they
 
      don't leak to other apps on the same origin AND so they get sent
 
@@ -183,7 +183,7 @@ class TestGateRedirectsCarryPrefix:
 
         r = gated_app_proxied.get(
             "/sessions",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -203,7 +203,7 @@ class TestGateRedirectsCarryPrefix:
 
         r = gated_app_proxied.get(
             "/api/sessions",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -275,7 +275,7 @@ class TestOAuthRedirectUriRespectsPrefix:
 
         r = gated_app_proxied.get(
             "/auth/login?provider=stub",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -474,7 +474,7 @@ class TestPublicUrlOverride:
     ):
         """When public_url already carries a path prefix
 
-        (``https://example.com/clawk``), the OAuth callback URL is
+        (``https://example.com/clawksis``), the OAuth callback URL is
 
         the path appended verbatim. The operator is declaring the
 
@@ -484,7 +484,7 @@ class TestPublicUrlOverride:
 
         monkeypatch.setenv(
             "CLAWK_DASHBOARD_PUBLIC_URL",
-            "https://example.com/clawk",
+            "https://example.com/clawksis",
         )
 
         redirect_uri = self._redirect_uri(gated_app_direct)
@@ -631,7 +631,7 @@ class TestCookiePathRespectsPrefix:
 
         r = gated_app_proxied.get(
             "/auth/login?provider=stub",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -641,13 +641,13 @@ class TestCookiePathRespectsPrefix:
 
         # Browser only sends cookie back if the request path is under
 
-        # the cookie's Path attribute, so we need /clawk here. Bare
+        # the cookie's Path attribute, so we need /clawksis here. Bare
 
         # /-rooted cookies would still be sent but would also be sent
 
         # to /billing/... etc.
 
-        assert "Path=/clawk" in pkce, f"PKCE cookie has wrong Path: {pkce!r}"
+        assert "Path=/clawksis" in pkce, f"PKCE cookie has wrong Path: {pkce!r}"
 
     def test_pkce_cookie_uses_secure_prefix_when_proxied(self, gated_app_proxied):
         """Behind a proxy with Path != /, ``__Host-`` is disallowed
@@ -660,7 +660,7 @@ class TestCookiePathRespectsPrefix:
 
         r = gated_app_proxied.get(
             "/auth/login?provider=stub",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -752,7 +752,7 @@ class TestCookiePathRespectsPrefix:
 
         trip via the proxy, the session-AT cookie carries the
 
-        __Secure- prefix AND Path=/clawk, so the next request under
+        __Secure- prefix AND Path=/clawksis, so the next request under
 
         the same prefix is authenticated.
 
@@ -766,7 +766,7 @@ class TestCookiePathRespectsPrefix:
 
         (``/clawksis/auth/login``, ``/clawksis/auth/callback``). A cookie
 
-        set with ``Path=/clawk`` would therefore NOT be sent back on
+        set with ``Path=/clawksis`` would therefore NOT be sent back on
 
         the second request through TestClient even though it WOULD be
 
@@ -788,7 +788,7 @@ class TestCookiePathRespectsPrefix:
 
         r1 = gated_app_proxied.get(
             "/auth/login?provider=stub",
-            headers={"x-forwarded-prefix": "/clawk"},
+            headers={"x-forwarded-prefix": "/clawksis"},
             follow_redirects=False,
         )
 
@@ -804,14 +804,14 @@ class TestCookiePathRespectsPrefix:
 
         # Round-trip the cookie by hand because TestClient's jar won't
 
-        # automatically send a Path=/clawk cookie to a /auth/callback
+        # automatically send a Path=/clawksis cookie to a /auth/callback
 
         # request path.
 
         r2 = gated_app_proxied.get(
             f"/auth/callback?code=stub_code&state={state}",
             headers={
-                "x-forwarded-prefix": "/clawk",
+                "x-forwarded-prefix": "/clawksis",
                 "cookie": pkce_kv,
             },
             follow_redirects=False,
@@ -825,7 +825,7 @@ class TestCookiePathRespectsPrefix:
 
         assert at_cookies, f"session_at missing __Secure- prefix: {cookies!r}"
 
-        assert "Path=/clawk" in at_cookies[0]
+        assert "Path=/clawksis" in at_cookies[0]
 
         assert "Secure" in at_cookies[0]
 
