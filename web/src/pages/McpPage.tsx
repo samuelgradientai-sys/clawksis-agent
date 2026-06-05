@@ -63,6 +63,7 @@ export default function McpPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [catalog, setCatalog] = useState<McpCatalogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<McpCatalogDiagnostic[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const { toast, showToast } = useToast();
   const { setEnd } = usePageHeader();
@@ -308,6 +309,15 @@ export default function McpPage() {
   diagnostics.forEach((d) => {
     (diagnosticsByName[d.name] ??= []).push(d);
   });
+
+  const catalogQuery = catalogSearch.trim().toLowerCase();
+  const filteredCatalog = catalogQuery
+    ? catalog.filter((e) =>
+        `${e.name} ${e.description} ${e.source}`
+          .toLowerCase()
+          .includes(catalogQuery),
+      )
+    : catalog;
 
   return (
     <div className="flex flex-col gap-6">
@@ -674,8 +684,18 @@ export default function McpPage() {
             className="flex items-center gap-2 text-muted-foreground"
           >
             <Package className="h-4 w-4" />
-            Catalog ({catalog.length})
+            Catalog ({filteredCatalog.length}
+            {catalogQuery ? ` / ${catalog.length}` : ""})
           </H2>
+          {catalog.length > 0 && (
+            <Input
+              type="search"
+              placeholder="Search catalog…"
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              className="sm:w-64"
+            />
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground">
@@ -690,7 +710,15 @@ export default function McpPage() {
           </Card>
         )}
 
-        {catalog.map((entry) => {
+        {catalog.length > 0 && filteredCatalog.length === 0 && (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No catalog entries match “{catalogSearch.trim()}”.
+            </CardContent>
+          </Card>
+        )}
+
+        {filteredCatalog.map((entry) => {
           const entryDiags = diagnosticsByName[entry.name] ?? [];
           const isInstalling = installingName === entry.name;
 
