@@ -1128,6 +1128,29 @@ export default function EnvPage() {
 
     try {
 
+      // Live-probe provider credentials before saving so the user gets
+      // immediate validity feedback. Only a confirmed-bad key (reachable +
+      // rejected) blocks the save; offline / no-probe cases fall through.
+      try {
+
+        const probe = await api.validateProviderCredential(key, value);
+
+        if (!probe.ok && probe.reachable) {
+
+          showToast(probe.message || `${key}: credential rejected`, "error");
+
+          setSaving(null);
+
+          return;
+
+        }
+
+      } catch {
+
+        // Validation probe itself failed — don't block the save.
+
+      }
+
       await api.setEnvVar(key, value);
 
       setVars((prev) =>

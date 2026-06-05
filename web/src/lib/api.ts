@@ -740,6 +740,18 @@ export const api = {
 
     }),
 
+  validateProviderCredential: (key: string, value: string) =>
+
+    fetchJSON<{ ok: boolean; reachable: boolean; message: string; models?: string[] }>("/api/providers/validate", {
+
+      method: "POST",
+
+      headers: { "Content-Type": "application/json" },
+
+      body: JSON.stringify({ key, value }),
+
+    }),
+
   deleteEnvVar: (key: string) =>
 
     fetchJSON<{ ok: boolean }>("/api/env", {
