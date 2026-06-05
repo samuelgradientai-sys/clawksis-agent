@@ -213,11 +213,11 @@ print_banner() {
     local BOLD='\033[1m'
     local NC_='\033[0m'
     echo ""
-    echo -e "${BOLD}${WINE2}  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗${NC_}"
-    echo -e "${BOLD}${WINE2} ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝${NC_}"
-    echo -e "${BOLD}${WINE}  ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗${NC_}"
-    echo -e "${BOLD}${WINE}  ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╚════██║██║╚════██║${NC_}"
-    echo -e "${BOLD}${WINE3} ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║${NC_}"
+    echo -e "${BOLD}${WINE2}  ██████â██â      █████â ██â    ██â██â  ██â███████â██â███████â${NC_}"
+    echo -e "${BOLD}${WINE2} ██ââââââ██â     ██âââ██â██â    ██â██â ██ââ██ââââââ██â██ââââââ${NC_}"
+    echo -e "${BOLD}${WINE}  ██â     ██â     ███████â██â █â ██â█████ââ ███████â██â███████â${NC_}"
+    echo -e "${BOLD}${WINE}  ██â     ██â     ██âââ██â██â███â██â██ââ██â âââââ██â██ââââââ██â${NC_}"
+    echo -e "${BOLD}${WINE3} â██████â███████â██â  ██ââ███â███ââ██â  ██â███████â██â███████â${NC_}"
     echo -e "${BOLD}${WINE3}  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝${NC_}"
     echo ""
 }
@@ -233,6 +233,29 @@ log_success() {
 log_warn() {
     echo -e "${YELLOW}⚠${NC} $1"
 }
+
+# ============================================================================
+# Barra de progreso de instalacion
+# ============================================================================
+INSTALL_STEP=0
+INSTALL_TOTAL=11
+
+progress_bar() {
+    local label="$1"
+    INSTALL_STEP=$((INSTALL_STEP + 1))
+    local pct=$((INSTALL_STEP * 100 / INSTALL_TOTAL))
+    local filled=$((pct * 30 / 100))
+    local empty=$((30 - filled))
+    local WINE='\033[38;5;160m'
+    local DIM='\033[2m'
+    local NC_='\033[0m'
+    local bar=""
+    local i
+    for ((i=0; i<filled; i++)); do bar="${bar}█"; done
+    for ((i=0; i<empty; i++)); do bar="${bar}░"; done
+    printf "\n${WINE}[%b] %3d%%${NC_} ${DIM}(%d/%d)${NC_} %s\n" "$bar" "$pct" "$INSTALL_STEP" "$INSTALL_TOTAL" "$label"
+}
+
 
 log_error() {
     echo -e "${RED}✗${NC} $1"
@@ -2533,21 +2556,39 @@ run_stage_protocol() {
 main() {
     print_banner
 
+    progress_bar "Detectando sistema operativo..."
     detect_os
     resolve_install_layout
+
+    progress_bar "Verificando gestor de paquetes (uv)..."
     install_uv
+
+    progress_bar "Verificando Python, Git y Node.js..."
     check_python
     check_git
     check_node
     check_network_prerequisites
     install_system_packages
 
+    progress_bar "Descargando Clawksis..."
     clone_repo
+
+    progress_bar "Creando entorno virtual Python..."
     setup_venv
+
+    progress_bar "Instalando dependencias Python..."
     install_deps
+
+    progress_bar "Instalando dependencias Node (browser tools)..."
     install_node_deps
+
+    progress_bar "Enlazando el comando clawk..."
     setup_path
+
+    progress_bar "Preparando configuracion y skills..."
     copy_config_templates
+
+    progress_bar "Listo. Iniciando asistente de configuracion..."
     run_setup_wizard
     maybe_start_gateway
 
