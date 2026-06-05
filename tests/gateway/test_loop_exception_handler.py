@@ -28,6 +28,7 @@ from gateway.run import (
 # We avoid importing telegram / httpx here so the test runs in environments
 # without those packages installed (the classifier matches on class name).
 
+
 class TimedOut(Exception):
     """Stand-in for ``telegram.error.TimedOut``."""
 

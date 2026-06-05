@@ -41,8 +41,9 @@ def _make_store(tmp_path, max_age_days: int = 90, has_active_processes_fn=None):
     return store
 
 
-def _entry(key: str, age_days: float, *, suspended: bool = False,
-           session_id: str | None = None) -> SessionEntry:
+def _entry(
+    key: str, age_days: float, *, suspended: bool = False, session_id: str | None = None
+) -> SessionEntry:
     now = datetime.now()
     return SessionEntry(
         session_key=key,
@@ -74,8 +75,8 @@ class TestPruneBasics:
         entry = SessionEntry(
             session_key="long-lived",
             session_id="sid",
-            created_at=now - timedelta(days=365),   # ancient
-            updated_at=now - timedelta(days=3),     # but just chatted
+            created_at=now - timedelta(days=365),  # ancient
+            updated_at=now - timedelta(days=3),  # but just chatted
             platform=Platform.TELEGRAM,
             chat_type="dm",
         )
@@ -104,9 +105,7 @@ class TestPruneBasics:
     def test_prune_skips_suspended_entries(self, tmp_path):
         """/stop-suspended sessions must be kept for later resume."""
         store = _make_store(tmp_path)
-        store._entries["suspended"] = _entry(
-            "suspended", age_days=1000, suspended=True
-        )
+        store._entries["suspended"] = _entry("suspended", age_days=1000, suspended=True)
         store._entries["idle"] = _entry("idle", age_days=1000)
 
         removed = store.prune_old_entries(max_age_days=90)
@@ -135,9 +134,7 @@ class TestPruneBasics:
         store._entries["active"] = _entry(
             "active", age_days=1000, session_id="sid_active"
         )
-        store._entries["idle"] = _entry(
-            "idle", age_days=1000, session_id="sid_idle"
-        )
+        store._entries["idle"] = _entry("idle", age_days=1000, session_id="sid_idle")
 
         removed = store.prune_old_entries(max_age_days=90)
 
@@ -150,6 +147,7 @@ class TestPruneBasics:
         NOT protect entries during prune.  This pins the fix so a future
         refactor can't silently revert to passing session_id again.
         """
+
         def _recognises_only_ids(identifier: str) -> bool:
             return identifier.startswith("sid_")
 

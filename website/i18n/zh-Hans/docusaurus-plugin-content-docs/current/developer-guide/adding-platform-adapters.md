@@ -63,94 +63,119 @@ optional_env:
 
 ### adapter.py
 
-```python
-import os
-from gateway.platforms.base import (
-    BasePlatformAdapter, SendResult, MessageEvent, MessageType,
-)
-from gateway.config import Platform, PlatformConfig
-
-
-class MyPlatformAdapter(BasePlatformAdapter):
-    def __init__(self, config: PlatformConfig):
-        super().__init__(config, Platform("my_platform"))
-        extra = config.extra or {}
-        self.token = os.getenv("MY_PLATFORM_TOKEN") or extra.get("token", "")
-
-    async def connect(self) -> bool:
-        # 连接到平台 API，启动监听器
-        self._mark_connected()
-        return True
-
-    async def disconnect(self) -> None:
-        self._mark_disconnected()
-
-    async def send(self, chat_id, content, reply_to=None, metadata=None):
-        # 通过平台 API 发送消息
-        return SendResult(success=True, message_id="...")
-
-    async def get_chat_info(self, chat_id):
-        return {"name": chat_id, "type": "dm"}
-
-
-def check_requirements() -> bool:
-    return bool(os.getenv("MY_PLATFORM_TOKEN"))
-
-
-def validate_config(config) -> bool:
-    extra = getattr(config, "extra", {}) or {}
-    return bool(os.getenv("MY_PLATFORM_TOKEN") or extra.get("token"))
-
-
-def _env_enablement() -> dict | None:
-    token = os.getenv("MY_PLATFORM_TOKEN", "").strip()
-    channel = os.getenv("MY_PLATFORM_CHANNEL", "").strip()
-    if not (token and channel):
-        return None
-    seed = {"token": token, "channel": channel}
-    home = os.getenv("MY_PLATFORM_HOME_CHANNEL")
-    if home:
-        seed["home_channel"] = {"chat_id": home, "name": "Home"}
-    return seed
-
-
-def register(ctx):
-    """Plugin 入口点 — 由 Clawksis plugin 系统调用。"""
-    ctx.register_platform(
-        name="my_platform",
-        label="My Platform",
-        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
-        check_fn=check_requirements,
-        validate_config=validate_config,
-        required_env=["MY_PLATFORM_TOKEN"],
-        install_hint="pip install my-platform-sdk",
-        # 环境变量驱动的自动配置 — 在适配器构建前从环境变量
-        # 填充 PlatformConfig.extra。参见下方"环境变量驱动的自动配置"章节。
-        env_enablement_fn=_env_enablement,
-        # Cron 主频道投递支持。允许 deliver=my_platform 的 cron 任务
-        # 无需编辑 cron/scheduler.py 即可路由。参见下方"Cron 投递"章节。
-        cron_deliver_env_var="MY_PLATFORM_HOME_CHANNEL",
-        # 每平台用户授权环境变量
-        allowed_users_env="MY_PLATFORM_ALLOWED_USERS",
-        allow_all_env="MY_PLATFORM_ALLOW_ALL_USERS",
-        # 智能分块的消息长度限制（0 = 无限制）
-        max_message_length=4000,
-        # 注入系统 prompt（提示词）的 LLM 指导
-        platform_hint=(
-            "You are chatting via My Platform. "
-            "It supports markdown formatting."
-        ),
-        # 显示
-        emoji="💬",
-    )
-
-    # 可选：注册平台专属工具
-    ctx.register_tool(
-        name="my_platform_search",
-        toolset="my_platform",
-        schema={...},
-        handler=my_search_handler,
-    )
+```pythonimport os
+
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    SendResult,
+    MessageEvent,
+    MessageType,
+)
+
+from gateway.config import Platform, PlatformConfig
+
+
+class MyPlatformAdapter(BasePlatformAdapter):
+    def __init__(self, config: PlatformConfig):
+
+        super().__init__(config, Platform("my_platform"))
+
+        extra = config.extra or {}
+
+        self.token = os.getenv("MY_PLATFORM_TOKEN") or extra.get("token", "")
+
+    async def connect(self) -> bool:
+
+        # 连接到平台 API，启动监听器
+
+        self._mark_connected()
+
+        return True
+
+    async def disconnect(self) -> None:
+
+        self._mark_disconnected()
+
+    async def send(self, chat_id, content, reply_to=None, metadata=None):
+
+        # 通过平台 API 发送消息
+
+        return SendResult(success=True, message_id="...")
+
+    async def get_chat_info(self, chat_id):
+
+        return {"name": chat_id, "type": "dm"}
+
+
+def check_requirements() -> bool:
+
+    return bool(os.getenv("MY_PLATFORM_TOKEN"))
+
+
+def validate_config(config) -> bool:
+
+    extra = getattr(config, "extra", {}) or {}
+
+    return bool(os.getenv("MY_PLATFORM_TOKEN") or extra.get("token"))
+
+
+def _env_enablement() -> dict | None:
+
+    token = os.getenv("MY_PLATFORM_TOKEN", "").strip()
+
+    channel = os.getenv("MY_PLATFORM_CHANNEL", "").strip()
+
+    if not (token and channel):
+        return None
+
+    seed = {"token": token, "channel": channel}
+
+    home = os.getenv("MY_PLATFORM_HOME_CHANNEL")
+
+    if home:
+        seed["home_channel"] = {"chat_id": home, "name": "Home"}
+
+    return seed
+
+
+def register(ctx):
+    """Plugin 入口点 — 由 Clawksis plugin 系统调用。"""
+
+    ctx.register_platform(
+        name="my_platform",
+        label="My Platform",
+        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
+        check_fn=check_requirements,
+        validate_config=validate_config,
+        required_env=["MY_PLATFORM_TOKEN"],
+        install_hint="pip install my-platform-sdk",
+        # 环境变量驱动的自动配置 — 在适配器构建前从环境变量
+        # 填充 PlatformConfig.extra。参见下方"环境变量驱动的自动配置"章节。
+        env_enablement_fn=_env_enablement,
+        # Cron 主频道投递支持。允许 deliver=my_platform 的 cron 任务
+        # 无需编辑 cron/scheduler.py 即可路由。参见下方"Cron 投递"章节。
+        cron_deliver_env_var="MY_PLATFORM_HOME_CHANNEL",
+        # 每平台用户授权环境变量
+        allowed_users_env="MY_PLATFORM_ALLOWED_USERS",
+        allow_all_env="MY_PLATFORM_ALLOW_ALL_USERS",
+        # 智能分块的消息长度限制（0 = 无限制）
+        max_message_length=4000,
+        # 注入系统 prompt（提示词）的 LLM 指导
+        platform_hint=(
+            "You are chatting via My Platform. It supports markdown formatting."
+        ),
+        # 显示
+        emoji="💬",
+    )
+
+    # 可选：注册平台专属工具
+
+    ctx.register_tool(
+        name="my_platform_search",
+        toolset="my_platform",
+        schema={...},
+        handler=my_search_handler,
+    )
 ```
 
 ### 配置
@@ -200,41 +225,56 @@ gateway:
 
 大多数用户通过将环境变量写入 `~/.clawksis/.env` 来配置平台，而不是编辑 `config.yaml`。`env_enablement_fn` hook 允许你的 plugin 在适配器构建**之前**读取这些环境变量，使 `clawk gateway status`、`get_connected_platforms()` 和 cron 投递无需实例化平台 SDK 即可看到正确状态。
 
-```python
-def _env_enablement() -> dict | None:
-    """从环境变量填充 PlatformConfig.extra。
-
-    在 load_gateway_config() 期间由平台注册表调用。
-    当平台未完成最低配置时返回 None — 调用方将跳过自动启用。
-    返回字典以填充 extras。
-
-    特殊键 'home_channel' 会被提取并成为 PlatformConfig 上的
-    HomeChannel dataclass；其他所有键合并到 PlatformConfig.extra 中。
-    """
-    token = os.getenv("MY_PLATFORM_TOKEN", "").strip()
-    channel = os.getenv("MY_PLATFORM_CHANNEL", "").strip()
-    if not (token and channel):
-        return None
-    seed = {"token": token, "channel": channel}
-    home = os.getenv("MY_PLATFORM_HOME_CHANNEL")
-    if home:
-        seed["home_channel"] = {
-            "chat_id": home,
-            "name": os.getenv("MY_PLATFORM_HOME_CHANNEL_NAME", "Home"),
-        }
-    return seed
-
-
-def register(ctx):
-    ctx.register_platform(
-        name="my_platform",
-        label="My Platform",
-        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
-        check_fn=check_requirements,
-        validate_config=validate_config,
-        env_enablement_fn=_env_enablement,
-        # ... 其他字段
-    )
+```pythondef _env_enablement() -> dict | None:
+    """从环境变量填充 PlatformConfig.extra。
+
+
+
+    在 load_gateway_config() 期间由平台注册表调用。
+
+    当平台未完成最低配置时返回 None — 调用方将跳过自动启用。
+
+    返回字典以填充 extras。
+
+
+
+    特殊键 'home_channel' 会被提取并成为 PlatformConfig 上的
+
+    HomeChannel dataclass；其他所有键合并到 PlatformConfig.extra 中。
+
+    """
+
+    token = os.getenv("MY_PLATFORM_TOKEN", "").strip()
+
+    channel = os.getenv("MY_PLATFORM_CHANNEL", "").strip()
+
+    if not (token and channel):
+        return None
+
+    seed = {"token": token, "channel": channel}
+
+    home = os.getenv("MY_PLATFORM_HOME_CHANNEL")
+
+    if home:
+        seed["home_channel"] = {
+            "chat_id": home,
+            "name": os.getenv("MY_PLATFORM_HOME_CHANNEL_NAME", "Home"),
+        }
+
+    return seed
+
+
+def register(ctx):
+
+    ctx.register_platform(
+        name="my_platform",
+        label="My Platform",
+        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
+        check_fn=check_requirements,
+        validate_config=validate_config,
+        env_enablement_fn=_env_enablement,
+        # ... 其他字段
+    )
 ```
 
 
@@ -374,33 +414,44 @@ optional_env:
 
 `BasePlatformAdapter._keep_typing` 是正在输入指示器的心跳 — 它在 LLM 生成时作为后台任务运行，响应投递后被取消。要在某个阈值时叠加平台专属行为（例如在 45 秒时发送"仍在思考"气泡），在你的适配器中覆盖 `_keep_typing`，在 `super()._keep_typing()` 旁边调度你自己的任务，并在 `finally` 中清理：
 
-```python
-class LineAdapter(BasePlatformAdapter):
-    async def _keep_typing(self, chat_id: str, *args, **kwargs) -> None:
-        if self.slow_response_threshold <= 0:
-            await super()._keep_typing(chat_id, *args, **kwargs)
-            return
-
-        async def _fire_at_threshold() -> None:
-            try:
-                await asyncio.sleep(self.slow_response_threshold)
-            except asyncio.CancelledError:
-                raise
-            # 平台专属操作 — 对于 LINE，使用缓存的回复 token 发送
-            # Template Buttons "获取答案"气泡，用户可通过 postback
-            # 回调中的新（免费）回复 token 稍后获取缓存的响应。
-            await self._send_slow_response_button(chat_id)
-
-        side_task = asyncio.create_task(_fire_at_threshold())
-        try:
-            await super()._keep_typing(chat_id, *args, **kwargs)
-        finally:
-            if not side_task.done():
-                side_task.cancel()
-                try:
-                    await side_task
-                except (asyncio.CancelledError, Exception):
-                    pass
+```pythonclass LineAdapter(BasePlatformAdapter):
+    async def _keep_typing(self, chat_id: str, *args, **kwargs) -> None:
+
+        if self.slow_response_threshold <= 0:
+            await super()._keep_typing(chat_id, *args, **kwargs)
+
+            return
+
+        async def _fire_at_threshold() -> None:
+
+            try:
+                await asyncio.sleep(self.slow_response_threshold)
+
+            except asyncio.CancelledError:
+                raise
+
+            # 平台专属操作 — 对于 LINE，使用缓存的回复 token 发送
+
+            # Template Buttons "获取答案"气泡，用户可通过 postback
+
+            # 回调中的新（免费）回复 token 稍后获取缓存的响应。
+
+            await self._send_slow_response_button(chat_id)
+
+        side_task = asyncio.create_task(_fire_at_threshold())
+
+        try:
+            await super()._keep_typing(chat_id, *args, **kwargs)
+
+        finally:
+            if not side_task.done():
+                side_task.cancel()
+
+                try:
+                    await side_task
+
+                except (asyncio.CancelledError, Exception):
+                    pass
 ```
 
 关键点：
@@ -417,15 +468,19 @@ class LineAdapter(BasePlatformAdapter):
 2. **系统忙碌确认**（`⚡ Interrupting`、`⏳ Queued`、`⏩ Steered`）→ 绕过缓存直接发送，使用户看到 gateway 对其输入的响应。
 3. **正常响应** → 按常规通过回复 token 或 Push 发送。
 
-```python
-async def send(self, chat_id: str, content: str, **kw) -> SendResult:
-    if _is_system_bypass(content):
-        return await self._send_text_chunks(chat_id, content, force_push=False)
-    pending_rid = self._pending_buttons.get(chat_id)
-    if pending_rid:
-        self._cache.set_ready(pending_rid, content)
-        return SendResult(success=True, message_id=pending_rid)
-    return await self._send_text_chunks(chat_id, content, force_push=False)
+```pythonasync def send(self, chat_id: str, content: str, **kw) -> SendResult:
+
+    if _is_system_bypass(content):
+        return await self._send_text_chunks(chat_id, content, force_push=False)
+
+    pending_rid = self._pending_buttons.get(chat_id)
+
+    if pending_rid:
+        self._cache.set_ready(pending_rid, content)
+
+        return SendResult(success=True, message_id=pending_rid)
+
+    return await self._send_text_chunks(chat_id, content, force_push=False)
 ```
 
 `_SYSTEM_BYPASS_PREFIXES` 是 gateway 自身的忙碌确认前缀（`⚡`、`⏳`、`⏩`、`💾`）。无论缓存 UX 状态如何，始终让这些前缀可见地通过。
@@ -464,67 +519,86 @@ LINE 两者都支持：阈值默认为 45 秒用于免费 postback 获取，`LIN
 
 在 `gateway/config.py` 的 `Platform` 枚举中添加你的平台：
 
-```python
-class Platform(str, Enum):
-    # ... 现有平台 ...
-    NEWPLAT = "newplat"
+```pythonclass Platform(str, Enum):
+    # ... 现有平台 ...
+
+    NEWPLAT = "newplat"
 ```
 
 ### 2. 适配器文件
 
 创建 `gateway/platforms/newplat.py`：
 
-```python
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import (
-    BasePlatformAdapter, MessageEvent, MessageType, SendResult,
-)
-
-def check_newplat_requirements() -> bool:
-    """如果依赖可用则返回 True。"""
-    return SOME_SDK_AVAILABLE
-
-class NewPlatAdapter(BasePlatformAdapter):
-    def __init__(self, config: PlatformConfig):
-        super().__init__(config, Platform.NEWPLAT)
-        # 从 config.extra 字典读取配置
-        extra = config.extra or {}
-        self._api_key = extra.get("api_key") or os.getenv("NEWPLAT_API_KEY", "")
-
-    async def connect(self) -> bool:
-        # 建立连接，启动轮询/webhook
-        self._mark_connected()
-        return True
-
-    async def disconnect(self) -> None:
-        self._running = False
-        self._mark_disconnected()
-
-    async def send(self, chat_id, content, reply_to=None, metadata=None):
-        # 通过平台 API 发送消息
-        return SendResult(success=True, message_id="...")
-
-    async def get_chat_info(self, chat_id):
-        return {"name": chat_id, "type": "dm"}
+```pythonfrom gateway.config import Platform, PlatformConfig
+
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
+
+
+def check_newplat_requirements() -> bool:
+    """如果依赖可用则返回 True。"""
+
+    return SOME_SDK_AVAILABLE
+
+
+class NewPlatAdapter(BasePlatformAdapter):
+    def __init__(self, config: PlatformConfig):
+
+        super().__init__(config, Platform.NEWPLAT)
+
+        # 从 config.extra 字典读取配置
+
+        extra = config.extra or {}
+
+        self._api_key = extra.get("api_key") or os.getenv("NEWPLAT_API_KEY", "")
+
+    async def connect(self) -> bool:
+
+        # 建立连接，启动轮询/webhook
+
+        self._mark_connected()
+
+        return True
+
+    async def disconnect(self) -> None:
+
+        self._running = False
+
+        self._mark_disconnected()
+
+    async def send(self, chat_id, content, reply_to=None, metadata=None):
+
+        # 通过平台 API 发送消息
+
+        return SendResult(success=True, message_id="...")
+
+    async def get_chat_info(self, chat_id):
+
+        return {"name": chat_id, "type": "dm"}
 ```
 
 对于入站消息，构建 `MessageEvent` 并调用 `self.handle_message(event)`：
 
-```python
-source = self.build_source(
-    chat_id=chat_id,
-    chat_name=name,
-    chat_type="dm",  # 或 "group"
-    user_id=user_id,
-    user_name=user_name,
-)
-event = MessageEvent(
-    text=content,
-    message_type=MessageType.TEXT,
-    source=source,
-    message_id=msg_id,
-)
-await self.handle_message(event)
+```pythonsource = self.build_source(
+    chat_id=chat_id,
+    chat_name=name,
+    chat_type="dm",  # 或 "group"
+    user_id=user_id,
+    user_name=user_name,
+)
+
+event = MessageEvent(
+    text=content,
+    message_type=MessageType.TEXT,
+    source=source,
+    message_id=msg_id,
+)
+
+await self.handle_message(event)
 ```
 
 ### 3. Gateway 配置（`gateway/config.py`）
@@ -574,14 +648,13 @@ await self.handle_message(event)
 
 **`agent/prompt_builder.py`** — 如果你的平台有特定渲染限制（不支持 markdown、消息长度限制等），在 `_PLATFORM_HINTS` 字典中添加条目。这会将平台专属指导注入系统 prompt：
 
-```python
-_PLATFORM_HINTS = {
-    # ...
-    "newplat": (
-        "You are chatting via NewPlat. It supports markdown formatting "
-        "but has a 4000-character message limit."
-    ),
-}
+```python_PLATFORM_HINTS = {
+    # ...
+    "newplat": (
+        "You are chatting via NewPlat. It supports markdown formatting "
+        "but has a 4000-character message limit."
+    ),
+}
 ```
 
 并非所有平台都需要提示 — 仅在 agent 行为应有所不同时添加。
@@ -630,33 +703,44 @@ search_files "newplat" output_mode="files_only" file_glob="*.py"
 
 如果你的适配器使用长轮询（如 Telegram 或 Weixin），使用轮询循环任务：
 
-```python
-async def connect(self):
-    self._poll_task = asyncio.create_task(self._poll_loop())
-    self._mark_connected()
-
-async def _poll_loop(self):
-    while self._running:
-        messages = await self._fetch_updates()
-        for msg in messages:
-            await self.handle_message(self._build_event(msg))
+```pythonasync def connect(self):
+
+    self._poll_task = asyncio.create_task(self._poll_loop())
+
+    self._mark_connected()
+
+
+async def _poll_loop(self):
+
+    while self._running:
+        messages = await self._fetch_updates()
+
+        for msg in messages:
+            await self.handle_message(self._build_event(msg))
 ```
 
 ### 回调/Webhook 适配器
 
 如果平台将消息推送到你的端点（如 WeCom 回调），运行 HTTP 服务器：
 
-```python
-async def connect(self):
-    self._app = web.Application()
-    self._app.router.add_post("/callback", self._handle_callback)
-    # ... 启动 aiohttp 服务器
-    self._mark_connected()
-
-async def _handle_callback(self, request):
-    event = self._build_event(await request.text())
-    await self._message_queue.put(event)
-    return web.Response(text="success")  # 立即确认
+```pythonasync def connect(self):
+
+    self._app = web.Application()
+
+    self._app.router.add_post("/callback", self._handle_callback)
+
+    # ... 启动 aiohttp 服务器
+
+    self._mark_connected()
+
+
+async def _handle_callback(self, request):
+
+    event = self._build_event(await request.text())
+
+    await self._message_queue.put(event)
+
+    return web.Response(text="success")  # 立即确认
 ```
 
 对于有严格响应截止时间的平台（例如 WeCom 的 5 秒限制），始终立即确认，稍后通过 API 主动投递 agent 的回复。Agent 会话运行 3–30 分钟 — 在回调响应窗口内内联回复是不可行的。
@@ -665,17 +749,22 @@ async def _handle_callback(self, request):
 
 如果适配器持有带唯一凭据的持久连接，添加作用域锁以防止两个配置文件使用相同凭据：
 
-```python
-from gateway.status import acquire_scoped_lock, release_scoped_lock
-
-async def connect(self):
-    if not acquire_scoped_lock("newplat", self._token):
-        logger.error("Token already in use by another profile")
-        return False
-    # ... 连接
-
-async def disconnect(self):
-    release_scoped_lock("newplat", self._token)
+```pythonfrom gateway.status import acquire_scoped_lock, release_scoped_lock
+
+
+async def connect(self):
+
+    if not acquire_scoped_lock("newplat", self._token):
+        logger.error("Token already in use by another profile")
+
+        return False
+
+    # ... 连接
+
+
+async def disconnect(self):
+
+    release_scoped_lock("newplat", self._token)
 ```
 
 ## 参考实现

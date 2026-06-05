@@ -68,45 +68,57 @@ modal setup  # Opens browser for authentication
 
 ### Hello World with GPU
 
-```python
-import modal
-
-app = modal.App("hello-gpu")
-
-@app.function(gpu="T4")
-def gpu_info():
-    import subprocess
-    return subprocess.run(["nvidia-smi"], capture_output=True, text=True).stdout
-
-@app.local_entrypoint()
-def main():
-    print(gpu_info.remote())
+```pythonimport modal
+
+
+app = modal.App("hello-gpu")
+
+
+@app.function(gpu="T4")
+def gpu_info():
+
+    import subprocess
+
+    return subprocess.run(["nvidia-smi"], capture_output=True, text=True).stdout
+
+
+@app.local_entrypoint()
+def main():
+
+    print(gpu_info.remote())
 ```
 
 Run: `modal run hello_gpu.py`
 
 ### Basic inference endpoint
 
-```python
-import modal
-
-app = modal.App("text-generation")
-image = modal.Image.debian_slim().pip_install("transformers", "torch", "accelerate")
-
-@app.cls(gpu="A10G", image=image)
-class TextGenerator:
-    @modal.enter()
-    def load_model(self):
-        from transformers import pipeline
-        self.pipe = pipeline("text-generation", model="gpt2", device=0)
-
-    @modal.method()
-    def generate(self, prompt: str) -> str:
-        return self.pipe(prompt, max_length=100)[0]["generated_text"]
-
-@app.local_entrypoint()
-def main():
-    print(TextGenerator().generate.remote("Hello, world"))
+```pythonimport modal
+
+
+app = modal.App("text-generation")
+
+image = modal.Image.debian_slim().pip_install("transformers", "torch", "accelerate")
+
+
+@app.cls(gpu="A10G", image=image)
+class TextGenerator:
+    @modal.enter()
+    def load_model(self):
+
+        from transformers import pipeline
+
+        self.pipe = pipeline("text-generation", model="gpt2", device=0)
+
+    @modal.method()
+    def generate(self, prompt: str) -> str:
+
+        return self.pipe(prompt, max_length=100)[0]["generated_text"]
+
+
+@app.local_entrypoint()
+def main():
+
+    print(TextGenerator().generate.remote("Hello, world"))
 ```
 
 ## Core concepts
@@ -167,63 +179,76 @@ def main():
 
 ## Container images
 
-```python
-# Basic image with pip
-image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "torch==2.1.0", "transformers==4.36.0", "accelerate"
-)
-
-# From CUDA base
-image = modal.Image.from_registry(
-    "nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04",
-    add_python="3.11"
-).pip_install("torch", "transformers")
-
-# With system packages
-image = modal.Image.debian_slim().apt_install("git", "ffmpeg").pip_install("whisper")
+```python# Basic image with pip
+
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "torch==2.1.0", "transformers==4.36.0", "accelerate"
+)
+
+
+# From CUDA base
+
+image = modal.Image.from_registry(
+    "nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04", add_python="3.11"
+).pip_install("torch", "transformers")
+
+
+# With system packages
+
+image = modal.Image.debian_slim().apt_install("git", "ffmpeg").pip_install("whisper")
 ```
 
 ## Persistent storage
 
-```python
-volume = modal.Volume.from_name("model-cache", create_if_missing=True)
-
-@app.function(gpu="A10G", volumes={"/models": volume})
-def load_model():
-    import os
-    model_path = "/models/llama-7b"
-    if not os.path.exists(model_path):
-        model = download_model()
-        model.save_pretrained(model_path)
-        volume.commit()  # Persist changes
-    return load_from_path(model_path)
+```pythonvolume = modal.Volume.from_name("model-cache", create_if_missing=True)
+
+
+@app.function(gpu="A10G", volumes={"/models": volume})
+def load_model():
+
+    import os
+
+    model_path = "/models/llama-7b"
+
+    if not os.path.exists(model_path):
+        model = download_model()
+
+        model.save_pretrained(model_path)
+
+        volume.commit()  # Persist changes
+
+    return load_from_path(model_path)
 ```
 
 ## Web endpoints
 
 ### FastAPI endpoint decorator
 
-```python
-@app.function()
-@modal.fastapi_endpoint(method="POST")
-def predict(text: str) -> dict:
-    return {"result": model.predict(text)}
+```python@app.function()
+@modal.fastapi_endpoint(method="POST")
+def predict(text: str) -> dict:
+
+    return {"result": model.predict(text)}
 ```
 
 ### Full ASGI app
 
-```python
-from fastapi import FastAPI
-web_app = FastAPI()
-
-@web_app.post("/predict")
-async def predict(text: str):
-    return {"result": await model.predict.remote.aio(text)}
-
-@app.function()
-@modal.asgi_app()
-def fastapi_app():
-    return web_app
+```pythonfrom fastapi import FastAPI
+
+web_app = FastAPI()
+
+
+@web_app.post("/predict")
+async def predict(text: str):
+
+    return {"result": await model.predict.remote.aio(text)}
+
+
+@app.function()
+@modal.asgi_app()
+def fastapi_app():
+
+    return web_app
 ```
 
 ### Web endpoint types
@@ -237,12 +262,13 @@ def fastapi_app():
 
 ## Dynamic batching
 
-```python
-@app.function()
-@modal.batched(max_batch_size=32, wait_ms=100)
-async def batch_predict(inputs: list[str]) -> list[dict]:
-    # Inputs automatically batched
-    return model.batch_predict(inputs)
+```python@app.function()
+@modal.batched(max_batch_size=32, wait_ms=100)
+async def batch_predict(inputs: list[str]) -> list[dict]:
+
+    # Inputs automatically batched
+
+    return model.batch_predict(inputs)
 ```
 
 ## Secrets management
@@ -252,92 +278,103 @@ async def batch_predict(inputs: list[str]) -> list[dict]:
 modal secret create huggingface HF_TOKEN=hf_xxx
 ```
 
-```python
-@app.function(secrets=[modal.Secret.from_name("huggingface")])
-def download_model():
-    import os
-    token = os.environ["HF_TOKEN"]
+```python@app.function(secrets=[modal.Secret.from_name("huggingface")])
+def download_model():
+
+    import os
+
+    token = os.environ["HF_TOKEN"]
 ```
 
 ## Scheduling
 
-```python
-@app.function(schedule=modal.Cron("0 0 * * *"))  # Daily midnight
-def daily_job():
-    pass
-
-@app.function(schedule=modal.Period(hours=1))
-def hourly_job():
-    pass
+```python@app.function(schedule=modal.Cron("0 0 * * *"))  # Daily midnight
+def daily_job():
+
+    pass
+
+
+@app.function(schedule=modal.Period(hours=1))
+def hourly_job():
+
+    pass
 ```
 
 ## Performance optimization
 
 ### Cold start mitigation
 
-```python
-@app.function(
-    container_idle_timeout=300,  # Keep warm 5 min
-    allow_concurrent_inputs=10,  # Handle concurrent requests
-)
-def inference():
-    pass
+```python@app.function(
+    container_idle_timeout=300,  # Keep warm 5 min
+    allow_concurrent_inputs=10,  # Handle concurrent requests
+)
+def inference():
+
+    pass
 ```
 
 ### Model loading best practices
 
-```python
-@app.cls(gpu="A100")
-class Model:
-    @modal.enter()  # Run once at container start
-    def load(self):
-        self.model = load_model()  # Load during warm-up
-
-    @modal.method()
-    def predict(self, x):
-        return self.model(x)
+```python@app.cls(gpu="A100")
+class Model:
+    @modal.enter()  # Run once at container start
+    def load(self):
+
+        self.model = load_model()  # Load during warm-up
+
+    @modal.method()
+    def predict(self, x):
+
+        return self.model(x)
 ```
 
 ## Parallel processing
 
-```python
-@app.function()
-def process_item(item):
-    return expensive_computation(item)
-
-@app.function()
-def run_parallel():
-    items = list(range(1000))
-    # Fan out to parallel containers
-    results = list(process_item.map(items))
-    return results
+```python@app.function()
+def process_item(item):
+
+    return expensive_computation(item)
+
+
+@app.function()
+def run_parallel():
+
+    items = list(range(1000))
+
+    # Fan out to parallel containers
+
+    results = list(process_item.map(items))
+
+    return results
 ```
 
 ## Common configuration
 
-```python
-@app.function(
-    gpu="A100",
-    memory=32768,              # 32GB RAM
-    cpu=4,                     # 4 CPU cores
-    timeout=3600,              # 1 hour max
-    container_idle_timeout=120,# Keep warm 2 min
-    retries=3,                 # Retry on failure
-    concurrency_limit=10,      # Max concurrent containers
-)
-def my_function():
-    pass
+```python@app.function(
+    gpu="A100",
+    memory=32768,  # 32GB RAM
+    cpu=4,  # 4 CPU cores
+    timeout=3600,  # 1 hour max
+    container_idle_timeout=120,  # Keep warm 2 min
+    retries=3,  # Retry on failure
+    concurrency_limit=10,  # Max concurrent containers
+)
+def my_function():
+
+    pass
 ```
 
 ## Debugging
 
-```python
-# Test locally
-if __name__ == "__main__":
-    result = my_function.local()
-
-# View logs
-# modal app logs my-app
+```python# Test locally
+
+if __name__ == "__main__":
+    result = my_function.local()
+
+
+# View logs
+
+# modal app logs my-app
 ```
 
 ## Common issues

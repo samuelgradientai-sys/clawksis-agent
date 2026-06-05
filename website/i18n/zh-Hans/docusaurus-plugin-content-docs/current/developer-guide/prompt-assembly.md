@@ -120,16 +120,23 @@ renderable inside a terminal.
 
 `SOUL.md` 位于 `~/.clawksis/SOUL.md`，作为 agent 的身份标识——系统 prompt 的第一个部分。`prompt_builder.py` 中的加载逻辑如下：
 
-```python
-# From agent/prompt_builder.py (simplified)
-def load_soul_md() -> Optional[str]:
-    soul_path = get_clawk_home() / "SOUL.md"
-    if not soul_path.exists():
-        return None
-    content = soul_path.read_text(encoding="utf-8").strip()
-    content = _scan_context_content(content, "SOUL.md")  # Security scan
-    content = _truncate_content(content, "SOUL.md")       # Cap at 20k chars
-    return content
+```python# From agent/prompt_builder.py (simplified)
+
+
+def load_soul_md() -> Optional[str]:
+
+    soul_path = get_clawk_home() / "SOUL.md"
+
+    if not soul_path.exists():
+        return None
+
+    content = soul_path.read_text(encoding="utf-8").strip()
+
+    content = _scan_context_content(content, "SOUL.md")  # Security scan
+
+    content = _truncate_content(content, "SOUL.md")  # Cap at 20k chars
+
+    return content
 ```
 
 当 `load_soul_md()` 返回内容时，它会替换硬编码的 `DEFAULT_AGENT_IDENTITY`。随后调用 `build_context_files_prompt()` 时传入 `skip_soul=True`，以防止 SOUL.md 出现两次（一次作为身份，一次作为上下文文件）。
@@ -150,38 +157,43 @@ Be targeted and efficient in your exploration and investigations.
 
 `build_context_files_prompt()` 使用**优先级系统**——只加载一种项目上下文类型（先匹配先赢）：
 
-```python
-# From agent/prompt_builder.py (simplified)
-def build_context_files_prompt(cwd=None, skip_soul=False):
-    cwd_path = Path(cwd).resolve()
-
-    # Priority: first match wins — only ONE project context loaded
-    project_context = (
-        _load_clawk_md(cwd_path)       # 1. .clawk.md / HERMES.md (walks to git root)
-        or _load_agents_md(cwd_path)    # 2. AGENTS.md (cwd only)
-        or _load_claude_md(cwd_path)    # 3. CLAUDE.md (cwd only)
-        or _load_cursorrules(cwd_path)  # 4. .cursorrules / .cursor/rules/*.mdc
-    )
-
-    sections = []
-    if project_context:
-        sections.append(project_context)
-
-    # SOUL.md from CLAWK_HOME (independent of project context)
-    if not skip_soul:
-        soul_content = load_soul_md()
-        if soul_content:
-            sections.append(soul_content)
-
-    if not sections:
-        return ""
-
-    return (
-        "# Project Context\n\n"
-        "The following project context files have been loaded "
-        "and should be followed:\n\n"
-        + "\n".join(sections)
-    )
+```python# From agent/prompt_builder.py (simplified)
+
+
+def build_context_files_prompt(cwd=None, skip_soul=False):
+
+    cwd_path = Path(cwd).resolve()
+
+    # Priority: first match wins — only ONE project context loaded
+
+    project_context = (
+        _load_clawk_md(cwd_path)  # 1. .clawk.md / HERMES.md (walks to git root)
+        or _load_agents_md(cwd_path)  # 2. AGENTS.md (cwd only)
+        or _load_claude_md(cwd_path)  # 3. CLAUDE.md (cwd only)
+        or _load_cursorrules(cwd_path)  # 4. .cursorrules / .cursor/rules/*.mdc
+    )
+
+    sections = []
+
+    if project_context:
+        sections.append(project_context)
+
+    # SOUL.md from CLAWK_HOME (independent of project context)
+
+    if not skip_soul:
+        soul_content = load_soul_md()
+
+        if soul_content:
+            sections.append(soul_content)
+
+    if not sections:
+        return ""
+
+    return (
+        "# Project Context\n\n"
+        "The following project context files have been loaded "
+        "and should be followed:\n\n" + "\n".join(sections)
+    )
 ```
 
 ### 上下文文件发现详情

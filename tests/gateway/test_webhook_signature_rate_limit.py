@@ -48,9 +48,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 SIMPLE_PAYLOAD = {"event": "test", "data": "hello"}

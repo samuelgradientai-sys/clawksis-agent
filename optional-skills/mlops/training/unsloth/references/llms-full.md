@@ -1032,23 +1032,37 @@ wget -qO- https://raw.githubusercontent.com/unslothai/unsloth/main/unsloth/_auto
 Or, run the below manually in a Python REPL:
 
 ```python
-try: import torch
-except: raise ImportError('Install torch via `pip install torch`')
+try:
+    import torch
+except:
+    raise ImportError("Install torch via `pip install torch`")
 from packaging.version import Version as V
+
 v = V(torch.__version__)
 cuda = str(torch.version.cuda)
 is_ampere = torch.cuda.get_device_capability()[0] >= 8
-if cuda != "12.1" and cuda != "11.8" and cuda != "12.4": raise RuntimeError(f"CUDA = {cuda} not supported!")
-if   v <= V('2.1.0'): raise RuntimeError(f"Torch = {v} too old!")
-elif v <= V('2.1.1'): x = 'cu{}{}-torch211'
-elif v <= V('2.1.2'): x = 'cu{}{}-torch212'
-elif v  < V('2.3.0'): x = 'cu{}{}-torch220'
-elif v  < V('2.4.0'): x = 'cu{}{}-torch230'
-elif v  < V('2.5.0'): x = 'cu{}{}-torch240'
-elif v  < V('2.6.0'): x = 'cu{}{}-torch250'
-else: raise RuntimeError(f"Torch = {v} too new!")
+if cuda != "12.1" and cuda != "11.8" and cuda != "12.4":
+    raise RuntimeError(f"CUDA = {cuda} not supported!")
+if v <= V("2.1.0"):
+    raise RuntimeError(f"Torch = {v} too old!")
+elif v <= V("2.1.1"):
+    x = "cu{}{}-torch211"
+elif v <= V("2.1.2"):
+    x = "cu{}{}-torch212"
+elif v < V("2.3.0"):
+    x = "cu{}{}-torch220"
+elif v < V("2.4.0"):
+    x = "cu{}{}-torch230"
+elif v < V("2.5.0"):
+    x = "cu{}{}-torch240"
+elif v < V("2.6.0"):
+    x = "cu{}{}-torch250"
+else:
+    raise RuntimeError(f"Torch = {v} too new!")
 x = x.format(cuda.replace(".", ""), "-ampere" if is_ampere else "")
-print(f'pip install --upgrade pip && pip install "unsloth[{x}] @ git+https://github.com/unslothai/unsloth.git"')
+print(
+    f'pip install --upgrade pip && pip install "unsloth[{x}] @ git+https://github.com/unslothai/unsloth.git"'
+)
 ```
 
 
@@ -1676,58 +1690,65 @@ from unsloth import FastLanguageModel, FastModel
 import torch
 from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
-max_seq_length = 2048 # Supports RoPE Scaling internally, so choose any!
+
+max_seq_length = 2048  # Supports RoPE Scaling internally, so choose any!
 # Get LAION dataset
 url = "https://huggingface.co/datasets/laion/OIG/resolve/main/unified_chip2.jsonl"
-dataset = load_dataset("json", data_files = {"train" : url}, split = "train")
+dataset = load_dataset("json", data_files={"train": url}, split="train")
 
 # 4bit pre quantized models we support for 4x faster downloading + no OOMs.
 fourbit_models = [
-    "unsloth/gpt-oss-20b-unsloth-bnb-4bit", #or choose any model
-
-] # More models at https://huggingface.co/unsloth
+    "unsloth/gpt-oss-20b-unsloth-bnb-4bit",  # or choose any model
+]  # More models at https://huggingface.co/unsloth
 
 model, tokenizer = FastModel.from_pretrained(
-    model_name = "unsloth/gpt-oss-20b",
-    max_seq_length = 2048, # Choose any for long context!
-    load_in_4bit = True,  # 4-bit quantization. False = 16-bit LoRA.
-    load_in_8bit = False, # 8-bit quantization
-    load_in_16bit = False, # [NEW!] 16-bit LoRA
-    full_finetuning = False, # Use for full fine-tuning.
+    model_name="unsloth/gpt-oss-20b",
+    max_seq_length=2048,  # Choose any for long context!
+    load_in_4bit=True,  # 4-bit quantization. False = 16-bit LoRA.
+    load_in_8bit=False,  # 8-bit quantization
+    load_in_16bit=False,  # [NEW!] 16-bit LoRA
+    full_finetuning=False,  # Use for full fine-tuning.
     # token = "hf_...", # use one if using gated models
 )
 
 # Do model patching and add fast LoRA weights
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    max_seq_length = max_seq_length,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    max_seq_length=max_seq_length,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
 )
 
 trainer = SFTTrainer(
-    model = model,
-    train_dataset = dataset,
-    tokenizer = tokenizer,
-    args = SFTConfig(
-        max_seq_length = max_seq_length,
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 10,
-        max_steps = 60,
-        logging_steps = 1,
-        output_dir = "outputs",
-        optim = "adamw_8bit",
-        seed = 3407,
+    model=model,
+    train_dataset=dataset,
+    tokenizer=tokenizer,
+    args=SFTConfig(
+        max_seq_length=max_seq_length,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=10,
+        max_steps=60,
+        logging_steps=1,
+        output_dir="outputs",
+        optim="adamw_8bit",
+        seed=3407,
     ),
 )
 trainer.train()
@@ -2381,12 +2402,14 @@ To format the dataset, all vision finetuning tasks should be formatted as follow
 
 ```python
 [
-{ "role": "user",
-  "content": [{"type": "text",  "text": instruction}, {"type": "image", "image": image} ]
-},
-{ "role": "assistant",
-  "content": [{"type": "text",  "text": answer} ]
-},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image", "image": image},
+        ],
+    },
+    {"role": "assistant", "content": [{"type": "text", "text": answer}]},
 ]
 ```
 

@@ -60,11 +60,14 @@ Agent 使用 `memory` 工具执行以下操作：
 
 `replace` 和 `remove` 操作使用简短的唯一子字符串匹配——不需要完整的条目文本。`old_text` 参数只需是能唯一标识某一条目的子字符串即可：
 
-```python
-# If memory contains "User prefers dark mode in all editors"
-memory(action="replace", target="memory",
-       old_text="dark mode",
-       content="User prefers light mode in VS Code, dark mode in terminal")
+```python# If memory contains "User prefers dark mode in all editors"
+
+memory(
+    action="replace",
+    target="memory",
+    old_text="dark mode",
+    content="User prefers light mode in VS Code, dark mode in terminal",
+)
 ```
 
 如果子字符串匹配到多个条目，则返回错误，要求提供更具体的匹配内容。

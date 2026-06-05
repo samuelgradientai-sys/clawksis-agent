@@ -67,9 +67,7 @@ def _unsign(secret: bytes, token: str):
     try:
         blob = base64.urlsafe_b64decode(token.encode())
         raw, sig = blob[:-32], blob[-32:]
-        if not hmac.compare_digest(
-            sig, hmac.new(secret, raw, hashlib.sha256).digest()
-        ):
+        if not hmac.compare_digest(sig, hmac.new(secret, raw, hashlib.sha256).digest()):
             return None
         return json.loads(raw)
     except Exception:
@@ -116,9 +114,14 @@ class PasswordProvider(DashboardAuthProvider):
         if not p or p.get("kind") != "access" or p["exp"] <= int(time.time()):
             return None
         return Session(
-            user_id=p["sub"], email="", display_name=p["sub"], org_id="",
-            provider=self.name, expires_at=p["exp"],
-            access_token=access_token, refresh_token="",
+            user_id=p["sub"],
+            email="",
+            display_name=p["sub"],
+            org_id="",
+            provider=self.name,
+            expires_at=p["exp"],
+            access_token=access_token,
+            refresh_token="",
         )
 
     def refresh_session(self, *, refresh_token: str) -> Session:
@@ -129,8 +132,12 @@ class PasswordProvider(DashboardAuthProvider):
             raise RefreshExpiredError("dead rt")
         exp = int(time.time()) + self._ttl
         return Session(
-            user_id=p["sub"], email="", display_name=p["sub"], org_id="",
-            provider=self.name, expires_at=exp,
+            user_id=p["sub"],
+            email="",
+            display_name=p["sub"],
+            org_id="",
+            provider=self.name,
+            expires_at=exp,
             access_token=_sign(self._secret, p["sub"], "access", self._ttl),
             refresh_token=_sign(self._secret, p["sub"], "refresh", 30 * 86400),
         )
@@ -186,9 +193,7 @@ class TestProtocolExtension:
         # A provider that doesn't override the method (the Stub) raises,
         # rather than silently accepting any credentials.
         with pytest.raises(NotImplementedError):
-            StubAuthProvider().complete_password_login(
-                username="x", password="y"
-            )
+            StubAuthProvider().complete_password_login(username="x", password="y")
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +214,7 @@ class TestProviderListFlag:
         prev = getattr(web_server.app.state, "auth_required", None)
         web_server.app.state.auth_required = True
         try:
-            client = TestClient(
-                web_server.app, base_url="https://fly-app.fly.dev"
-            )
+            client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
             resp = client.get("/api/auth/providers")
             prov = {p["name"]: p for p in resp.json()["providers"]}
             assert prov["stub"]["supports_password"] is False
@@ -226,9 +229,7 @@ class TestProviderListFlag:
 
 
 class TestPasswordLoginRoute:
-    def test_valid_credentials_set_session_cookies_and_return_next(
-        self, gated_app
-    ):
+    def test_valid_credentials_set_session_cookies_and_return_next(self, gated_app):
         resp = gated_app.post(
             "/auth/password-login",
             json={
@@ -294,9 +295,7 @@ class TestPasswordLoginRoute:
         prev = getattr(web_server.app.state, "auth_required", None)
         web_server.app.state.auth_required = True
         try:
-            client = TestClient(
-                web_server.app, base_url="https://fly-app.fly.dev"
-            )
+            client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
             resp = client.post(
                 "/auth/password-login",
                 json={"provider": "stub", "username": "x", "password": "y"},
@@ -356,9 +355,7 @@ class TestPasswordSessionRefresh:
         prev = getattr(web_server.app.state, "auth_required", None)
         web_server.app.state.auth_required = True
         try:
-            client = TestClient(
-                web_server.app, base_url="https://fly-app.fly.dev"
-            )
+            client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
             login = client.post(
                 "/auth/password-login",
                 json={"provider": "testpw", "username": "admin", "password": "hunter2"},

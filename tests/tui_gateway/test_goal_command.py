@@ -16,10 +16,7 @@ uses to render a system line and fire the kickoff prompt.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import importlib
@@ -31,15 +28,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture()
-
 def clawk_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -50,13 +42,9 @@ def clawk_home(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     # Bust the goal-module DB cache so it re-resolves CLAWK_HOME.
 
     from clawk_cli import goals
-
-
 
     goals._DB_CACHE.clear()
 
@@ -65,27 +53,16 @@ def clawk_home(tmp_path, monkeypatch):
     goals._DB_CACHE.clear()
 
 
-
-
-
 @pytest.fixture()
-
 def server(clawk_home):
 
     with patch.dict(
-
         "sys.modules",
-
         {
-
             "clawk_cli.env_loader": MagicMock(),
-
             "clawk_cli.banner": MagicMock(),
-
         },
-
     ):
-
         mod = importlib.import_module("tui_gateway.server")
 
         yield mod
@@ -113,11 +90,7 @@ def server(clawk_home):
         mod._answers.clear()
 
 
-
-
-
 @pytest.fixture()
-
 def session(server):
 
     sid = "sid-test"
@@ -125,29 +98,18 @@ def session(server):
     session_key = "tui-goal-session-1"
 
     s = {
-
         "session_key": session_key,
-
         "history": [],
-
         "history_lock": threading.Lock(),
-
         "history_version": 0,
-
         "running": False,
-
         "attached_images": [],
-
         "cols": 120,
-
     }
 
     server._sessions[sid] = s
 
     return sid, session_key, s
-
-
-
 
 
 def _call(server, method, **params):
@@ -157,13 +119,7 @@ def _call(server, method, **params):
     return handler(1, params)
 
 
-
-
-
 # ── command.dispatch /goal ────────────────────────────────────────────
-
-
-
 
 
 def test_goal_bare_shows_status_when_none_set(server, session):
@@ -177,9 +133,6 @@ def test_goal_bare_shows_status_when_none_set(server, session):
     assert "No active goal" in r["result"]["output"]
 
 
-
-
-
 def test_goal_whitespace_only_shows_status(server, session):
 
     sid, _, _ = session
@@ -189,9 +142,6 @@ def test_goal_whitespace_only_shows_status(server, session):
     assert r["result"]["type"] == "exec"
 
     assert "No active goal" in r["result"]["output"]
-
-
-
 
 
 def test_goal_status_alias_shows_status(server, session):
@@ -205,14 +155,13 @@ def test_goal_status_alias_shows_status(server, session):
     assert "No active goal" in r["result"]["output"]
 
 
-
-
-
 def test_goal_set_returns_send_with_notice(server, session):
 
     sid, session_key, _ = session
 
-    r = _call(server, "command.dispatch", name="goal", arg="build a rocket", session_id=sid)
+    r = _call(
+        server, "command.dispatch", name="goal", arg="build a rocket", session_id=sid
+    )
 
     result = r["result"]
 
@@ -226,13 +175,9 @@ def test_goal_set_returns_send_with_notice(server, session):
 
     assert "20-turn budget" in result["notice"]
 
-
-
     # Persisted in SessionDB
 
     from clawk_cli.goals import GoalManager
-
-
 
     mgr = GoalManager(session_key)
 
@@ -241,9 +186,6 @@ def test_goal_set_returns_send_with_notice(server, session):
     assert mgr.state.goal == "build a rocket"
 
     assert mgr.state.status == "active"
-
-
-
 
 
 def test_goal_pause_after_set(server, session):
@@ -258,16 +200,9 @@ def test_goal_pause_after_set(server, session):
 
     assert "paused" in r["result"]["output"].lower()
 
-
-
     from clawk_cli.goals import GoalManager
 
-
-
     assert GoalManager(session_key).state.status == "paused"
-
-
-
 
 
 def test_goal_resume_reactivates(server, session):
@@ -284,16 +219,9 @@ def test_goal_resume_reactivates(server, session):
 
     assert "resumed" in r["result"]["output"].lower()
 
-
-
     from clawk_cli.goals import GoalManager
 
-
-
     assert GoalManager(session_key).state.status == "active"
-
-
-
 
 
 def test_goal_clear_removes_active_goal(server, session):
@@ -308,11 +236,7 @@ def test_goal_clear_removes_active_goal(server, session):
 
     assert "cleared" in r["result"]["output"].lower()
 
-
-
     from clawk_cli.goals import GoalManager
-
-
 
     # After clear the row is marked status=cleared (kept for audit);
 
@@ -329,9 +253,6 @@ def test_goal_clear_removes_active_goal(server, session):
     assert "No active goal" in mgr.status_line()
 
 
-
-
-
 def test_goal_stop_and_done_are_clear_aliases(server, session):
 
     sid, _, _ = session
@@ -342,16 +263,11 @@ def test_goal_stop_and_done_are_clear_aliases(server, session):
 
     assert "cleared" in r["result"]["output"].lower()
 
-
-
     _call(server, "command.dispatch", name="goal", arg="second goal", session_id=sid)
 
     r = _call(server, "command.dispatch", name="goal", arg="done", session_id=sid)
 
     assert "cleared" in r["result"]["output"].lower()
-
-
-
 
 
 def test_goal_requires_session(server):
@@ -363,17 +279,10 @@ def test_goal_requires_session(server):
     assert r["error"]["code"] == 4001
 
 
-
-
-
 # ── slash.exec /goal routing ──────────────────────────────────────────
 
 
-
-
-
 def test_slash_exec_rejects_goal_routes_to_command_dispatch(server, session):
-
     """slash.exec must reject /goal with 4018 so the TUI client falls through
 
     to command.dispatch. Without this, the ClawksisCLI slash-worker subprocess
@@ -391,14 +300,9 @@ def test_slash_exec_rejects_goal_routes_to_command_dispatch(server, session):
     assert "command.dispatch" in r["error"]["message"]
 
 
-
-
-
 def test_pending_input_commands_includes_goal(server):
-
     """Guard: _PENDING_INPUT_COMMANDS must list 'goal' — removing it would
 
     silently re-break the TUI."""
 
     assert "goal" in server._PENDING_INPUT_COMMANDS
-

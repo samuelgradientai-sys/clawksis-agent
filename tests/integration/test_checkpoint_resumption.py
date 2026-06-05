@@ -19,6 +19,7 @@ Usage:
 """
 
 import pytest
+
 pytestmark = pytest.mark.integration
 
 import json
@@ -37,73 +38,83 @@ def create_test_dataset(num_prompts: int = 20) -> Path:
     """Create a small test dataset for checkpoint testing."""
     test_data_dir = Path("tests/test_data")
     test_data_dir.mkdir(parents=True, exist_ok=True)
-    
+
     dataset_file = test_data_dir / "checkpoint_test_dataset.jsonl"
-    
-    with open(dataset_file, 'w', encoding='utf-8') as f:
+
+    with open(dataset_file, "w", encoding="utf-8") as f:
         for i in range(num_prompts):
             entry = {
                 "prompt": f"Test prompt {i}: What is 2+2? Just answer briefly.",
-                "test_id": i
+                "test_id": i,
             }
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    
+
     print(f"✅ Created test dataset: {dataset_file} ({num_prompts} prompts)")
     return dataset_file
 
 
-def monitor_checkpoint_during_run(checkpoint_file: Path, duration: int = 30) -> List[Dict[str, Any]]:
+def monitor_checkpoint_during_run(
+    checkpoint_file: Path, duration: int = 30
+) -> List[Dict[str, Any]]:
     """
     Monitor checkpoint file during a batch run to see when it gets updated.
-    
+
     Args:
         checkpoint_file: Path to checkpoint file to monitor
         duration: How long to monitor (seconds)
-    
+
     Returns:
         List of checkpoint snapshots with timestamps
     """
     snapshots = []
     start_time = time.time()
     last_mtime = None
-    
+
     print(f"\n🔍 Monitoring checkpoint file: {checkpoint_file}")
     print(f"   Duration: {duration}s")
     print("-" * 70)
-    
+
     while time.time() - start_time < duration:
         if checkpoint_file.exists():
             current_mtime = checkpoint_file.stat().st_mtime
-            
+
             # Check if file was modified
             if last_mtime is None or current_mtime != last_mtime:
                 elapsed = time.time() - start_time
-                
+
                 try:
-                    with open(checkpoint_file, 'r') as f:
+                    with open(checkpoint_file, "r") as f:
                         checkpoint_data = json.load(f)
-                    
+
                     snapshot = {
                         "elapsed_seconds": round(elapsed, 2),
-                        "completed_count": len(checkpoint_data.get("completed_prompts", [])),
-                        "completed_prompts": checkpoint_data.get("completed_prompts", [])[:5],  # First 5 for display
-                        "timestamp": checkpoint_data.get("last_updated")
+                        "completed_count": len(
+                            checkpoint_data.get("completed_prompts", [])
+                        ),
+                        "completed_prompts": checkpoint_data.get(
+                            "completed_prompts", []
+                        )[:5],  # First 5 for display
+                        "timestamp": checkpoint_data.get("last_updated"),
                     }
-                    
+
                     snapshots.append(snapshot)
-                    
-                    print(f"[{elapsed:6.2f}s] Checkpoint updated: {snapshot['completed_count']} prompts completed")
-                    
+
+                    print(
+                        f"[{elapsed:6.2f}s] Checkpoint updated: {snapshot['completed_count']} prompts completed"
+                    )
+
                 except Exception as e:
                     print(f"[{elapsed:6.2f}s] Error reading checkpoint: {e}")
-                
+
                 last_mtime = current_mtime
         else:
             if len(snapshots) == 0:
-                print(f"[{time.time() - start_time:6.2f}s] Checkpoint file not yet created...")
-        
+                print(
+                    f"[{time.time() - start_time:6.2f}s] Checkpoint file not yet created..."
+                )
+
         time.sleep(0.5)  # Check every 0.5 seconds
-    
+
     return snapshots
 
 
@@ -123,21 +134,21 @@ def test_current_implementation():
     print("TEST 1: Current Implementation - Checkpoint Timing")
     print("=" * 70)
     print("\n📝 Testing whether checkpoints are saved incrementally during run...")
-    
+
     # Setup
     dataset_file = create_test_dataset(num_prompts=12)
     run_name = "checkpoint_test_current"
     output_dir = Path("data") / run_name
-    
+
     # Clean up any existing test data
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    
+
     # Import here to avoid issues if module changes
     from batch_runner import BatchRunner
-    
+
     checkpoint_file = output_dir / "checkpoint.json"
-    
+
     # Start monitoring in a separate process would be ideal, but for simplicity
     # we'll just check before and after
     print(f"\n▶️  Starting batch run...")
@@ -145,9 +156,9 @@ def test_current_implementation():
     print(f"   Batch size: 3 (4 batches total)")
     print(f"   Workers: 2")
     print(f"   Expected behavior: If incremental, checkpoint should update during run")
-    
+
     start_time = time.time()
-    
+
     try:
         runner = BatchRunner(
             dataset_file=str(dataset_file),
@@ -157,40 +168,41 @@ def test_current_implementation():
             max_iterations=3,  # Keep it short
             model="claude-opus-4-20250514",
             num_workers=2,
-            verbose=False
+            verbose=False,
         )
-        
+
         # Run with monitoring
         import threading
+
         snapshots = []
-        
+
         def monitor():
             nonlocal snapshots
             snapshots = monitor_checkpoint_during_run(checkpoint_file, duration=60)
-        
+
         monitor_thread = threading.Thread(target=monitor, daemon=True)
         monitor_thread.start()
-        
+
         runner.run(resume=False)
-        
+
         monitor_thread.join(timeout=2)
-        
+
     except Exception as e:
         print(f"❌ Error during run: {e}")
         traceback.print_exc()
         return False
     finally:
         _cleanup_test_artifacts(dataset_file, output_dir)
-    
+
     elapsed = time.time() - start_time
-    
+
     # Analyze results
     print("\n" + "=" * 70)
     print("📊 TEST RESULTS")
     print("=" * 70)
     print(f"Total run time: {elapsed:.2f}s")
     print(f"Checkpoint updates observed: {len(snapshots)}")
-    
+
     if len(snapshots) == 0:
         print("\n❌ ISSUE: No checkpoint updates observed during run")
         print("   This suggests checkpoints are only saved at the end")
@@ -202,13 +214,15 @@ def test_current_implementation():
     else:
         print(f"\n✅ GOOD: Multiple checkpoint updates ({len(snapshots)}) observed")
         print("   Checkpointing appears to be incremental")
-        
+
         # Show timeline
         print("\n📈 Checkpoint Timeline:")
         for i, snapshot in enumerate(snapshots, 1):
-            print(f"   {i}. [{snapshot['elapsed_seconds']:6.2f}s] "
-                  f"{snapshot['completed_count']} prompts completed")
-        
+            print(
+                f"   {i}. [{snapshot['elapsed_seconds']:6.2f}s] "
+                f"{snapshot['completed_count']} prompts completed"
+            )
+
         return True
 
 
@@ -218,30 +232,32 @@ def test_interruption_and_resume():
     print("TEST 2: Interruption and Resume")
     print("=" * 70)
     print("\n📝 Testing whether resume works after manual interruption...")
-    
+
     # Setup
     dataset_file = create_test_dataset(num_prompts=15)
     run_name = "checkpoint_test_resume"
     output_dir = Path("data") / run_name
-    
+
     # Clean up any existing test data
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    
+
     from batch_runner import BatchRunner
-    
+
     checkpoint_file = output_dir / "checkpoint.json"
-    
-    print(f"\n▶️  Starting first run (will process 5 prompts, then simulate interruption)...")
-    
+
+    print(
+        f"\n▶️  Starting first run (will process 5 prompts, then simulate interruption)..."
+    )
+
     temp_dataset = Path("tests/test_data/checkpoint_test_resume_partial.jsonl")
     try:
         # Create a modified dataset with only first 5 prompts for initial run
-        with open(dataset_file, 'r') as f:
+        with open(dataset_file, "r") as f:
             lines = f.readlines()[:5]
-        with open(temp_dataset, 'w') as f:
+        with open(temp_dataset, "w") as f:
             f.writelines(lines)
-        
+
         runner = BatchRunner(
             dataset_file=str(temp_dataset),
             batch_size=2,
@@ -250,25 +266,27 @@ def test_interruption_and_resume():
             max_iterations=3,
             model="claude-opus-4-20250514",
             num_workers=1,
-            verbose=False
+            verbose=False,
         )
-        
+
         runner.run(resume=False)
-        
+
         # Check checkpoint after first run
         if not checkpoint_file.exists():
             print("❌ ERROR: Checkpoint file not created after first run")
             return False
-        
-        with open(checkpoint_file, 'r') as f:
+
+        with open(checkpoint_file, "r") as f:
             checkpoint_data = json.load(f)
-        
+
         initial_completed = len(checkpoint_data.get("completed_prompts", []))
-        print(f"✅ First run completed: {initial_completed} prompts saved to checkpoint")
-        
+        print(
+            f"✅ First run completed: {initial_completed} prompts saved to checkpoint"
+        )
+
         # Now try to resume with full dataset
         print(f"\n▶️  Starting resume run with full dataset (15 prompts)...")
-        
+
         runner2 = BatchRunner(
             dataset_file=str(dataset_file),
             batch_size=2,
@@ -277,31 +295,31 @@ def test_interruption_and_resume():
             max_iterations=3,
             model="claude-opus-4-20250514",
             num_workers=1,
-            verbose=False
+            verbose=False,
         )
-        
+
         runner2.run(resume=True)
-        
+
         # Check final checkpoint
-        with open(checkpoint_file, 'r') as f:
+        with open(checkpoint_file, "r") as f:
             final_checkpoint = json.load(f)
-        
+
         final_completed = len(final_checkpoint.get("completed_prompts", []))
-        
+
         print("\n" + "=" * 70)
         print("📊 TEST RESULTS")
         print("=" * 70)
         print(f"Initial completed: {initial_completed}")
         print(f"Final completed: {final_completed}")
         print(f"Expected: 15")
-        
+
         if final_completed == 15:
             print("\n✅ PASS: Resume successfully completed all prompts")
             return True
         else:
             print(f"\n❌ FAIL: Expected 15 completed, got {final_completed}")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during test: {e}")
         traceback.print_exc()
@@ -325,7 +343,7 @@ def print_test_plan():
     print("\n" + "=" * 70)
     print("CHECKPOINT FIX - DETAILED PLAN")
     print("=" * 70)
-    
+
     print("""
 📋 PROBLEM SUMMARY
 ------------------
@@ -391,11 +409,11 @@ def main(
     test_resume: bool = False,
     test_crash: bool = False,
     compare: bool = False,
-    show_plan: bool = False
+    show_plan: bool = False,
 ):
     """
     Run checkpoint behavior tests.
-    
+
     Args:
         test_current: Test current implementation checkpoint timing
         test_resume: Test interruption and resume functionality
@@ -406,18 +424,18 @@ def main(
     if show_plan or (not any([test_current, test_resume, test_crash, compare])):
         print_test_plan()
         return
-    
+
     results = {}
-    
+
     if test_current or compare:
-        results['current'] = test_current_implementation()
-    
+        results["current"] = test_current_implementation()
+
     if test_resume or compare:
-        results['resume'] = test_interruption_and_resume()
-    
+        results["resume"] = test_interruption_and_resume()
+
     if test_crash or compare:
-        results['crash'] = test_simulated_crash()
-    
+        results["crash"] = test_simulated_crash()
+
     # Summary
     if results:
         print("\n" + "=" * 70)
@@ -435,5 +453,5 @@ def main(
 
 if __name__ == "__main__":
     import fire
-    fire.Fire(main)
 
+    fire.Fire(main)

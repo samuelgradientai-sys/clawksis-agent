@@ -7,7 +7,6 @@ finishes the interrupted work before addressing the new input.
 """
 
 
-
 def _simulate_auto_continue(agent_history: list, user_message: str) -> str:
     """Reproduce the auto-continue injection logic from _run_agent().
 
@@ -22,8 +21,7 @@ def _simulate_auto_continue(agent_history: list, user_message: str) -> str:
             "process the last tool result(s). The conversation history contains "
             "tool outputs you haven't responded to yet. Please finish processing "
             "those results and summarize what was accomplished, then address the "
-            "user's new message below.]\n\n"
-            + message
+            "user's new message below.]\n\n" + message
         )
     return message
 
@@ -34,10 +32,21 @@ class TestAutoDetection:
     def test_trailing_tool_result_triggers_note(self):
         history = [
             {"role": "user", "content": "deploy the app"},
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}
-            ]},
-            {"role": "tool", "tool_call_id": "call_1", "content": "deployed successfully"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "deployed successfully",
+            },
         ]
         result = _simulate_auto_continue(history, "what happened?")
         assert "[System note:" in result
@@ -69,10 +78,14 @@ class TestAutoDetection:
         """Multiple tool calls in a row — last one is still role=tool."""
         history = [
             {"role": "user", "content": "search and read"},
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "call_1", "function": {"name": "search", "arguments": "{}"}},
-                {"id": "call_2", "function": {"name": "read", "arguments": "{}"}},
-            ]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "call_1", "function": {"name": "search", "arguments": "{}"}},
+                    {"id": "call_2", "function": {"name": "read", "arguments": "{}"}},
+                ],
+            },
             {"role": "tool", "tool_call_id": "call_1", "content": "found it"},
             {"role": "tool", "tool_call_id": "call_2", "content": "file content here"},
         ]
@@ -82,9 +95,13 @@ class TestAutoDetection:
     def test_original_message_preserved_after_note(self):
         """The user's actual message must appear after the system note."""
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
-            ]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "done"},
         ]
         result = _simulate_auto_continue(history, "now do X")

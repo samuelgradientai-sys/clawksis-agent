@@ -339,14 +339,19 @@ When the user asks a question about the wiki's domain:
 When the user asks to lint, health-check, or audit the wiki:
 
 ① **Orphan pages:** Find pages with no inbound `[[wikilinks]]` from other pages.
-```python
-# Use execute_code for this — programmatic scan across all wiki pages
-import os, re
-from collections import defaultdict
-wiki = "<WIKI_PATH>"
-# Scan all .md files in entities/, concepts/, comparisons/, queries/
-# Extract all [[wikilinks]] — build inbound link map
-# Pages with zero inbound links are orphans
+```python# Use execute_code for this — programmatic scan across all wiki pages
+
+import os, re
+
+from collections import defaultdict
+
+wiki = "<WIKI_PATH>"
+
+# Scan all .md files in entities/, concepts/, comparisons/, queries/
+
+# Extract all [[wikilinks]] — build inbound link map
+
+# Pages with zero inbound links are orphans
 ```
 
 ② **Broken wikilinks:** Find `[[links]]` that point to pages that don't exist.

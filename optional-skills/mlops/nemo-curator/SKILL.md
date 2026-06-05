@@ -52,124 +52,154 @@ uv pip install "nemo-curator[cpu]"
 
 ### Basic text curation pipeline
 
-```python
-from nemo_curator import ScoreFilter, Modify
-from nemo_curator.datasets import DocumentDataset
-import pandas as pd
-
-# Load data
-df = pd.DataFrame({"text": ["Good document", "Bad doc", "Excellent text"]})
-dataset = DocumentDataset(df)
-
-# Quality filtering
-def quality_score(doc):
-    return len(doc["text"].split()) > 5  # Filter short docs
-
-filtered = ScoreFilter(quality_score)(dataset)
-
-# Deduplication
-from nemo_curator.modules import ExactDuplicates
-deduped = ExactDuplicates()(filtered)
-
-# Save
-deduped.to_parquet("curated_data/")
+```pythonfrom nemo_curator import ScoreFilter, Modify
+
+from nemo_curator.datasets import DocumentDataset
+
+import pandas as pd
+
+
+# Load data
+
+df = pd.DataFrame({"text": ["Good document", "Bad doc", "Excellent text"]})
+
+dataset = DocumentDataset(df)
+
+
+# Quality filtering
+
+
+def quality_score(doc):
+
+    return len(doc["text"].split()) > 5  # Filter short docs
+
+
+filtered = ScoreFilter(quality_score)(dataset)
+
+
+# Deduplication
+
+from nemo_curator.modules import ExactDuplicates
+
+deduped = ExactDuplicates()(filtered)
+
+
+# Save
+
+deduped.to_parquet("curated_data/")
 ```
 
 ## Data curation pipeline
 
 ### Stage 1: Quality filtering
 
-```python
-from nemo_curator.filters import (
-    WordCountFilter,
-    RepeatedLinesFilter,
-    UrlRatioFilter,
-    NonAlphaNumericFilter
-)
-
-# Apply 30+ heuristic filters
-from nemo_curator import ScoreFilter
-
-# Word count filter
-dataset = dataset.filter(WordCountFilter(min_words=50, max_words=100000))
-
-# Remove repetitive content
-dataset = dataset.filter(RepeatedLinesFilter(max_repeated_line_fraction=0.3))
-
-# URL ratio filter
-dataset = dataset.filter(UrlRatioFilter(max_url_ratio=0.2))
+```pythonfrom nemo_curator.filters import (
+    WordCountFilter,
+    RepeatedLinesFilter,
+    UrlRatioFilter,
+    NonAlphaNumericFilter,
+)
+
+
+# Apply 30+ heuristic filters
+
+from nemo_curator import ScoreFilter
+
+
+# Word count filter
+
+dataset = dataset.filter(WordCountFilter(min_words=50, max_words=100000))
+
+
+# Remove repetitive content
+
+dataset = dataset.filter(RepeatedLinesFilter(max_repeated_line_fraction=0.3))
+
+
+# URL ratio filter
+
+dataset = dataset.filter(UrlRatioFilter(max_url_ratio=0.2))
 ```
 
 ### Stage 2: Deduplication
 
 **Exact deduplication**:
-```python
-from nemo_curator.modules import ExactDuplicates
-
-# Remove exact duplicates
-deduped = ExactDuplicates(id_field="id", text_field="text")(dataset)
+```pythonfrom nemo_curator.modules import ExactDuplicates
+
+
+# Remove exact duplicates
+
+deduped = ExactDuplicates(id_field="id", text_field="text")(dataset)
 ```
 
 **Fuzzy deduplication** (16× faster on GPU):
-```python
-from nemo_curator.modules import FuzzyDuplicates
-
-# MinHash + LSH deduplication
-fuzzy_dedup = FuzzyDuplicates(
-    id_field="id",
-    text_field="text",
-    num_hashes=260,      # MinHash parameters
-    num_buckets=20,
-    hash_method="md5"
-)
-
-deduped = fuzzy_dedup(dataset)
+```pythonfrom nemo_curator.modules import FuzzyDuplicates
+
+
+# MinHash + LSH deduplication
+
+fuzzy_dedup = FuzzyDuplicates(
+    id_field="id",
+    text_field="text",
+    num_hashes=260,  # MinHash parameters
+    num_buckets=20,
+    hash_method="md5",
+)
+
+
+deduped = fuzzy_dedup(dataset)
 ```
 
 **Semantic deduplication**:
-```python
-from nemo_curator.modules import SemanticDuplicates
-
-# Embedding-based deduplication
-semantic_dedup = SemanticDuplicates(
-    id_field="id",
-    text_field="text",
-    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-    threshold=0.8  # Cosine similarity threshold
-)
-
-deduped = semantic_dedup(dataset)
+```pythonfrom nemo_curator.modules import SemanticDuplicates
+
+
+# Embedding-based deduplication
+
+semantic_dedup = SemanticDuplicates(
+    id_field="id",
+    text_field="text",
+    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
+    threshold=0.8,  # Cosine similarity threshold
+)
+
+
+deduped = semantic_dedup(dataset)
 ```
 
 ### Stage 3: PII redaction
 
-```python
-from nemo_curator.modules import Modify
-from nemo_curator.modifiers import PIIRedactor
-
-# Redact personally identifiable information
-pii_redactor = PIIRedactor(
-    supported_entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "PERSON", "LOCATION"],
-    anonymize_action="replace"  # or "redact"
-)
-
-redacted = Modify(pii_redactor)(dataset)
+```pythonfrom nemo_curator.modules import Modify
+
+from nemo_curator.modifiers import PIIRedactor
+
+
+# Redact personally identifiable information
+
+pii_redactor = PIIRedactor(
+    supported_entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "PERSON", "LOCATION"],
+    anonymize_action="replace",  # or "redact"
+)
+
+
+redacted = Modify(pii_redactor)(dataset)
 ```
 
 ### Stage 4: Classifier filtering
 
-```python
-from nemo_curator.classifiers import QualityClassifier
-
-# Quality classification
-quality_clf = QualityClassifier(
-    model_path="nvidia/quality-classifier-deberta",
-    batch_size=256,
-    device="cuda"
-)
-
-# Filter low-quality documents
-high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
+```pythonfrom nemo_curator.classifiers import QualityClassifier
+
+
+# Quality classification
+
+quality_clf = QualityClassifier(
+    model_path="nvidia/quality-classifier-deberta", batch_size=256, device="cuda"
+)
+
+
+# Filter low-quality documents
+
+high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
 ```
 
 ## GPU acceleration
@@ -184,145 +214,176 @@ high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
 
 ### Multi-GPU scaling
 
-```python
-from nemo_curator import get_client
-import dask_cuda
-
-# Initialize GPU cluster
-client = get_client(cluster_type="gpu", n_workers=8)
-
-# Process with 8 GPUs
-deduped = FuzzyDuplicates(...)(dataset)
+```pythonfrom nemo_curator import get_client
+
+import dask_cuda
+
+
+# Initialize GPU cluster
+
+client = get_client(cluster_type="gpu", n_workers=8)
+
+
+# Process with 8 GPUs
+
+deduped = FuzzyDuplicates(...)(dataset)
 ```
 
 ## Multi-modal curation
 
 ### Image curation
 
-```python
-from nemo_curator.image import (
-    AestheticFilter,
-    NSFWFilter,
-    CLIPEmbedder
-)
-
-# Aesthetic scoring
-aesthetic_filter = AestheticFilter(threshold=5.0)
-filtered_images = aesthetic_filter(image_dataset)
-
-# NSFW detection
-nsfw_filter = NSFWFilter(threshold=0.9)
-safe_images = nsfw_filter(filtered_images)
-
-# Generate CLIP embeddings
-clip_embedder = CLIPEmbedder(model="openai/clip-vit-base-patch32")
-image_embeddings = clip_embedder(safe_images)
+```pythonfrom nemo_curator.image import AestheticFilter, NSFWFilter, CLIPEmbedder
+
+
+# Aesthetic scoring
+
+aesthetic_filter = AestheticFilter(threshold=5.0)
+
+filtered_images = aesthetic_filter(image_dataset)
+
+
+# NSFW detection
+
+nsfw_filter = NSFWFilter(threshold=0.9)
+
+safe_images = nsfw_filter(filtered_images)
+
+
+# Generate CLIP embeddings
+
+clip_embedder = CLIPEmbedder(model="openai/clip-vit-base-patch32")
+
+image_embeddings = clip_embedder(safe_images)
 ```
 
 ### Video curation
 
-```python
-from nemo_curator.video import (
-    SceneDetector,
-    ClipExtractor,
-    InternVideo2Embedder
-)
-
-# Detect scenes
-scene_detector = SceneDetector(threshold=27.0)
-scenes = scene_detector(video_dataset)
-
-# Extract clips
-clip_extractor = ClipExtractor(min_duration=2.0, max_duration=10.0)
-clips = clip_extractor(scenes)
-
-# Generate embeddings
-video_embedder = InternVideo2Embedder()
-video_embeddings = video_embedder(clips)
+```pythonfrom nemo_curator.video import SceneDetector, ClipExtractor, InternVideo2Embedder
+
+
+# Detect scenes
+
+scene_detector = SceneDetector(threshold=27.0)
+
+scenes = scene_detector(video_dataset)
+
+
+# Extract clips
+
+clip_extractor = ClipExtractor(min_duration=2.0, max_duration=10.0)
+
+clips = clip_extractor(scenes)
+
+
+# Generate embeddings
+
+video_embedder = InternVideo2Embedder()
+
+video_embeddings = video_embedder(clips)
 ```
 
 ### Audio curation
 
-```python
-from nemo_curator.audio import (
-    ASRInference,
-    WERFilter,
-    DurationFilter
-)
-
-# ASR transcription
-asr = ASRInference(model="nvidia/stt_en_fastconformer_hybrid_large_pc")
-transcribed = asr(audio_dataset)
-
-# Filter by WER (word error rate)
-wer_filter = WERFilter(max_wer=0.3)
-high_quality_audio = wer_filter(transcribed)
-
-# Duration filtering
-duration_filter = DurationFilter(min_duration=1.0, max_duration=30.0)
-filtered_audio = duration_filter(high_quality_audio)
+```pythonfrom nemo_curator.audio import ASRInference, WERFilter, DurationFilter
+
+
+# ASR transcription
+
+asr = ASRInference(model="nvidia/stt_en_fastconformer_hybrid_large_pc")
+
+transcribed = asr(audio_dataset)
+
+
+# Filter by WER (word error rate)
+
+wer_filter = WERFilter(max_wer=0.3)
+
+high_quality_audio = wer_filter(transcribed)
+
+
+# Duration filtering
+
+duration_filter = DurationFilter(min_duration=1.0, max_duration=30.0)
+
+filtered_audio = duration_filter(high_quality_audio)
 ```
 
 ## Common patterns
 
 ### Web scrape curation (Common Crawl)
 
-```python
-from nemo_curator import ScoreFilter, Modify
-from nemo_curator.filters import *
-from nemo_curator.modules import *
-from nemo_curator.datasets import DocumentDataset
-
-# Load Common Crawl data
-dataset = DocumentDataset.read_parquet("common_crawl/*.parquet")
-
-# Pipeline
-pipeline = [
-    # 1. Quality filtering
-    WordCountFilter(min_words=100, max_words=50000),
-    RepeatedLinesFilter(max_repeated_line_fraction=0.2),
-    SymbolToWordRatioFilter(max_symbol_to_word_ratio=0.3),
-    UrlRatioFilter(max_url_ratio=0.3),
-
-    # 2. Language filtering
-    LanguageIdentificationFilter(target_languages=["en"]),
-
-    # 3. Deduplication
-    ExactDuplicates(id_field="id", text_field="text"),
-    FuzzyDuplicates(id_field="id", text_field="text", num_hashes=260),
-
-    # 4. PII redaction
-    PIIRedactor(),
-
-    # 5. NSFW filtering
-    NSFWClassifier(threshold=0.8)
-]
-
-# Execute
-for stage in pipeline:
-    dataset = stage(dataset)
-
-# Save
-dataset.to_parquet("curated_common_crawl/")
+```pythonfrom nemo_curator import ScoreFilter, Modify
+
+from nemo_curator.filters import *
+
+from nemo_curator.modules import *
+
+from nemo_curator.datasets import DocumentDataset
+
+
+# Load Common Crawl data
+
+dataset = DocumentDataset.read_parquet("common_crawl/*.parquet")
+
+
+# Pipeline
+
+pipeline = [
+    # 1. Quality filtering
+    WordCountFilter(min_words=100, max_words=50000),
+    RepeatedLinesFilter(max_repeated_line_fraction=0.2),
+    SymbolToWordRatioFilter(max_symbol_to_word_ratio=0.3),
+    UrlRatioFilter(max_url_ratio=0.3),
+    # 2. Language filtering
+    LanguageIdentificationFilter(target_languages=["en"]),
+    # 3. Deduplication
+    ExactDuplicates(id_field="id", text_field="text"),
+    FuzzyDuplicates(id_field="id", text_field="text", num_hashes=260),
+    # 4. PII redaction
+    PIIRedactor(),
+    # 5. NSFW filtering
+    NSFWClassifier(threshold=0.8),
+]
+
+
+# Execute
+
+for stage in pipeline:
+    dataset = stage(dataset)
+
+
+# Save
+
+dataset.to_parquet("curated_common_crawl/")
 ```
 
 ### Distributed processing
 
-```python
-from nemo_curator import get_client
-from dask_cuda import LocalCUDACluster
-
-# Multi-GPU cluster
-cluster = LocalCUDACluster(n_workers=8)
-client = get_client(cluster=cluster)
-
-# Process large dataset
-dataset = DocumentDataset.read_parquet("s3://large_dataset/*.parquet")
-deduped = FuzzyDuplicates(...)(dataset)
-
-# Cleanup
-client.close()
-cluster.close()
+```pythonfrom nemo_curator import get_client
+
+from dask_cuda import LocalCUDACluster
+
+
+# Multi-GPU cluster
+
+cluster = LocalCUDACluster(n_workers=8)
+
+client = get_client(cluster=cluster)
+
+
+# Process large dataset
+
+dataset = DocumentDataset.read_parquet("s3://large_dataset/*.parquet")
+
+deduped = FuzzyDuplicates(...)(dataset)
+
+
+# Cleanup
+
+client.close()
+
+cluster.close()
 ```
 
 ## Performance benchmarks

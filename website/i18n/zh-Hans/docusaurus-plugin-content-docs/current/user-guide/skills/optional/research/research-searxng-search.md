@@ -115,30 +115,40 @@ for r in data.get('results', []):
 
 直接从 Python 使用 `requests` 库调用 SearXNG REST API：
 
-```python
-import os, requests, urllib.parse
-
-base_url = os.environ.get("SEARXNG_URL", "")
-if not base_url:
-    raise RuntimeError("SEARXNG_URL is not set")
-
-query = "fastapi deployment guide"
-params = {
-    "q": query,
-    "format": "json",
-    "limit": 5,
-    "engines": "google,bing",
-}
-
-resp = requests.get(f"{base_url}/search", params=params, timeout=10)
-resp.raise_for_status()
-data = resp.json()
-
-for r in data.get("results", []):
-    print(r["title"])
-    print(r["url"])
-    print(r.get("content", "")[:200])
-    print()
+```pythonimport os, requests, urllib.parse
+
+
+base_url = os.environ.get("SEARXNG_URL", "")
+
+if not base_url:
+    raise RuntimeError("SEARXNG_URL is not set")
+
+
+query = "fastapi deployment guide"
+
+params = {
+    "q": query,
+    "format": "json",
+    "limit": 5,
+    "engines": "google,bing",
+}
+
+
+resp = requests.get(f"{base_url}/search", params=params, timeout=10)
+
+resp.raise_for_status()
+
+data = resp.json()
+
+
+for r in data.get("results", []):
+    print(r["title"])
+
+    print(r["url"])
+
+    print(r.get("content", "")[:200])
+
+    print()
 ```
 
 ## 方法三：searxng-data Python 包
@@ -149,11 +159,12 @@ for r in data.get("results", []):
 pip install searxng-data
 ```
 
-```python
-from searxng_data import engines
-
-# 列出可用引擎
-print(engines.list_engines())
+```pythonfrom searxng_data import engines
+
+
+# 列出可用引擎
+
+print(engines.list_engines())
 ```
 
 注意：此包仅提供引擎元数据，不提供搜索 API 本身。

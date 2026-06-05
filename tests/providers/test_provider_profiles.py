@@ -69,7 +69,9 @@ class TestKimiProfile:
 
     def test_thinking_enabled(self):
         p = get_provider_profile("kimi")
-        eb, tl = p.build_api_kwargs_extras(reasoning_config={"enabled": True, "effort": "high"})
+        eb, tl = p.build_api_kwargs_extras(
+            reasoning_config={"enabled": True, "effort": "high"}
+        )
         assert eb["thinking"] == {"type": "enabled"}
         assert tl["reasoning_effort"] == "high"
 
@@ -114,9 +116,7 @@ class TestOpenRouterProfile:
             model="openrouter/pareto-code",
             openrouter_min_coding_score=0.65,
         )
-        assert body["plugins"] == [
-            {"id": "pareto-router", "min_coding_score": 0.65}
-        ]
+        assert body["plugins"] == [{"id": "pareto-router", "min_coding_score": 0.65}]
 
     def test_pareto_score_ignored_for_other_models(self):
         """Score has no effect on any other model — plugins block must not appear."""
@@ -219,6 +219,7 @@ class TestOpenRouterProfile:
 class TestNousProfile:
     def test_tags(self):
         from agent.portal_tags import nous_portal_tags
+
         p = get_provider_profile("nous")
         body = p.build_extra_body()
         assert body["tags"] == nous_portal_tags()

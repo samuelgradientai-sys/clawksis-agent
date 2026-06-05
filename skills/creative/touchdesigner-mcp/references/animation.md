@@ -26,19 +26,19 @@ TD has three time references — pick the right one.
 The simplest periodic driver. Fast, GPU-cheap, expression-friendly.
 
 ```python
-lfo = root.create(lfoCHOP, 'rot_driver')
-lfo.par.type = 'sin'        # 'sin' | 'cos' | 'ramp' | 'square' | 'triangle' | 'pulse'
-lfo.par.frequency = 0.25    # cycles per second
+lfo = root.create(lfoCHOP, "rot_driver")
+lfo.par.type = "sin"  # 'sin' | 'cos' | 'ramp' | 'square' | 'triangle' | 'pulse'
+lfo.par.frequency = 0.25  # cycles per second
 lfo.par.amplitude = 1.0
 lfo.par.offset = 0.0
-lfo.par.phase = 0.0         # 0-1, useful for offsetting parallel LFOs
+lfo.par.phase = 0.0  # 0-1, useful for offsetting parallel LFOs
 ```
 
 **Drive a parameter via export:**
 
 ```python
-op('/project1/geo1').par.rx.mode = ParMode.EXPRESSION
-op('/project1/geo1').par.rx.expr = "op('rot_driver')['chan1'] * 360"
+op("/project1/geo1").par.rx.mode = ParMode.EXPRESSION
+op("/project1/geo1").par.rx.expr = "op('rot_driver')['chan1'] * 360"
 ```
 
 **Multiple synced LFOs (X/Y/Z rotation with phase offsets):**
@@ -51,9 +51,9 @@ Create one LFO with three channels and phase-offset each, or use three LFOs and 
 For run-once animations, beat-locked sequences, or stage-based logic.
 
 ```python
-timer = root.create(timerCHOP, 'fade_timer')
-timer.par.length = 4.0       # cycle length in seconds
-timer.par.cycle = False      # run once vs. loop
+timer = root.create(timerCHOP, "fade_timer")
+timer.par.length = 4.0  # cycle length in seconds
+timer.par.cycle = False  # run once vs. loop
 timer.par.outputseconds = True
 ```
 
@@ -66,8 +66,8 @@ timer.par.start.pulse()
 
 **Drive a fade:**
 ```python
-op('/project1/level1').par.opacity.mode = ParMode.EXPRESSION
-op('/project1/level1').par.opacity.expr = "op('fade_timer')['timer_fraction']"
+op("/project1/level1").par.opacity.mode = ParMode.EXPRESSION
+op("/project1/level1").par.opacity.expr = "op('fade_timer')['timer_fraction']"
 ```
 
 **Easing on the timer fraction** — apply in the expression itself:
@@ -86,10 +86,10 @@ expr = "1 - pow(1 - op('fade_timer')['timer_fraction'], 3)"
 For arbitrary waveforms (saw ramps, easing curves, custom envelopes).
 
 ```python
-pat = root.create(patternCHOP, 'envelope')
-pat.par.type = 'gaussian'    # 'gaussian' | 'ramp' | 'square' | 'sin' | etc.
-pat.par.length = 60          # samples
-pat.par.cyclelength = 1.0    # seconds at TD framerate
+pat = root.create(patternCHOP, "envelope")
+pat.par.type = "gaussian"  # 'gaussian' | 'ramp' | 'square' | 'sin' | etc.
+pat.par.length = 60  # samples
+pat.par.cyclelength = 1.0  # seconds at TD framerate
 ```
 
 Combine with `lookupCHOP` to remap a 0-1 driver through a custom curve.
@@ -101,23 +101,23 @@ Combine with `lookupCHOP` to remap a 0-1 driver through a custom curve.
 For multi-keyframe motion graphics. Each animationCOMP holds channels with keyframes editable in the Animation Editor.
 
 ```python
-anim = root.create(animationCOMP, 'intro_anim')
+anim = root.create(animationCOMP, "intro_anim")
 # By default has channels chan1..chanN; access via:
 # op('intro_anim').par.length, .par.play, .par.cue, etc.
 
 # Drive a parameter from a channel
-op('/project1/text1').par.tx.mode = ParMode.EXPRESSION
-op('/project1/text1').par.tx.expr = "op('intro_anim/out1')['chan1']"
+op("/project1/text1").par.tx.mode = ParMode.EXPRESSION
+op("/project1/text1").par.tx.expr = "op('intro_anim/out1')['chan1']"
 ```
 
 **Keyframes are typically edited in the UI** (Animation Editor), but can be set via `keyframes` table internally. For programmatic keyframe creation, use `td_execute_python`:
 
 ```python
 # Get the channel CHOP inside an animationCOMP
-ch = op('/project1/intro_anim/chans')
+ch = op("/project1/intro_anim/chans")
 # Insert a key (advanced API — verify with td_get_par_info(op_type='animationCOMP'))
-ch.appendKey('chan1', frame=0, value=0.0, expression=None)
-ch.appendKey('chan1', frame=120, value=1.0)
+ch.appendKey("chan1", frame=0, value=0.0, expression=None)
+ch.appendKey("chan1", frame=120, value=1.0)
 ```
 
 For most use cases, drive params with LFO/Timer/Pattern CHOPs instead — simpler and scriptable.
@@ -157,10 +157,10 @@ Where `t` is `op('fade_timer')['timer_fraction']` or any 0-1 driver.
 Smooth out jittery values (e.g., audio analysis, sensor data) before driving visuals.
 
 ```python
-filt = root.create(filterCHOP, 'smooth')
-filt.par.filter = 'gaussian'   # or 'lowpass'
-filt.par.width = 0.5            # smoothing window in seconds
-filt.inputConnectors[0].connect(op('raw_signal'))
+filt = root.create(filterCHOP, "smooth")
+filt.par.filter = "gaussian"  # or 'lowpass'
+filt.par.width = 0.5  # smoothing window in seconds
+filt.inputConnectors[0].connect(op("raw_signal"))
 ```
 
 **WARNING:** Do NOT use Filter CHOP on AudioSpectrum output in timeslice mode — it expands the sample count and averages bins to near-zero. See `audio-reactive.md`.
@@ -172,10 +172,10 @@ filt.inputConnectors[0].connect(op('raw_signal'))
 Different speeds for rising vs. falling values. Standard for visualizing audio envelopes.
 
 ```python
-lag = root.create(lagCHOP, 'env_smooth')
-lag.par.lag1 = 0.02   # attack (rise time, seconds)
-lag.par.lag2 = 0.30   # release (fall time, seconds)
-lag.inputConnectors[0].connect(op('raw_envelope'))
+lag = root.create(lagCHOP, "env_smooth")
+lag.par.lag1 = 0.02  # attack (rise time, seconds)
+lag.par.lag2 = 0.30  # release (fall time, seconds)
+lag.inputConnectors[0].connect(op("raw_envelope"))
 ```
 
 Fast attack, slow release = classic VU-meter feel.
@@ -190,8 +190,8 @@ For complex per-frame logic that doesn't fit expressions, use a `executeDAT` (`o
 # In an executeDAT (frameStart):
 def onFrameStart(frame):
     t = absTime.seconds
-    op('/project1/circle').par.tx = math.sin(t * 2.0) * 3.0
-    op('/project1/circle').par.ty = math.cos(t * 2.0) * 3.0
+    op("/project1/circle").par.tx = math.sin(t * 2.0) * 3.0
+    op("/project1/circle").par.ty = math.cos(t * 2.0) * 3.0
     return
 ```
 

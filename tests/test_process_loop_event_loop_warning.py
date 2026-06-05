@@ -13,7 +13,6 @@ import warnings
 
 
 class TestGetRunningLoopReplacement:
-
     def test_get_running_loop_raises_runtime_error_not_warning(self):
         warnings_caught = []
 
@@ -31,8 +30,7 @@ class TestGetRunningLoopReplacement:
         t.join(timeout=5)
 
         runtime_warnings = [
-            x for x in warnings_caught
-            if issubclass(x.category, RuntimeWarning)
+            x for x in warnings_caught if issubclass(x.category, RuntimeWarning)
         ]
         assert runtime_warnings == [], (
             f"Unexpected RuntimeWarning(s): {[str(w.message) for w in runtime_warnings]}"
@@ -55,8 +53,7 @@ class TestGetRunningLoopReplacement:
         t.join(timeout=5)
 
         assert all(
-            not issubclass(w.category, RuntimeWarning)
-            for w in caught_from_running
+            not issubclass(w.category, RuntimeWarning) for w in caught_from_running
         ), "get_running_loop() must never emit RuntimeWarning"
 
     def test_get_running_loop_returns_loop_when_running(self):
@@ -87,8 +84,7 @@ class TestGetRunningLoopReplacement:
         t.join(timeout=5)
 
         runtime_warnings = [
-            x for x in warnings_caught
-            if issubclass(x.category, RuntimeWarning)
+            x for x in warnings_caught if issubclass(x.category, RuntimeWarning)
         ]
         assert runtime_warnings == [], (
             f"RuntimeWarning emitted despite fix: "
@@ -121,8 +117,7 @@ class TestGetRunningLoopReplacement:
 
         assert results.get("current_loop") is None
         runtime_warnings = [
-            x for x in warnings_list
-            if issubclass(x.category, RuntimeWarning)
+            x for x in warnings_list if issubclass(x.category, RuntimeWarning)
         ]
         assert runtime_warnings == [], (
             f"process_loop simulation still emits RuntimeWarning: "

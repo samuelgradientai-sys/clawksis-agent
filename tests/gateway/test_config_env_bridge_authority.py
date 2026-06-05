@@ -14,10 +14,7 @@ values for `agent.*`, `display.*`, `timezone`, and `security.*` keys.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import os
@@ -31,21 +28,15 @@ import textwrap
 from pathlib import Path
 
 
-
 import pytest
-
-
-
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-
-
-
-def _run_gateway_import(clawk_home: Path, initial_env: dict[str, str]) -> dict[str, str]:
-
+def _run_gateway_import(
+    clawk_home: Path, initial_env: dict[str, str]
+) -> dict[str, str]:
     """Import gateway.run in a clean subprocess and return the post-import env.
 
 
@@ -61,7 +52,6 @@ def _run_gateway_import(clawk_home: Path, initial_env: dict[str, str]) -> dict[s
     """
 
     script = textwrap.dedent(
-
         f"""
 
         import os, sys
@@ -105,7 +95,6 @@ def _run_gateway_import(clawk_home: Path, initial_env: dict[str, str]) -> dict[s
                 print(f"{{k}}={{v}}")
 
         """
-
     )
 
     env = dict(initial_env)
@@ -115,43 +104,27 @@ def _run_gateway_import(clawk_home: Path, initial_env: dict[str, str]) -> dict[s
     # Keep PATH / PYTHONPATH so venv imports resolve.
 
     for k in ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "HOME"):
-
         if k in os.environ and k not in env:
-
             env[k] = os.environ[k]
 
-
-
     result = subprocess.run(
-
         [sys.executable, "-c", script],
-
         env=env,
-
         capture_output=True,
-
         text=True,
-
         timeout=60,
-
     )
 
     if result.returncode != 0:
-
         pytest.fail(
-
             f"gateway.run import failed (rc={result.returncode})\n"
-
             f"stderr:\n{result.stderr}\nstdout:\n{result.stdout}"
-
         )
 
     out: dict[str, str] = {}
 
     for line in result.stdout.splitlines():
-
         if "=" in line:
-
             k, v = line.split("=", 1)
 
             out[k] = v
@@ -159,33 +132,27 @@ def _run_gateway_import(clawk_home: Path, initial_env: dict[str, str]) -> dict[s
     return out
 
 
-
-
-
-def _write_config(home: Path, agent_cfg: dict | None = None, display_cfg: dict | None = None,
-
-                  timezone: str | None = None) -> None:
+def _write_config(
+    home: Path,
+    agent_cfg: dict | None = None,
+    display_cfg: dict | None = None,
+    timezone: str | None = None,
+) -> None:
 
     import yaml
 
     cfg: dict = {}
 
     if agent_cfg:
-
         cfg["agent"] = agent_cfg
 
     if display_cfg:
-
         cfg["display"] = display_cfg
 
     if timezone:
-
         cfg["timezone"] = timezone
 
     (home / "config.yaml").write_text(yaml.safe_dump(cfg))
-
-
-
 
 
 def _write_env(home: Path, entries: dict[str, str]) -> None:
@@ -195,11 +162,7 @@ def _write_env(home: Path, entries: dict[str, str]) -> None:
     (home / ".env").write_text("".join(lines))
 
 
-
-
-
 @pytest.fixture
-
 def clawk_home(tmp_path: Path) -> Path:
 
     home = tmp_path / ".clawksis"
@@ -209,67 +172,45 @@ def clawk_home(tmp_path: Path) -> Path:
     return home
 
 
-
-
-
 def test_config_max_turns_wins_over_stale_env(clawk_home: Path) -> None:
-
     """Regression: config.yaml:agent.max_turns=500 must beat .env=60."""
 
     _write_config(clawk_home, agent_cfg={"max_turns": 500})
 
     _write_env(clawk_home, {"CLAWK_MAX_ITERATIONS": "60"})
 
-
-
     env = _run_gateway_import(clawk_home, initial_env={})
 
-
-
     assert env.get("CLAWK_MAX_ITERATIONS") == "500", (
-
         f"expected config.yaml max_turns=500 to win; got {env.get('CLAWK_MAX_ITERATIONS')!r}. "
-
         "Stale .env value is shadowing config — the bridge lost its override."
-
     )
 
 
-
-
-
 def test_config_gateway_timeout_wins_over_stale_env(clawk_home: Path) -> None:
-
     """Every agent.* bridge key must be config-authoritative, not .env-authoritative."""
 
-    _write_config(clawk_home, agent_cfg={
+    _write_config(
+        clawk_home,
+        agent_cfg={
+            "gateway_timeout": 1800,
+            "gateway_timeout_warning": 900,
+        },
+    )
 
-        "gateway_timeout": 1800,
-
-        "gateway_timeout_warning": 900,
-
-    })
-
-    _write_env(clawk_home, {
-
-        "CLAWK_AGENT_TIMEOUT": "60",
-
-        "CLAWK_AGENT_TIMEOUT_WARNING": "30",
-
-    })
-
-
+    _write_env(
+        clawk_home,
+        {
+            "CLAWK_AGENT_TIMEOUT": "60",
+            "CLAWK_AGENT_TIMEOUT_WARNING": "30",
+        },
+    )
 
     env = _run_gateway_import(clawk_home, initial_env={})
-
-
 
     assert env.get("CLAWK_AGENT_TIMEOUT") == "1800"
 
     assert env.get("CLAWK_AGENT_TIMEOUT_WARNING") == "900"
-
-
-
 
 
 def test_config_display_busy_input_mode_wins_over_stale_env(clawk_home: Path) -> None:
@@ -278,16 +219,9 @@ def test_config_display_busy_input_mode_wins_over_stale_env(clawk_home: Path) ->
 
     _write_env(clawk_home, {"CLAWK_GATEWAY_BUSY_INPUT_MODE": "queue"})
 
-
-
     env = _run_gateway_import(clawk_home, initial_env={})
 
-
-
     assert env.get("CLAWK_GATEWAY_BUSY_INPUT_MODE") == "interrupt"
-
-
-
 
 
 def test_config_display_busy_text_mode_wins_over_stale_env(clawk_home: Path) -> None:
@@ -296,16 +230,9 @@ def test_config_display_busy_text_mode_wins_over_stale_env(clawk_home: Path) -> 
 
     _write_env(clawk_home, {"CLAWK_GATEWAY_BUSY_TEXT_MODE": "interrupt"})
 
-
-
     env = _run_gateway_import(clawk_home, initial_env={})
 
-
-
     assert env.get("CLAWK_GATEWAY_BUSY_TEXT_MODE") == "queue"
-
-
-
 
 
 def test_config_timezone_wins_over_stale_env(clawk_home: Path) -> None:
@@ -314,20 +241,12 @@ def test_config_timezone_wins_over_stale_env(clawk_home: Path) -> None:
 
     _write_env(clawk_home, {"CLAWK_TIMEZONE": "UTC"})
 
-
-
     env = _run_gateway_import(clawk_home, initial_env={})
-
-
 
     assert env.get("CLAWK_TIMEZONE") == "America/Los_Angeles"
 
 
-
-
-
 def test_env_value_survives_when_config_omits_key(clawk_home: Path) -> None:
-
     """If config.yaml doesn't set max_turns, .env value must still pass through.
 
 
@@ -342,11 +261,6 @@ def test_env_value_survives_when_config_omits_key(clawk_home: Path) -> None:
 
     _write_env(clawk_home, {"CLAWK_MAX_ITERATIONS": "123"})
 
-
-
     env = _run_gateway_import(clawk_home, initial_env={})
 
-
-
     assert env.get("CLAWK_MAX_ITERATIONS") == "123"
-

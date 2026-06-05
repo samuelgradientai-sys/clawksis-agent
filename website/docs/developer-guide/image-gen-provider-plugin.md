@@ -38,145 +38,175 @@ A bundled plugin is complete at this point. User plugins at `~/.clawksis/plugins
 
 Subclass `agent.image_gen_provider.ImageGenProvider`. The only required members are the `name` property and the `generate()` method — everything else has sane defaults:
 
-```python
-# plugins/image_gen/my-backend/__init__.py
-from typing import Any, Dict, List, Optional
-import os
-
-from agent.image_gen_provider import (
-    DEFAULT_ASPECT_RATIO,
-    ImageGenProvider,
-    error_response,
-    resolve_aspect_ratio,
-    save_b64_image,
-    success_response,
-)
-
-
-class MyBackendImageGenProvider(ImageGenProvider):
-    @property
-    def name(self) -> str:
-        # Stable id used in image_gen.provider config. Lowercase, no spaces.
-        return "my-backend"
-
-    @property
-    def display_name(self) -> str:
-        # Human label shown in `clawk tools`. Defaults to name.title() if omitted.
-        return "My Backend"
-
-    def is_available(self) -> bool:
-        # Return False if credentials or deps are missing.
-        # The tool's availability gate calls this before dispatch.
-        if not os.environ.get("MY_BACKEND_API_KEY"):
-            return False
-        try:
-            import my_backend_sdk  # noqa: F401
-        except ImportError:
-            return False
-        return True
-
-    def list_models(self) -> List[Dict[str, Any]]:
-        # Catalog shown in `clawk tools` model picker.
-        return [
-            {
-                "id": "my-model-fast",
-                "display": "My Model (Fast)",
-                "speed": "~5s",
-                "strengths": "Quick iteration",
-                "price": "$0.01/image",
-            },
-            {
-                "id": "my-model-hq",
-                "display": "My Model (HQ)",
-                "speed": "~30s",
-                "strengths": "Highest fidelity",
-                "price": "$0.04/image",
-            },
-        ]
-
-    def default_model(self) -> Optional[str]:
-        return "my-model-fast"
-
-    def get_setup_schema(self) -> Dict[str, Any]:
-        # Metadata for the `clawk tools` picker — keys to prompt for at setup.
-        return {
-            "name": "My Backend",
-            "badge": "paid",        # optional; shown as a short tag in the picker
-            "tag": "One-line description shown under the name",
-            "env_vars": [
-                {
-                    "key": "MY_BACKEND_API_KEY",
-                    "prompt": "My Backend API key",
-                    "url": "https://my-backend.example.com/api-keys",
-                },
-            ],
-        }
-
-    def generate(
-        self,
-        prompt: str,
-        aspect_ratio: str = DEFAULT_ASPECT_RATIO,
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        prompt = (prompt or "").strip()
-        aspect_ratio = resolve_aspect_ratio(aspect_ratio)
-
-        if not prompt:
-            return error_response(
-                error="Prompt is required",
-                error_type="invalid_input",
-                provider=self.name,
-                prompt="",
-                aspect_ratio=aspect_ratio,
-            )
-
-        # Model selection precedence: env var → config → default. The helper
-        # _resolve_model() in the built-in openai plugin is a good reference.
-        model_id = kwargs.get("model") or self.default_model() or "my-model-fast"
-
-        try:
-            import my_backend_sdk
-            client = my_backend_sdk.Client(api_key=os.environ["MY_BACKEND_API_KEY"])
-            result = client.generate(
-                prompt=prompt,
-                model=model_id,
-                aspect_ratio=aspect_ratio,
-            )
-
-            # Two shapes supported:
-            #   - URL string: return it as `image`
-            #   - base64 data: save under $CLAWK_HOME/cache/images/ via save_b64_image()
-            if result.get("image_b64"):
-                path = save_b64_image(
-                    result["image_b64"],
-                    prefix=self.name,
-                    extension="png",
-                )
-                image = str(path)
-            else:
-                image = result["image_url"]
-
-            return success_response(
-                image=image,
-                model=model_id,
-                prompt=prompt,
-                aspect_ratio=aspect_ratio,
-                provider=self.name,
-            )
-        except Exception as exc:
-            return error_response(
-                error=str(exc),
-                error_type=type(exc).__name__,
-                provider=self.name,
-                model=model_id,
-                prompt=prompt,
-                aspect_ratio=aspect_ratio,
-            )
-
-
-def register(ctx) -> None:
-    """Plugin entry point — called once at load time."""
-    ctx.register_image_gen_provider(MyBackendImageGenProvider())
+```python# plugins/image_gen/my-backend/__init__.py
+
+from typing import Any, Dict, List, Optional
+
+import os
+
+
+from agent.image_gen_provider import (
+    DEFAULT_ASPECT_RATIO,
+    ImageGenProvider,
+    error_response,
+    resolve_aspect_ratio,
+    save_b64_image,
+    success_response,
+)
+
+
+class MyBackendImageGenProvider(ImageGenProvider):
+    @property
+    def name(self) -> str:
+
+        # Stable id used in image_gen.provider config. Lowercase, no spaces.
+
+        return "my-backend"
+
+    @property
+    def display_name(self) -> str:
+
+        # Human label shown in `clawk tools`. Defaults to name.title() if omitted.
+
+        return "My Backend"
+
+    def is_available(self) -> bool:
+
+        # Return False if credentials or deps are missing.
+
+        # The tool's availability gate calls this before dispatch.
+
+        if not os.environ.get("MY_BACKEND_API_KEY"):
+            return False
+
+        try:
+            import my_backend_sdk  # noqa: F401
+
+        except ImportError:
+            return False
+
+        return True
+
+    def list_models(self) -> List[Dict[str, Any]]:
+
+        # Catalog shown in `clawk tools` model picker.
+
+        return [
+            {
+                "id": "my-model-fast",
+                "display": "My Model (Fast)",
+                "speed": "~5s",
+                "strengths": "Quick iteration",
+                "price": "$0.01/image",
+            },
+            {
+                "id": "my-model-hq",
+                "display": "My Model (HQ)",
+                "speed": "~30s",
+                "strengths": "Highest fidelity",
+                "price": "$0.04/image",
+            },
+        ]
+
+    def default_model(self) -> Optional[str]:
+
+        return "my-model-fast"
+
+    def get_setup_schema(self) -> Dict[str, Any]:
+
+        # Metadata for the `clawk tools` picker — keys to prompt for at setup.
+
+        return {
+            "name": "My Backend",
+            "badge": "paid",  # optional; shown as a short tag in the picker
+            "tag": "One-line description shown under the name",
+            "env_vars": [
+                {
+                    "key": "MY_BACKEND_API_KEY",
+                    "prompt": "My Backend API key",
+                    "url": "https://my-backend.example.com/api-keys",
+                },
+            ],
+        }
+
+    def generate(
+        self,
+        prompt: str,
+        aspect_ratio: str = DEFAULT_ASPECT_RATIO,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+
+        prompt = (prompt or "").strip()
+
+        aspect_ratio = resolve_aspect_ratio(aspect_ratio)
+
+        if not prompt:
+            return error_response(
+                error="Prompt is required",
+                error_type="invalid_input",
+                provider=self.name,
+                prompt="",
+                aspect_ratio=aspect_ratio,
+            )
+
+        # Model selection precedence: env var → config → default. The helper
+
+        # _resolve_model() in the built-in openai plugin is a good reference.
+
+        model_id = kwargs.get("model") or self.default_model() or "my-model-fast"
+
+        try:
+            import my_backend_sdk
+
+            client = my_backend_sdk.Client(api_key=os.environ["MY_BACKEND_API_KEY"])
+
+            result = client.generate(
+                prompt=prompt,
+                model=model_id,
+                aspect_ratio=aspect_ratio,
+            )
+
+            # Two shapes supported:
+
+            #   - URL string: return it as `image`
+
+            #   - base64 data: save under $CLAWK_HOME/cache/images/ via save_b64_image()
+
+            if result.get("image_b64"):
+                path = save_b64_image(
+                    result["image_b64"],
+                    prefix=self.name,
+                    extension="png",
+                )
+
+                image = str(path)
+
+            else:
+                image = result["image_url"]
+
+            return success_response(
+                image=image,
+                model=model_id,
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                provider=self.name,
+            )
+
+        except Exception as exc:
+            return error_response(
+                error=str(exc),
+                error_type=type(exc).__name__,
+                provider=self.name,
+                model=model_id,
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+            )
+
+
+def register(ctx) -> None:
+    """Plugin entry point — called once at load time."""
+
+    ctx.register_image_gen_provider(MyBackendImageGenProvider())
 ```
 
 ## plugin.yaml

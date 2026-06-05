@@ -18,12 +18,16 @@ def _base_config(tmp_path):
 
 
 def test_command_requires_pipe_stdin_detects_gh_with_token():
-    assert terminal_tool_module._command_requires_pipe_stdin(
-        "gh auth login --hostname github.com --git-protocol https --with-token"
-    ) is True
-    assert terminal_tool_module._command_requires_pipe_stdin(
-        "gh auth login --web"
-    ) is False
+    assert (
+        terminal_tool_module._command_requires_pipe_stdin(
+            "gh auth login --hostname github.com --git-protocol https --with-token"
+        )
+        is True
+    )
+    assert (
+        terminal_tool_module._command_requires_pipe_stdin("gh auth login --web")
+        is False
+    )
 
 
 def test_terminal_background_disables_pty_for_gh_with_token(monkeypatch, tmp_path):
@@ -37,8 +41,14 @@ def test_terminal_background_disables_pty_for_gh_with_token(monkeypatch, tmp_pat
 
     monkeypatch.setattr(terminal_tool_module, "_get_env_config", lambda: config)
     monkeypatch.setattr(terminal_tool_module, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool_module, "_check_all_guards", lambda *_args, **_kwargs: {"approved": True})
-    monkeypatch.setattr(process_registry_module.process_registry, "spawn_local", fake_spawn_local)
+    monkeypatch.setattr(
+        terminal_tool_module,
+        "_check_all_guards",
+        lambda *_args, **_kwargs: {"approved": True},
+    )
+    monkeypatch.setattr(
+        process_registry_module.process_registry, "spawn_local", fake_spawn_local
+    )
     monkeypatch.setitem(terminal_tool_module._active_environments, "default", dummy_env)
     monkeypatch.setitem(terminal_tool_module._last_activity, "default", 0.0)
 
@@ -59,7 +69,9 @@ def test_terminal_background_disables_pty_for_gh_with_token(monkeypatch, tmp_pat
     assert "PTY disabled" in result["pty_note"]
 
 
-def test_terminal_background_keeps_pty_for_regular_interactive_commands(monkeypatch, tmp_path):
+def test_terminal_background_keeps_pty_for_regular_interactive_commands(
+    monkeypatch, tmp_path
+):
     config = _base_config(tmp_path)
     dummy_env = SimpleNamespace(env={})
     captured = {}
@@ -70,15 +82,21 @@ def test_terminal_background_keeps_pty_for_regular_interactive_commands(monkeypa
 
     monkeypatch.setattr(terminal_tool_module, "_get_env_config", lambda: config)
     monkeypatch.setattr(terminal_tool_module, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool_module, "_check_all_guards", lambda *_args, **_kwargs: {"approved": True})
-    monkeypatch.setattr(process_registry_module.process_registry, "spawn_local", fake_spawn_local)
+    monkeypatch.setattr(
+        terminal_tool_module,
+        "_check_all_guards",
+        lambda *_args, **_kwargs: {"approved": True},
+    )
+    monkeypatch.setattr(
+        process_registry_module.process_registry, "spawn_local", fake_spawn_local
+    )
     monkeypatch.setitem(terminal_tool_module._active_environments, "default", dummy_env)
     monkeypatch.setitem(terminal_tool_module._last_activity, "default", 0.0)
 
     try:
         result = json.loads(
             terminal_tool_module.terminal_tool(
-                command="python3 -c \"print(input())\"",
+                command='python3 -c "print(input())"',
                 background=True,
                 pty=True,
             )

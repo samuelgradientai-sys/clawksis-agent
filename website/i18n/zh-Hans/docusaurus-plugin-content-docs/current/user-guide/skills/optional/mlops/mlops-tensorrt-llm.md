@@ -68,25 +68,28 @@ pip install tensorrt_llm==1.2.0rc3
 
 ### 基本推理
 
-```python
-from tensorrt_llm import LLM, SamplingParams
-
-# 初始化模型
-llm = LLM(model="meta-llama/Meta-Llama-3-8B")
-
-# 配置采样参数
-sampling_params = SamplingParams(
-    max_tokens=100,
-    temperature=0.7,
-    top_p=0.9
-)
-
-# 生成
-prompts = ["Explain quantum computing"]
-outputs = llm.generate(prompts, sampling_params)
-
-for output in outputs:
-    print(output.text)
+```pythonfrom tensorrt_llm import LLM, SamplingParams
+
+
+# 初始化模型
+
+llm = LLM(model="meta-llama/Meta-Llama-3-8B")
+
+
+# 配置采样参数
+
+sampling_params = SamplingParams(max_tokens=100, temperature=0.7, top_p=0.9)
+
+
+# 生成
+
+prompts = ["Explain quantum computing"]
+
+outputs = llm.generate(prompts, sampling_params)
+
+
+for output in outputs:
+    print(output.text)
 ```
 
 ### 使用 trtllm-serve 提供服务
@@ -133,43 +136,37 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ### 量化模型（FP8）
 
-```python
-from tensorrt_llm import LLM
-
-# 加载 FP8 量化模型（速度提升 2 倍，内存减少 50%）
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-70B",
-    dtype="fp8",
-    max_num_tokens=8192
-)
-
-# 推理方式与之前相同
-outputs = llm.generate(["Summarize this article..."])
+```pythonfrom tensorrt_llm import LLM
+
+
+# 加载 FP8 量化模型（速度提升 2 倍，内存减少 50%）
+
+llm = LLM(model="meta-llama/Meta-Llama-3-70B", dtype="fp8", max_num_tokens=8192)
+
+
+# 推理方式与之前相同
+
+outputs = llm.generate(["Summarize this article..."])
 ```
 
 ### 多 GPU 部署
 
-```python
-# 跨 8 个 GPU 的张量并行
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-405B",
-    tensor_parallel_size=8,
-    dtype="fp8"
-)
+```python# 跨 8 个 GPU 的张量并行
+
+llm = LLM(model="meta-llama/Meta-Llama-3-405B", tensor_parallel_size=8, dtype="fp8")
 ```
 
 ### 批量推理
 
-```python
-# 高效处理 100 个 prompt
-prompts = [f"Question {i}: ..." for i in range(100)]
-
-outputs = llm.generate(
-    prompts,
-    sampling_params=SamplingParams(max_tokens=200)
-)
-
-# 自动 in-flight batching 以实现最大吞吐量
+```python# 高效处理 100 个 prompt
+
+prompts = [f"Question {i}: ..." for i in range(100)]
+
+
+outputs = llm.generate(prompts, sampling_params=SamplingParams(max_tokens=200))
+
+
+# 自动 in-flight batching 以实现最大吞吐量
 ```
 
 ## 性能基准

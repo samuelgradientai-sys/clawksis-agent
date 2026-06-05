@@ -108,10 +108,12 @@ class TestTodoToolFunction:
 
     def test_write_mode(self):
         store = TodoStore()
-        result = json.loads(todo_tool(
-            todos=[{"id": "1", "content": "New", "status": "in_progress"}],
-            store=store,
-        ))
+        result = json.loads(
+            todo_tool(
+                todos=[{"id": "1", "content": "New", "status": "in_progress"}],
+                store=store,
+            )
+        )
         assert result["summary"]["in_progress"] == 1
 
     def test_no_store_returns_error(self):

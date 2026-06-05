@@ -82,13 +82,15 @@ uv pip install --upgrade transformers
 
 在 `HeartMuLa` 类的 `setup_caches` 方法中，在 `reset_caches` 的 try/except 块之后、`with device:` 块之前，添加 RoPE 重新初始化代码：
 
-```python
-# Re-initialize RoPE caches that were skipped during meta-device loading
-from torchtune.models.llama3_1._position_embeddings import Llama3ScaledRoPE
-for module in self.modules():
-    if isinstance(module, Llama3ScaledRoPE) and not module.is_cache_built:
-        module.rope_init()
-        module.to(device)
+```python# Re-initialize RoPE caches that were skipped during meta-device loading
+
+from torchtune.models.llama3_1._position_embeddings import Llama3ScaledRoPE
+
+for module in self.modules():
+    if isinstance(module, Llama3ScaledRoPE) and not module.is_cache_built:
+        module.rope_init()
+
+        module.to(device)
 ```
 
 **原因**：`from_pretrained` 首先在 meta 设备上创建模型；`Llama3ScaledRoPE.rope_init()` 在 meta 张量上跳过缓存构建，且在权重加载到真实设备后也不会重建。

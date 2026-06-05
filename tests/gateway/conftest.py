@@ -121,12 +121,15 @@ def _ensure_discord_mock() -> None:
             self.color = color
             self.fields = []
             self.footer = None
+
         def add_field(self, *, name=None, value=None, inline=False, **_):
             self.fields.append({"name": name, "value": value, "inline": inline})
             return self
+
         def set_footer(self, *, text=None, icon_url=None, **_):
             self.footer = {"text": text, "icon_url": icon_url}
             return self
+
     discord_mod.Embed = _FakeEmbed
 
     # ui.View / ui.Select / ui.Button: real classes (not MagicMock) so
@@ -136,8 +139,10 @@ def _ensure_discord_mock() -> None:
         def __init__(self, timeout=None):
             self.timeout = timeout
             self.children = []
+
         def add_item(self, item):
             self.children.append(item)
+
         def clear_items(self):
             self.children.clear()
 
@@ -150,8 +155,19 @@ def _ensure_discord_mock() -> None:
             self.disabled = False
 
     class _FakeButton:
-        def __init__(self, *, label=None, style=None, custom_id=None, emoji=None,
-                     url=None, disabled=False, row=None, sku_id=None, **_):
+        def __init__(
+            self,
+            *,
+            label=None,
+            style=None,
+            custom_id=None,
+            emoji=None,
+            url=None,
+            disabled=False,
+            row=None,
+            sku_id=None,
+            **_,
+        ):
             self.label = label
             self.style = style
             self.custom_id = custom_id
@@ -167,21 +183,32 @@ def _ensure_discord_mock() -> None:
             self.label = label
             self.value = value
             self.description = description
+
     discord_mod.SelectOption = _FakeSelectOption
 
     discord_mod.ui = SimpleNamespace(
         View=_FakeView,
         Select=_FakeSelect,
         Button=_FakeButton,
-        button=lambda *a, **k: (lambda fn: fn),
+        button=lambda *a, **k: lambda fn: fn,
     )
     discord_mod.ButtonStyle = SimpleNamespace(
-        success=1, primary=2, secondary=2, danger=3,
-        green=1, grey=2, blurple=2, red=3,
+        success=1,
+        primary=2,
+        secondary=2,
+        danger=3,
+        green=1,
+        grey=2,
+        blurple=2,
+        red=3,
     )
     discord_mod.Color = SimpleNamespace(
-        orange=lambda: 1, green=lambda: 2, blue=lambda: 3,
-        red=lambda: 4, purple=lambda: 5, greyple=lambda: 6,
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+        greyple=lambda: 6,
     )
 
     # app_commands — needed by _register_slash_commands auto-registration
@@ -205,8 +232,8 @@ def _ensure_discord_mock() -> None:
             self.parent = parent
 
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         Group=_FakeGroup,
         Command=_FakeCommand,
@@ -416,6 +443,7 @@ def pytest_configure(config):
     # without a lock they'd all find no cache and all run the scan.
     try:
         from filelock import FileLock
+
         lock = FileLock(str(lock_file), timeout=120)
     except ImportError:
         # Fallback: no locking (still correct, just slower under contention).
@@ -423,8 +451,10 @@ def pytest_configure(config):
         class _NoLock:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 pass
+
         lock = _NoLock()
 
     with lock:
@@ -448,4 +478,3 @@ def pytest_configure(config):
             raise pytest.UsageError(msg)
         else:
             cache_file.write_text("clean", encoding="utf-8")
-

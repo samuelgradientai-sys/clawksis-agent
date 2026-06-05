@@ -20,8 +20,6 @@ On a fresh install, all three are no-ops — fall through to first-time setup.
 
 """
 
-
-
 from argparse import Namespace
 
 from contextlib import ExitStack
@@ -29,37 +27,22 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 
-
 import pytest
-
-
-
 
 
 def _make_setup_args(**overrides):
 
     return Namespace(
-
         non_interactive=overrides.get("non_interactive", False),
-
         section=overrides.get("section", None),
-
         reset=overrides.get("reset", False),
-
         reconfigure=overrides.get("reconfigure", False),
-
         quick=overrides.get("quick", False),
-
     )
 
 
-
-
-
 @pytest.fixture
-
 def existing_install(tmp_path, monkeypatch):
-
     """Simulate a returning user with an existing configured install."""
 
     home = tmp_path / ".clawksis"
@@ -73,13 +56,8 @@ def existing_install(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 @pytest.fixture
-
 def fresh_install(tmp_path, monkeypatch):
-
     """Simulate a first-time user with no existing configuration."""
 
     home = tmp_path / ".clawksis"
@@ -93,11 +71,7 @@ def fresh_install(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 def _enter_existing_install_patches(stack, **extra):
-
     """Apply standard existing-install mocks via an ExitStack.
 
 
@@ -111,132 +85,79 @@ def _enter_existing_install_patches(stack, **extra):
     # Unconditional mocks (no return values to assert against).
 
     for target, kwargs in [
-
         ("clawk_cli.setup.ensure_clawk_home", {}),
-
         ("clawk_cli.setup.is_interactive_stdin", {"return_value": True}),
-
         ("clawk_cli.config.is_managed", {"return_value": False}),
-
         ("clawk_cli.setup.load_config", {"return_value": {}}),
-
         ("clawk_cli.setup.save_config", {}),
-
         ("clawk_cli.setup.get_env_value", {"return_value": None}),
-
         ("clawk_cli.auth.get_active_provider", {"return_value": "openrouter"}),
-
         ("clawk_cli.setup._print_setup_summary", {}),
-
         ("clawk_cli.setup._offer_openclaw_migration", {"return_value": False}),
-
     ]:
-
         stack.enter_context(patch(target, **kwargs))
-
-
 
     # Named mocks caller wants to assert on.
 
     named = {}
 
     for name, target in extra.items():
-
         named[name] = stack.enter_context(patch(target))
 
     return named
 
 
-
-
-
 def _enter_fresh_install_patches(stack, **extra):
 
     for target, kwargs in [
-
         ("clawk_cli.setup.ensure_clawk_home", {}),
-
         ("clawk_cli.setup.is_interactive_stdin", {"return_value": True}),
-
         ("clawk_cli.config.is_managed", {"return_value": False}),
-
         ("clawk_cli.setup.load_config", {"return_value": {}}),
-
         ("clawk_cli.setup.save_config", {}),
-
         ("clawk_cli.auth.get_active_provider", {"return_value": None}),
-
         ("clawk_cli.setup.get_env_value", {"return_value": None}),
-
         ("clawk_cli.setup._offer_openclaw_migration", {"return_value": False}),
-
     ]:
-
         stack.enter_context(patch(target, **kwargs))
-
-
 
     named = {}
 
     for name, target_spec in extra.items():
-
         if isinstance(target_spec, tuple):
-
             target, kwargs = target_spec
 
             named[name] = stack.enter_context(patch(target, **kwargs))
 
         else:
-
             named[name] = stack.enter_context(patch(target_spec))
 
     return named
 
 
-
-
-
 class TestExistingInstallDefault:
-
     """Bare `clawk setup` on an existing install = full reconfigure wizard."""
 
-
-
     def test_bare_setup_runs_full_reconfigure_without_menu(self, existing_install):
-
         """No menu, no prompt_choice — just run every section in sequence."""
 
         args = _make_setup_args()  # no flags
 
-
-
         with ExitStack() as stack:
-
             m = _enter_existing_install_patches(
-
                 stack,
-
                 prompt_choice="clawk_cli.setup.prompt_choice",
-
                 quick="clawk_cli.setup._run_quick_setup",
-
                 model="clawk_cli.setup.setup_model_provider",
-
                 terminal="clawk_cli.setup.setup_terminal_backend",
-
                 agent="clawk_cli.setup.setup_agent_settings",
-
                 gateway="clawk_cli.setup.setup_gateway",
-
                 tools="clawk_cli.setup.setup_tools",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
-
-
 
         # No menu shown.
 
@@ -260,41 +181,25 @@ class TestExistingInstallDefault:
 
         m["tools"].assert_called_once()
 
-
-
     def test_reconfigure_flag_is_backwards_compat_noop(self, existing_install):
-
         """`clawk setup --reconfigure` behaves the same as bare `clawk setup`."""
 
         args = _make_setup_args(reconfigure=True)
 
-
-
         with ExitStack() as stack:
-
             m = _enter_existing_install_patches(
-
                 stack,
-
                 prompt_choice="clawk_cli.setup.prompt_choice",
-
                 model="clawk_cli.setup.setup_model_provider",
-
                 terminal="clawk_cli.setup.setup_terminal_backend",
-
                 agent="clawk_cli.setup.setup_agent_settings",
-
                 gateway="clawk_cli.setup.setup_gateway",
-
                 tools="clawk_cli.setup.setup_tools",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
-
-
 
         m["prompt_choice"].assert_not_called()
 
@@ -309,46 +214,27 @@ class TestExistingInstallDefault:
         m["tools"].assert_called_once()
 
 
-
-
-
 class TestQuickFlag:
-
     """`--quick` on an existing install runs the fill-missing flow."""
-
-
 
     def test_quick_flag_runs_quick_setup_only(self, existing_install):
 
         args = _make_setup_args(quick=True)
 
-
-
         with ExitStack() as stack:
-
             m = _enter_existing_install_patches(
-
                 stack,
-
                 quick="clawk_cli.setup._run_quick_setup",
-
                 model="clawk_cli.setup.setup_model_provider",
-
                 terminal="clawk_cli.setup.setup_terminal_backend",
-
                 agent="clawk_cli.setup.setup_agent_settings",
-
                 gateway="clawk_cli.setup.setup_gateway",
-
                 tools="clawk_cli.setup.setup_tools",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
-
-
 
         m["quick"].assert_called_once()
 
@@ -365,112 +251,69 @@ class TestQuickFlag:
         m["tools"].assert_not_called()
 
 
-
-
-
 class TestFreshInstall:
-
     """On a fresh install (no active provider), flags are no-ops."""
-
-
 
     def test_bare_setup_runs_first_time_flow(self, fresh_install):
 
         args = _make_setup_args()
 
-
-
         with ExitStack() as stack:
-
             m = _enter_fresh_install_patches(
-
                 stack,
-
                 prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
-
                 first="clawk_cli.setup._run_first_time_quick_setup",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
-
-
 
         m["prompt"].assert_called_once()  # quick-vs-full prompt
 
         m["first"].assert_called_once()
 
-
-
     def test_reconfigure_on_fresh_install_falls_through(self, fresh_install):
 
         args = _make_setup_args(reconfigure=True)
 
-
-
         with ExitStack() as stack:
-
             m = _enter_fresh_install_patches(
-
                 stack,
-
                 prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
-
                 first="clawk_cli.setup._run_first_time_quick_setup",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
 
-
-
         m["prompt"].assert_called_once()
 
         m["first"].assert_called_once()
-
-
 
     def test_quick_on_fresh_install_falls_through(self, fresh_install):
 
         args = _make_setup_args(quick=True)
 
-
-
         with ExitStack() as stack:
-
             m = _enter_fresh_install_patches(
-
                 stack,
-
                 prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
-
                 first="clawk_cli.setup._run_first_time_quick_setup",
-
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
 
-
-
         m["prompt"].assert_called_once()
 
         m["first"].assert_called_once()
 
 
-
-
-
 class TestArgparse:
-
     """The flags are plumbed through argparse to cmd_setup."""
-
-
 
     def test_reconfigure_flag_reaches_cmd_setup(self, monkeypatch):
 
@@ -478,33 +321,24 @@ class TestArgparse:
 
         from clawk_cli.main import main
 
-
-
         captured = {}
 
         monkeypatch.setattr(
-
             "clawk_cli.setup.run_setup_wizard",
-
             lambda args: captured.setdefault("args", args),
-
         )
 
         monkeypatch.setattr(sys, "argv", ["clawk", "setup", "--reconfigure"])
 
         try:
-
             main()
 
         except SystemExit:
-
             pass
 
         assert captured["args"].reconfigure is True
 
         assert captured["args"].quick is False
-
-
 
     def test_quick_flag_reaches_cmd_setup(self, monkeypatch):
 
@@ -512,33 +346,24 @@ class TestArgparse:
 
         from clawk_cli.main import main
 
-
-
         captured = {}
 
         monkeypatch.setattr(
-
             "clawk_cli.setup.run_setup_wizard",
-
             lambda args: captured.setdefault("args", args),
-
         )
 
         monkeypatch.setattr(sys, "argv", ["clawk", "setup", "--quick"])
 
         try:
-
             main()
 
         except SystemExit:
-
             pass
 
         assert captured["args"].quick is True
 
         assert captured["args"].reconfigure is False
-
-
 
     def test_bare_setup_has_both_flags_false(self, monkeypatch):
 
@@ -546,29 +371,21 @@ class TestArgparse:
 
         from clawk_cli.main import main
 
-
-
         captured = {}
 
         monkeypatch.setattr(
-
             "clawk_cli.setup.run_setup_wizard",
-
             lambda args: captured.setdefault("args", args),
-
         )
 
         monkeypatch.setattr(sys, "argv", ["clawk", "setup"])
 
         try:
-
             main()
 
         except SystemExit:
-
             pass
 
         assert captured["args"].reconfigure is False
 
         assert captured["args"].quick is False
-

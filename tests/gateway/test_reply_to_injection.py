@@ -7,6 +7,7 @@ in the conversation history. History can contain the same or similar text
 multiple times, and without an explicit pointer the agent has to guess
 which prior message the user is referencing.
 """
+
 import pytest
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
@@ -80,9 +81,7 @@ async def test_reply_prefix_still_injected_when_text_in_history():
         {"role": "user", "content": "I'm thinking of going to Japan or Italy."},
         {
             "role": "assistant",
-            "content": (
-                f"{quoted} Italy is better if you prefer a relaxed pace."
-            ),
+            "content": (f"{quoted} Italy is better if you prefer a relaxed pace."),
         },
         {"role": "user", "content": "How long should I stay?"},
         {"role": "assistant", "content": "For Japan, 10-14 days is ideal."},

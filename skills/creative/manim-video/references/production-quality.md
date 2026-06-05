@@ -18,12 +18,12 @@ Before writing any Manim code:
 
 ```python
 # RULE: buff >= 0.5 for edge text
-label.to_edge(DOWN, buff=0.5)     # GOOD
-label.to_edge(DOWN, buff=0.3)     # BAD — may clip
+label.to_edge(DOWN, buff=0.5)  # GOOD
+label.to_edge(DOWN, buff=0.3)  # BAD — may clip
 
 # RULE: FadeOut previous before adding new at same position
 self.play(ReplacementTransform(note1, note2))  # GOOD
-self.play(Write(note2))                          # BAD — overlaps note1
+self.play(Write(note2))  # BAD — overlaps note1
 
 # RULE: Reduce font size for dense scenes
 # When > 4 text elements visible, use font_size=20 not 28

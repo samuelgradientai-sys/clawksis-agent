@@ -327,40 +327,63 @@ description: "My custom Python TTS backend"
 ```
 
 `__init__.py`:
-```python
-from agent.tts_provider import TTSProvider
-
-
-class MyTTSProvider(TTSProvider):
-    @property
-    def name(self) -> str:
-        return "my-tts"  # what tts.provider matches against
-
-    @property
-    def display_name(self) -> str:
-        return "My Custom TTS"
-
-    def is_available(self) -> bool:
-        # Return False when credentials/deps are missing — picker skips
-        # this row but the dispatcher still routes here on explicit config.
-        import os
-        return bool(os.environ.get("MY_TTS_API_KEY"))
-
-    def synthesize(self, text, output_path, *, voice=None, model=None,
-                   speed=None, format="mp3", **extra) -> str:
-        # Write audio bytes to output_path, return the path.
-        # Raise on failure — the dispatcher converts exceptions to a
-        # standard error envelope.
-        import my_tts_sdk
-        client = my_tts_sdk.Client()
-        audio_bytes = client.synthesize(text=text, voice=voice or "default")
-        with open(output_path, "wb") as f:
-            f.write(audio_bytes)
-        return output_path
-
-
-def register(ctx):
-    ctx.register_tts_provider(MyTTSProvider())
+```pythonfrom agent.tts_provider import TTSProvider
+
+
+class MyTTSProvider(TTSProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-tts"  # what tts.provider matches against
+
+    @property
+    def display_name(self) -> str:
+
+        return "My Custom TTS"
+
+    def is_available(self) -> bool:
+
+        # Return False when credentials/deps are missing — picker skips
+
+        # this row but the dispatcher still routes here on explicit config.
+
+        import os
+
+        return bool(os.environ.get("MY_TTS_API_KEY"))
+
+    def synthesize(
+        self,
+        text,
+        output_path,
+        *,
+        voice=None,
+        model=None,
+        speed=None,
+        format="mp3",
+        **extra,
+    ) -> str:
+
+        # Write audio bytes to output_path, return the path.
+
+        # Raise on failure — the dispatcher converts exceptions to a
+
+        # standard error envelope.
+
+        import my_tts_sdk
+
+        client = my_tts_sdk.Client()
+
+        audio_bytes = client.synthesize(text=text, voice=voice or "default")
+
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
+
+        return output_path
+
+
+def register(ctx):
+
+    ctx.register_tts_provider(MyTTSProvider())
 ```
 
 Enable it (`clawk plugins enable my-tts`), point `tts.provider` at it (`tts.provider: my-tts` in `config.yaml`), and the `text_to_speech` tool will route through your plugin.
@@ -583,50 +606,65 @@ description: "My custom Python STT backend"
 ```
 
 `__init__.py`:
-```python
-from agent.transcription_provider import TranscriptionProvider
-
-
-class MySTTProvider(TranscriptionProvider):
-    @property
-    def name(self) -> str:
-        return "my-stt"  # what stt.provider matches against
-
-    @property
-    def display_name(self) -> str:
-        return "My Custom STT"
-
-    def is_available(self) -> bool:
-        # Return False when credentials/deps are missing — picker skips
-        # this row but the dispatcher still routes here on explicit config.
-        import os
-        return bool(os.environ.get("MY_STT_API_KEY"))
-
-    def transcribe(self, file_path, *, model=None, language=None, **extra):
-        # Return the standard transcribe envelope:
-        #   {"success": bool, "transcript": str, "provider": str, "error": str}
-        # Do NOT raise — convert exceptions to the error envelope so the
-        # gateway/CLI caller sees a consistent shape on failure.
-        try:
-            import my_stt_sdk
-            client = my_stt_sdk.Client()
-            text = client.transcribe(open(file_path, "rb"))
-            return {
-                "success": True,
-                "transcript": text,
-                "provider": "my-stt",
-            }
-        except Exception as exc:
-            return {
-                "success": False,
-                "transcript": "",
-                "error": f"my-stt failed: {exc}",
-                "provider": "my-stt",
-            }
-
-
-def register(ctx):
-    ctx.register_transcription_provider(MySTTProvider())
+```pythonfrom agent.transcription_provider import TranscriptionProvider
+
+
+class MySTTProvider(TranscriptionProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-stt"  # what stt.provider matches against
+
+    @property
+    def display_name(self) -> str:
+
+        return "My Custom STT"
+
+    def is_available(self) -> bool:
+
+        # Return False when credentials/deps are missing — picker skips
+
+        # this row but the dispatcher still routes here on explicit config.
+
+        import os
+
+        return bool(os.environ.get("MY_STT_API_KEY"))
+
+    def transcribe(self, file_path, *, model=None, language=None, **extra):
+
+        # Return the standard transcribe envelope:
+
+        #   {"success": bool, "transcript": str, "provider": str, "error": str}
+
+        # Do NOT raise — convert exceptions to the error envelope so the
+
+        # gateway/CLI caller sees a consistent shape on failure.
+
+        try:
+            import my_stt_sdk
+
+            client = my_stt_sdk.Client()
+
+            text = client.transcribe(open(file_path, "rb"))
+
+            return {
+                "success": True,
+                "transcript": text,
+                "provider": "my-stt",
+            }
+
+        except Exception as exc:
+            return {
+                "success": False,
+                "transcript": "",
+                "error": f"my-stt failed: {exc}",
+                "provider": "my-stt",
+            }
+
+
+def register(ctx):
+
+    ctx.register_transcription_provider(MySTTProvider())
 ```
 
 Enable it (`clawk plugins enable my-stt`), set `stt.provider: my-stt` in `config.yaml`, and voice-message transcription will route through your plugin.

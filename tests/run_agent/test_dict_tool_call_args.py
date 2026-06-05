@@ -31,7 +31,9 @@ class _FakeChatCompletions:
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
-                    message=SimpleNamespace(content="done", reasoning=None, tool_calls=[]),
+                    message=SimpleNamespace(
+                        content="done", reasoning=None, tool_calls=[]
+                    ),
                     finish_reason="stop",
                 )
             ],
@@ -54,7 +56,10 @@ def test_tool_call_validation_accepts_dict_arguments(monkeypatch):
     )
     monkeypatch.setattr(
         "run_agent.handle_function_call",
-        lambda name, args, task_id=None, **kwargs: json.dumps({"ok": True, "args": args}),
+        lambda name, args, task_id=None, **kwargs: json.dumps({
+            "ok": True,
+            "args": args,
+        }),
     )
 
     agent = AIAgent(

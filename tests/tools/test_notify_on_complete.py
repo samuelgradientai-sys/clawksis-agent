@@ -52,6 +52,7 @@ def _make_session(
 # ProcessSession field
 # =========================================================================
 
+
 class TestProcessSessionField:
     def test_default_false(self):
         s = ProcessSession(id="proc_1", command="echo hi")
@@ -65,6 +66,7 @@ class TestProcessSessionField:
 # =========================================================================
 # Completion queue
 # =========================================================================
+
 
 class TestCompletionQueue:
     def test_queue_exists(self, registry):
@@ -180,6 +182,7 @@ class TestCompletionQueue:
 # Checkpoint persistence
 # =========================================================================
 
+
 class TestCheckpointNotify:
     def test_checkpoint_includes_notify(self, registry, tmp_path):
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
@@ -202,13 +205,17 @@ class TestCheckpointNotify:
 
     def test_recover_preserves_notify(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_live",
-            "command": "sleep 999",
-            "pid": os.getpid(),
-            "task_id": "t1",
-            "notify_on_complete": True,
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),
+                    "task_id": "t1",
+                    "notify_on_complete": True,
+                }
+            ])
+        )
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -217,20 +224,24 @@ class TestCheckpointNotify:
 
     def test_recover_requeues_notify_watchers(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_live",
-            "command": "sleep 999",
-            "pid": os.getpid(),
-            "task_id": "t1",
-            "session_key": "sk1",
-            "watcher_platform": "telegram",
-            "watcher_chat_id": "123",
-            "watcher_user_id": "u123",
-            "watcher_user_name": "alice",
-            "watcher_thread_id": "42",
-            "watcher_interval": 5,
-            "notify_on_complete": True,
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),
+                    "task_id": "t1",
+                    "session_key": "sk1",
+                    "watcher_platform": "telegram",
+                    "watcher_chat_id": "123",
+                    "watcher_user_id": "u123",
+                    "watcher_user_name": "alice",
+                    "watcher_thread_id": "42",
+                    "watcher_interval": 5,
+                    "notify_on_complete": True,
+                }
+            ])
+        )
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -242,12 +253,16 @@ class TestCheckpointNotify:
     def test_recover_defaults_false(self, registry, tmp_path):
         """Old checkpoint entries without the field default to False."""
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_live",
-            "command": "sleep 999",
-            "pid": os.getpid(),
-            "task_id": "t1",
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),
+                    "task_id": "t1",
+                }
+            ])
+        )
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -259,9 +274,11 @@ class TestCheckpointNotify:
 # Terminal tool schema
 # =========================================================================
 
+
 class TestTerminalSchema:
     def test_schema_has_notify_on_complete(self):
         from tools.terminal_tool import TERMINAL_SCHEMA
+
         props = TERMINAL_SCHEMA["parameters"]["properties"]
         assert "notify_on_complete" in props
         assert props["notify_on_complete"]["type"] == "boolean"
@@ -270,7 +287,10 @@ class TestTerminalSchema:
     def test_handler_passes_notify(self):
         """_handle_terminal passes notify_on_complete to terminal_tool."""
         from tools.terminal_tool import _handle_terminal
-        with patch("tools.terminal_tool.terminal_tool", return_value='{"ok":true}') as mock_tt:
+
+        with patch(
+            "tools.terminal_tool.terminal_tool", return_value='{"ok":true}'
+        ) as mock_tt:
             _handle_terminal(
                 {"command": "echo hi", "background": True, "notify_on_complete": True},
                 task_id="t1",
@@ -283,15 +303,18 @@ class TestTerminalSchema:
 # Code execution blocked params
 # =========================================================================
 
+
 class TestCodeExecutionBlocked:
     def test_notify_on_complete_blocked_in_sandbox(self):
         from tools.code_execution_tool import _TERMINAL_BLOCKED_PARAMS
+
         assert "notify_on_complete" in _TERMINAL_BLOCKED_PARAMS
 
 
 # =========================================================================
 # Completion consumed suppression
 # =========================================================================
+
 
 class TestCompletionConsumed:
     """Test that wait/poll/log suppress redundant completion notifications."""
@@ -329,7 +352,9 @@ class TestCompletionConsumed:
 
     def test_log_marks_completion_consumed(self, registry):
         """read_log() on exited session marks as consumed."""
-        s = _make_session(sid="proc_log", notify_on_complete=True, output="line1\nline2")
+        s = _make_session(
+            sid="proc_log", notify_on_complete=True, output="line1\nline2"
+        )
         s.exited = True
         s.exit_code = 0
         registry._finished[s.id] = s
@@ -398,8 +423,14 @@ def _silent_bg_harness(monkeypatch, tmp_path):
 
     monkeypatch.setattr(terminal_tool_module, "_get_env_config", lambda: config)
     monkeypatch.setattr(terminal_tool_module, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool_module, "_check_all_guards", lambda *_args, **_kwargs: {"approved": True})
-    monkeypatch.setattr(process_registry_module.process_registry, "spawn_local", fake_spawn_local)
+    monkeypatch.setattr(
+        terminal_tool_module,
+        "_check_all_guards",
+        lambda *_args, **_kwargs: {"approved": True},
+    )
+    monkeypatch.setattr(
+        process_registry_module.process_registry, "spawn_local", fake_spawn_local
+    )
     monkeypatch.setitem(terminal_tool_module._active_environments, "default", dummy_env)
     monkeypatch.setitem(terminal_tool_module._last_activity, "default", 0.0)
     return terminal_tool_module
@@ -481,6 +512,7 @@ def test_foreground_command_does_not_emit_hint(monkeypatch, tmp_path):
     # exec method to short-circuit to a clean exit so the test doesn't
     # actually shell out.
     from types import SimpleNamespace
+
     dummy_env = SimpleNamespace(
         env={},
         execute=lambda *a, **kw: {"output": "done", "exit_code": 0, "error": None},
@@ -529,7 +561,7 @@ def test_homebrew_ci_poller_via_statusCheckRollup_emits_hint(monkeypatch, tmp_pa
                     "status=$(gh pr view $PR --json statusCheckRollup "
                     "--jq '[.statusCheckRollup[] | .conclusion] "
                     "| group_by(.) | map({k:.[0],v:length}) | from_entries'); "
-                    "echo \"$status\"; sleep 30; done"
+                    'echo "$status"; sleep 30; done'
                 ),
                 background=True,
                 notify_on_complete=True,
@@ -545,12 +577,14 @@ def test_homebrew_ci_poller_via_statusCheckRollup_emits_hint(monkeypatch, tmp_pa
         "Hint must name the canonical skill file so the agent can find the verbatim snippets"
     )
     # Naming exit-code-driven OR column-2 in the hint is what makes it actionable.
-    assert "exit" in hint.lower() or "column-2" in hint.lower() or "tab" in hint.lower(), (
-        "Hint must point at the canonical alternatives (exit-code or column-2)"
-    )
+    assert (
+        "exit" in hint.lower() or "column-2" in hint.lower() or "tab" in hint.lower()
+    ), "Hint must point at the canonical alternatives (exit-code or column-2)"
 
 
-def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(monkeypatch, tmp_path):
+def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(
+    monkeypatch, tmp_path
+):
     """`gh pr checks` doesn't emit JSON, so piping it to jq is a confused-
     intent anti-pattern that produces silent failures (jq fails, loop
     keeps spinning with empty data)."""
@@ -576,7 +610,9 @@ def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(monkeypatch,
     assert "green-ci-policy" in hint
 
 
-def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(monkeypatch, tmp_path):
+def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(
+    monkeypatch, tmp_path
+):
     """The blessed column-2 awk-on-tabs poller from green-ci-policy is the
     PREFERRED pattern for sharded matrices. Must not be flagged as
     homebrew — the gating signal is statusCheckRollup or `gh pr checks
@@ -588,10 +624,10 @@ def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(monkeypatch, t
                 command=(
                     "PR=1; while :; do "
                     "out=$(gh pr checks $PR 2>&1); "
-                    "pending=$(echo \"$out\" | awk -F\"\\t\" \"\\$2==\\\"pending\\\"\" | wc -l); "
-                    "failed=$(echo \"$out\" | awk -F\"\\t\" \"\\$2==\\\"fail\\\"\" | wc -l); "
-                    "if [ \"$pending\" -eq 0 ]; then "
-                    "[ \"$failed\" -gt 0 ] && exit 1 || exit 0; "
+                    'pending=$(echo "$out" | awk -F"\\t" "\\$2==\\"pending\\"" | wc -l); '
+                    'failed=$(echo "$out" | awk -F"\\t" "\\$2==\\"fail\\"" | wc -l); '
+                    'if [ "$pending" -eq 0 ]; then '
+                    '[ "$failed" -gt 0 ] && exit 1 || exit 0; '
                     "fi; sleep 30; "
                     "done"
                 ),
@@ -608,7 +644,9 @@ def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(monkeypatch, t
     )
 
 
-def test_canonical_gh_pr_checks_exit_code_loop_does_not_emit_hint(monkeypatch, tmp_path):
+def test_canonical_gh_pr_checks_exit_code_loop_does_not_emit_hint(
+    monkeypatch, tmp_path
+):
     """The blessed exit-code-driven snippet from green-ci-policy is exactly
     what we want — no jq, no awk-on-stdout, gates the loop on exit code.
     Must not be flagged as a homebrew anti-pattern."""

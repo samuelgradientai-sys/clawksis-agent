@@ -11,10 +11,13 @@ from gateway.session import SessionStore
 
 
 @pytest.mark.asyncio
-async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, monkeypatch):
+async def test_gateway_retry_replaces_last_user_turn_in_transcript(
+    tmp_path, monkeypatch
+):
     # Pin DEFAULT_DB_PATH so SessionDB() doesn't write to the real ~/.clawksis/state.db.
     # (Module-level constant snapshot, see test_load_transcript_db_only.)
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -42,11 +45,13 @@ async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, mon
     async def fake_handle_message(event):
         assert event.text == "retry me"
         transcript_before = store.load_transcript(session_id)
-        assert [m.get("content") for m in transcript_before if m.get("role") == "user"] == [
-            "first question"
-        ]
+        assert [
+            m.get("content") for m in transcript_before if m.get("role") == "user"
+        ] == ["first question"]
         store.append_to_transcript(session_id, {"role": "user", "content": event.text})
-        store.append_to_transcript(session_id, {"role": "assistant", "content": "new answer"})
+        store.append_to_transcript(
+            session_id, {"role": "assistant", "content": "new answer"}
+        )
         return "new answer"
 
     gw._handle_message = AsyncMock(side_effect=fake_handle_message)
@@ -61,7 +66,9 @@ async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, mon
         "first question",
         "retry me",
     ]
-    assert [m.get("content") for m in transcript_after if m.get("role") == "assistant"] == [
+    assert [
+        m.get("content") for m in transcript_after if m.get("role") == "assistant"
+    ] == [
         "first answer",
         "new answer",
     ]

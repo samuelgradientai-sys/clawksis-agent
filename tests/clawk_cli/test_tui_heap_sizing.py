@@ -15,7 +15,7 @@ import clawk_cli.main as m
 
 V2 = "/sys/fs/cgroup/memory.max"
 V1 = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
-GB = 1024 ** 3
+GB = 1024**3
 
 
 def _fake_open(files: dict):
@@ -71,7 +71,9 @@ class TestReadCgroupMemoryLimit:
 
 class TestResolveTuiHeapMb:
     def _resolve(self, limit_bytes):
-        with mock.patch.object(m, "_read_cgroup_memory_limit", return_value=limit_bytes):
+        with mock.patch.object(
+            m, "_read_cgroup_memory_limit", return_value=limit_bytes
+        ):
             return m._resolve_tui_heap_mb()
 
     def test_unconstrained_uses_default(self):
@@ -104,7 +106,9 @@ class TestNodeOptionsTokenMerge:
     already supplied one, and must preserve unrelated NODE_OPTIONS flags."""
 
     def _merge(self, node_options, limit_bytes):
-        with mock.patch.object(m, "_read_cgroup_memory_limit", return_value=limit_bytes):
+        with mock.patch.object(
+            m, "_read_cgroup_memory_limit", return_value=limit_bytes
+        ):
             tokens = node_options.split()
             if not any(t.startswith("--max-old-space-size=") for t in tokens):
                 tokens.append(f"--max-old-space-size={m._resolve_tui_heap_mb()}")
@@ -117,7 +121,13 @@ class TestNodeOptionsTokenMerge:
         assert self._merge("", 4 * GB) == "--max-old-space-size=3072"
 
     def test_user_override_respected(self):
-        assert self._merge("--max-old-space-size=12288", 2 * GB) == "--max-old-space-size=12288"
+        assert (
+            self._merge("--max-old-space-size=12288", 2 * GB)
+            == "--max-old-space-size=12288"
+        )
 
     def test_preserves_other_flags(self):
-        assert self._merge("--enable-source-maps", 4 * GB) == "--enable-source-maps --max-old-space-size=3072"
+        assert (
+            self._merge("--enable-source-maps", 4 * GB)
+            == "--enable-source-maps --max-old-space-size=3072"
+        )

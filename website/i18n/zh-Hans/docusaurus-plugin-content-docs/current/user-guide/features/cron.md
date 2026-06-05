@@ -63,28 +63,26 @@ Cron 任务可以在运行 prompt（提示词）之前加载一个或多个 skil
 
 ### 单个 skill
 
-```python
-cronjob(
-    action="create",
-    skill="blogwatcher",
-    prompt="Check the configured feeds and summarize anything new.",
-    schedule="0 9 * * *",
-    name="Morning feeds",
-)
+```pythoncronjob(
+    action="create",
+    skill="blogwatcher",
+    prompt="Check the configured feeds and summarize anything new.",
+    schedule="0 9 * * *",
+    name="Morning feeds",
+)
 ```
 
 ### 多个 skill
 
 Skill 按顺序加载。Prompt 作为任务指令叠加在这些 skill 之上。
 
-```python
-cronjob(
-    action="create",
-    skills=["blogwatcher", "maps"],
-    prompt="Look for new local events and interesting nearby places, then combine them into one short brief.",
-    schedule="every 6h",
-    name="Local brief",
-)
+```pythoncronjob(
+    action="create",
+    skills=["blogwatcher", "maps"],
+    prompt="Look for new local events and interesting nearby places, then combine them into one short brief.",
+    schedule="every 6h",
+    name="Local brief",
+)
 ```
 
 当你希望定时 agent 继承可复用的工作流，而不必将完整的 skill 文本塞入 cron prompt 本身时，这非常有用。
@@ -100,14 +98,14 @@ clawk cron create "every 1d at 09:00" \
   --workdir /home/me/projects/acme
 ```
 
-```python
-# 在聊天中，通过 cronjob 工具
-cronjob(
-    action="create",
-    schedule="every 1d at 09:00",
-    workdir="/home/me/projects/acme",
-    prompt="Audit open PRs, summarize CI health, and post to #eng",
-)
+```python# 在聊天中，通过 cronjob 工具
+
+cronjob(
+    action="create",
+    schedule="every 1d at 09:00",
+    workdir="/home/me/projects/acme",
+    prompt="Audit open PRs, summarize CI health, and post to #eng",
+)
 ```
 
 设置 `workdir` 后：
@@ -132,14 +130,14 @@ clawk cron create "every 1d at 03:00" \
   --profile night-ops
 ```
 
-```python
-# 在聊天中，通过 cronjob 工具
-cronjob(
-    action="create",
-    schedule="every 1d at 03:00",
-    prompt="Tail the security log and flag anomalies",
-    profile="night-ops",
-)
+```python# 在聊天中，通过 cronjob 工具
+
+cronjob(
+    action="create",
+    schedule="every 1d at 03:00",
+    prompt="Tail the security log and flag anomalies",
+    profile="night-ops",
+)
 ```
 
 使用 `--profile default` 可显式固定到根 Clawksis profile。指定的 profile 必须已存在；调度器不会动态创建 profile。在 `cron edit` 时清除 profile 固定，传入空字符串（`--profile ""` 或 `profile=""`）——任务将恢复在调度器当前所在的 profile 中运行。
@@ -376,10 +374,14 @@ Ping me on Telegram if RAM is over 85%, every 5 minutes.
 
 Clawksis 会通过 `write_file` 将检查脚本写入 `~/.clawksis/scripts/`，然后调用：
 
-```python
-cronjob(action="create", schedule="every 5m",
-        script="memory-watchdog.sh", no_agent=True,
-        deliver="telegram", name="memory-watchdog")
+```pythoncronjob(
+    action="create",
+    schedule="every 5m",
+    script="memory-watchdog.sh",
+    no_agent=True,
+    deliver="telegram",
+    name="memory-watchdog",
+)
 ```
 
 当消息内容完全由脚本决定时（看门狗、阈值告警、心跳），它会自动选择 `no_agent=True`。同一工具也让 agent 可以暂停、恢复、编辑和删除任务——整个生命周期都通过聊天驱动，无需任何人接触 CLI。
@@ -390,33 +392,38 @@ cronjob(action="create", schedule="every 5m",
 
 Cron 任务在隔离的会话中运行，不保留之前运行的记忆。但有时一个任务的输出恰好是下一个任务所需的输入。`context_from` 参数自动建立这种连接——任务 B 的 prompt 在运行时会将任务 A 的最新输出作为上下文前置。
 
-```python
-# 任务 1：收集原始数据
-cronjob(
-    action="create",
-    prompt="Fetch the top 10 AI/ML stories from Hacker News. Save them to ~/.clawksis/data/briefs/raw.md in markdown format with title, URL, and score.",
-    schedule="0 7 * * *",
-    name="AI News Collector",
-)
-
-# 任务 2：分类——接收任务 1 的输出作为上下文
-# 从 cronjob(action="list") 获取任务 1 的 ID
-cronjob(
-    action="create",
-    prompt="Read ~/.clawksis/data/briefs/raw.md. Score each story 1–10 for engagement potential and novelty. Output the top 5 to ~/.clawksis/data/briefs/ranked.md.",
-    schedule="30 7 * * *",
-    context_from="<job1_id>",
-    name="AI News Triage",
-)
-
-# 任务 3：发布——接收任务 2 的输出作为上下文
-cronjob(
-    action="create",
-    prompt="Read ~/.clawksis/data/briefs/ranked.md. Write 3 tweet drafts (hook + body + hashtags). Deliver to telegram:7976161601.",
-    schedule="0 8 * * *",
-    context_from="<job2_id>",
-    name="AI News Brief",
-)
+```python# 任务 1：收集原始数据
+
+cronjob(
+    action="create",
+    prompt="Fetch the top 10 AI/ML stories from Hacker News. Save them to ~/.clawksis/data/briefs/raw.md in markdown format with title, URL, and score.",
+    schedule="0 7 * * *",
+    name="AI News Collector",
+)
+
+
+# 任务 2：分类——接收任务 1 的输出作为上下文
+
+# 从 cronjob(action="list") 获取任务 1 的 ID
+
+cronjob(
+    action="create",
+    prompt="Read ~/.clawksis/data/briefs/raw.md. Score each story 1–10 for engagement potential and novelty. Output the top 5 to ~/.clawksis/data/briefs/ranked.md.",
+    schedule="30 7 * * *",
+    context_from="<job1_id>",
+    name="AI News Triage",
+)
+
+
+# 任务 3：发布——接收任务 2 的输出作为上下文
+
+cronjob(
+    action="create",
+    prompt="Read ~/.clawksis/data/briefs/ranked.md. Write 3 tweet drafts (hook + body + hashtags). Deliver to telegram:7976161601.",
+    schedule="0 8 * * *",
+    context_from="<job2_id>",
+    name="AI News Brief",
+)
 ```
 
 **工作原理：**
@@ -496,13 +503,12 @@ every 1d     → 每天
 
 可以覆盖：
 
-```python
-cronjob(
-    action="create",
-    prompt="...",
-    schedule="every 2h",
-    repeat=5,
-)
+```pythoncronjob(
+    action="create",
+    prompt="...",
+    schedule="every 2h",
+    repeat=5,
+)
 ```
 
 ## 以编程方式管理任务
@@ -552,16 +558,22 @@ cronjob(action="create", name="weekly-news-summary",
 
 ……cron 将完全跳过本次 tick 的 agent 运行。适用于高频轮询（每 1–5 分钟），只在状态实际发生变化时才需要唤醒 LLM——否则你会为一遍遍的零内容 agent 轮次付费。
 
-```python
-# 预检脚本
-import json, sys
-latest = fetch_latest_issue_count()
-prev = read_state("issue_count")
-if latest == prev:
-    print(json.dumps({"wakeAgent": False}))   # 跳过本次 tick
-    sys.exit(0)
-write_state("issue_count", latest)
-print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
+```python# 预检脚本
+
+import json, sys
+
+latest = fetch_latest_issue_count()
+
+prev = read_state("issue_count")
+
+if latest == prev:
+    print(json.dumps({"wakeAgent": False}))  # 跳过本次 tick
+
+    sys.exit(0)
+
+write_state("issue_count", latest)
+
+print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
 ```
 
 省略 `wakeAgent` 时，默认为 `true`（照常唤醒 agent）。
@@ -617,18 +629,23 @@ cronjob(action="create", name="nightly-analysis",
 
 **SQL 计数门控**——仅在你自己的数据库中有新行需要处理时运行。脚本还可以通过 `context` 将计数传递给 agent，让 agent 无需重新查询就知道数据量。
 
-```python
-#!/usr/bin/env python
-# ~/.clawksis/scripts/new-rows.py
-import json, sqlite3
-conn = sqlite3.connect("/home/me/data/app.db")
-n = conn.execute(
-    "SELECT COUNT(*) FROM messages WHERE ts > strftime('%s','now','-2 hours')"
-).fetchone()[0]
-if n < 1:
-    print(json.dumps({"wakeAgent": False}))
-else:
-    print(json.dumps({"wakeAgent": True, "context": {"new_rows": n}}))
+```python#!/usr/bin/env python
+
+# ~/.clawksis/scripts/new-rows.py
+
+import json, sqlite3
+
+conn = sqlite3.connect("/home/me/data/app.db")
+
+n = conn.execute(
+    "SELECT COUNT(*) FROM messages WHERE ts > strftime('%s','now','-2 hours')"
+).fetchone()[0]
+
+if n < 1:
+    print(json.dumps({"wakeAgent": False}))
+
+else:
+    print(json.dumps({"wakeAgent": True, "context": {"new_rows": n}}))
 ```
 
 ```text

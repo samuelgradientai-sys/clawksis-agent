@@ -10,6 +10,7 @@ These tests cover the routing decision layer — session_key selection,
 sidecar detection, last-active-session tracking, and the config toggle.
 The downstream session creation is covered by test_browser_cloud_fallback.py.
 """
+
 from unittest.mock import Mock
 
 import pytest
@@ -55,7 +56,9 @@ class TestNavigationSessionKey:
 
     def test_rfc1918_lan_routes_to_local_sidecar(self, monkeypatch):
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: Mock())
-        key = browser_tool._navigation_session_key("default", "http://192.168.1.50:8000/")
+        key = browser_tool._navigation_session_key(
+            "default", "http://192.168.1.50:8000/"
+        )
         assert key == "default::local"
 
     def test_ipv6_loopback_routes_to_local_sidecar(self, monkeypatch):
@@ -91,7 +94,9 @@ class TestNavigationSessionKey:
     def test_cdp_override_stays_on_bare_task_id(self, monkeypatch):
         """A user-supplied CDP endpoint owns the whole session — no hybrid."""
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: Mock())
-        monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: "ws://localhost:9222")
+        monkeypatch.setattr(
+            browser_tool, "_get_cdp_override", lambda: "ws://localhost:9222"
+        )
         key = browser_tool._navigation_session_key("default", "http://localhost:3000/")
         assert key == "default"
 
@@ -184,7 +189,9 @@ class TestCleanupHybridSessions:
         def _fake_cleanup_one(key):
             reaped.append(key)
 
-        monkeypatch.setattr(browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one)
+        monkeypatch.setattr(
+            browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one
+        )
         monkeypatch.setattr(
             browser_tool,
             "_active_sessions",
@@ -210,7 +217,9 @@ class TestCleanupHybridSessions:
         def _fake_cleanup_one(key):
             reaped.append(key)
 
-        monkeypatch.setattr(browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one)
+        monkeypatch.setattr(
+            browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one
+        )
         monkeypatch.setattr(
             browser_tool,
             "_active_sessions",
@@ -228,7 +237,9 @@ class TestCleanupHybridSessions:
         def _fake_cleanup_one(key):
             reaped.append(key)
 
-        monkeypatch.setattr(browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one)
+        monkeypatch.setattr(
+            browser_tool, "_cleanup_single_browser_session", _fake_cleanup_one
+        )
         monkeypatch.setattr(
             browser_tool,
             "_active_sessions",

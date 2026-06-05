@@ -107,15 +107,18 @@ Avoid saying:
 
 Best for: general research, companies, documentation.
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.text("python async programming", max_results=5):
-        print(r["title"])
-        print(r["href"])
-        print(r.get("body", "")[:200])
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.text("python async programming", max_results=5):
+        print(r["title"])
+
+        print(r["href"])
+
+        print(r.get("body", "")[:200])
+
+        print()
 ```
 
 Returns: `title`, `href`, `body`
@@ -124,15 +127,18 @@ Returns: `title`, `href`, `body`
 
 Best for: current events, breaking news, latest updates.
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.news("AI regulation 2026", max_results=5):
-        print(r["date"], "-", r["title"])
-        print(r.get("source", ""), "|", r["url"])
-        print(r.get("body", "")[:200])
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.news("AI regulation 2026", max_results=5):
+        print(r["date"], "-", r["title"])
+
+        print(r.get("source", ""), "|", r["url"])
+
+        print(r.get("body", "")[:200])
+
+        print()
 ```
 
 Returns: `date`, `title`, `body`, `url`, `image`, `source`
@@ -141,16 +147,20 @@ Returns: `date`, `title`, `body`, `url`, `image`, `source`
 
 Best for: visual references, product images, diagrams.
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.images("semiconductor chip", max_results=5):
-        print(r["title"])
-        print(r["image"])
-        print(r.get("thumbnail", ""))
-        print(r.get("source", ""))
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.images("semiconductor chip", max_results=5):
+        print(r["title"])
+
+        print(r["image"])
+
+        print(r.get("thumbnail", ""))
+
+        print(r.get("source", ""))
+
+        print()
 ```
 
 Returns: `title`, `image`, `thumbnail`, `url`, `height`, `width`, `source`
@@ -159,17 +169,22 @@ Returns: `title`, `image`, `thumbnail`, `url`, `height`, `width`, `source`
 
 Best for: tutorials, demos, explainers.
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.videos("FastAPI tutorial", max_results=5):
-        print(r["title"])
-        print(r.get("content", ""))
-        print(r.get("duration", ""))
-        print(r.get("provider", ""))
-        print(r.get("published", ""))
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.videos("FastAPI tutorial", max_results=5):
+        print(r["title"])
+
+        print(r.get("content", ""))
+
+        print(r.get("duration", ""))
+
+        print(r.get("provider", ""))
+
+        print(r.get("published", ""))
+
+        print()
 ```
 
 Returns: `title`, `content`, `description`, `duration`, `provider`, `published`, `statistics`, `uploader`
@@ -195,13 +210,14 @@ ddgs text -q "fastapi deployment guide" -m 3 -o json
 
 Python example, only after verifying `ddgs` is installed in that runtime:
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    results = list(ddgs.text("fastapi deployment guide", max_results=3))
-    for r in results:
-        print(r["title"], "->", r["href"])
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    results = list(ddgs.text("fastapi deployment guide", max_results=3))
+
+    for r in results:
+        print(r["title"], "->", r["href"])
 ```
 
 Then extract the best URL with `web_extract` or another content-retrieval tool.

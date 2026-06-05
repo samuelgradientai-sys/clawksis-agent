@@ -26,7 +26,11 @@ def _run(tmp_path: Path, word: str) -> list[tuple[str, str]]:
     completer = SlashCommandCompleter.__new__(SlashCommandCompleter)
     completions: Iterable = completer._context_completions(word)
 
-    return [(c.text, c.display_meta) for c in completions if c.text.startswith(("@file:", "@folder:"))]
+    return [
+        (c.text, c.display_meta)
+        for c in completions
+        if c.text.startswith(("@file:", "@folder:"))
+    ]
 
 
 def test_at_folder_only_yields_directories(tmp_path, monkeypatch):

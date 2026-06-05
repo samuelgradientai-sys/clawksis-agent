@@ -84,21 +84,27 @@ class FactRetriever:
             if self.hrr_weight > 0 and fact.get("hrr_vector"):
                 fact_vec = hrr.bytes_to_phases(fact["hrr_vector"])
                 query_vec = hrr.encode_text(query, self.hrr_dim)
-                hrr_sim = (hrr.similarity(query_vec, fact_vec) + 1.0) / 2.0  # shift to [0,1]
+                hrr_sim = (
+                    hrr.similarity(query_vec, fact_vec) + 1.0
+                ) / 2.0  # shift to [0,1]
             else:
                 hrr_sim = 0.5  # neutral
 
             # Combine FTS5 + Jaccard + HRR
-            relevance = (self.fts_weight * fts_score
-                        + self.jaccard_weight * jaccard
-                        + self.hrr_weight * hrr_sim)
+            relevance = (
+                self.fts_weight * fts_score
+                + self.jaccard_weight * jaccard
+                + self.hrr_weight * hrr_sim
+            )
 
             # Trust weighting
             score = relevance * fact["trust_score"]
 
             # Optional temporal decay
             if self.half_life > 0:
-                score *= self._temporal_decay(fact.get("updated_at") or fact.get("created_at"))
+                score *= self._temporal_decay(
+                    fact.get("updated_at") or fact.get("created_at")
+                )
 
             fact["score"] = score
             scored.append(fact)
@@ -181,7 +187,9 @@ class FactRetriever:
             residual = hrr.unbind(fact_vec, probe_key)
             # Compare residual against content signal
             role_content = hrr.encode_atom("__hrr_role_content__", self.hrr_dim)
-            content_vec = hrr.bind(hrr.encode_text(fact["content"], self.hrr_dim), role_content)
+            content_vec = hrr.bind(
+                hrr.encode_text(fact["content"], self.hrr_dim), role_content
+            )
             sim = hrr.similarity(residual, content_vec)
             fact["score"] = (sim + 1.0) / 2.0 * fact["trust_score"]
             scored.append(fact)
@@ -380,7 +388,9 @@ class FactRetriever:
         # Above that, only check the most recently updated facts.
         _MAX_CONTRADICT_FACTS = 500
         if len(rows) > _MAX_CONTRADICT_FACTS:
-            rows = sorted(rows, key=lambda r: r["updated_at"] or r["created_at"], reverse=True)
+            rows = sorted(
+                rows, key=lambda r: r["updated_at"] or r["created_at"], reverse=True
+            )
             rows = rows[:_MAX_CONTRADICT_FACTS]
 
         # Build entity sets per fact
@@ -411,7 +421,9 @@ class FactRetriever:
                     continue
 
                 # Entity overlap (Jaccard)
-                entity_overlap = len(ents1 & ents2) / len(ents1 | ents2) if (ents1 | ents2) else 0.0
+                entity_overlap = (
+                    len(ents1 & ents2) / len(ents1 | ents2) if (ents1 | ents2) else 0.0
+                )
 
                 if entity_overlap < 0.3:
                     continue  # Not enough entity overlap to be contradictory

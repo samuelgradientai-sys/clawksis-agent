@@ -30,8 +30,12 @@ def main() -> int:
     parser.add_argument("--template", help="Template name without .py suffix")
     parser.add_argument("--name", help="FastMCP server display name")
     parser.add_argument("--output", help="Destination Python file path")
-    parser.add_argument("--force", action="store_true", help="Overwrite an existing output file")
-    parser.add_argument("--list", action="store_true", help="List available templates and exit")
+    parser.add_argument(
+        "--force", action="store_true", help="Overwrite an existing output file"
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="List available templates and exit"
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -40,7 +44,9 @@ def main() -> int:
         return 0
 
     if not args.template or not args.name or not args.output:
-        parser.error("--template, --name, and --output are required unless --list is used")
+        parser.error(
+            "--template, --name, and --output are required unless --list is used"
+        )
 
     output_path = Path(args.output).expanduser()
     if output_path.exists() and not args.force:

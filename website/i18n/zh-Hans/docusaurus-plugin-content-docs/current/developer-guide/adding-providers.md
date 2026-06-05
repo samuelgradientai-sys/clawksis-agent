@@ -213,15 +213,14 @@ kimi:model-name
 
 添加一个分支，至少返回包含以下内容的字典：
 
-```python
-{
-    "provider": "your-provider",
-    "api_mode": "chat_completions",  # or your native mode
-    "base_url": "https://...",
-    "api_key": "...",
-    "source": "env|portal|auth-store|explicit",
-    "requested_provider": requested_provider,
-}
+```python{
+    "provider": "your-provider",
+    "api_mode": "chat_completions",  # or your native mode
+    "base_url": "https://...",
+    "api_key": "...",
+    "source": "env|portal|auth-store|explicit",
+    "requested_provider": requested_provider,
+}
 ```
 
 如果 provider 与 OpenAI 兼容，`api_mode` 通常应保持为 `chat_completions`。

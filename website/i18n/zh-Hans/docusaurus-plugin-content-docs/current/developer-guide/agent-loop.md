@@ -23,17 +23,19 @@ description: "AIAgent 执行流程、API 模式、工具、回调及回退行为
 
 ## 两个入口点
 
-```python
-# 简单接口——返回最终响应字符串
-response = agent.chat("Fix the bug in main.py")
-
-# 完整接口——返回包含消息、元数据、用量统计的 dict
-result = agent.run_conversation(
-    user_message="Fix the bug in main.py",
-    system_message=None,           # 省略时自动构建
-    conversation_history=None,      # 省略时自动从 session 加载
-    task_id="task_abc123"
-)
+```python# 简单接口——返回最终响应字符串
+
+response = agent.chat("Fix the bug in main.py")
+
+
+# 完整接口——返回包含消息、元数据、用量统计的 dict
+
+result = agent.run_conversation(
+    user_message="Fix the bug in main.py",
+    system_message=None,  # 省略时自动构建
+    conversation_history=None,  # 省略时自动从 session 加载
+    task_id="task_abc123",
+)
 ```
 
 `chat()` 是对 `run_conversation()` 的轻量封装，从结果 dict 中提取 `final_response` 字段。
@@ -82,11 +84,13 @@ run_conversation()
 
 所有消息在内部均使用兼容 OpenAI 的格式：
 
-```python
-{"role": "system", "content": "..."}
-{"role": "user", "content": "..."}
-{"role": "assistant", "content": "...", "tool_calls": [...]}
-{"role": "tool", "tool_call_id": "...", "content": "..."}
+```python{"role": "system", "content": "..."}
+
+{"role": "user", "content": "..."}
+
+{"role": "assistant", "content": "...", "tool_calls": [...]}
+
+{"role": "tool", "tool_call_id": "...", "content": "..."}
 ```
 
 推理内容（来自支持扩展思考的模型）存储在 `assistant_msg["reasoning"]` 中，并可选择通过 `reasoning_callback` 展示。

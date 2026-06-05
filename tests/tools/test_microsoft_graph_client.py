@@ -16,7 +16,9 @@ from tools.microsoft_graph_client import (
 
 
 def _make_provider() -> MicrosoftGraphTokenProvider:
-    provider = MicrosoftGraphTokenProvider(GraphCredentials("tenant", "client", "secret"))
+    provider = MicrosoftGraphTokenProvider(
+        GraphCredentials("tenant", "client", "secret")
+    )
     provider._cached_token = type(  # type: ignore[attr-defined]
         "Token",
         (),
@@ -190,9 +192,7 @@ class TestMicrosoftGraphClient:
         def handler(request: httpx.Request) -> httpx.Response:
             calls.append(1)
             if len(calls) == 1:
-                return httpx.Response(
-                    503, json={"error": {"message": "unavailable"}}
-                )
+                return httpx.Response(503, json={"error": {"message": "unavailable"}})
             return httpx.Response(
                 200,
                 content=b"payload",

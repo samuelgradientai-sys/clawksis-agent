@@ -108,17 +108,23 @@ td_create_operator(type="nullTOP", parent="/project1", name="out")
 
 批量创建或连线时，使用 `td_execute_python`：
 
-```python
-# td_execute_python script:
-root = op('/project1')
-nodes = []
-for name, optype in [('bg', noiseTOP), ('fx', levelTOP), ('out', nullTOP)]:
-    n = root.create(optype, name)
-    nodes.append(n.path)
-# Wire chain
-for i in range(len(nodes)-1):
-    op(nodes[i]).outputConnectors[0].connect(op(nodes[i+1]).inputConnectors[0])
-result = {'created': nodes}
+```python# td_execute_python script:
+
+root = op("/project1")
+
+nodes = []
+
+for name, optype in [("bg", noiseTOP), ("fx", levelTOP), ("out", nullTOP)]:
+    n = root.create(optype, name)
+
+    nodes.append(n.path)
+
+# Wire chain
+
+for i in range(len(nodes) - 1):
+    op(nodes[i]).outputConnectors[0].connect(op(nodes[i + 1]).inputConnectors[0])
+
+result = {"created": nodes}
 ```
 
 ### 第 2 步：设置参数
@@ -131,16 +137,14 @@ td_set_operator_pars(path="/project1/bg", parameters={"roughness": 0.6, "monochr
 
 对于表达式或模式，使用 `td_execute_python`：
 
-```python
-op('/project1/time_driver').par.colorr.expr = "absTime.seconds % 1000.0"
+```pythonop("/project1/time_driver").par.colorr.expr = "absTime.seconds % 1000.0"
 ```
 
 ### 第 3 步：连线
 
 使用 `td_execute_python`——不存在原生连线工具：
 
-```python
-op('/project1/bg').outputConnectors[0].connect(op('/project1/fx').inputConnectors[0])
+```pythonop("/project1/bg").outputConnectors[0].connect(op("/project1/fx").inputConnectors[0])
 ```
 
 ### 第 4 步：验证
@@ -159,11 +163,14 @@ td_get_screenshot(path="/project1/out")
 
 或通过脚本打开窗口：
 
-```python
-win = op('/project1').create(windowCOMP, 'display')
-win.par.winop = op('/project1/out').path
-win.par.winw = 1280; win.par.winh = 720
-win.par.winopen.pulse()
+```pythonwin = op("/project1").create(windowCOMP, "display")
+
+win.par.winop = op("/project1/out").path
+
+win.par.winw = 1280
+win.par.winh = 720
+
+win.par.winopen.pulse()
 ```
 
 ## MCP 工具快速参考
@@ -229,12 +236,15 @@ win.par.winopen.pulse()
 ## 关键实现规则
 
 **GLSL 时间：** GLSL TOP 中没有 `uTDCurrentTime`。使用 Values 页面：
-```python
-# 先调用 td_get_par_info(op_type="glslTOP") 确认参数名称
-td_set_operator_pars(path="/project1/shader", parameters={"value0name": "uTime"})
-# 然后通过脚本设置表达式：
-# op('/project1/shader').par.value0.expr = "absTime.seconds"
-# 在 GLSL 中：uniform float uTime;
+```python# 先调用 td_get_par_info(op_type="glslTOP") 确认参数名称
+
+td_set_operator_pars(path="/project1/shader", parameters={"value0name": "uTime"})
+
+# 然后通过脚本设置表达式：
+
+# op('/project1/shader').par.value0.expr = "absTime.seconds"
+
+# 在 GLSL 中：uniform float uTime;
 ```
 
 备选方案：使用 `rgba32float` 格式的 Constant TOP（8 位会钳制到 0-1，导致 shader 冻结）。
@@ -255,16 +265,23 @@ td_set_operator_pars(path="/project1/shader", parameters={"value0name": "uTime"}
 
 ## 录制 / 导出视频
 
-```python
-# via td_execute_python:
-root = op('/project1')
-rec = root.create(moviefileoutTOP, 'recorder')
-op('/project1/out').outputConnectors[0].connect(rec.inputConnectors[0])
-rec.par.type = 'movie'
-rec.par.file = '/tmp/output.mov'
-rec.par.videocodec = 'prores'  # Apple ProRes — macOS 上不受许可证限制
-rec.par.record = True   # 开始
-# rec.par.record = False  # 停止（稍后单独调用）
+```python# via td_execute_python:
+
+root = op("/project1")
+
+rec = root.create(moviefileoutTOP, "recorder")
+
+op("/project1/out").outputConnectors[0].connect(rec.inputConnectors[0])
+
+rec.par.type = "movie"
+
+rec.par.file = "/tmp/output.mov"
+
+rec.par.videocodec = "prores"  # Apple ProRes — macOS 上不受许可证限制
+
+rec.par.record = True  # 开始
+
+# rec.par.record = False  # 停止（稍后单独调用）
 ```
 
 H.264/H.265/AV1 需要商业许可证。macOS 上使用 `prores`，备选 `mjpa`。

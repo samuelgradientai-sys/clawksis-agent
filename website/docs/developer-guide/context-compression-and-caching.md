@@ -304,11 +304,13 @@ Breakpoint 4: Last non-system message          ─┘
 `apply_anthropic_cache_control()` deep-copies the messages and injects
 `cache_control` markers:
 
-```python
-# Cache marker format
-marker = {"type": "ephemeral"}
-# Or for 1-hour TTL:
-marker = {"type": "ephemeral", "ttl": "1h"}
+```python# Cache marker format
+
+marker = {"type": "ephemeral"}
+
+# Or for 1-hour TTL:
+
+marker = {"type": "ephemeral", "ttl": "1h"}
 ```
 
 The marker is applied differently based on content type:

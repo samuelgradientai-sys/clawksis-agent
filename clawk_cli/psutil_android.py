@@ -26,9 +26,7 @@ def _normalize_member_parts(member_name: str) -> tuple[str, ...]:
     path = PurePosixPath(member_name)
     parts = tuple(part for part in path.parts if part not in ("", "."))
     if path.is_absolute() or ".." in parts or not parts:
-        raise PsutilAndroidInstallError(
-            f"Unsafe archive member path: {member_name!r}"
-        )
+        raise PsutilAndroidInstallError(f"Unsafe archive member path: {member_name!r}")
     return parts
 
 
@@ -70,7 +68,8 @@ def prepare_patched_psutil_sdist(archive: Path, destination: Path) -> Path:
 
     src_roots = sorted(
         (
-            path for path in destination.iterdir()
+            path
+            for path in destination.iterdir()
             if path.is_dir() and path.name.startswith("psutil-")
         ),
         key=lambda path: path.name,

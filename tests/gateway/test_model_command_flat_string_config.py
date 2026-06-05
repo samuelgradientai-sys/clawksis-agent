@@ -22,12 +22,9 @@ the proper ``model: {default: ..., provider: ...}`` form.
 
 """
 
-
-
 import yaml
 
 import pytest
-
 
 
 from gateway.config import Platform
@@ -37,9 +34,6 @@ from gateway.platforms.base import MessageEvent, MessageType
 from gateway.run import GatewayRunner
 
 from gateway.session import SessionSource
-
-
-
 
 
 def _make_runner():
@@ -57,66 +51,39 @@ def _make_runner():
     return runner
 
 
-
-
-
 def _make_event(text):
 
     return MessageEvent(
-
         text=text,
-
         message_type=MessageType.TEXT,
-
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
-
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
-
-
-
 def _fake_switch_result():
-
     """Build a successful ModelSwitchResult that bypasses real provider resolution."""
 
     from clawk_cli.model_switch import ModelSwitchResult
 
-
-
     return ModelSwitchResult(
-
         success=True,
-
         new_model="gpt-5.5",
-
         target_provider="openrouter",
-
         provider_changed=True,
-
         api_key="sk-test",
-
         base_url="https://openrouter.ai/api/v1",
-
         api_mode="chat_completions",
-
         provider_label="OpenRouter",
-
         is_global=True,
-
     )
 
 
-
-
-
 def _setup_isolated_home(tmp_path, monkeypatch, model_yaml_value):
-
     """Write a config.yaml with the given ``model:`` value and stub the heavy bits."""
 
     import gateway.run as gateway_run
-
-
 
     clawk_home = tmp_path / ".clawksis"
 
@@ -125,25 +92,17 @@ def _setup_isolated_home(tmp_path, monkeypatch, model_yaml_value):
     cfg_path = clawk_home / "config.yaml"
 
     cfg_path.write_text(
-
         yaml.safe_dump({"model": model_yaml_value, "providers": {}}),
-
         encoding="utf-8",
-
     )
-
-
 
     monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
 
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
 
     monkeypatch.setattr(
-
         "clawk_cli.model_switch.switch_model",
-
         lambda **kw: _fake_switch_result(),
-
     )
 
     # save_config writes to ``get_clawk_home() / config.yaml`` — point it here.
@@ -155,13 +114,10 @@ def _setup_isolated_home(tmp_path, monkeypatch, model_yaml_value):
     return cfg_path
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_model_global_persists_when_config_has_flat_string_model(tmp_path, monkeypatch):
-
+async def test_model_global_persists_when_config_has_flat_string_model(
+    tmp_path, monkeypatch
+):
     """Regression: ``model: deepseek-v4-flash`` (flat string) used to crash
 
     the gateway ``/model X --global`` persist branch with TypeError. After
@@ -174,15 +130,9 @@ async def test_model_global_persists_when_config_has_flat_string_model(tmp_path,
 
     cfg_path = _setup_isolated_home(tmp_path, monkeypatch, "deepseek-v4-flash")
 
-
-
     result = await _make_runner()._handle_model_command(
-
         _make_event("/model gpt-5.5 --global")
-
     )
-
-
 
     # Sanity: the handler returned a success-looking message (not a crash log).
 
@@ -190,16 +140,12 @@ async def test_model_global_persists_when_config_has_flat_string_model(tmp_path,
 
     assert "gpt-5.5" in result
 
-
-
     # The persist block must have rewritten config.yaml as a nested dict.
 
     written = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
 
     assert isinstance(written["model"], dict), (
-
         "model: should be coerced to a dict, got %r" % (written["model"],)
-
     )
 
     assert written["model"]["default"] == "gpt-5.5"
@@ -209,13 +155,10 @@ async def test_model_global_persists_when_config_has_flat_string_model(tmp_path,
     assert written["model"]["base_url"] == "https://openrouter.ai/api/v1"
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_model_global_persists_when_config_has_missing_model(tmp_path, monkeypatch):
-
+async def test_model_global_persists_when_config_has_missing_model(
+    tmp_path, monkeypatch
+):
     """Companion case: ``model:`` key absent entirely. setdefault would have
 
     worked here, but the coercion branch also has to handle this cleanly.
@@ -223,8 +166,6 @@ async def test_model_global_persists_when_config_has_missing_model(tmp_path, mon
     """
 
     import gateway.run as gateway_run
-
-
 
     clawk_home = tmp_path / ".clawksis"
 
@@ -234,33 +175,22 @@ async def test_model_global_persists_when_config_has_missing_model(tmp_path, mon
 
     cfg_path.write_text(yaml.safe_dump({"providers": {}}), encoding="utf-8")
 
-
-
     monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
 
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
 
     monkeypatch.setattr(
-
         "clawk_cli.model_switch.switch_model",
-
         lambda **kw: _fake_switch_result(),
-
     )
 
     monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: clawk_home)
 
     monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: clawk_home)
 
-
-
     result = await _make_runner()._handle_model_command(
-
         _make_event("/model gpt-5.5 --global")
-
     )
-
-
 
     assert result is not None
 
@@ -273,13 +203,10 @@ async def test_model_global_persists_when_config_has_missing_model(tmp_path, mon
     assert written["model"]["provider"] == "openrouter"
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_model_global_persists_when_config_has_proper_dict_model(tmp_path, monkeypatch):
-
+async def test_model_global_persists_when_config_has_proper_dict_model(
+    tmp_path, monkeypatch
+):
     """Already-correct nested dict must still work — no regression on the
 
     common case.
@@ -287,24 +214,14 @@ async def test_model_global_persists_when_config_has_proper_dict_model(tmp_path,
     """
 
     cfg_path = _setup_isolated_home(
-
         tmp_path,
-
         monkeypatch,
-
         {"default": "old-model", "provider": "openai-codex"},
-
     )
-
-
 
     result = await _make_runner()._handle_model_command(
-
         _make_event("/model gpt-5.5 --global")
-
     )
-
-
 
     assert result is not None
 
@@ -313,4 +230,3 @@ async def test_model_global_persists_when_config_has_proper_dict_model(tmp_path,
     assert written["model"]["default"] == "gpt-5.5"
 
     assert written["model"]["provider"] == "openrouter"
-

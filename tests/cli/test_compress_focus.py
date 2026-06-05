@@ -33,7 +33,9 @@ def test_focus_topic_extracted_and_passed(capsys):
             return 100
         return 50
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate):
+    with patch(
+        "agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate
+    ):
         shell._manual_compress("/compress database schema")
 
     output = capsys.readouterr().out

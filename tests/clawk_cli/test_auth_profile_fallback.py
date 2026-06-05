@@ -18,10 +18,7 @@ authenticated only at the global root.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import json
@@ -29,47 +26,31 @@ import json
 from pathlib import Path
 
 
-
 import pytest
 
 
-
-
-
 def _make_auth_store(
-
     pool: dict | None = None,
-
     providers: dict | None = None,
-
     active_provider: str | None = None,
-
 ) -> dict:
 
     store: dict = {"version": 1}
 
     if pool is not None:
-
         store["credential_pool"] = pool
 
     if providers is not None:
-
         store["providers"] = providers
 
     if active_provider is not None:
-
         store["active_provider"] = active_provider
 
     return store
 
 
-
-
-
 @pytest.fixture()
-
 def profile_env(tmp_path, monkeypatch):
-
     """Set up a global root + an active profile under Path.home()/.clawksis/profiles/coder.
 
 
@@ -103,15 +84,9 @@ def profile_env(tmp_path, monkeypatch):
     return {"global": global_root, "profile": profile_dir}
 
 
-
-
-
 def _write(path: Path, payload: dict) -> None:
 
     path.write_text(json.dumps(payload, indent=2))
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -121,42 +96,32 @@ def _write(path: Path, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_profile_with_zero_entries_falls_back_to_global(profile_env):
-
     """Empty profile pool inherits the global-root entries for that provider."""
 
     from clawk_cli.auth import read_credential_pool
 
-
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "glob-1",
-
-            "label": "global-key",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-global",
-
-        }],
-
-    }))
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "glob-1",
+                        "label": "global-key",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-global",
+                    }
+                ],
+            }
+        ),
+    )
 
     # Profile auth.json: exists but has no openrouter entries.
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={}))
-
-
 
     entries = read_credential_pool("openrouter")
 
@@ -167,58 +132,46 @@ def test_profile_with_zero_entries_falls_back_to_global(profile_env):
     assert entries[0]["access_token"] == "sk-or-global"
 
 
-
-
-
 def test_profile_with_entries_fully_shadows_global(profile_env):
-
     """Once the profile has any entries for a provider, global is ignored."""
 
     from clawk_cli.auth import read_credential_pool
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "glob-1",
+                        "label": "global-key",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-global",
+                    }
+                ],
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "glob-1",
-
-            "label": "global-key",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-global",
-
-        }],
-
-    }))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "prof-1",
-
-            "label": "profile-key",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-profile",
-
-        }],
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "prof-1",
+                        "label": "profile-key",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-profile",
+                    }
+                ],
+            }
+        ),
+    )
 
     entries = read_credential_pool("openrouter")
 
@@ -229,76 +182,57 @@ def test_profile_with_entries_fully_shadows_global(profile_env):
     assert entries[0]["access_token"] == "sk-or-profile"
 
 
-
-
-
 def test_per_provider_shadowing_is_independent(profile_env):
-
     """Profile can override one provider while inheriting another from global."""
 
     from clawk_cli.auth import read_credential_pool
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "glob-or",
+                        "label": "global-or",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-global",
+                    }
+                ],
+                "anthropic": [
+                    {
+                        "id": "glob-ant",
+                        "label": "global-ant",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-ant-global",
+                    }
+                ],
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "glob-or",
-
-            "label": "global-or",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-global",
-
-        }],
-
-        "anthropic": [{
-
-            "id": "glob-ant",
-
-            "label": "global-ant",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-ant-global",
-
-        }],
-
-    }))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={
-
-        # Profile has openrouter only — anthropic should still fall back.
-
-        "openrouter": [{
-
-            "id": "prof-or",
-
-            "label": "profile-or",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-profile",
-
-        }],
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            pool={
+                # Profile has openrouter only — anthropic should still fall back.
+                "openrouter": [
+                    {
+                        "id": "prof-or",
+                        "label": "profile-or",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-profile",
+                    }
+                ],
+            }
+        ),
+    )
 
     or_entries = read_credential_pool("openrouter")
 
@@ -309,78 +243,59 @@ def test_per_provider_shadowing_is_independent(profile_env):
     assert [e["id"] for e in ant_entries] == ["glob-ant"]
 
 
-
-
-
 def test_missing_global_auth_file_is_safe(profile_env):
-
     """Profile processes that never had a global auth.json still work."""
 
     from clawk_cli.auth import read_credential_pool
 
-
-
     # No global auth.json written at all.
 
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "prof-1",
-
-            "label": "profile",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-profile",
-
-        }],
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "prof-1",
+                        "label": "profile",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-profile",
+                    }
+                ],
+            }
+        ),
+    )
 
     assert read_credential_pool("openrouter")[0]["id"] == "prof-1"
 
     assert read_credential_pool("anthropic") == []
 
 
-
-
-
 def test_malformed_global_auth_file_does_not_break_profile_read(profile_env):
 
     (profile_env["global"] / "auth.json").write_text("{not valid json")
 
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "prof-1",
-
-            "label": "profile",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-profile",
-
-        }],
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "prof-1",
+                        "label": "profile",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-profile",
+                    }
+                ],
+            }
+        ),
+    )
 
     from clawk_cli.auth import read_credential_pool
-
-
 
     # Profile reads still work; malformed global is silently ignored.
 
@@ -391,9 +306,6 @@ def test_malformed_global_auth_file_does_not_break_profile_read(profile_env):
     assert read_credential_pool("anthropic") == []
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # read_credential_pool — whole-pool reads (provider_id=None)
@@ -401,72 +313,55 @@ def test_malformed_global_auth_file_does_not_break_profile_read(profile_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_whole_pool_merges_global_providers_when_missing_locally(profile_env):
 
     from clawk_cli.auth import read_credential_pool
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "glob-or",
+                        "label": "global-or",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-global",
+                    }
+                ],
+                "anthropic": [
+                    {
+                        "id": "glob-ant",
+                        "label": "global-ant",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-ant-global",
+                    }
+                ],
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "glob-or",
-
-            "label": "global-or",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-global",
-
-        }],
-
-        "anthropic": [{
-
-            "id": "glob-ant",
-
-            "label": "global-ant",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-ant-global",
-
-        }],
-
-    }))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "prof-or",
-
-            "label": "profile-or",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-or-profile",
-
-        }],
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "prof-or",
+                        "label": "profile-or",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-or-profile",
+                    }
+                ],
+            }
+        ),
+    )
 
     pool = read_credential_pool(None)
 
@@ -477,9 +372,6 @@ def test_whole_pool_merges_global_providers_when_missing_locally(profile_env):
     assert [e["id"] for e in pool["anthropic"]] == ["glob-ant"]
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # get_provider_auth_state — singleton fallback
@@ -487,24 +379,20 @@ def test_whole_pool_merges_global_providers_when_missing_locally(profile_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_provider_auth_state_falls_back_to_global_when_profile_has_none(profile_env):
 
     from clawk_cli.auth import get_provider_auth_state
 
-
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "nous-global", "refresh_token": "rt-global"},
-
-    }))
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "nous-global", "refresh_token": "rt-global"},
+            }
+        ),
+    )
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
-
-
 
     state = get_provider_auth_state("nous")
 
@@ -513,28 +401,27 @@ def test_provider_auth_state_falls_back_to_global_when_profile_has_none(profile_
     assert state["access_token"] == "nous-global"
 
 
-
-
-
 def test_provider_auth_state_profile_wins_when_present(profile_env):
 
     from clawk_cli.auth import get_provider_auth_state
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "nous-global"},
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "nous-global"},
-
-    }))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "nous-profile"},
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "nous-profile"},
+            }
+        ),
+    )
 
     state = get_provider_auth_state("nous")
 
@@ -543,25 +430,15 @@ def test_provider_auth_state_profile_wins_when_present(profile_env):
     assert state["access_token"] == "nous-profile"
 
 
-
-
-
 def test_provider_auth_state_returns_none_when_neither_has_it(profile_env):
 
     from clawk_cli.auth import get_provider_auth_state
-
-
 
     _write(profile_env["global"] / "auth.json", _make_auth_store(providers={}))
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
 
-
-
     assert get_provider_auth_state("nous") is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -587,26 +464,21 @@ def test_provider_auth_state_returns_none_when_neither_has_it(profile_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_load_provider_state_falls_back_to_global(profile_env):
-
     """When the loaded profile store has no provider entry, fall back to global."""
 
     from clawk_cli.auth import _load_auth_store, _load_provider_state
 
-
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "global-nous-token", "refresh_token": "rt"},
-
-    }))
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "global-nous-token", "refresh_token": "rt"},
+            }
+        ),
+    )
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
-
-
 
     auth_store = _load_auth_store()
 
@@ -617,28 +489,27 @@ def test_load_provider_state_falls_back_to_global(profile_env):
     assert state["access_token"] == "global-nous-token"
 
 
-
-
-
 def test_load_provider_state_profile_wins_over_global(profile_env):
 
     from clawk_cli.auth import _load_auth_store, _load_provider_state
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "global-token"},
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "global-token"},
-
-    }))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "profile-token"},
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "profile-token"},
+            }
+        ),
+    )
 
     auth_store = _load_auth_store()
 
@@ -649,31 +520,20 @@ def test_load_provider_state_profile_wins_over_global(profile_env):
     assert state["access_token"] == "profile-token"
 
 
-
-
-
 def test_load_provider_state_returns_none_when_neither_has_it(profile_env):
 
     from clawk_cli.auth import _load_auth_store, _load_provider_state
 
-
-
     _write(profile_env["global"] / "auth.json", _make_auth_store(providers={}))
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
-
-
 
     auth_store = _load_auth_store()
 
     assert _load_provider_state(auth_store, "nous") is None
 
 
-
-
-
 def test_load_provider_state_classic_mode_no_fallback(tmp_path, monkeypatch):
-
     """In classic mode there is no global to fall back to; behavior is unchanged."""
 
     fake_home = tmp_path / "home"
@@ -688,19 +548,16 @@ def test_load_provider_state_classic_mode_no_fallback(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-
-
-    _write(clawk_home / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "classic-token"},
-
-    }))
-
-
+    _write(
+        clawk_home / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "classic-token"},
+            }
+        ),
+    )
 
     from clawk_cli.auth import _load_auth_store, _load_provider_state
-
-
 
     auth_store = _load_auth_store()
 
@@ -715,26 +572,21 @@ def test_load_provider_state_classic_mode_no_fallback(tmp_path, monkeypatch):
     assert _load_provider_state(auth_store, "anthropic") is None
 
 
-
-
-
 def test_load_provider_state_malformed_global_does_not_break_profile(profile_env):
-
     """A corrupt global auth.json must not break profile reads."""
 
     (profile_env["global"] / "auth.json").write_text("{not valid json")
 
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={
-
-        "nous": {"access_token": "profile-token"},
-
-    }))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            providers={
+                "nous": {"access_token": "profile-token"},
+            }
+        ),
+    )
 
     from clawk_cli.auth import _load_auth_store, _load_provider_state
-
-
 
     auth_store = _load_auth_store()
 
@@ -745,9 +597,6 @@ def test_load_provider_state_malformed_global_does_not_break_profile(profile_env
     assert state["access_token"] == "profile-token"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Classic mode — no fallback path should ever trigger
@@ -755,11 +604,7 @@ def test_load_provider_state_malformed_global_does_not_break_profile(profile_env
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_classic_mode_does_not_double_read_same_file(tmp_path, monkeypatch):
-
     """In classic mode (CLAWK_HOME == global root), no fallback path runs.
 
 
@@ -788,33 +633,25 @@ def test_classic_mode_does_not_double_read_same_file(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-
-
-    _write(clawk_home / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "only",
-
-            "label": "classic",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-classic",
-
-        }],
-
-    }))
-
-
+    _write(
+        clawk_home / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "only",
+                        "label": "classic",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-classic",
+                    }
+                ],
+            }
+        ),
+    )
 
     from clawk_cli.auth import read_credential_pool, _global_auth_file_path
-
-
 
     # Classic mode: CLAWK_HOME is set to a custom path that is NOT under
 
@@ -835,9 +672,6 @@ def test_classic_mode_does_not_double_read_same_file(tmp_path, monkeypatch):
     assert entries[0]["id"] == "only"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Writes stay scoped to the profile
@@ -845,54 +679,41 @@ def test_classic_mode_does_not_double_read_same_file(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_write_credential_pool_targets_profile_not_global(profile_env):
 
     from clawk_cli.auth import read_credential_pool, write_credential_pool
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            pool={
+                "openrouter": [
+                    {
+                        "id": "glob-1",
+                        "label": "global",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "sk-global",
+                    }
+                ],
+            }
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(pool={
-
-        "openrouter": [{
-
-            "id": "glob-1",
-
-            "label": "global",
-
-            "auth_type": "api_key",
-
-            "priority": 0,
-
-            "source": "manual",
-
-            "access_token": "sk-global",
-
-        }],
-
-    }))
-
-
-
-    write_credential_pool("openrouter", [{
-
-        "id": "prof-new",
-
-        "label": "profile-new",
-
-        "auth_type": "api_key",
-
-        "priority": 0,
-
-        "source": "manual",
-
-        "access_token": "sk-profile-new",
-
-    }])
-
-
+    write_credential_pool(
+        "openrouter",
+        [
+            {
+                "id": "prof-new",
+                "label": "profile-new",
+                "auth_type": "api_key",
+                "priority": 0,
+                "source": "manual",
+                "access_token": "sk-profile-new",
+            }
+        ],
+    )
 
     # Global auth.json unchanged.
 
@@ -900,22 +721,15 @@ def test_write_credential_pool_targets_profile_not_global(profile_env):
 
     assert global_data["credential_pool"]["openrouter"][0]["id"] == "glob-1"
 
-
-
     # Profile auth.json holds the new entry.
 
     profile_data = json.loads((profile_env["profile"] / "auth.json").read_text())
 
     assert profile_data["credential_pool"]["openrouter"][0]["id"] == "prof-new"
 
-
-
     # Subsequent read returns profile (shadows global).
 
     assert [e["id"] for e in read_credential_pool("openrouter")] == ["prof-new"]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -943,89 +757,61 @@ def test_write_credential_pool_targets_profile_not_global(profile_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_active_provider_falls_back_to_global(profile_env):
-
     """An empty profile inherits the global-root active_provider selection."""
 
     from clawk_cli.auth import get_active_provider
 
-
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(
-
-        providers={"nous": {"access_token": "nous-global"}},
-
-        active_provider="nous",
-
-    ))
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={"nous": {"access_token": "nous-global"}},
+            active_provider="nous",
+        ),
+    )
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
-
-
 
     assert get_active_provider() == "nous"
 
 
-
-
-
 def test_active_provider_profile_wins_over_global(profile_env):
-
     """A profile that selected its own provider shadows the global selection."""
 
     from clawk_cli.auth import get_active_provider
 
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={"nous": {"access_token": "nous-global"}},
+            active_provider="nous",
+        ),
+    )
 
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(
-
-        providers={"nous": {"access_token": "nous-global"}},
-
-        active_provider="nous",
-
-    ))
-
-    _write(profile_env["profile"] / "auth.json", _make_auth_store(
-
-        providers={"anthropic": {"access_token": "ant-profile"}},
-
-        active_provider="anthropic",
-
-    ))
-
-
+    _write(
+        profile_env["profile"] / "auth.json",
+        _make_auth_store(
+            providers={"anthropic": {"access_token": "ant-profile"}},
+            active_provider="anthropic",
+        ),
+    )
 
     assert get_active_provider() == "anthropic"
 
 
-
-
-
 def test_active_provider_none_when_neither_has_it(profile_env):
-
     """No selection anywhere stays None — the fallback must not invent one."""
 
     from clawk_cli.auth import get_active_provider
-
-
 
     _write(profile_env["global"] / "auth.json", _make_auth_store(providers={}))
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
 
-
-
     assert get_active_provider() is None
 
 
-
-
-
 def test_active_provider_classic_mode_reads_profile(tmp_path, monkeypatch):
-
     """In classic mode there is no global to fall back to; behavior is unchanged."""
 
     fake_home = tmp_path / "home"
@@ -1040,30 +826,20 @@ def test_active_provider_classic_mode_reads_profile(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-
-
-    _write(clawk_home / "auth.json", _make_auth_store(
-
-        providers={"nous": {"access_token": "classic-token"}},
-
-        active_provider="nous",
-
-    ))
-
-
+    _write(
+        clawk_home / "auth.json",
+        _make_auth_store(
+            providers={"nous": {"access_token": "classic-token"}},
+            active_provider="nous",
+        ),
+    )
 
     from clawk_cli.auth import get_active_provider
-
-
 
     assert get_active_provider() == "nous"
 
 
-
-
-
 def test_resolve_provider_uses_global_active_provider(profile_env, monkeypatch):
-
     """resolve_provider('auto') honors the global-root active_provider.
 
 
@@ -1082,31 +858,20 @@ def test_resolve_provider_uses_global_active_provider(profile_env, monkeypatch):
 
     import clawk_cli.auth as auth
 
-
-
-    _write(profile_env["global"] / "auth.json", _make_auth_store(
-
-        providers={"nous": {"access_token": "nous-global"}},
-
-        active_provider="nous",
-
-    ))
+    _write(
+        profile_env["global"] / "auth.json",
+        _make_auth_store(
+            providers={"nous": {"access_token": "nous-global"}},
+            active_provider="nous",
+        ),
+    )
 
     _write(profile_env["profile"] / "auth.json", _make_auth_store(providers={}))
 
-
-
     monkeypatch.setattr(
-
         auth,
-
         "get_auth_status",
-
         lambda provider=None: {"logged_in": True, "provider": provider},
-
     )
 
-
-
     assert auth.resolve_provider("auto") == "nous"
-

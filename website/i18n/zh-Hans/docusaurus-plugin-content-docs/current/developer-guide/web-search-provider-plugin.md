@@ -45,82 +45,102 @@ plugins/web/my-backend/
 
 继承 `agent.web_search_provider.WebSearchProvider`。唯一必须实现的成员是 `name`、`is_available()`，以及你所实现的 `search()` / `extract()` / `crawl()` 中的相应方法。
 
-```python
-# plugins/web/my-backend/provider.py
-from __future__ import annotations
-
-import os
-from typing import Any, Dict, List
-
-from agent.web_search_provider import WebSearchProvider
-
-
-class MyBackendWebSearchProvider(WebSearchProvider):
-    """Minimal search-only provider against the My Backend HTTP API."""
-
-    @property
-    def name(self) -> str:
-        # Stable id used in web.search_backend / web.extract_backend / web.backend
-        # config keys. Lowercase, no spaces; hyphens permitted.
-        return "my-backend"
-
-    @property
-    def display_name(self) -> str:
-        # Human label shown in `clawk tools`. Defaults to `name`.
-        return "My Backend"
-
-    def is_available(self) -> bool:
-        # Cheap check — env var present, optional dep importable, etc.
-        # MUST NOT make network calls (runs on every `clawk tools` paint).
-        return bool(os.getenv("MY_BACKEND_API_KEY", "").strip())
-
-    def supports_search(self) -> bool:
-        return True
-
-    def supports_extract(self) -> bool:
-        return False
-
-    def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        import httpx
-
-        api_key = os.environ["MY_BACKEND_API_KEY"]
-        try:
-            resp = httpx.get(
-                "https://api.example.com/search",
-                params={"q": query, "count": max(1, min(int(limit), 20))},
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.HTTPError as exc:
-            return {"success": False, "error": str(exc)}
-
-        # Response shape is fixed — see "Response shape" below.
-        return {
-            "success": True,
-            "data": {
-                "web": [
-                    {
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "description": item.get("snippet", ""),
-                        "position": idx + 1,
-                    }
-                    for idx, item in enumerate(data.get("results", []))
-                ],
-            },
-        }
+```python# plugins/web/my-backend/provider.py
+
+from __future__ import annotations
+
+
+import os
+
+from typing import Any, Dict, List
+
+
+from agent.web_search_provider import WebSearchProvider
+
+
+class MyBackendWebSearchProvider(WebSearchProvider):
+    """Minimal search-only provider against the My Backend HTTP API."""
+
+    @property
+    def name(self) -> str:
+
+        # Stable id used in web.search_backend / web.extract_backend / web.backend
+
+        # config keys. Lowercase, no spaces; hyphens permitted.
+
+        return "my-backend"
+
+    @property
+    def display_name(self) -> str:
+
+        # Human label shown in `clawk tools`. Defaults to `name`.
+
+        return "My Backend"
+
+    def is_available(self) -> bool:
+
+        # Cheap check — env var present, optional dep importable, etc.
+
+        # MUST NOT make network calls (runs on every `clawk tools` paint).
+
+        return bool(os.getenv("MY_BACKEND_API_KEY", "").strip())
+
+    def supports_search(self) -> bool:
+
+        return True
+
+    def supports_extract(self) -> bool:
+
+        return False
+
+    def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
+
+        import httpx
+
+        api_key = os.environ["MY_BACKEND_API_KEY"]
+
+        try:
+            resp = httpx.get(
+                "https://api.example.com/search",
+                params={"q": query, "count": max(1, min(int(limit), 20))},
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=15,
+            )
+
+            resp.raise_for_status()
+
+            data = resp.json()
+
+        except httpx.HTTPError as exc:
+            return {"success": False, "error": str(exc)}
+
+        # Response shape is fixed — see "Response shape" below.
+
+        return {
+            "success": True,
+            "data": {
+                "web": [
+                    {
+                        "title": item.get("title", ""),
+                        "url": item.get("url", ""),
+                        "description": item.get("snippet", ""),
+                        "position": idx + 1,
+                    }
+                    for idx, item in enumerate(data.get("results", []))
+                ],
+            },
+        }
 ```
 
-```python
-# plugins/web/my-backend/__init__.py
-from plugins.web.my_backend.provider import MyBackendWebSearchProvider
-
-
-def register(ctx) -> None:
-    """Plugin entry point — called once at load time."""
-    ctx.register_web_search_provider(MyBackendWebSearchProvider())
+```python# plugins/web/my-backend/__init__.py
+
+from plugins.web.my_backend.provider import MyBackendWebSearchProvider
+
+
+def register(ctx) -> None:
+    """Plugin entry point — called once at load time."""
+
+    ctx.register_web_search_provider(MyBackendWebSearchProvider())
 ```
 
 ## plugin.yaml
@@ -165,41 +185,35 @@ requires_env:
 
 **搜索成功：**
 
-```python
-{
-    "success": True,
-    "data": {
-        "web": [
-            {"title": str, "url": str, "description": str, "position": int},
-            ...
-        ],
-    },
-}
+```python{
+    "success": True,
+    "data": {
+        "web": [{"title": str, "url": str, "description": str, "position": int}, ...],
+    },
+}
 ```
 
 **提取成功：**
 
-```python
-{
-    "success": True,
-    "data": [
-        {
-            "url": str,
-            "title": str,
-            "content": str,
-            "raw_content": str,
-            "metadata": dict,    # optional
-            "error": str,        # optional, only on per-URL failure
-        },
-        ...
-    ],
-}
+```python{
+    "success": True,
+    "data": [
+        {
+            "url": str,
+            "title": str,
+            "content": str,
+            "raw_content": str,
+            "metadata": dict,  # optional
+            "error": str,  # optional, only on per-URL failure
+        },
+        ...,
+    ],
+}
 ```
 
 **任意能力，失败时：**
 
-```python
-{"success": False, "error": "human-readable message"}
+```python{"success": False, "error": "human-readable message"}
 ```
 
 `search()` 和 `extract()` 均可定义为 `async def`——调度器通过 `inspect.iscoroutinefunction` 检测协程函数并相应地进行 await。对于小型后端，执行阻塞 I/O（HTTP、SDK 调用）的同步实现也完全可行；调度器会处理线程调度。

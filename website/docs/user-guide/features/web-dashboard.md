@@ -793,22 +793,30 @@ Every login start, success, failure, and session-verify failure is written as a 
 
 To plug a non-Nous OAuth provider (e.g. Google, GitHub, custom OIDC), create a plugin that registers a `DashboardAuthProvider`:
 
-```python
-# ~/.clawksis/plugins/dashboard-auth-myidp/__init__.py
-from clawk_cli.dashboard_auth import DashboardAuthProvider, Session, LoginStart
-
-class MyIdPProvider(DashboardAuthProvider):
-    name = "myidp"
-    display_name = "My Identity Provider"
-
-    def start_login(self, *, redirect_uri): ...
-    def complete_login(self, *, code, state, code_verifier, redirect_uri): ...
-    def verify_session(self, *, access_token): ...
-    def refresh_session(self, *, refresh_token): ...
-    def revoke_session(self, *, refresh_token): ...
-
-def register(ctx):
-    ctx.register_dashboard_auth_provider(MyIdPProvider())
+```python# ~/.clawksis/plugins/dashboard-auth-myidp/__init__.py
+
+from clawk_cli.dashboard_auth import DashboardAuthProvider, Session, LoginStart
+
+
+class MyIdPProvider(DashboardAuthProvider):
+    name = "myidp"
+
+    display_name = "My Identity Provider"
+
+    def start_login(self, *, redirect_uri): ...
+
+    def complete_login(self, *, code, state, code_verifier, redirect_uri): ...
+
+    def verify_session(self, *, access_token): ...
+
+    def refresh_session(self, *, refresh_token): ...
+
+    def revoke_session(self, *, refresh_token): ...
+
+
+def register(ctx):
+
+    ctx.register_dashboard_auth_provider(MyIdPProvider())
 ```
 
 The login page lists all registered providers; multiple providers can be stacked and the user picks one at `/login`.

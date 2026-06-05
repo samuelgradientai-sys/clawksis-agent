@@ -28,9 +28,13 @@ def _make_runner():
     return runner
 
 
-def _patch_resolution(monkeypatch, *, model_from_config: str, provider: str = "openrouter"):
+def _patch_resolution(
+    monkeypatch, *, model_from_config: str, provider: str = "openrouter"
+):
     """Stub gateway model + runtime resolution to a known state."""
-    monkeypatch.setattr(gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config)
+    monkeypatch.setattr(
+        gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config
+    )
     monkeypatch.setattr(
         gateway_run,
         "_resolve_runtime_agent_kwargs",
@@ -48,7 +52,9 @@ def test_normal_turn_caches_last_resolved_model(monkeypatch):
     runner = _make_runner()
     sk = "agent:main:discord:dm:123"
 
-    model, _ = runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    model, _ = runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
 
     assert model == "deepseek/deepseek-v4-flash"
     # Cached per-session AND process-wide for first-seen-session recovery.
@@ -62,13 +68,17 @@ def test_empty_model_recovers_session_last_good(monkeypatch):
 
     # Turn 1: config has the model — cache it.
     _patch_resolution(monkeypatch, model_from_config="deepseek/deepseek-v4-flash")
-    runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
 
     # Turn 2: simulate the transient empty config read (the #35314 race).
     _patch_resolution(monkeypatch, model_from_config="", provider="")
     model, _ = runner._resolve_session_agent_runtime(session_key=sk, user_config={})
 
-    assert model == "deepseek/deepseek-v4-flash", "recovery turn must reuse last-known-good, not build model=''"
+    assert model == "deepseek/deepseek-v4-flash", (
+        "recovery turn must reuse last-known-good, not build model=''"
+    )
 
 
 def test_empty_model_new_session_recovers_global_last_good(monkeypatch):
@@ -76,11 +86,15 @@ def test_empty_model_new_session_recovers_global_last_good(monkeypatch):
 
     # Prime a different session so the process-wide "*" slot is populated.
     _patch_resolution(monkeypatch, model_from_config="deepseek/deepseek-v4-flash")
-    runner._resolve_session_agent_runtime(session_key="agent:main:discord:dm:111", user_config={"model": {}})
+    runner._resolve_session_agent_runtime(
+        session_key="agent:main:discord:dm:111", user_config={"model": {}}
+    )
 
     # A brand-new session that hits an empty config read still recovers via "*".
     _patch_resolution(monkeypatch, model_from_config="", provider="")
-    model, _ = runner._resolve_session_agent_runtime(session_key="agent:main:discord:dm:999", user_config={})
+    model, _ = runner._resolve_session_agent_runtime(
+        session_key="agent:main:discord:dm:999", user_config={}
+    )
 
     assert model == "deepseek/deepseek-v4-flash"
 
@@ -90,7 +104,9 @@ def test_cold_start_empty_model_does_not_crash(monkeypatch):
     _patch_resolution(monkeypatch, model_from_config="", provider="")
     runner = _make_runner()
 
-    model, _ = runner._resolve_session_agent_runtime(session_key="agent:main:discord:dm:1", user_config={})
+    model, _ = runner._resolve_session_agent_runtime(
+        session_key="agent:main:discord:dm:1", user_config={}
+    )
 
     assert model == ""
 
@@ -106,7 +122,9 @@ def test_bare_runner_without_cache_attr_does_not_crash(monkeypatch):
     runner._service_tier = None
     # Deliberately omit _last_resolved_model.
 
-    model, _ = runner._resolve_session_agent_runtime(session_key="x", user_config={"model": {}})
+    model, _ = runner._resolve_session_agent_runtime(
+        session_key="x", user_config={"model": {}}
+    )
 
     assert model == "deepseek/deepseek-v4-flash"
 

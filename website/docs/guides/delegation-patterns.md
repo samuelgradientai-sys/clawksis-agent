@@ -44,24 +44,25 @@ Focus on recent developments and key players.
 
 Behind the scenes, Clawksis uses:
 
-```python
-delegate_task(tasks=[
-    {
-        "goal": "Research WebAssembly outside the browser in 2025",
-        "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research RISC-V server chip adoption",
-        "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research practical quantum computing applications",
-        "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
-        "toolsets": ["web"]
-    }
-])
+```pythondelegate_task(
+    tasks=[
+        {
+            "goal": "Research WebAssembly outside the browser in 2025",
+            "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research RISC-V server chip adoption",
+            "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research practical quantum computing applications",
+            "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
+            "toolsets": ["web"],
+        },
+    ]
+)
 ```
 
 All three run concurrently. Each subagent searches the web independently and returns a summary. The parent agent then synthesizes them into a coherent briefing.
@@ -80,16 +81,19 @@ and session management. Fix anything you find and run the tests.
 
 The key is the `context` field — it must include everything the subagent needs:
 
-```python
-delegate_task(
-    goal="Review src/auth/ for security issues and fix any found",
-    context="""Project at /home/user/webapp. Python 3.11, Flask, PyJWT, bcrypt.
-    Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
-    Test command: pytest tests/auth/ -v
-    Focus on: SQL injection, JWT validation, password hashing, session management.
-    Fix issues found and verify tests pass.""",
-    toolsets=["terminal", "file"]
-)
+```pythondelegate_task(
+    goal="Review src/auth/ for security issues and fix any found",
+    context="""Project at /home/user/webapp. Python 3.11, Flask, PyJWT, bcrypt.
+
+    Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
+
+    Test command: pytest tests/auth/ -v
+
+    Focus on: SQL injection, JWT validation, password hashing, session management.
+
+    Fix issues found and verify tests pass.""",
+    toolsets=["terminal", "file"],
+)
 ```
 
 :::warning The Context Problem
@@ -121,36 +125,49 @@ Each subagent researches one option independently. Because they're isolated, the
 
 Split a large refactoring task across parallel subagents, each handling a different part of the codebase:
 
-```python
-delegate_task(tasks=[
-    {
-        "goal": "Refactor all API endpoint handlers to use the new response format",
-        "context": """Project at /home/user/api-server.
-        Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
-        Old format: return {"data": result, "status": "ok"}
-        New format: return APIResponse(data=result, status=200).to_dict()
-        Import: from src.responses import APIResponse
-        Run tests after: pytest tests/handlers/ -v""",
-        "toolsets": ["terminal", "file"]
-    },
-    {
-        "goal": "Update all client SDK methods to handle the new response format",
-        "context": """Project at /home/user/api-server.
-        Files: sdk/python/client.py, sdk/python/models.py
-        Old parsing: result = response.json()["data"]
-        New parsing: result = response.json()["data"] (same key, but add status code checking)
-        Also update sdk/python/tests/test_client.py""",
-        "toolsets": ["terminal", "file"]
-    },
-    {
-        "goal": "Update API documentation to reflect the new response format",
-        "context": """Project at /home/user/api-server.
-        Docs at: docs/api/. Format: Markdown with code examples.
-        Update all response examples from old format to new format.
-        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
-        "toolsets": ["terminal", "file"]
-    }
-])
+```pythondelegate_task(
+    tasks=[
+        {
+            "goal": "Refactor all API endpoint handlers to use the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
+
+        Old format: return {"data": result, "status": "ok"}
+
+        New format: return APIResponse(data=result, status=200).to_dict()
+
+        Import: from src.responses import APIResponse
+
+        Run tests after: pytest tests/handlers/ -v""",
+            "toolsets": ["terminal", "file"],
+        },
+        {
+            "goal": "Update all client SDK methods to handle the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Files: sdk/python/client.py, sdk/python/models.py
+
+        Old parsing: result = response.json()["data"]
+
+        New parsing: result = response.json()["data"] (same key, but add status code checking)
+
+        Also update sdk/python/tests/test_client.py""",
+            "toolsets": ["terminal", "file"],
+        },
+        {
+            "goal": "Update API documentation to reflect the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Docs at: docs/api/. Format: Markdown with code examples.
+
+        Update all response examples from old format to new format.
+
+        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
+            "toolsets": ["terminal", "file"],
+        },
+    ]
+)
 ```
 
 :::tip
@@ -163,37 +180,60 @@ Each subagent gets its own terminal session. They can work on the same project d
 
 Use `execute_code` for mechanical data gathering, then delegate the reasoning-heavy analysis:
 
-```python
-# Step 1: Mechanical gathering (execute_code is better here — no reasoning needed)
-execute_code("""
-from clawk_tools import web_search, web_extract
-
-results = []
-for query in ["AI funding Q1 2026", "AI startup acquisitions 2026", "AI IPOs 2026"]:
-    r = web_search(query, limit=5)
-    for item in r["data"]["web"]:
-        results.append({"title": item["title"], "url": item["url"], "desc": item["description"]})
-
-# Extract full content from top 5 most relevant
-urls = [r["url"] for r in results[:5]]
-content = web_extract(urls)
-
-# Save for the analysis step
-import json
-with open("/tmp/ai-funding-data.json", "w") as f:
-    json.dump({"search_results": results, "extracted": content["results"]}, f)
-print(f"Collected {len(results)} results, extracted {len(content['results'])} pages")
-""")
-
-# Step 2: Reasoning-heavy analysis (delegation is better here)
-delegate_task(
-    goal="Analyze AI funding data and write a market report",
-    context="""Raw data at /tmp/ai-funding-data.json contains search results and
-    extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
-    Write a structured market report: key deals, trends, notable players,
-    and outlook. Focus on deals over $100M.""",
-    toolsets=["terminal", "file"]
-)
+```python# Step 1: Mechanical gathering (execute_code is better here — no reasoning needed)
+
+execute_code("""
+
+from clawk_tools import web_search, web_extract
+
+
+
+results = []
+
+for query in ["AI funding Q1 2026", "AI startup acquisitions 2026", "AI IPOs 2026"]:
+
+    r = web_search(query, limit=5)
+
+    for item in r["data"]["web"]:
+
+        results.append({"title": item["title"], "url": item["url"], "desc": item["description"]})
+
+
+
+# Extract full content from top 5 most relevant
+
+urls = [r["url"] for r in results[:5]]
+
+content = web_extract(urls)
+
+
+
+# Save for the analysis step
+
+import json
+
+with open("/tmp/ai-funding-data.json", "w") as f:
+
+    json.dump({"search_results": results, "extracted": content["results"]}, f)
+
+print(f"Collected {len(results)} results, extracted {len(content['results'])} pages")
+
+""")
+
+
+# Step 2: Reasoning-heavy analysis (delegation is better here)
+
+delegate_task(
+    goal="Analyze AI funding data and write a market report",
+    context="""Raw data at /tmp/ai-funding-data.json contains search results and
+
+    extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
+
+    Write a structured market report: key deals, trends, notable players,
+
+    and outlook. Focus on deals over $100M.""",
+    toolsets=["terminal", "file"],
+)
 ```
 
 This is often the most efficient pattern: `execute_code` handles the 10+ sequential tool calls cheaply, then a subagent does the single expensive reasoning task with a clean context.

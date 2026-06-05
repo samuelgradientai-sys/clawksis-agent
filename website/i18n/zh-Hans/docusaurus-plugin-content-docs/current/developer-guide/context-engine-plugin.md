@@ -38,48 +38,63 @@ plugins/context_engine/lcm/
 
 你的引擎必须实现以下**必需**方法：
 
-```python
-from agent.context_engine import ContextEngine
-
-class LCMEngine(ContextEngine):
-
-    @property
-    def name(self) -> str:
-        """短标识符，例如 'lcm'。必须与 config.yaml 中的值匹配。"""
-        return "lcm"
-
-    def update_from_response(self, usage: dict) -> None:
-        """每次 LLM 调用后，以 usage dict 为参数调用。
-
-        从响应中更新 self.last_prompt_tokens、self.last_completion_tokens、
-        self.last_total_tokens。
-        """
-
-    def should_compress(self, prompt_tokens: int = None) -> bool:
-        """若本轮应触发压缩则返回 True。"""
-
-    def compress(self, messages: list, current_tokens: int = None,
-                 focus_topic: str = None) -> list:
-        """压缩消息列表并返回新的（可能更短的）列表。
-
-        返回的列表必须是有效的 OpenAI 格式消息序列。
-
-        ``focus_topic`` 是来自手动 ``/compress <focus>`` 的可选主题字符串；
-        支持引导式压缩的引擎应优先保留与其相关的信息，其他引擎可忽略。
-        """
+```pythonfrom agent.context_engine import ContextEngine
+
+
+class LCMEngine(ContextEngine):
+    @property
+    def name(self) -> str:
+        """短标识符，例如 'lcm'。必须与 config.yaml 中的值匹配。"""
+
+        return "lcm"
+
+    def update_from_response(self, usage: dict) -> None:
+        """每次 LLM 调用后，以 usage dict 为参数调用。
+
+
+
+        从响应中更新 self.last_prompt_tokens、self.last_completion_tokens、
+
+        self.last_total_tokens。
+
+        """
+
+    def should_compress(self, prompt_tokens: int = None) -> bool:
+        """若本轮应触发压缩则返回 True。"""
+
+    def compress(
+        self, messages: list, current_tokens: int = None, focus_topic: str = None
+    ) -> list:
+        """压缩消息列表并返回新的（可能更短的）列表。
+
+
+
+        返回的列表必须是有效的 OpenAI 格式消息序列。
+
+
+
+        ``focus_topic`` 是来自手动 ``/compress <focus>`` 的可选主题字符串；
+
+        支持引导式压缩的引擎应优先保留与其相关的信息，其他引擎可忽略。
+
+        """
 ```
 
 ### 引擎必须维护的类属性
 
 Agent 直接读取这些属性用于显示和日志记录：
 
-```python
-last_prompt_tokens: int = 0
-last_completion_tokens: int = 0
-last_total_tokens: int = 0
-threshold_tokens: int = 0        # 触发压缩的阈值
-context_length: int = 0          # 模型的完整上下文窗口
-compression_count: int = 0       # compress() 已运行的次数
+```pythonlast_prompt_tokens: int = 0
+
+last_completion_tokens: int = 0
+
+last_total_tokens: int = 0
+
+threshold_tokens: int = 0  # 触发压缩的阈值
+
+context_length: int = 0  # 模型的完整上下文窗口
+
+compression_count: int = 0  # compress() 已运行的次数
 ```
 
 ### 可选方法
@@ -101,25 +116,31 @@ compression_count: int = 0       # compress() 已运行的次数
 
 Context engine 可以暴露 agent 直接调用的工具。从 `get_tool_schemas()` 返回 schema，并在 `handle_tool_call()` 中处理调用：
 
-```python
-def get_tool_schemas(self):
-    return [{
-        "name": "lcm_grep",
-        "description": "Search the context knowledge graph",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"}
-            },
-            "required": ["query"],
-        },
-    }]
-
-def handle_tool_call(self, name, args, **kwargs):
-    if name == "lcm_grep":
-        results = self._search_dag(args["query"])
-        return json.dumps({"results": results})
-    return json.dumps({"error": f"Unknown tool: {name}"})
+```pythondef get_tool_schemas(self):
+
+    return [
+        {
+            "name": "lcm_grep",
+            "description": "Search the context knowledge graph",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"],
+            },
+        }
+    ]
+
+
+def handle_tool_call(self, name, args, **kwargs):
+
+    if name == "lcm_grep":
+        results = self._search_dag(args["query"])
+
+        return json.dumps({"results": results})
+
+    return json.dumps({"error": f"Unknown tool: {name}"})
 ```
 
 引擎工具在启动时注入到 agent 的工具列表中并自动分发 — 无需注册到注册表。
@@ -134,10 +155,11 @@ def handle_tool_call(self, name, args, **kwargs):
 
 通用插件也可以注册 context engine：
 
-```python
-def register(ctx):
-    engine = LCMEngine(context_length=200000)
-    ctx.register_context_engine(engine)
+```pythondef register(ctx):
+
+    engine = LCMEngine(context_length=200000)
+
+    ctx.register_context_engine(engine)
 ```
 
 只能注册一个引擎。第二个尝试注册的插件将被拒绝并发出警告。
@@ -168,20 +190,29 @@ context:
 
 ## 测试
 
-```python
-from agent.context_engine import ContextEngine
-
-def test_engine_satisfies_abc():
-    engine = YourEngine(context_length=200000)
-    assert isinstance(engine, ContextEngine)
-    assert engine.name == "your-name"
-
-def test_compress_returns_valid_messages():
-    engine = YourEngine(context_length=200000)
-    msgs = [{"role": "user", "content": "hello"}]
-    result = engine.compress(msgs)
-    assert isinstance(result, list)
-    assert all("role" in m for m in result)
+```pythonfrom agent.context_engine import ContextEngine
+
+
+def test_engine_satisfies_abc():
+
+    engine = YourEngine(context_length=200000)
+
+    assert isinstance(engine, ContextEngine)
+
+    assert engine.name == "your-name"
+
+
+def test_compress_returns_valid_messages():
+
+    engine = YourEngine(context_length=200000)
+
+    msgs = [{"role": "user", "content": "hello"}]
+
+    result = engine.compress(msgs)
+
+    assert isinstance(result, list)
+
+    assert all("role" in m for m in result)
 ```
 
 完整的 ABC 契约测试套件请参见 `tests/agent/test_context_engine.py`。

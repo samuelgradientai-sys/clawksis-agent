@@ -23,9 +23,7 @@ _OSV_ENDPOINT = os.getenv("OSV_ENDPOINT", "https://api.osv.dev/v1/query")
 _TIMEOUT = 10  # seconds
 
 
-def check_package_for_malware(
-    command: str, args: list
-) -> Optional[str]:
+def check_package_for_malware(command: str, args: list) -> Optional[str]:
     """Check if an MCP server package has known malware advisories.
 
     Inspects the *command* (e.g. ``npx``, ``uvx``) and *args* to infer the
@@ -47,14 +45,14 @@ def check_package_for_malware(
         malware = _query_osv(package, ecosystem, version)
     except Exception as exc:
         # Fail-open: network errors, timeouts, parse failures → allow
-        logger.debug("OSV check failed for %s/%s (allowing): %s", ecosystem, package, exc)
+        logger.debug(
+            "OSV check failed for %s/%s (allowing): %s", ecosystem, package, exc
+        )
         return None
 
     if malware:
         ids = ", ".join(m["id"] for m in malware[:3])
-        summaries = "; ".join(
-            m.get("summary", m["id"])[:100] for m in malware[:3]
-        )
+        summaries = "; ".join(m.get("summary", m["id"])[:100] for m in malware[:3])
         return (
             f"BLOCKED: Package '{package}' ({ecosystem}) has known malware "
             f"advisories: {ids}. Details: {summaries}"
@@ -128,9 +126,7 @@ def _parse_pypi_package(token: str) -> Tuple[Optional[str], Optional[str]]:
     return token, None
 
 
-def _query_osv(
-    package: str, ecosystem: str, version: Optional[str] = None
-) -> list:
+def _query_osv(package: str, ecosystem: str, version: Optional[str] = None) -> list:
     """Query the OSV API for MAL-* advisories. Returns list of malware vulns."""
     payload = {"package": {"name": package, "ecosystem": ecosystem}}
     if version:

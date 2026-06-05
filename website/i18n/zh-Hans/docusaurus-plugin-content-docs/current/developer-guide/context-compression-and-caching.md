@@ -277,11 +277,13 @@ Breakpoint 4: Last non-system message          ─┘
 
 `apply_anthropic_cache_control()` 深拷贝消息并注入 `cache_control` 标记：
 
-```python
-# Cache marker format
-marker = {"type": "ephemeral"}
-# Or for 1-hour TTL:
-marker = {"type": "ephemeral", "ttl": "1h"}
+```python# Cache marker format
+
+marker = {"type": "ephemeral"}
+
+# Or for 1-hour TTL:
+
+marker = {"type": "ephemeral", "ttl": "1h"}
 ```
 
 标记根据内容类型以不同方式应用：

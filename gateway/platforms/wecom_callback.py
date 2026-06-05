@@ -17,6 +17,7 @@ import logging
 import socket as _socket
 import time
 from typing import Any, Dict, List, Optional
+
 # Security: parse untrusted, pre-auth request bodies (WeCom callbacks) with
 # defusedxml to block billion-laughs / entity-expansion (and XXE) DoS. The
 # parsing API (fromstring) is a drop-in for the stdlib calls used below;
@@ -46,7 +47,12 @@ except ImportError:
     HTTPX_AVAILABLE = False
 
 from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType, SendResult
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
 from gateway.platforms.wecom_crypto import WXBizMsgCrypt, WeComCryptoError
 
 logger = logging.getLogger(__name__)
@@ -131,7 +137,10 @@ class WecomCallbackAdapter(BasePlatformAdapter):
         try:
             # Tighter keepalive so idle CLOSE_WAIT drains promptly (#18451).
             from gateway.platforms._http_client_limits import platform_httpx_limits
-            self._http_client = httpx.AsyncClient(timeout=20.0, limits=platform_httpx_limits())
+
+            self._http_client = httpx.AsyncClient(
+                timeout=20.0, limits=platform_httpx_limits()
+            )
             self._app = web.Application()
             self._app.router.add_get("/health", self._handle_health)
             self._app.router.add_get(self._path, self._handle_verify)
@@ -144,7 +153,9 @@ class WecomCallbackAdapter(BasePlatformAdapter):
             self._mark_connected()
             logger.info(
                 "[WecomCallback] HTTP server listening on %s:%s%s",
-                self._host, self._port, self._path,
+                self._host,
+                self._port,
+                self._path,
             )
             for app in self._apps:
                 try:
@@ -152,7 +163,8 @@ class WecomCallbackAdapter(BasePlatformAdapter):
                 except Exception as exc:
                     logger.warning(
                         "[WecomCallback] Initial token refresh failed for app '%s': %s",
-                        app.get("name", "default"), exc,
+                        app.get("name", "default"),
+                        exc,
                     )
             return True
         except Exception:
@@ -217,7 +229,8 @@ class WecomCallbackAdapter(BasePlatformAdapter):
                     # the next _get_access_token call forces a fresh fetch.
                     logger.warning(
                         "[WecomCallback] Token rejected for app '%s' (errcode=%s), refreshing",
-                        app.get("name", "default"), errcode,
+                        app.get("name", "default"),
+                        errcode,
                     )
                     self._access_tokens.pop(app["name"], None)
                     continue
@@ -278,7 +291,11 @@ class WecomCallbackAdapter(BasePlatformAdapter):
         for app in self._apps:
             try:
                 decrypted = self._decrypt_request(
-                    app, body, msg_signature, timestamp, nonce,
+                    app,
+                    body,
+                    msg_signature,
+                    timestamp,
+                    nonce,
                 )
                 event = self._build_event(app, decrypted)
                 if event is not None:
@@ -287,19 +304,32 @@ class WecomCallbackAdapter(BasePlatformAdapter):
                     if event.message_id:
                         now = time.time()
                         if event.message_id in self._seen_messages:
-                            if now - self._seen_messages[event.message_id] < MESSAGE_DEDUP_TTL_SECONDS:
-                                logger.debug("[WecomCallback] Duplicate MsgId %s, skipping", event.message_id)
-                                return web.Response(text="success", content_type="text/plain")
+                            if (
+                                now - self._seen_messages[event.message_id]
+                                < MESSAGE_DEDUP_TTL_SECONDS
+                            ):
+                                logger.debug(
+                                    "[WecomCallback] Duplicate MsgId %s, skipping",
+                                    event.message_id,
+                                )
+                                return web.Response(
+                                    text="success", content_type="text/plain"
+                                )
                             del self._seen_messages[event.message_id]
                         self._seen_messages[event.message_id] = now
                         # Prune expired entries when cache grows large
                         if len(self._seen_messages) > 2000:
                             cutoff = now - MESSAGE_DEDUP_TTL_SECONDS
-                            self._seen_messages = {k: v for k, v in self._seen_messages.items() if v > cutoff}
+                            self._seen_messages = {
+                                k: v
+                                for k, v in self._seen_messages.items()
+                                if v > cutoff
+                            }
                     # Record which app this user belongs to.
                     if event.source and event.source.user_id:
                         map_key = self._user_app_key(
-                            str(app.get("corp_id") or ""), event.source.user_id,
+                            str(app.get("corp_id") or ""),
+                            event.source.user_id,
                         )
                         self._user_app_map[map_key] = app["name"]
                     await self._message_queue.put(event)
@@ -329,15 +359,21 @@ class WecomCallbackAdapter(BasePlatformAdapter):
     # ------------------------------------------------------------------
 
     def _decrypt_request(
-        self, app: Dict[str, Any], body: str,
-        msg_signature: str, timestamp: str, nonce: str,
+        self,
+        app: Dict[str, Any],
+        body: str,
+        msg_signature: str,
+        timestamp: str,
+        nonce: str,
     ) -> str:
         root = ET.fromstring(body)
         encrypt = root.findtext("Encrypt", default="")
         crypt = self._crypt_for_app(app)
         return crypt.decrypt(msg_signature, timestamp, nonce, encrypt).decode("utf-8")
 
-    def _build_event(self, app: Dict[str, Any], xml_text: str) -> Optional[MessageEvent]:
+    def _build_event(
+        self, app: Dict[str, Any], xml_text: str
+    ) -> Optional[MessageEvent]:
         root = ET.fromstring(xml_text)
         msg_type = (root.findtext("MsgType") or "").lower()
         # Silently acknowledge lifecycle events.

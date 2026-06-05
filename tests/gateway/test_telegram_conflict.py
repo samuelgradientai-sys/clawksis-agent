@@ -40,11 +40,15 @@ from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 @pytest.fixture(autouse=True)
 def _no_auto_discovery(monkeypatch):
     """Disable DoH auto-discovery so connect() uses the plain builder chain."""
+
     async def _noop():
         return []
+
     monkeypatch.setattr("gateway.platforms.telegram.discover_fallback_ips", _noop)
     # Mock HTTPXRequest so the builder chain doesn't fail
-    monkeypatch.setattr("gateway.platforms.telegram.HTTPXRequest", lambda **kwargs: MagicMock())
+    monkeypatch.setattr(
+        "gateway.platforms.telegram.HTTPXRequest", lambda **kwargs: MagicMock()
+    )
 
 
 @pytest.mark.asyncio
@@ -103,7 +107,10 @@ async def test_polling_conflict_retries_before_fatal(monkeypatch):
     builder.request.return_value = builder
     builder.get_updates_request.return_value = builder
     builder.build.return_value = app
-    monkeypatch.setattr("gateway.platforms.telegram.Application", SimpleNamespace(builder=MagicMock(return_value=builder)))
+    monkeypatch.setattr(
+        "gateway.platforms.telegram.Application",
+        SimpleNamespace(builder=MagicMock(return_value=builder)),
+    )
 
     # Speed up retries for testing
     monkeypatch.setattr("asyncio.sleep", AsyncMock())
@@ -117,7 +124,9 @@ async def test_polling_conflict_retries_before_fatal(monkeypatch):
     conflict = type("Conflict", (Exception,), {})
 
     # First conflict: should retry, NOT be fatal
-    captured["error_callback"](conflict("Conflict: terminated by other getUpdates request"))
+    captured["error_callback"](
+        conflict("Conflict: terminated by other getUpdates request")
+    )
     await asyncio.sleep(0)
     await asyncio.sleep(0)
     # Give the scheduled task a chance to run
@@ -125,7 +134,9 @@ async def test_polling_conflict_retries_before_fatal(monkeypatch):
         await asyncio.sleep(0)
 
     assert adapter.has_fatal_error is False, "First conflict should not be fatal"
-    assert adapter._polling_conflict_count == 0, "Count should reset after successful retry"
+    assert adapter._polling_conflict_count == 0, (
+        "Count should reset after successful retry"
+    )
 
 
 @pytest.mark.asyncio
@@ -179,7 +190,10 @@ async def test_polling_conflict_becomes_fatal_after_retries(monkeypatch):
     builder.request.return_value = builder
     builder.get_updates_request.return_value = builder
     builder.build.return_value = app
-    monkeypatch.setattr("gateway.platforms.telegram.Application", SimpleNamespace(builder=MagicMock(return_value=builder)))
+    monkeypatch.setattr(
+        "gateway.platforms.telegram.Application",
+        SimpleNamespace(builder=MagicMock(return_value=builder)),
+    )
 
     # Speed up retries for testing
     monkeypatch.setattr("asyncio.sleep", AsyncMock())
@@ -208,7 +222,9 @@ async def test_polling_conflict_becomes_fatal_after_retries(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_connect_marks_retryable_fatal_error_for_startup_network_failure(monkeypatch):
+async def test_connect_marks_retryable_fatal_error_for_startup_network_failure(
+    monkeypatch,
+):
     adapter = TelegramAdapter(PlatformConfig(enabled=True, token="***"))
 
     monkeypatch.setattr(
@@ -228,11 +244,16 @@ async def test_connect_marks_retryable_fatal_error_for_startup_network_failure(m
         bot=SimpleNamespace(delete_webhook=AsyncMock(), set_my_commands=AsyncMock()),
         updater=SimpleNamespace(),
         add_handler=MagicMock(),
-        initialize=AsyncMock(side_effect=RuntimeError("Temporary failure in name resolution")),
+        initialize=AsyncMock(
+            side_effect=RuntimeError("Temporary failure in name resolution")
+        ),
         start=AsyncMock(),
     )
     builder.build.return_value = app
-    monkeypatch.setattr("gateway.platforms.telegram.Application", SimpleNamespace(builder=MagicMock(return_value=builder)))
+    monkeypatch.setattr(
+        "gateway.platforms.telegram.Application",
+        SimpleNamespace(builder=MagicMock(return_value=builder)),
+    )
 
     ok = await adapter.connect()
 

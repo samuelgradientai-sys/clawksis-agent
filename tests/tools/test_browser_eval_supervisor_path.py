@@ -5,6 +5,7 @@ the response shaping in ``CDPSupervisor.evaluate_runtime`` using mocks — no
 real browser, no real WebSocket.  Real-CDP coverage lives in
 ``tests/tools/test_browser_supervisor.py`` (gated on Chrome being installed).
 """
+
 from __future__ import annotations
 
 import json
@@ -52,8 +53,11 @@ class TestBrowserEvalSupervisorPath:
         _patch_supervisor(monkeypatch, sup)
         # If the subprocess path is hit we want a loud failure.
         monkeypatch.setattr(
-            bt, "_run_browser_command",
-            lambda *a, **kw: pytest.fail("subprocess path must not run when supervisor is healthy"),
+            bt,
+            "_run_browser_command",
+            lambda *a, **kw: pytest.fail(
+                "subprocess path must not run when supervisor is healthy"
+            ),
         )
 
         out = json.loads(bt._browser_eval("1 + 41"))
@@ -74,11 +78,12 @@ class TestBrowserEvalSupervisorPath:
         }
         _patch_supervisor(monkeypatch, sup)
         monkeypatch.setattr(
-            bt, "_run_browser_command",
+            bt,
+            "_run_browser_command",
             lambda *a, **kw: pytest.fail("subprocess path must not run"),
         )
 
-        out = json.loads(bt._browser_eval('JSON.stringify({a:1,b:[2,3]})'))
+        out = json.loads(bt._browser_eval("JSON.stringify({a:1,b:[2,3]})"))
         assert out["success"] is True
         assert out["result"] == {"a": 1, "b": [2, 3]}
         # result_type reflects the parsed Python type, not the raw JS type.
@@ -94,7 +99,9 @@ class TestBrowserEvalSupervisorPath:
             "result_type": "string",
         }
         _patch_supervisor(monkeypatch, sup)
-        monkeypatch.setattr(bt, "_run_browser_command", lambda *a, **kw: pytest.fail("nope"))
+        monkeypatch.setattr(
+            bt, "_run_browser_command", lambda *a, **kw: pytest.fail("nope")
+        )
 
         out = json.loads(bt._browser_eval('"hello world"'))
         assert out["result"] == "hello world"
@@ -121,8 +128,9 @@ class TestBrowserEvalSupervisorPath:
         out = json.loads(bt._browser_eval("foo.bar"))
         assert out["success"] is False
         assert "ReferenceError" in out["error"]
-        assert called["subprocess"] is False, \
+        assert called["subprocess"] is False, (
             "JS exception should be surfaced, not retried via subprocess"
+        )
 
     def test_supervisor_loop_down_falls_through_to_subprocess(self, monkeypatch):
         """When the supervisor itself is unavailable, fall back to the subprocess."""

@@ -185,8 +185,8 @@ ulimit -s unlimited
 ```python
 llm = Llama(
     model_path="model.gguf",
-    n_batch=512,        # Increase for faster prompt processing
-    n_gpu_layers=35
+    n_batch=512,  # Increase for faster prompt processing
+    n_gpu_layers=35,
 )
 ```
 
@@ -223,7 +223,7 @@ llm = Llama(model_path="model.gguf", n_gpu_layers=10)
 llm = Llama(
     model_path="model.gguf",
     n_ctx=2048,  # Reduce from 4096
-    n_gpu_layers=35
+    n_gpu_layers=35,
 )
 ```
 
@@ -231,9 +231,9 @@ llm = Llama(
 ```python
 llm = Llama(
     model_path="model.gguf",
-    type_k=2,    # Q4_0 for K cache
-    type_v=2,    # Q4_0 for V cache
-    n_gpu_layers=35
+    type_k=2,  # Q4_0 for K cache
+    type_v=2,  # Q4_0 for V cache
+    n_gpu_layers=35,
 )
 ```
 
@@ -263,7 +263,7 @@ print(output)
 ```python
 llm = Llama(
     model_path="model.gguf",
-    chat_format="llama-3"  # Match your model: chatml, mistral, etc.
+    chat_format="llama-3",  # Match your model: chatml, mistral, etc.
 )
 ```
 
@@ -280,7 +280,7 @@ output = llm("Hello", max_tokens=50, temperature=0.1)
 **Fix**:
 ```python
 # Ensure UTF-8 encoding
-prompt = "Hello, world!".encode('utf-8').decode('utf-8')
+prompt = "Hello, world!".encode("utf-8").decode("utf-8")
 output = llm(prompt, max_tokens=50)
 ```
 
@@ -335,13 +335,13 @@ from openai import OpenAI
 # Use correct base URL format
 client = OpenAI(
     base_url="http://localhost:8080/v1",  # Include /v1
-    api_key="not-needed"
+    api_key="not-needed",
 )
 
 # Use correct model name
 response = client.chat.completions.create(
     model="local",  # Or the actual model name
-    messages=[{"role": "user", "content": "Hello"}]
+    messages=[{"role": "user", "content": "Hello"}],
 )
 ```
 
@@ -376,8 +376,8 @@ CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python --force-reinstall
 # Offload all layers for Metal
 llm = Llama(
     model_path="model.gguf",
-    n_gpu_layers=99,    # Offload everything
-    n_threads=1         # Metal handles parallelism
+    n_gpu_layers=99,  # Offload everything
+    n_threads=1,  # Metal handles parallelism
 )
 ```
 
@@ -405,21 +405,23 @@ llm = Llama(model_path="model.gguf", verbose=True)
 ```python
 import struct
 
+
 def validate_gguf(filepath):
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         magic = f.read(4)
-        if magic != b'GGUF':
+        if magic != b"GGUF":
             print(f"Invalid magic: {magic}")
             return False
 
-        version = struct.unpack('<I', f.read(4))[0]
+        version = struct.unpack("<I", f.read(4))[0]
         print(f"GGUF version: {version}")
 
-        tensor_count = struct.unpack('<Q', f.read(8))[0]
-        metadata_count = struct.unpack('<Q', f.read(8))[0]
+        tensor_count = struct.unpack("<Q", f.read(8))[0]
+        metadata_count = struct.unpack("<Q", f.read(8))[0]
         print(f"Tensors: {tensor_count}, Metadata: {metadata_count}")
 
         return True
+
 
 validate_gguf("model.gguf")
 ```

@@ -66,14 +66,18 @@ class TestEmptyProfileHint:
         payload = json.loads(raw)
         assert "hint" in payload
         # Generic hint mentions self-hosted as a common cause
-        assert any(word in payload["hint"].lower() for word in ("self-hosted", "dialectic"))
+        assert any(
+            word in payload["hint"].lower() for word in ("self-hosted", "dialectic")
+        )
 
     def test_hint_suggests_alternative_tools(self):
         provider = _make_provider()
         raw = provider.handle_tool_call("honcho_profile", {})
         payload = json.loads(raw)
         # User-facing suggestion to try honcho_reasoning or honcho_search
-        assert "honcho_reasoning" in payload["hint"] or "honcho_search" in payload["hint"]
+        assert (
+            "honcho_reasoning" in payload["hint"] or "honcho_search" in payload["hint"]
+        )
 
     def test_populated_card_returns_card_without_hint(self):
         """Regression: a populated card should NOT trigger the hint path."""

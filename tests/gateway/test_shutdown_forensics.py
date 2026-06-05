@@ -18,6 +18,7 @@ from gateway import shutdown_forensics as sf
 # _signal_name
 # ---------------------------------------------------------------------------
 
+
 class TestSignalName:
     def test_known_signals_resolve_to_names(self):
         assert sf._signal_name(signal.SIGTERM) == "SIGTERM"
@@ -37,6 +38,7 @@ class TestSignalName:
 # ---------------------------------------------------------------------------
 # snapshot_shutdown_context
 # ---------------------------------------------------------------------------
+
 
 class TestSnapshotShutdownContext:
     def test_includes_self_pid_and_signal(self):
@@ -102,18 +104,14 @@ class TestSnapshotShutdownContext:
     def test_detects_takeover_marker_for_other(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         marker = tmp_path / ".gateway-takeover.json"
-        marker.write_text(
-            '{"target_pid": 1, "replacer_pid": 99999}', encoding="utf-8"
-        )
+        marker.write_text('{"target_pid": 1, "replacer_pid": 99999}', encoding="utf-8")
         ctx = sf.snapshot_shutdown_context(signal.SIGTERM)
         assert ctx["takeover_marker_for_self"] is False
 
     def test_detects_planned_stop_marker(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         marker = tmp_path / ".gateway-planned-stop.json"
-        marker.write_text(
-            f'{{"target_pid": {os.getpid()}}}', encoding="utf-8"
-        )
+        marker.write_text(f'{{"target_pid": {os.getpid()}}}', encoding="utf-8")
         ctx = sf.snapshot_shutdown_context(signal.SIGTERM)
         assert "planned_stop_marker" in ctx
 
@@ -121,6 +119,7 @@ class TestSnapshotShutdownContext:
 # ---------------------------------------------------------------------------
 # format_context_for_log / context_as_json
 # ---------------------------------------------------------------------------
+
 
 class TestFormatters:
     def test_format_context_for_log_includes_signal_and_parent(self):
@@ -149,6 +148,7 @@ class TestFormatters:
 # ---------------------------------------------------------------------------
 # spawn_async_diagnostic
 # ---------------------------------------------------------------------------
+
 
 class TestSpawnAsyncDiagnostic:
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only diagnostic")
@@ -207,6 +207,7 @@ class TestSpawnAsyncDiagnostic:
 # _parse_systemd_duration_to_us
 # ---------------------------------------------------------------------------
 
+
 class TestParseSystemdDuration:
     def test_seconds(self):
         assert sf._parse_systemd_duration_to_us("90s") == 90 * 1_000_000
@@ -233,6 +234,7 @@ class TestParseSystemdDuration:
 # ---------------------------------------------------------------------------
 # check_systemd_timing_alignment
 # ---------------------------------------------------------------------------
+
 
 class TestCheckSystemdTimingAlignment:
     def test_returns_none_when_not_under_systemd(self, monkeypatch):

@@ -707,19 +707,24 @@ The bundle still calls `register()` with a placeholder component (good practice 
 
 Plugins can register FastAPI routes by setting `api` in the manifest. Create the file and export a `router`:
 
-```python
-# ~/.clawksis/plugins/my-plugin/dashboard/plugin_api.py
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/data")
-async def get_data():
-    return {"items": ["one", "two", "three"]}
-
-@router.post("/action")
-async def do_action(body: dict):
-    return {"ok": True, "received": body}
+```python# ~/.clawksis/plugins/my-plugin/dashboard/plugin_api.py
+
+from fastapi import APIRouter
+
+
+router = APIRouter()
+
+
+@router.get("/data")
+async def get_data():
+
+    return {"items": ["one", "two", "three"]}
+
+
+@router.post("/action")
+async def do_action(body: dict):
+
+    return {"ok": True, "received": body}
 ```
 
 Routes are mounted under `/api/plugins/<name>/`, so the above becomes:
@@ -733,26 +738,36 @@ Plugin API routes bypass session-token authentication since the dashboard server
 
 Backend routes run inside the dashboard process, so they can import from the clawksis-agent codebase directly:
 
-```python
-from fastapi import APIRouter
-from clawk_state import SessionDB
-from clawk_cli.config import load_config
-
-router = APIRouter()
-
-@router.get("/session-count")
-async def session_count():
-    db = SessionDB()
-    try:
-        count = len(db.list_sessions(limit=9999))
-        return {"count": count}
-    finally:
-        db.close()
-
-@router.get("/config-snapshot")
-async def config_snapshot():
-    cfg = load_config()
-    return {"model": cfg.get("model", {})}
+```pythonfrom fastapi import APIRouter
+
+from clawk_state import SessionDB
+
+from clawk_cli.config import load_config
+
+
+router = APIRouter()
+
+
+@router.get("/session-count")
+async def session_count():
+
+    db = SessionDB()
+
+    try:
+        count = len(db.list_sessions(limit=9999))
+
+        return {"count": count}
+
+    finally:
+        db.close()
+
+
+@router.get("/config-snapshot")
+async def config_snapshot():
+
+    cfg = load_config()
+
+    return {"model": cfg.get("model", {})}
 ```
 
 ### Custom CSS per plugin

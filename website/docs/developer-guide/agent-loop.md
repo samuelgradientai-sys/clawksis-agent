@@ -23,17 +23,19 @@ The core orchestration engine is `run_agent.py`'s `AIAgent` class — a large fi
 
 ## Two Entry Points
 
-```python
-# Simple interface — returns final response string
-response = agent.chat("Fix the bug in main.py")
-
-# Full interface — returns dict with messages, metadata, usage stats
-result = agent.run_conversation(
-    user_message="Fix the bug in main.py",
-    system_message=None,           # auto-built if omitted
-    conversation_history=None,      # auto-loaded from session if omitted
-    task_id="task_abc123"
-)
+```python# Simple interface — returns final response string
+
+response = agent.chat("Fix the bug in main.py")
+
+
+# Full interface — returns dict with messages, metadata, usage stats
+
+result = agent.run_conversation(
+    user_message="Fix the bug in main.py",
+    system_message=None,  # auto-built if omitted
+    conversation_history=None,  # auto-loaded from session if omitted
+    task_id="task_abc123",
+)
 ```
 
 `chat()` is a thin wrapper around `run_conversation()` that extracts the `final_response` field from the result dict.
@@ -82,11 +84,13 @@ run_conversation()
 
 All messages use OpenAI-compatible format internally:
 
-```python
-{"role": "system", "content": "..."}
-{"role": "user", "content": "..."}
-{"role": "assistant", "content": "...", "tool_calls": [...]}
-{"role": "tool", "tool_call_id": "...", "content": "..."}
+```python{"role": "system", "content": "..."}
+
+{"role": "user", "content": "..."}
+
+{"role": "assistant", "content": "...", "tool_calls": [...]}
+
+{"role": "tool", "tool_call_id": "...", "content": "..."}
 ```
 
 Reasoning content (from models that support extended thinking) is stored in `assistant_msg["reasoning"]` and optionally displayed via the `reasoning_callback`.

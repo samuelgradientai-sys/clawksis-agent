@@ -44,47 +44,53 @@ description: A minimal example plugin
 
 **`~/.clawksis/plugins/hello-world/__init__.py`**
 
-```python
-"""Minimal Clawksis plugin — registers a tool and a hook."""
-
-import json
-
-
-def register(ctx):
-    # --- Tool: hello_world ---
-    schema = {
-        "name": "hello_world",
-        "description": "Returns a friendly greeting for the given name.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Name to greet",
-                }
-            },
-            "required": ["name"],
-        },
-    }
-
-    def handle_hello(params, **kwargs):
-        del kwargs
-        name = params.get("name", "World")
-        return json.dumps({"success": True, "greeting": f"Hello, {name}!"})
-
-    ctx.register_tool(
-        name="hello_world",
-        toolset="hello_world",
-        schema=schema,
-        handler=handle_hello,
-        description="Return a friendly greeting for the given name.",
-    )
-
-    # --- Hook: log every tool call ---
-    def on_tool_call(tool_name, params, result):
-        print(f"[hello-world] tool called: {tool_name}")
-
-    ctx.register_hook("post_tool_call", on_tool_call)
+```python"""Minimal Clawksis plugin — registers a tool and a hook."""
+
+import json
+
+
+def register(ctx):
+
+    # --- Tool: hello_world ---
+
+    schema = {
+        "name": "hello_world",
+        "description": "Returns a friendly greeting for the given name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name to greet",
+                }
+            },
+            "required": ["name"],
+        },
+    }
+
+    def handle_hello(params, **kwargs):
+
+        del kwargs
+
+        name = params.get("name", "World")
+
+        return json.dumps({"success": True, "greeting": f"Hello, {name}!"})
+
+    ctx.register_tool(
+        name="hello_world",
+        toolset="hello_world",
+        schema=schema,
+        handler=handle_hello,
+        description="Return a friendly greeting for the given name.",
+    )
+
+    # --- Hook: log every tool call ---
+
+    def on_tool_call(tool_name, params, result):
+
+        print(f"[hello-world] tool called: {tool_name}")
+
+    ctx.register_hook("post_tool_call", on_tool_call)
 ```
 
 Drop both files into `~/.clawksis/plugins/hello-world/`, restart Clawksis, and the model can immediately call `hello_world`. The hook prints a log line after every tool invocation.
@@ -324,8 +330,7 @@ In a running session, `/plugins` shows which plugins are currently loaded.
 
 Plugins can inject messages into the active conversation using `ctx.inject_message()`:
 
-```python
-ctx.inject_message("New data arrived from the webhook", role="user")
+```pythonctx.inject_message("New data arrived from the webhook", role="user")
 ```
 
 **Signature:** `ctx.inject_message(content: str, role: str = "user") -> bool`

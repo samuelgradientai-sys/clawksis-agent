@@ -195,9 +195,8 @@ On Windows, some default encodings (such as `cp125x`) cannot represent all Unico
 
 - Prefer opening files with an explicit UTF-8 encoding:
 
-```python
-with open("results.txt", "w", encoding="utf-8") as f:
-    f.write("✓ All good\n")
+```pythonwith open("results.txt", "w", encoding="utf-8") as f:
+    f.write("✓ All good\n")
 ```
 
 - In PowerShell, you can also switch the current session to UTF-8 for console and native command output:

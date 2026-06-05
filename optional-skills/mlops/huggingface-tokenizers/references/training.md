@@ -29,9 +29,10 @@ from datasets import load_dataset
 
 dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
 
+
 def batch_iterator(batch_size=1000):
     for i in range(0, len(dataset), batch_size):
-        yield dataset[i:i + batch_size]["text"]
+        yield dataset[i : i + batch_size]["text"]
 ```
 
 ### Step 3: Initialize tokenizer
@@ -52,7 +53,7 @@ trainer = BpeTrainer(
     vocab_size=50000,
     min_frequency=2,
     special_tokens=["<|endoftext|>", "<|padding|>"],
-    show_progress=True
+    show_progress=True,
 )
 ```
 
@@ -72,7 +73,7 @@ trainer = WordPieceTrainer(
     min_frequency=2,
     special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
     continuing_subword_prefix="##",
-    show_progress=True
+    show_progress=True,
 )
 ```
 
@@ -87,7 +88,7 @@ trainer = UnigramTrainer(
     vocab_size=8000,
     special_tokens=["<unk>", "<s>", "</s>", "<pad>"],
     unk_token="<unk>",
-    show_progress=True
+    show_progress=True,
 )
 ```
 
@@ -101,7 +102,7 @@ tokenizer.train(files=files, trainer=trainer)
 tokenizer.train_from_iterator(
     batch_iterator(),
     trainer=trainer,
-    length=len(dataset)  # Optional, for progress bar
+    length=len(dataset),  # Optional, for progress bar
 )
 ```
 
@@ -153,7 +154,7 @@ transformers_tokenizer = PreTrainedTokenizerFast(
     pad_token="[PAD]",
     cls_token="[CLS]",
     sep_token="[SEP]",
-    mask_token="[MASK]"
+    mask_token="[MASK]",
 )
 
 transformers_tokenizer.save_pretrained("my-tokenizer-dir")
@@ -167,14 +168,14 @@ transformers_tokenizer.save_pretrained("my-tokenizer-dir")
 from tokenizers.trainers import BpeTrainer
 
 trainer = BpeTrainer(
-    vocab_size=30000,              # Target vocabulary size
-    min_frequency=2,               # Minimum frequency for merges
-    special_tokens=["[UNK]"],      # Special tokens (added first)
-    limit_alphabet=1000,           # Limit initial alphabet size
-    initial_alphabet=[],           # Pre-defined initial characters
-    show_progress=True,            # Show progress bar
+    vocab_size=30000,  # Target vocabulary size
+    min_frequency=2,  # Minimum frequency for merges
+    special_tokens=["[UNK]"],  # Special tokens (added first)
+    limit_alphabet=1000,  # Limit initial alphabet size
+    initial_alphabet=[],  # Pre-defined initial characters
+    show_progress=True,  # Show progress bar
     continuing_subword_prefix="",  # Prefix for continuing subwords
-    end_of_word_suffix=""          # Suffix for end of words
+    end_of_word_suffix="",  # Suffix for end of words
 )
 ```
 
@@ -189,12 +190,12 @@ trainer = BpeTrainer(
 from tokenizers.trainers import WordPieceTrainer
 
 trainer = WordPieceTrainer(
-    vocab_size=30522,              # BERT uses 30,522
+    vocab_size=30522,  # BERT uses 30,522
     min_frequency=2,
     special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
     limit_alphabet=1000,
-    continuing_subword_prefix="##", # BERT-style prefix
-    show_progress=True
+    continuing_subword_prefix="##",  # BERT-style prefix
+    show_progress=True,
 )
 ```
 
@@ -204,13 +205,13 @@ trainer = WordPieceTrainer(
 from tokenizers.trainers import UnigramTrainer
 
 trainer = UnigramTrainer(
-    vocab_size=8000,               # Typically smaller than BPE/WordPiece
+    vocab_size=8000,  # Typically smaller than BPE/WordPiece
     special_tokens=["<unk>", "<s>", "</s>"],
     unk_token="<unk>",
-    max_piece_length=16,           # Maximum token length
-    n_sub_iterations=2,            # EM algorithm iterations
-    shrinking_factor=0.75,         # Vocabulary reduction rate
-    show_progress=True
+    max_piece_length=16,  # Maximum token length
+    n_sub_iterations=2,  # EM algorithm iterations
+    shrinking_factor=0.75,  # Vocabulary reduction rate
+    show_progress=True,
 )
 ```
 
@@ -227,6 +228,7 @@ from tokenizers.trainers import BpeTrainer
 # Load dataset
 dataset = load_dataset("wikipedia", "20220301.en", split="train", streaming=True)
 
+
 # Create iterator (yields batches)
 def batch_iterator(batch_size=1000):
     batch = []
@@ -238,15 +240,13 @@ def batch_iterator(batch_size=1000):
     if batch:
         yield batch
 
+
 # Initialize tokenizer
 tokenizer = Tokenizer(BPE())
 trainer = BpeTrainer(vocab_size=50000, special_tokens=["<|endoftext|>"])
 
 # Train (memory efficient - streams data)
-tokenizer.train_from_iterator(
-    batch_iterator(),
-    trainer=trainer
-)
+tokenizer.train_from_iterator(batch_iterator(), trainer=trainer)
 ```
 
 **Memory usage**: ~200 MB (vs 10+ GB loading full dataset)
@@ -270,12 +270,14 @@ tokenizer.train(files=files, trainer=trainer)
 from multiprocessing import Pool, cpu_count
 import os
 
+
 def train_shard(shard_files):
     """Train tokenizer on a shard of files."""
     tokenizer = Tokenizer(BPE())
     trainer = BpeTrainer(vocab_size=50000)
     tokenizer.train(files=shard_files, trainer=trainer)
     return tokenizer.get_vocab()
+
 
 # Split files into shards
 num_shards = cpu_count()
@@ -314,9 +316,7 @@ tokenizer.pre_tokenizer = ByteLevel()
 
 # Train on code corpus
 trainer = BpeTrainer(
-    vocab_size=50000,
-    special_tokens=["<|endoftext|>", "<|pad|>"],
-    min_frequency=2
+    vocab_size=50000, special_tokens=["<|endoftext|>", "<|pad|>"], min_frequency=2
 )
 
 tokenizer.train(files=["code_corpus.txt"], trainer=trainer)
@@ -337,13 +337,13 @@ tokenizer.normalizer = NFKC()
 # Preserve medical terms
 tokenizer.pre_tokenizer = Sequence([
     Whitespace(),
-    Punctuation(behavior="isolated")  # Keep punctuation separate
+    Punctuation(behavior="isolated"),  # Keep punctuation separate
 ])
 
 trainer = BpeTrainer(
     vocab_size=50000,
     special_tokens=["[UNK]", "[CLS]", "[SEP]"],
-    min_frequency=3  # Higher threshold for rare medical terms
+    min_frequency=3,  # Higher threshold for rare medical terms
 )
 
 tokenizer.train(files=["pubmed_corpus.txt"], trainer=trainer)
@@ -362,12 +362,13 @@ tokenizer.normalizer = NFKC()
 
 # Byte-level handles all Unicode
 from tokenizers.pre_tokenizers import ByteLevel
+
 tokenizer.pre_tokenizer = ByteLevel()
 
 trainer = BpeTrainer(
     vocab_size=100000,  # Larger vocab for multiple languages
     special_tokens=["<unk>", "<s>", "</s>"],
-    limit_alphabet=None  # No limit (handles all scripts)
+    limit_alphabet=None,  # No limit (handles all scripts)
 )
 
 # Train on multilingual corpus
@@ -415,7 +416,9 @@ for vocab_size in vocab_sizes:
     test_text = "Test sentence for evaluation..."
     tokens = tokenizer.encode(test_text).ids
 
-    print(f"Vocab: {vocab_size:6d} | Tokens: {len(tokens):3d} | Avg: {len(test_text)/len(tokens):.2f} chars/token")
+    print(
+        f"Vocab: {vocab_size:6d} | Tokens: {len(tokens):3d} | Avg: {len(test_text) / len(tokens):.2f} chars/token"
+    )
 
 # Example output:
 # Vocab:  10000 | Tokens:  12 | Avg: 2.33 chars/token
@@ -481,7 +484,7 @@ test_phrases = [
     "machine learning",
     "artificial intelligence",
     "preprocessing",
-    "hello world"
+    "hello world",
 ]
 
 for phrase in test_phrases:
@@ -507,10 +510,10 @@ for phrase in test_phrases:
 ```python
 # Fast training configuration
 trainer = BpeTrainer(
-    vocab_size=20000,      # Smaller vocab
-    min_frequency=5,       # Higher threshold
-    limit_alphabet=500,    # Limit alphabet
-    show_progress=True
+    vocab_size=20000,  # Smaller vocab
+    min_frequency=5,  # Higher threshold
+    limit_alphabet=500,  # Limit alphabet
+    show_progress=True,
 )
 ```
 
@@ -524,8 +527,8 @@ trainer = BpeTrainer(
 ```python
 # Better coverage configuration
 trainer = BpeTrainer(
-    vocab_size=50000,      # Larger vocab
-    min_frequency=1,       # Lower threshold
+    vocab_size=50000,  # Larger vocab
+    min_frequency=1,  # Lower threshold
 )
 ```
 

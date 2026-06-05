@@ -72,7 +72,7 @@ result = model.transcribe("audio.mp3", language="ja")  # Japanese
 # Translate any language to English
 result = model.transcribe(
     "spanish_audio.mp3",
-    task="translate"  # Translates to English
+    task="translate",  # Translates to English
 )
 
 print(f"Original language: {result['language']}")
@@ -90,7 +90,7 @@ model = whisper.load_model("large")
 result = model.transcribe(
     "chinese_audio.mp3",
     language="zh",
-    initial_prompt="这是一段关于技术的讨论"  # Context helps
+    initial_prompt="这是一段关于技术的讨论",  # Context helps
 )
 ```
 
@@ -99,9 +99,7 @@ result = model.transcribe(
 ```python
 # Japanese benefits from initial prompt
 result = model.transcribe(
-    "japanese_audio.mp3",
-    language="ja",
-    initial_prompt="これは技術的な会議の録音です"
+    "japanese_audio.mp3", language="ja", initial_prompt="これは技術的な会議の録音です"
 )
 ```
 
@@ -111,10 +109,7 @@ result = model.transcribe(
 # Arabic: Use large model for best results
 model = whisper.load_model("large")
 
-result = model.transcribe(
-    "arabic_audio.mp3",
-    language="ar"
-)
+result = model.transcribe("arabic_audio.mp3", language="ar")
 ```
 
 ## Model size recommendations

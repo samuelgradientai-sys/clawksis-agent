@@ -298,54 +298,100 @@ class TestResolveModalBackendState:
     # --- auto mode ---
 
     def test_auto_prefers_managed_when_available(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=True
+        )
         assert result["selected_backend"] == "managed"
 
     def test_auto_falls_back_to_direct(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=True, managed_ready=False, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=True, managed_ready=False, nous_enabled=True
+        )
         assert result["selected_backend"] == "direct"
 
     def test_auto_no_backends_available(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=False, managed_ready=False)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=False, managed_ready=False
+        )
         assert result["selected_backend"] is None
 
     def test_auto_managed_ready_but_nous_disabled(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=False)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=False
+        )
         assert result["selected_backend"] == "direct"
 
     def test_auto_nothing_when_only_managed_and_nous_disabled(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=False, managed_ready=True, nous_enabled=False)
+        result = self._resolve(
+            monkeypatch,
+            "auto",
+            has_direct=False,
+            managed_ready=True,
+            nous_enabled=False,
+        )
         assert result["selected_backend"] is None
 
     # --- direct mode ---
 
     def test_direct_selects_direct_when_available(self, monkeypatch):
-        result = self._resolve(monkeypatch, "direct", has_direct=True, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "direct",
+            has_direct=True,
+            managed_ready=True,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] == "direct"
 
     def test_direct_none_when_no_credentials(self, monkeypatch):
-        result = self._resolve(monkeypatch, "direct", has_direct=False, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "direct",
+            has_direct=False,
+            managed_ready=True,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] is None
 
     # --- managed mode ---
 
     def test_managed_selects_managed_when_ready_and_enabled(self, monkeypatch):
-        result = self._resolve(monkeypatch, "managed", has_direct=True, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "managed",
+            has_direct=True,
+            managed_ready=True,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] == "managed"
 
     def test_managed_none_when_not_ready(self, monkeypatch):
-        result = self._resolve(monkeypatch, "managed", has_direct=True, managed_ready=False, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "managed",
+            has_direct=True,
+            managed_ready=False,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] is None
 
     def test_managed_blocked_when_nous_disabled(self, monkeypatch):
-        result = self._resolve(monkeypatch, "managed", has_direct=True, managed_ready=True, nous_enabled=False)
+        result = self._resolve(
+            monkeypatch,
+            "managed",
+            has_direct=True,
+            managed_ready=True,
+            nous_enabled=False,
+        )
         assert result["selected_backend"] is None
         assert result["managed_mode_blocked"] is True
 
     # --- return structure ---
 
     def test_return_dict_keys(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=True, managed_ready=False)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=True, managed_ready=False
+        )
         expected_keys = {
             "requested_mode",
             "mode",
@@ -357,7 +403,9 @@ class TestResolveModalBackendState:
         assert set(result.keys()) == expected_keys
 
     def test_passthrough_flags(self, monkeypatch):
-        result = self._resolve(monkeypatch, "direct", has_direct=True, managed_ready=False)
+        result = self._resolve(
+            monkeypatch, "direct", has_direct=True, managed_ready=False
+        )
         assert result["requested_mode"] == "direct"
         assert result["mode"] == "direct"
         assert result["has_direct"] is True
@@ -366,7 +414,9 @@ class TestResolveModalBackendState:
     # --- invalid mode falls back to auto ---
 
     def test_invalid_mode_treated_as_auto(self, monkeypatch):
-        result = self._resolve(monkeypatch, "bogus", has_direct=True, managed_ready=False)
+        result = self._resolve(
+            monkeypatch, "bogus", has_direct=True, managed_ready=False
+        )
         assert result["requested_mode"] == "auto"
         assert result["mode"] == "auto"
 

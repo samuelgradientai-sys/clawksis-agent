@@ -274,21 +274,24 @@ skill_view(name="concept-diagrams", file_path="templates/template.html")
 
 写入单个 `.html` 文件，用户可直接打开。无需服务器，无需依赖，离线可用。模式：
 
-```python
-# 1. Load the template
-template = skill_view("concept-diagrams", "templates/template.html")
-
-# 2. Fill in title, subtitle, and paste your SVG
-html = template.replace(
-    "<!-- DIAGRAM TITLE HERE -->", "SN2 reaction mechanism"
-).replace(
-    "<!-- OPTIONAL SUBTITLE HERE -->", "Bimolecular nucleophilic substitution"
-).replace(
-    "<!-- PASTE SVG HERE -->", svg_content
-)
-
-# 3. Write to a user-chosen path (or ./ by default)
-write_file("./sn2-mechanism.html", html)
+```python# 1. Load the template
+
+template = skill_view("concept-diagrams", "templates/template.html")
+
+
+# 2. Fill in title, subtitle, and paste your SVG
+
+html = (
+    template
+    .replace("<!-- DIAGRAM TITLE HERE -->", "SN2 reaction mechanism")
+    .replace("<!-- OPTIONAL SUBTITLE HERE -->", "Bimolecular nucleophilic substitution")
+    .replace("<!-- PASTE SVG HERE -->", svg_content)
+)
+
+
+# 3. Write to a user-chosen path (or ./ by default)
+
+write_file("./sn2-mechanism.html", html)
 ```
 
 告知用户如何打开：

@@ -15,9 +15,7 @@ from unittest.mock import patch
 from clawk_cli.main import cmd_update
 
 
-def _make_run_side_effect(
-    branch="main", verify_ok=True, commit_count="1", dirty=False
-):
+def _make_run_side_effect(branch="main", verify_ok=True, commit_count="1", dirty=False):
     """Minimal subprocess.run side_effect for the update flow."""
 
     def side_effect(cmd, **kwargs):
@@ -122,9 +120,11 @@ class TestUpdateYesConfigMigration:
         # "Non-interactive session" branch instead of prompting.
         import sys as _sys
 
-        with patch("builtins.input", return_value="n") as mock_input, patch.object(
-            _sys.stdin, "isatty", return_value=True
-        ), patch.object(_sys.stdout, "isatty", return_value=True):
+        with (
+            patch("builtins.input", return_value="n") as mock_input,
+            patch.object(_sys.stdin, "isatty", return_value=True),
+            patch.object(_sys.stdout, "isatty", return_value=True),
+        ):
             cmd_update(args)
             # The user was actually prompted.
             assert mock_input.called
@@ -134,4 +134,3 @@ class TestUpdateYesConfigMigration:
 
 class TestUpdateYesStashRestore:
     """--yes auto-restores the pre-update autostash without prompting."""
-

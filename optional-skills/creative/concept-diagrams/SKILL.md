@@ -257,21 +257,24 @@ Before finalizing any SVG, verify ALL of the following:
 
 Write a single `.html` file the user can open directly. No server, no dependencies, works offline. Pattern:
 
-```python
-# 1. Load the template
-template = skill_view("concept-diagrams", "templates/template.html")
-
-# 2. Fill in title, subtitle, and paste your SVG
-html = template.replace(
-    "<!-- DIAGRAM TITLE HERE -->", "SN2 reaction mechanism"
-).replace(
-    "<!-- OPTIONAL SUBTITLE HERE -->", "Bimolecular nucleophilic substitution"
-).replace(
-    "<!-- PASTE SVG HERE -->", svg_content
-)
-
-# 3. Write to a user-chosen path (or ./ by default)
-write_file("./sn2-mechanism.html", html)
+```python# 1. Load the template
+
+template = skill_view("concept-diagrams", "templates/template.html")
+
+
+# 2. Fill in title, subtitle, and paste your SVG
+
+html = (
+    template
+    .replace("<!-- DIAGRAM TITLE HERE -->", "SN2 reaction mechanism")
+    .replace("<!-- OPTIONAL SUBTITLE HERE -->", "Bimolecular nucleophilic substitution")
+    .replace("<!-- PASTE SVG HERE -->", svg_content)
+)
+
+
+# 3. Write to a user-chosen path (or ./ by default)
+
+write_file("./sn2-mechanism.html", html)
 ```
 
 Tell the user how to open it:

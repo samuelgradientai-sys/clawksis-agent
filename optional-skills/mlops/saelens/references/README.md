@@ -30,9 +30,7 @@ from sae_lens import SAE
 # Load model and SAE
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 sae, cfg_dict, sparsity = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 # Encode activations to sparse features

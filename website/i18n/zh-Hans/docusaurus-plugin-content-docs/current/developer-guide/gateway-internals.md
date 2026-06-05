@@ -121,10 +121,9 @@ Gateway 中所有斜杠命令均经过相同的解析流程：
 
 在 agent 处理消息期间不得执行的命令会被提前拒绝：
 
-```python
-if _quick_key in self._running_agents:
-    if canonical == "model":
-        return "⏳ Agent is running — wait for it to finish or /stop first."
+```pythonif _quick_key in self._running_agents:
+    if canonical == "model":
+        return "⏳ Agent is running — wait for it to finish or /stop first."
 ```
 
 绕过命令（`/stop`、`/new`、`/approve`、`/deny`、`/queue`、`/status`）具有特殊处理逻辑。

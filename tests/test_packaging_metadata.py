@@ -105,8 +105,7 @@ def test_bundled_plugin_manifests_ship_in_both_wheel_and_sdist():
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     plugins_pkg_data = data["tool"]["setuptools"]["package-data"].get("plugins", [])
     assert any(
-        g.endswith("plugin.yaml") or g.endswith("plugin.yml")
-        for g in plugins_pkg_data
+        g.endswith("plugin.yaml") or g.endswith("plugin.yml") for g in plugins_pkg_data
     ), "pyproject package-data 'plugins' must ship plugin.yaml/plugin.yml (wheel)"
 
     # Sdist channel: MANIFEST.in must recursively include the manifests so
@@ -153,7 +152,14 @@ def test_starlette_pinned_above_cve_2026_48710_floor_in_pyproject():
     found = {}
     for extra, specs in extras.items():
         for spec in specs:
-            name = spec.split("==", 1)[0].split(">", 1)[0].split("<", 1)[0].split("[", 1)[0].strip()
+            name = (
+                spec
+                .split("==", 1)[0]
+                .split(">", 1)[0]
+                .split("<", 1)[0]
+                .split("[", 1)[0]
+                .strip()
+            )
             if name.lower() == "starlette":
                 assert "==" in spec, f"[{extra}] must exact-pin starlette, got {spec!r}"
                 ver = spec.split("==", 1)[1].split(";", 1)[0].strip()

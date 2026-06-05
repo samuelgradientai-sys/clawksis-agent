@@ -32,6 +32,7 @@ class _FakeResponse:
     def raise_for_status(self):
         if self.status_code >= 400:
             import httpx
+
             raise httpx.HTTPStatusError("err", request=None, response=self)  # type: ignore
 
     def json(self):
@@ -53,11 +54,14 @@ class _FakeAsyncClient:
         return _FakeResponse(200, {"request_id": "req-123"})
 
     async def get(self, url, headers=None, timeout=None):
-        return _FakeResponse(200, {
-            "status": "done",
-            "video": {"url": "https://xai-cdn/out.mp4", "duration": 8},
-            "model": self.posts[-1]["json"]["model"],
-        })
+        return _FakeResponse(
+            200,
+            {
+                "status": "done",
+                "video": {"url": "https://xai-cdn/out.mp4", "duration": 8},
+                "model": self.posts[-1]["json"]["model"],
+            },
+        )
 
 
 @pytest.fixture

@@ -69,7 +69,7 @@ client.create_collection(
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     shard_number=6,  # Number of shards
     replication_factor=2,  # Replicas per shard
-    write_consistency_factor=1  # Required acks for write
+    write_consistency_factor=1,  # Required acks for write
 )
 
 # Check cluster status
@@ -87,21 +87,21 @@ from qdrant_client.models import WriteOrdering
 client.upsert(
     collection_name="critical_data",
     points=points,
-    ordering=WriteOrdering.STRONG  # Wait for all replicas
+    ordering=WriteOrdering.STRONG,  # Wait for all replicas
 )
 
 # Eventual consistency (faster)
 client.upsert(
     collection_name="logs",
     points=points,
-    ordering=WriteOrdering.WEAK  # Return after primary ack
+    ordering=WriteOrdering.WEAK,  # Return after primary ack
 )
 
 # Read from specific shard
 results = client.search(
     collection_name="documents",
     query_vector=query,
-    consistency="majority"  # Read from majority of replicas
+    consistency="majority",  # Read from majority of replicas
 )
 ```
 
@@ -113,33 +113,38 @@ Combine semantic (dense) and keyword (sparse) search:
 
 ```python
 from qdrant_client.models import (
-    VectorParams, SparseVectorParams, SparseIndexParams,
-    Distance, PointStruct, SparseVector, Prefetch, Query
+    VectorParams,
+    SparseVectorParams,
+    SparseIndexParams,
+    Distance,
+    PointStruct,
+    SparseVector,
+    Prefetch,
+    Query,
 )
 
 # Create hybrid collection
 client.create_collection(
     collection_name="hybrid",
-    vectors_config={
-        "dense": VectorParams(size=384, distance=Distance.COSINE)
-    },
+    vectors_config={"dense": VectorParams(size=384, distance=Distance.COSINE)},
     sparse_vectors_config={
-        "sparse": SparseVectorParams(
-            index=SparseIndexParams(on_disk=False)
-        )
-    }
+        "sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))
+    },
 )
+
 
 # Insert with both vector types
 def encode_sparse(text: str) -> SparseVector:
     """Simple BM25-like sparse encoding"""
     from collections import Counter
+
     tokens = text.lower().split()
     counts = Counter(tokens)
     # Map tokens to indices (use vocabulary in production)
     indices = [hash(t) % 30000 for t in counts.keys()]
     values = list(counts.values())
     return SparseVector(indices=indices, values=values)
+
 
 client.upsert(
     collection_name="hybrid",
@@ -148,11 +153,11 @@ client.upsert(
             id=1,
             vector={
                 "dense": dense_encoder.encode("Python programming").tolist(),
-                "sparse": encode_sparse("Python programming language code")
+                "sparse": encode_sparse("Python programming language code"),
             },
-            payload={"text": "Python programming language code"}
+            payload={"text": "Python programming language code"},
         )
-    ]
+    ],
 )
 
 # Hybrid search with Reciprocal Rank Fusion (RRF)
@@ -162,10 +167,10 @@ results = client.query_points(
     collection_name="hybrid",
     prefetch=[
         Prefetch(query=dense_query, using="dense", limit=20),
-        Prefetch(query=sparse_query, using="sparse", limit=20)
+        Prefetch(query=sparse_query, using="sparse", limit=20),
     ],
     query=FusionQuery(fusion="rrf"),  # Combine results
-    limit=10
+    limit=10,
 )
 ```
 
@@ -181,12 +186,12 @@ results = client.query_points(
         Prefetch(
             query=query_vector,
             limit=100,  # Broad first stage
-            params={"quantization": {"rescore": False}}  # Fast, approximate
+            params={"quantization": {"rescore": False}},  # Fast, approximate
         )
     ],
     query=Query(nearest=query_vector),
     limit=10,
-    params={"quantization": {"rescore": True}}  # Accurate reranking
+    params={"quantization": {"rescore": True}},  # Accurate reranking
 )
 ```
 
@@ -199,8 +204,8 @@ results = client.query_points(
 recommendations = client.recommend(
     collection_name="products",
     positive=[1, 2, 3],  # IDs user liked
-    negative=[4],         # IDs user disliked
-    limit=10
+    negative=[4],  # IDs user disliked
+    limit=10,
 )
 
 # With filtering
@@ -210,10 +215,10 @@ recommendations = client.recommend(
     query_filter={
         "must": [
             {"key": "category", "match": {"value": "electronics"}},
-            {"key": "in_stock", "match": {"value": True}}
+            {"key": "in_stock", "match": {"value": True}},
         ]
     },
-    limit=10
+    limit=10,
 )
 ```
 
@@ -225,14 +230,9 @@ from qdrant_client.models import RecommendStrategy, LookupLocation
 # Recommend using vectors from another collection
 results = client.recommend(
     collection_name="products",
-    positive=[
-        LookupLocation(
-            collection_name="user_history",
-            id="user_123"
-        )
-    ],
+    positive=[LookupLocation(collection_name="user_history", id="user_123")],
     strategy=RecommendStrategy.AVERAGE_VECTOR,
-    limit=10
+    limit=10,
 )
 ```
 
@@ -254,15 +254,14 @@ results = client.search(
                 filter=Filter(
                     must=[
                         FieldCondition(
-                            key="author.name",
-                            match=MatchValue(value="John")
+                            key="author.name", match=MatchValue(value="John")
                         )
                     ]
-                )
+                ),
             )
         ]
     ),
-    limit=10
+    limit=10,
 )
 ```
 
@@ -281,12 +280,12 @@ results = client.search(
                 key="location",
                 geo_radius=GeoRadius(
                     center=GeoPoint(lat=40.7128, lon=-74.0060),
-                    radius=5000  # meters
-                )
+                    radius=5000,  # meters
+                ),
             )
         ]
     ),
-    limit=10
+    limit=10,
 )
 
 # Geo bounding box
@@ -301,12 +300,12 @@ results = client.search(
                 key="location",
                 geo_bounding_box=GeoBoundingBox(
                     top_left=GeoPoint(lat=40.8, lon=-74.1),
-                    bottom_right=GeoPoint(lat=40.6, lon=-73.9)
-                )
+                    bottom_right=GeoPoint(lat=40.6, lon=-73.9),
+                ),
             )
         ]
     ),
-    limit=10
+    limit=10,
 )
 ```
 
@@ -324,8 +323,8 @@ client.create_payload_index(
         tokenizer=TokenizerType.WORD,
         min_token_len=2,
         max_token_len=15,
-        lowercase=True
-    )
+        lowercase=True,
+    ),
 )
 
 # Full-text filter
@@ -335,14 +334,9 @@ results = client.search(
     collection_name="documents",
     query_vector=query,
     query_filter=Filter(
-        must=[
-            FieldCondition(
-                key="content",
-                match=MatchText(text="machine learning")
-            )
-        ]
+        must=[FieldCondition(key="content", match=MatchText(text="machine learning"))]
     ),
-    limit=10
+    limit=10,
 )
 ```
 
@@ -351,7 +345,11 @@ results = client.search(
 ### Scalar Quantization (INT8)
 
 ```python
-from qdrant_client.models import ScalarQuantization, ScalarQuantizationConfig, ScalarType
+from qdrant_client.models import (
+    ScalarQuantization,
+    ScalarQuantizationConfig,
+    ScalarType,
+)
 
 # ~4x memory reduction, minimal accuracy loss
 client.create_collection(
@@ -360,17 +358,21 @@ client.create_collection(
     quantization_config=ScalarQuantization(
         scalar=ScalarQuantizationConfig(
             type=ScalarType.INT8,
-            quantile=0.99,       # Clip extreme values
-            always_ram=True     # Keep quantized vectors in RAM
+            quantile=0.99,  # Clip extreme values
+            always_ram=True,  # Keep quantized vectors in RAM
         )
-    )
+    ),
 )
 ```
 
 ### Product Quantization
 
 ```python
-from qdrant_client.models import ProductQuantization, ProductQuantizationConfig, CompressionRatio
+from qdrant_client.models import (
+    ProductQuantization,
+    ProductQuantizationConfig,
+    CompressionRatio,
+)
 
 # ~16x memory reduction, some accuracy loss
 client.create_collection(
@@ -378,10 +380,9 @@ client.create_collection(
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     quantization_config=ProductQuantization(
         product=ProductQuantizationConfig(
-            compression=CompressionRatio.X16,
-            always_ram=True
+            compression=CompressionRatio.X16, always_ram=True
         )
-    )
+    ),
 )
 ```
 
@@ -396,7 +397,7 @@ client.create_collection(
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     quantization_config=BinaryQuantization(
         binary=BinaryQuantizationConfig(always_ram=True)
-    )
+    ),
 )
 
 # Search with oversampling
@@ -406,10 +407,10 @@ results = client.search(
     search_params={
         "quantization": {
             "rescore": True,
-            "oversampling": 2.0  # Retrieve 2x candidates, rescore
+            "oversampling": 2.0,  # Retrieve 2x candidates, rescore
         }
     },
-    limit=10
+    limit=10,
 )
 ```
 
@@ -438,7 +439,7 @@ full_snapshot = client.create_full_snapshot()
 client.download_snapshot(
     collection_name="documents",
     snapshot_name="documents-2024-01-01.snapshot",
-    target_path="./backup/"
+    target_path="./backup/",
 )
 
 # Restore (via REST API)
@@ -446,7 +447,7 @@ import requests
 
 response = requests.put(
     "http://localhost:6333/collections/documents/snapshots/recover",
-    json={"location": "file:///backup/documents-2024-01-01.snapshot"}
+    json={"location": "file:///backup/documents-2024-01-01.snapshot"},
 )
 ```
 
@@ -494,7 +495,7 @@ while True:
         limit=100,
         offset=offset,
         with_payload=True,
-        with_vectors=False
+        with_vectors=False,
     )
     all_points.extend(results)
 
@@ -511,11 +512,9 @@ print(f"Total points: {len(all_points)}")
 results, _ = client.scroll(
     collection_name="documents",
     scroll_filter=Filter(
-        must=[
-            FieldCondition(key="status", match=MatchValue(value="active"))
-        ]
+        must=[FieldCondition(key="status", match=MatchValue(value="active"))]
     ),
-    limit=1000
+    limit=1000,
 )
 ```
 
@@ -525,27 +524,24 @@ results, _ = client.scroll(
 import asyncio
 from qdrant_client import AsyncQdrantClient
 
+
 async def main():
     client = AsyncQdrantClient(host="localhost", port=6333)
 
     # Async operations
     await client.create_collection(
         collection_name="async_docs",
-        vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+        vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     )
 
-    await client.upsert(
-        collection_name="async_docs",
-        points=points
-    )
+    await client.upsert(collection_name="async_docs", points=points)
 
     results = await client.search(
-        collection_name="async_docs",
-        query_vector=query,
-        limit=10
+        collection_name="async_docs", query_vector=query, limit=10
     )
 
     return results
+
 
 results = asyncio.run(main())
 ```
@@ -560,18 +556,13 @@ client = QdrantClient(
     host="localhost",
     port=6333,
     grpc_port=6334,
-    prefer_grpc=True  # Use gRPC when available
+    prefer_grpc=True,  # Use gRPC when available
 )
 
 # gRPC-only client
 from qdrant_client import QdrantClient
 
-client = QdrantClient(
-    host="localhost",
-    grpc_port=6334,
-    prefer_grpc=True,
-    https=False
-)
+client = QdrantClient(host="localhost", grpc_port=6334, prefer_grpc=True, https=False)
 ```
 
 ## Multitenancy
@@ -584,11 +575,9 @@ client.upsert(
     collection_name="multi_tenant",
     points=[
         PointStruct(
-            id=1,
-            vector=embedding,
-            payload={"tenant_id": "tenant_a", "text": "..."}
+            id=1, vector=embedding, payload={"tenant_id": "tenant_a", "text": "..."}
         )
-    ]
+    ],
 )
 
 # Search within tenant
@@ -598,7 +587,7 @@ results = client.search(
     query_filter=Filter(
         must=[FieldCondition(key="tenant_id", match=MatchValue(value="tenant_a"))]
     ),
-    limit=10
+    limit=10,
 )
 ```
 
@@ -609,15 +598,14 @@ results = client.search(
 def create_tenant_collection(tenant_id: str):
     client.create_collection(
         collection_name=f"tenant_{tenant_id}",
-        vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+        vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     )
+
 
 # Search tenant collection
 def search_tenant(tenant_id: str, query_vector: list, limit: int = 10):
     return client.search(
-        collection_name=f"tenant_{tenant_id}",
-        query_vector=query_vector,
-        limit=limit
+        collection_name=f"tenant_{tenant_id}", query_vector=query_vector, limit=limit
     )
 ```
 

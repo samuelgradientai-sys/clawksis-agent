@@ -59,12 +59,14 @@ pip install "openpyxl>=3.0"
 ### 公式优先于硬编码
 每个计算单元格必须是公式字符串，绝不能是在 Python 中计算后粘贴的数值。
 
-```python
-# 错误——潜在的隐性 bug
-ws["D20"] = revenue_prior_year * (1 + growth)
-
-# 正确——用户更改假设时自动联动
-ws["D20"] = "=D19*(1+$B$8)"
+```python# 错误——潜在的隐性 bug
+
+ws["D20"] = revenue_prior_year * (1 + growth)
+
+
+# 正确——用户更改假设时自动联动
+
+ws["D20"] = "=D19*(1+$B$8)"
 ```
 
 唯一允许硬编码的数字：
@@ -77,11 +79,13 @@ ws["D20"] = "=D19*(1+$B$8)"
 ### 跨工作表引用使用命名范围
 对从另一张工作表、演示文稿或备忘录引用的任何数值，使用命名范围。
 
-```python
-from openpyxl.workbook.defined_name import DefinedName
-wb.defined_names["WACC"] = DefinedName("WACC", attr_text="Inputs!$C$8")
-# 然后在其他地方：
-calc["D30"] = "=D29/WACC"
+```pythonfrom openpyxl.workbook.defined_name import DefinedName
+
+wb.defined_names["WACC"] = DefinedName("WACC", attr_text="Inputs!$C$8")
+
+# 然后在其他地方：
+
+calc["D30"] = "=D29/WACC"
 ```
 
 ### 余额检查标签页
@@ -92,21 +96,25 @@ calc["D30"] = "=D29/WACC"
 - 计算范围内无游离硬编码
 
 示例：
-```python
-checks = wb.create_sheet("Checks")
-checks["A2"] = "BS balances"
-checks["B2"] = "=IS!D20-IS!D21-IS!D22"
-checks["C2"] = "=ABS(B2)<0.01"  # TRUE/FALSE
+```pythonchecks = wb.create_sheet("Checks")
+
+checks["A2"] = "BS balances"
+
+checks["B2"] = "=IS!D20-IS!D21-IS!D22"
+
+checks["C2"] = "=ABS(B2)<0.01"  # TRUE/FALSE
 ```
 
 ### 每个硬编码输入均添加单元格注释
 在创建单元格时同步添加注释，不要事后补充。
 
-```python
-from openpyxl.comments import Comment
-ws["C2"] = 1_250_000_000
-ws["C2"].font = Font(color="0000FF")
-ws["C2"].comment = Comment("Source: 10-K FY2024, p.47, revenue line", "analyst")
+```pythonfrom openpyxl.comments import Comment
+
+ws["C2"] = 1_250_000_000
+
+ws["C2"].font = Font(color="0000FF")
+
+ws["C2"].comment = Comment("Source: 10-K FY2024, p.47, revenue line", "analyst")
 ```
 
 格式：`Source: [系统/文档], [日期], [参考], [URL（如适用）]`。
@@ -115,63 +123,99 @@ ws["C2"].comment = Comment("Source: 10-K FY2024, p.47, revenue line", "analyst")
 
 ## 骨架：典型财务模型
 
-```python
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.comments import Comment
-from openpyxl.utils import get_column_letter
-from pathlib import Path
-
-BLUE = Font(color="0000FF")
-BLACK = Font(color="000000")
-GREEN = Font(color="006100")
-BOLD = Font(bold=True)
-HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
-HEADER_FONT = Font(color="FFFFFF", bold=True)
-
-wb = Workbook()
-
-# --- Inputs 标签页 ---
-inp = wb.active
-inp.title = "Inputs"
-inp["A1"] = "MARKET DATA & KEY INPUTS"
-inp["A1"].font = HEADER_FONT
-inp["A1"].fill = HEADER_FILL
-inp.merge_cells("A1:C1")
-
-inp["B3"] = "Revenue FY2024"
-inp["C3"] = 1_250_000_000
-inp["C3"].font = BLUE
-inp["C3"].comment = Comment("Source: 10-K FY2024 p.47", "model")
-
-inp["B4"] = "Growth Rate"
-inp["C4"] = 0.12
-inp["C4"].font = BLUE
-
-# --- 计算标签页 ---
-calc = wb.create_sheet("DCF")
-calc["B2"] = "Projected Revenue"
-calc["C2"] = "=Inputs!C3*(1+Inputs!C4)"   # 公式，黑色
-
-# --- 检查标签页 ---
-chk = wb.create_sheet("Checks")
-chk["A2"] = "BS balances"
-chk["B2"] = "=ABS(BS!D20-BS!D21-BS!D22)<0.01"
-
-Path("./out").mkdir(exist_ok=True)
-wb.save("./out/model.xlsx")
+```pythonfrom openpyxl import Workbook
+
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+from openpyxl.comments import Comment
+
+from openpyxl.utils import get_column_letter
+
+from pathlib import Path
+
+
+BLUE = Font(color="0000FF")
+
+BLACK = Font(color="000000")
+
+GREEN = Font(color="006100")
+
+BOLD = Font(bold=True)
+
+HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
+
+HEADER_FONT = Font(color="FFFFFF", bold=True)
+
+
+wb = Workbook()
+
+
+# --- Inputs 标签页 ---
+
+inp = wb.active
+
+inp.title = "Inputs"
+
+inp["A1"] = "MARKET DATA & KEY INPUTS"
+
+inp["A1"].font = HEADER_FONT
+
+inp["A1"].fill = HEADER_FILL
+
+inp.merge_cells("A1:C1")
+
+
+inp["B3"] = "Revenue FY2024"
+
+inp["C3"] = 1_250_000_000
+
+inp["C3"].font = BLUE
+
+inp["C3"].comment = Comment("Source: 10-K FY2024 p.47", "model")
+
+
+inp["B4"] = "Growth Rate"
+
+inp["C4"] = 0.12
+
+inp["C4"].font = BLUE
+
+
+# --- 计算标签页 ---
+
+calc = wb.create_sheet("DCF")
+
+calc["B2"] = "Projected Revenue"
+
+calc["C2"] = "=Inputs!C3*(1+Inputs!C4)"  # 公式，黑色
+
+
+# --- 检查标签页 ---
+
+chk = wb.create_sheet("Checks")
+
+chk["A2"] = "BS balances"
+
+chk["B2"] = "=ABS(BS!D20-BS!D21-BS!D22)<0.01"
+
+
+Path("./out").mkdir(exist_ok=True)
+
+wb.save("./out/model.xlsx")
 ```
 
 ## 带合并单元格的节标题
 
 openpyxl 特性：合并时，在左上角单元格设置值，并单独对整个范围设置样式。
 
-```python
-ws["A7"] = "CASH FLOW PROJECTION"
-ws["A7"].font = HEADER_FONT
-ws.merge_cells("A7:H7")
-for col in range(1, 9):  # A..H
-    ws.cell(row=7, column=col).fill = HEADER_FILL
+```pythonws["A7"] = "CASH FLOW PROJECTION"
+
+ws["A7"].font = HEADER_FONT
+
+ws.merge_cells("A7:H7")
+
+for col in range(1, 9):  # A..H
+    ws.cell(row=7, column=col).fill = HEADER_FILL
 ```
 
 ## 敏感性表格
@@ -183,37 +227,55 @@ for col in range(1, 9):  # A..H
 - **高亮中心单元格**，使用中蓝色填充（`"BDD7EE"`）并加粗。
 - 每个单元格均填入完整的重新计算公式——绝不使用近似值。
 
-```python
-# 5x5 WACC（行）x 终值增长率（列）敏感性
-wacc_axis = [0.08, 0.085, 0.09, 0.095, 0.10]        # 中间行 = 基准 9.0%
-term_axis = [0.02, 0.025, 0.03, 0.035, 0.04]        # 中间列 = 基准 3.0%
-
-start_row = 40
-ws.cell(row=start_row, column=1).value = "Implied Share Price ($)"
-ws.cell(row=start_row, column=1).font = BOLD
-
-for j, g in enumerate(term_axis):
-    ws.cell(row=start_row+1, column=2+j).value = g
-    ws.cell(row=start_row+1, column=2+j).font = BLUE
-
-for i, w in enumerate(wacc_axis):
-    r = start_row + 2 + i
-    ws.cell(row=r, column=1).value = w
-    ws.cell(row=r, column=1).font = BLUE
-    for j, g in enumerate(term_axis):
-        c = 2 + j
-        # 完整 DCF 重新计算公式（此处为简化示意）。
-        # 在实际模型中，此处引用完整的预测区块。
-        ws.cell(row=r, column=c).value = (
-            f"=SUMPRODUCT(FCF_range,1/(1+{w})^year_offset) + "
-            f"FCF_terminal*(1+{g})/({w}-{g})/(1+{w})^terminal_year"
-        )
-
-# 高亮中心单元格（基准情景）
-center = ws.cell(row=start_row+2+len(wacc_axis)//2,
-                 column=2+len(term_axis)//2)
-center.fill = PatternFill("solid", fgColor="BDD7EE")
-center.font = BOLD
+```python# 5x5 WACC（行）x 终值增长率（列）敏感性
+
+wacc_axis = [0.08, 0.085, 0.09, 0.095, 0.10]  # 中间行 = 基准 9.0%
+
+term_axis = [0.02, 0.025, 0.03, 0.035, 0.04]  # 中间列 = 基准 3.0%
+
+
+start_row = 40
+
+ws.cell(row=start_row, column=1).value = "Implied Share Price ($)"
+
+ws.cell(row=start_row, column=1).font = BOLD
+
+
+for j, g in enumerate(term_axis):
+    ws.cell(row=start_row + 1, column=2 + j).value = g
+
+    ws.cell(row=start_row + 1, column=2 + j).font = BLUE
+
+
+for i, w in enumerate(wacc_axis):
+    r = start_row + 2 + i
+
+    ws.cell(row=r, column=1).value = w
+
+    ws.cell(row=r, column=1).font = BLUE
+
+    for j, g in enumerate(term_axis):
+        c = 2 + j
+
+        # 完整 DCF 重新计算公式（此处为简化示意）。
+
+        # 在实际模型中，此处引用完整的预测区块。
+
+        ws.cell(row=r, column=c).value = (
+            f"=SUMPRODUCT(FCF_range,1/(1+{w})^year_offset) + "
+            f"FCF_terminal*(1+{g})/({w}-{g})/(1+{w})^terminal_year"
+        )
+
+
+# 高亮中心单元格（基准情景）
+
+center = ws.cell(
+    row=start_row + 2 + len(wacc_axis) // 2, column=2 + len(term_axis) // 2
+)
+
+center.fill = PatternFill("solid", fgColor="BDD7EE")
+
+center.font = BOLD
 ```
 
 ## 交付前重新计算

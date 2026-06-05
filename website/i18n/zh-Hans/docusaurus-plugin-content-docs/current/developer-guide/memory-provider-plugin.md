@@ -27,28 +27,36 @@ plugins/memory/my-provider/
 
 你的插件需要实现 `agent/memory_provider.py` 中的 `MemoryProvider` 抽象基类（ABC）：
 
-```python
-from agent.memory_provider import MemoryProvider
-
-class MyMemoryProvider(MemoryProvider):
-    @property
-    def name(self) -> str:
-        return "my-provider"
-
-    def is_available(self) -> bool:
-        """检查此 provider 是否可以激活。禁止发起网络请求。"""
-        return bool(os.environ.get("MY_API_KEY"))
-
-    def initialize(self, session_id: str, **kwargs) -> None:
-        """在 agent 启动时调用一次。
-
-        kwargs 始终包含：
-          clawk_home (str): 当前活跃的 CLAWK_HOME 路径。用于存储数据。
-        """
-        self._api_key = os.environ.get("MY_API_KEY", "")
-        self._session_id = session_id
-
-    # ... 实现其余方法
+```pythonfrom agent.memory_provider import MemoryProvider
+
+
+class MyMemoryProvider(MemoryProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-provider"
+
+    def is_available(self) -> bool:
+        """检查此 provider 是否可以激活。禁止发起网络请求。"""
+
+        return bool(os.environ.get("MY_API_KEY"))
+
+    def initialize(self, session_id: str, **kwargs) -> None:
+        """在 agent 启动时调用一次。
+
+
+
+        kwargs 始终包含：
+
+          clawk_home (str): 当前活跃的 CLAWK_HOME 路径。用于存储数据。
+
+        """
+
+        self._api_key = os.environ.get("MY_API_KEY", "")
+
+        self._session_id = session_id
+
+    # ... 实现其余方法
 ```
 
 ## 必须实现的方法
@@ -87,29 +95,29 @@ class MyMemoryProvider(MemoryProvider):
 
 `get_config_schema()` 返回一个字段描述符列表，供 `clawk memory setup` 使用：
 
-```python
-def get_config_schema(self):
-    return [
-        {
-            "key": "api_key",
-            "description": "My Provider API key",
-            "secret": True,           # → 写入 .env
-            "required": True,
-            "env_var": "MY_API_KEY",   # 显式指定环境变量名
-            "url": "https://my-provider.com/keys",  # 获取密钥的地址
-        },
-        {
-            "key": "region",
-            "description": "Server region",
-            "default": "us-east",
-            "choices": ["us-east", "eu-west", "ap-south"],
-        },
-        {
-            "key": "project",
-            "description": "Project identifier",
-            "default": "clawk",
-        },
-    ]
+```pythondef get_config_schema(self):
+
+    return [
+        {
+            "key": "api_key",
+            "description": "My Provider API key",
+            "secret": True,  # → 写入 .env
+            "required": True,
+            "env_var": "MY_API_KEY",  # 显式指定环境变量名
+            "url": "https://my-provider.com/keys",  # 获取密钥的地址
+        },
+        {
+            "key": "region",
+            "description": "Server region",
+            "default": "us-east",
+            "choices": ["us-east", "eu-west", "ap-south"],
+        },
+        {
+            "key": "project",
+            "description": "Project identifier",
+            "default": "clawk",
+        },
+    ]
 ```
 
 `secret: True` 且带有 `env_var` 的字段写入 `.env`。非敏感字段传递给 `save_config()`。
@@ -120,23 +128,26 @@ def get_config_schema(self):
 
 ## 保存配置
 
-```python
-def save_config(self, values: dict, clawk_home: str) -> None:
-    """将非敏感配置写入原生位置。"""
-    import json
-    from pathlib import Path
-    config_path = Path(clawk_home) / "my-provider.json"
-    config_path.write_text(json.dumps(values, indent=2))
+```pythondef save_config(self, values: dict, clawk_home: str) -> None:
+    """将非敏感配置写入原生位置。"""
+
+    import json
+
+    from pathlib import Path
+
+    config_path = Path(clawk_home) / "my-provider.json"
+
+    config_path.write_text(json.dumps(values, indent=2))
 ```
 
 对于仅使用环境变量的 provider，保留默认的空实现即可。
 
 ## 插件入口点
 
-```python
-def register(ctx) -> None:
-    """由 memory 插件发现系统调用。"""
-    ctx.register_memory_provider(MyMemoryProvider())
+```pythondef register(ctx) -> None:
+    """由 memory 插件发现系统调用。"""
+
+    ctx.register_memory_provider(MyMemoryProvider())
 ```
 
 ## plugin.yaml
@@ -153,51 +164,66 @@ hooks:
 
 **`sync_turn()` 必须是非阻塞的。** 如果你的后端存在延迟（API 调用、LLM 处理），请在守护线程中执行：
 
-```python
-def sync_turn(self, user_content, assistant_content):
-    def _sync():
-        try:
-            self._api.ingest(user_content, assistant_content)
-        except Exception as e:
-            logger.warning("Sync failed: %s", e)
-
-    if self._sync_thread and self._sync_thread.is_alive():
-        self._sync_thread.join(timeout=5.0)
-    self._sync_thread = threading.Thread(target=_sync, daemon=True)
-    self._sync_thread.start()
+```pythondef sync_turn(self, user_content, assistant_content):
+
+    def _sync():
+
+        try:
+            self._api.ingest(user_content, assistant_content)
+
+        except Exception as e:
+            logger.warning("Sync failed: %s", e)
+
+    if self._sync_thread and self._sync_thread.is_alive():
+        self._sync_thread.join(timeout=5.0)
+
+    self._sync_thread = threading.Thread(target=_sync, daemon=True)
+
+    self._sync_thread.start()
 ```
 
 ## Profile 隔离
 
 所有存储路径**必须**使用 `initialize()` 中的 `clawk_home` kwarg，而不是硬编码的 `~/.clawksis`：
 
-```python
-# 正确 — 按 profile 隔离
-from clawk_constants import get_clawk_home
-data_dir = get_clawk_home() / "my-provider"
-
-# 错误 — 所有 profile 共享
-data_dir = Path("~/.clawksis/my-provider").expanduser()
+```python# 正确 — 按 profile 隔离
+
+from clawk_constants import get_clawk_home
+
+data_dir = get_clawk_home() / "my-provider"
+
+
+# 错误 — 所有 profile 共享
+
+data_dir = Path("~/.clawksis/my-provider").expanduser()
 ```
 
 ## 测试
 
 完整的端到端测试模式（使用真实 SQLite provider）请参见 `tests/agent/test_memory_plugin_e2e.py`。
 
-```python
-from agent.memory_manager import MemoryManager
-
-mgr = MemoryManager()
-mgr.add_provider(my_provider)
-mgr.initialize_all(session_id="test-1", platform="cli")
-
-# 测试工具路由
-result = mgr.handle_tool_call("my_tool", {"action": "add", "content": "test"})
-
-# 测试生命周期
-mgr.sync_all("user msg", "assistant msg")
-mgr.on_session_end([])
-mgr.shutdown_all()
+```pythonfrom agent.memory_manager import MemoryManager
+
+
+mgr = MemoryManager()
+
+mgr.add_provider(my_provider)
+
+mgr.initialize_all(session_id="test-1", platform="cli")
+
+
+# 测试工具路由
+
+result = mgr.handle_tool_call("my_tool", {"action": "add", "content": "test"})
+
+
+# 测试生命周期
+
+mgr.sync_all("user msg", "assistant msg")
+
+mgr.on_session_end([])
+
+mgr.shutdown_all()
 ```
 
 ## 添加 CLI 命令
@@ -215,28 +241,40 @@ Memory provider 插件可以注册自己的 CLI 子命令树（例如 `clawk my-
 
 ### 示例
 
-```python
-# plugins/memory/my-provider/cli.py
-
-def my_command(args):
-    """由 argparse 分发的处理函数。"""
-    sub = getattr(args, "my_command", None)
-    if sub == "status":
-        print("Provider is active and connected.")
-    elif sub == "config":
-        print("Showing config...")
-    else:
-        print("Usage: clawk my-provider <status|config>")
-
-def register_cli(subparser) -> None:
-    """构建 clawk my-provider 的 argparse 树。
-
-    在 argparse 初始化时由 discover_plugin_cli_commands() 调用。
-    """
-    subs = subparser.add_subparsers(dest="my_command")
-    subs.add_parser("status", help="Show provider status")
-    subs.add_parser("config", help="Show provider config")
-    subparser.set_defaults(func=my_command)
+```python# plugins/memory/my-provider/cli.py
+
+
+def my_command(args):
+    """由 argparse 分发的处理函数。"""
+
+    sub = getattr(args, "my_command", None)
+
+    if sub == "status":
+        print("Provider is active and connected.")
+
+    elif sub == "config":
+        print("Showing config...")
+
+    else:
+        print("Usage: clawk my-provider <status|config>")
+
+
+def register_cli(subparser) -> None:
+    """构建 clawk my-provider 的 argparse 树。
+
+
+
+    在 argparse 初始化时由 discover_plugin_cli_commands() 调用。
+
+    """
+
+    subs = subparser.add_subparsers(dest="my_command")
+
+    subs.add_parser("status", help="Show provider status")
+
+    subs.add_parser("config", help="Show provider config")
+
+    subparser.set_defaults(func=my_command)
 ```
 
 ### 参考实现

@@ -51,7 +51,9 @@ def test_subagent_task_id_collapses_to_default():
 
 def test_arbitrary_session_id_collapses_to_default():
     # Session UUIDs or anything else without an override still collapse.
-    assert terminal_tool._resolve_container_task_id("sess-123e4567-e89b-12d3") == "default"
+    assert (
+        terminal_tool._resolve_container_task_id("sess-123e4567-e89b-12d3") == "default"
+    )
 
 
 def test_rl_task_with_override_keeps_its_own_id():

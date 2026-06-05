@@ -22,7 +22,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Pure scroll-offset logic extracted from _curses_menu for unit testing
 # ---------------------------------------------------------------------------
 
-def _compute_scroll_offset(cursor: int, scroll_offset: int, visible: int, n_choices: int) -> int:
+
+def _compute_scroll_offset(
+    cursor: int, scroll_offset: int, visible: int, n_choices: int
+) -> int:
     """Mirror of the scroll adjustment block inside _curses_menu."""
     if cursor < scroll_offset:
         scroll_offset = cursor
@@ -41,6 +44,7 @@ def _visible_indices(cursor: int, scroll_offset: int, visible: int, n_choices: i
 # ---------------------------------------------------------------------------
 # Tests: scroll offset calculation
 # ---------------------------------------------------------------------------
+
 
 class TestScrollOffsetLogic:
     N = 13  # typical extended-providers list length
@@ -100,7 +104,9 @@ class TestScrollOffsetLogic:
         scroll_offset = 0
         cursor = 0
         for _ in range(self.N + 2):  # wrap around twice
-            scroll_offset = _compute_scroll_offset(cursor, scroll_offset, visible, self.N)
+            scroll_offset = _compute_scroll_offset(
+                cursor, scroll_offset, visible, self.N
+            )
             rendered = list(range(scroll_offset, min(scroll_offset + visible, self.N)))
             assert cursor in rendered, f"cursor={cursor} not in rendered={rendered}"
             cursor = (cursor + 1) % self.N
@@ -111,7 +117,9 @@ class TestScrollOffsetLogic:
         scroll_offset = 0
         cursor = 0
         for _ in range(self.N + 2):
-            scroll_offset = _compute_scroll_offset(cursor, scroll_offset, visible, self.N)
+            scroll_offset = _compute_scroll_offset(
+                cursor, scroll_offset, visible, self.N
+            )
             rendered = list(range(scroll_offset, min(scroll_offset + visible, self.N)))
             assert cursor in rendered, f"cursor={cursor} not in rendered={rendered}"
             cursor = (cursor - 1) % self.N

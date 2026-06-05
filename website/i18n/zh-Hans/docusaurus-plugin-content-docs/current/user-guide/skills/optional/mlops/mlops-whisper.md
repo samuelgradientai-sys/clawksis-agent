@@ -70,31 +70,40 @@ pip install -U openai-whisper
 
 ### 基本转录
 
-```python
-import whisper
-
-# Load model
-model = whisper.load_model("base")
-
-# Transcribe
-result = model.transcribe("audio.mp3")
-
-# Print text
-print(result["text"])
-
-# Access segments
-for segment in result["segments"]:
-    print(f"[{segment['start']:.2f}s - {segment['end']:.2f}s] {segment['text']}")
+```pythonimport whisper
+
+
+# Load model
+
+model = whisper.load_model("base")
+
+
+# Transcribe
+
+result = model.transcribe("audio.mp3")
+
+
+# Print text
+
+print(result["text"])
+
+
+# Access segments
+
+for segment in result["segments"]:
+    print(f"[{segment['start']:.2f}s - {segment['end']:.2f}s] {segment['text']}")
 ```
 
 ## 模型规格
 
-```python
-# Available models
-models = ["tiny", "base", "small", "medium", "large", "turbo"]
-
-# Load specific model
-model = whisper.load_model("turbo")  # Fastest, good quality
+```python# Available models
+
+models = ["tiny", "base", "small", "medium", "large", "turbo"]
+
+
+# Load specific model
+
+model = whisper.load_model("turbo")  # Fastest, good quality
 ```
 
 | 模型 | 参数量 | 仅英语 | 多语言 | 速度 | 显存 |
@@ -112,61 +121,69 @@ model = whisper.load_model("turbo")  # Fastest, good quality
 
 ### 语言指定
 
-```python
-# Auto-detect language
-result = model.transcribe("audio.mp3")
-
-# Specify language (faster)
-result = model.transcribe("audio.mp3", language="en")
-
-# Supported: en, es, fr, de, it, pt, ru, ja, ko, zh, and 89 more
+```python# Auto-detect language
+
+result = model.transcribe("audio.mp3")
+
+
+# Specify language (faster)
+
+result = model.transcribe("audio.mp3", language="en")
+
+
+# Supported: en, es, fr, de, it, pt, ru, ja, ko, zh, and 89 more
 ```
 
 ### 任务选择
 
-```python
-# Transcription (default)
-result = model.transcribe("audio.mp3", task="transcribe")
-
-# Translation to English
-result = model.transcribe("spanish.mp3", task="translate")
-# Input: Spanish audio → Output: English text
+```python# Transcription (default)
+
+result = model.transcribe("audio.mp3", task="transcribe")
+
+
+# Translation to English
+
+result = model.transcribe("spanish.mp3", task="translate")
+
+# Input: Spanish audio → Output: English text
 ```
 
 ### 初始 prompt（提示词）
 
-```python
-# Improve accuracy with context
-result = model.transcribe(
-    "audio.mp3",
-    initial_prompt="This is a technical podcast about machine learning and AI."
-)
-
-# Helps with:
-# - Technical terms
-# - Proper nouns
-# - Domain-specific vocabulary
+```python# Improve accuracy with context
+
+result = model.transcribe(
+    "audio.mp3",
+    initial_prompt="This is a technical podcast about machine learning and AI.",
+)
+
+
+# Helps with:
+
+# - Technical terms
+
+# - Proper nouns
+
+# - Domain-specific vocabulary
 ```
 
 ### 时间戳
 
-```python
-# Word-level timestamps
-result = model.transcribe("audio.mp3", word_timestamps=True)
-
-for segment in result["segments"]:
-    for word in segment["words"]:
-        print(f"{word['word']} ({word['start']:.2f}s - {word['end']:.2f}s)")
+```python# Word-level timestamps
+
+result = model.transcribe("audio.mp3", word_timestamps=True)
+
+
+for segment in result["segments"]:
+    for word in segment["words"]:
+        print(f"{word['word']} ({word['start']:.2f}s - {word['end']:.2f}s)")
 ```
 
 ### 温度回退
 
-```python
-# Retry with different temperatures if confidence low
-result = model.transcribe(
-    "audio.mp3",
-    temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
-)
+```python# Retry with different temperatures if confidence low
+
+result = model.transcribe("audio.mp3", temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0))
 ```
 
 ## 命令行用法
@@ -193,53 +210,68 @@ whisper spanish.mp3 --task translate
 
 ## 批量处理
 
-```python
-import os
-
-audio_files = ["file1.mp3", "file2.mp3", "file3.mp3"]
-
-for audio_file in audio_files:
-    print(f"Transcribing {audio_file}...")
-    result = model.transcribe(audio_file)
-
-    # Save to file
-    output_file = audio_file.replace(".mp3", ".txt")
-    with open(output_file, "w") as f:
-        f.write(result["text"])
+```pythonimport os
+
+
+audio_files = ["file1.mp3", "file2.mp3", "file3.mp3"]
+
+
+for audio_file in audio_files:
+    print(f"Transcribing {audio_file}...")
+
+    result = model.transcribe(audio_file)
+
+    # Save to file
+
+    output_file = audio_file.replace(".mp3", ".txt")
+
+    with open(output_file, "w") as f:
+        f.write(result["text"])
 ```
 
 ## 实时转录
 
-```python
-# For streaming audio, use faster-whisper
-# pip install faster-whisper
-
-from faster_whisper import WhisperModel
-
-model = WhisperModel("base", device="cuda", compute_type="float16")
-
-# Transcribe with streaming
-segments, info = model.transcribe("audio.mp3", beam_size=5)
-
-for segment in segments:
-    print(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+```python# For streaming audio, use faster-whisper
+
+# pip install faster-whisper
+
+
+from faster_whisper import WhisperModel
+
+
+model = WhisperModel("base", device="cuda", compute_type="float16")
+
+
+# Transcribe with streaming
+
+segments, info = model.transcribe("audio.mp3", beam_size=5)
+
+
+for segment in segments:
+    print(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
 ```
 
 ## GPU 加速
 
-```python
-import whisper
-
-# Automatically uses GPU if available
-model = whisper.load_model("turbo")
-
-# Force CPU
-model = whisper.load_model("turbo", device="cpu")
-
-# Force GPU
-model = whisper.load_model("turbo", device="cuda")
-
-# 10-20× faster on GPU
+```pythonimport whisper
+
+
+# Automatically uses GPU if available
+
+model = whisper.load_model("turbo")
+
+
+# Force CPU
+
+model = whisper.load_model("turbo", device="cpu")
+
+
+# Force GPU
+
+model = whisper.load_model("turbo", device="cuda")
+
+
+# 10-20× faster on GPU
 ```
 
 ## 与其他工具集成
@@ -255,17 +287,22 @@ whisper video.mp4 --output_format srt --language English
 
 ### 与 LangChain 集成
 
-```python
-from langchain.document_loaders import WhisperTranscriptionLoader
-
-loader = WhisperTranscriptionLoader(file_path="audio.mp3")
-docs = loader.load()
-
-# Use transcription in RAG
-from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
-
-vectorstore = Chroma.from_documents(docs, OpenAIEmbeddings())
+```pythonfrom langchain.document_loaders import WhisperTranscriptionLoader
+
+
+loader = WhisperTranscriptionLoader(file_path="audio.mp3")
+
+docs = loader.load()
+
+
+# Use transcription in RAG
+
+from langchain_chroma import Chroma
+
+from langchain_openai import OpenAIEmbeddings
+
+
+vectorstore = Chroma.from_documents(docs, OpenAIEmbeddings())
 ```
 
 ### 从视频中提取音频

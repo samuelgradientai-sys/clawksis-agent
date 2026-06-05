@@ -6,6 +6,7 @@ OpenCode's ``lsp/diagnostic.ts`` and Claude Code's
 ``formatDiagnosticsSummary`` produce — ``<diagnostics>`` blocks with
 1-indexed line/column, capped at ``MAX_PER_FILE`` errors.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -57,7 +58,7 @@ def report_for_file(
     body = "\n".join(lines)
     if extra > 0:
         body += f"\n... and {extra} more"
-    return f"<diagnostics file=\"{file_path}\">\n{body}\n</diagnostics>"
+    return f'<diagnostics file="{file_path}">\n{body}\n</diagnostics>'
 
 
 def truncate(s: str, *, limit: int = MAX_TOTAL_CHARS) -> str:

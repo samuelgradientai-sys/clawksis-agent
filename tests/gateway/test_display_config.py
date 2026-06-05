@@ -5,6 +5,7 @@
 # Resolver: resolution order
 # ---------------------------------------------------------------------------
 
+
 class TestResolveDisplaySetting:
     """resolve_display_setting() resolves with correct priority."""
 
@@ -52,7 +53,10 @@ class TestResolveDisplaySetting:
 
         config = {}
         # Unknown platform, no config → global default "all"
-        assert resolve_display_setting(config, "unknown_platform", "tool_progress") == "all"
+        assert (
+            resolve_display_setting(config, "unknown_platform", "tool_progress")
+            == "all"
+        )
 
     def test_fallback_parameter_used_last(self):
         """Explicit fallback is used when nothing else matches."""
@@ -60,7 +64,9 @@ class TestResolveDisplaySetting:
 
         config = {}
         # "nonexistent_key" isn't in any defaults
-        result = resolve_display_setting(config, "telegram", "nonexistent_key", "my_fallback")
+        result = resolve_display_setting(
+            config, "telegram", "nonexistent_key", "my_fallback"
+        )
         assert result == "my_fallback"
 
     def test_platform_override_only_affects_that_platform(self):
@@ -82,6 +88,7 @@ class TestResolveDisplaySetting:
 # ---------------------------------------------------------------------------
 # Backward compatibility: tool_progress_overrides
 # ---------------------------------------------------------------------------
+
 
 class TestBackwardCompat:
     """Legacy tool_progress_overrides is still respected as a fallback."""
@@ -132,6 +139,7 @@ class TestBackwardCompat:
 # YAML normalisation
 # ---------------------------------------------------------------------------
 
+
 class TestYAMLNormalisation:
     """YAML 1.1 quirks (bare off → False, on → True) are handled."""
 
@@ -174,6 +182,7 @@ class TestYAMLNormalisation:
 # ---------------------------------------------------------------------------
 # Built-in platform defaults (tier system)
 # ---------------------------------------------------------------------------
+
 
 class TestPlatformDefaults:
     """Built-in defaults reflect platform capability tiers."""
@@ -234,17 +243,27 @@ class TestPlatformDefaults:
 
         # Real model voice — keep on. Without this, Telegram users see
         # "typing..." for the entire turn duration with no feedback.
-        assert resolve_display_setting({}, "telegram", "interim_assistant_messages") is True
+        assert (
+            resolve_display_setting({}, "telegram", "interim_assistant_messages")
+            is True
+        )
         # Periodic "Working — N min" heartbeat — keep on. Otherwise long
         # turns appear completely silent.
-        assert resolve_display_setting({}, "telegram", "long_running_notifications") is True
+        assert (
+            resolve_display_setting({}, "telegram", "long_running_notifications")
+            is True
+        )
         # Verbose iteration counter in busy-ack and heartbeat — off by
         # default on Telegram (mobile chat is cramped enough without
         # "iteration 21/60" debug detail).
         assert resolve_display_setting({}, "telegram", "busy_ack_detail") is False
         # Discord keeps all of these on (desktop-first, more vertical space).
-        assert resolve_display_setting({}, "discord", "interim_assistant_messages") is True
-        assert resolve_display_setting({}, "discord", "long_running_notifications") is True
+        assert (
+            resolve_display_setting({}, "discord", "interim_assistant_messages") is True
+        )
+        assert (
+            resolve_display_setting({}, "discord", "long_running_notifications") is True
+        )
         assert resolve_display_setting({}, "discord", "busy_ack_detail") is True
 
     def test_telegram_mobile_chatter_can_opt_in(self):
@@ -263,14 +282,21 @@ class TestPlatformDefaults:
                 }
             }
         }
-        assert resolve_display_setting(config, "telegram", "interim_assistant_messages") is False
-        assert resolve_display_setting(config, "telegram", "long_running_notifications") is False
+        assert (
+            resolve_display_setting(config, "telegram", "interim_assistant_messages")
+            is False
+        )
+        assert (
+            resolve_display_setting(config, "telegram", "long_running_notifications")
+            is False
+        )
         assert resolve_display_setting(config, "telegram", "busy_ack_detail") is True
 
 
 # ---------------------------------------------------------------------------
 # Config migration: tool_progress_overrides → display.platforms
 # ---------------------------------------------------------------------------
+
 
 class TestConfigMigration:
     """Version 16 migration moves tool_progress_overrides into display.platforms."""
@@ -295,6 +321,7 @@ class TestConfigMigration:
         # Re-import to pick up the new CLAWK_HOME
         import importlib
         import clawk_cli.config as cfg_mod
+
         importlib.reload(cfg_mod)
 
         result = cfg_mod.migrate_config(interactive=False, quiet=True)
@@ -304,7 +331,9 @@ class TestConfigMigration:
         assert platforms.get("signal", {}).get("tool_progress") == "off"
         assert platforms.get("telegram", {}).get("tool_progress") == "all"
 
-    def test_migration_preserves_existing_platforms_entries(self, tmp_path, monkeypatch):
+    def test_migration_preserves_existing_platforms_entries(
+        self, tmp_path, monkeypatch
+    ):
         """Existing display.platforms entries are NOT overwritten by migration."""
         import yaml
 
@@ -321,6 +350,7 @@ class TestConfigMigration:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         import clawk_cli.config as cfg_mod
+
         importlib.reload(cfg_mod)
 
         cfg_mod.migrate_config(interactive=False, quiet=True)
@@ -332,6 +362,7 @@ class TestConfigMigration:
 # ---------------------------------------------------------------------------
 # Streaming per-platform (None = follow global)
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingPerPlatform:
     """Streaming per-platform override semantics."""
@@ -380,6 +411,7 @@ class TestStreamingPerPlatform:
 # ---------------------------------------------------------------------------
 # cleanup_progress — opt-in deletion of temporary progress bubbles
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupProgress:
     """``cleanup_progress`` is off by default and resolvable per-platform."""
@@ -435,4 +467,6 @@ class TestCleanupProgress:
                     "platforms": {"telegram": {"cleanup_progress": val}},
                 }
             }
-            assert resolve_display_setting(config, "telegram", "cleanup_progress") is True, val
+            assert (
+                resolve_display_setting(config, "telegram", "cleanup_progress") is True
+            ), val

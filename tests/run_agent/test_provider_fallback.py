@@ -96,8 +96,10 @@ class TestFallbackChainAdvancement:
             {"provider": "zai", "model": "glm-4.7"},
         ]
         agent = _make_agent(fallback_model=fbs)
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                    return_value=(_mock_client(), "gpt-4o")):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(_mock_client(), "gpt-4o"),
+        ):
             assert agent._try_activate_fallback() is True
             assert agent._fallback_index == 1
             assert agent.model == "gpt-4o"
@@ -109,8 +111,10 @@ class TestFallbackChainAdvancement:
             {"provider": "zai", "model": "glm-4.7"},
         ]
         agent = _make_agent(fallback_model=fbs)
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                    return_value=(_mock_client(), "resolved")):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(_mock_client(), "resolved"),
+        ):
             assert agent._try_activate_fallback() is True
             assert agent.model == "gpt-4o"
             assert agent._try_activate_fallback() is True
@@ -120,8 +124,10 @@ class TestFallbackChainAdvancement:
     def test_all_exhausted_returns_false(self):
         fbs = [{"provider": "openai", "model": "gpt-4o"}]
         agent = _make_agent(fallback_model=fbs)
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                    return_value=(_mock_client(), "gpt-4o")):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(_mock_client(), "gpt-4o"),
+        ):
             assert agent._try_activate_fallback() is True
             assert agent._try_activate_fallback() is False
 
@@ -134,8 +140,8 @@ class TestFallbackChainAdvancement:
         agent = _make_agent(fallback_model=fbs)
         with patch("agent.auxiliary_client.resolve_provider_client") as mock_rpc:
             mock_rpc.side_effect = [
-                (None, None),                    # broken provider
-                (_mock_client(), "gpt-4o"),       # fallback succeeds
+                (None, None),  # broken provider
+                (_mock_client(), "gpt-4o"),  # fallback succeeds
             ]
             assert agent._try_activate_fallback() is True
             assert agent.model == "gpt-4o"
@@ -248,11 +254,18 @@ class TestFallbackChainDedup:
         # Stub out resolve_provider_client so we can assert which entry was
         # actually used — return a MagicMock client tagged with the provider.
         called = []
+
         def _resolve(provider, model=None, raw_codex=False, **kwargs):
             called.append((provider, model))
             return _mock_client(), model
-        with patch("agent.auxiliary_client.resolve_provider_client", side_effect=_resolve):
-            with patch("clawk_cli.model_normalize.normalize_model_for_provider", side_effect=lambda m, p: m):
+
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client", side_effect=_resolve
+        ):
+            with patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                side_effect=lambda m, p: m,
+            ):
                 ok = agent._try_activate_fallback()
 
         assert ok is True
@@ -266,8 +279,11 @@ class TestFallbackChainDedup:
         with the same model should dedup even if their provider names differ."""
         fbs = [
             # Different provider name but same shim URL + model — same backend.
-            {"provider": "claude-cli-alt", "model": "claude-opus-4.7",
-             "base_url": "http://127.0.0.1:7891/v1"},
+            {
+                "provider": "claude-cli-alt",
+                "model": "claude-opus-4.7",
+                "base_url": "http://127.0.0.1:7891/v1",
+            },
             # Real different fallback.
             {"provider": "openrouter", "model": "anthropic/claude-opus-4.7"},
         ]
@@ -277,11 +293,18 @@ class TestFallbackChainDedup:
         agent.base_url = "http://127.0.0.1:7891/v1"
 
         called = []
+
         def _resolve(provider, model=None, raw_codex=False, **kwargs):
             called.append((provider, model))
             return _mock_client(), model
-        with patch("agent.auxiliary_client.resolve_provider_client", side_effect=_resolve):
-            with patch("clawk_cli.model_normalize.normalize_model_for_provider", side_effect=lambda m, p: m):
+
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client", side_effect=_resolve
+        ):
+            with patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                side_effect=lambda m, p: m,
+            ):
                 ok = agent._try_activate_fallback()
 
         assert ok is True

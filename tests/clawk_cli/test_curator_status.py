@@ -12,10 +12,7 @@ Covers:
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import io
@@ -29,11 +26,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-
 import pytest
-
-
-
 
 
 def test_status_uses_last_activity_not_only_last_used(monkeypatch, capsys):
@@ -44,19 +37,16 @@ def test_status_uses_last_activity_not_only_last_used(monkeypatch, capsys):
 
     import tools.skill_usage as skill_usage
 
-
-
-    monkeypatch.setattr(curator_state, "load_state", lambda: {
-
-        "paused": False,
-
-        "last_run_at": None,
-
-        "last_run_summary": "(none)",
-
-        "run_count": 0,
-
-    })
+    monkeypatch.setattr(
+        curator_state,
+        "load_state",
+        lambda: {
+            "paused": False,
+            "last_run_at": None,
+            "last_run_summary": "(none)",
+            "run_count": 0,
+        },
+    )
 
     monkeypatch.setattr(curator_state, "is_enabled", lambda: True)
 
@@ -66,39 +56,26 @@ def test_status_uses_last_activity_not_only_last_used(monkeypatch, capsys):
 
     monkeypatch.setattr(curator_state, "get_archive_after_days", lambda: 90)
 
-    monkeypatch.setattr(skill_usage, "agent_created_report", lambda: [
-
-        {
-
-            "name": "recently-viewed",
-
-            "state": "active",
-
-            "pinned": False,
-
-            "use_count": 0,
-
-            "view_count": 3,
-
-            "patch_count": 1,
-
-            "created_at": "2026-01-01T00:00:00+00:00",
-
-            "last_used_at": None,
-
-            "last_viewed_at": "2026-04-30T10:00:00+00:00",
-
-            "last_patched_at": "2026-04-30T11:00:00+00:00",
-
-            "last_activity_at": "2026-04-30T11:00:00+00:00",
-
-            "activity_count": 4,
-
-        }
-
-    ])
-
-
+    monkeypatch.setattr(
+        skill_usage,
+        "agent_created_report",
+        lambda: [
+            {
+                "name": "recently-viewed",
+                "state": "active",
+                "pinned": False,
+                "use_count": 0,
+                "view_count": 3,
+                "patch_count": 1,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "last_used_at": None,
+                "last_viewed_at": "2026-04-30T10:00:00+00:00",
+                "last_patched_at": "2026-04-30T11:00:00+00:00",
+                "last_activity_at": "2026-04-30T11:00:00+00:00",
+                "activity_count": 4,
+            }
+        ],
+    )
 
     assert curator_cli._cmd_status(SimpleNamespace()) == 0
 
@@ -113,13 +90,8 @@ def test_status_uses_last_activity_not_only_last_used(monkeypatch, capsys):
     assert "last_used=never" not in out
 
 
-
-
-
 @pytest.fixture
-
 def curator_status_env(tmp_path, monkeypatch):
-
     """Isolated CLAWK_HOME with real agent-created skills on disk."""
 
     home = tmp_path / ".clawksis"
@@ -133,8 +105,6 @@ def curator_status_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-
 
     import importlib
 
@@ -154,8 +124,6 @@ def curator_status_env(tmp_path, monkeypatch):
 
     importlib.reload(curator_cli)
 
-
-
     def _write_skill(name: str) -> None:
 
         d = skills / name
@@ -163,45 +131,24 @@ def curator_status_env(tmp_path, monkeypatch):
         d.mkdir()
 
         (d / "SKILL.md").write_text(
-
             "---\n"
-
             f"name: {name}\n"
-
             "description: test\n"
-
             "version: 1.0.0\n"
-
             "metadata:\n"
-
             "  clawk:\n"
-
             "    agent_created: true\n"
-
             "---\n"
-
             f"# {name}\n"
-
         )
 
-
-
     return {
-
         "home": home,
-
         "skills": skills,
-
         "make_skill": _write_skill,
-
         "skill_usage": skill_usage,
-
         "curator_cli": curator_cli,
-
     }
-
-
-
 
 
 def _capture_status(curator_cli) -> str:
@@ -209,15 +156,11 @@ def _capture_status(curator_cli) -> str:
     buf = io.StringIO()
 
     with redirect_stdout(buf):
-
         rc = curator_cli._cmd_status(Namespace())
 
     assert rc == 0
 
     return buf.getvalue()
-
-
-
 
 
 def test_status_shows_most_and_least_used_sections(curator_status_env):
@@ -239,10 +182,7 @@ def test_status_shows_most_and_least_used_sections(curator_status_env):
     # it creates a skill through skill_manage).
 
     for n in ("top-dog", "middling", "never-used"):
-
         env["skill_usage"].mark_agent_created(n)
-
-
 
     # Bump use_count differentially. All three counters (use/view/patch) feed
 
@@ -251,18 +191,12 @@ def test_status_shows_most_and_least_used_sections(curator_status_env):
     # diverge between skills.
 
     for _ in range(10):
-
         env["skill_usage"].bump_use("top-dog")
 
     for _ in range(2):
-
         env["skill_usage"].bump_use("middling")
 
-
-
     out = _capture_status(env["curator_cli"])
-
-
 
     # Both new sections present
 
@@ -274,8 +208,6 @@ def test_status_shows_most_and_least_used_sections(curator_status_env):
 
     assert "least recently active (top 5):" in out
 
-
-
     # most-active lists top-dog FIRST (highest activity_count)
 
     most_section = out.split("most active (top 5):")[1].split("\n\n")[0]
@@ -285,8 +217,6 @@ def test_status_shows_most_and_least_used_sections(curator_status_env):
     assert "top-dog" in top_line
 
     assert "activity= 10" in top_line
-
-
 
     # least-active lists never-used FIRST (activity=0)
 
@@ -299,11 +229,7 @@ def test_status_shows_most_and_least_used_sections(curator_status_env):
     assert "activity=  0" in bottom_line
 
 
-
-
-
 def test_status_hides_most_active_when_all_zero(curator_status_env):
-
     """If no skills have any activity, skip the most-active block — it's noise.
 
     Least-active still shows so the user sees their catalog."""
@@ -320,11 +246,7 @@ def test_status_hides_most_active_when_all_zero(curator_status_env):
 
     env["skill_usage"].mark_agent_created("b")
 
-
-
     out = _capture_status(env["curator_cli"])
-
-
 
     # most-active section is hidden because the top is 0
 
@@ -333,9 +255,6 @@ def test_status_hides_most_active_when_all_zero(curator_status_env):
     # least-active still renders — it's part of the catalog overview
 
     assert "least active (top 5):" in out
-
-
-
 
 
 def test_status_no_skills_produces_clean_empty_output(curator_status_env):
@@ -353,9 +272,6 @@ def test_status_no_skills_produces_clean_empty_output(curator_status_env):
     assert "least active" not in out
 
 
-
-
-
 def test_status_marks_missing_last_report_path(monkeypatch, capsys, tmp_path):
 
     import agent.curator as curator_state
@@ -364,23 +280,19 @@ def test_status_marks_missing_last_report_path(monkeypatch, capsys, tmp_path):
 
     import tools.skill_usage as skill_usage
 
-
-
     missing_report = tmp_path / "stale-report"
 
-    monkeypatch.setattr(curator_state, "load_state", lambda: {
-
-        "paused": False,
-
-        "last_run_at": None,
-
-        "last_run_summary": "auto: no changes",
-
-        "run_count": 1,
-
-        "last_report_path": str(missing_report),
-
-    })
+    monkeypatch.setattr(
+        curator_state,
+        "load_state",
+        lambda: {
+            "paused": False,
+            "last_run_at": None,
+            "last_run_summary": "auto: no changes",
+            "run_count": 1,
+            "last_report_path": str(missing_report),
+        },
+    )
 
     monkeypatch.setattr(curator_state, "is_enabled", lambda: True)
 
@@ -392,13 +304,8 @@ def test_status_marks_missing_last_report_path(monkeypatch, capsys, tmp_path):
 
     monkeypatch.setattr(skill_usage, "agent_created_report", lambda: [])
 
-
-
     assert curator_cli._cmd_status(SimpleNamespace()) == 0
-
-
 
     out = capsys.readouterr().out
 
     assert f"last report:    {missing_report} (missing)" in out
-

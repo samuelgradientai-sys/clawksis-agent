@@ -7,6 +7,7 @@ layer; this helper exists to strip structural framing tokens the model
 itself might react to (XML role tags, CDATA, markdown code fences) and to
 cap pathological lengths.
 """
+
 from __future__ import annotations
 
 from model_tools import _sanitize_tool_error, _TOOL_ERROR_MAX_LEN
@@ -26,7 +27,15 @@ class TestRoleTagStripping:
 
     def test_strips_role_tags(self):
         # Each of these should be stripped
-        for tag in ("system", "assistant", "user", "result", "response", "output", "input"):
+        for tag in (
+            "system",
+            "assistant",
+            "user",
+            "result",
+            "response",
+            "output",
+            "input",
+        ):
             raw = f"prefix <{tag}>hi</{tag}> suffix"
             out = _sanitize_tool_error(raw)
             assert f"<{tag}>" not in out, f"failed to strip <{tag}>"
@@ -34,7 +43,9 @@ class TestRoleTagStripping:
 
     def test_role_tag_strip_is_case_insensitive(self):
         out = _sanitize_tool_error("<TOOL_CALL>x</Tool_Call>")
-        assert "<" not in out.replace("[TOOL_ERROR]", "")  # only the prefix bracket survives
+        assert "<" not in out.replace(
+            "[TOOL_ERROR]", ""
+        )  # only the prefix bracket survives
 
     def test_unrelated_xml_kept(self):
         # We intentionally only strip the role-like tag whitelist, not all XML
@@ -56,7 +67,7 @@ class TestCDATAStripping:
 
 class TestCodeFenceStripping:
     def test_strips_leading_fence_with_lang(self):
-        out = _sanitize_tool_error("```json\n{\"x\": 1}")
+        out = _sanitize_tool_error('```json\n{"x": 1}')
         assert not out.replace("[TOOL_ERROR] ", "").startswith("```")
 
     def test_strips_trailing_fence(self):
@@ -73,7 +84,7 @@ class TestTruncation:
         long = "A" * (_TOOL_ERROR_MAX_LEN * 2)
         out = _sanitize_tool_error(long)
         # Total length is prefix + truncated body
-        body = out[len("[TOOL_ERROR] "):]
+        body = out[len("[TOOL_ERROR] ") :]
         assert len(body) == _TOOL_ERROR_MAX_LEN
         assert body.endswith("...")
 

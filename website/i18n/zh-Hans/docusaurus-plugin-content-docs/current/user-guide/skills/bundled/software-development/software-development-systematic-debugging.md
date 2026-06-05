@@ -151,12 +151,14 @@ git log -p --follow src/problematic_file.py | head -100
 
 **操作：** 使用 `search_files` 追踪引用：
 
-```python
-# 查找函数被调用的位置
-search_files("function_name(", path="src/", file_glob="*.py")
-
-# 查找变量被赋值的位置
-search_files("variable_name\\s*=", path="src/", file_glob="*.py")
+```python# 查找函数被调用的位置
+
+search_files("function_name(", path="src/", file_glob="*.py")
+
+
+# 查找变量被赋值的位置
+
+search_files("variable_name\\s*=", path="src/", file_glob="*.py")
 ```
 
 ### 阶段 1 完成检查清单
@@ -183,8 +185,7 @@ search_files("variable_name\\s*=", path="src/", file_glob="*.py")
 
 **操作：** 使用 `search_files` 查找可比较的模式：
 
-```python
-search_files("similar_pattern", path="src/", file_glob="*.py")
+```pythonsearch_files("similar_pattern", path="src/", file_glob="*.py")
 ```
 
 ### 2. 与参考实现对比
@@ -348,22 +349,31 @@ pytest tests/ -q
 
 对于复杂的多组件调试，派发调查子 agent：
 
-```python
-delegate_task(
-    goal="调查为何 [特定测试/行为] 失败",
-    context="""
-    遵循 systematic-debugging skill：
-    1. 仔细阅读错误信息
-    2. 复现问题
-    3. 追踪数据流以找到根因
-    4. 报告发现——暂不修复
-
-    错误：[粘贴完整错误]
-    文件：[故障代码路径]
-    测试命令：[确切命令]
-    """,
-    toolsets=['terminal', 'file']
-)
+```pythondelegate_task(
+    goal="调查为何 [特定测试/行为] 失败",
+    context="""
+
+    遵循 systematic-debugging skill：
+
+    1. 仔细阅读错误信息
+
+    2. 复现问题
+
+    3. 追踪数据流以找到根因
+
+    4. 报告发现——暂不修复
+
+
+
+    错误：[粘贴完整错误]
+
+    文件：[故障代码路径]
+
+    测试命令：[确切命令]
+
+    """,
+    toolsets=["terminal", "file"],
+)
 ```
 
 ### 与 test-driven-development 配合使用

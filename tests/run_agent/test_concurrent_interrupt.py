@@ -1,7 +1,5 @@
 """Tests for interrupt handling in concurrent tool execution."""
 
-
-
 import threading
 
 import time
@@ -9,15 +7,10 @@ import time
 from unittest.mock import MagicMock
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture(autouse=True)
-
 def _isolate_clawk(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
@@ -25,11 +18,7 @@ def _isolate_clawk(tmp_path, monkeypatch):
     (tmp_path / ".clawksis").mkdir(exist_ok=True)
 
 
-
-
-
 def _make_agent(monkeypatch):
-
     """Create a minimal AIAgent-like object with just the methods under test."""
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
@@ -40,10 +29,7 @@ def _make_agent(monkeypatch):
 
     import run_agent as _ra
 
-
-
     class _Stub:
-
         _interrupt_requested = False
 
         _interrupt_message = None
@@ -94,8 +80,6 @@ def _make_agent(monkeypatch):
 
         _active_children: list = []
 
-
-
         def __init__(self):
 
             # Instance-level (not class-level) so each test gets a fresh set.
@@ -106,49 +90,37 @@ def _make_agent(monkeypatch):
 
             self._active_children_lock = threading.Lock()
 
-
-
         def _touch_activity(self, desc):
 
             self._last_activity = time.time()
-
-
 
         def _vprint(self, msg, force=False):
 
             pass
 
-
-
         def _safe_print(self, msg):
 
             pass
-
-
 
         def _should_emit_quiet_tool_messages(self):
 
             return False
 
-
-
         def _should_start_quiet_spinner(self):
 
             return False
-
-
 
         def _has_stream_consumers(self):
 
             return False
 
-
-
     stub = _Stub()
 
     # Bind the real methods under test
 
-    stub._execute_tool_calls_concurrent = _ra.AIAgent._execute_tool_calls_concurrent.__get__(stub)
+    stub._execute_tool_calls_concurrent = (
+        _ra.AIAgent._execute_tool_calls_concurrent.__get__(stub)
+    )
 
     stub.interrupt = _ra.AIAgent.interrupt.__get__(stub)
 
@@ -167,11 +139,7 @@ def _make_agent(monkeypatch):
     return stub
 
 
-
-
-
 class _FakeToolCall:
-
     def __init__(self, name, args="{}", call_id="tc_1"):
 
         self.function = MagicMock(name=name, arguments=args)
@@ -181,25 +149,13 @@ class _FakeToolCall:
         self.id = call_id
 
 
-
-
-
 class _FakeAssistantMsg:
-
     def __init__(self, tool_calls):
 
         self.tool_calls = tool_calls
 
 
-
-
-
-
-
-
-
 def test_concurrent_preflight_interrupt_skips_all(monkeypatch):
-
     """When _interrupt_requested is already set before concurrent execution,
 
     all tools are skipped with cancellation messages."""
@@ -207,8 +163,6 @@ def test_concurrent_preflight_interrupt_skips_all(monkeypatch):
     agent = _make_agent(monkeypatch)
 
     agent._interrupt_requested = True
-
-
 
     tc1 = _FakeToolCall("tool_a", call_id="tc_a")
 
@@ -218,11 +172,7 @@ def test_concurrent_preflight_interrupt_skips_all(monkeypatch):
 
     messages = []
 
-
-
     agent._execute_tool_calls_concurrent(msg, messages, "test_task")
-
-
 
     assert len(messages) == 2
 
@@ -235,15 +185,7 @@ def test_concurrent_preflight_interrupt_skips_all(monkeypatch):
     agent._invoke_tool.assert_not_called()
 
 
-
-
-
-
-
-
-
 def test_clear_interrupt_clears_worker_tids(monkeypatch):
-
     """After clear_interrupt(), stale worker-tid bits must be cleared so the
 
     next turn's tools — which may be scheduled onto recycled tids — don't
@@ -251,8 +193,6 @@ def test_clear_interrupt_clears_worker_tids(monkeypatch):
     see a false interrupt."""
 
     from tools.interrupt import is_interrupted, set_interrupt
-
-
 
     agent = _make_agent(monkeypatch)
 
@@ -262,29 +202,20 @@ def test_clear_interrupt_clears_worker_tids(monkeypatch):
 
     # flag it interrupted.
 
-    fake_tid = threading.current_thread().ident  # use real tid so is_interrupted can see it
+    fake_tid = (
+        threading.current_thread().ident
+    )  # use real tid so is_interrupted can see it
 
     with agent._tool_worker_threads_lock:
-
         agent._tool_worker_threads.add(fake_tid)
 
     set_interrupt(True, fake_tid)
 
     assert is_interrupted() is True  # sanity
 
-
-
     agent.clear_interrupt()
 
-
-
     assert is_interrupted() is False, (
-
         "clear_interrupt() did not clear the interrupt bit for a tracked "
-
         "worker tid — stale interrupt can leak into the next turn"
-
     )
-
-
-

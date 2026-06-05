@@ -3,6 +3,7 @@
 Ensures that foreground commands with timeout > FOREGROUND_MAX_TIMEOUT
 are rejected with an error suggesting background=true.
 """
+
 import json
 from unittest.mock import patch, MagicMock
 
@@ -34,13 +35,18 @@ class TestForegroundTimeoutCap:
         """When model requests timeout > FOREGROUND_MAX_TIMEOUT, return error."""
         from tools.terminal_tool import terminal_tool, FOREGROUND_MAX_TIMEOUT
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
-            result = json.loads(terminal_tool(
-                command="echo hello",
-                timeout=9999,  # Way above max
-            ))
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
+            result = json.loads(
+                terminal_tool(
+                    command="echo hello",
+                    timeout=9999,  # Way above max
+                )
+            )
 
         assert "error" in result
         assert "9999" in result["error"]
@@ -51,12 +57,17 @@ class TestForegroundTimeoutCap:
         """Foreground nohup/disown/setsid commands should be redirected to background mode."""
         from tools.terminal_tool import terminal_tool
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
-            result = json.loads(terminal_tool(
-                command="nohup pnpm dev > /tmp/sg-server.log 2>&1 &",
-            ))
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
+            result = json.loads(
+                terminal_tool(
+                    command="nohup pnpm dev > /tmp/sg-server.log 2>&1 &",
+                )
+            )
 
         assert result["exit_code"] == -1
         assert "background=true" in result["error"]
@@ -66,9 +77,12 @@ class TestForegroundTimeoutCap:
         """Foreground dev server commands should be redirected to background mode."""
         from tools.terminal_tool import terminal_tool
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             result = json.loads(terminal_tool(command="pnpm dev"))
 
         assert result["exit_code"] == -1
@@ -79,15 +93,25 @@ class TestForegroundTimeoutCap:
         """Informational variants like '--help' should not be blocked."""
         from tools.terminal_tool import terminal_tool
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.execute.return_value = {"output": "usage", "returncode": 0}
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}):
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+            ):
                 result = json.loads(terminal_tool(command="pnpm dev --help"))
 
         assert result["error"] is None
@@ -98,19 +122,31 @@ class TestForegroundTimeoutCap:
         """When model requests timeout <= FOREGROUND_MAX_TIMEOUT, execute normally."""
         from tools.terminal_tool import terminal_tool
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.execute.return_value = {"output": "done", "returncode": 0}
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}):
-                result = json.loads(terminal_tool(
-                    command="echo hello",
-                    timeout=300,  # Within max
-                ))
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+            ):
+                result = json.loads(
+                    terminal_tool(
+                        command="echo hello",
+                        timeout=300,  # Within max
+                    )
+                )
 
         call_kwargs = mock_env.execute.call_args
         assert call_kwargs[1]["timeout"] == 300
@@ -125,16 +161,26 @@ class TestForegroundTimeoutCap:
         from tools.terminal_tool import terminal_tool
 
         # User configured TERMINAL_TIMEOUT=900 in their env
-        with patch("tools.terminal_tool._get_env_config",
-                    return_value=_make_env_config(timeout=900)), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config",
+                return_value=_make_env_config(timeout=900),
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.execute.return_value = {"output": "done", "returncode": 0}
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}):
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+            ):
                 result = json.loads(terminal_tool(command="make build"))
 
         # Should execute with the config default, NOT be rejected
@@ -146,9 +192,12 @@ class TestForegroundTimeoutCap:
         """Background commands should NOT be subject to foreground timeout cap."""
         from tools.terminal_tool import terminal_tool
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.env = {}
             mock_proc_session = MagicMock()
@@ -158,16 +207,25 @@ class TestForegroundTimeoutCap:
             mock_registry = MagicMock()
             mock_registry.spawn_local.return_value = mock_proc_session
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}), \
-                 patch("tools.process_registry.process_registry", mock_registry), \
-                 patch("tools.approval.get_current_session_key", return_value=""):
-                result = json.loads(terminal_tool(
-                    command="python server.py",
-                    background=True,
-                    timeout=9999,
-                ))
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+                patch("tools.process_registry.process_registry", mock_registry),
+                patch("tools.approval.get_current_session_key", return_value=""),
+            ):
+                result = json.loads(
+                    terminal_tool(
+                        command="python server.py",
+                        background=True,
+                        timeout=9999,
+                    )
+                )
 
         # Background should NOT be rejected
         assert "error" not in result or result["error"] is None
@@ -179,15 +237,25 @@ class TestForegroundTimeoutCap:
         # 180 < 600, so no rejection
         assert 180 < FOREGROUND_MAX_TIMEOUT
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.execute.return_value = {"output": "done", "returncode": 0}
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}):
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+            ):
                 result = json.loads(terminal_tool(command="echo hello"))
 
         call_kwargs = mock_env.execute.call_args
@@ -198,19 +266,31 @@ class TestForegroundTimeoutCap:
         """Timeout exactly at FOREGROUND_MAX_TIMEOUT should execute normally."""
         from tools.terminal_tool import terminal_tool, FOREGROUND_MAX_TIMEOUT
 
-        with patch("tools.terminal_tool._get_env_config", return_value=_make_env_config()), \
-             patch("tools.terminal_tool._start_cleanup_thread"):
-
+        with (
+            patch(
+                "tools.terminal_tool._get_env_config", return_value=_make_env_config()
+            ),
+            patch("tools.terminal_tool._start_cleanup_thread"),
+        ):
             mock_env = MagicMock()
             mock_env.execute.return_value = {"output": "done", "returncode": 0}
 
-            with patch("tools.terminal_tool._active_environments", {"default": mock_env}), \
-                 patch("tools.terminal_tool._last_activity", {"default": 0}), \
-                 patch("tools.terminal_tool._check_all_guards", return_value={"approved": True}):
-                result = json.loads(terminal_tool(
-                    command="echo hello",
-                    timeout=FOREGROUND_MAX_TIMEOUT,  # Exactly at limit
-                ))
+            with (
+                patch(
+                    "tools.terminal_tool._active_environments", {"default": mock_env}
+                ),
+                patch("tools.terminal_tool._last_activity", {"default": 0}),
+                patch(
+                    "tools.terminal_tool._check_all_guards",
+                    return_value={"approved": True},
+                ),
+            ):
+                result = json.loads(
+                    terminal_tool(
+                        command="echo hello",
+                        timeout=FOREGROUND_MAX_TIMEOUT,  # Exactly at limit
+                    )
+                )
 
         call_kwargs = mock_env.execute.call_args
         assert call_kwargs[1]["timeout"] == FOREGROUND_MAX_TIMEOUT
@@ -223,11 +303,15 @@ class TestForegroundMaxTimeoutConstant:
     def test_default_value_is_600(self):
         """Default FOREGROUND_MAX_TIMEOUT is 600 when env var is not set."""
         from tools.terminal_tool import FOREGROUND_MAX_TIMEOUT
+
         assert FOREGROUND_MAX_TIMEOUT == 600
 
     def test_schema_mentions_max(self):
         """Tool schema description should mention the max timeout."""
         from tools.terminal_tool import TERMINAL_SCHEMA, FOREGROUND_MAX_TIMEOUT
-        timeout_desc = TERMINAL_SCHEMA["parameters"]["properties"]["timeout"]["description"]
+
+        timeout_desc = TERMINAL_SCHEMA["parameters"]["properties"]["timeout"][
+            "description"
+        ]
         assert str(FOREGROUND_MAX_TIMEOUT) in timeout_desc
         assert "background=true" in timeout_desc

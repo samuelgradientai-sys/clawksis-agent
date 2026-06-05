@@ -24,6 +24,7 @@ def _make_message(*, author=None, content="hello", mentions=None, is_dm=False):
     msg.mentions = mentions or []
     if is_dm:
         import discord
+
         msg.channel = MagicMock(spec=discord.DMChannel)
         msg.channel.id = 111
     else:
@@ -54,7 +55,7 @@ class TestDiscordBotFilter(unittest.TestCase):
                 if not client_user or client_user not in message.mentions:
                     return False
             # "all" falls through
-        
+
         return True  # message accepted
 
     def test_own_messages_always_ignored(self):

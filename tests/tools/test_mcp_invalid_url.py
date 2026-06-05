@@ -74,29 +74,21 @@ class TestInvalidUrlsRejected:
 
     def test_missing_scheme_rejected(self):
         # The most common typo — users copy a host from a web page.
-        with pytest.raises(
-            InvalidMcpUrlError, match="scheme must be http or https"
-        ):
+        with pytest.raises(InvalidMcpUrlError, match="scheme must be http or https"):
             _validate_remote_mcp_url("ctx", "example.com/mcp")
 
     def test_file_scheme_rejected(self):
-        with pytest.raises(
-            InvalidMcpUrlError, match="scheme must be http or https"
-        ):
+        with pytest.raises(InvalidMcpUrlError, match="scheme must be http or https"):
             _validate_remote_mcp_url("ctx", "file:///etc/passwd")
 
     def test_ws_scheme_rejected(self):
         # WebSocket is not MCP's remote transport.
-        with pytest.raises(
-            InvalidMcpUrlError, match="scheme must be http or https"
-        ):
+        with pytest.raises(InvalidMcpUrlError, match="scheme must be http or https"):
             _validate_remote_mcp_url("ctx", "ws://example.com/mcp")
 
     def test_stdio_scheme_rejected(self):
         # stdio servers use the ``command`` key, not ``url``.
-        with pytest.raises(
-            InvalidMcpUrlError, match="scheme must be http or https"
-        ):
+        with pytest.raises(InvalidMcpUrlError, match="scheme must be http or https"):
             _validate_remote_mcp_url("ctx", "stdio:///node server.js")
 
     def test_empty_host_rejected(self):

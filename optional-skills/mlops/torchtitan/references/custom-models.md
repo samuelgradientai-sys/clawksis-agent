@@ -31,6 +31,7 @@ Inherit from `BaseModelArgs`:
 from torchtitan.protocols.model import BaseModelArgs
 from dataclasses import dataclass
 
+
 @dataclass
 class YourModelArgs(BaseModelArgs):
     dim: int = 4096
@@ -60,6 +61,7 @@ import torch.nn as nn
 from torchtitan.protocols.model import ModelProtocol
 from .args import YourModelArgs
 
+
 class YourModel(ModelProtocol):
     def __init__(self, args: YourModelArgs):
         super().__init__()
@@ -81,7 +83,7 @@ class YourModel(ModelProtocol):
     def init_weights(self):
         """Initialize weights recursively."""
         for module in self.modules():
-            if hasattr(module, 'init_weights') and module is not self:
+            if hasattr(module, "init_weights") and module is not self:
                 module.init_weights()
             elif isinstance(module, nn.Linear):
                 nn.init.normal_(module.weight, std=0.02)
@@ -99,6 +101,7 @@ class YourModel(ModelProtocol):
 # infra/parallelize.py
 from torch.distributed._composable.fsdp import fully_shard
 from torch.distributed.tensor.parallel import parallelize_module
+
 
 def parallelize_your_model(
     model: YourModel,
@@ -141,6 +144,7 @@ MODEL_CONFIGS = {
     "70B": YourModelArgs(dim=8192, n_layers=80, n_heads=64),
 }
 
+
 def get_train_spec(flavor: str) -> TrainSpec:
     return TrainSpec(
         model_cls=YourModel,
@@ -155,6 +159,7 @@ def get_train_spec(flavor: str) -> TrainSpec:
         state_dict_adapter=None,  # Or YourStateDictAdapter
     )
 
+
 # Register so train.py can find it
 register_train_spec("your_model", get_train_spec)
 ```
@@ -166,6 +171,7 @@ For HuggingFace checkpoint conversion:
 ```python
 # model/state_dict_adapter.py
 from torchtitan.protocols.state_dict_adapter import BaseStateDictAdapter
+
 
 class YourStateDictAdapter(BaseStateDictAdapter):
     def to_hf(self, state_dict: dict) -> dict:

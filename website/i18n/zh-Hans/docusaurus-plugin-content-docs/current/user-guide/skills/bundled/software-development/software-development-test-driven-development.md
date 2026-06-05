@@ -77,30 +77,39 @@ TDD：强制执行 RED-GREEN-REFACTOR，测试先于代码。
 编写一个最简测试，说明应该发生什么。
 
 **好的测试：**
-```python
-def test_retries_failed_operations_3_times():
-    attempts = 0
-    def operation():
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            raise Exception('fail')
-        return 'success'
-
-    result = retry_operation(operation)
-
-    assert result == 'success'
-    assert attempts == 3
+```pythondef test_retries_failed_operations_3_times():
+
+    attempts = 0
+
+    def operation():
+
+        nonlocal attempts
+
+        attempts += 1
+
+        if attempts < 3:
+            raise Exception("fail")
+
+        return "success"
+
+    result = retry_operation(operation)
+
+    assert result == "success"
+
+    assert attempts == 3
 ```
 名称清晰，测试真实行为，只测一件事。
 
 **坏的测试：**
-```python
-def test_retry_works():
-    mock = MagicMock()
-    mock.side_effect = [Exception(), Exception(), 'success']
-    result = retry_operation(mock)
-    assert result == 'success'  # 重试次数呢？时序呢？
+```pythondef test_retry_works():
+
+    mock = MagicMock()
+
+    mock.side_effect = [Exception(), Exception(), "success"]
+
+    result = retry_operation(mock)
+
+    assert result == "success"  # 重试次数呢？时序呢？
 ```
 名称模糊，测试的是 mock 而非真实代码。
 
@@ -133,17 +142,19 @@ pytest tests/test_feature.py::test_specific_behavior -v
 编写最简单的代码使测试通过。不多不少。
 
 **好的：**
-```python
-def add(a, b):
-    return a + b  # 没有多余的东西
+```pythondef add(a, b):
+
+    return a + b  # 没有多余的东西
 ```
 
 **坏的：**
-```python
-def add(a, b):
-    result = a + b
-    logging.info(f"Adding {a} + {b} = {result}")  # 多余！
-    return result
+```pythondef add(a, b):
+
+    result = a + b
+
+    logging.info(f"Adding {a} + {b} = {result}")  # 多余！
+
+    return result
 ```
 
 不要添加功能、重构其他代码，或在测试范围之外"改进"。
@@ -304,38 +315,52 @@ TDD 本身就是务实的：
 
 使用 `terminal` 工具在每个步骤运行测试：
 
-```python
-# RED — 验证失败
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# GREEN — 验证通过
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# 完整套件 — 验证无回归
-terminal("pytest tests/ -q")
+```python# RED — 验证失败
+
+terminal("pytest tests/test_feature.py::test_name -v")
+
+
+# GREEN — 验证通过
+
+terminal("pytest tests/test_feature.py::test_name -v")
+
+
+# 完整套件 — 验证无回归
+
+terminal("pytest tests/ -q")
 ```
 
 ### 与 delegate_task 配合使用
 
 向子 agent 分派实现任务时，在目标中强制执行 TDD：
 
-```python
-delegate_task(
-    goal="Implement [feature] using strict TDD",
-    context="""
-    Follow test-driven-development skill:
-    1. Write failing test FIRST
-    2. Run test to verify it fails
-    3. Write minimal code to pass
-    4. Run test to verify it passes
-    5. Refactor if needed
-    6. Commit
-
-    Project test command: pytest tests/ -q
-    Project structure: [describe relevant files]
-    """,
-    toolsets=['terminal', 'file']
-)
+```pythondelegate_task(
+    goal="Implement [feature] using strict TDD",
+    context="""
+
+    Follow test-driven-development skill:
+
+    1. Write failing test FIRST
+
+    2. Run test to verify it fails
+
+    3. Write minimal code to pass
+
+    4. Run test to verify it passes
+
+    5. Refactor if needed
+
+    6. Commit
+
+
+
+    Project test command: pytest tests/ -q
+
+    Project structure: [describe relevant files]
+
+    """,
+    toolsets=["terminal", "file"],
+)
 ```
 
 ### 与 systematic-debugging 配合使用

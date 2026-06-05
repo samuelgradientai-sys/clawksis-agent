@@ -34,9 +34,16 @@ def _fixture(tmp_path: Path):
 
 
 def _items(word: str):
-    resp = server.handle_request({"id": "1", "method": "complete.path", "params": {"word": word}})
+    resp = server.handle_request({
+        "id": "1",
+        "method": "complete.path",
+        "params": {"word": word},
+    })
 
-    return [(it["text"], it["display"], it.get("meta", "")) for it in resp["result"]["items"]]
+    return [
+        (it["text"], it["display"], it.get("meta", ""))
+        for it in resp["result"]["items"]
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -136,7 +143,9 @@ def test_fuzzy_at_finds_file_without_directory_prefix(tmp_path, monkeypatch):
 
     # Display is the basename, meta is the containing directory, so the
     # picker can show `appChrome.tsx  ui-tui/src/components` on one row.
-    row = next(r for r in entries if r[0] == "@file:ui-tui/src/components/appChrome.tsx")
+    row = next(
+        r for r in entries if r[0] == "@file:ui-tui/src/components/appChrome.tsx"
+    )
     assert row[1] == "appChrome.tsx"
     assert row[2] == "ui-tui/src/components"
 
@@ -246,7 +255,9 @@ def test_fuzzy_paths_relative_to_cwd_inside_subdir(tmp_path, monkeypatch):
     import subprocess
 
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True
+    )
     subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
 
     (tmp_path / "apps" / "web" / "src").mkdir(parents=True)

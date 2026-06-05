@@ -57,6 +57,7 @@ def has_clipboard_image() -> bool:
 
 # ── macOS ────────────────────────────────────────────────────────────────
 
+
 def _macos_save(dest: Path) -> bool:
     """Try pngpaste first (fast, handles more formats), fall back to osascript."""
     return _macos_pngpaste(dest) or _macos_osascript(dest)
@@ -67,7 +68,9 @@ def _macos_has_image() -> bool:
     try:
         info = subprocess.run(
             ["osascript", "-e", "clipboard info"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         return "«class PNGf»" in info.stdout or "«class TIFF»" in info.stdout
     except Exception:
@@ -79,7 +82,8 @@ def _macos_pngpaste(dest: Path) -> bool:
     try:
         r = subprocess.run(
             ["pngpaste", str(dest)],
-            capture_output=True, timeout=3,
+            capture_output=True,
+            timeout=3,
         )
         if r.returncode == 0 and dest.exists() and dest.stat().st_size > 0:
             return True
@@ -97,21 +101,28 @@ def _macos_osascript(dest: Path) -> bool:
 
     # Extract as PNG
     script = (
-        'try\n'
-        '  set imgData to the clipboard as «class PNGf»\n'
+        "try\n"
+        "  set imgData to the clipboard as «class PNGf»\n"
         f'  set f to open for access POSIX file "{dest}" with write permission\n'
-        '  write imgData to f\n'
-        '  close access f\n'
-        'on error\n'
+        "  write imgData to f\n"
+        "  close access f\n"
+        "on error\n"
         '  return "fail"\n'
-        'end try\n'
+        "end try\n"
     )
     try:
         r = subprocess.run(
             ["osascript", "-e", script],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        if r.returncode == 0 and "fail" not in r.stdout and dest.exists() and dest.stat().st_size > 0:
+        if (
+            r.returncode == 0
+            and "fail" not in r.stdout
+            and dest.exists()
+            and dest.stat().st_size > 0
+        ):
             return True
     except Exception as e:
         logger.debug("osascript clipboard extract failed: %s", e)
@@ -200,7 +211,9 @@ _POWERSHELL_EXTRACT_IMAGE_SCRIPTS = (
 def _run_powershell(exe: str, script: str, timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(
         [exe, "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
 
 
@@ -258,7 +271,9 @@ def _find_powershell() -> str | None:
         try:
             r = subprocess.run(
                 [name, "-NoProfile", "-NonInteractive", "-Command", "echo ok"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if r.returncode == 0 and "ok" in r.stdout:
                 return name
@@ -299,6 +314,7 @@ def _windows_save(dest: Path) -> bool:
 
 # ── Linux ────────────────────────────────────────────────────────────────
 
+
 def _linux_save(dest: Path) -> bool:
     """Try clipboard backends in priority order: WSL → Wayland → X11."""
     if _is_wsl():
@@ -316,6 +332,7 @@ def _linux_save(dest: Path) -> bool:
 # ── WSL2 (powershell.exe) ────────────────────────────────────────────────
 # Reuses _PS_CHECK_IMAGE / _PS_EXTRACT_IMAGE defined above.
 
+
 def _wsl_has_image() -> bool:
     """Check if Windows clipboard has an image (via powershell.exe)."""
     return _powershell_has_image("powershell.exe", timeout=8, label="WSL")
@@ -328,12 +345,15 @@ def _wsl_save(dest: Path) -> bool:
 
 # ── Wayland (wl-paste) ──────────────────────────────────────────────────
 
+
 def _wayland_has_image() -> bool:
     """Check if Wayland clipboard has image content."""
     try:
         r = subprocess.run(
             ["wl-paste", "--list-types"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         return r.returncode == 0 and any(
             t.startswith("image/") for t in r.stdout.splitlines()
@@ -351,7 +371,9 @@ def _wayland_save(dest: Path) -> bool:
         # Check available MIME types
         types_r = subprocess.run(
             ["wl-paste", "--list-types"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if types_r.returncode != 0:
             return False
@@ -359,8 +381,13 @@ def _wayland_save(dest: Path) -> bool:
 
         # Prefer PNG, fall back to other image formats
         mime = None
-        for preferred in ("image/png", "image/jpeg", "image/bmp",
-                          "image/gif", "image/webp"):
+        for preferred in (
+            "image/png",
+            "image/jpeg",
+            "image/bmp",
+            "image/gif",
+            "image/webp",
+        ):
             if preferred in types:
                 mime = preferred
                 break
@@ -372,7 +399,10 @@ def _wayland_save(dest: Path) -> bool:
         with open(dest, "wb") as f:
             subprocess.run(
                 ["wl-paste", "--type", mime],
-                stdout=f, stderr=subprocess.DEVNULL, timeout=5, check=True,
+                stdout=f,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=True,
             )
 
         if not dest.exists() or dest.stat().st_size == 0:
@@ -402,6 +432,7 @@ def _convert_to_png(path: Path) -> bool:
     # Try Pillow first (likely installed in the venv)
     try:
         from PIL import Image
+
         img = Image.open(path)
         img.save(path, "PNG")
         return True
@@ -416,7 +447,8 @@ def _convert_to_png(path: Path) -> bool:
         path.rename(tmp)
         r = subprocess.run(
             ["convert", str(tmp), "png:" + str(path)],
-            capture_output=True, timeout=5,
+            capture_output=True,
+            timeout=5,
         )
         if r.returncode == 0 and path.exists() and path.stat().st_size > 0:
             tmp.unlink(missing_ok=True)
@@ -448,12 +480,15 @@ def _is_png_file(path: Path) -> bool:
 
 # ── X11 (xclip) ─────────────────────────────────────────────────────────
 
+
 def _xclip_has_image() -> bool:
     """Check if X11 clipboard has image content."""
     try:
         r = subprocess.run(
             ["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         return r.returncode == 0 and "image/png" in r.stdout
     except FileNotFoundError:
@@ -469,7 +504,9 @@ def _xclip_save(dest: Path) -> bool:
     try:
         targets = subprocess.run(
             ["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if "image/png" not in targets.stdout:
             return False
@@ -484,7 +521,10 @@ def _xclip_save(dest: Path) -> bool:
         with open(dest, "wb") as f:
             subprocess.run(
                 ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
-                stdout=f, stderr=subprocess.DEVNULL, timeout=5, check=True,
+                stdout=f,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=True,
             )
         if dest.exists() and dest.stat().st_size > 0:
             return True

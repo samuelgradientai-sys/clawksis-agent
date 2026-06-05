@@ -61,73 +61,104 @@ Skip for UI rendering, DB query tuning, or DNS/firewall infra (escalate).
 
 ### REST via terminal
 
-```python
-# Verbose request/response exchange
-terminal('curl -v https://api.example.com/users/1')
-
-# POST with JSON
-terminal("""curl -X POST https://api.example.com/users \\
-  -H 'Content-Type: application/json' \\
-  -H "Authorization: Bearer $TOKEN" \\
-  -d '{"name":"test","email":"test@example.com"}'""")
-
-# Headers only
-terminal('curl -sI https://api.example.com/health')
-
-# Pretty-print JSON
-terminal('curl -s https://api.example.com/users | python3 -m json.tool')
+```python# Verbose request/response exchange
+
+terminal("curl -v https://api.example.com/users/1")
+
+
+# POST with JSON
+
+terminal("""curl -X POST https://api.example.com/users \\
+
+  -H 'Content-Type: application/json' \\
+
+  -H "Authorization: Bearer $TOKEN" \\
+
+  -d '{"name":"test","email":"test@example.com"}'""")
+
+
+# Headers only
+
+terminal("curl -sI https://api.example.com/health")
+
+
+# Pretty-print JSON
+
+terminal("curl -s https://api.example.com/users | python3 -m json.tool")
 ```
 
 ### GraphQL via terminal
 
-```python
-terminal("""curl -X POST https://api.example.com/graphql \\
-  -H 'Content-Type: application/json' \\
-  -H "Authorization: Bearer $TOKEN" \\
-  -d '{"query":"{ user(id: 1) { name email } }"}'""")
+```pythonterminal("""curl -X POST https://api.example.com/graphql \\
+
+  -H 'Content-Type: application/json' \\
+
+  -H "Authorization: Bearer $TOKEN" \\
+
+  -d '{"query":"{ user(id: 1) { name email } }"}'""")
 ```
 
 **GraphQL gotcha:** servers often return HTTP 200 even when the query failed. Always inspect the `errors` field regardless of status code:
 
-```python
-execute_code('''
-import os, requests
-resp = requests.post(
-    "https://api.example.com/graphql",
-    json={"query": "{ user(id: 1) { name email } }"},
-    headers={"Authorization": f"Bearer {os.environ['TOKEN']}"},
-    timeout=10,
-)
-data = resp.json()
-if data.get("errors"):
-    for err in data["errors"]:
-        print(f"GraphQL error: {err['message']} (path: {err.get('path')})")
-print(data.get("data"))
-''')
+```pythonexecute_code("""
+
+import os, requests
+
+resp = requests.post(
+
+    "https://api.example.com/graphql",
+
+    json={"query": "{ user(id: 1) { name email } }"},
+
+    headers={"Authorization": f"Bearer {os.environ['TOKEN']}"},
+
+    timeout=10,
+
+)
+
+data = resp.json()
+
+if data.get("errors"):
+
+    for err in data["errors"]:
+
+        print(f"GraphQL error: {err['message']} (path: {err.get('path')})")
+
+print(data.get("data"))
+
+""")
 ```
 
 ### Python (requests) via execute_code
 
-```python
-execute_code('''
-import requests
-resp = requests.get(
-    "https://api.example.com/users/1",
-    headers={"Authorization": "Bearer <TOKEN>"},
-    timeout=(3.05, 30),  # (connect, read)
-)
-print(resp.status_code, dict(resp.headers))
-print(resp.text[:500])
-''')
+```pythonexecute_code("""
+
+import requests
+
+resp = requests.get(
+
+    "https://api.example.com/users/1",
+
+    headers={"Authorization": "Bearer <TOKEN>"},
+
+    timeout=(3.05, 30),  # (connect, read)
+
+)
+
+print(resp.status_code, dict(resp.headers))
+
+print(resp.text[:500])
+
+""")
 ```
 
 ## Layered Debug Flow
 
 ### Step 1 — Connectivity
 
-```python
-terminal('nslookup api.example.com')
-terminal('curl -v --connect-timeout 5 https://api.example.com/health')
+```pythonterminal("nslookup api.example.com")
+
+terminal("curl -v --connect-timeout 5 https://api.example.com/health")
 ```
 
 Failures: DNS not resolving, firewall, VPN required, proxy missing.
@@ -136,50 +167,67 @@ Failures: DNS not resolving, firewall, VPN required, proxy missing.
 
 Distinguish *can't reach* from *reaches but slow*:
 
-```python
-terminal('''curl -w "dns:%{time_namelookup}s connect:%{time_connect}s tls:%{time_appconnect}s ttfb:%{time_starttransfer}s total:%{time_total}s\\n" \\
-  -o /dev/null -s https://api.example.com/endpoint''')
+```pythonterminal("""curl -w "dns:%{time_namelookup}s connect:%{time_connect}s tls:%{time_appconnect}s ttfb:%{time_starttransfer}s total:%{time_total}s\\n" \\
+
+  -o /dev/null -s https://api.example.com/endpoint""")
 ```
 
 In Python, always pass a tuple timeout — `requests` has no default and will hang forever:
 
-```python
-execute_code('''
-import requests
-from requests.exceptions import ConnectTimeout, ReadTimeout
-try:
-    requests.get(url, timeout=(3.05, 30))
-except ConnectTimeout:
-    print("Cannot reach host — DNS, firewall, VPN")
-except ReadTimeout:
-    print("Connected but server is slow")
-''')
+```pythonexecute_code("""
+
+import requests
+
+from requests.exceptions import ConnectTimeout, ReadTimeout
+
+try:
+
+    requests.get(url, timeout=(3.05, 30))
+
+except ConnectTimeout:
+
+    print("Cannot reach host — DNS, firewall, VPN")
+
+except ReadTimeout:
+
+    print("Connected but server is slow")
+
+""")
 ```
 
 Diagnosis: high `time_connect` is network/firewall; high `time_starttransfer` with low `time_connect` is a slow server.
 
 ### Step 2 — TLS/SSL
 
-```python
-terminal('curl -vI https://api.example.com 2>&1 | grep -E "SSL|subject|expire|issuer"')
+```pythonterminal('curl -vI https://api.example.com 2>&1 | grep -E "SSL|subject|expire|issuer"')
 ```
 
 Failures: expired cert, self-signed, hostname mismatch, missing CA bundle. Use `-k` only for ad-hoc debug, never in code.
 
 ### Step 3 — Authentication
 
-```python
-# Token validity check
-terminal('curl -s -o /dev/null -w "%{http_code}\\n" -H "Authorization: Bearer $TOKEN" https://api.example.com/me')
-
-# Decode JWT exp claim — handles base64url padding correctly
-execute_code('''
-import json, base64, os
-tok = os.environ["TOKEN"]
-payload = tok.split(".")[1]
-payload += "=" * (-len(payload) % 4)
-print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
-''')
+```python# Token validity check
+
+terminal(
+    'curl -s -o /dev/null -w "%{http_code}\\n" -H "Authorization: Bearer $TOKEN" https://api.example.com/me'
+)
+
+
+# Decode JWT exp claim — handles base64url padding correctly
+
+execute_code("""
+
+import json, base64, os
+
+tok = os.environ["TOKEN"]
+
+payload = tok.split(".")[1]
+
+payload += "=" * (-len(payload) % 4)
+
+print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+
+""")
 ```
 
 Checklist:
@@ -190,26 +238,33 @@ Checklist:
 
 ### Step 4 — Request Format
 
-```python
-terminal("""curl -v -X POST https://api.example.com/endpoint \\
-  -H 'Content-Type: application/json' \\
-  -d '{"key":"value"}' 2>&1""")
+```pythonterminal("""curl -v -X POST https://api.example.com/endpoint \\
+
+  -H 'Content-Type: application/json' \\
+
+  -d '{"key":"value"}' 2>&1""")
 ```
 
 **Content-Type / body mismatch — the silent 415/400:**
 
-```python
-# WRONG — data= sends form-encoded, header lies
-requests.post(url, data='{"k":"v"}', headers={"Content-Type": "application/json"})
-
-# RIGHT — json= auto-sets header AND serializes
-requests.post(url, json={"k": "v"})
-
-# WRONG — Accept says XML, code calls .json()
-requests.get(url, headers={"Accept": "text/xml"})
-
-# RIGHT — let requests build multipart with boundary
-requests.post(url, files={"file": open("doc.pdf", "rb")})
+```python# WRONG — data= sends form-encoded, header lies
+
+requests.post(url, data='{"k":"v"}', headers={"Content-Type": "application/json"})
+
+
+# RIGHT — json= auto-sets header AND serializes
+
+requests.post(url, json={"k": "v"})
+
+
+# WRONG — Accept says XML, code calls .json()
+
+requests.get(url, headers={"Accept": "text/xml"})
+
+
+# RIGHT — let requests build multipart with boundary
+
+requests.post(url, files={"file": open("doc.pdf", "rb")})
 ```
 
 Common: form-encoded vs JSON, missing required fields, wrong HTTP method, unencoded query params.
@@ -218,18 +273,27 @@ Common: form-encoded vs JSON, missing required fields, wrong HTTP method, unenco
 
 Always inspect content-type before calling `.json()`:
 
-```python
-execute_code('''
-import requests
-resp = requests.post(url, json=payload, timeout=10)
-print(f"status={resp.status_code}")
-print(f"headers={dict(resp.headers)}")
-ct = resp.headers.get("Content-Type", "")
-if "application/json" in ct:
-    print(resp.json())
-else:
-    print(f"unexpected content-type {ct!r}, body={resp.text[:500]!r}")
-''')
+```pythonexecute_code("""
+
+import requests
+
+resp = requests.post(url, json=payload, timeout=10)
+
+print(f"status={resp.status_code}")
+
+print(f"headers={dict(resp.headers)}")
+
+ct = resp.headers.get("Content-Type", "")
+
+if "application/json" in ct:
+
+    print(resp.json())
+
+else:
+
+    print(f"unexpected content-type {ct!r}, body={resp.text[:500]!r}")
+
+""")
 ```
 
 Failures: HTML error page where JSON expected, empty body, wrong charset.
@@ -283,19 +347,29 @@ The error body usually names the bad fields. Check:
 
 Check `Retry-After` and `X-RateLimit-*` headers. Exponential backoff:
 
-```python
-execute_code('''
-import time, requests
-
-def with_backoff(method, url, **kwargs):
-    for attempt in range(5):
-        resp = requests.request(method, url, **kwargs)
-        if resp.status_code != 429:
-            return resp
-        wait = int(resp.headers.get("Retry-After", 2 ** attempt))
-        time.sleep(wait)
-    return resp
-''')
+```pythonexecute_code("""
+
+import time, requests
+
+
+
+def with_backoff(method, url, **kwargs):
+
+    for attempt in range(5):
+
+        resp = requests.request(method, url, **kwargs)
+
+        if resp.status_code != 429:
+
+            return resp
+
+        wait = int(resp.headers.get("Retry-After", 2 ** attempt))
+
+        time.sleep(wait)
+
+    return resp
+
+""")
 ```
 
 ### 5xx — server-side, usually not your fault
@@ -319,25 +393,41 @@ For all 5xx: backoff with jitter, alert on persistence.
 
 Catch schema drift before it hits production:
 
-```python
-execute_code('''
-import requests
-
-def validate_user(data: dict) -> list[str]:
-    errors = []
-    required = {"id": int, "email": str, "created_at": str}
-    for field, expected in required.items():
-        if field not in data:
-            errors.append(f"missing field: {field}")
-        elif not isinstance(data[field], expected):
-            errors.append(f"{field}: want {expected.__name__}, got {type(data[field]).__name__}")
-    return errors
-
-resp = requests.get(f"{BASE}/users/1", headers=HEADERS, timeout=10)
-issues = validate_user(resp.json())
-if issues:
-    print(f"contract violations: {issues}")
-''')
+```pythonexecute_code("""
+
+import requests
+
+
+
+def validate_user(data: dict) -> list[str]:
+
+    errors = []
+
+    required = {"id": int, "email": str, "created_at": str}
+
+    for field, expected in required.items():
+
+        if field not in data:
+
+            errors.append(f"missing field: {field}")
+
+        elif not isinstance(data[field], expected):
+
+            errors.append(f"{field}: want {expected.__name__}, got {type(data[field]).__name__}")
+
+    return errors
+
+
+
+resp = requests.get(f"{BASE}/users/1", headers=HEADERS, timeout=10)
+
+issues = validate_user(resp.json())
+
+if issues:
+
+    print(f"contract violations: {issues}")
+
+""")
 ```
 
 Run after API upgrades, when integrating new third parties, or in CI smoke tests.
@@ -346,18 +436,27 @@ Run after API upgrades, when integrating new third parties, or in CI smoke tests
 
 Always capture the provider's request ID — fastest path to vendor support:
 
-```python
-execute_code('''
-import requests
-resp = requests.post(url, json=payload, headers=headers, timeout=10)
-request_id = (
-    resp.headers.get("X-Request-Id")
-    or resp.headers.get("X-Trace-Id")
-    or resp.headers.get("CF-Ray")  # Cloudflare
-)
-if resp.status_code >= 400:
-    print(f"failed status={resp.status_code} req_id={request_id} ts={resp.headers.get('Date')}")
-''')
+```pythonexecute_code("""
+
+import requests
+
+resp = requests.post(url, json=payload, headers=headers, timeout=10)
+
+request_id = (
+
+    resp.headers.get("X-Request-Id")
+
+    or resp.headers.get("X-Trace-Id")
+
+    or resp.headers.get("CF-Ray")  # Cloudflare
+
+)
+
+if resp.status_code >= 400:
+
+    print(f"failed status={resp.status_code} req_id={request_id} ts={resp.headers.get('Date')}")
+
+""")
 ```
 
 **Vendor bug-report template:**
@@ -376,38 +475,53 @@ Repro:       curl -X POST … (auth: <REDACTED>)
 
 Drop this into `tests/` and run via `terminal('pytest tests/test_api_smoke.py -v')`:
 
-```python
-import os, requests, pytest
-
-BASE_URL = os.environ.get("API_BASE_URL", "https://api.example.com")
-TOKEN    = os.environ.get("API_TOKEN", "")
-HEADERS  = {"Authorization": f"Bearer {TOKEN}"}
-
-class TestAPISmoke:
-    def test_health(self):
-        resp = requests.get(f"{BASE_URL}/health", timeout=5)
-        assert resp.status_code == 200
-
-    def test_list_users_returns_array(self):
-        resp = requests.get(f"{BASE_URL}/users", headers=HEADERS, timeout=10)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data.get("data", data), list)
-
-    def test_get_user_required_fields(self):
-        resp = requests.get(f"{BASE_URL}/users/1", headers=HEADERS, timeout=10)
-        assert resp.status_code in (200, 404)
-        if resp.status_code == 200:
-            user = resp.json()
-            assert "id" in user and "email" in user
-
-    def test_invalid_auth_returns_401(self):
-        resp = requests.get(
-            f"{BASE_URL}/users",
-            headers={"Authorization": "Bearer invalid-token"},
-            timeout=10,
-        )
-        assert resp.status_code == 401
+```pythonimport os, requests, pytest
+
+
+BASE_URL = os.environ.get("API_BASE_URL", "https://api.example.com")
+
+TOKEN = os.environ.get("API_TOKEN", "")
+
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+
+
+class TestAPISmoke:
+    def test_health(self):
+
+        resp = requests.get(f"{BASE_URL}/health", timeout=5)
+
+        assert resp.status_code == 200
+
+    def test_list_users_returns_array(self):
+
+        resp = requests.get(f"{BASE_URL}/users", headers=HEADERS, timeout=10)
+
+        assert resp.status_code == 200
+
+        data = resp.json()
+
+        assert isinstance(data.get("data", data), list)
+
+    def test_get_user_required_fields(self):
+
+        resp = requests.get(f"{BASE_URL}/users/1", headers=HEADERS, timeout=10)
+
+        assert resp.status_code in (200, 404)
+
+        if resp.status_code == 200:
+            user = resp.json()
+
+            assert "id" in user and "email" in user
+
+    def test_invalid_auth_returns_401(self):
+
+        resp = requests.get(
+            f"{BASE_URL}/users",
+            headers={"Authorization": "Bearer invalid-token"},
+            timeout=10,
+        )
+
+        assert resp.status_code == 401
 ```
 
 ## Security
@@ -419,10 +533,13 @@ class TestAPISmoke:
 
 ### Safe logging
 
-```python
-def redact_auth(headers: dict) -> dict:
-    sensitive = {"authorization", "x-api-key", "cookie", "set-cookie"}
-    return {k: ("<REDACTED>" if k.lower() in sensitive else v) for k, v in headers.items()}
+```pythondef redact_auth(headers: dict) -> dict:
+
+    sensitive = {"authorization", "x-api-key", "cookie", "set-cookie"}
+
+    return {
+        k: ("<REDACTED>" if k.lower() in sensitive else v) for k, v in headers.items()
+    }
 ```
 
 ### Leak checklist
@@ -438,68 +555,100 @@ def redact_auth(headers: dict) -> dict:
 
 ### terminal — for curl, dig, openssl
 
-```python
-terminal('curl -sI https://api.example.com')
-terminal('openssl s_client -connect api.example.com:443 -servername api.example.com </dev/null 2>/dev/null | openssl x509 -noout -dates')
+```pythonterminal("curl -sI https://api.example.com")
+
+terminal(
+    "openssl s_client -connect api.example.com:443 -servername api.example.com </dev/null 2>/dev/null | openssl x509 -noout -dates"
+)
 ```
 
 ### execute_code — for multi-step Python flows
 
 When debugging spans auth → fetch → paginate → validate, use `execute_code`. Variables persist for the script, results print to stdout, no risk of token spam in your context:
 
-```python
-execute_code('''
-import os, requests
-
-token = os.environ["API_TOKEN"]
-base  = "https://api.example.com"
-H     = {"Authorization": f"Bearer {token}"}
-
-# 1. auth
-me = requests.get(f"{base}/me", headers=H, timeout=10)
-print(f"auth {me.status_code}")
-
-# 2. paginate
-all_users, cursor = [], None
-while True:
-    params = {"cursor": cursor} if cursor else {}
-    r = requests.get(f"{base}/users", headers=H, params=params, timeout=10)
-    body = r.json()
-    all_users.extend(body["data"])
-    cursor = body.get("next_cursor")
-    if not cursor:
-        break
-print(f"users={len(all_users)}")
-''')
+```pythonexecute_code("""
+
+import os, requests
+
+
+
+token = os.environ["API_TOKEN"]
+
+base  = "https://api.example.com"
+
+H     = {"Authorization": f"Bearer {token}"}
+
+
+
+# 1. auth
+
+me = requests.get(f"{base}/me", headers=H, timeout=10)
+
+print(f"auth {me.status_code}")
+
+
+
+# 2. paginate
+
+all_users, cursor = [], None
+
+while True:
+
+    params = {"cursor": cursor} if cursor else {}
+
+    r = requests.get(f"{base}/users", headers=H, params=params, timeout=10)
+
+    body = r.json()
+
+    all_users.extend(body["data"])
+
+    cursor = body.get("next_cursor")
+
+    if not cursor:
+
+        break
+
+print(f"users={len(all_users)}")
+
+""")
 ```
 
 ### web_extract — for vendor API docs
 
 Pull the spec for the endpoint you're debugging instead of guessing:
 
-```python
-web_extract(urls=["https://docs.example.com/api/v1/users"])
+```pythonweb_extract(urls=["https://docs.example.com/api/v1/users"])
 ```
 
 ### delegate_task — for full CRUD test sweeps
 
-```python
-delegate_task(
-    goal="Test all CRUD endpoints for /api/v1/users",
-    context="""
-Follow the rest-graphql-debug skill (optional-skills/software-development/rest-graphql-debug).
-Base URL: https://api.example.com
-Auth: Bearer token from API_TOKEN env var.
-
-For each verb (POST, GET, PATCH, DELETE):
-  - happy path: assert status + response schema
-  - error cases: 400, 404, 422
-  - log a repro curl for any failure (redact tokens)
-
-Output: pass/fail per endpoint + correlation IDs for failures.
-""",
-    toolsets=["terminal", "file"],
-)
+```pythondelegate_task(
+    goal="Test all CRUD endpoints for /api/v1/users",
+    context="""
+
+Follow the rest-graphql-debug skill (optional-skills/software-development/rest-graphql-debug).
+
+Base URL: https://api.example.com
+
+Auth: Bearer token from API_TOKEN env var.
+
+
+
+For each verb (POST, GET, PATCH, DELETE):
+
+  - happy path: assert status + response schema
+
+  - error cases: 400, 404, 422
+
+  - log a repro curl for any failure (redact tokens)
+
+
+
+Output: pass/fail per endpoint + correlation IDs for failures.
+
+""",
+    toolsets=["terminal", "file"],
+)
 ```
 
 ## Output Format

@@ -19,17 +19,19 @@ Complete guide to JSON generation with Outlines using Pydantic models and JSON s
 from pydantic import BaseModel
 import outlines
 
+
 class User(BaseModel):
     name: str
     age: int
     email: str
 
+
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, User)
 
 user = generator("Generate user: Alice, 25, alice@example.com")
-print(user.name)   # "Alice"
-print(user.age)    # 25
+print(user.name)  # "Alice"
+print(user.age)  # 25
 print(user.email)  # "alice@example.com"
 ```
 
@@ -40,12 +42,14 @@ print(user.email)  # "alice@example.com"
 ```python
 from pydantic import BaseModel, Field
 
+
 class Product(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     price: float = Field(gt=0, description="Price in USD")
     discount: float = Field(ge=0, le=100, description="Discount percentage")
     quantity: int = Field(ge=0, description="Available quantity")
     sku: str = Field(pattern=r"^[A-Z]{3}-\d{6}$")
+
 
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, Product)
@@ -66,6 +70,7 @@ product = generator("Generate product: iPhone 15, $999")
 ```python
 from typing import Optional
 
+
 class Article(BaseModel):
     title: str  # Required
     author: Optional[str] = None  # Optional
@@ -73,12 +78,13 @@ class Article(BaseModel):
     tags: list[str] = []  # Default empty list
     view_count: int = 0  # Default value
 
+
 generator = outlines.generate.json(model, Article)
 
 # Can generate even if optional fields missing
 article = generator("Title: Introduction to AI")
 print(article.author)  # None (not provided)
-print(article.tags)    # [] (default)
+print(article.tags)  # [] (default)
 ```
 
 ### Default Values
@@ -89,6 +95,7 @@ class Config(BaseModel):
     max_retries: int = 3
     timeout: float = 30.0
     log_level: str = "INFO"
+
 
 # Generator uses defaults when not specified
 generator = outlines.generate.json(model, Config)
@@ -104,16 +111,19 @@ print(config.timeout)  # 30.0 (default)
 ```python
 from enum import Enum
 
+
 class Status(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
 
+
 class Application(BaseModel):
     applicant_name: str
     status: Status  # Must be one of enum values
     submitted_date: str
+
 
 generator = outlines.generate.json(model, Application)
 app = generator("Generate application for John Doe")
@@ -127,11 +137,13 @@ print(type(app.status))  # <enum 'Status'>
 ```python
 from typing import Literal
 
+
 class Task(BaseModel):
     title: str
     priority: Literal["low", "medium", "high", "critical"]
     status: Literal["todo", "in_progress", "done"]
     assigned_to: str
+
 
 generator = outlines.generate.json(model, Task)
 task = generator("Create high priority task: Fix bug")
@@ -144,8 +156,11 @@ print(task.priority)  # One of: "low", "medium", "high", "critical"
 ```python
 class Survey(BaseModel):
     question: str
-    answer: Literal["strongly_disagree", "disagree", "neutral", "agree", "strongly_agree"]
+    answer: Literal[
+        "strongly_disagree", "disagree", "neutral", "agree", "strongly_agree"
+    ]
     confidence: Literal["low", "medium", "high"]
+
 
 generator = outlines.generate.json(model, Survey)
 survey = generator("Rate: 'I enjoy using this product'")
@@ -163,11 +178,13 @@ class Address(BaseModel):
     zip_code: str
     country: str = "USA"
 
+
 class Person(BaseModel):
     name: str
     age: int
     email: str
     address: Address  # Nested model
+
 
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, Person)
@@ -193,14 +210,17 @@ class Coordinates(BaseModel):
     latitude: float
     longitude: float
 
+
 class Location(BaseModel):
     name: str
     coordinates: Coordinates
+
 
 class Event(BaseModel):
     title: str
     date: str
     location: Location
+
 
 generator = outlines.generate.json(model, Event)
 event = generator("Generate event: Tech Conference in San Francisco")
@@ -218,11 +238,13 @@ class Item(BaseModel):
     quantity: int
     price: float
 
+
 class Order(BaseModel):
     order_id: str
     customer: str
     items: list[Item]  # List of nested models
     total: float
+
 
 generator = outlines.generate.json(model, Order)
 
@@ -247,18 +269,22 @@ print(f"Total: ${order.total}")
 ```python
 from typing import Union
 
+
 class TextContent(BaseModel):
     type: Literal["text"]
     content: str
+
 
 class ImageContent(BaseModel):
     type: Literal["image"]
     url: str
     caption: str
 
+
 class Post(BaseModel):
     title: str
     content: Union[TextContent, ImageContent]  # Either type
+
 
 generator = outlines.generate.json(model, Post)
 
@@ -280,6 +306,7 @@ class Article(BaseModel):
     sections: list[dict[str, str]]  # List of dicts
     related_ids: list[int]
 
+
 generator = outlines.generate.json(model, Article)
 article = generator("Generate article about AI")
 
@@ -296,6 +323,7 @@ class Metadata(BaseModel):
     counts: dict[str, int]  # String keys, int values
     settings: dict[str, Union[str, int, bool]]  # Mixed value types
 
+
 generator = outlines.generate.json(model, Metadata)
 meta = generator("Generate metadata")
 
@@ -308,10 +336,12 @@ print(meta.counts)  # {"views": 1000, "likes": 50}
 ```python
 from typing import Any
 
+
 class FlexibleData(BaseModel):
     name: str
     structured_field: str
     flexible_field: Any  # Can be anything
+
 
 # Note: Any reduces type safety, use only when necessary
 generator = outlines.generate.json(model, FlexibleData)
@@ -332,9 +362,9 @@ schema = {
     "properties": {
         "name": {"type": "string"},
         "age": {"type": "integer", "minimum": 0, "maximum": 120},
-        "email": {"type": "string", "format": "email"}
+        "email": {"type": "string", "format": "email"},
     },
-    "required": ["name", "age", "email"]
+    "required": ["name", "age", "email"],
 }
 
 # Generate from schema
@@ -351,6 +381,7 @@ class User(BaseModel):
     name: str
     age: int
     email: str
+
 
 # Get JSON schema from Pydantic model
 schema = User.model_json_schema()
@@ -380,6 +411,7 @@ class Order(BaseModel):
     delivery_date: str
     express_fee: Optional[float] = None  # Only for express orders
 
+
 generator = outlines.generate.json(model, Order)
 
 # Express order
@@ -396,9 +428,11 @@ print(order2.express_fee)  # None
 ```python
 from typing import Optional, List
 
+
 class TreeNode(BaseModel):
     value: str
-    children: Optional[List['TreeNode']] = None
+    children: Optional[List["TreeNode"]] = None
+
 
 # Enable forward references
 TreeNode.model_rebuild()
@@ -415,20 +449,23 @@ print(tree.children[0].value)  # "subdir1"
 ```python
 from pydantic import field_validator
 
+
 class DateRange(BaseModel):
     start_date: str
     end_date: str
 
-    @field_validator('end_date')
+    @field_validator("end_date")
     def end_after_start(cls, v, info):
         """Ensure end_date is after start_date."""
-        if 'start_date' in info.data:
+        if "start_date" in info.data:
             from datetime import datetime
-            start = datetime.strptime(info.data['start_date'], '%Y-%m-%d')
-            end = datetime.strptime(v, '%Y-%m-%d')
+
+            start = datetime.strptime(info.data["start_date"], "%Y-%m-%d")
+            end = datetime.strptime(v, "%Y-%m-%d")
             if end < start:
-                raise ValueError('end_date must be after start_date')
+                raise ValueError("end_date must be after start_date")
         return v
+
 
 generator = outlines.generate.json(model, DateRange)
 # Validation happens after generation
@@ -443,9 +480,11 @@ class Person(BaseModel):
     name: str
     age: int
 
+
 class Team(BaseModel):
     team_name: str
     members: list[Person]
+
 
 generator = outlines.generate.json(model, Team)
 
@@ -470,14 +509,16 @@ def generate_batch(prompts: list[str], schema: type[BaseModel]):
 
     return results
 
+
 class Product(BaseModel):
     name: str
     price: float
 
+
 prompts = [
     "Product: iPhone 15, $999",
     "Product: MacBook Pro, $2499",
-    "Product: AirPods, $179"
+    "Product: AirPods, $179",
 ]
 
 products = generate_batch(prompts, Product)
@@ -492,11 +533,13 @@ for product in products:
 ```python
 from functools import lru_cache
 
+
 @lru_cache(maxsize=10)
 def get_generator(model_name: str, schema_hash: int):
     """Cache generators for reuse."""
     model = outlines.models.transformers(model_name)
     return outlines.generate.json(model, schema)
+
 
 # First call: creates generator
 gen1 = get_generator("microsoft/Phi-3-mini-4k-instruct", hash(User))
@@ -527,6 +570,7 @@ class SimplePerson(BaseModel):
     age: int
     city: str
 
+
 # ⚠️ Slower: Deep nesting
 class ComplexPerson(BaseModel):
     personal_info: PersonalInfo
@@ -542,10 +586,12 @@ class ComplexPerson(BaseModel):
 ```python
 from pydantic import ValidationError
 
+
 class User(BaseModel):
     name: str
     age: int
     email: str
+
 
 try:
     user = generator("Generate user")  # May not include all fields
@@ -561,6 +607,7 @@ class RobustUser(BaseModel):
     name: str  # Required
     age: Optional[int] = None  # Optional
     email: Optional[str] = None  # Optional
+
 
 # More likely to succeed even with incomplete data
 user = generator("Generate user: Alice")
@@ -580,6 +627,7 @@ class Product(BaseModel):
     quantity: int  # Not str
     in_stock: bool  # Not int
 
+
 # ❌ Bad: Generic types
 class Product(BaseModel):
     name: Any
@@ -596,6 +644,7 @@ class Article(BaseModel):
     content: str = Field(description="Main article content in paragraphs")
     tags: list[str] = Field(description="List of relevant topic tags")
 
+
 # Descriptions help the model understand expected output
 ```
 
@@ -605,6 +654,7 @@ class Article(BaseModel):
 # ✅ Good: With constraints
 class Age(BaseModel):
     value: int = Field(ge=0, le=120, description="Age in years")
+
 
 # ❌ Bad: No constraints
 class Age(BaseModel):
@@ -620,8 +670,10 @@ class Priority(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
 
+
 class Task(BaseModel):
     priority: Priority  # Guaranteed valid
+
 
 # ❌ Bad: Free-form string
 class Task(BaseModel):
@@ -633,14 +685,10 @@ class Task(BaseModel):
 ```python
 # Test models work as expected
 def test_product_model():
-    product = Product(
-        name="Test Product",
-        price=19.99,
-        quantity=10,
-        in_stock=True
-    )
+    product = Product(name="Test Product", price=19.99, quantity=10, in_stock=True)
     assert product.price == 19.99
     assert isinstance(product, Product)
+
 
 # Run tests before using in production
 ```

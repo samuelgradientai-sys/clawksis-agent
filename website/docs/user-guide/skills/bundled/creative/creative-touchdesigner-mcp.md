@@ -108,17 +108,23 @@ td_create_operator(type="nullTOP", parent="/project1", name="out")
 
 For bulk creation or wiring, use `td_execute_python`:
 
-```python
-# td_execute_python script:
-root = op('/project1')
-nodes = []
-for name, optype in [('bg', noiseTOP), ('fx', levelTOP), ('out', nullTOP)]:
-    n = root.create(optype, name)
-    nodes.append(n.path)
-# Wire chain
-for i in range(len(nodes)-1):
-    op(nodes[i]).outputConnectors[0].connect(op(nodes[i+1]).inputConnectors[0])
-result = {'created': nodes}
+```python# td_execute_python script:
+
+root = op("/project1")
+
+nodes = []
+
+for name, optype in [("bg", noiseTOP), ("fx", levelTOP), ("out", nullTOP)]:
+    n = root.create(optype, name)
+
+    nodes.append(n.path)
+
+# Wire chain
+
+for i in range(len(nodes) - 1):
+    op(nodes[i]).outputConnectors[0].connect(op(nodes[i + 1]).inputConnectors[0])
+
+result = {"created": nodes}
 ```
 
 ### Step 2: Set Parameters
@@ -131,16 +137,14 @@ td_set_operator_pars(path="/project1/bg", parameters={"roughness": 0.6, "monochr
 
 For expressions or modes, use `td_execute_python`:
 
-```python
-op('/project1/time_driver').par.colorr.expr = "absTime.seconds % 1000.0"
+```pythonop("/project1/time_driver").par.colorr.expr = "absTime.seconds % 1000.0"
 ```
 
 ### Step 3: Wire
 
 Use `td_execute_python` — no native wire tool exists:
 
-```python
-op('/project1/bg').outputConnectors[0].connect(op('/project1/fx').inputConnectors[0])
+```pythonop("/project1/bg").outputConnectors[0].connect(op("/project1/fx").inputConnectors[0])
 ```
 
 ### Step 4: Verify
@@ -159,11 +163,14 @@ td_get_screenshot(path="/project1/out")
 
 Or open a window via script:
 
-```python
-win = op('/project1').create(windowCOMP, 'display')
-win.par.winop = op('/project1/out').path
-win.par.winw = 1280; win.par.winh = 720
-win.par.winopen.pulse()
+```pythonwin = op("/project1").create(windowCOMP, "display")
+
+win.par.winop = op("/project1/out").path
+
+win.par.winw = 1280
+win.par.winh = 720
+
+win.par.winopen.pulse()
 ```
 
 ## MCP Tool Quick Reference
@@ -229,12 +236,15 @@ The table above covers the 32 tools used in typical creative workflows. The rema
 ## Key Implementation Rules
 
 **GLSL time:** No `uTDCurrentTime` in GLSL TOP. Use the Values page:
-```python
-# Call td_get_par_info(op_type="glslTOP") first to confirm param names
-td_set_operator_pars(path="/project1/shader", parameters={"value0name": "uTime"})
-# Then set expression via script:
-# op('/project1/shader').par.value0.expr = "absTime.seconds"
-# In GLSL: uniform float uTime;
+```python# Call td_get_par_info(op_type="glslTOP") first to confirm param names
+
+td_set_operator_pars(path="/project1/shader", parameters={"value0name": "uTime"})
+
+# Then set expression via script:
+
+# op('/project1/shader').par.value0.expr = "absTime.seconds"
+
+# In GLSL: uniform float uTime;
 ```
 
 Fallback: Constant TOP in `rgba32float` format (8-bit clamps to 0-1, freezing the shader).
@@ -255,16 +265,23 @@ Fallback: Constant TOP in `rgba32float` format (8-bit clamps to 0-1, freezing th
 
 ## Recording / Exporting Video
 
-```python
-# via td_execute_python:
-root = op('/project1')
-rec = root.create(moviefileoutTOP, 'recorder')
-op('/project1/out').outputConnectors[0].connect(rec.inputConnectors[0])
-rec.par.type = 'movie'
-rec.par.file = '/tmp/output.mov'
-rec.par.videocodec = 'prores'  # Apple ProRes — NOT license-restricted on macOS
-rec.par.record = True   # start
-# rec.par.record = False  # stop (call separately later)
+```python# via td_execute_python:
+
+root = op("/project1")
+
+rec = root.create(moviefileoutTOP, "recorder")
+
+op("/project1/out").outputConnectors[0].connect(rec.inputConnectors[0])
+
+rec.par.type = "movie"
+
+rec.par.file = "/tmp/output.mov"
+
+rec.par.videocodec = "prores"  # Apple ProRes — NOT license-restricted on macOS
+
+rec.par.record = True  # start
+
+# rec.par.record = False  # stop (call separately later)
 ```
 
 H.264/H.265/AV1 need Commercial license. Use `prores` on macOS or `mjpa` as fallback.

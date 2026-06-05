@@ -7,16 +7,24 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 
-def make_sender(sender_type: str = "user", open_id: str = "ou_human",
-                user_id: Optional[str] = None, union_id: Optional[str] = None) -> Any:
+def make_sender(
+    sender_type: str = "user",
+    open_id: str = "ou_human",
+    user_id: Optional[str] = None,
+    union_id: Optional[str] = None,
+) -> Any:
     return SimpleNamespace(
         sender_type=sender_type,
         sender_id=SimpleNamespace(open_id=open_id, user_id=user_id, union_id=union_id),
     )
 
 
-def make_message(message_id: str = "om_xxx", chat_type: str = "p2p",
-                 chat_id: str = "oc_1", mentions: Optional[list] = None) -> Any:
+def make_message(
+    message_id: str = "om_xxx",
+    chat_type: str = "p2p",
+    chat_id: str = "oc_1",
+    mentions: Optional[list] = None,
+) -> Any:
     return SimpleNamespace(
         message_id=message_id,
         chat_type=chat_type,

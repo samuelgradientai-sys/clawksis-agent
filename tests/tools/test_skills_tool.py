@@ -1,7 +1,5 @@
 """Tests for tools/skills_tool.py — skill discovery and viewing."""
 
-
-
 import json
 
 import os
@@ -11,53 +9,33 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 import pytest
-
 
 
 import tools.skills_tool as skills_tool_module
 
 from tools.skills_tool import (
-
     _get_required_environment_variables,
-
     _parse_frontmatter,
-
     _parse_tags,
-
     _get_category_from_path,
-
     _find_all_skills,
-
     skill_matches_platform,
-
     skills_list,
-
     skill_view,
-
     MAX_DESCRIPTION_LENGTH,
-
 )
 
 
-
-
-
 def _make_skill(
-
     skills_dir, name, frontmatter_extra="", body="Step 1: Do the thing.", category=None
-
 ):
-
     """Helper to create a minimal skill directory."""
 
     if category:
-
         skill_dir = skills_dir / category / name
 
     else:
-
         skill_dir = skills_dir / name
 
     skill_dir.mkdir(parents=True, exist_ok=True)
@@ -86,11 +64,7 @@ description: Description for {name}.
     return skill_dir
 
 
-
-
-
 def _symlink_category(skills_dir: Path, linked_root: Path, category: str) -> Path:
-
     """Create a category symlink under skills_dir pointing outside the tree."""
 
     external_category = linked_root / category
@@ -100,17 +74,12 @@ def _symlink_category(skills_dir: Path, linked_root: Path, category: str) -> Pat
     symlink_path = skills_dir / category
 
     try:
-
         symlink_path.symlink_to(external_category, target_is_directory=True)
 
     except (OSError, NotImplementedError) as exc:
-
         pytest.skip(f"symlinks unavailable in test environment: {exc}")
 
     return external_category
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +89,7 @@ def _symlink_category(skills_dir: Path, linked_root: Path, category: str) -> Pat
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestParseFrontmatter:
-
     def test_valid_frontmatter(self):
 
         content = "---\nname: test\ndescription: A test.\n---\n\n# Body\n"
@@ -137,8 +102,6 @@ class TestParseFrontmatter:
 
         assert "# Body" in body
 
-
-
     def test_no_frontmatter(self):
 
         content = "# Just a heading\nSome content.\n"
@@ -149,8 +112,6 @@ class TestParseFrontmatter:
 
         assert body == content
 
-
-
     def test_empty_frontmatter(self):
 
         content = "---\n---\n\n# Body\n"
@@ -159,24 +120,17 @@ class TestParseFrontmatter:
 
         assert fm == {}
 
-
-
     def test_nested_yaml(self):
 
         content = (
-
             "---\nname: test\nmetadata:\n  clawk:\n    tags: [a, b]\n---\n\nBody.\n"
-
         )
 
         fm, body = _parse_frontmatter(content)
 
         assert fm["metadata"]["clawk"]["tags"] == ["a", "b"]
 
-
-
     def test_malformed_yaml_fallback(self):
-
         """Malformed YAML falls back to simple key:value parsing."""
 
         content = "---\nname: test\ndescription: desc\n: invalid\n---\n\nBody.\n"
@@ -188,9 +142,6 @@ class TestParseFrontmatter:
         assert "name" in fm
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _parse_tags
@@ -198,28 +149,18 @@ class TestParseFrontmatter:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestParseTags:
-
     def test_list_input(self):
 
         assert _parse_tags(["a", "b", "c"]) == ["a", "b", "c"]
-
-
 
     def test_comma_separated_string(self):
 
         assert _parse_tags("a, b, c") == ["a", "b", "c"]
 
-
-
     def test_bracket_wrapped_string(self):
 
         assert _parse_tags("[a, b, c]") == ["a", "b", "c"]
-
-
 
     def test_empty_input(self):
 
@@ -229,8 +170,6 @@ class TestParseTags:
 
         assert _parse_tags([]) == []
 
-
-
     def test_strips_quotes(self):
 
         result = _parse_tags("\"tag1\", 'tag2'")
@@ -239,87 +178,48 @@ class TestParseTags:
 
         assert "tag2" in result
 
-
-
     def test_filters_empty_items(self):
 
         assert _parse_tags([None, "", "valid"]) == ["valid"]
 
 
-
-
-
 class TestRequiredEnvironmentVariablesNormalization:
-
     def test_parses_new_required_environment_variables_metadata(self):
 
         frontmatter = {
-
             "required_environment_variables": [
-
                 {
-
                     "name": "TENOR_API_KEY",
-
                     "prompt": "Tenor API key",
-
                     "help": "Get a key from https://developers.google.com/tenor",
-
                     "required_for": "full functionality",
-
                 }
-
             ]
-
         }
-
-
 
         result = _get_required_environment_variables(frontmatter)
 
-
-
         assert result == [
-
             {
-
                 "name": "TENOR_API_KEY",
-
                 "prompt": "Tenor API key",
-
                 "help": "Get a key from https://developers.google.com/tenor",
-
                 "required_for": "full functionality",
-
             }
-
         ]
-
-
 
     def test_normalizes_legacy_prerequisites_env_vars(self):
 
         frontmatter = {"prerequisites": {"env_vars": ["TENOR_API_KEY"]}}
 
-
-
         result = _get_required_environment_variables(frontmatter)
 
-
-
         assert result == [
-
             {
-
                 "name": "TENOR_API_KEY",
-
                 "prompt": "Enter value for TENOR_API_KEY",
-
             }
-
         ]
-
-
 
     def test_empty_env_file_value_is_treated_as_missing(self, monkeypatch):
 
@@ -327,26 +227,17 @@ class TestRequiredEnvironmentVariablesNormalization:
 
         monkeypatch.setenv("EMPTY_HOST_KEY", "")
 
-
-
         from tools.skills_tool import _is_env_var_persisted
-
-
 
         assert _is_env_var_persisted("EMPTY_FILE_KEY", {"EMPTY_FILE_KEY": ""}) is False
 
         assert (
-
             _is_env_var_persisted("FILLED_FILE_KEY", {"FILLED_FILE_KEY": "x"}) is True
-
         )
 
         assert _is_env_var_persisted("EMPTY_HOST_KEY", {}) is False
 
         assert _is_env_var_persisted("FILLED_KEY", {}) is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -356,15 +247,10 @@ class TestRequiredEnvironmentVariablesNormalization:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestGetCategoryFromPath:
-
     def test_categorized_skill(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skill_md = tmp_path / "mlops" / "axolotl" / "SKILL.md"
 
             skill_md.parent.mkdir(parents=True)
@@ -373,12 +259,9 @@ class TestGetCategoryFromPath:
 
             assert _get_category_from_path(skill_md) == "mlops"
 
-
-
     def test_uncategorized_skill(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skill_md = tmp_path / "my-skill" / "SKILL.md"
 
             skill_md.parent.mkdir(parents=True)
@@ -387,18 +270,12 @@ class TestGetCategoryFromPath:
 
             assert _get_category_from_path(skill_md) is None
 
-
-
     def test_outside_skills_dir(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"):
-
             skill_md = tmp_path / "other" / "SKILL.md"
 
             assert _get_category_from_path(skill_md) is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -408,15 +285,10 @@ class TestGetCategoryFromPath:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestFindAllSkills:
-
     def test_finds_skills(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "skill-a")
 
             _make_skill(tmp_path, "skill-b")
@@ -431,32 +303,23 @@ class TestFindAllSkills:
 
         assert "skill-b" in names
 
-
-
     def test_empty_directory(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skills = _find_all_skills()
 
         assert skills == []
-
-
 
     def test_nonexistent_directory(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path / "nope"):
-
             skills = _find_all_skills()
 
         assert skills == []
 
-
-
     def test_categorized_skills(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "axolotl", category="mlops")
 
             skills = _find_all_skills()
@@ -465,10 +328,7 @@ class TestFindAllSkills:
 
         assert skills[0]["category"] == "mlops"
 
-
-
     def test_description_from_body_when_missing(self, tmp_path):
-
         """If no description in frontmatter, first non-header line is used."""
 
         skill_dir = tmp_path / "no-desc"
@@ -476,18 +336,13 @@ class TestFindAllSkills:
         skill_dir.mkdir()
 
         (skill_dir / "SKILL.md").write_text(
-
             "---\nname: no-desc\n---\n\n# Heading\n\nFirst paragraph.\n"
-
         )
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skills = _find_all_skills()
 
         assert skills[0]["description"] == "First paragraph."
-
-
 
     def test_long_description_truncated(self, tmp_path):
 
@@ -498,23 +353,17 @@ class TestFindAllSkills:
         skill_dir.mkdir()
 
         (skill_dir / "SKILL.md").write_text(
-
             f"---\nname: long\ndescription: {long_desc}\n---\n\nBody.\n"
-
         )
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skills = _find_all_skills()
 
         assert len(skills[0]["description"]) <= MAX_DESCRIPTION_LENGTH
 
-
-
     def test_skips_git_directories(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "real-skill")
 
             git_dir = tmp_path / ".git" / "fake-skill"
@@ -522,9 +371,7 @@ class TestFindAllSkills:
             git_dir.mkdir(parents=True)
 
             (git_dir / "SKILL.md").write_text(
-
                 "---\nname: fake\ndescription: x\n---\n\nBody.\n"
-
             )
 
             skills = _find_all_skills()
@@ -533,59 +380,35 @@ class TestFindAllSkills:
 
         assert skills[0]["name"] == "real-skill"
 
-
-
     def test_skips_nested_virtualenv_dependency_skills(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "real-skill")
 
             typer_skill = (
-
                 tmp_path
-
                 / "bring"
-
                 / "scripts"
-
                 / ".venv"
-
                 / "lib"
-
                 / "python3.13"
-
                 / "site-packages"
-
                 / "typer"
-
                 / ".agents"
-
                 / "skills"
-
                 / "typer"
-
             )
 
             typer_skill.mkdir(parents=True)
 
             (typer_skill / "SKILL.md").write_text(
-
                 "---\nname: typer\ndescription: Should not be discovered.\n---\n",
-
                 encoding="utf-8",
-
             )
-
-
 
             skills = _find_all_skills()
 
-
-
         assert [skill["name"] for skill in skills] == ["real-skill"]
-
-
 
     def test_finds_skills_in_symlinked_category_dir(self, tmp_path):
 
@@ -595,26 +418,16 @@ class TestFindAllSkills:
 
         skills_root.mkdir()
 
-
-
         external_category = _symlink_category(skills_root, external_root, "linked")
 
         _make_skill(external_category.parent, "knowledge-brain", category="linked")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", skills_root):
-
             skills = _find_all_skills()
-
-
 
         assert [s["name"] for s in skills] == ["knowledge-brain"]
 
         assert skills[0]["category"] == "linked"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -624,17 +437,12 @@ class TestFindAllSkills:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSkillsList:
-
     def test_empty_creates_directory(self, tmp_path):
 
         skills_dir = tmp_path / "skills"
 
         with patch("tools.skills_tool.SKILLS_DIR", skills_dir):
-
             raw = skills_list()
 
         result = json.loads(raw)
@@ -645,12 +453,9 @@ class TestSkillsList:
 
         assert skills_dir.exists()
 
-
-
     def test_lists_skills(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "alpha")
 
             _make_skill(tmp_path, "beta")
@@ -661,12 +466,9 @@ class TestSkillsList:
 
         assert result["count"] == 2
 
-
-
     def test_category_filter(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "skill-a", category="devops")
 
             _make_skill(tmp_path, "skill-b", category="mlops")
@@ -679,8 +481,6 @@ class TestSkillsList:
 
         assert result["skills"][0]["name"] == "skill-a"
 
-
-
     def test_category_filter_finds_symlinked_category(self, tmp_path):
 
         external_root = tmp_path / "repo"
@@ -689,19 +489,12 @@ class TestSkillsList:
 
         skills_root.mkdir()
 
-
-
         external_category = _symlink_category(skills_root, external_root, "linked")
 
         _make_skill(external_category.parent, "knowledge-brain", category="linked")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", skills_root):
-
             raw = skills_list(category="linked")
-
-
 
         result = json.loads(raw)
 
@@ -714,9 +507,6 @@ class TestSkillsList:
         assert result["skills"][0]["name"] == "knowledge-brain"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # skill_view
@@ -724,15 +514,10 @@ class TestSkillsList:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSkillView:
-
     def test_view_existing_skill(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "my-skill")
 
             raw = skill_view("my-skill")
@@ -745,37 +530,22 @@ class TestSkillView:
 
         assert "Step 1" in result["content"]
 
-
-
     def test_skill_view_applies_template_vars(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch(
-
                 "agent.skill_preprocessing.load_skills_config",
-
                 return_value={"template_vars": True, "inline_shell": False},
-
             ),
-
         ):
-
             skill_dir = _make_skill(
-
                 tmp_path,
-
                 "templated",
-
                 body="Run ${CLAWK_SKILL_DIR}/scripts/do.sh in ${CLAWK_SESSION_ID}",
-
             )
 
             raw = skill_view("templated", task_id="session-123")
-
-
 
         result = json.loads(raw)
 
@@ -785,45 +555,26 @@ class TestSkillView:
 
         assert "${CLAWK_SKILL_DIR}" not in result["content"]
 
-
-
     def test_skill_view_applies_inline_shell_when_enabled(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch(
-
                 "agent.skill_preprocessing.load_skills_config",
-
                 return_value={
-
                     "template_vars": True,
-
                     "inline_shell": True,
-
                     "inline_shell_timeout": 5,
-
                 },
-
             ),
-
         ):
-
             _make_skill(
-
                 tmp_path,
-
                 "dynamic",
-
                 body="Current date: !`printf 2026-04-24`",
-
             )
 
             raw = skill_view("dynamic")
-
-
 
         result = json.loads(raw)
 
@@ -833,37 +584,22 @@ class TestSkillView:
 
         assert "!`printf 2026-04-24`" not in result["content"]
 
-
-
     def test_skill_view_leaves_inline_shell_literal_when_disabled(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch(
-
                 "agent.skill_preprocessing.load_skills_config",
-
                 return_value={"template_vars": True, "inline_shell": False},
-
             ),
-
         ):
-
             _make_skill(
-
                 tmp_path,
-
                 "static",
-
                 body="Current date: !`printf SHOULD_NOT_RUN`",
-
             )
 
             raw = skill_view("static")
-
-
 
         result = json.loads(raw)
 
@@ -873,12 +609,9 @@ class TestSkillView:
 
         assert "Current date: SHOULD_NOT_RUN" not in result["content"]
 
-
-
     def test_view_nonexistent_skill(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "other-skill")
 
             raw = skill_view("nonexistent")
@@ -891,12 +624,9 @@ class TestSkillView:
 
         assert "available_skills" in result
 
-
-
     def test_view_reference_file(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skill_dir = _make_skill(tmp_path, "my-skill")
 
             refs_dir = skill_dir / "references"
@@ -913,12 +643,9 @@ class TestSkillView:
 
         assert "Endpoint info" in result["content"]
 
-
-
     def test_view_nonexistent_file(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "my-skill")
 
             raw = skill_view("my-skill", file_path="references/nope.md")
@@ -927,12 +654,9 @@ class TestSkillView:
 
         assert result["success"] is False
 
-
-
     def test_view_shows_linked_files(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             skill_dir = _make_skill(tmp_path, "my-skill")
 
             refs_dir = skill_dir / "references"
@@ -949,20 +673,13 @@ class TestSkillView:
 
         assert "references" in result["linked_files"]
 
-
-
     def test_view_tags_from_metadata(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "tagged",
-
                 frontmatter_extra="metadata:\n  clawk:\n    tags: [fine-tuning, llm]\n",
-
             )
 
             raw = skill_view("tagged")
@@ -973,38 +690,25 @@ class TestSkillView:
 
         assert "llm" in result["tags"]
 
-
-
     def test_view_nonexistent_skills_dir(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path / "nope"):
-
             raw = skill_view("anything")
 
         result = json.loads(raw)
 
         assert result["success"] is False
 
-
-
     def test_view_disabled_skill_blocked(self, tmp_path):
-
         """Disabled skills should not be viewable via skill_view."""
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch(
-
                 "tools.skills_tool._is_skill_disabled",
-
                 return_value=True,
-
             ),
-
         ):
-
             _make_skill(tmp_path, "hidden-skill")
 
             raw = skill_view("hidden-skill")
@@ -1015,26 +719,16 @@ class TestSkillView:
 
         assert "disabled" in result["error"].lower()
 
-
-
     def test_view_enabled_skill_allowed(self, tmp_path):
-
         """Non-disabled skills should be viewable normally."""
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch(
-
                 "tools.skills_tool._is_skill_disabled",
-
                 return_value=False,
-
             ),
-
         ):
-
             _make_skill(tmp_path, "active-skill")
 
             raw = skill_view("active-skill")
@@ -1042,8 +736,6 @@ class TestSkillView:
         result = json.loads(raw)
 
         assert result["success"] is True
-
-
 
     def test_view_finds_skill_in_symlinked_category_dir(self, tmp_path):
 
@@ -1053,19 +745,12 @@ class TestSkillView:
 
         skills_root.mkdir()
 
-
-
         external_category = _symlink_category(skills_root, external_root, "linked")
 
         _make_skill(external_category.parent, "knowledge-brain", category="linked")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", skills_root):
-
             raw = skill_view("knowledge-brain")
-
-
 
         result = json.loads(raw)
 
@@ -1073,121 +758,71 @@ class TestSkillView:
 
         assert result["name"] == "knowledge-brain"
 
-
-
     def test_not_found_hint_uses_same_order_as_skills_list(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "zeta", category="z-cat")
 
             _make_skill(tmp_path, "alpha", category="a-cat")
 
             _make_skill(tmp_path, "beta", category="a-cat")
 
-
-
             list_result = json.loads(skills_list())
 
             view_result = json.loads(skill_view("missing-skill"))
 
-
-
         assert view_result["success"] is False
 
         assert view_result["available_skills"] == [
-
             skill["name"] for skill in list_result["skills"]
-
         ]
 
 
-
-
-
 class TestSkillViewSecureSetupOnLoad:
-
     def test_requests_missing_required_env_and_continues(self, tmp_path, monkeypatch):
 
         monkeypatch.delenv("TENOR_API_KEY", raising=False)
 
         calls = []
 
-
-
         def fake_secret_callback(var_name, prompt, metadata=None):
 
-            calls.append(
-
-                {
-
-                    "var_name": var_name,
-
-                    "prompt": prompt,
-
-                    "metadata": metadata,
-
-                }
-
-            )
+            calls.append({
+                "var_name": var_name,
+                "prompt": prompt,
+                "metadata": metadata,
+            })
 
             os.environ[var_name] = "stored-in-test"
 
             return {
-
                 "success": True,
-
                 "stored_as": var_name,
-
                 "validated": False,
-
                 "skipped": False,
-
             }
 
-
-
         monkeypatch.setattr(
-
             skills_tool_module,
-
             "_secret_capture_callback",
-
             fake_secret_callback,
-
             raising=False,
-
         )
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "gif-search",
-
                 frontmatter_extra=(
-
                     "required_environment_variables:\n"
-
                     "  - name: TENOR_API_KEY\n"
-
                     "    prompt: Tenor API key\n"
-
                     "    help: Get a key from https://developers.google.com/tenor\n"
-
                     "    required_for: full functionality\n"
-
                 ),
-
             )
 
             raw = skill_view("gif-search")
-
-
 
         result = json.loads(raw)
 
@@ -1196,92 +831,53 @@ class TestSkillViewSecureSetupOnLoad:
         assert result["name"] == "gif-search"
 
         assert calls == [
-
             {
-
                 "var_name": "TENOR_API_KEY",
-
                 "prompt": "Tenor API key",
-
                 "metadata": {
-
                     "skill_name": "gif-search",
-
                     "help": "Get a key from https://developers.google.com/tenor",
-
                     "required_for": "full functionality",
-
                 },
-
             }
-
         ]
 
         assert result["required_environment_variables"][0]["name"] == "TENOR_API_KEY"
 
         assert result["setup_skipped"] is False
 
-
-
     def test_allows_skipping_secure_setup_and_still_loads(self, tmp_path, monkeypatch):
 
         monkeypatch.delenv("TENOR_API_KEY", raising=False)
 
-
-
         def fake_secret_callback(var_name, prompt, metadata=None):
 
             return {
-
                 "success": True,
-
                 "stored_as": var_name,
-
                 "validated": False,
-
                 "skipped": True,
-
             }
 
-
-
         monkeypatch.setattr(
-
             skills_tool_module,
-
             "_secret_capture_callback",
-
             fake_secret_callback,
-
             raising=False,
-
         )
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "gif-search",
-
                 frontmatter_extra=(
-
                     "required_environment_variables:\n"
-
                     "  - name: TENOR_API_KEY\n"
-
                     "    prompt: Tenor API key\n"
-
                 ),
-
             )
 
             raw = skill_view("gif-search")
-
-
 
         result = json.loads(raw)
 
@@ -1292,7 +888,6 @@ class TestSkillViewSecureSetupOnLoad:
         assert result["content"].startswith("---")
 
 
-
 # ---------------------------------------------------------------------------
 
 # skill_matches_platform
@@ -1300,101 +895,69 @@ class TestSkillViewSecureSetupOnLoad:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSkillMatchesPlatform:
-
     """Tests for the platforms frontmatter field filtering."""
 
-
-
     def test_no_platforms_field_matches_everything(self):
-
         """Skills without a platforms field should load on any OS."""
 
         assert skill_matches_platform({}) is True
 
         assert skill_matches_platform({"name": "foo"}) is True
 
-
-
     def test_empty_platforms_matches_everything(self):
-
         """Empty platforms list should load on any OS."""
 
         assert skill_matches_platform({"platforms": []}) is True
 
         assert skill_matches_platform({"platforms": None}) is True
 
-
-
     def test_macos_on_darwin(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "darwin"
 
             assert skill_matches_platform({"platforms": ["macos"]}) is True
 
-
-
     def test_macos_on_linux(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "linux"
 
             assert skill_matches_platform({"platforms": ["macos"]}) is False
 
-
-
     def test_linux_on_linux(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "linux"
 
             assert skill_matches_platform({"platforms": ["linux"]}) is True
 
-
-
     def test_linux_on_darwin(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "darwin"
 
             assert skill_matches_platform({"platforms": ["linux"]}) is False
 
-
-
     def test_windows_on_win32(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "win32"
 
             assert skill_matches_platform({"platforms": ["windows"]}) is True
 
-
-
     def test_windows_on_linux(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "linux"
 
             assert skill_matches_platform({"platforms": ["windows"]}) is False
 
-
-
     def test_multi_platform_match(self):
-
         """Skills listing multiple platforms should match any of them."""
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "darwin"
 
             assert skill_matches_platform({"platforms": ["macos", "linux"]}) is True
@@ -1407,14 +970,10 @@ class TestSkillMatchesPlatform:
 
             assert skill_matches_platform({"platforms": ["macos", "linux"]}) is False
 
-
-
     def test_string_instead_of_list(self):
-
         """A single string value should be treated as a one-element list."""
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "darwin"
 
             assert skill_matches_platform({"platforms": "macos"}) is True
@@ -1423,30 +982,21 @@ class TestSkillMatchesPlatform:
 
             assert skill_matches_platform({"platforms": "macos"}) is False
 
-
-
     def test_case_insensitive(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "darwin"
 
             assert skill_matches_platform({"platforms": ["MacOS"]}) is True
 
             assert skill_matches_platform({"platforms": ["MACOS"]}) is True
 
-
-
     def test_unknown_platform_no_match(self):
 
         with patch("agent.skill_utils.sys") as mock_sys:
-
             mock_sys.platform = "linux"
 
             assert skill_matches_platform({"platforms": ["freebsd"]}) is False
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1456,25 +1006,15 @@ class TestSkillMatchesPlatform:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestFindAllSkillsPlatformFiltering:
-
     """Test that _find_all_skills respects the platforms field."""
-
-
 
     def test_excludes_incompatible_platform(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch("agent.skill_utils.sys") as mock_sys,
-
         ):
-
             mock_sys.platform = "linux"
 
             _make_skill(tmp_path, "universal-skill")
@@ -1489,18 +1029,12 @@ class TestFindAllSkillsPlatformFiltering:
 
         assert "mac-only" not in names
 
-
-
     def test_includes_matching_platform(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch("agent.skill_utils.sys") as mock_sys,
-
         ):
-
             mock_sys.platform = "darwin"
 
             _make_skill(tmp_path, "mac-only", frontmatter_extra="platforms: [macos]\n")
@@ -1511,20 +1045,13 @@ class TestFindAllSkillsPlatformFiltering:
 
         assert "mac-only" in names
 
-
-
     def test_no_platforms_always_included(self, tmp_path):
-
         """Skills without platforms field should appear on any platform."""
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch("agent.skill_utils.sys") as mock_sys,
-
         ):
-
             mock_sys.platform = "win32"
 
             _make_skill(tmp_path, "generic-skill")
@@ -1535,22 +1062,14 @@ class TestFindAllSkillsPlatformFiltering:
 
         assert skills[0]["name"] == "generic-skill"
 
-
-
     def test_multi_platform_skill(self, tmp_path):
 
         with (
-
             patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-
             patch("agent.skill_utils.sys") as mock_sys,
-
         ):
-
             _make_skill(
-
                 tmp_path, "cross-plat", frontmatter_extra="platforms: [macos, linux]\n"
-
             )
 
             mock_sys.platform = "darwin"
@@ -1572,9 +1091,6 @@ class TestFindAllSkillsPlatformFiltering:
         assert len(skills_win) == 0
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _find_all_skills
@@ -1582,25 +1098,16 @@ class TestFindAllSkillsPlatformFiltering:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestFindAllSkillsSecureSetup:
-
     def test_skills_with_missing_env_vars_remain_listed(self, tmp_path, monkeypatch):
 
         monkeypatch.delenv("NONEXISTENT_API_KEY_XYZ", raising=False)
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "needs-key",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [NONEXISTENT_API_KEY_XYZ]\n",
-
             )
 
             skills = _find_all_skills()
@@ -1613,26 +1120,17 @@ class TestFindAllSkillsSecureSetup:
 
         assert "missing_prerequisites" not in skills[0]
 
-
-
     def test_skills_with_met_prereqs_have_same_listing_shape(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.setenv("MY_PRESENT_KEY", "val")
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "has-key",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [MY_PRESENT_KEY]\n",
-
             )
 
             skills = _find_all_skills()
@@ -1643,12 +1141,9 @@ class TestFindAllSkillsSecureSetup:
 
         assert "readiness_status" not in skills[0]
 
-
-
     def test_skills_without_prereqs_have_same_listing_shape(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "simple-skill")
 
             skills = _find_all_skills()
@@ -1659,72 +1154,44 @@ class TestFindAllSkillsSecureSetup:
 
         assert "readiness_status" not in skills[0]
 
-
-
     def test_skill_listing_does_not_probe_backend_for_env_vars(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.setenv("TERMINAL_ENV", "docker")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "skill-a",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [A_KEY]\n",
-
             )
 
             _make_skill(
-
                 tmp_path,
-
                 "skill-b",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [B_KEY]\n",
-
             )
 
             skills = _find_all_skills()
-
-
 
         assert len(skills) == 2
 
         assert {skill["name"] for skill in skills} == {"skill-a", "skill-b"}
 
 
-
-
-
 class TestSkillViewPrerequisites:
-
     def test_legacy_prerequisites_expose_required_env_setup_metadata(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.delenv("MISSING_KEY_XYZ", raising=False)
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "gated-skill",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [MISSING_KEY_XYZ]\n",
-
             )
 
             raw = skill_view("gated-skill")
@@ -1738,33 +1205,21 @@ class TestSkillViewPrerequisites:
         assert result["missing_required_environment_variables"] == ["MISSING_KEY_XYZ"]
 
         assert result["required_environment_variables"] == [
-
             {
-
                 "name": "MISSING_KEY_XYZ",
-
                 "prompt": "Enter value for MISSING_KEY_XYZ",
-
             }
-
         ]
-
-
 
     def test_no_setup_needed_when_legacy_prereqs_are_met(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("PRESENT_KEY", "value")
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "ready-skill",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [PRESENT_KEY]\n",
-
             )
 
             raw = skill_view("ready-skill")
@@ -1777,41 +1232,26 @@ class TestSkillViewPrerequisites:
 
         assert result["missing_required_environment_variables"] == []
 
-
-
     def test_remote_backend_treats_persisted_env_as_available(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.setenv("TERMINAL_ENV", "docker")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "remote-ready",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [PERSISTED_REMOTE_KEY]\n",
-
             )
 
             from clawk_cli.config import save_env_value
-
-
 
             save_env_value("PERSISTED_REMOTE_KEY", "persisted-value")
 
             monkeypatch.delenv("PERSISTED_REMOTE_KEY", raising=False)
 
             raw = skill_view("remote-ready")
-
-
 
         result = json.loads(raw)
 
@@ -1823,12 +1263,9 @@ class TestSkillViewPrerequisites:
 
         assert result["readiness_status"] == "available"
 
-
-
     def test_no_setup_metadata_when_no_required_envs(self, tmp_path):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "plain-skill")
 
             raw = skill_view("plain-skill")
@@ -1841,28 +1278,17 @@ class TestSkillViewPrerequisites:
 
         assert result["required_environment_variables"] == []
 
-
-
     def test_skill_view_treats_backend_only_env_as_setup_needed(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.setenv("TERMINAL_ENV", "docker")
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "backend-ready",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [BACKEND_ONLY_KEY]\n",
-
             )
 
             raw = skill_view("backend-ready")
@@ -1875,31 +1301,20 @@ class TestSkillViewPrerequisites:
 
         assert result["missing_required_environment_variables"] == ["BACKEND_ONLY_KEY"]
 
-
-
     def test_local_env_missing_keeps_setup_needed(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("TERMINAL_ENV", "local")
 
         monkeypatch.delenv("SHELL_ONLY_KEY", raising=False)
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "shell-ready",
-
                 frontmatter_extra="prerequisites:\n  env_vars: [SHELL_ONLY_KEY]\n",
-
             )
 
             raw = skill_view("shell-ready")
-
-
 
         result = json.loads(raw)
 
@@ -1911,20 +1326,12 @@ class TestSkillViewPrerequisites:
 
         assert result["readiness_status"] == "setup_needed"
 
-
-
     @pytest.mark.parametrize(
-
         "backend",
-
         ["ssh", "daytona", "docker", "singularity", "modal"],
-
     )
-
     def test_remote_backend_becomes_available_after_local_secret_capture(
-
         self, tmp_path, monkeypatch, backend
-
     ):
 
         monkeypatch.setenv("TERMINAL_ENV", backend)
@@ -1933,8 +1340,6 @@ class TestSkillViewPrerequisites:
 
         calls = []
 
-
-
         def fake_secret_callback(var_name, prompt, metadata=None):
 
             calls.append((var_name, prompt, metadata))
@@ -1942,56 +1347,31 @@ class TestSkillViewPrerequisites:
             os.environ[var_name] = "captured-locally"
 
             return {
-
                 "success": True,
-
                 "stored_as": var_name,
-
                 "validated": False,
-
                 "skipped": False,
-
             }
 
-
-
         monkeypatch.setattr(
-
             skills_tool_module,
-
             "_secret_capture_callback",
-
             fake_secret_callback,
-
             raising=False,
-
         )
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "gif-search",
-
                 frontmatter_extra=(
-
                     "required_environment_variables:\n"
-
                     "  - name: TENOR_API_KEY\n"
-
                     "    prompt: Tenor API key\n"
-
                 ),
-
             )
 
             raw = skill_view("gif-search")
-
-
 
         result = json.loads(raw)
 
@@ -2007,39 +1387,27 @@ class TestSkillViewPrerequisites:
 
         assert "setup_note" not in result
 
-
-
     def test_skill_view_surfaces_skill_read_errors(self, tmp_path, monkeypatch):
 
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(tmp_path, "broken-skill")
 
             skill_md = tmp_path / "broken-skill" / "SKILL.md"
 
             original_read_text = Path.read_text
 
-
-
             def fake_read_text(path_obj, *args, **kwargs):
 
                 if path_obj == skill_md:
-
                     raise UnicodeDecodeError(
-
                         "utf-8", b"\xff", 0, 1, "invalid start byte"
-
                     )
 
                 return original_read_text(path_obj, *args, **kwargs)
 
-
-
             monkeypatch.setattr(Path, "read_text", fake_read_text)
 
             raw = skill_view("broken-skill")
-
-
 
         result = json.loads(raw)
 
@@ -2047,14 +1415,11 @@ class TestSkillViewPrerequisites:
 
         assert "Failed to read skill 'broken-skill'" in result["error"]
 
-
-
     def test_legacy_flat_md_skill_preserves_frontmatter_metadata(self, tmp_path):
 
         flat_skill = tmp_path / "legacy-skill.md"
 
         flat_skill.write_text(
-
             """\
 ---
 
@@ -2085,18 +1450,11 @@ required_environment_variables:
 Do the legacy thing.
 
 """,
-
             encoding="utf-8",
-
         )
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             raw = skill_view("legacy-skill")
-
-
 
         result = json.loads(raw)
 
@@ -2109,90 +1467,53 @@ Do the legacy thing.
         assert result["tags"] == ["legacy", "flat"]
 
         assert result["required_environment_variables"] == [
-
             {"name": "LEGACY_KEY", "prompt": "Legacy key"}
-
         ]
 
-
-
     def test_successful_secret_capture_reloads_empty_env_placeholder(
-
         self, tmp_path, monkeypatch
-
     ):
 
         monkeypatch.setenv("TERMINAL_ENV", "local")
 
         monkeypatch.delenv("TENOR_API_KEY", raising=False)
 
-
-
         def fake_secret_callback(var_name, prompt, metadata=None):
 
             from clawk_cli.config import save_env_value
 
-
-
             save_env_value(var_name, "captured-value")
 
             return {
-
                 "success": True,
-
                 "stored_as": var_name,
-
                 "validated": False,
-
                 "skipped": False,
-
             }
 
-
-
         monkeypatch.setattr(
-
             skills_tool_module,
-
             "_secret_capture_callback",
-
             fake_secret_callback,
-
             raising=False,
-
         )
 
-
-
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
-
             _make_skill(
-
                 tmp_path,
-
                 "gif-search",
-
                 frontmatter_extra=(
-
                     "required_environment_variables:\n"
-
                     "  - name: TENOR_API_KEY\n"
-
                     "    prompt: Tenor API key\n"
-
                 ),
-
             )
 
             from clawk_cli.config import save_env_value
 
-
-
             save_env_value("TENOR_API_KEY", "")
 
             raw = skill_view("gif-search")
-
-
 
         result = json.loads(raw)
 
@@ -2205,11 +1526,7 @@ Do the legacy thing.
         assert result["readiness_status"] == "available"
 
 
-
-
-
 class TestSkillViewCollisionDetection:
-
     """Regression tests for skill_view name collision handling.
 
 
@@ -2240,30 +1557,18 @@ class TestSkillViewCollisionDetection:
 
     """
 
-
-
     def _patch_dirs(self, local_dir, external_dirs):
-
         """Patch SKILLS_DIR (module-level) and get_external_skills_dirs at source."""
 
         return (
-
             patch("tools.skills_tool.SKILLS_DIR", local_dir),
-
             patch(
-
                 "agent.skill_utils.get_external_skills_dirs",
-
                 return_value=list(external_dirs),
-
             ),
-
         )
 
-
-
     def test_nested_local_collides_with_top_level_external(self, tmp_path):
-
         """The original bug scenario: nested local + top-level external,
 
         same name. Now refuses with both paths surfaced."""
@@ -2276,31 +1581,19 @@ class TestSkillViewCollisionDetection:
 
         external_dir.mkdir()
 
-
-
         _make_skill(
-
             local_dir,
-
             "explore-codebase",
-
             category="foundations/runtime",
-
             body="LOCAL VERSION",
-
         )
 
         _make_skill(external_dir, "explore-codebase", body="EXTERNAL VERSION")
 
-
-
         p1, p2 = self._patch_dirs(local_dir, [external_dir])
 
         with p1, p2:
-
             raw = skill_view("explore-codebase")
-
-
 
         result = json.loads(raw)
 
@@ -2320,10 +1613,7 @@ class TestSkillViewCollisionDetection:
 
         assert "hint" in result
 
-
-
     def test_top_level_local_collides_with_external(self, tmp_path):
-
         """Top-level local + top-level external with the same name also
 
         refuses — same-name shadowing is ambiguous regardless of nesting."""
@@ -2336,21 +1626,14 @@ class TestSkillViewCollisionDetection:
 
         external_dir.mkdir()
 
-
-
         _make_skill(local_dir, "shared-name", body="LOCAL VERSION")
 
         _make_skill(external_dir, "shared-name", body="EXTERNAL VERSION")
 
-
-
         p1, p2 = self._patch_dirs(local_dir, [external_dir])
 
         with p1, p2:
-
             raw = skill_view("shared-name")
-
-
 
         result = json.loads(raw)
 
@@ -2360,10 +1643,7 @@ class TestSkillViewCollisionDetection:
 
         assert len(result["matches"]) == 2
 
-
-
     def test_collision_resolvable_via_categorized_path(self, tmp_path):
-
         """User can recover from a collision by passing the full
 
         categorized path — the bare name is ambiguous, the path is not."""
@@ -2376,31 +1656,19 @@ class TestSkillViewCollisionDetection:
 
         external_dir.mkdir()
 
-
-
         _make_skill(
-
             local_dir,
-
             "explore-codebase",
-
             category="foundations/runtime",
-
             body="LOCAL VERSION",
-
         )
 
         _make_skill(external_dir, "explore-codebase", body="EXTERNAL VERSION")
 
-
-
         p1, p2 = self._patch_dirs(local_dir, [external_dir])
 
         with p1, p2:
-
             raw = skill_view("foundations/runtime/explore-codebase")
-
-
 
         result = json.loads(raw)
 
@@ -2408,10 +1676,7 @@ class TestSkillViewCollisionDetection:
 
         assert "LOCAL VERSION" in result["content"]
 
-
-
     def test_external_skill_resolves_when_no_collision(self, tmp_path):
-
         """External-only skills still resolve normally when there's no
 
         local skill of the same name."""
@@ -2424,19 +1689,12 @@ class TestSkillViewCollisionDetection:
 
         external_dir.mkdir()
 
-
-
         _make_skill(external_dir, "external-only", body="EXTERNAL BODY")
-
-
 
         p1, p2 = self._patch_dirs(local_dir, [external_dir])
 
         with p1, p2:
-
             raw = skill_view("external-only")
-
-
 
         result = json.loads(raw)
 
@@ -2444,10 +1702,7 @@ class TestSkillViewCollisionDetection:
 
         assert "EXTERNAL BODY" in result["content"]
 
-
-
     def test_two_externals_same_name_also_refuse(self, tmp_path):
-
         """Collision detection is symmetric — two external dirs with
 
         same-name skills also trigger the refusal."""
@@ -2464,21 +1719,14 @@ class TestSkillViewCollisionDetection:
 
         ext_b.mkdir()
 
-
-
         _make_skill(ext_a, "pr", body="EXT_A VERSION")
 
         _make_skill(ext_b, "pr", body="EXT_B VERSION")
 
-
-
         p1, p2 = self._patch_dirs(local_dir, [ext_a, ext_b])
 
         with p1, p2:
-
             raw = skill_view("pr")
-
-
 
         result = json.loads(raw)
 
@@ -2488,10 +1736,7 @@ class TestSkillViewCollisionDetection:
 
         assert len(result["matches"]) == 2
 
-
-
     def test_local_only_skill_loads_normally(self, tmp_path):
-
         """Sanity: a single local skill (no external collision) loads
 
         without any error."""
@@ -2504,33 +1749,20 @@ class TestSkillViewCollisionDetection:
 
         external_dir.mkdir()
 
-
-
         _make_skill(
-
             local_dir,
-
             "my-skill",
-
             category="foundations/runtime",
-
             body="LOCAL BODY",
-
         )
-
-
 
         p1, p2 = self._patch_dirs(local_dir, [external_dir])
 
         with p1, p2:
-
             raw = skill_view("my-skill")
-
-
 
         result = json.loads(raw)
 
         assert result["success"] is True
 
         assert "LOCAL BODY" in result["content"]
-

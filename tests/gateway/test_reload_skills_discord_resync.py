@@ -20,6 +20,7 @@ No ``tree.sync()`` is required because Discord fetches autocomplete
 options dynamically on every keystroke — we only need to rebind the
 data the live callbacks already read from.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -29,6 +30,7 @@ def _make_adapter():
     """Construct a DiscordAdapter without going through __init__ / token checks."""
     from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.platforms.base import Platform
+
     adapter = object.__new__(DiscordAdapter)
     adapter.config = MagicMock()
     adapter.config.extra = {}
@@ -63,9 +65,11 @@ class TestRefreshSkillGroup:
         # User adds new-skill to disk and removes old-skill.
         def fake_collector(*, reserved_names):
             return (
-                {"creative": [("new-skill", "Fresh skill", "/new-skill")]},  # categories
+                {
+                    "creative": [("new-skill", "Fresh skill", "/new-skill")]
+                },  # categories
                 [],  # uncategorized
-                0,   # hidden
+                0,  # hidden
             )
 
         monkeypatch.setattr(
@@ -109,9 +113,7 @@ class TestRefreshSkillGroup:
         names = [n for n, _d, _k in adapter._skill_entries]
         assert names == sorted(names) == ["alpha", "zebra"]
 
-    def test_refresh_handles_collector_exception_gracefully(
-        self, monkeypatch
-    ) -> None:
+    def test_refresh_handles_collector_exception_gracefully(self, monkeypatch) -> None:
         """A broken collector must not take down /reload-skills."""
         adapter = _make_adapter()
         adapter._skill_entries = [("keep", "kept", "/keep")]
@@ -151,9 +153,7 @@ class TestRegisterSkillGroupUsesInstanceState:
     ``_refresh_skill_catalog_state`` runs before any decorator evaluation.
     """
 
-    def test_refresh_catalog_state_populates_instance_attrs(
-        self, monkeypatch
-    ) -> None:
+    def test_refresh_catalog_state_populates_instance_attrs(self, monkeypatch) -> None:
         adapter = _make_adapter()
         adapter._skill_group_reserved_names = set()
 
@@ -163,6 +163,7 @@ class TestRegisterSkillGroupUsesInstanceState:
                 [],
                 0,
             )
+
         monkeypatch.setattr(
             "clawk_cli.commands.discord_skill_commands_by_category",
             fake_collector,
@@ -199,6 +200,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
         # Import without constructing a real runner — test the method
         # directly against an ``object.__new__`` instance.
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
 
         sync_refresh = MagicMock(return_value=(5, 0))
@@ -206,6 +208,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         class AsyncAdapter:
             name = "async-platform"
+
             async def refresh_skill_group(self):
                 async_called["flag"] = True
                 return (3, 0)
@@ -226,9 +229,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         # Mock reload_skills itself so no disk scan runs.
         fake_result = {"added": [], "removed": [], "total": 7}
-        with patch(
-            "agent.skill_commands.reload_skills", return_value=fake_result
-        ):
+        with patch("agent.skill_commands.reload_skills", return_value=fake_result):
             event = MagicMock()
             event.source = MagicMock()
             # _session_key_for_source may be called — make it safe.

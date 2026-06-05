@@ -19,7 +19,9 @@ from clawk_cli.runtime_provider import _detect_api_mode_for_url
 
 class TestCodexResponsesDetection:
     def test_openai_api_returns_codex_responses(self):
-        assert _detect_api_mode_for_url("https://api.openai.com/v1") == "codex_responses"
+        assert (
+            _detect_api_mode_for_url("https://api.openai.com/v1") == "codex_responses"
+        )
 
     def test_xai_api_returns_codex_responses(self):
         assert _detect_api_mode_for_url("https://api.x.ai/v1") == "codex_responses"
@@ -32,7 +34,10 @@ class TestCodexResponsesDetection:
         assert _detect_api_mode_for_url("https://api.openai.com.example/v1") is None
 
     def test_openai_path_segment_does_not_match(self):
-        assert _detect_api_mode_for_url("https://proxy.example.test/api.openai.com/v1") is None
+        assert (
+            _detect_api_mode_for_url("https://proxy.example.test/api.openai.com/v1")
+            is None
+        )
 
     def test_xai_host_suffix_does_not_match(self):
         assert _detect_api_mode_for_url("https://api.x.ai.example/v1") is None
@@ -42,22 +47,36 @@ class TestAnthropicMessagesDetection:
     """Third-party gateways that speak the Anthropic protocol under /anthropic."""
 
     def test_minimax_anthropic_endpoint(self):
-        assert _detect_api_mode_for_url("https://api.minimax.io/anthropic") == "anthropic_messages"
+        assert (
+            _detect_api_mode_for_url("https://api.minimax.io/anthropic")
+            == "anthropic_messages"
+        )
 
     def test_minimax_cn_anthropic_endpoint(self):
-        assert _detect_api_mode_for_url("https://api.minimaxi.com/anthropic") == "anthropic_messages"
+        assert (
+            _detect_api_mode_for_url("https://api.minimaxi.com/anthropic")
+            == "anthropic_messages"
+        )
 
     def test_dashscope_anthropic_endpoint(self):
         assert (
-            _detect_api_mode_for_url("https://dashscope.aliyuncs.com/api/v2/apps/anthropic")
+            _detect_api_mode_for_url(
+                "https://dashscope.aliyuncs.com/api/v2/apps/anthropic"
+            )
             == "anthropic_messages"
         )
 
     def test_trailing_slash_tolerated(self):
-        assert _detect_api_mode_for_url("https://api.minimax.io/anthropic/") == "anthropic_messages"
+        assert (
+            _detect_api_mode_for_url("https://api.minimax.io/anthropic/")
+            == "anthropic_messages"
+        )
 
     def test_uppercase_path_tolerated(self):
-        assert _detect_api_mode_for_url("https://API.MINIMAX.IO/Anthropic") == "anthropic_messages"
+        assert (
+            _detect_api_mode_for_url("https://API.MINIMAX.IO/Anthropic")
+            == "anthropic_messages"
+        )
 
     def test_anthropic_in_middle_of_path_does_not_match(self):
         # The helper requires ``/anthropic`` as the path SUFFIX, not anywhere.

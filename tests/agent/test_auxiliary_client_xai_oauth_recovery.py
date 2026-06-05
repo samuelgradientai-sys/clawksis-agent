@@ -13,8 +13,10 @@ import pytest
 
 # ── _is_auth_error ──────────────────────────────────────────────────────────
 
+
 def _import_is_auth_error():
     from agent.auxiliary_client import _is_auth_error
+
     return _is_auth_error
 
 
@@ -37,9 +39,7 @@ class TestIsAuthErrorXaiOauth403:
 
     def test_xai_403_bad_credentials_without_status_code(self):
         """Fallback match when status_code attribute is missing."""
-        exc = Exception(
-            "Error code: 403 - unauthenticated:bad-credentials"
-        )
+        exc = Exception("Error code: 403 - unauthenticated:bad-credentials")
         # No status_code attribute — should still match via string pattern
         assert self.is_auth_error(exc) is True
 
@@ -86,8 +86,10 @@ class TestIsAuthErrorXaiOauth403:
 
 # ── _recoverable_pool_provider ──────────────────────────────────────────────
 
+
 def _import_recoverable_pool_provider():
     from agent.auxiliary_client import _recoverable_pool_provider
+
     return _recoverable_pool_provider
 
 
@@ -105,6 +107,7 @@ class TestRecoverablePoolProviderXaiOAuth:
 
     def test_api_x_ai_host_match(self):
         """api.x.ai base URL maps to xai-oauth pool."""
+
         class MockClient:
             base_url = "https://api.x.ai/v1/"
 
@@ -113,6 +116,7 @@ class TestRecoverablePoolProviderXaiOAuth:
 
     def test_auto_with_unknown_host_returns_none(self):
         """auto provider with unknown host returns None."""
+
         class MockClient:
             base_url = "https://unknown.example.com/v1/"
 
@@ -122,8 +126,10 @@ class TestRecoverablePoolProviderXaiOAuth:
 
 # ── _refresh_provider_credentials (structure check) ─────────────────────────
 
+
 def _import_refresh_provider_credentials():
     from agent.auxiliary_client import _refresh_provider_credentials
+
     return _refresh_provider_credentials
 
 

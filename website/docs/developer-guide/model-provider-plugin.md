@@ -35,29 +35,32 @@ The only required file is `__init__.py`. `plugin.yaml` is used by `clawk plugins
 
 ## Minimal example — a simple API-key provider
 
-```python
-# plugins/model-providers/acme-inference/__init__.py
-from providers import register_provider
-from providers.base import ProviderProfile
-
-acme = ProviderProfile(
-    name="acme-inference",
-    aliases=("acme",),
-    display_name="Acme Inference",
-    description="Acme — OpenAI-compatible direct API",
-    signup_url="https://acme.example.com/keys",
-    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
-    base_url="https://api.acme.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="acme-small-fast",
-    fallback_models=(
-        "acme-large-v3",
-        "acme-medium-v3",
-        "acme-small-fast",
-    ),
-)
-
-register_provider(acme)
+```python# plugins/model-providers/acme-inference/__init__.py
+
+from providers import register_provider
+
+from providers.base import ProviderProfile
+
+
+acme = ProviderProfile(
+    name="acme-inference",
+    aliases=("acme",),
+    display_name="Acme Inference",
+    description="Acme — OpenAI-compatible direct API",
+    signup_url="https://acme.example.com/keys",
+    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
+    base_url="https://api.acme.example.com/v1",
+    auth_type="api_key",
+    default_aux_model="acme-small-fast",
+    fallback_models=(
+        "acme-large-v3",
+        "acme-medium-v3",
+        "acme-small-fast",
+    ),
+)
+
+
+register_provider(acme)
 ```
 
 ```yaml
@@ -109,37 +112,53 @@ Full definition in `providers/base.py`. The most useful ones:
 
 Subclass `ProviderProfile` for non-trivial quirks:
 
-```python
-from typing import Any
-from providers.base import ProviderProfile
-
-class AcmeProfile(ProviderProfile):
-    def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Provider-specific message preprocessing. Runs after codex
-        sanitization, before developer-role swap. Default: pass-through."""
-        # Example: Qwen normalizes plain-text content to a list-of-parts
-        # array and injects cache_control; Kimi rewrites tool-call JSON
-        return messages
-
-    def build_extra_body(self, *, session_id=None, **context) -> dict:
-        """Provider-specific extra_body fields merged into the API call.
-        Context includes: session_id, provider_preferences, model, base_url,
-        reasoning_config. Default: empty dict."""
-        # Example: OpenRouter's provider-preferences block,
-        # Gemini's thinking_config translation.
-        return {}
-
-    def build_api_kwargs_extras(self, *, reasoning_config=None, **context):
-        """Returns (extra_body_additions, top_level_kwargs). Needed when some
-        fields go top-level (Kimi's reasoning_effort) and some go in extra_body
-        (OpenRouter's reasoning dict). Default: ({}, {})."""
-        return {}, {}
-
-    def fetch_models(self, *, api_key=None, timeout=8.0) -> list[str] | None:
-        """Live catalog fetch. Default hits {models_url or base_url}/models with
-        Bearer auth. Override for: custom auth (Anthropic), no REST endpoint
-        (Bedrock → None), or public/unauthenticated catalogs (OpenRouter)."""
-        return super().fetch_models(api_key=api_key, timeout=timeout)
+```pythonfrom typing import Any
+
+from providers.base import ProviderProfile
+
+
+class AcmeProfile(ProviderProfile):
+    def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Provider-specific message preprocessing. Runs after codex
+
+        sanitization, before developer-role swap. Default: pass-through."""
+
+        # Example: Qwen normalizes plain-text content to a list-of-parts
+
+        # array and injects cache_control; Kimi rewrites tool-call JSON
+
+        return messages
+
+    def build_extra_body(self, *, session_id=None, **context) -> dict:
+        """Provider-specific extra_body fields merged into the API call.
+
+        Context includes: session_id, provider_preferences, model, base_url,
+
+        reasoning_config. Default: empty dict."""
+
+        # Example: OpenRouter's provider-preferences block,
+
+        # Gemini's thinking_config translation.
+
+        return {}
+
+    def build_api_kwargs_extras(self, *, reasoning_config=None, **context):
+        """Returns (extra_body_additions, top_level_kwargs). Needed when some
+
+        fields go top-level (Kimi's reasoning_effort) and some go in extra_body
+
+        (OpenRouter's reasoning dict). Default: ({}, {})."""
+
+        return {}, {}
+
+    def fetch_models(self, *, api_key=None, timeout=8.0) -> list[str] | None:
+        """Live catalog fetch. Default hits {models_url or base_url}/models with
+
+        Bearer auth. Override for: custom auth (Anthropic), no REST endpoint
+
+        (Bedrock → None), or public/unauthenticated catalogs (OpenRouter)."""
+
+        return super().fetch_models(api_key=api_key, timeout=timeout)
 ```
 
 ## Hook reference examples
@@ -160,18 +179,21 @@ Look at these bundled plugins for idioms:
 
 Say you want to point `gmi` at your private staging endpoint for testing. Create `~/.clawksis/plugins/model-providers/gmi/__init__.py`:
 
-```python
-from providers import register_provider
-from providers.base import ProviderProfile
-
-register_provider(ProviderProfile(
-    name="gmi",
-    aliases=("gmi-cloud", "gmicloud"),
-    env_vars=("GMI_API_KEY",),
-    base_url="https://gmi-staging.internal.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="google/gemini-3.1-flash-lite-preview",
-))
+```pythonfrom providers import register_provider
+
+from providers.base import ProviderProfile
+
+
+register_provider(
+    ProviderProfile(
+        name="gmi",
+        aliases=("gmi-cloud", "gmicloud"),
+        env_vars=("GMI_API_KEY",),
+        base_url="https://gmi-staging.internal.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="google/gemini-3.1-flash-lite-preview",
+    )
+)
 ```
 
 Next session, `get_provider_profile("gmi").base_url` returns the staging URL. No repo patch, no rebuild. Because user plugins are discovered after bundled ones, the user `register_provider()` call wins.
@@ -213,10 +235,10 @@ clawk doctor
 
 For programmatic inspection:
 
-```python
-from providers import list_providers
-for p in list_providers():
-    print(p.name, p.base_url, p.api_mode)
+```pythonfrom providers import list_providers
+
+for p in list_providers():
+    print(p.name, p.base_url, p.api_mode)
 ```
 
 ## Testing your plugin

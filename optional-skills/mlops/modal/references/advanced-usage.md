@@ -10,6 +10,7 @@ import modal
 app = modal.App("multi-gpu-training")
 image = modal.Image.debian_slim().pip_install("torch", "transformers", "accelerate")
 
+
 @app.function(gpu="H100:4", image=image, timeout=7200)
 def train_multi_gpu():
     from accelerate import Accelerator
@@ -31,6 +32,7 @@ image = modal.Image.debian_slim().pip_install(
     "torch", "transformers", "deepspeed", "accelerate"
 )
 
+
 @app.function(gpu="A100:8", image=image, timeout=14400)
 def deepspeed_train(config: dict):
     from transformers import Trainer, TrainingArguments
@@ -40,7 +42,7 @@ def deepspeed_train(config: dict):
         deepspeed="ds_config.json",
         fp16=True,
         per_device_train_batch_size=4,
-        gradient_accumulation_steps=4
+        gradient_accumulation_steps=4,
     )
 
     trainer = Trainer(model=model, args=args, train_dataset=dataset)
@@ -57,6 +59,7 @@ For frameworks that re-execute the Python entrypoint (like PyTorch Lightning), u
 @app.function(gpu="H100:4")
 def train_with_subprocess():
     import subprocess
+
     subprocess.run(["python", "-m", "torch.distributed.launch", "train.py"])
 ```
 
@@ -92,9 +95,7 @@ image = modal.Image.debian_slim().pip_install(
 ### Using uv for faster installs
 
 ```python
-image = modal.Image.debian_slim().uv_pip_install(
-    "torch", "transformers", "accelerate"
-)
+image = modal.Image.debian_slim().uv_pip_install("torch", "transformers", "accelerate")
 ```
 
 ## Advanced Class Patterns
@@ -126,7 +127,7 @@ class InferenceService:
 @app.cls(
     gpu="A100",
     allow_concurrent_inputs=20,  # Handle 20 requests per container
-    container_idle_timeout=300
+    container_idle_timeout=300,
 )
 class BatchInference:
     @modal.enter()
@@ -150,6 +151,7 @@ async def fetch_data(url: str):
     async with aiohttp.ClientSession() as session:
         return await session.get(url)
 
+
 # Dynamic batching - good for GPU inference
 @app.function()
 @modal.batched(max_batch_size=32, wait_ms=100)
@@ -163,6 +165,7 @@ async def batch_embed(texts: list[str]) -> list[list[float]]:
 
 ```python
 volume = modal.Volume.from_name("my-volume", create_if_missing=True)
+
 
 @app.function(volumes={"/data": volume})
 def volume_operations():
@@ -184,11 +187,13 @@ def volume_operations():
 ```python
 shared_volume = modal.Volume.from_name("shared-data", create_if_missing=True)
 
+
 @app.function(volumes={"/shared": shared_volume})
 def writer():
     with open("/shared/data.txt", "w") as f:
         f.write("Hello from writer")
     shared_volume.commit()
+
 
 @app.function(volumes={"/shared": shared_volume})
 def reader():
@@ -202,9 +207,9 @@ def reader():
 ```python
 # Mount S3 bucket
 bucket = modal.CloudBucketMount(
-    bucket_name="my-bucket",
-    secret=modal.Secret.from_name("aws-credentials")
+    bucket_name="my-bucket", secret=modal.Secret.from_name("aws-credentials")
 )
+
 
 @app.function(volumes={"/s3": bucket})
 def process_s3_data():
@@ -221,13 +226,16 @@ def process_s3_data():
 def preprocess(data):
     return cleaned_data
 
+
 @app.function(gpu="T4")
 def inference(data):
     return predictions
 
+
 @app.function()
 def postprocess(predictions):
     return formatted_results
+
 
 @app.function()
 def pipeline(raw_data):
@@ -244,6 +252,7 @@ def pipeline(raw_data):
 def process_item(item):
     return expensive_computation(item)
 
+
 @app.function()
 def parallel_pipeline(items):
     # Fan out: process all items in parallel
@@ -257,6 +266,7 @@ def parallel_pipeline(items):
 @app.function()
 def process(x, y, z):
     return x + y + z
+
 
 @app.function()
 def orchestrate():
@@ -275,12 +285,14 @@ from fastapi import FastAPI, WebSocket
 app = modal.App("websocket-app")
 web_app = FastAPI()
 
+
 @web_app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
         await websocket.send_text(f"Processed: {data}")
+
 
 @app.function()
 @modal.asgi_app()
@@ -293,16 +305,17 @@ def ws_app():
 ```python
 from fastapi.responses import StreamingResponse
 
+
 @app.function(gpu="A100")
 def generate_stream(prompt: str):
     for token in model.generate_stream(prompt):
         yield token
 
+
 @web_app.get("/stream")
 async def stream_response(prompt: str):
     return StreamingResponse(
-        generate_stream.remote_gen(prompt),
-        media_type="text/event-stream"
+        generate_stream.remote_gen(prompt), media_type="text/event-stream"
     )
 ```
 
@@ -311,6 +324,7 @@ async def stream_response(prompt: str):
 ```python
 from fastapi import Depends, HTTPException, Header
 
+
 async def verify_token(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401)
@@ -318,6 +332,7 @@ async def verify_token(authorization: str = Header(None)):
     if not verify_jwt(token):
         raise HTTPException(status_code=403)
     return token
+
 
 @web_app.post("/predict")
 async def predict(data: dict, token: str = Depends(verify_token)):
@@ -333,6 +348,7 @@ async def predict(data: dict, token: str = Depends(verify_token)):
 @app.function(gpu="L40S")  # 48GB, best cost/perf for inference
 def inference():
     pass
+
 
 # For training: larger GPUs for throughput
 @app.function(gpu="A100-80GB")
@@ -356,6 +372,7 @@ def flexible_compute():
 def on_demand():
     pass
 
+
 # Keep containers warm for low latency (costs more)
 @app.function(gpu="A100", keep_warm=1)
 def always_ready():
@@ -369,6 +386,7 @@ def always_ready():
 @app.function(gpu="A100")
 def batch_process(items: list):
     return [process(item) for item in items]
+
 
 # Better than individual calls
 results = batch_process.remote(all_items)
@@ -385,21 +403,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @app.function()
 def structured_logging(request_id: str, data: dict):
-    logger.info(json.dumps({
-        "event": "inference_start",
-        "request_id": request_id,
-        "input_size": len(data)
-    }))
+    logger.info(
+        json.dumps({
+            "event": "inference_start",
+            "request_id": request_id,
+            "input_size": len(data),
+        })
+    )
 
     result = process(data)
 
-    logger.info(json.dumps({
-        "event": "inference_complete",
-        "request_id": request_id,
-        "output_size": len(result)
-    }))
+    logger.info(
+        json.dumps({
+            "event": "inference_complete",
+            "request_id": request_id,
+            "output_size": len(result),
+        })
+    )
 
     return result
 ```
@@ -457,7 +480,7 @@ def health():
     return {
         "status": "healthy",
         "model_loaded": hasattr(Model, "_model"),
-        "gpu_available": torch.cuda.is_available()
+        "gpu_available": torch.cuda.is_available(),
     }
 ```
 
@@ -468,11 +491,7 @@ def health():
 ```python
 @app.function()
 def run_sandbox():
-    sandbox = modal.Sandbox.create(
-        app=app,
-        image=image,
-        gpu="T4"
-    )
+    sandbox = modal.Sandbox.create(app=app, image=image, gpu="T4")
 
     # Execute code in sandbox
     result = sandbox.exec("python", "-c", "print('Hello from sandbox')")

@@ -13,9 +13,14 @@ from agent.context_compressor import ContextCompressor
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _tc(call_id: str) -> dict:
     """Create a minimal tool_call dict."""
-    return {"id": call_id, "type": "function", "function": {"name": "test", "arguments": "{}"}}
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": "test", "arguments": "{}"},
+    }
 
 
 def _tool_result(call_id: str, content: str = "result") -> dict:
@@ -25,7 +30,11 @@ def _tool_result(call_id: str, content: str = "result") -> dict:
 
 def _assistant_with_tools(*call_ids: str) -> dict:
     """Create an assistant message with tool_calls."""
-    return {"role": "assistant", "tool_calls": [_tc(cid) for cid in call_ids], "content": None}
+    return {
+        "role": "assistant",
+        "tool_calls": [_tc(cid) for cid in call_ids],
+        "content": None,
+    }
 
 
 def _make_compressor(**kwargs) -> ContextCompressor:
@@ -44,6 +53,7 @@ def _make_compressor(**kwargs) -> ContextCompressor:
 # ---------------------------------------------------------------------------
 # _align_boundary_backward tests
 # ---------------------------------------------------------------------------
+
 
 class TestAlignBoundaryBackward:
     """Test that compress-end boundary never splits a tool_call/result group."""
@@ -72,8 +82,8 @@ class TestAlignBoundaryBackward:
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "hi"},
             _assistant_with_tools("tc_1", "tc_2"),  # idx=3
-            _tool_result("tc_1"),                    # idx=4
-            _tool_result("tc_2"),                    # idx=5
+            _tool_result("tc_1"),  # idx=4
+            _tool_result("tc_2"),  # idx=5
             {"role": "user", "content": "next"},
         ]
         # Boundary at 4, messages[3] = assistant with tool_calls → pull back to 3
@@ -88,11 +98,11 @@ class TestAlignBoundaryBackward:
             {"role": "assistant", "content": "hi"},
             {"role": "user", "content": "do 5 things"},
             _assistant_with_tools("tc_A", "tc_B", "tc_C", "tc_D", "tc_E"),  # idx=4
-            _tool_result("tc_A", "result A"),    # idx=5
-            _tool_result("tc_B", "result B"),    # idx=6
-            _tool_result("tc_C", "result C"),    # idx=7
-            _tool_result("tc_D", "result D"),    # idx=8
-            _tool_result("tc_E", "result E"),    # idx=9
+            _tool_result("tc_A", "result A"),  # idx=5
+            _tool_result("tc_B", "result B"),  # idx=6
+            _tool_result("tc_C", "result C"),  # idx=7
+            _tool_result("tc_D", "result D"),  # idx=8
+            _tool_result("tc_E", "result E"),  # idx=9
             {"role": "user", "content": "ok"},
             {"role": "assistant", "content": "done"},
         ]
@@ -108,9 +118,9 @@ class TestAlignBoundaryBackward:
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "hi"},
             _assistant_with_tools("tc_1", "tc_2", "tc_3"),  # idx=3
-            _tool_result("tc_1"),    # idx=4
-            _tool_result("tc_2"),    # idx=5
-            _tool_result("tc_3"),    # idx=6
+            _tool_result("tc_1"),  # idx=4
+            _tool_result("tc_2"),  # idx=5
+            _tool_result("tc_3"),  # idx=6
             {"role": "user", "content": "next"},
         ]
         # Boundary at 7 — messages[6] is last tool result.
@@ -123,12 +133,12 @@ class TestAlignBoundaryBackward:
         messages = [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "hello"},
-            _assistant_with_tools("tc_1"),     # idx=2
-            _tool_result("tc_1"),              # idx=3
+            _assistant_with_tools("tc_1"),  # idx=2
+            _tool_result("tc_1"),  # idx=3
             {"role": "user", "content": "more"},
             _assistant_with_tools("tc_2", "tc_3"),  # idx=5
-            _tool_result("tc_2"),              # idx=6
-            _tool_result("tc_3"),              # idx=7
+            _tool_result("tc_2"),  # idx=6
+            _tool_result("tc_3"),  # idx=7
             {"role": "user", "content": "done"},
         ]
         # Boundary at 7 — messages[6] = tool result for tc_2 group
@@ -140,6 +150,7 @@ class TestAlignBoundaryBackward:
 # End-to-end: compression must not lose tool results
 # ---------------------------------------------------------------------------
 
+
 class TestCompressionToolResultPreservation:
     """Verify that compress() never silently drops tool results."""
 
@@ -148,21 +159,25 @@ class TestCompressionToolResultPreservation:
         comp = _make_compressor(protect_first_n=3, protect_last_n=4)
 
         messages = [
-            {"role": "system", "content": "You are helpful."},            # 0
-            {"role": "user", "content": "Hello"},                         # 1
-            {"role": "assistant", "content": "Hi there!"},                # 2  (end of head)
-            {"role": "user", "content": "Read 7 files for me"},           # 3
-            _assistant_with_tools("tc_A", "tc_B", "tc_C", "tc_D", "tc_E", "tc_F", "tc_G"),  # 4
-            _tool_result("tc_A", "content of file A"),                    # 5
-            _tool_result("tc_B", "content of file B"),                    # 6
-            _tool_result("tc_C", "content of file C"),                    # 7
-            _tool_result("tc_D", "content of file D"),                    # 8
-            _tool_result("tc_E", "content of file E"),                    # 9
-            _tool_result("tc_F", "content of file F"),                    # 10
-            _tool_result("tc_G", "CRITICAL DATA in file G"),              # 11 ← compress_end=15-4=11
-            {"role": "user", "content": "Now summarize them"},            # 12
-            {"role": "assistant", "content": "Here is the summary..."},   # 13
-            {"role": "user", "content": "Thanks"},                        # 14
+            {"role": "system", "content": "You are helpful."},  # 0
+            {"role": "user", "content": "Hello"},  # 1
+            {"role": "assistant", "content": "Hi there!"},  # 2  (end of head)
+            {"role": "user", "content": "Read 7 files for me"},  # 3
+            _assistant_with_tools(
+                "tc_A", "tc_B", "tc_C", "tc_D", "tc_E", "tc_F", "tc_G"
+            ),  # 4
+            _tool_result("tc_A", "content of file A"),  # 5
+            _tool_result("tc_B", "content of file B"),  # 6
+            _tool_result("tc_C", "content of file C"),  # 7
+            _tool_result("tc_D", "content of file D"),  # 8
+            _tool_result("tc_E", "content of file E"),  # 9
+            _tool_result("tc_F", "content of file F"),  # 10
+            _tool_result(
+                "tc_G", "CRITICAL DATA in file G"
+            ),  # 11 ← compress_end=15-4=11
+            {"role": "user", "content": "Now summarize them"},  # 12
+            {"role": "assistant", "content": "Here is the summary..."},  # 13
+            {"role": "user", "content": "Thanks"},  # 14
         ]
         # 15 messages. compress_end = 15 - 4 = 11 (before fix: splits tool group)
 
@@ -194,5 +209,9 @@ class TestCompressionToolResultPreservation:
         # Every assistant tool_call must have a real result (not a stub)
         for msg in result:
             if msg.get("role") == "tool":
-                assert msg["content"] != "[Result from earlier conversation — see context summary above]", \
+                assert (
+                    msg["content"]
+                    != "[Result from earlier conversation — see context summary above]"
+                ), (
                     f"Stub result found for {msg.get('tool_call_id')} — real result was lost"
+                )

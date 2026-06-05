@@ -20,6 +20,7 @@ from clawk_cli.logs import (
 # Timestamp parsing
 # ---------------------------------------------------------------------------
 
+
 class TestParseSince:
     def test_hours(self):
         cutoff = _parse_since("2h")
@@ -65,7 +66,9 @@ class TestExtractLevel:
         assert _extract_level("2026-01-01 00:00:00 INFO gateway.run: msg") == "INFO"
 
     def test_warning(self):
-        assert _extract_level("2026-01-01 00:00:00 WARNING tools.file: msg") == "WARNING"
+        assert (
+            _extract_level("2026-01-01 00:00:00 WARNING tools.file: msg") == "WARNING"
+        )
 
     def test_error(self):
         assert _extract_level("2026-01-01 00:00:00 ERROR run_agent: msg") == "ERROR"
@@ -80,6 +83,7 @@ class TestExtractLevel:
 # ---------------------------------------------------------------------------
 # Logger name extraction (new for component filtering)
 # ---------------------------------------------------------------------------
+
 
 class TestExtractLoggerName:
     def test_standard_line(self):
@@ -126,11 +130,14 @@ class TestLineMatchesComponent:
     def test_agent_with_multiple_prefixes(self):
         prefixes = ("agent", "run_agent", "model_tools")
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO agent.context_compressor: msg", prefixes)
+            "2026-04-11 10:23:45 INFO agent.context_compressor: msg", prefixes
+        )
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO run_agent: msg", prefixes)
+            "2026-04-11 10:23:45 INFO run_agent: msg", prefixes
+        )
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO model_tools: msg", prefixes)
+            "2026-04-11 10:23:45 INFO model_tools: msg", prefixes
+        )
 
     def test_no_match(self):
         line = "2026-04-11 10:23:45 INFO tools.browser: msg"
@@ -148,29 +155,34 @@ class TestLineMatchesComponent:
 # Combined filter
 # ---------------------------------------------------------------------------
 
+
 class TestMatchesFilters:
     def test_no_filters_passes_everything(self):
         assert _matches_filters("any line")
 
     def test_level_filter(self):
         assert _matches_filters(
-            "2026-01-01 00:00:00 WARNING x: msg", min_level="WARNING")
+            "2026-01-01 00:00:00 WARNING x: msg", min_level="WARNING"
+        )
         assert not _matches_filters(
-            "2026-01-01 00:00:00 INFO x: msg", min_level="WARNING")
+            "2026-01-01 00:00:00 INFO x: msg", min_level="WARNING"
+        )
 
     def test_session_filter(self):
         assert _matches_filters(
-            "2026-01-01 00:00:00 INFO [abc123] x: msg", session_filter="abc123")
+            "2026-01-01 00:00:00 INFO [abc123] x: msg", session_filter="abc123"
+        )
         assert not _matches_filters(
-            "2026-01-01 00:00:00 INFO [xyz789] x: msg", session_filter="abc123")
+            "2026-01-01 00:00:00 INFO [xyz789] x: msg", session_filter="abc123"
+        )
 
     def test_component_filter(self):
         assert _matches_filters(
-            "2026-01-01 00:00:00 INFO gateway.run: msg",
-            component_prefixes=("gateway",))
+            "2026-01-01 00:00:00 INFO gateway.run: msg", component_prefixes=("gateway",)
+        )
         assert not _matches_filters(
-            "2026-01-01 00:00:00 INFO tools.file: msg",
-            component_prefixes=("gateway",))
+            "2026-01-01 00:00:00 INFO tools.file: msg", component_prefixes=("gateway",)
+        )
 
     def test_combined_filters(self):
         """All filters must pass for a line to match."""
@@ -193,17 +205,19 @@ class TestMatchesFilters:
         # Line with a very old timestamp should be filtered out
         assert not _matches_filters(
             "2020-01-01 00:00:00 INFO x: old msg",
-            since=datetime.now() - timedelta(hours=1))
+            since=datetime.now() - timedelta(hours=1),
+        )
         # Line with a recent timestamp should pass
         recent = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         assert _matches_filters(
-            f"{recent} INFO x: recent msg",
-            since=datetime.now() - timedelta(hours=1))
+            f"{recent} INFO x: recent msg", since=datetime.now() - timedelta(hours=1)
+        )
 
 
 # ---------------------------------------------------------------------------
 # File reading
 # ---------------------------------------------------------------------------
+
 
 class TestReadTail:
     def test_read_small_file(self, tmp_path):
@@ -226,7 +240,8 @@ class TestReadTail:
         log_file.write_text("".join(lines))
 
         result = _read_tail(
-            log_file, 50,
+            log_file,
+            50,
             has_filters=True,
             component_prefixes=("gateway",),
         )
@@ -244,6 +259,7 @@ class TestReadTail:
 # ---------------------------------------------------------------------------
 # LOG_FILES registry
 # ---------------------------------------------------------------------------
+
 
 class TestLogFiles:
     def test_known_log_files(self):

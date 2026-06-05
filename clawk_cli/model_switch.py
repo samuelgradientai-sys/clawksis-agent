@@ -36,10 +36,7 @@ OpenRouter variant suffixes (``:free``, ``:extended``, ``:fast``).
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import logging
@@ -51,47 +48,28 @@ from dataclasses import dataclass
 from typing import List, NamedTuple, Optional
 
 
-
 from clawk_cli.providers import (
-
     custom_provider_slug,
-
     determine_api_mode,
-
     get_label,
-
     is_aggregator,
-
     resolve_provider_full,
-
 )
 
 from clawk_cli.model_normalize import (
-
     normalize_model_for_provider,
-
 )
 
 from agent.models_dev import (
-
     ModelCapabilities,
-
     ModelInfo,
-
     get_model_capabilities,
-
     get_model_info,
-
     list_provider_models,
-
 )
 
 
-
 logger = logging.getLogger(__name__)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -101,19 +79,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-
 _CLAWK_MODEL_WARNING = (
-
     "Nous Research Clawksis 3 & 4 models are NOT agentic and are not designed "
-
     "for use with Clawksis. They lack the tool-calling capabilities "
-
     "required for agent workflows. Consider using an agentic model instead "
-
     "(Claude, GPT, Gemini, DeepSeek, etc.)."
-
 )
-
 
 
 # Match only the real Nous Research Clawksis 3 / Clawksis 4 chat families.
@@ -135,19 +106,12 @@ _CLAWK_MODEL_WARNING = (
 #   clawk-brain:qwen3-14b-ctx16k, qwen3:14b, claude-opus-4-6
 
 _NOUS_CLAWK_NON_AGENTIC_RE = re.compile(
-
     r"(?:^|[/:])clawk[-_ ]?[34](?:[-_.:]|$)",
-
     re.IGNORECASE,
-
 )
 
 
-
-
-
 def is_nous_clawk_non_agentic(model_name: str) -> bool:
-
     """Return True if *model_name* is a real Nous Clawksis 3/4 chat model.
 
 
@@ -161,27 +125,18 @@ def is_nous_clawk_non_agentic(model_name: str) -> bool:
     """
 
     if not model_name:
-
         return False
 
     return bool(_NOUS_CLAWK_NON_AGENTIC_RE.search(model_name))
 
 
-
-
-
 def _check_clawk_model_warning(model_name: str) -> str:
-
     """Return a warning string if *model_name* is a Nous Clawksis 3/4 chat model."""
 
     if is_nous_clawk_non_agentic(model_name):
-
         return _CLAWK_MODEL_WARNING
 
     return ""
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +148,7 @@ def _check_clawk_model_warning(model_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-
 class ModelIdentity(NamedTuple):
-
     """Vendor slug and family prefix used for catalog resolution."""
 
     vendor: str
@@ -203,111 +156,43 @@ class ModelIdentity(NamedTuple):
     family: str
 
 
-
-
-
 MODEL_ALIASES: dict[str, ModelIdentity] = {
-
     # Anthropic
-
-    "sonnet":    ModelIdentity("anthropic", "claude-sonnet"),
-
-    "opus":      ModelIdentity("anthropic", "claude-opus"),
-
-    "haiku":     ModelIdentity("anthropic", "claude-haiku"),
-
-    "claude":    ModelIdentity("anthropic", "claude"),
-
-
-
+    "sonnet": ModelIdentity("anthropic", "claude-sonnet"),
+    "opus": ModelIdentity("anthropic", "claude-opus"),
+    "haiku": ModelIdentity("anthropic", "claude-haiku"),
+    "claude": ModelIdentity("anthropic", "claude"),
     # OpenAI
-
-    "gpt5":      ModelIdentity("openai", "gpt-5"),
-
-    "gpt":       ModelIdentity("openai", "gpt"),
-
-    "codex":     ModelIdentity("openai", "codex"),
-
-    "o3":        ModelIdentity("openai", "o3"),
-
-    "o4":        ModelIdentity("openai", "o4"),
-
-
-
+    "gpt5": ModelIdentity("openai", "gpt-5"),
+    "gpt": ModelIdentity("openai", "gpt"),
+    "codex": ModelIdentity("openai", "codex"),
+    "o3": ModelIdentity("openai", "o3"),
+    "o4": ModelIdentity("openai", "o4"),
     # Google
-
-    "gemini":    ModelIdentity("google", "gemini"),
-
-
-
+    "gemini": ModelIdentity("google", "gemini"),
     # DeepSeek
-
-    "deepseek":  ModelIdentity("deepseek", "deepseek-chat"),
-
-
-
+    "deepseek": ModelIdentity("deepseek", "deepseek-chat"),
     # X.AI
-
-    "grok":      ModelIdentity("x-ai", "grok"),
-
-
-
+    "grok": ModelIdentity("x-ai", "grok"),
     # Meta
-
-    "llama":     ModelIdentity("meta-llama", "llama"),
-
-
-
+    "llama": ModelIdentity("meta-llama", "llama"),
     # Qwen / Alibaba
-
-    "qwen":      ModelIdentity("qwen", "qwen"),
-
-
-
+    "qwen": ModelIdentity("qwen", "qwen"),
     # MiniMax
-
-    "minimax":   ModelIdentity("minimax", "minimax"),
-
-
-
+    "minimax": ModelIdentity("minimax", "minimax"),
     # Nvidia
-
-    "nemotron":  ModelIdentity("nvidia", "nemotron"),
-
-
-
+    "nemotron": ModelIdentity("nvidia", "nemotron"),
     # Moonshot / Kimi
-
-    "kimi":      ModelIdentity("moonshotai", "kimi"),
-
-
-
+    "kimi": ModelIdentity("moonshotai", "kimi"),
     # Z.AI / GLM
-
-    "glm":       ModelIdentity("z-ai", "glm"),
-
-
-
+    "glm": ModelIdentity("z-ai", "glm"),
     # Step Plan (StepFun)
-
-    "step":      ModelIdentity("stepfun", "step"),
-
-
-
+    "step": ModelIdentity("stepfun", "step"),
     # Xiaomi
-
-    "mimo":      ModelIdentity("xiaomi", "mimo"),
-
-
-
+    "mimo": ModelIdentity("xiaomi", "mimo"),
     # Arcee
-
-    "trinity":   ModelIdentity("arcee-ai", "trinity"),
-
+    "trinity": ModelIdentity("arcee-ai", "trinity"),
 }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -325,9 +210,7 @@ MODEL_ALIASES: dict[str, ModelIdentity] = {
 # ---------------------------------------------------------------------------
 
 
-
 class DirectAlias(NamedTuple):
-
     """Exact model mapping that bypasses catalog resolution."""
 
     model: str
@@ -337,13 +220,9 @@ class DirectAlias(NamedTuple):
     base_url: str
 
 
-
-
-
 # Built-in direct aliases (can be extended via config.yaml model_aliases:)
 
 _BUILTIN_DIRECT_ALIASES: dict[str, DirectAlias] = {}
-
 
 
 # Merged dict (builtins + user config); populated by _load_direct_aliases()
@@ -351,11 +230,7 @@ _BUILTIN_DIRECT_ALIASES: dict[str, DirectAlias] = {}
 DIRECT_ALIASES: dict[str, DirectAlias] = {}
 
 
-
-
-
 def _load_direct_aliases() -> dict[str, DirectAlias]:
-
     """Load direct aliases from config.yaml ``model_aliases:`` section.
 
 
@@ -397,23 +272,17 @@ def _load_direct_aliases() -> dict[str, DirectAlias]:
     merged = dict(_BUILTIN_DIRECT_ALIASES)
 
     try:
-
         from clawk_cli.config import load_config
 
         cfg = load_config()
-
-
 
         # --- model_aliases (dict-based format) ---
 
         user_aliases = cfg.get("model_aliases")
 
         if isinstance(user_aliases, dict):
-
             for name, entry in user_aliases.items():
-
                 if not isinstance(entry, dict):
-
                     continue
 
                 model = entry.get("model", "")
@@ -423,73 +292,54 @@ def _load_direct_aliases() -> dict[str, DirectAlias]:
                 base_url = entry.get("base_url", "")
 
                 if model:
-
                     merged[name.strip().lower()] = DirectAlias(
-
-                        model=model, provider=provider, base_url=base_url,
-
+                        model=model,
+                        provider=provider,
+                        base_url=base_url,
                     )
-
-
 
         # --- model.aliases (string-based format, from config set) ---
 
         model_section = cfg.get("model", {})
 
         if isinstance(model_section, dict):
-
             simple_aliases = model_section.get("aliases")
 
             if isinstance(simple_aliases, dict):
-
                 current_provider = model_section.get("provider", "")
 
                 for name, value in simple_aliases.items():
-
                     if not isinstance(value, str) or not value.strip():
-
                         continue
 
                     key = name.strip().lower()
 
                     if key in merged:
-
                         continue  # don't override explicit model_aliases entries
 
                     val = value.strip()
 
                     if "/" in val:
-
                         provider, model = val.split("/", 1)
 
                     else:
-
                         provider = current_provider
 
                         model = val
 
                     merged[key] = DirectAlias(
-
                         model=model.strip(),
-
                         provider=provider.strip() or current_provider,
-
                         base_url="",
-
                     )
 
     except Exception:
-
         pass
 
     return merged
 
 
-
-
-
 def _ensure_direct_aliases() -> None:
-
     """Lazy-load direct aliases on first use.
 
 
@@ -505,11 +355,7 @@ def _ensure_direct_aliases() -> None:
     """
 
     if not DIRECT_ALIASES:
-
         DIRECT_ALIASES.update(_load_direct_aliases())
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -519,14 +365,9 @@ def _ensure_direct_aliases() -> None:
 # ---------------------------------------------------------------------------
 
 
-
 @dataclass
-
 class ModelSwitchResult:
-
     """Result of a model switch attempt."""
-
-
 
     success: bool
 
@@ -556,6 +397,7 @@ class ModelSwitchResult:
 
     is_global: bool = False
 
+
 # ---------------------------------------------------------------------------
 
 # Flag parsing
@@ -563,9 +405,7 @@ class ModelSwitchResult:
 # ---------------------------------------------------------------------------
 
 
-
 def parse_model_flags(raw_args: str) -> tuple[str, str, bool, bool]:
-
     """Parse --provider, --global, and --refresh flags from /model command args.
 
 
@@ -598,37 +438,29 @@ def parse_model_flags(raw_args: str) -> tuple[str, str, bool, bool]:
 
     force_refresh = False
 
-
-
     # Normalize Unicode dashes (Telegram/iOS auto-converts -- to em/en dash)
 
     # A single Unicode dash before a flag keyword becomes "--"
 
     import re as _re
 
-    raw_args = _re.sub(r'[\u2012\u2013\u2014\u2015](provider|global|refresh)', r'--\1', raw_args)
-
-
+    raw_args = _re.sub(
+        r"[\u2012\u2013\u2014\u2015](provider|global|refresh)", r"--\1", raw_args
+    )
 
     # Extract --global
 
     if "--global" in raw_args:
-
         is_global = True
 
         raw_args = raw_args.replace("--global", "").strip()
 
-
-
     # Extract --refresh (bust the model picker disk cache before listing)
 
     if "--refresh" in raw_args:
-
         force_refresh = True
 
         raw_args = raw_args.replace("--refresh", "").strip()
-
-
 
     # Extract --provider <name>
 
@@ -639,27 +471,19 @@ def parse_model_flags(raw_args: str) -> tuple[str, str, bool, bool]:
     filtered: list[str] = []
 
     while i < len(parts):
-
         if parts[i] == "--provider" and i + 1 < len(parts):
-
             explicit_provider = parts[i + 1]
 
             i += 2
 
         else:
-
             filtered.append(parts[i])
 
             i += 1
 
-
-
     model_input = " ".join(filtered).strip()
 
     return (model_input, explicit_provider, is_global, force_refresh)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -669,9 +493,7 @@ def parse_model_flags(raw_args: str) -> tuple[str, str, bool, bool]:
 # ---------------------------------------------------------------------------
 
 
-
 def _model_sort_key(model_id: str, prefix: str) -> tuple:
-
     """Sort key for model version preference.
 
 
@@ -702,15 +524,12 @@ def _model_sort_key(model_id: str, prefix: str) -> tuple:
 
     # Strip the prefix (and optional "/" separator for aggregator slugs)
 
-    rest = model_id[len(prefix):]
+    rest = model_id[len(prefix) :]
 
     if rest.startswith("/"):
-
         rest = rest[1:]
 
     rest = rest.lstrip("-").strip()
-
-
 
     # Parse version and suffix from the remainder.
 
@@ -728,68 +547,49 @@ def _model_sort_key(model_id: str, prefix: str) -> tuple:
 
     num_buf = ""
 
-
-
     for ch in rest:
-
         if state == "start":
-
             if ch in "vV":
-
                 state = "in_version"
 
             elif ch.isdigit():
-
                 state = "in_version"
 
                 num_buf += ch
 
             elif ch in "-_.":
-
                 pass  # skip separators before any content
 
             else:
-
                 state = "in_suffix"
 
                 suffix_buf += ch
 
         elif state == "in_version":
-
             if ch.isdigit():
-
                 num_buf += ch
 
             elif ch == ".":
-
                 if "." in num_buf:
-
                     # Second dot — flush current number, start new component
 
                     try:
-
                         nums.append(float(num_buf.rstrip(".")))
 
                     except ValueError:
-
                         pass
 
                     num_buf = ""
 
                 else:
-
                     num_buf += ch
 
             elif ch in "-_.":
-
                 if num_buf:
-
                     try:
-
                         nums.append(float(num_buf.rstrip(".")))
 
                     except ValueError:
-
                         pass
 
                     num_buf = ""
@@ -797,15 +597,11 @@ def _model_sort_key(model_id: str, prefix: str) -> tuple:
                 state = "between"
 
             else:
-
                 if num_buf:
-
                     try:
-
                         nums.append(float(num_buf.rstrip(".")))
 
                     except ValueError:
-
                         pass
 
                     num_buf = ""
@@ -815,58 +611,41 @@ def _model_sort_key(model_id: str, prefix: str) -> tuple:
                 suffix_buf += ch
 
         elif state == "between":
-
             if ch.isdigit():
-
                 state = "in_version"
 
                 num_buf = ch
 
             elif ch in "vV":
-
                 state = "in_version"
 
             elif ch in "-_.":
-
                 pass
 
             else:
-
                 state = "in_suffix"
 
                 suffix_buf += ch
 
         elif state == "in_suffix":
-
             suffix_buf += ch
-
-
 
     # Flush remaining buffer (strip trailing dots — "5.4." → "5.4")
 
     if num_buf and state == "in_version":
-
         try:
-
             nums.append(float(num_buf.rstrip(".")))
 
         except ValueError:
-
             pass
-
-
 
     suffix = suffix_buf.lower().strip("-_.")
 
     suffix = suffix.strip()
 
-
-
     # Negate versions so higher → sorts first
 
     version_key = tuple(-n for n in nums)
-
-
 
     # Suffix quality ranking: pro/max > (no suffix) > omni/flash/mini/lite
 
@@ -876,22 +655,13 @@ def _model_sort_key(model_id: str, prefix: str) -> tuple:
 
     suffix_rank = _SUFFIX_RANK.get(suffix, 1)
 
-
-
     return version_key + (suffix_rank, suffix)
 
 
-
-
-
 def resolve_alias(
-
     raw_input: str,
-
     current_provider: str,
-
 ) -> Optional[tuple[str, str, str]]:
-
     """Resolve a short alias against the current provider's catalog.
 
 
@@ -918,8 +688,6 @@ def resolve_alias(
 
     key = raw_input.strip().lower()
 
-
-
     # Check direct aliases first (exact model+provider+base_url mappings)
 
     _ensure_direct_aliases()
@@ -927,10 +695,7 @@ def resolve_alias(
     direct = DIRECT_ALIASES.get(key)
 
     if direct is not None:
-
         return (direct.provider, direct.model, key)
-
-
 
     # Reverse lookup: match by model ID so full names (e.g. "kimi-k2.5",
 
@@ -939,24 +704,15 @@ def resolve_alias(
     # to the catalog/OpenRouter.
 
     for alias_name, da in DIRECT_ALIASES.items():
-
         if da.model.lower() == key:
-
             return (da.provider, da.model, alias_name)
-
-
 
     identity = MODEL_ALIASES.get(key)
 
     if identity is None:
-
         return None
 
-
-
     vendor, family = identity
-
-
 
     # Build catalog from models.dev, then merge in static _PROVIDER_MODELS
 
@@ -967,64 +723,36 @@ def resolve_alias(
     catalog = list_provider_models(current_provider)
 
     try:
-
         from clawk_cli.models import _PROVIDER_MODELS
 
         static = _PROVIDER_MODELS.get(current_provider, [])
 
         if static:
-
             seen = {m.lower() for m in catalog}
 
             for m in static:
-
                 if m.lower() not in seen:
-
                     catalog.append(m)
 
     except Exception:
-
         pass
-
-
 
     # For aggregators, models are vendor/model-name format
 
     aggregator = is_aggregator(current_provider)
 
-
-
     if aggregator:
-
         prefix = f"{vendor}/{family}".lower()
 
-        matches = [
-
-            mid for mid in catalog
-
-            if mid.lower().startswith(prefix)
-
-        ]
+        matches = [mid for mid in catalog if mid.lower().startswith(prefix)]
 
     else:
-
         family_lower = family.lower()
 
-        matches = [
-
-            mid for mid in catalog
-
-            if mid.lower().startswith(family_lower)
-
-        ]
-
-
+        matches = [mid for mid in catalog if mid.lower().startswith(family_lower)]
 
     if not matches:
-
         return None
-
-
 
     # Sort by version descending — prefer the latest/highest version
 
@@ -1035,19 +763,11 @@ def resolve_alias(
     return (current_provider, matches[0], key)
 
 
-
-
-
 def get_authenticated_provider_slugs(
-
     current_provider: str = "",
-
     user_providers: dict = None,
-
     custom_providers: list | None = None,
-
 ) -> list[str]:
-
     """Return slugs of providers that have credentials.
 
 
@@ -1059,37 +779,23 @@ def get_authenticated_provider_slugs(
     """
 
     try:
-
         providers = list_authenticated_providers(
-
             current_provider=current_provider,
-
             user_providers=user_providers,
-
             custom_providers=custom_providers,
-
             max_models=0,
-
         )
 
         return [p["slug"] for p in providers]
 
     except Exception:
-
         return []
 
 
-
-
-
 def _resolve_alias_fallback(
-
     raw_input: str,
-
     authenticated_providers: list[str] = (),
-
 ) -> Optional[tuple[str, str, str]]:
-
     """Try to resolve an alias on the user's authenticated providers.
 
 
@@ -1103,37 +809,23 @@ def _resolve_alias_fallback(
     providers = authenticated_providers or ("openrouter", "nous")
 
     for provider in providers:
-
         result = resolve_alias(raw_input, provider)
 
         if result is not None:
-
             return result
 
     return None
 
 
-
-
-
 def resolve_display_context_length(
-
     model: str,
-
     provider: str,
-
     base_url: str = "",
-
     api_key: str = "",
-
     model_info: Optional[ModelInfo] = None,
-
     custom_providers: list | None = None,
-
     config_context_length: int | None = None,
-
 ) -> Optional[int]:
-
     """Resolve the context length to show in /model output.
 
 
@@ -1169,41 +861,27 @@ def resolve_display_context_length(
     """
 
     try:
-
         from agent.model_metadata import get_model_context_length
 
         ctx = get_model_context_length(
-
             model,
-
             base_url=base_url or "",
-
             api_key=api_key or "",
-
             provider=provider or None,
-
             custom_providers=custom_providers,
-
             config_context_length=config_context_length,
-
         )
 
         if ctx:
-
             return int(ctx)
 
     except Exception:
-
         pass
 
     if model_info is not None and model_info.context_window:
-
         return int(model_info.context_window)
 
     return None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1213,29 +891,17 @@ def resolve_display_context_length(
 # ---------------------------------------------------------------------------
 
 
-
 def switch_model(
-
     raw_input: str,
-
     current_provider: str,
-
     current_model: str,
-
     current_base_url: str = "",
-
     current_api_key: str = "",
-
     is_global: bool = False,
-
     explicit_provider: str = "",
-
     user_providers: dict = None,
-
     custom_providers: list | None = None,
-
 ) -> ModelSwitchResult:
-
     """Core model-switching pipeline shared between CLI and gateway.
 
 
@@ -1311,28 +977,19 @@ def switch_model(
     """
 
     from clawk_cli.models import (
-
         copilot_model_api_mode,
-
         detect_provider_for_model,
-
         validate_requested_model,
-
         opencode_model_api_mode,
-
     )
 
     from clawk_cli.runtime_provider import resolve_runtime_provider
-
-
 
     resolved_alias = ""
 
     new_model = raw_input.strip()
 
     target_provider = current_provider
-
-
 
     # =================================================================
 
@@ -1341,66 +998,44 @@ def switch_model(
     # =================================================================
 
     if explicit_provider:
-
         # Resolve the provider
 
         pdef = resolve_provider_full(
-
             explicit_provider,
-
             user_providers,
-
             custom_providers,
-
         )
 
         if pdef is None:
-
             _switch_err = (
-
                 f"Unknown provider '{explicit_provider}'. "
-
                 f"Check 'clawk model' for available providers, or define it "
-
                 f"in config.yaml under 'providers:'."
-
             )
 
             # Check for common config issues that cause provider resolution failures
 
             try:
-
                 from clawk_cli.config import validate_config_structure
 
                 _cfg_issues = validate_config_structure()
 
                 if _cfg_issues:
-
                     _switch_err += "\n\nRun 'clawk doctor' — config issues detected:"
 
                     for _ci in _cfg_issues[:3]:
-
                         _switch_err += f"\n  • {_ci.message}"
 
             except Exception:
-
                 pass
 
             return ModelSwitchResult(
-
                 success=False,
-
                 is_global=is_global,
-
                 error_message=_switch_err,
-
             )
 
-
-
         target_provider = pdef.id
-
-
 
         # Guard against silent aggregator hops. A vendor name like bare
 
@@ -1423,138 +1058,81 @@ def switch_model(
         _alias_target = _PROVIDER_ALIAS_TABLE.get(_explicit_norm)
 
         if (
-
             _alias_target
-
             and _alias_target == target_provider
-
             and target_provider != _explicit_norm
-
             and target_provider in _AGG_PROVIDERS
-
         ):
-
             _authed = get_authenticated_provider_slugs(
-
                 current_provider=current_provider,
-
                 user_providers=user_providers,
-
                 custom_providers=custom_providers,
-
             )
 
             if target_provider not in _authed:
-
                 _suggestions = [
-
-                    s for s in _authed
-
+                    s
+                    for s in _authed
                     if s.startswith(_explicit_norm) and s != _explicit_norm
-
                 ]
 
                 _hint = (
-
-                    f" Did you mean: {', '.join(_suggestions)}?"
-
-                    if _suggestions else ""
-
+                    f" Did you mean: {', '.join(_suggestions)}?" if _suggestions else ""
                 )
 
                 return ModelSwitchResult(
-
                     success=False,
-
                     target_provider=target_provider,
-
                     provider_label=pdef.name,
-
                     is_global=is_global,
-
                     error_message=(
-
                         f"Provider '{_explicit_norm}' is an alias that routes "
-
                         f"through {get_label(target_provider)}, which "
-
                         f"has no credentials configured.{_hint}"
-
                     ),
-
                 )
-
-
 
         # If no model specified, try auto-detect from endpoint
 
         if not new_model:
-
             if pdef.base_url:
-
                 from clawk_cli.runtime_provider import _auto_detect_local_model
 
                 detected = _auto_detect_local_model(pdef.base_url)
 
                 if detected:
-
                     new_model = detected
 
                 else:
-
                     return ModelSwitchResult(
-
                         success=False,
-
                         target_provider=target_provider,
-
                         provider_label=pdef.name,
-
                         is_global=is_global,
-
                         error_message=(
-
                             f"No model detected on {pdef.name} ({pdef.base_url}). "
-
                             f"Specify the model explicitly: /model <model-name> --provider {explicit_provider}"
-
                         ),
-
                     )
 
             else:
-
                 return ModelSwitchResult(
-
                     success=False,
-
                     target_provider=target_provider,
-
                     provider_label=pdef.name,
-
                     is_global=is_global,
-
                     error_message=(
-
                         f"Provider '{pdef.name}' has no base URL configured. "
-
                         f"Specify a model: /model <model-name> --provider {explicit_provider}"
-
                     ),
-
                 )
-
-
 
         # Resolve alias on the TARGET provider
 
         alias_result = resolve_alias(new_model, target_provider)
 
         if alias_result is not None:
-
             _, new_model, resolved_alias = alias_result
-
-
 
     # =================================================================
 
@@ -1563,81 +1141,58 @@ def switch_model(
     # =================================================================
 
     else:
-
         # --- Step a: Try alias resolution on current provider ---
 
         alias_result = resolve_alias(raw_input, current_provider)
 
-
-
         if alias_result is not None:
-
             target_provider, new_model, resolved_alias = alias_result
 
             logger.debug(
-
                 "Alias '%s' resolved to %s on %s",
-
-                resolved_alias, new_model, target_provider,
-
+                resolved_alias,
+                new_model,
+                target_provider,
             )
 
         else:
-
             # --- Step b: Alias exists but not on current provider -> fallback ---
 
             key = raw_input.strip().lower()
 
             if key in MODEL_ALIASES:
-
                 authed = get_authenticated_provider_slugs(
-
                     current_provider=current_provider,
-
                     user_providers=user_providers,
-
                     custom_providers=custom_providers,
-
                 )
 
                 fallback_result = _resolve_alias_fallback(raw_input, authed)
 
                 if fallback_result is not None:
-
                     target_provider, new_model, resolved_alias = fallback_result
 
                     logger.debug(
-
                         "Alias '%s' resolved via fallback to %s on %s",
-
-                        resolved_alias, new_model, target_provider,
-
+                        resolved_alias,
+                        new_model,
+                        target_provider,
                     )
 
                 else:
-
                     identity = MODEL_ALIASES[key]
 
                     return ModelSwitchResult(
-
                         success=False,
-
                         is_global=is_global,
-
                         error_message=(
-
                             f"Alias '{key}' maps to {identity.vendor}/{identity.family} "
-
                             f"but no matching model was found in any provider catalog. "
-
                             f"Try specifying the full model name."
-
                         ),
-
                     )
 
             else:
-
                 # --- Step c: On aggregator, convert vendor:model to vendor/model ---
 
                 # Only convert when there's no slash — a slash means the name
@@ -1648,27 +1203,25 @@ def switch_model(
 
                 colon_pos = raw_input.find(":")
 
-                if colon_pos > 0 and "/" not in raw_input and is_aggregator(current_provider):
-
+                if (
+                    colon_pos > 0
+                    and "/" not in raw_input
+                    and is_aggregator(current_provider)
+                ):
                     left = raw_input[:colon_pos].strip().lower()
 
-                    right = raw_input[colon_pos + 1:].strip()
+                    right = raw_input[colon_pos + 1 :].strip()
 
                     if left and right:
-
                         # Colons become slashes for aggregator slugs
 
                         new_model = f"{left}/{right}"
 
                         logger.debug(
-
                             "Converted vendor:model '%s' to aggregator slug '%s'",
-
-                            raw_input, new_model,
-
+                            raw_input,
+                            new_model,
                         )
-
-
 
         # --- Step d: Aggregator catalog search ---
 
@@ -1685,17 +1238,13 @@ def switch_model(
         resolved_in_current_catalog = False
 
         if is_aggregator(target_provider) and not resolved_alias:
-
             catalog = list_provider_models(target_provider)
 
             if catalog:
-
                 new_model_lower = new_model.lower()
 
                 for mid in catalog:
-
                     if mid.lower() == new_model_lower:
-
                         new_model = mid
 
                         resolved_in_current_catalog = True
@@ -1703,54 +1252,35 @@ def switch_model(
                         break
 
                 else:
-
                     for mid in catalog:
-
                         if "/" in mid:
-
                             _, bare = mid.split("/", 1)
 
                             if bare.lower() == new_model_lower:
-
                                 new_model = mid
 
                                 resolved_in_current_catalog = True
 
                                 break
 
-
-
         # --- Step e: detect_provider_for_model() as last resort ---
 
         _base = current_base_url or ""
 
         is_custom = current_provider in {"custom", "local"} or (
-
             "localhost" in _base or "127.0.0.1" in _base
-
         )
 
-
-
         if (
-
             target_provider == current_provider
-
             and not is_custom
-
             and not resolved_alias
-
             and not resolved_in_current_catalog
-
         ):
-
             detected = detect_provider_for_model(new_model, current_provider)
 
             if detected:
-
                 target_provider, new_model = detected
-
-
 
     # =================================================================
 
@@ -1758,29 +1288,19 @@ def switch_model(
 
     # =================================================================
 
-
-
     provider_changed = target_provider != current_provider
 
     provider_label = get_label(target_provider)
 
     if target_provider.startswith("custom:"):
-
         custom_pdef = resolve_provider_full(
-
             target_provider,
-
             user_providers,
-
             custom_providers,
-
         )
 
         if custom_pdef is not None:
-
             provider_label = custom_pdef.name
-
-
 
     # --- Resolve credentials ---
 
@@ -1790,10 +1310,7 @@ def switch_model(
 
     api_mode = ""
 
-
-
     if provider_changed or explicit_provider:
-
         import os
 
         # User-config providers (providers.<name> in config.yaml) carry their
@@ -1809,46 +1326,37 @@ def switch_model(
         _user_pdef = None
 
         if explicit_provider and user_providers:
-
             from clawk_cli.providers import resolve_user_provider as _ruser
 
             _user_pdef = _ruser(explicit_provider.strip().lower(), user_providers)
 
             if _user_pdef is None:
-
                 _user_pdef = _ruser(target_provider, user_providers)
 
         if _user_pdef is not None and _user_pdef.base_url:
-
-            _ucfg = (user_providers or {}).get(explicit_provider.strip().lower()) \
-                or (user_providers or {}).get(target_provider) or {}
+            _ucfg = (
+                (user_providers or {}).get(explicit_provider.strip().lower())
+                or (user_providers or {}).get(target_provider)
+                or {}
+            )
 
             _ukey = str(_ucfg.get("api_key", "") or "").strip()
 
             if _ukey.startswith("${") and _ukey.endswith("}"):
-
                 _ukey = os.environ.get(_ukey[2:-1], "").strip()
 
             if not _ukey:
-
                 _kenv = str(_ucfg.get("key_env", "") or "").strip()
 
                 if _kenv:
-
                     _ukey = os.environ.get(_kenv, "").strip()
 
             try:
-
                 runtime = resolve_runtime_provider(
-
                     requested=target_provider,
-
                     explicit_api_key=_ukey or None,
-
                     explicit_base_url=_user_pdef.base_url,
-
                     target_model=new_model,
-
                 )
 
                 api_key = runtime.get("api_key", "") or _ukey
@@ -1858,7 +1366,6 @@ def switch_model(
                 api_mode = runtime.get("api_mode", "")
 
             except Exception:
-
                 api_key = _ukey
 
                 base_url = _user_pdef.base_url
@@ -1866,15 +1373,10 @@ def switch_model(
                 api_mode = ""
 
         else:
-
             try:
-
                 runtime = resolve_runtime_provider(
-
                     requested=target_provider,
-
                     target_model=new_model,
-
                 )
 
                 api_key = runtime.get("api_key", "")
@@ -1884,37 +1386,22 @@ def switch_model(
                 api_mode = runtime.get("api_mode", "")
 
             except Exception as e:
-
                 return ModelSwitchResult(
-
                     success=False,
-
                     target_provider=target_provider,
-
                     provider_label=provider_label,
-
                     is_global=is_global,
-
                     error_message=(
-
                         f"Could not resolve credentials for provider "
-
                         f"'{provider_label}': {e}"
-
                     ),
-
                 )
 
     else:
-
         try:
-
             runtime = resolve_runtime_provider(
-
                 requested=current_provider,
-
                 target_model=new_model,
-
             )
 
             # If resolution fell through to "custom" (e.g. named custom provider like
@@ -1932,93 +1419,63 @@ def switch_model(
             api_mode = runtime.get("api_mode", "")
 
         except Exception:
-
             pass
-
-
 
     # --- Direct alias override: use exact base_url from the alias if set ---
 
     if resolved_alias:
-
         _ensure_direct_aliases()
 
         _da = DIRECT_ALIASES.get(resolved_alias)
 
         if _da is not None and _da.base_url:
-
             base_url = _da.base_url
 
             api_mode = ""  # clear so determine_api_mode re-detects from URL
 
             if not api_key:
-
                 api_key = "no-key-required"
-
-
 
     # --- Normalize model name for target provider ---
 
     new_model = normalize_model_for_provider(new_model, target_provider)
 
-
-
     # --- Validate ---
 
     try:
-
         validation = validate_requested_model(
-
             new_model,
-
             target_provider,
-
             api_key=api_key,
-
             base_url=base_url,
-
             api_mode=api_mode or None,
-
         )
 
     except Exception as e:
-
         validation = {
-
             "accepted": False,
-
             "persist": False,
-
             "recognized": False,
-
             "message": f"Could not validate `{new_model}`: {e}",
-
         }
-
-
 
     # Override rejection if model is in the user's saved provider config.
 
     # API /v1/models may not list cloud/aliased models even though the server supports them.
 
     if not validation.get("accepted"):
-
         override = False
 
         if user_providers:
-
             # user_providers is a dict: {provider_slug: config_dict}
 
             for slug, cfg in user_providers.items():
-
                 if slug == target_provider:
-
                     cfg_models = cfg.get("models", {})
 
                     # Direct membership works for dict (keys) and list (strings)
 
                     if new_model in cfg_models:
-
                         override = True
 
                         break
@@ -2026,9 +1483,11 @@ def switch_model(
                     # Also accept if models is a list of dicts with 'name' field
 
                     if isinstance(cfg_models, list):
-
-                        if any(m.get("name") == new_model for m in cfg_models if isinstance(m, dict)):
-
+                        if any(
+                            m.get("name") == new_model
+                            for m in cfg_models
+                            if isinstance(m, dict)
+                        ):
                             override = True
 
                             break
@@ -2038,11 +1497,8 @@ def switch_model(
         # even if the remote /v1/models endpoint doesn't list them.
 
         if not override and custom_providers and isinstance(custom_providers, list):
-
             for entry in custom_providers:
-
                 if not isinstance(entry, dict):
-
                     continue
 
                 # Match by provider slug (custom:<name>) or by base_url
@@ -2054,7 +1510,6 @@ def switch_model(
                 entry_url = entry.get("base_url", "")
 
                 if entry_slug == target_provider or entry_url == base_url:
-
                     # Check if the requested model matches the entry's model
 
                     entry_model = entry.get("model", "")
@@ -2062,74 +1517,54 @@ def switch_model(
                     entry_models = entry.get("models", {})
 
                     if new_model == entry_model:
-
                         override = True
 
                         break
 
                     if isinstance(entry_models, dict) and new_model in entry_models:
-
                         override = True
 
                         break
 
         if override:
-
-            validation = {"accepted": True, "persist": True, "recognized": False, "message": validation.get("message", "")}
+            validation = {
+                "accepted": True,
+                "persist": True,
+                "recognized": False,
+                "message": validation.get("message", ""),
+            }
 
         else:
-
             msg = validation.get("message", "Invalid model")
 
             return ModelSwitchResult(
-
                 success=False,
-
                 new_model=new_model,
-
                 target_provider=target_provider,
-
                 provider_label=provider_label,
-
                 is_global=is_global,
-
                 error_message=msg,
-
             )
-
-
 
     # Apply auto-correction if validation found a closer match
 
     if validation.get("corrected_model"):
-
         new_model = validation["corrected_model"]
-
-
 
     # --- Copilot api_mode override ---
 
     if target_provider in {"copilot", "github-copilot"}:
-
         api_mode = copilot_model_api_mode(new_model, api_key=api_key)
-
-
 
     # --- OpenCode api_mode override ---
 
     if target_provider in {"opencode-zen", "opencode-go", "opencode"}:
-
         api_mode = opencode_model_api_mode(target_provider, new_model)
-
-
 
     # --- Determine api_mode if not already set ---
 
     if not api_mode:
-
         api_mode = determine_api_mode(target_provider, base_url)
-
-
 
     # OpenCode base URLs end with /v1 for OpenAI-compatible models, but the
 
@@ -2148,83 +1583,50 @@ def switch_model(
     # on opencode-zen) hit a double /v1 and returned OpenCode's website 404 page.
 
     if (
-
         api_mode == "anthropic_messages"
-
         and target_provider in {"opencode-zen", "opencode-go"}
-
         and isinstance(base_url, str)
-
         and base_url
-
     ):
-
         base_url = re.sub(r"/v1/?$", "", base_url)
-
-
 
     # --- Get capabilities (legacy) ---
 
     capabilities = get_model_capabilities(target_provider, new_model)
 
-
-
     # --- Get full model info from models.dev ---
 
     model_info = get_model_info(target_provider, new_model)
-
-
 
     # --- Collect warnings ---
 
     warnings: list[str] = []
 
     if validation.get("message"):
-
         warnings.append(validation["message"])
 
     clawk_warn = _check_clawk_model_warning(new_model)
 
     if clawk_warn:
-
         warnings.append(clawk_warn)
-
-
 
     # --- Build result ---
 
     return ModelSwitchResult(
-
         success=True,
-
         new_model=new_model,
-
         target_provider=target_provider,
-
         provider_changed=provider_changed,
-
         api_key=api_key,
-
         base_url=base_url,
-
         api_mode=api_mode,
-
         warning_message=" | ".join(warnings) if warnings else "",
-
         provider_label=provider_label,
-
         resolved_via_alias=resolved_alias,
-
         capabilities=capabilities,
-
         model_info=model_info,
-
         is_global=is_global,
-
     )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2234,23 +1636,14 @@ def switch_model(
 # ---------------------------------------------------------------------------
 
 
-
 def list_authenticated_providers(
-
     current_provider: str = "",
-
     current_base_url: str = "",
-
     user_providers: dict = None,
-
     custom_providers: list | None = None,
-
     max_models: int = 8,
-
     current_model: str = "",
-
 ) -> List[dict]:
-
     """Detect which providers have credentials and list their curated models.
 
 
@@ -2288,34 +1681,29 @@ def list_authenticated_providers(
     import os
 
     from agent.models_dev import (
-
         PROVIDER_TO_MODELS_DEV,
-
         fetch_models_dev,
-
         get_provider_info as _mdev_pinfo,
-
     )
 
     from clawk_cli.auth import PROVIDER_REGISTRY
 
     from clawk_cli.models import (
-
-        OPENROUTER_MODELS, _PROVIDER_MODELS,
-
-        _MODELS_DEV_PREFERRED, _merge_with_models_dev, cached_provider_model_ids,
-
+        OPENROUTER_MODELS,
+        _PROVIDER_MODELS,
+        _MODELS_DEV_PREFERRED,
+        _merge_with_models_dev,
+        cached_provider_model_ids,
         get_curated_nous_model_ids,
-
     )
-
-
 
     results: List[dict] = []
 
     seen_slugs: set = set()  # lowercase-normalized to catch case variants (#9545)
 
-    seen_mdev_ids: set = set()  # prevent duplicate entries for aliases (e.g. kimi-coding + kimi-coding-cn)
+    seen_mdev_ids: set = (
+        set()
+    )  # prevent duplicate entries for aliases (e.g. kimi-coding + kimi-coding-cn)
 
     # Effective base URLs of every built-in row we emit (normalized lower+rstrip).
 
@@ -2329,16 +1717,11 @@ def list_authenticated_providers(
 
     _builtin_endpoints: set = set()
 
-
-
     def _norm_url(url: str) -> str:
 
         return str(url or "").strip().rstrip("/").lower()
 
-
-
     def _record_builtin_endpoint(slug: str) -> None:
-
         """Record the effective base URL for a built-in provider row.
 
 
@@ -2350,39 +1733,30 @@ def list_authenticated_providers(
         that URL into custom_providers would actually hit."""
 
         try:
-
             from clawk_cli.auth import PROVIDER_REGISTRY as _reg
 
         except Exception:
-
             return
 
         pcfg = _reg.get(slug)
 
         if not pcfg:
-
             return
 
         url = ""
 
         if getattr(pcfg, "base_url_env_var", ""):
-
             url = os.environ.get(pcfg.base_url_env_var, "") or ""
 
         if not url:
-
             url = getattr(pcfg, "inference_base_url", "") or ""
 
         normed = _norm_url(url)
 
         if normed:
-
             _builtin_endpoints.add(normed)
 
-
-
     def _has_fast_aws_sdk_signal() -> bool:
-
         """Return True when explicit AWS auth config is present.
 
 
@@ -2398,41 +1772,25 @@ def list_authenticated_providers(
         """
 
         if os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip():
-
             return True
 
         if (
-
             os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
-
             and os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
-
         ):
-
             return True
 
         return any(
-
             os.environ.get(name, "").strip()
-
             for name in (
-
                 "AWS_PROFILE",
-
                 "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-
                 "AWS_CONTAINER_CREDENTIALS_FULL_URI",
-
                 "AWS_WEB_IDENTITY_TOKEN_FILE",
-
             )
-
         )
 
-
-
     def _has_aws_sdk_creds_for_listing(slug: str) -> bool:
-
         """Credential check for AWS SDK providers in non-runtime discovery."""
 
         slug_norm = str(slug or "").strip().lower()
@@ -2440,28 +1798,20 @@ def list_authenticated_providers(
         current_norm = str(current_provider or "").strip().lower()
 
         if _has_fast_aws_sdk_signal():
-
             return True
 
         if slug_norm != current_norm:
-
             return False
 
         try:
-
             from agent.bedrock_adapter import has_aws_credentials
 
             return bool(has_aws_credentials())
 
         except Exception:
-
             return False
 
-
-
     data = fetch_models_dev()
-
-
 
     # Build curated model lists keyed by clawk provider ID
 
@@ -2484,7 +1834,6 @@ def list_authenticated_providers(
     # Ollama Cloud uses dynamic discovery (no static curated list)
 
     if "ollama-cloud" not in curated:
-
         from clawk_cli.models import fetch_ollama_cloud_models
 
         curated["ollama-cloud"] = fetch_ollama_cloud_models()
@@ -2502,11 +1851,10 @@ def list_authenticated_providers(
     # current model so the picker still shows something when offline / mis-keyed.
 
     if "lmstudio" not in curated and (
-
-        os.environ.get("LM_API_KEY") or os.environ.get("LM_BASE_URL") or current_provider.strip().lower() == "lmstudio"
-
+        os.environ.get("LM_API_KEY")
+        or os.environ.get("LM_BASE_URL")
+        or current_provider.strip().lower() == "lmstudio"
     ):
-
         from clawk_cli.models import fetch_lmstudio_models
 
         from clawk_cli.auth import AuthError
@@ -2514,38 +1862,25 @@ def list_authenticated_providers(
         is_current_lmstudio = current_provider.strip().lower() == "lmstudio"
 
         lm_base = (
-
             os.environ.get("LM_BASE_URL")
-
             or (current_base_url if is_current_lmstudio and current_base_url else None)
-
             or "http://127.0.0.1:1234/v1"
-
         )
 
         try:
-
             live = fetch_lmstudio_models(
-
                 api_key=os.environ.get("LM_API_KEY", ""),
-
                 base_url=lm_base,
-
-                timeout=1.5, # Smaller timeout for picker
-
+                timeout=1.5,  # Smaller timeout for picker
             )
 
         except AuthError:
-
             live = []
 
         if not live and is_current_lmstudio and current_model:
-
             live = [current_model]
 
         curated["lmstudio"] = live
-
-
 
     # --- 1. Check Clawksis-mapped providers ---
 
@@ -2554,7 +1889,6 @@ def list_authenticated_providers(
     from clawk_cli.providers import ALIASES as _PROVIDER_ALIAS_TABLE
 
     for clawk_id, mdev_id in PROVIDER_TO_MODELS_DEV.items():
-
         # Skip vendor names that are merely aliases routing through an
 
         # aggregator (e.g. bare "openai" → "openrouter"). These are NOT
@@ -2574,15 +1908,10 @@ def list_authenticated_providers(
         _alias_target = _PROVIDER_ALIAS_TABLE.get(clawk_id)
 
         if (
-
             _alias_target
-
             and _alias_target != clawk_id
-
             and _alias_target in _AGG_PROVIDERS
-
         ):
-
             continue
 
         # Skip aliases that map to the same models.dev provider (e.g.
@@ -2592,16 +1921,12 @@ def list_authenticated_providers(
         # The first one with valid credentials wins (#10526).
 
         if mdev_id in seen_mdev_ids:
-
             continue
 
         pdata = data.get(mdev_id)
 
         if not isinstance(pdata, dict):
-
             continue
-
-
 
         # Prefer auth.py PROVIDER_REGISTRY for env var names — it's our
 
@@ -2616,48 +1941,35 @@ def list_authenticated_providers(
         # section 2 (CLAWK_OVERLAYS) with proper auth store checking.
 
         if pconfig and pconfig.auth_type != "api_key":
-
             continue
 
         if pconfig and pconfig.api_key_env_vars:
-
             env_vars = list(pconfig.api_key_env_vars)
 
         else:
-
             env_vars = pdata.get("env", [])
 
             if not isinstance(env_vars, list):
-
                 continue
-
-
 
         # Check if any env var is set
 
         has_creds = any(os.environ.get(ev) for ev in env_vars)
 
         if not has_creds:
-
             try:
-
                 from clawk_cli.auth import _load_auth_store
 
                 store = _load_auth_store()
 
                 if store and store.get("credential_pool", {}).get(clawk_id):
-
                     has_creds = True
 
             except Exception:
-
                 pass
 
         if not has_creds:
-
             continue
-
-
 
         # Unified pathway: route through cached_provider_model_ids() so the
 
@@ -2670,18 +1982,14 @@ def list_authenticated_providers(
         model_ids = cached_provider_model_ids(clawk_id)
 
         if not model_ids:
-
             model_ids = curated.get(clawk_id, [])
 
             if clawk_id in _MODELS_DEV_PREFERRED:
-
                 model_ids = _merge_with_models_dev(clawk_id, model_ids)
 
         total = len(model_ids)
 
         top = model_ids[:max_models]
-
-
 
         slug = clawk_id
 
@@ -2689,24 +1997,14 @@ def list_authenticated_providers(
 
         display_name = pinfo.name if pinfo else mdev_id
 
-
-
         results.append({
-
             "slug": slug,
-
             "name": display_name,
-
             "is_current": slug == current_provider or mdev_id == current_provider,
-
             "is_user_defined": False,
-
             "models": top,
-
             "total_models": total,
-
             "source": "built-in",
-
         })
 
         seen_slugs.add(slug.lower())
@@ -2715,15 +2013,11 @@ def list_authenticated_providers(
 
         _record_builtin_endpoint(slug)
 
-
-
     # --- 2. Check Clawksis-only providers (nous, openai-codex, copilot, opencode-go) ---
 
     from clawk_cli.providers import CLAWK_OVERLAYS
 
     from clawk_cli.auth import PROVIDER_REGISTRY as _auth_registry
-
-
 
     # Build reverse mapping: models.dev ID → Clawksis provider ID.
 
@@ -2733,50 +2027,35 @@ def list_authenticated_providers(
 
     _mdev_to_clawk = {v: k for k, v in PROVIDER_TO_MODELS_DEV.items()}
 
-
-
     for pid, overlay in CLAWK_OVERLAYS.items():
-
         if pid.lower() in seen_slugs:
-
             continue
-
-
 
         # Resolve Clawksis slug — e.g. "github-copilot" → "copilot"
 
         clawk_slug = _mdev_to_clawk.get(pid, pid)
 
         if clawk_slug.lower() in seen_slugs:
-
             continue
-
-
 
         # Check if credentials exist
 
         has_creds = False
 
         if overlay.auth_type == "aws_sdk":
-
             has_creds = _has_aws_sdk_creds_for_listing(clawk_slug)
 
         elif overlay.extra_env_vars:
-
             has_creds = any(os.environ.get(ev) for ev in overlay.extra_env_vars)
 
         # Also check api_key_env_vars from PROVIDER_REGISTRY for api_key auth_type
 
         if not has_creds and overlay.auth_type == "api_key":
-
             for _key in (pid, clawk_slug):
-
                 pcfg = _auth_registry.get(_key)
 
                 if pcfg and pcfg.api_key_env_vars:
-
                     if any(os.environ.get(ev) for ev in pcfg.api_key_env_vars):
-
                         has_creds = True
 
                         break
@@ -2790,9 +2069,7 @@ def list_authenticated_providers(
         # OAuth via external credential files).
 
         if not has_creds:
-
             try:
-
                 from clawk_cli.auth import _load_auth_store
 
                 store = _load_auth_store()
@@ -2800,11 +2077,9 @@ def list_authenticated_providers(
                 providers_store = store.get("providers", {})
 
                 if store and (pid in providers_store or clawk_slug in providers_store):
-
                     has_creds = True
 
             except Exception as exc:
-
                 logger.debug("Auth store check failed for %s: %s", pid, exc)
 
         # Fallback: check the credential pool with full auto-seeding.
@@ -2816,19 +2091,15 @@ def list_authenticated_providers(
         # imports on demand but aren't in the raw auth.json yet.
 
         if not has_creds:
-
             try:
-
                 from agent.credential_pool import load_pool
 
                 pool = load_pool(clawk_slug)
 
                 if pool.has_credentials():
-
                     has_creds = True
 
             except Exception as exc:
-
                 logger.debug("Credential pool check failed for %s: %s", clawk_slug, exc)
 
         # Fallback: check external credential files directly.
@@ -2846,38 +2117,28 @@ def list_authenticated_providers(
         # configured.
 
         if not has_creds and clawk_slug == "anthropic":
-
             try:
-
                 from agent.anthropic_adapter import (
-
                     read_claude_code_credentials,
-
                     read_clawk_oauth_credentials,
-
                 )
 
                 clawk_creds = read_clawk_oauth_credentials()
 
                 cc_creds = read_claude_code_credentials()
 
-                if (clawk_creds and clawk_creds.get("accessToken")) or \
-                   (cc_creds and cc_creds.get("accessToken")):
-
+                if (clawk_creds and clawk_creds.get("accessToken")) or (
+                    cc_creds and cc_creds.get("accessToken")
+                ):
                     has_creds = True
 
             except Exception as exc:
-
                 logger.debug("Anthropic external creds check failed: %s", exc)
 
         if not has_creds:
-
             continue
 
-
-
         if clawk_slug in {"openai-codex", "copilot", "copilot-acp"}:
-
             # Use live OAuth-backed discovery so the gateway /model picker
 
             # matches what the user's authenticated Codex/Copilot backend
@@ -2899,19 +2160,19 @@ def list_authenticated_providers(
         # reflects the active region (eu.*, ap.*) not the static us.* list.
 
         elif overlay.auth_type == "aws_sdk":
-
             try:
-
                 _ids = cached_provider_model_ids(clawk_slug)
 
-                model_ids = _ids if _ids else (curated.get(clawk_slug, []) or curated.get(pid, []))
+                model_ids = (
+                    _ids
+                    if _ids
+                    else (curated.get(clawk_slug, []) or curated.get(pid, []))
+                )
 
             except Exception:
-
                 model_ids = curated.get(clawk_slug, []) or curated.get(pid, [])
 
         elif clawk_slug == "nous":
-
             # Nous serves a large live /v1/models catalog (vendor-prefixed
 
             # models from many providers, returned alphabetically). The
@@ -2935,47 +2196,34 @@ def list_authenticated_providers(
             model_ids = curated.get("nous", [])
 
             try:
-
                 from clawk_cli.models import (
-
                     get_pricing_for_provider as _nous_pricing,
-
                     check_nous_free_tier as _nous_free,
-
                     union_with_portal_free_recommendations as _union_free,
-
                     union_with_portal_paid_recommendations as _union_paid,
-
                 )
 
                 from clawk_cli.auth import get_provider_auth_state as _nous_state
-
-
 
                 _pricing = _nous_pricing("nous") or {}
 
                 _portal = ""
 
                 try:
-
                     _st = _nous_state("nous") or {}
 
                     _portal = _st.get("portal_base_url", "") or ""
 
                 except Exception:
-
                     _portal = ""
 
                 if _nous_free(force_fresh=True):
-
                     model_ids, _ = _union_free(model_ids, _pricing, _portal)
 
                 else:
-
                     model_ids, _ = _union_paid(model_ids, _pricing, _portal)
 
             except Exception:
-
                 # Portal recommendation fetch failed — fall back to the
 
                 # curated list alone (still correct, just may lag newly
@@ -2985,7 +2233,6 @@ def list_authenticated_providers(
                 pass
 
         else:
-
             # Unified pathway — see Section 1 rationale. Fall back to the
 
             # curated dict (with models.dev merge for preferred providers)
@@ -2995,35 +2242,23 @@ def list_authenticated_providers(
             model_ids = cached_provider_model_ids(clawk_slug)
 
             if not model_ids:
-
                 model_ids = curated.get(clawk_slug, []) or curated.get(pid, [])
 
                 if clawk_slug in _MODELS_DEV_PREFERRED:
-
                     model_ids = _merge_with_models_dev(clawk_slug, model_ids)
 
         total = len(model_ids)
 
         top = model_ids[:max_models]
 
-
-
         results.append({
-
             "slug": clawk_slug,
-
             "name": get_label(clawk_slug),
-
             "is_current": clawk_slug == current_provider or pid == current_provider,
-
             "is_user_defined": False,
-
             "models": top,
-
             "total_models": total,
-
             "source": "clawk",
-
         })
 
         seen_slugs.add(pid.lower())
@@ -3031,8 +2266,6 @@ def list_authenticated_providers(
         seen_slugs.add(clawk_slug.lower())
 
         _record_builtin_endpoint(clawk_slug)
-
-
 
     # --- 2b. Cross-check canonical provider list ---
 
@@ -3043,22 +2276,14 @@ def list_authenticated_providers(
     # with `clawk model`).
 
     try:
-
         from clawk_cli.models import CANONICAL_PROVIDERS as _canon_provs
 
     except ImportError:
-
         _canon_provs = []
 
-
-
     for _cp in _canon_provs:
-
         if _cp.slug.lower() in seen_slugs:
-
             continue
-
-
 
         # Check credentials via PROVIDER_REGISTRY (auth.py)
 
@@ -3067,15 +2292,14 @@ def list_authenticated_providers(
         _cp_has_creds = False
 
         if _cp_config and _cp_config.api_key_env_vars:
-
-            _cp_has_creds = any(os.environ.get(ev) for ev in _cp_config.api_key_env_vars)
+            _cp_has_creds = any(
+                os.environ.get(ev) for ev in _cp_config.api_key_env_vars
+            )
 
         # Also check auth store and credential pool
 
         if not _cp_has_creds:
-
             try:
-
                 from clawk_cli.auth import _load_auth_store
 
                 _cp_store = _load_auth_store()
@@ -3083,30 +2307,22 @@ def list_authenticated_providers(
                 _cp_providers_store = _cp_store.get("providers", {})
 
                 if _cp_store and _cp.slug in _cp_providers_store:
-
                     _cp_has_creds = True
 
             except Exception:
-
                 pass
 
         if not _cp_has_creds:
-
             try:
-
                 from agent.credential_pool import load_pool
 
                 _cp_pool = load_pool(_cp.slug)
 
                 if _cp_pool.has_credentials():
-
                     _cp_has_creds = True
 
             except Exception:
-
                 pass
-
-
 
         # Special case: aws_sdk auth (bedrock) — no API key env vars,
 
@@ -3114,73 +2330,54 @@ def list_authenticated_providers(
 
         # ~/.aws/credentials, instance roles, etc.)
 
-        if not _cp_has_creds and _cp_config and getattr(_cp_config, "auth_type", "") == "aws_sdk":
-
+        if (
+            not _cp_has_creds
+            and _cp_config
+            and getattr(_cp_config, "auth_type", "") == "aws_sdk"
+        ):
             _cp_has_creds = _has_aws_sdk_creds_for_listing(_cp.slug)
 
-
-
         if not _cp_has_creds:
-
             continue
-
-
 
         # For bedrock, use live discovery so the list reflects the active
 
         # region (eu.*, us.*, ap.*) instead of the hardcoded us.* static list.
 
         if _cp_config and getattr(_cp_config, "auth_type", "") == "aws_sdk":
-
             try:
-
                 _ids = cached_provider_model_ids(_cp.slug)
 
                 _cp_model_ids = _ids if _ids else curated.get(_cp.slug, [])
 
             except Exception:
-
                 _cp_model_ids = curated.get(_cp.slug, [])
 
         else:
-
             # Unified pathway — same as sections 1 and 2.
 
             _cp_model_ids = cached_provider_model_ids(_cp.slug)
 
             if not _cp_model_ids:
-
                 _cp_model_ids = curated.get(_cp.slug, [])
 
         _cp_total = len(_cp_model_ids)
 
         _cp_top = _cp_model_ids[:max_models]
 
-
-
         results.append({
-
             "slug": _cp.slug,
-
             "name": _cp.label,
-
             "is_current": _cp.slug == current_provider,
-
             "is_user_defined": False,
-
             "models": _cp_top,
-
             "total_models": _cp_total,
-
             "source": "canonical",
-
         })
 
         seen_slugs.add(_cp.slug.lower())
 
         _record_builtin_endpoint(_cp.slug)
-
-
 
     # --- 3. User-defined endpoints from config ---
 
@@ -3199,11 +2396,8 @@ def list_authenticated_providers(
     _section3_emitted_pairs: set = set()
 
     if user_providers and isinstance(user_providers, dict):
-
         for ep_name, ep_cfg in user_providers.items():
-
             if not isinstance(ep_cfg, dict):
-
                 continue
 
             # Skip if this slug was already emitted (e.g. canonical provider
@@ -3211,7 +2405,6 @@ def list_authenticated_providers(
             # with the same name) or will be picked up by section 4.
 
             if ep_name.lower() in seen_slugs:
-
                 continue
 
             display_name = ep_cfg.get("name", "") or ep_name
@@ -3223,15 +2416,10 @@ def list_authenticated_providers(
             # remain as fallbacks for hand-edited / legacy configs.
 
             api_url = (
-
                 ep_cfg.get("base_url", "")
-
                 or ep_cfg.get("api", "")
-
                 or ep_cfg.get("url", "")
-
                 or ""
-
             )
 
             # ``default_model`` is the legacy key; ``model`` matches what
@@ -3240,14 +2428,11 @@ def list_authenticated_providers(
 
             default_model = ep_cfg.get("default_model", "") or ep_cfg.get("model", "")
 
-
-
             # Build models list from both default_model and full models array
 
             models_list = []
 
             if default_model:
-
                 models_list.append(default_model)
 
             # Also include the full models list from config.
@@ -3261,40 +2446,27 @@ def list_authenticated_providers(
             cfg_models = ep_cfg.get("models", [])
 
             if isinstance(cfg_models, dict):
-
                 for m in cfg_models:
-
                     if m and m not in models_list:
-
                         models_list.append(m)
 
             elif isinstance(cfg_models, list):
-
                 for m in cfg_models:
-
                     if m and m not in models_list:
-
                         models_list.append(m)
-
-
 
             # Official OpenAI API rows in providers: often have base_url but no
 
             # explicit models: dict — avoid a misleading zero count in /model.
 
             if not models_list:
-
                 url_lower = str(api_url).strip().lower()
 
                 if "api.openai.com" in url_lower:
-
                     fb = curated.get("openai") or []
 
                     if fb:
-
                         models_list = list(fb)
-
-
 
             # Prefer the endpoint's live /models list when credentials are
 
@@ -3307,7 +2479,6 @@ def list_authenticated_providers(
             api_key = str(ep_cfg.get("api_key", "") or "").strip()
 
             if not api_key:
-
                 key_env = str(ep_cfg.get("key_env", "") or "").strip()
 
                 api_key = os.environ.get(key_env, "").strip() if key_env else ""
@@ -3315,45 +2486,29 @@ def list_authenticated_providers(
             discover = ep_cfg.get("discover_models", True)
 
             if isinstance(discover, str):
-
                 discover = discover.lower() not in {"false", "no", "0"}
 
             if api_url and api_key and discover:
-
                 try:
-
                     from clawk_cli.models import fetch_api_models
 
                     live_models = fetch_api_models(api_key, api_url)
 
                     if live_models:
-
                         models_list = live_models
 
                 except Exception:
-
                     pass
 
-
-
             results.append({
-
                 "slug": ep_name,
-
                 "name": display_name,
-
                 "is_current": ep_name == current_provider,
-
                 "is_user_defined": True,
-
                 "models": models_list,
-
                 "total_models": len(models_list) if models_list else 0,
-
                 "source": "user-config",
-
                 "api_url": api_url,
-
             })
 
             seen_slugs.add(ep_name.lower())
@@ -3361,18 +2516,12 @@ def list_authenticated_providers(
             seen_slugs.add(custom_provider_slug(display_name).lower())
 
             _pair = (
-
                 str(display_name).strip().lower(),
-
                 str(api_url).strip().rstrip("/").lower(),
-
             )
 
             if _pair[0] and _pair[1]:
-
                 _section3_emitted_pairs.add(_pair)
-
-
 
     # --- 4. Saved custom providers from config ---
 
@@ -3393,10 +2542,7 @@ def list_authenticated_providers(
     # or ``api_mode`` remain distinct providers.
 
     if custom_providers and isinstance(custom_providers, list):
-
         from collections import OrderedDict
-
-
 
         # Key by endpoint + credential identity + wire protocol instead of
 
@@ -3411,29 +2557,23 @@ def list_authenticated_providers(
         groups: "OrderedDict[tuple, dict]" = OrderedDict()
 
         for entry in custom_providers:
-
             if not isinstance(entry, dict):
-
                 continue
-
-
 
             raw_name = (entry.get("name") or "").strip()
 
             api_url = (
-
-                entry.get("base_url", "")
-
-                or entry.get("url", "")
-
-                or entry.get("api", "")
-
-                or ""
-
-            ).strip().rstrip("/")
+                (
+                    entry.get("base_url", "")
+                    or entry.get("url", "")
+                    or entry.get("api", "")
+                    or ""
+                )
+                .strip()
+                .rstrip("/")
+            )
 
             if not raw_name or not api_url:
-
                 continue
 
             inline_api_key = (entry.get("api_key") or "").strip()
@@ -3441,37 +2581,24 @@ def list_authenticated_providers(
             key_env = (entry.get("key_env") or "").strip()
 
             api_key = inline_api_key or (
-
                 os.environ.get(key_env, "").strip() if key_env else ""
-
             )
 
-            api_mode = str(
-
-                entry.get("api_mode")
-
-                or entry.get("transport")
-
-                or ""
-
-            ).strip().lower()
+            api_mode = (
+                str(entry.get("api_mode") or entry.get("transport") or "")
+                .strip()
+                .lower()
+            )
 
             credential_identity = (
-
                 inline_api_key
-
                 if inline_api_key
-
                 else (f"env:{key_env}" if key_env else "")
-
             )
-
-
 
             group_key = (api_url, credential_identity, api_mode)
 
             if group_key not in groups:
-
                 # Strip per-model suffix so "Ollama — GLM 5.1" becomes
 
                 # "Ollama" for the grouped row. Em dash is the convention
@@ -3483,38 +2610,26 @@ def list_authenticated_providers(
                 display_name = raw_name
 
                 for sep in ("—", " - "):
-
                     if sep in display_name:
-
                         display_name = display_name.split(sep)[0].strip()
 
                         break
 
                 if not display_name:
-
                     display_name = raw_name
 
                 slug = custom_provider_slug(display_name)
 
                 groups[group_key] = {
-
                     "slug": slug,
-
                     "name": display_name,
-
                     "api_url": api_url,
-
                     "api_key": api_key,
-
                     "models": [],
-
                 }
 
             elif api_key and not groups[group_key].get("api_key"):
-
                 groups[group_key]["api_key"] = api_key
-
-
 
             # The singular ``model:`` field only holds the currently
 
@@ -3529,49 +2644,33 @@ def list_authenticated_providers(
             default_model = (entry.get("model") or "").strip()
 
             if default_model and default_model not in groups[group_key]["models"]:
-
                 groups[group_key]["models"].append(default_model)
-
-
 
             cfg_models = entry.get("models", {})
 
             if isinstance(cfg_models, dict):
-
                 for m in cfg_models:
-
                     if m and m not in groups[group_key]["models"]:
-
                         groups[group_key]["models"].append(m)
 
             elif isinstance(cfg_models, list):
-
                 for m in cfg_models:
-
                     if m and m not in groups[group_key]["models"]:
-
                         groups[group_key]["models"].append(m)
-
-
 
         _section4_emitted_slugs: set = set()
 
         _current_base_url_norm = str(current_base_url or "").strip().rstrip("/").lower()
 
         _current_base_url_group_count = sum(
-
             1
-
             for _grp in groups.values()
-
             if _current_base_url_norm
-
-            and str(_grp["api_url"]).strip().rstrip("/").lower() == _current_base_url_norm
-
+            and str(_grp["api_url"]).strip().rstrip("/").lower()
+            == _current_base_url_norm
         )
 
         for grp in groups.values():
-
             api_url = grp["api_url"]
 
             api_key = grp.get("api_key", "")
@@ -3584,8 +2683,10 @@ def list_authenticated_providers(
 
             # to avoid shadowing a real provider.
 
-            if slug.lower() in seen_slugs and slug.lower() not in _section4_emitted_slugs:
-
+            if (
+                slug.lower() in seen_slugs
+                and slug.lower() not in _section4_emitted_slugs
+            ):
                 continue
 
             # If a prior section-4 group already used this slug (two custom
@@ -3597,13 +2698,11 @@ def list_authenticated_providers(
             # append a counter so both rows stay visible in the picker.
 
             if slug.lower() in _section4_emitted_slugs:
-
                 base_slug = slug
 
                 n = 2
 
                 while f"{base_slug}-{n}".lower() in seen_slugs:
-
                     n += 1
 
                 slug = f"{base_slug}-{n}"
@@ -3621,15 +2720,11 @@ def list_authenticated_providers(
             # ``custom_providers`` list.
 
             _pair_key = (
-
                 str(grp["name"]).strip().lower(),
-
                 str(grp["api_url"]).strip().rstrip("/").lower(),
-
             )
 
             if _pair_key[0] and _pair_key[1] and _pair_key in _section3_emitted_pairs:
-
                 continue
 
             # Skip if a built-in row (sections 1/2/2b) already represents this
@@ -3647,7 +2742,6 @@ def list_authenticated_providers(
             _grp_url_norm = _pair_key[1]
 
             if _grp_url_norm and _grp_url_norm in _builtin_endpoints:
-
                 continue
 
             # Live model discovery from custom provider endpoints (matches
@@ -3693,89 +2787,55 @@ def list_authenticated_providers(
             should_probe = bool(api_url) and (bool(api_key) or not grp["models"])
 
             if should_probe:
-
                 try:
-
                     from clawk_cli.models import fetch_api_models
-
-
 
                     live_models = fetch_api_models(api_key, api_url)
 
                     if live_models:
-
                         grp["models"] = live_models
 
                         grp["total_models"] = len(live_models)
 
                 except Exception:
-
                     pass
 
             results.append({
-
                 "slug": slug,
-
                 "name": grp["name"],
-
-                "is_current": slug == current_provider or (
-
+                "is_current": slug == current_provider
+                or (
                     current_provider == "custom"
-
                     and bool(_current_base_url_norm)
-
                     and _grp_url_norm == _current_base_url_norm
-
                     and _current_base_url_group_count == 1
-
                 ),
-
                 "is_user_defined": True,
-
                 "models": grp["models"],
-
                 "total_models": len(grp["models"]),
-
                 "source": "user-config",
-
                 "api_url": grp["api_url"],
-
             })
 
             seen_slugs.add(slug.lower())
 
             _section4_emitted_slugs.add(slug.lower())
 
-
-
     # Sort: current provider first, then by model count descending
 
     results.sort(key=lambda r: (not r["is_current"], -r["total_models"]))
 
-
-
     return results
 
 
-
-
-
 def list_picker_providers(
-
     current_provider: str = "",
-
     current_base_url: str = "",
-
     user_providers: dict = None,
-
     custom_providers: list | None = None,
-
     max_models: int = 8,
-
     current_model: str = "",
-
 ) -> List[dict]:
-
     """Interactive-picker variant of :func:`list_authenticated_providers`.
 
 
@@ -3816,42 +2876,27 @@ def list_picker_providers(
 
     from clawk_cli.models import fetch_openrouter_models
 
-
-
     providers = list_authenticated_providers(
-
         current_provider=current_provider,
-
         current_base_url=current_base_url,
-
         user_providers=user_providers,
-
         custom_providers=custom_providers,
-
         max_models=max_models,
-
         current_model=current_model,
-
     )
-
-
 
     filtered: List[dict] = []
 
     for p in providers:
-
         slug = str(p.get("slug", "")).lower()
 
         if slug == "openrouter":
-
             try:
-
                 live = fetch_openrouter_models()
 
                 live_ids = [mid for mid, _ in live]
 
             except Exception:
-
                 live_ids = list(p.get("models", []))
 
             p = dict(p)
@@ -3860,19 +2905,13 @@ def list_picker_providers(
 
             p["total_models"] = len(live_ids)
 
-
-
         has_models = bool(p.get("models"))
 
         is_custom_endpoint = bool(p.get("is_user_defined")) and bool(p.get("api_url"))
 
         if not has_models and not is_custom_endpoint:
-
             continue
 
         filtered.append(p)
 
-
-
     return filtered
-

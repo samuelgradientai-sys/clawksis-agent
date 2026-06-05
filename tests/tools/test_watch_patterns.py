@@ -49,6 +49,7 @@ def _make_session(
 # ProcessSession field defaults
 # =========================================================================
 
+
 class TestProcessSessionField:
     def test_default_empty(self):
         s = ProcessSession(id="proc_1", command="echo hi")
@@ -65,6 +66,7 @@ class TestProcessSessionField:
 # =========================================================================
 # Pattern matching + queue population
 # =========================================================================
+
 
 class TestCheckWatchPatterns:
     def test_no_patterns_no_notification(self, registry):
@@ -153,6 +155,7 @@ class TestCheckWatchPatterns:
 # =========================================================================
 # Per-session rate limiting: 1 notification per 15s, 3 strikes → disable
 # =========================================================================
+
 
 class TestPerSessionRateLimit:
     def test_first_match_delivers(self, registry):
@@ -265,6 +268,7 @@ class TestPerSessionRateLimit:
 # Checkpoint persistence
 # =========================================================================
 
+
 class TestCheckpointPersistence:
     def test_watch_patterns_in_checkpoint(self, registry):
         """watch_patterns is included in checkpoint data."""
@@ -282,22 +286,27 @@ class TestCheckpointPersistence:
     def test_watch_patterns_recovery(self, registry, tmp_path, monkeypatch):
         """watch_patterns survives checkpoint recovery."""
         import tools.process_registry as pr_mod
+
         checkpoint = tmp_path / "processes.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_recovered",
-            "command": "tail -f log",
-            "pid": 99999999,  # non-existent
-            "pid_scope": "host",
-            "started_at": time.time(),
-            "task_id": "",
-            "session_key": "",
-            "watcher_platform": "",
-            "watcher_chat_id": "",
-            "watcher_thread_id": "",
-            "watcher_interval": 0,
-            "notify_on_complete": False,
-            "watch_patterns": ["PANIC", "OOM"],
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_recovered",
+                    "command": "tail -f log",
+                    "pid": 99999999,  # non-existent
+                    "pid_scope": "host",
+                    "started_at": time.time(),
+                    "task_id": "",
+                    "session_key": "",
+                    "watcher_platform": "",
+                    "watcher_chat_id": "",
+                    "watcher_thread_id": "",
+                    "watcher_interval": 0,
+                    "notify_on_complete": False,
+                    "watch_patterns": ["PANIC", "OOM"],
+                }
+            ])
+        )
         monkeypatch.setattr(pr_mod, "CHECKPOINT_PATH", checkpoint)
         # PID doesn't exist, so nothing will be recovered
         count = registry.recover_from_checkpoint()
@@ -309,9 +318,11 @@ class TestCheckpointPersistence:
 # Terminal tool schema + handler
 # =========================================================================
 
+
 class TestTerminalToolSchema:
     def test_schema_includes_watch_patterns(self):
         from tools.terminal_tool import TERMINAL_SCHEMA
+
         props = TERMINAL_SCHEMA["parameters"]["properties"]
         assert "watch_patterns" in props
         assert props["watch_patterns"]["type"] == "array"
@@ -320,6 +331,7 @@ class TestTerminalToolSchema:
     def test_handler_passes_watch_patterns(self):
         """_handle_terminal passes watch_patterns to terminal_tool."""
         from tools.terminal_tool import _handle_terminal
+
         with patch("tools.terminal_tool.terminal_tool") as mock_tt:
             mock_tt.return_value = json.dumps({"output": "ok", "exit_code": 0})
             _handle_terminal(
@@ -334,15 +346,18 @@ class TestTerminalToolSchema:
 # Code execution tool blocked params
 # =========================================================================
 
+
 class TestCodeExecutionBlocked:
     def test_watch_patterns_blocked(self):
         from tools.code_execution_tool import _TERMINAL_BLOCKED_PARAMS
+
         assert "watch_patterns" in _TERMINAL_BLOCKED_PARAMS
 
 
 # =========================================================================
 # Suppress-after-exit (anti-spam fix)
 # =========================================================================
+
 
 class TestSuppressAfterExit:
     def test_match_dropped_once_session_exited(self, registry):
@@ -367,6 +382,7 @@ class TestSuppressAfterExit:
 # =========================================================================
 # Mutual exclusion: notify_on_complete wins over watch_patterns
 # =========================================================================
+
 
 class TestMutualExclusion:
     def test_resolver_drops_watch_when_notify_set(self):
@@ -422,6 +438,7 @@ class TestMutualExclusion:
 # =========================================================================
 # Global circuit breaker (cross-session overflow blocker)
 # =========================================================================
+
 
 class TestGlobalCircuitBreaker:
     def test_trips_after_global_threshold(self, registry):

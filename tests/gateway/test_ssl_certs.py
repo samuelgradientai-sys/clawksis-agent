@@ -60,8 +60,10 @@ class TestEnsureSslCerts:
         mock_paths.openssl_cafile = None
 
         env = {k: v for k, v in os.environ.items() if k != "SSL_CERT_FILE"}
-        with patch.dict(os.environ, env, clear=True), \
-             patch("ssl.get_default_verify_paths", return_value=mock_paths):
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("ssl.get_default_verify_paths", return_value=mock_paths),
+        ):
             fn()
             assert os.environ.get("SSL_CERT_FILE") == str(cert)
 
@@ -72,9 +74,11 @@ class TestEnsureSslCerts:
         mock_paths.openssl_cafile = None
 
         env = {k: v for k, v in os.environ.items() if k != "SSL_CERT_FILE"}
-        with patch.dict(os.environ, env, clear=True), \
-             patch("ssl.get_default_verify_paths", return_value=mock_paths), \
-             patch("os.path.exists", return_value=False), \
-             patch.dict("sys.modules", {"certifi": None}):
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("ssl.get_default_verify_paths", return_value=mock_paths),
+            patch("os.path.exists", return_value=False),
+            patch.dict("sys.modules", {"certifi": None}),
+        ):
             fn()
             assert "SSL_CERT_FILE" not in os.environ

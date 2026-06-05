@@ -305,18 +305,26 @@ clawk pairing clear-pending
 
 每个容器均使用以下标志运行（定义于 `tools/environments/docker.py`）：
 
-```python
-_SECURITY_ARGS = [
-    "--cap-drop", "ALL",                          # 丢弃所有 Linux capabilities
-    "--cap-add", "DAC_OVERRIDE",                  # root 可写入绑定挂载目录
-    "--cap-add", "CHOWN",                         # 包管理器需要文件所有权
-    "--cap-add", "FOWNER",                        # 包管理器需要文件所有权
-    "--security-opt", "no-new-privileges",         # 阻止权限提升
-    "--pids-limit", "256",                         # 限制进程数量
-    "--tmpfs", "/tmp:rw,nosuid,size=512m",         # 有大小限制的 /tmp
-    "--tmpfs", "/var/tmp:rw,noexec,nosuid,size=256m",  # 禁止执行的 /var/tmp
-    "--tmpfs", "/run:rw,noexec,nosuid,size=64m",   # 禁止执行的 /run
-]
+```python_SECURITY_ARGS = [
+    "--cap-drop",
+    "ALL",  # 丢弃所有 Linux capabilities
+    "--cap-add",
+    "DAC_OVERRIDE",  # root 可写入绑定挂载目录
+    "--cap-add",
+    "CHOWN",  # 包管理器需要文件所有权
+    "--cap-add",
+    "FOWNER",  # 包管理器需要文件所有权
+    "--security-opt",
+    "no-new-privileges",  # 阻止权限提升
+    "--pids-limit",
+    "256",  # 限制进程数量
+    "--tmpfs",
+    "/tmp:rw,nosuid,size=512m",  # 有大小限制的 /tmp
+    "--tmpfs",
+    "/var/tmp:rw,noexec,nosuid,size=256m",  # 禁止执行的 /var/tmp
+    "--tmpfs",
+    "/run:rw,noexec,nosuid,size=64m",  # 禁止执行的 /run
+]
 ```
 
 ### 资源限制

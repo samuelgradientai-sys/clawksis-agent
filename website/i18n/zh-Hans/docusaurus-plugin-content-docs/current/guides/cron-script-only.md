@@ -57,28 +57,36 @@ Clawksis 将此称为**无 agent 模式**。这是去掉 LLM 的 cron 系统。
 
 在底层，agent 进行了两次工具调用：
 
-```python
-# 1. 写入检查脚本
-write_file(
-    path="~/.clawksis/scripts/memory-watchdog.sh",
-    content='''#!/usr/bin/env bash
-ram_pct=$(free | awk '/^Mem:/ {printf "%d", $3 * 100 / $2}')
-if [ "$ram_pct" -ge 85 ]; then
-  echo "RAM ${ram_pct}% on $(hostname)"
-fi
-# Empty stdout = silent tick; no message sent.
-''',
-)
-
-# 2. 调度任务 — no_agent=True 在每次触发时跳过 LLM
-cronjob(
-    action="create",
-    schedule="every 5m",
-    script="memory-watchdog.sh",
-    no_agent=True,
-    deliver="telegram",
-    name="memory-watchdog",
-)
+```python# 1. 写入检查脚本
+
+write_file(
+    path="~/.clawksis/scripts/memory-watchdog.sh",
+    content="""#!/usr/bin/env bash
+
+ram_pct=$(free | awk '/^Mem:/ {printf "%d", $3 * 100 / $2}')
+
+if [ "$ram_pct" -ge 85 ]; then
+
+  echo "RAM ${ram_pct}% on $(hostname)"
+
+fi
+
+# Empty stdout = silent tick; no message sent.
+
+""",
+)
+
+
+# 2. 调度任务 — no_agent=True 在每次触发时跳过 LLM
+
+cronjob(
+    action="create",
+    schedule="every 5m",
+    script="memory-watchdog.sh",
+    no_agent=True,
+    deliver="telegram",
+    name="memory-watchdog",
+)
 ```
 
 此后每次触发都是免费的：调度器运行脚本，若 stdout 非空则将其发送到 Telegram，且从不调用模型。

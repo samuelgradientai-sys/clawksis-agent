@@ -20,6 +20,7 @@ def get_provider_request_timeout(
 
     try:
         from clawk_cli.config import load_config_readonly
+
         config = load_config_readonly()
     except Exception:
         return None
@@ -49,6 +50,7 @@ def get_provider_stale_timeout(
 
     try:
         from clawk_cli.config import load_config_readonly
+
         config = load_config_readonly()
     except Exception:
         return None

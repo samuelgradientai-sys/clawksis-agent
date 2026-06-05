@@ -64,13 +64,15 @@ uv pip install --upgrade transformers
 
 In the `setup_caches` method of the `HeartMuLa` class, add RoPE reinitialization after the `reset_caches` try/except block and before the `with device:` block:
 
-```python
-# Re-initialize RoPE caches that were skipped during meta-device loading
-from torchtune.models.llama3_1._position_embeddings import Llama3ScaledRoPE
-for module in self.modules():
-    if isinstance(module, Llama3ScaledRoPE) and not module.is_cache_built:
-        module.rope_init()
-        module.to(device)
+```python# Re-initialize RoPE caches that were skipped during meta-device loading
+
+from torchtune.models.llama3_1._position_embeddings import Llama3ScaledRoPE
+
+for module in self.modules():
+    if isinstance(module, Llama3ScaledRoPE) and not module.is_cache_built:
+        module.rope_init()
+
+        module.to(device)
 ```
 
 **Why**: `from_pretrained` creates model on meta device first; `Llama3ScaledRoPE.rope_init()` skips cache building on meta tensors, then never rebuilds after weights are loaded to real device.

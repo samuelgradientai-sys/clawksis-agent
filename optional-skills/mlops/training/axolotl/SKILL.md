@@ -84,34 +84,29 @@ utils.trainer.drop_long_seq(sample, sequence_len=2048, min_sequence_len=2)
 ### Example Code Patterns
 
 **Example 1** (python):
-```python
-cli.cloud.modal_.ModalCloud(config, app=None)
+```pythoncli.cloud.modal_.ModalCloud(config, app=None)
 ```
 
 **Example 2** (python):
-```python
-cli.cloud.modal_.run_cmd(cmd, run_folder, volumes=None)
+```pythoncli.cloud.modal_.run_cmd(cmd, run_folder, volumes=None)
 ```
 
 **Example 3** (python):
-```python
-core.trainers.base.AxolotlTrainer(
-    *_args,
-    bench_data_collator=None,
-    eval_data_collator=None,
-    dataset_tags=None,
-    **kwargs,
-)
+```pythoncore.trainers.base.AxolotlTrainer(
+    *_args,
+    bench_data_collator=None,
+    eval_data_collator=None,
+    dataset_tags=None,
+    **kwargs,
+)
 ```
 
 **Example 4** (python):
-```python
-core.trainers.base.AxolotlTrainer.log(logs, start_time=None)
+```pythoncore.trainers.base.AxolotlTrainer.log(logs, start_time=None)
 ```
 
 **Example 5** (python):
-```python
-prompt_strategies.input_output.RawInputOutputPrompter()
+```pythonprompt_strategies.input_output.RawInputOutputPrompter()
 ```
 
 ## Reference Files

@@ -11,10 +11,10 @@ import queue
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_adapter():
     """Build a minimal APIServerAdapter with mocked internals."""
@@ -37,6 +37,7 @@ def _make_request():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestSSEAgentCancelOnDisconnect:
     """gateway/platforms/api_server.py — _write_sse_chat_completion()"""
 
@@ -53,7 +54,11 @@ class TestSSEAgentCancelOnDisconnect:
 
         async def fake_agent():
             await agent_done.wait()
-            return {"final_response": "done"}, {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+            return {"final_response": "done"}, {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+            }
 
         async def run():
             from aiohttp import web
@@ -73,14 +78,23 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=write_side_effect)
             mock_response.prepare = AsyncMock()
 
-            with patch.object(type(adapter), '_write_sse_chat_completion',
-                              adapter._write_sse_chat_completion):
+            with patch.object(
+                type(adapter),
+                "_write_sse_chat_completion",
+                adapter._write_sse_chat_completion,
+            ):
                 # Patch StreamResponse creation
-                with patch("gateway.platforms.api_server.web.StreamResponse",
-                           return_value=mock_response):
+                with patch(
+                    "gateway.platforms.api_server.web.StreamResponse",
+                    return_value=mock_response,
+                ):
                     await adapter._write_sse_chat_completion(
-                        _make_request(), "cmpl-123", "gpt-4", 1234567890,
-                        stream_q, agent_task,
+                        _make_request(),
+                        "cmpl-123",
+                        "gpt-4",
+                        1234567890,
+                        stream_q,
+                        agent_task,
                     )
 
             # The critical assertion: agent_task must be cancelled
@@ -99,7 +113,11 @@ class TestSSEAgentCancelOnDisconnect:
         stream_q.put(None)  # End-of-stream sentinel
 
         async def fake_agent():
-            return {"final_response": "done"}, {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+            return {"final_response": "done"}, {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+            }
 
         async def run():
             from aiohttp import web
@@ -111,11 +129,17 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock()
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
-                       return_value=mock_response):
+            with patch(
+                "gateway.platforms.api_server.web.StreamResponse",
+                return_value=mock_response,
+            ):
                 await adapter._write_sse_chat_completion(
-                    _make_request(), "cmpl-456", "gpt-4", 1234567890,
-                    stream_q, agent_task,
+                    _make_request(),
+                    "cmpl-456",
+                    "gpt-4",
+                    1234567890,
+                    stream_q,
+                    agent_task,
                 )
 
             # Agent should have completed normally, not been cancelled
@@ -143,11 +167,17 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=BrokenPipeError("pipe broken"))
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
-                       return_value=mock_response):
+            with patch(
+                "gateway.platforms.api_server.web.StreamResponse",
+                return_value=mock_response,
+            ):
                 await adapter._write_sse_chat_completion(
-                    _make_request(), "cmpl-789", "gpt-4", 1234567890,
-                    stream_q, agent_task,
+                    _make_request(),
+                    "cmpl-789",
+                    "gpt-4",
+                    1234567890,
+                    stream_q,
+                    agent_task,
                 )
 
             assert agent_task.cancelled() or agent_task.done()
@@ -182,11 +212,17 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=write_side_effect)
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
-                       return_value=mock_response):
+            with patch(
+                "gateway.platforms.api_server.web.StreamResponse",
+                return_value=mock_response,
+            ):
                 await adapter._write_sse_chat_completion(
-                    _make_request(), "cmpl-done", "gpt-4", 1234567890,
-                    stream_q, agent_task,
+                    _make_request(),
+                    "cmpl-done",
+                    "gpt-4",
+                    1234567890,
+                    stream_q,
+                    agent_task,
                 )
 
             # Task was already done — should not be cancelled
@@ -231,11 +267,18 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=write_side_effect)
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
-                       return_value=mock_response):
+            with patch(
+                "gateway.platforms.api_server.web.StreamResponse",
+                return_value=mock_response,
+            ):
                 await adapter._write_sse_chat_completion(
-                    _make_request(), "cmpl-int", "gpt-4", 1234567890,
-                    stream_q, agent_task, agent_ref,
+                    _make_request(),
+                    "cmpl-int",
+                    "gpt-4",
+                    1234567890,
+                    stream_q,
+                    agent_task,
+                    agent_ref,
                 )
 
             # agent.interrupt() must have been called
@@ -265,12 +308,18 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=BrokenPipeError("gone"))
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
-                       return_value=mock_response):
+            with patch(
+                "gateway.platforms.api_server.web.StreamResponse",
+                return_value=mock_response,
+            ):
                 # No agent_ref passed — should still handle disconnect cleanly
                 await adapter._write_sse_chat_completion(
-                    _make_request(), "cmpl-noref", "gpt-4", 1234567890,
-                    stream_q, agent_task,
+                    _make_request(),
+                    "cmpl-noref",
+                    "gpt-4",
+                    1234567890,
+                    stream_q,
+                    agent_task,
                 )
 
             assert agent_task.cancelled() or agent_task.done()

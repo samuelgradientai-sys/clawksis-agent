@@ -129,60 +129,65 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### 基础生成
 
-```python
-from llama_cpp import Llama
-
-llm = Llama(
-    model_path="./model-q4_k_m.gguf",
-    n_ctx=4096,
-    n_gpu_layers=35,     # 0 为 CPU，99 为全部卸载到 GPU
-    n_threads=8,
-)
-
-out = llm("What is machine learning?", max_tokens=256, temperature=0.7)
-print(out["choices"][0]["text"])
+```pythonfrom llama_cpp import Llama
+
+
+llm = Llama(
+    model_path="./model-q4_k_m.gguf",
+    n_ctx=4096,
+    n_gpu_layers=35,  # 0 为 CPU，99 为全部卸载到 GPU
+    n_threads=8,
+)
+
+
+out = llm("What is machine learning?", max_tokens=256, temperature=0.7)
+
+print(out["choices"][0]["text"])
 ```
 
 ### 对话 + 流式输出
 
-```python
-llm = Llama(
-    model_path="./model-q4_k_m.gguf",
-    n_ctx=4096,
-    n_gpu_layers=35,
-    chat_format="llama-3",   # 或 "chatml"、"mistral" 等
-)
-
-resp = llm.create_chat_completion(
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "What is Python?"},
-    ],
-    max_tokens=256,
-)
-print(resp["choices"][0]["message"]["content"])
-
-# 流式输出
-for chunk in llm("Explain quantum computing:", max_tokens=256, stream=True):
-    print(chunk["choices"][0]["text"], end="", flush=True)
+```pythonllm = Llama(
+    model_path="./model-q4_k_m.gguf",
+    n_ctx=4096,
+    n_gpu_layers=35,
+    chat_format="llama-3",  # 或 "chatml"、"mistral" 等
+)
+
+
+resp = llm.create_chat_completion(
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is Python?"},
+    ],
+    max_tokens=256,
+)
+
+print(resp["choices"][0]["message"]["content"])
+
+
+# 流式输出
+
+for chunk in llm("Explain quantum computing:", max_tokens=256, stream=True):
+    print(chunk["choices"][0]["text"], end="", flush=True)
 ```
 
 ### Embedding（嵌入向量）
 
-```python
-llm = Llama(model_path="./model-q4_k_m.gguf", embedding=True, n_gpu_layers=35)
-vec = llm.embed("This is a test sentence.")
-print(f"Embedding dimension: {len(vec)}")
+```pythonllm = Llama(model_path="./model-q4_k_m.gguf", embedding=True, n_gpu_layers=35)
+
+vec = llm.embed("This is a test sentence.")
+
+print(f"Embedding dimension: {len(vec)}")
 ```
 
 也可以直接从 Hub 加载 GGUF：
 
-```python
-llm = Llama.from_pretrained(
-    repo_id="bartowski/Llama-3.2-3B-Instruct-GGUF",
-    filename="*Q4_K_M.gguf",
-    n_gpu_layers=35,
-)
+```pythonllm = Llama.from_pretrained(
+    repo_id="bartowski/Llama-3.2-3B-Instruct-GGUF",
+    filename="*Q4_K_M.gguf",
+    n_gpu_layers=35,
+)
 ```
 
 ## 选择量化方案

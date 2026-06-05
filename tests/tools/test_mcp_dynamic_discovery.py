@@ -53,18 +53,21 @@ class TestRefreshTools:
 
         # Seed initial state: one old tool registered
         mock_registry.register(
-            name="mcp_live_srv_old_tool", toolset="mcp-live_srv", schema={},
-            handler=lambda x: x, check_fn=lambda: True, is_async=False,
-            description="", emoji="",
+            name="mcp_live_srv_old_tool",
+            toolset="mcp-live_srv",
+            schema={},
+            handler=lambda x: x,
+            check_fn=lambda: True,
+            is_async=False,
+            description="",
+            emoji="",
         )
         server._registered_tool_names = ["mcp_live_srv_old_tool"]
 
         # New tool list from server
         new_tool = _make_mcp_tool("new_tool", "new behavior")
         server.session = SimpleNamespace(
-            list_tools=AsyncMock(
-                return_value=SimpleNamespace(tools=[new_tool])
-            )
+            list_tools=AsyncMock(return_value=SimpleNamespace(tools=[new_tool]))
         )
 
         with patch("tools.registry.registry", mock_registry):
@@ -82,6 +85,7 @@ class TestMessageHandler:
     @pytest.mark.asyncio
     async def test_dispatches_tool_list_changed(self):
         from tools.mcp_tool import _MCP_NOTIFICATION_TYPES
+
         if not _MCP_NOTIFICATION_TYPES:
             pytest.skip("MCP SDK ToolListChangedNotification not available")
 
@@ -96,7 +100,9 @@ class TestMessageHandler:
         with patch.object(MCPServerTask, "_schedule_tools_refresh") as mock_schedule:
             handler = server._make_message_handler()
             notification = ServerNotification(
-                root=ToolListChangedNotification(method="notifications/tools/list_changed")
+                root=ToolListChangedNotification(
+                    method="notifications/tools/list_changed"
+                )
             )
             await handler(notification)
             mock_schedule.assert_called_once()
@@ -126,7 +132,9 @@ class TestDeregister:
     def test_cleans_up_toolset_check(self):
         reg = ToolRegistry()
         check = lambda: True  # noqa: E731
-        reg.register(name="foo", toolset="ts1", schema={}, handler=lambda x: x, check_fn=check)
+        reg.register(
+            name="foo", toolset="ts1", schema={}, handler=lambda x: x, check_fn=check
+        )
         assert reg.is_toolset_available("ts1")
         reg.deregister("foo")
         # Toolset check should be gone since no tools remain
@@ -135,7 +143,9 @@ class TestDeregister:
     def test_preserves_toolset_check_if_other_tools_remain(self):
         reg = ToolRegistry()
         check = lambda: True  # noqa: E731
-        reg.register(name="foo", toolset="ts1", schema={}, handler=lambda x: x, check_fn=check)
+        reg.register(
+            name="foo", toolset="ts1", schema={}, handler=lambda x: x, check_fn=check
+        )
         reg.register(name="bar", toolset="ts1", schema={}, handler=lambda x: x)
         reg.deregister("foo")
         # bar still in ts1, so check should remain

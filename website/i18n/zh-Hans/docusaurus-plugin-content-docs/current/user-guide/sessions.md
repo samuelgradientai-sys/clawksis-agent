@@ -355,8 +355,7 @@ Agent 内置了 `session_search` 工具，使用 SQLite 的 FTS5 引擎对所有
 
 **1. 发现——传入 `query`：**
 
-```python
-session_search(query="auth refactor", limit=3)
+```pythonsession_search(query="auth refactor", limit=3)
 ```
 
 运行 FTS5，按 session 谱系去重，返回前 N 个 session。每个结果包含：
@@ -372,8 +371,7 @@ session_search(query="auth refactor", limit=3)
 
 **2. 滚动——传入 `session_id` + `around_message_id`：**
 
-```python
-session_search(session_id="20260510_174648_805cc2", around_message_id=590803, window=10)
+```pythonsession_search(session_id="20260510_174648_805cc2", around_message_id=590803, window=10)
 ```
 
 返回以锚点为中心的 ±`window` 条消息窗口。无 FTS5，无书签——只是切片。在发现调用后需要比默认 ±5 窗口更多上下文时使用。
@@ -387,8 +385,7 @@ session_search(session_id="20260510_174648_805cc2", around_message_id=590803, wi
 
 **3. 浏览——无参数：**
 
-```python
-session_search()
+```pythonsession_search()
 ```
 
 按时间顺序返回最近的 session（标题、预览、时间戳）。当用户询问"我在做什么"而未指定主题时很有用。

@@ -66,65 +66,91 @@ pip install tokenizers transformers
 
 ### 加载预训练 tokenizer
 
-```python
-from tokenizers import Tokenizer
-
-# 从 HuggingFace Hub 加载
-tokenizer = Tokenizer.from_pretrained("bert-base-uncased")
-
-# 对文本编码
-output = tokenizer.encode("Hello, how are you?")
-print(output.tokens)  # ['hello', ',', 'how', 'are', 'you', '?']
-print(output.ids)     # [7592, 1010, 2129, 2024, 2017, 1029]
-
-# 解码还原
-text = tokenizer.decode(output.ids)
-print(text)  # "hello, how are you?"
+```pythonfrom tokenizers import Tokenizer
+
+
+# 从 HuggingFace Hub 加载
+
+tokenizer = Tokenizer.from_pretrained("bert-base-uncased")
+
+
+# 对文本编码
+
+output = tokenizer.encode("Hello, how are you?")
+
+print(output.tokens)  # ['hello', ',', 'how', 'are', 'you', '?']
+
+print(output.ids)  # [7592, 1010, 2129, 2024, 2017, 1029]
+
+
+# 解码还原
+
+text = tokenizer.decode(output.ids)
+
+print(text)  # "hello, how are you?"
 ```
 
 ### 训练自定义 BPE tokenizer
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import Whitespace
-
-# 使用 BPE 模型初始化 tokenizer
-tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
-tokenizer.pre_tokenizer = Whitespace()
-
-# 配置训练器
-trainer = BpeTrainer(
-    vocab_size=30000,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
-    min_frequency=2
-)
-
-# 在文件上训练
-files = ["train.txt", "validation.txt"]
-tokenizer.train(files, trainer)
-
-# 保存
-tokenizer.save("my-tokenizer.json")
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import BPE
+
+from tokenizers.trainers import BpeTrainer
+
+from tokenizers.pre_tokenizers import Whitespace
+
+
+# 使用 BPE 模型初始化 tokenizer
+
+tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
+
+tokenizer.pre_tokenizer = Whitespace()
+
+
+# 配置训练器
+
+trainer = BpeTrainer(
+    vocab_size=30000,
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+    min_frequency=2,
+)
+
+
+# 在文件上训练
+
+files = ["train.txt", "validation.txt"]
+
+tokenizer.train(files, trainer)
+
+
+# 保存
+
+tokenizer.save("my-tokenizer.json")
 ```
 
 **训练时间**：100MB 语料约 1–2 分钟，1GB 语料约 10–20 分钟
 
 ### 批量编码与 padding
 
-```python
-# 启用 padding
-tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
-
-# 批量编码
-texts = ["Hello world", "This is a longer sentence"]
-encodings = tokenizer.encode_batch(texts)
-
-for encoding in encodings:
-    print(encoding.ids)
-# [101, 7592, 2088, 102, 3, 3, 3]
-# [101, 2023, 2003, 1037, 2936, 6251, 102]
+```python# 启用 padding
+
+tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
+
+
+# 批量编码
+
+texts = ["Hello world", "This is a longer sentence"]
+
+encodings = tokenizer.encode_batch(texts)
+
+
+for encoding in encodings:
+    print(encoding.ids)
+
+# [101, 7592, 2088, 102, 3, 3, 3]
+
+# [101, 2023, 2003, 1037, 2936, 6251, 102]
 ```
 
 ## 分词算法
@@ -139,22 +165,26 @@ for encoding in encodings:
 
 **使用者**：GPT-2、GPT-3、RoBERTa、BART、DeBERTa
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import ByteLevel
-
-tokenizer = Tokenizer(BPE(unk_token="<|endoftext|>"))
-tokenizer.pre_tokenizer = ByteLevel()
-
-trainer = BpeTrainer(
-    vocab_size=50257,
-    special_tokens=["<|endoftext|>"],
-    min_frequency=2
-)
-
-tokenizer.train(files=["data.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import BPE
+
+from tokenizers.trainers import BpeTrainer
+
+from tokenizers.pre_tokenizers import ByteLevel
+
+
+tokenizer = Tokenizer(BPE(unk_token="<|endoftext|>"))
+
+tokenizer.pre_tokenizer = ByteLevel()
+
+
+trainer = BpeTrainer(
+    vocab_size=50257, special_tokens=["<|endoftext|>"], min_frequency=2
+)
+
+
+tokenizer.train(files=["data.txt"], trainer=trainer)
 ```
 
 **优点**：
@@ -176,24 +206,32 @@ tokenizer.train(files=["data.txt"], trainer=trainer)
 
 **使用者**：BERT、DistilBERT、MobileBERT
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import WordPiece
-from tokenizers.trainers import WordPieceTrainer
-from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.normalizers import BertNormalizer
-
-tokenizer = Tokenizer(WordPiece(unk_token="[UNK]"))
-tokenizer.normalizer = BertNormalizer(lowercase=True)
-tokenizer.pre_tokenizer = Whitespace()
-
-trainer = WordPieceTrainer(
-    vocab_size=30522,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
-    continuing_subword_prefix="##"
-)
-
-tokenizer.train(files=["corpus.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import WordPiece
+
+from tokenizers.trainers import WordPieceTrainer
+
+from tokenizers.pre_tokenizers import Whitespace
+
+from tokenizers.normalizers import BertNormalizer
+
+
+tokenizer = Tokenizer(WordPiece(unk_token="[UNK]"))
+
+tokenizer.normalizer = BertNormalizer(lowercase=True)
+
+tokenizer.pre_tokenizer = Whitespace()
+
+
+trainer = WordPieceTrainer(
+    vocab_size=30522,
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+    continuing_subword_prefix="##",
+)
+
+
+tokenizer.train(files=["corpus.txt"], trainer=trainer)
 ```
 
 **优点**：
@@ -214,20 +252,22 @@ tokenizer.train(files=["corpus.txt"], trainer=trainer)
 
 **使用者**：ALBERT、T5、mBART、XLNet（通过 SentencePiece）
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import Unigram
-from tokenizers.trainers import UnigramTrainer
-
-tokenizer = Tokenizer(Unigram())
-
-trainer = UnigramTrainer(
-    vocab_size=8000,
-    special_tokens=["<unk>", "<s>", "</s>"],
-    unk_token="<unk>"
-)
-
-tokenizer.train(files=["data.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import Unigram
+
+from tokenizers.trainers import UnigramTrainer
+
+
+tokenizer = Tokenizer(Unigram())
+
+
+trainer = UnigramTrainer(
+    vocab_size=8000, special_tokens=["<unk>", "<s>", "</s>"], unk_token="<unk>"
+)
+
+
+tokenizer.train(files=["data.txt"], trainer=trainer)
 ```
 
 **优点**：
@@ -247,17 +287,19 @@ tokenizer.train(files=["data.txt"], trainer=trainer)
 
 清洗并标准化文本：
 
-```python
-from tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
-
-tokenizer.normalizer = Sequence([
-    NFD(),           # Unicode 归一化（分解）
-    Lowercase(),     # 转为小写
-    StripAccents()   # 去除重音符号
-])
-
-# 输入："Héllo WORLD"
-# 归一化后："hello world"
+```pythonfrom tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
+
+
+tokenizer.normalizer = Sequence([
+    NFD(),  # Unicode 归一化（分解）
+    Lowercase(),  # 转为小写
+    StripAccents(),  # 去除重音符号
+])
+
+
+# 输入："Héllo WORLD"
+
+# 归一化后："hello world"
 ```
 
 **常用归一化器**：
@@ -271,17 +313,17 @@ tokenizer.normalizer = Sequence([
 
 将文本拆分为类词单元：
 
-```python
-from tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
-
-# 按空白和标点拆分
-tokenizer.pre_tokenizer = Sequence([
-    Whitespace(),
-    Punctuation()
-])
-
-# 输入："Hello, world!"
-# 预分词后：["Hello", ",", "world", "!"]
+```pythonfrom tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
+
+
+# 按空白和标点拆分
+
+tokenizer.pre_tokenizer = Sequence([Whitespace(), Punctuation()])
+
+
+# 输入："Hello, world!"
+
+# 预分词后：["Hello", ",", "world", "!"]
 ```
 
 **常用预分词器**：
@@ -295,53 +337,60 @@ tokenizer.pre_tokenizer = Sequence([
 
 为模型输入添加特殊 token：
 
-```python
-from tokenizers.processors import TemplateProcessing
-
-# BERT 风格：[CLS] sentence [SEP]
-tokenizer.post_processor = TemplateProcessing(
-    single="[CLS] $A [SEP]",
-    pair="[CLS] $A [SEP] $B [SEP]",
-    special_tokens=[
-        ("[CLS]", 1),
-        ("[SEP]", 2),
-    ],
-)
+```pythonfrom tokenizers.processors import TemplateProcessing
+
+
+# BERT 风格：[CLS] sentence [SEP]
+
+tokenizer.post_processor = TemplateProcessing(
+    single="[CLS] $A [SEP]",
+    pair="[CLS] $A [SEP] $B [SEP]",
+    special_tokens=[
+        ("[CLS]", 1),
+        ("[SEP]", 2),
+    ],
+)
 ```
 
 **常见模式**：
-```python
-# GPT-2：sentence <|endoftext|>
-TemplateProcessing(
-    single="$A <|endoftext|>",
-    special_tokens=[("<|endoftext|>", 50256)]
-)
-
-# RoBERTa：<s> sentence </s>
-TemplateProcessing(
-    single="<s> $A </s>",
-    pair="<s> $A </s> </s> $B </s>",
-    special_tokens=[("<s>", 0), ("</s>", 2)]
-)
+```python# GPT-2：sentence <|endoftext|>
+
+TemplateProcessing(single="$A <|endoftext|>", special_tokens=[("<|endoftext|>", 50256)])
+
+
+# RoBERTa：<s> sentence </s>
+
+TemplateProcessing(
+    single="<s> $A </s>",
+    pair="<s> $A </s> </s> $B </s>",
+    special_tokens=[("<s>", 0), ("</s>", 2)],
+)
 ```
 
 ## 对齐追踪
 
 追踪 token 在原始文本中的位置：
 
-```python
-output = tokenizer.encode("Hello, world!")
-
-# 获取 token 偏移量
-for token, offset in zip(output.tokens, output.offsets):
-    start, end = offset
-    print(f"{token:10} → [{start:2}, {end:2}): {text[start:end]!r}")
-
-# 输出：
-# hello      → [ 0,  5): 'Hello'
-# ,          → [ 5,  6): ','
-# world      → [ 7, 12): 'world'
-# !          → [12, 13): '!'
+```pythonoutput = tokenizer.encode("Hello, world!")
+
+
+# 获取 token 偏移量
+
+for token, offset in zip(output.tokens, output.offsets):
+    start, end = offset
+
+    print(f"{token:10} → [{start:2}, {end:2}): {text[start:end]!r}")
+
+
+# 输出：
+
+# hello      → [ 0,  5): 'Hello'
+
+# ,          → [ 5,  6): ','
+
+# world      → [ 7, 12): 'world'
+
+# !          → [12, 13): '!'
 ```
 
 **使用场景**：
@@ -353,114 +402,145 @@ for token, offset in zip(output.tokens, output.offsets):
 
 ### 使用 AutoTokenizer 加载
 
-```python
-from transformers import AutoTokenizer
-
-# AutoTokenizer 自动使用快速 tokenizer
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-
-# 检查是否使用快速 tokenizer
-print(tokenizer.is_fast)  # True
-
-# 访问底层 tokenizers.Tokenizer
-fast_tokenizer = tokenizer.backend_tokenizer
-print(type(fast_tokenizer))  # <class 'tokenizers.Tokenizer'>
+```pythonfrom transformers import AutoTokenizer
+
+
+# AutoTokenizer 自动使用快速 tokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+
+# 检查是否使用快速 tokenizer
+
+print(tokenizer.is_fast)  # True
+
+
+# 访问底层 tokenizers.Tokenizer
+
+fast_tokenizer = tokenizer.backend_tokenizer
+
+print(type(fast_tokenizer))  # <class 'tokenizers.Tokenizer'>
 ```
 
 ### 将自定义 tokenizer 转换为 transformers 格式
 
-```python
-from tokenizers import Tokenizer
-from transformers import PreTrainedTokenizerFast
-
-# 训练自定义 tokenizer
-tokenizer = Tokenizer(BPE())
-# ... 训练 tokenizer ...
-tokenizer.save("my-tokenizer.json")
-
-# 封装为 transformers 格式
-transformers_tokenizer = PreTrainedTokenizerFast(
-    tokenizer_file="my-tokenizer.json",
-    unk_token="[UNK]",
-    pad_token="[PAD]",
-    cls_token="[CLS]",
-    sep_token="[SEP]",
-    mask_token="[MASK]"
-)
-
-# 像使用任何 transformers tokenizer 一样使用
-outputs = transformers_tokenizer(
-    "Hello world",
-    padding=True,
-    truncation=True,
-    max_length=512,
-    return_tensors="pt"
-)
+```pythonfrom tokenizers import Tokenizer
+
+from transformers import PreTrainedTokenizerFast
+
+
+# 训练自定义 tokenizer
+
+tokenizer = Tokenizer(BPE())
+
+# ... 训练 tokenizer ...
+
+tokenizer.save("my-tokenizer.json")
+
+
+# 封装为 transformers 格式
+
+transformers_tokenizer = PreTrainedTokenizerFast(
+    tokenizer_file="my-tokenizer.json",
+    unk_token="[UNK]",
+    pad_token="[PAD]",
+    cls_token="[CLS]",
+    sep_token="[SEP]",
+    mask_token="[MASK]",
+)
+
+
+# 像使用任何 transformers tokenizer 一样使用
+
+outputs = transformers_tokenizer(
+    "Hello world", padding=True, truncation=True, max_length=512, return_tensors="pt"
+)
 ```
 
 ## 常见模式
 
 ### 从迭代器训练（大型数据集）
 
-```python
-from datasets import load_dataset
-
-# 加载数据集
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-
-# 创建批量迭代器
-def batch_iterator(batch_size=1000):
-    for i in range(0, len(dataset), batch_size):
-        yield dataset[i:i + batch_size]["text"]
-
-# 训练 tokenizer
-tokenizer.train_from_iterator(
-    batch_iterator(),
-    trainer=trainer,
-    length=len(dataset)  # 用于进度条
-)
+```pythonfrom datasets import load_dataset
+
+
+# 加载数据集
+
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+
+
+# 创建批量迭代器
+
+
+def batch_iterator(batch_size=1000):
+
+    for i in range(0, len(dataset), batch_size):
+        yield dataset[i : i + batch_size]["text"]
+
+
+# 训练 tokenizer
+
+tokenizer.train_from_iterator(
+    batch_iterator(),
+    trainer=trainer,
+    length=len(dataset),  # 用于进度条
+)
 ```
 
 **性能**：约 10–20 分钟处理 1GB
 
 ### 启用 truncation 和 padding
 
-```python
-# 启用 truncation
-tokenizer.enable_truncation(max_length=512)
-
-# 启用 padding
-tokenizer.enable_padding(
-    pad_id=tokenizer.token_to_id("[PAD]"),
-    pad_token="[PAD]",
-    length=512  # 固定长度，或 None 表示批次最大长度
-)
-
-# 同时编码
-output = tokenizer.encode("This is a long sentence that will be truncated...")
-print(len(output.ids))  # 512
+```python# 启用 truncation
+
+tokenizer.enable_truncation(max_length=512)
+
+
+# 启用 padding
+
+tokenizer.enable_padding(
+    pad_id=tokenizer.token_to_id("[PAD]"),
+    pad_token="[PAD]",
+    length=512,  # 固定长度，或 None 表示批次最大长度
+)
+
+
+# 同时编码
+
+output = tokenizer.encode("This is a long sentence that will be truncated...")
+
+print(len(output.ids))  # 512
 ```
 
 ### 多进程处理
 
-```python
-from tokenizers import Tokenizer
-from multiprocessing import Pool
-
-# 加载 tokenizer
-tokenizer = Tokenizer.from_file("tokenizer.json")
-
-def encode_batch(texts):
-    return tokenizer.encode_batch(texts)
-
-# 并行处理大型语料库
-with Pool(8) as pool:
-    # 将语料库拆分为块
-    chunk_size = 1000
-    chunks = [corpus[i:i+chunk_size] for i in range(0, len(corpus), chunk_size)]
-
-    # 并行编码
-    results = pool.map(encode_batch, chunks)
+```pythonfrom tokenizers import Tokenizer
+
+from multiprocessing import Pool
+
+
+# 加载 tokenizer
+
+tokenizer = Tokenizer.from_file("tokenizer.json")
+
+
+def encode_batch(texts):
+
+    return tokenizer.encode_batch(texts)
+
+
+# 并行处理大型语料库
+
+with Pool(8) as pool:
+    # 将语料库拆分为块
+
+    chunk_size = 1000
+
+    chunks = [corpus[i : i + chunk_size] for i in range(0, len(corpus), chunk_size)]
+
+    # 并行编码
+
+    results = pool.map(encode_batch, chunks)
 ```
 
 **加速比**：8 核下约 5–8 倍

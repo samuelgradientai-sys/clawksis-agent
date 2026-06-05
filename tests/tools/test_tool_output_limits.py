@@ -97,7 +97,9 @@ class TestOverrides:
 class TestCoercion:
     @pytest.mark.parametrize("bad", [None, "not a number", -1, 0, [], {}])
     def test_invalid_values_fall_back_to_defaults(self, bad):
-        cfg = {"tool_output": {"max_bytes": bad, "max_lines": bad, "max_line_length": bad}}
+        cfg = {
+            "tool_output": {"max_bytes": bad, "max_lines": bad, "max_line_length": bad}
+        }
         with patch("clawk_cli.config.load_config", return_value=cfg):
             limits = tol.get_tool_output_limits()
         assert limits["max_bytes"] == tol.DEFAULT_MAX_BYTES
@@ -133,6 +135,7 @@ class TestDefaultConfigHasSection:
 
     def test_default_config_contains_tool_output_section(self):
         from clawk_cli.config import DEFAULT_CONFIG
+
         assert "tool_output" in DEFAULT_CONFIG
         section = DEFAULT_CONFIG["tool_output"]
         assert isinstance(section, dict)
@@ -146,6 +149,7 @@ class TestIntegrationReadPagination:
 
     def test_pagination_limit_clamped_by_config_value(self):
         from tools.file_operations import normalize_read_pagination
+
         cfg = {"tool_output": {"max_lines": 50}}
         with patch("clawk_cli.config.load_config", return_value=cfg):
             offset, limit = normalize_read_pagination(offset=1, limit=1000)
@@ -155,6 +159,7 @@ class TestIntegrationReadPagination:
 
     def test_pagination_default_when_config_missing(self):
         from tools.file_operations import normalize_read_pagination
+
         with patch("clawk_cli.config.load_config", return_value={}):
             offset, limit = normalize_read_pagination(offset=10, limit=100000)
         # Clamped to default MAX_LINES (2000).

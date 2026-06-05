@@ -30,6 +30,7 @@ from gateway.platforms.webhook import WebhookAdapter, _INSECURE_NO_AUTH
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter(routes, **extra_kw) -> WebhookAdapter:
     """Create a WebhookAdapter with the given routes."""
     extra = {"host": "0.0.0.0", "port": 0, "routes": routes}
@@ -48,9 +49,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 # A realistic GitHub pull_request event payload (trimmed)
@@ -77,8 +76,8 @@ GITHUB_PR_PAYLOAD = {
 # Test 1: GitHub PR webhook triggers agent
 # ===================================================================
 
-class TestGitHubPRWebhook:
 
+class TestGitHubPRWebhook:
     @pytest.mark.asyncio
     async def test_github_pr_webhook_triggers_agent(self):
         """POST with a realistic GitHub PR payload should:
@@ -147,8 +146,8 @@ class TestGitHubPRWebhook:
 # Test 2: Skills injected into prompt
 # ===================================================================
 
-class TestSkillsInjection:
 
+class TestSkillsInjection:
     @pytest.mark.asyncio
     async def test_skills_injected_into_prompt(self):
         """When a route has skills: [code-review], the adapter should
@@ -177,12 +176,15 @@ class TestSkillsInjection:
         )
 
         # The imports are lazy (inside the handler), so patch the source module
-        with patch(
-            "agent.skill_commands.build_skill_invocation_message",
-            return_value=skill_content,
-        ) as mock_build, patch(
-            "agent.skill_commands.get_skill_commands",
-            return_value={"/code-review": {"name": "code-review"}},
+        with (
+            patch(
+                "agent.skill_commands.build_skill_invocation_message",
+                return_value=skill_content,
+            ) as mock_build,
+            patch(
+                "agent.skill_commands.get_skill_commands",
+                return_value={"/code-review": {"name": "code-review"}},
+            ),
         ):
             app = _create_app(adapter)
             async with TestClient(TestServer(app)) as cli:
@@ -209,8 +211,8 @@ class TestSkillsInjection:
 # Test 3: Cross-platform delivery (webhook → Telegram)
 # ===================================================================
 
-class TestCrossPlatformDelivery:
 
+class TestCrossPlatformDelivery:
     @pytest.mark.asyncio
     async def test_cross_platform_delivery(self):
         """When deliver='telegram', the response is routed to the
@@ -267,8 +269,8 @@ class TestCrossPlatformDelivery:
 # Test 4: GitHub comment delivery via gh CLI
 # ===================================================================
 
-class TestGitHubCommentDelivery:
 
+class TestGitHubCommentDelivery:
     @pytest.mark.asyncio
     async def test_github_comment_delivery(self):
         """When deliver='github_comment', the adapter invokes
@@ -318,16 +320,19 @@ class TestGitHubCommentDelivery:
             "gateway.platforms.webhook.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
-            result = await adapter.send(
-                chat_id, "LGTM! The code looks great."
-            )
+            result = await adapter.send(chat_id, "LGTM! The code looks great.")
 
         assert result.success is True
         mock_run.assert_called_once_with(
             [
-                "gh", "pr", "comment", "42",
-                "--repo", "org/repo",
-                "--body", "LGTM! The code looks great.",
+                "gh",
+                "pr",
+                "comment",
+                "42",
+                "--repo",
+                "org/repo",
+                "--body",
+                "LGTM! The code looks great.",
             ],
             capture_output=True,
             text=True,

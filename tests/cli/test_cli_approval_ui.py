@@ -9,33 +9,23 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 
-
 import cli as cli_module
 
 from cli import ClawksisCLI
 
 
-
-
-
 class _FakeBuffer:
-
     def __init__(self, text="", cursor_position=None):
 
         self.text = text
 
         self.cursor_position = len(text) if cursor_position is None else cursor_position
 
-
-
     def reset(self, append_to_history=False):
 
         self.text = ""
 
         self.cursor_position = 0
-
-
-
 
 
 def _make_cli_stub():
@@ -61,9 +51,6 @@ def _make_cli_stub():
     return cli
 
 
-
-
-
 def _make_background_cli_stub():
 
     cli = _make_cli_stub()
@@ -74,25 +61,18 @@ def _make_background_cli_stub():
 
     cli._ensure_runtime_credentials = MagicMock(return_value=True)
 
-    cli._resolve_turn_agent_config = MagicMock(return_value={
-
-        "model": "test-model",
-
-        "runtime": {
-
-            "api_key": "test-key",
-
-            "base_url": "https://example.test/v1",
-
-            "provider": "test",
-
-            "api_mode": "chat_completions",
-
-        },
-
-        "request_overrides": None,
-
-    })
+    cli._resolve_turn_agent_config = MagicMock(
+        return_value={
+            "model": "test-model",
+            "runtime": {
+                "api_key": "test-key",
+                "base_url": "https://example.test/v1",
+                "provider": "test",
+                "api_mode": "chat_completions",
+            },
+            "request_overrides": None,
+        }
+    )
 
     cli.max_turns = 90
 
@@ -131,11 +111,7 @@ def _make_background_cli_stub():
     return cli
 
 
-
-
-
 class TestCliApprovalUi:
-
     def test_sudo_prompt_restores_existing_draft_after_response(self):
 
         cli = _make_cli_stub()
@@ -144,35 +120,23 @@ class TestCliApprovalUi:
 
         result = {}
 
-
-
         def _run_callback():
 
             result["value"] = cli._sudo_password_callback()
 
-
-
         with patch.object(cli_module, "_cprint"):
-
             thread = threading.Thread(target=_run_callback, daemon=True)
 
             thread.start()
 
-
-
             deadline = time.time() + 2
 
             while cli._sudo_state is None and time.time() < deadline:
-
                 time.sleep(0.01)
-
-
 
             assert cli._sudo_state is not None
 
             assert cli._app.current_buffer.text == ""
-
-
 
             cli._app.current_buffer.text = "secret"
 
@@ -180,19 +144,13 @@ class TestCliApprovalUi:
 
             cli._sudo_state["response_queue"].put("secret")
 
-
-
             thread.join(timeout=2)
-
-
 
         assert result["value"] == "secret"
 
         assert cli._app.current_buffer.text == "draft command"
 
         assert cli._app.current_buffer.cursor_position == 5
-
-
 
     def test_approval_callback_includes_view_for_long_commands(self):
 
@@ -202,33 +160,22 @@ class TestCliApprovalUi:
 
         result = {}
 
-
-
         def _run_callback():
 
             result["value"] = cli._approval_callback(command, "disk copy")
-
-
 
         thread = threading.Thread(target=_run_callback, daemon=True)
 
         thread.start()
 
-
-
         deadline = time.time() + 2
 
         while cli._approval_state is None and time.time() < deadline:
-
             time.sleep(0.01)
-
-
 
         assert cli._approval_state is not None
 
         assert "view" in cli._approval_state["choices"]
-
-
 
         cli._approval_state["response_queue"].put("deny")
 
@@ -236,31 +183,19 @@ class TestCliApprovalUi:
 
         assert result["value"] == "deny"
 
-
-
     def test_handle_approval_selection_view_expands_in_place(self):
 
         cli = _make_cli_stub()
 
         cli._approval_state = {
-
             "command": "sudo dd if=/tmp/in of=/usr/share/keyrings/githubcli-archive-keyring.gpg bs=4M status=progress",
-
             "description": "disk copy",
-
             "choices": ["once", "session", "always", "deny", "view"],
-
             "selected": 4,
-
             "response_queue": queue.Queue(),
-
         }
 
-
-
         cli._handle_approval_selection()
-
-
 
         assert cli._approval_state is not None
 
@@ -272,35 +207,23 @@ class TestCliApprovalUi:
 
         assert cli._approval_state["response_queue"].empty()
 
-
-
     def test_approval_display_places_title_inside_box_not_border(self):
 
         cli = _make_cli_stub()
 
         cli._approval_state = {
-
             "command": "sudo dd if=/tmp/in of=/usr/share/keyrings/githubcli-archive-keyring.gpg bs=4M status=progress",
-
             "description": "disk copy",
-
             "choices": ["once", "session", "always", "deny", "view"],
-
             "selected": 0,
-
             "response_queue": queue.Queue(),
-
         }
-
-
 
         fragments = cli._get_approval_display_fragments()
 
         rendered = "".join(text for _style, text in fragments)
 
         lines = rendered.splitlines()
-
-
 
         assert lines[0].startswith("╭")
 
@@ -312,8 +235,6 @@ class TestCliApprovalUi:
 
         assert "githubcli-archive-keyring.gpg" not in rendered
 
-
-
     def test_approval_display_shows_full_command_after_view(self):
 
         cli = _make_cli_stub()
@@ -321,28 +242,17 @@ class TestCliApprovalUi:
         full_command = "sudo dd if=/tmp/in of=/usr/share/keyrings/githubcli-archive-keyring.gpg bs=4M status=progress"
 
         cli._approval_state = {
-
             "command": full_command,
-
             "description": "disk copy",
-
             "choices": ["once", "session", "always", "deny"],
-
             "selected": 0,
-
             "show_full": True,
-
             "response_queue": queue.Queue(),
-
         }
-
-
 
         fragments = cli._get_approval_display_fragments()
 
         rendered = "".join(text for _style, text in fragments)
-
-
 
         assert "..." not in rendered
 
@@ -354,10 +264,7 @@ class TestCliApprovalUi:
 
         assert "status=progress" in rendered
 
-
-
     def test_approval_display_preserves_command_and_choices_with_long_description(self):
-
         """Regression: long tirith descriptions used to push approve/deny off-screen.
 
 
@@ -373,60 +280,37 @@ class TestCliApprovalUi:
         cli = _make_cli_stub()
 
         long_desc = (
-
             "Security scan — [CRITICAL] Destructive shell command with wildcard expansion: "
-
             "The command performs a recursive deletion of log files which may contain "
-
             "audit information relevant to active incident investigations, running services "
-
             "that rely on log files for state, rotated archives, and other system artifacts. "
-
             "Review whether this is intended before approving. Consider whether a targeted "
-
             "deletion with more specific filters would better match the intent."
-
         )
 
         cli._approval_state = {
-
             "command": "rm -rf /var/log/apache2/*.log",
-
             "description": long_desc,
-
             "choices": ["once", "session", "always", "deny"],
-
             "selected": 0,
-
             "response_queue": queue.Queue(),
-
         }
-
-
 
         # Simulate a compact terminal where the old unbounded panel would overflow.
 
         import shutil as _shutil
 
-
-
-        with patch("cli.shutil.get_terminal_size",
-
-                   return_value=_shutil.os.terminal_size((100, 20))):
-
+        with patch(
+            "cli.shutil.get_terminal_size",
+            return_value=_shutil.os.terminal_size((100, 20)),
+        ):
             fragments = cli._get_approval_display_fragments()
 
-
-
         rendered = "".join(text for _style, text in fragments)
-
-
 
         # Command must be fully visible (rm -rf /var/log/apache2/*.log is short).
 
         assert "rm -rf /var/log/apache2/*.log" in rendered
-
-
 
         # Every choice must render — this is the core bug: approve/deny were
 
@@ -440,22 +324,15 @@ class TestCliApprovalUi:
 
         assert "Deny" in rendered
 
-
-
         # The bottom border must render (i.e. the panel is self-contained).
 
         assert rendered.rstrip().endswith("╯")
-
-
 
         # The description gets truncated — marker should appear.
 
         assert "(description truncated)" in rendered
 
-
-
     def test_approval_display_skips_description_on_very_short_terminal(self):
-
         """On a 12-row terminal, only the command and choices have room.
 
 
@@ -469,36 +346,22 @@ class TestCliApprovalUi:
         cli = _make_cli_stub()
 
         cli._approval_state = {
-
             "command": "rm -rf /var/log/apache2/*.log",
-
             "description": "recursive delete",
-
             "choices": ["once", "session", "always", "deny"],
-
             "selected": 0,
-
             "response_queue": queue.Queue(),
-
         }
-
-
 
         import shutil as _shutil
 
-
-
-        with patch("cli.shutil.get_terminal_size",
-
-                   return_value=_shutil.os.terminal_size((100, 12))):
-
+        with patch(
+            "cli.shutil.get_terminal_size",
+            return_value=_shutil.os.terminal_size((100, 12)),
+        ):
             fragments = cli._get_approval_display_fragments()
 
-
-
         rendered = "".join(text for _style, text in fragments)
-
-
 
         # Command visible.
 
@@ -506,16 +369,15 @@ class TestCliApprovalUi:
 
         # All four choices visible.
 
-        for label in ("Allow once", "Allow for this session",
-
-                      "Add to permanent allowlist", "Deny"):
-
+        for label in (
+            "Allow once",
+            "Allow for this session",
+            "Add to permanent allowlist",
+            "Deny",
+        ):
             assert label in rendered, f"choice {label!r} missing"
 
-
-
     def test_approval_display_truncates_giant_command_in_view_mode(self):
-
         """If the user hits /view on a massive command, choices still render.
 
 
@@ -533,57 +395,39 @@ class TestCliApprovalUi:
         giant_cmd = "bash -c 'echo " + ("x" * 3000) + "'"
 
         cli._approval_state = {
-
             "command": giant_cmd,
-
             "description": "shell command via -c/-lc flag",
-
             "choices": ["once", "session", "always", "deny"],
-
             "selected": 0,
-
             "show_full": True,
-
             "response_queue": queue.Queue(),
-
         }
-
-
 
         import shutil as _shutil
 
-
-
-        with patch("cli.shutil.get_terminal_size",
-
-                   return_value=_shutil.os.terminal_size((100, 24))):
-
+        with patch(
+            "cli.shutil.get_terminal_size",
+            return_value=_shutil.os.terminal_size((100, 24)),
+        ):
             fragments = cli._get_approval_display_fragments()
-
-
 
         rendered = "".join(text for _style, text in fragments)
 
-
-
         # All four choices visible even with a huge command.
 
-        for label in ("Allow once", "Allow for this session",
-
-                      "Add to permanent allowlist", "Deny"):
-
+        for label in (
+            "Allow once",
+            "Allow for this session",
+            "Add to permanent allowlist",
+            "Deny",
+        ):
             assert label in rendered, f"choice {label!r} missing"
-
-
 
         # Command got truncated with a marker.
 
         assert "(command truncated" in rendered
 
-
-
     def test_background_task_registers_thread_local_approval_callbacks(self):
-
         """Background /btw tasks must use the prompt_toolkit approval UI.
 
 
@@ -604,65 +448,44 @@ class TestCliApprovalUi:
 
         seen = {}
 
-
-
         class FakeAgent:
-
             def __init__(self, **kwargs):
 
                 self._print_fn = None
 
                 self.thinking_callback = None
 
-
-
             def run_conversation(self, **kwargs):
 
                 from tools.terminal_tool import (
-
                     _get_approval_callback,
-
                     _get_sudo_password_callback,
-
                 )
-
-
 
                 seen["approval"] = _get_approval_callback()
 
                 seen["sudo"] = _get_sudo_password_callback()
 
                 return {
-
                     "final_response": "done",
-
                     "messages": [],
-
                     "completed": True,
-
                     "failed": False,
-
                 }
 
-
-
-        with patch.object(cli_module, "AIAgent", FakeAgent), \
-             patch.object(cli_module, "_cprint"), \
-             patch.object(cli_module, "ChatConsole") as chat_console:
-
+        with (
+            patch.object(cli_module, "AIAgent", FakeAgent),
+            patch.object(cli_module, "_cprint"),
+            patch.object(cli_module, "ChatConsole") as chat_console,
+        ):
             chat_console.return_value.print = MagicMock()
 
             cli._handle_background_command("/btw check weather")
 
-
-
             deadline = time.time() + 2
 
             while cli._background_tasks and time.time() < deadline:
-
                 time.sleep(0.01)
-
-
 
         assert seen["approval"].__self__ is cli
 
@@ -675,11 +498,7 @@ class TestCliApprovalUi:
         assert not cli._background_tasks
 
 
-
-
-
 class TestApprovalCallbackThreadLocalWiring:
-
     """Regression guard for the thread-local callback freeze (#13617 / #13618).
 
 
@@ -698,10 +517,7 @@ class TestApprovalCallbackThreadLocalWiring:
 
     """
 
-
-
     def test_main_thread_registration_is_invisible_to_child_thread(self):
-
         """Confirms the underlying threading.local semantics that drove the bug.
 
 
@@ -713,34 +529,22 @@ class TestApprovalCallbackThreadLocalWiring:
         """
 
         from tools.terminal_tool import (
-
             set_approval_callback,
-
             _get_approval_callback,
-
         )
-
-
 
         def main_cb(_cmd, _desc):
 
             return "once"
 
-
-
         set_approval_callback(main_cb)
 
         try:
-
             seen = {}
-
-
 
             def _child():
 
                 seen["value"] = _get_approval_callback()
-
-
 
             t = threading.Thread(target=_child, daemon=True)
 
@@ -751,13 +555,9 @@ class TestApprovalCallbackThreadLocalWiring:
             assert seen["value"] is None
 
         finally:
-
             set_approval_callback(None)
 
-
-
     def test_child_thread_registration_is_visible_and_cleared_in_finally(self):
-
         """The fix pattern: register INSIDE the worker thread, clear in finally.
 
 
@@ -769,34 +569,21 @@ class TestApprovalCallbackThreadLocalWiring:
         """
 
         from tools.terminal_tool import (
-
             set_approval_callback,
-
             set_sudo_password_callback,
-
             _get_approval_callback,
-
             _get_sudo_password_callback,
-
         )
-
-
 
         def approval_cb(_cmd, _desc):
 
             return "once"
 
-
-
         def sudo_cb():
 
             return "hunter2"
 
-
-
         seen = {}
-
-
 
         def _worker():
 
@@ -807,13 +594,11 @@ class TestApprovalCallbackThreadLocalWiring:
             set_sudo_password_callback(sudo_cb)
 
             try:
-
                 seen["approval"] = _get_approval_callback()
 
                 seen["sudo"] = _get_sudo_password_callback()
 
             finally:
-
                 set_approval_callback(None)
 
                 set_sudo_password_callback(None)
@@ -822,15 +607,11 @@ class TestApprovalCallbackThreadLocalWiring:
 
                 seen["sudo_after"] = _get_sudo_password_callback()
 
-
-
         t = threading.Thread(target=_worker, daemon=True)
 
         t.start()
 
         t.join(timeout=2)
-
-
 
         assert seen["approval"] is approval_cb
 
@@ -843,4 +624,3 @@ class TestApprovalCallbackThreadLocalWiring:
         assert seen["approval_after"] is None
 
         assert seen["sudo_after"] is None
-

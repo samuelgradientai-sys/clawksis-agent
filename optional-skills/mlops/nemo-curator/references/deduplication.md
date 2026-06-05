@@ -13,7 +13,7 @@ from nemo_curator.modules import ExactDuplicates
 exact_dedup = ExactDuplicates(
     id_field="id",
     text_field="text",
-    hash_method="md5"  # or "sha256"
+    hash_method="md5",  # or "sha256"
 )
 
 deduped = exact_dedup(dataset)
@@ -31,10 +31,10 @@ from nemo_curator.modules import FuzzyDuplicates
 fuzzy_dedup = FuzzyDuplicates(
     id_field="id",
     text_field="text",
-    num_hashes=260,        # MinHash permutations (more = accurate)
-    num_buckets=20,        # LSH buckets (more = faster, less recall)
+    num_hashes=260,  # MinHash permutations (more = accurate)
+    num_buckets=20,  # LSH buckets (more = faster, less recall)
     hash_method="md5",
-    jaccard_threshold=0.8  # Similarity threshold
+    jaccard_threshold=0.8,  # Similarity threshold
 )
 
 deduped = fuzzy_dedup(dataset)
@@ -60,7 +60,7 @@ semantic_dedup = SemanticDuplicates(
     embedding_model="sentence-transformers/all-MiniLM-L6-v2",
     embedding_batch_size=256,
     threshold=0.85,  # Cosine similarity threshold
-    device="cuda"
+    device="cuda",
 )
 
 deduped = semantic_dedup(dataset)

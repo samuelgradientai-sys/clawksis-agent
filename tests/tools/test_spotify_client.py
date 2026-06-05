@@ -9,7 +9,14 @@ from plugins.spotify import tools as spotify_tool
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict | None = None, *, text: str = "", headers: dict | None = None):
+    def __init__(
+        self,
+        status_code: int,
+        payload: dict | None = None,
+        *,
+        text: str = "",
+        headers: dict | None = None,
+    ):
         self.status_code = status_code
         self._payload = payload
         self.text = text or (json.dumps(payload) if payload is not None else "")
@@ -112,7 +119,11 @@ def test_spotify_client_formats_friendly_api_errors(
     )
 
     def fake_request(method, url, headers=None, params=None, json=None, timeout=None):
-        return _FakeResponse(status_code, payload, headers={"content-type": "application/json", "Retry-After": "7"})
+        return _FakeResponse(
+            status_code,
+            payload,
+            headers={"content-type": "application/json", "Retry-After": "7"},
+        )
 
     monkeypatch.setattr(spotify_mod.httpx, "request", fake_request)
 
@@ -123,7 +134,9 @@ def test_spotify_client_formats_friendly_api_errors(
     assert str(exc.value) == expected
 
 
-def test_get_currently_playing_returns_explanatory_empty_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_currently_playing_returns_explanatory_empty_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         spotify_mod,
         "resolve_spotify_runtime_credentials",
@@ -134,7 +147,9 @@ def test_get_currently_playing_returns_explanatory_empty_payload(monkeypatch: py
     )
 
     def fake_request(method, url, headers=None, params=None, json=None, timeout=None):
-        return _FakeResponse(204, None, text="", headers={"content-type": "application/json"})
+        return _FakeResponse(
+            204, None, text="", headers={"content-type": "application/json"}
+        )
 
     monkeypatch.setattr(spotify_mod.httpx, "request", fake_request)
 
@@ -148,7 +163,9 @@ def test_get_currently_playing_returns_explanatory_empty_payload(monkeypatch: py
     }
 
 
-def test_spotify_playback_get_currently_playing_returns_explanatory_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_spotify_playback_get_currently_playing_returns_explanatory_empty_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         spotify_tool,
         "_spotify_client",
@@ -159,7 +176,9 @@ def test_spotify_playback_get_currently_playing_returns_explanatory_empty_result
         }),
     )
 
-    payload = json.loads(spotify_tool._handle_spotify_playback({"action": "get_currently_playing"}))
+    payload = json.loads(
+        spotify_tool._handle_spotify_playback({"action": "get_currently_playing"})
+    )
 
     assert payload == {
         "success": True,
@@ -170,7 +189,9 @@ def test_spotify_playback_get_currently_playing_returns_explanatory_empty_result
     }
 
 
-def test_library_contains_uses_generic_library_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_library_contains_uses_generic_library_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[tuple[str, str, dict | None]] = []
 
     monkeypatch.setattr(
@@ -204,7 +225,12 @@ def test_library_contains_uses_generic_library_endpoint(monkeypatch: pytest.Monk
 @pytest.mark.parametrize(
     ("method_name", "item_key", "item_value", "expected_uris"),
     [
-        ("remove_saved_tracks", "track_ids", ["track-a", "track-b"], ["spotify:track:track-a", "spotify:track:track-b"]),
+        (
+            "remove_saved_tracks",
+            "track_ids",
+            ["track-a", "track-b"],
+            ["spotify:track:track-a", "spotify:track:track-b"],
+        ),
         ("remove_saved_albums", "album_ids", ["album-a"], ["spotify:album:album-a"]),
     ],
 )
@@ -244,8 +270,9 @@ def test_library_remove_uses_generic_library_endpoint(
     ]
 
 
-
-def test_spotify_library_tracks_list_routes_to_saved_tracks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_spotify_library_tracks_list_routes_to_saved_tracks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[str] = []
 
     class _LibStub:
@@ -258,11 +285,15 @@ def test_spotify_library_tracks_list_routes_to_saved_tracks(monkeypatch: pytest.
             return {"items": [], "total": 0}
 
     monkeypatch.setattr(spotify_tool, "_spotify_client", lambda: _LibStub())
-    json.loads(spotify_tool._handle_spotify_library({"kind": "tracks", "action": "list"}))
+    json.loads(
+        spotify_tool._handle_spotify_library({"kind": "tracks", "action": "list"})
+    )
     assert seen == ["tracks"]
 
 
-def test_spotify_library_albums_list_routes_to_saved_albums(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_spotify_library_albums_list_routes_to_saved_albums(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[str] = []
 
     class _LibStub:
@@ -275,7 +306,9 @@ def test_spotify_library_albums_list_routes_to_saved_albums(monkeypatch: pytest.
             return {"items": [], "total": 0}
 
     monkeypatch.setattr(spotify_tool, "_spotify_client", lambda: _LibStub())
-    json.loads(spotify_tool._handle_spotify_library({"kind": "albums", "action": "list"}))
+    json.loads(
+        spotify_tool._handle_spotify_library({"kind": "albums", "action": "list"})
+    )
     assert seen == ["albums"]
 
 
@@ -284,7 +317,9 @@ def test_spotify_library_rejects_missing_kind() -> None:
     assert "kind" in (payload.get("error") or "").lower()
 
 
-def test_spotify_playback_recently_played_action(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_spotify_playback_recently_played_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """recently_played is now an action on spotify_playback (folded from spotify_activity)."""
     seen: list[dict] = []
 
@@ -294,6 +329,8 @@ def test_spotify_playback_recently_played_action(monkeypatch: pytest.MonkeyPatch
             return {"items": [{"track": {"name": "x"}}]}
 
     monkeypatch.setattr(spotify_tool, "_spotify_client", lambda: _RecentStub())
-    payload = json.loads(spotify_tool._handle_spotify_playback({"action": "recently_played", "limit": 5}))
+    payload = json.loads(
+        spotify_tool._handle_spotify_playback({"action": "recently_played", "limit": 5})
+    )
     assert seen and seen[0]["limit"] == 5
     assert isinstance(payload, dict)

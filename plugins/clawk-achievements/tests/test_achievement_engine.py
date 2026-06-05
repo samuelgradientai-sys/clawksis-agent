@@ -12,7 +12,11 @@ class AchievementEngineTests(unittest.TestCase):
     def test_tool_call_stats_detect_tool_names_and_errors(self):
         messages = [
             {"role": "assistant", "tool_calls": [{"function": {"name": "terminal"}}]},
-            {"role": "tool", "tool_name": "terminal", "content": "Error: port 3000 already in use"},
+            {
+                "role": "tool",
+                "tool_name": "terminal",
+                "content": "Error: port 3000 already in use",
+            },
             {"role": "assistant", "tool_calls": [{"function": {"name": "web_search"}}]},
         ]
 
@@ -84,16 +88,22 @@ class AchievementEngineTests(unittest.TestCase):
             ],
         }
 
-        partial = plugin_api.evaluate_requirements(definition, {
-            "max_terminal_calls_in_session": 12,
-            "max_file_tool_calls_in_session": 2,
-            "max_web_calls_in_session": 0,
-        })
-        complete = plugin_api.evaluate_requirements(definition, {
-            "max_terminal_calls_in_session": 12,
-            "max_file_tool_calls_in_session": 6,
-            "max_web_calls_in_session": 2,
-        })
+        partial = plugin_api.evaluate_requirements(
+            definition,
+            {
+                "max_terminal_calls_in_session": 12,
+                "max_file_tool_calls_in_session": 2,
+                "max_web_calls_in_session": 0,
+            },
+        )
+        complete = plugin_api.evaluate_requirements(
+            definition,
+            {
+                "max_terminal_calls_in_session": 12,
+                "max_file_tool_calls_in_session": 6,
+                "max_web_calls_in_session": 2,
+            },
+        )
 
         self.assertEqual(partial["state"], "discovered")
         self.assertIs(partial["unlocked"], False)
@@ -138,17 +148,35 @@ class AchievementEngineTests(unittest.TestCase):
             {"model_names": {"openai/gpt-5"}},
             {"model_names": {"ollama/llama3"}},
         ])
-        definition = next(a for a in plugin_api.ACHIEVEMENTS if a["id"] == "open_weights_pilgrim")
+        definition = next(
+            a for a in plugin_api.ACHIEVEMENTS if a["id"] == "open_weights_pilgrim"
+        )
 
         self.assertEqual(aggregate_mentions_only["local_model_chat_sessions"], 0)
-        self.assertEqual(plugin_api.evaluate_definition(definition, aggregate_mentions_only)["state"], "discovered")
+        self.assertEqual(
+            plugin_api.evaluate_definition(definition, aggregate_mentions_only)[
+                "state"
+            ],
+            "discovered",
+        )
         self.assertEqual(aggregate_local_chat["local_model_chat_sessions"], 1)
-        self.assertEqual(plugin_api.evaluate_definition(definition, aggregate_local_chat)["state"], "unlocked")
+        self.assertEqual(
+            plugin_api.evaluate_definition(definition, aggregate_local_chat)["state"],
+            "unlocked",
+        )
 
     def test_config_surgeon_ignores_generic_config_mentions(self):
-        stats = plugin_api.analyze_messages("s1", "Config talk", [{"content": "config config configuration not configured"}])
+        stats = plugin_api.analyze_messages(
+            "s1",
+            "Config talk",
+            [{"content": "config config configuration not configured"}],
+        )
         self.assertEqual(stats["config_events"], 0)
-        stats = plugin_api.analyze_messages("s2", "Real config", [{"content": "edited config.yaml, manifest.json, and .env.local"}])
+        stats = plugin_api.analyze_messages(
+            "s2",
+            "Real config",
+            [{"content": "edited config.yaml, manifest.json, and .env.local"}],
+        )
         self.assertGreaterEqual(stats["config_events"], 3)
 
 

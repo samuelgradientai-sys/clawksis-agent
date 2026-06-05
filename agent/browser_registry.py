@@ -70,12 +70,14 @@ def register_provider(provider: BrowserProvider) -> None:
     if existing is not None:
         logger.debug(
             "Browser provider '%s' re-registered (was %r)",
-            name, type(existing).__name__,
+            name,
+            type(existing).__name__,
         )
     else:
         logger.debug(
             "Registered browser provider '%s' (%s)",
-            name, type(provider).__name__,
+            name,
+            type(provider).__name__,
         )
 
 
@@ -153,7 +155,9 @@ def _resolve(configured: Optional[str]) -> Optional[BrowserProvider]:
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "Browser provider %s.is_available() raised %s — treating as unavailable",
-                p.name, exc, exc_info=True,
+                p.name,
+                exc,
+                exc_info=True,
             )
             return False
 

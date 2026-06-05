@@ -53,7 +53,7 @@ with profile(
     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
     record_shapes=True,
     profile_memory=True,
-    with_stack=True
+    with_stack=True,
 ) as prof:
     for i, batch in enumerate(dataloader):
         if i >= 10:  # Profile first 10 batches
@@ -66,9 +66,7 @@ with profile(
         optimizer.zero_grad()
 
 # Print profiling results
-print(prof.key_averages().table(
-    sort_by="cuda_time_total", row_limit=20
-))
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
 # Export to Chrome tracing
 prof.export_chrome_trace("trace.json")
@@ -109,7 +107,7 @@ from transformers import AutoModelForCausalLM
 
 model = AutoModelForCausalLM.from_pretrained(
     "gpt2",
-    use_cache=False  # Required for gradient checkpointing
+    use_cache=False,  # Required for gradient checkpointing
 )
 
 # Enable checkpointing
@@ -125,7 +123,7 @@ model = accelerator.prepare(model)
 
 **BF16 (A100/H100)**:
 ```python
-accelerator = Accelerator(mixed_precision='bf16')
+accelerator = Accelerator(mixed_precision="bf16")
 
 # Automatic mixed precision
 for batch in dataloader:
@@ -139,15 +137,9 @@ for batch in dataloader:
 ```python
 from accelerate.utils import GradScalerKwargs
 
-scaler_kwargs = GradScalerKwargs(
-    init_scale=2.**16,
-    growth_interval=2000
-)
+scaler_kwargs = GradScalerKwargs(init_scale=2.0**16, growth_interval=2000)
 
-accelerator = Accelerator(
-    mixed_precision='fp16',
-    kwargs_handlers=[scaler_kwargs]
-)
+accelerator = Accelerator(mixed_precision="fp16", kwargs_handlers=[scaler_kwargs])
 ```
 
 **Memory savings**: 50% compared to FP32
@@ -160,13 +152,10 @@ from accelerate.utils import DeepSpeedPlugin
 ds_plugin = DeepSpeedPlugin(
     zero_stage=3,
     offload_optimizer_device="cpu",  # Offload optimizer to CPU
-    offload_param_device="cpu",      # Offload parameters to CPU
+    offload_param_device="cpu",  # Offload parameters to CPU
 )
 
-accelerator = Accelerator(
-    deepspeed_plugin=ds_plugin,
-    mixed_precision='bf16'
-)
+accelerator = Accelerator(deepspeed_plugin=ds_plugin, mixed_precision="bf16")
 ```
 
 **Memory savings**: 10-20× for optimizer state, 5-10× for parameters
@@ -183,7 +172,7 @@ from transformers import AutoModelForCausalLM
 
 model = AutoModelForCausalLM.from_pretrained(
     "gpt2",
-    attn_implementation="flash_attention_2"  # Enable Flash Attention 2
+    attn_implementation="flash_attention_2",  # Enable Flash Attention 2
 )
 
 model = accelerator.prepare(model)
@@ -203,7 +192,7 @@ from accelerate.utils import DistributedDataParallelKwargs
 ddp_kwargs = DistributedDataParallelKwargs(
     bucket_cap_mb=25,  # Bucket size for gradient reduction
     gradient_as_bucket_view=True,  # Reduce memory copies
-    static_graph=False  # Set True if model doesn't change
+    static_graph=False,  # Set True if model doesn't change
 )
 
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
@@ -218,9 +207,7 @@ accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
 
 ```python
 # Only enable if model has unused parameters (slower!)
-ddp_kwargs = DistributedDataParallelKwargs(
-    find_unused_parameters=True
-)
+ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 ```
 
 **Use case**: Models with conditional branches (e.g., mixture of experts)
@@ -254,10 +241,10 @@ from torch.utils.data import DataLoader
 train_loader = DataLoader(
     dataset,
     batch_size=32,
-    num_workers=4,      # Parallel data loading
-    pin_memory=True,    # Pin memory for faster GPU transfer
+    num_workers=4,  # Parallel data loading
+    pin_memory=True,  # Pin memory for faster GPU transfer
     prefetch_factor=2,  # Prefetch batches per worker
-    persistent_workers=True  # Keep workers alive between epochs
+    persistent_workers=True,  # Keep workers alive between epochs
 )
 
 train_loader = accelerator.prepare(train_loader)
@@ -277,16 +264,16 @@ from datasets import load_dataset
 dataset = load_dataset("openwebtext")
 
 for batch in dataset:
-    tokens = tokenizer(batch['text'])  # Slow!
+    tokens = tokenizer(batch["text"])  # Slow!
     ...
 
 # Good: Preprocess once, save
 dataset = load_dataset("openwebtext")
 tokenized = dataset.map(
-    lambda x: tokenizer(x['text']),
+    lambda x: tokenizer(x["text"]),
     batched=True,
     num_proc=8,  # Parallel preprocessing
-    remove_columns=['text']
+    remove_columns=["text"],
 )
 tokenized.save_to_disk("preprocessed_data")
 
@@ -306,7 +293,7 @@ from transformers import AutoTokenizer
 
 tokenizer = AutoTokenizer.from_pretrained(
     "gpt2",
-    use_fast=True  # Use fast Rust tokenizer
+    use_fast=True,  # Use fast Rust tokenizer
 )
 ```
 
@@ -321,8 +308,8 @@ import torch
 model = torch.compile(
     model,
     mode="reduce-overhead",  # Options: default, reduce-overhead, max-autotune
-    fullgraph=False,         # Compile entire graph (stricter)
-    dynamic=True             # Support dynamic shapes
+    fullgraph=False,  # Compile entire graph (stricter)
+    dynamic=True,  # Support dynamic shapes
 )
 
 model = accelerator.prepare(model)
@@ -363,6 +350,7 @@ import time
 import torch
 from accelerate import Accelerator
 
+
 def benchmark_strategy(strategy_name, accelerator_kwargs):
     """Benchmark a specific training strategy."""
     accelerator = Accelerator(**accelerator_kwargs)
@@ -372,9 +360,7 @@ def benchmark_strategy(strategy_name, accelerator_kwargs):
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
     dataloader = create_dataloader()
 
-    model, optimizer, dataloader = accelerator.prepare(
-        model, optimizer, dataloader
-    )
+    model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 
     # Warmup
     for i, batch in enumerate(dataloader):
@@ -418,11 +404,15 @@ def benchmark_strategy(strategy_name, accelerator_kwargs):
 
     torch.cuda.reset_peak_memory_stats()
 
+
 # Benchmark different strategies
 strategies = [
     ("DDP + FP32", {}),
     ("DDP + BF16", {"mixed_precision": "bf16"}),
-    ("DDP + BF16 + GradAccum", {"mixed_precision": "bf16", "gradient_accumulation_steps": 4}),
+    (
+        "DDP + BF16 + GradAccum",
+        {"mixed_precision": "bf16", "gradient_accumulation_steps": 4},
+    ),
     ("FSDP", {"fsdp_plugin": fsdp_plugin}),
     ("DeepSpeed ZeRO-2", {"deepspeed_plugin": ds_plugin_stage2}),
     ("DeepSpeed ZeRO-3", {"deepspeed_plugin": ds_plugin_stage3}),
@@ -467,15 +457,15 @@ for name, kwargs in strategies:
 **Cause 1**: Data loading bottleneck
 ```python
 # Solution: Increase workers and prefetch
-num_workers=8
-prefetch_factor=4
+num_workers = 8
+prefetch_factor = 4
 ```
 
 **Cause 2**: Small batch size
 ```python
 # Solution: Increase batch size or use gradient accumulation
-batch_size=32  # Increase
-gradient_accumulation_steps=4  # Or accumulate
+batch_size = 32  # Increase
+gradient_accumulation_steps = 4  # Or accumulate
 ```
 
 ### Issue: High Memory Usage
@@ -487,8 +477,8 @@ model.gradient_checkpointing_enable()
 
 **Solution 2**: Reduce batch size, increase accumulation
 ```python
-batch_size=8  # Reduce from 32
-gradient_accumulation_steps=16  # Maintain effective batch
+batch_size = 8  # Reduce from 32
+gradient_accumulation_steps = 16  # Maintain effective batch
 ```
 
 **Solution 3**: Use FSDP or DeepSpeed ZeRO-3

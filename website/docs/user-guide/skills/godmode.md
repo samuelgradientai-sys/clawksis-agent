@@ -63,24 +63,37 @@ Query N models in parallel via OpenRouter, score responses on quality/filteredne
 
 The fastest path — auto-detect the current model, test strategies in order of effectiveness, and lock in the winning config:
 
-```python
-# In execute_code:
-import os
-exec(open(os.path.expanduser(
-    "~/.clawksis/skills/red-teaming/godmode/scripts/load_godmode.py"
-)).read())
-
-# Auto-detect model from config and jailbreak it
-result = auto_jailbreak()
-
-# Or specify a model explicitly
-result = auto_jailbreak(model="anthropic/claude-sonnet-4")
-
-# Dry run — test without writing config
-result = auto_jailbreak(dry_run=True)
-
-# Undo — remove jailbreak settings
-undo_jailbreak()
+```python# In execute_code:
+
+import os
+
+exec(
+    open(
+        os.path.expanduser(
+            "~/.clawksis/skills/red-teaming/godmode/scripts/load_godmode.py"
+        )
+    ).read()
+)
+
+
+# Auto-detect model from config and jailbreak it
+
+result = auto_jailbreak()
+
+
+# Or specify a model explicitly
+
+result = auto_jailbreak(model="anthropic/claude-sonnet-4")
+
+
+# Dry run — test without writing config
+
+result = auto_jailbreak(dry_run=True)
+
+
+# Undo — remove jailbreak settings
+
+undo_jailbreak()
 ```
 
 ### What auto-jailbreak does

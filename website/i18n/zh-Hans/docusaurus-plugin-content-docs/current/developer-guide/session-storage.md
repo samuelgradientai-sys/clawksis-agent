@@ -174,69 +174,81 @@ _CHECKPOINT_EVERY_N_WRITES = 50
 
 ### 初始化
 
-```python
-from clawk_state import SessionDB
-
-db = SessionDB()                           # 默认：~/.clawksis/state.db
-db = SessionDB(db_path=Path("/tmp/test.db"))  # 自定义路径
+```pythonfrom clawk_state import SessionDB
+
+
+db = SessionDB()  # 默认：~/.clawksis/state.db
+
+db = SessionDB(db_path=Path("/tmp/test.db"))  # 自定义路径
 ```
 
 ### 创建和管理会话
 
-```python
-# 创建新会话
-db.create_session(
-    session_id="sess_abc123",
-    source="cli",
-    model="anthropic/claude-sonnet-4.6",
-    user_id="user_1",
-    parent_session_id=None,  # 或用于血缘追踪的上一个会话 ID
-)
-
-# 结束会话
-db.end_session("sess_abc123", end_reason="user_exit")
-
-# 重新打开会话（清除 ended_at/end_reason）
-db.reopen_session("sess_abc123")
+```python# 创建新会话
+
+db.create_session(
+    session_id="sess_abc123",
+    source="cli",
+    model="anthropic/claude-sonnet-4.6",
+    user_id="user_1",
+    parent_session_id=None,  # 或用于血缘追踪的上一个会话 ID
+)
+
+
+# 结束会话
+
+db.end_session("sess_abc123", end_reason="user_exit")
+
+
+# 重新打开会话（清除 ended_at/end_reason）
+
+db.reopen_session("sess_abc123")
 ```
 
 ### 存储消息
 
-```python
-msg_id = db.append_message(
-    session_id="sess_abc123",
-    role="assistant",
-    content="Here's the answer...",
-    tool_calls=[{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
-    token_count=150,
-    finish_reason="stop",
-    reasoning="Let me think about this...",
-)
+```pythonmsg_id = db.append_message(
+    session_id="sess_abc123",
+    role="assistant",
+    content="Here's the answer...",
+    tool_calls=[{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
+    token_count=150,
+    finish_reason="stop",
+    reasoning="Let me think about this...",
+)
 ```
 
 ### 检索消息
 
-```python
-# 包含所有元数据的原始消息
-messages = db.get_messages("sess_abc123")
-
-# OpenAI 对话格式（用于 API 重放）
-conversation = db.get_messages_as_conversation("sess_abc123")
-# 返回：[{"role": "user", "content": "..."}, {"role": "assistant", ...}]
+```python# 包含所有元数据的原始消息
+
+messages = db.get_messages("sess_abc123")
+
+
+# OpenAI 对话格式（用于 API 重放）
+
+conversation = db.get_messages_as_conversation("sess_abc123")
+
+# 返回：[{"role": "user", "content": "..."}, {"role": "assistant", ...}]
 ```
 
 ### 会话标题
 
-```python
-# 设置标题（非 NULL 标题中必须唯一）
-db.set_session_title("sess_abc123", "Fix Docker Build")
-
-# 按标题解析（返回血缘中最新的）
-session_id = db.resolve_session_by_title("Fix Docker Build")
-
-# 自动生成血缘中的下一个标题
-next_title = db.get_next_title_in_lineage("Fix Docker Build")
-# 返回："Fix Docker Build #2"
+```python# 设置标题（非 NULL 标题中必须唯一）
+
+db.set_session_title("sess_abc123", "Fix Docker Build")
+
+
+# 按标题解析（返回血缘中最新的）
+
+session_id = db.resolve_session_by_title("Fix Docker Build")
+
+
+# 自动生成血缘中的下一个标题
+
+next_title = db.get_next_title_in_lineage("Fix Docker Build")
+
+# 返回："Fix Docker Build #2"
 ```
 
 
@@ -246,8 +258,7 @@ next_title = db.get_next_title_in_lineage("Fix Docker Build")
 
 ### 基本搜索
 
-```python
-results = db.search_messages("docker deployment")
+```pythonresults = db.search_messages("docker deployment")
 ```
 
 ### FTS5 查询语法
@@ -262,15 +273,19 @@ results = db.search_messages("docker deployment")
 
 ### 过滤搜索
 
-```python
-# 仅搜索 CLI 会话
-results = db.search_messages("error", source_filter=["cli"])
-
-# 排除 gateway 会话
-results = db.search_messages("bug", exclude_sources=["telegram", "discord"])
-
-# 仅搜索用户消息
-results = db.search_messages("help", role_filter=["user"])
+```python# 仅搜索 CLI 会话
+
+results = db.search_messages("error", source_filter=["cli"])
+
+
+# 排除 gateway 会话
+
+results = db.search_messages("bug", exclude_sources=["telegram", "discord"])
+
+
+# 仅搜索用户消息
+
+results = db.search_messages("help", role_filter=["user"])
 ```
 
 ### 搜索结果格式
@@ -358,22 +373,31 @@ LIMIT 10;
 
 ## 导出与清理
 
-```python
-# 导出单个会话及其消息
-data = db.export_session("sess_abc123")
-
-# 导出所有会话（含消息）为字典列表
-all_data = db.export_all(source="cli")
-
-# 删除旧会话（仅删除已结束的会话）
-deleted_count = db.prune_sessions(older_than_days=90)
-deleted_count = db.prune_sessions(older_than_days=30, source="telegram")
-
-# 清除消息但保留会话记录
-db.clear_messages("sess_abc123")
-
-# 删除会话及所有消息
-db.delete_session("sess_abc123")
+```python# 导出单个会话及其消息
+
+data = db.export_session("sess_abc123")
+
+
+# 导出所有会话（含消息）为字典列表
+
+all_data = db.export_all(source="cli")
+
+
+# 删除旧会话（仅删除已结束的会话）
+
+deleted_count = db.prune_sessions(older_than_days=90)
+
+deleted_count = db.prune_sessions(older_than_days=30, source="telegram")
+
+
+# 清除消息但保留会话记录
+
+db.clear_messages("sess_abc123")
+
+
+# 删除会话及所有消息
+
+db.delete_session("sess_abc123")
 ```
 
 

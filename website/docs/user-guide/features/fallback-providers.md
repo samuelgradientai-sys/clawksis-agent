@@ -380,14 +380,13 @@ See [Subagent Delegation](/user-guide/features/delegation) for full configuratio
 
 Cron jobs inherit your configured `fallback_providers` chain (or legacy `fallback_model`) when they create an agent. To use a different primary provider for a cron job, configure `provider` and `model` overrides on the cron job itself:
 
-```python
-cronjob(
-    action="create",
-    schedule="every 2h",
-    prompt="Check server status",
-    provider="openrouter",
-    model="google/gemini-3-flash-preview"
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 2h",
+    prompt="Check server status",
+    provider="openrouter",
+    model="google/gemini-3-flash-preview",
+)
 ```
 
 See [Scheduled Tasks (Cron)](/user-guide/features/cron) for full configuration details.

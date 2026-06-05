@@ -44,9 +44,11 @@ logger = logging.getLogger(__name__)
 # Module-level state
 # =========================================================================
 
+
 @dataclass
 class _ClarifyEntry:
     """One pending clarify request inside a gateway session."""
+
     clarify_id: str
     session_key: str
     question: str
@@ -74,6 +76,7 @@ _session_index: Dict[str, List[str]] = {}
 # =========================================================================
 # Public API — agent-thread side
 # =========================================================================
+
 
 def register(
     clarify_id: str,
@@ -146,6 +149,7 @@ def wait_for_response(clarify_id: str, timeout: float) -> Optional[str]:
 # =========================================================================
 # Public API — gateway / adapter side
 # =========================================================================
+
 
 def resolve_gateway_clarify(clarify_id: str, response: str) -> bool:
     """Unblock the agent thread waiting on ``clarify_id``.
@@ -228,6 +232,7 @@ def clear_session(session_key: str) -> int:
 # Config
 # =========================================================================
 
+
 def get_clarify_timeout() -> int:
     """Read the clarify response timeout (seconds) from config.
 
@@ -240,6 +245,7 @@ def get_clarify_timeout() -> int:
     """
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
         agent_cfg = cfg.get("agent", {}) or {}
         return int(agent_cfg.get("clarify_timeout", 600))

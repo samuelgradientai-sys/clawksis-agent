@@ -12,10 +12,7 @@ isolation — no real package metadata, no real config, no real cache.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import time
@@ -25,15 +22,10 @@ from pathlib import Path
 from typing import Iterator
 
 
-
 import pytest
 
 
-
 import clawk_cli.security_advisories as adv
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -43,53 +35,27 @@ import clawk_cli.security_advisories as adv
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @pytest.fixture
-
 def fake_advisory() -> adv.Advisory:
-
     """A self-contained Advisory used across tests."""
 
     return adv.Advisory(
-
         id="test-advisory-2026-99",
-
         title="Test advisory",
-
         summary="Pretend this package has been compromised.",
-
         url="https://example.com/advisory",
-
-        compromised=(
-
-            ("fake-malicious-pkg", frozenset({"6.6.6"})),
-
-        ),
-
+        compromised=(("fake-malicious-pkg", frozenset({"6.6.6"})),),
         remediation=(
-
             "pip uninstall -y fake-malicious-pkg",
-
             "Rotate any credentials that may have been exposed.",
-
         ),
-
         published="2026-01-01",
-
         severity="critical",
-
     )
 
 
-
-
-
 @pytest.fixture
-
 def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-
     """Redirect CLAWK_HOME so banner cache and config writes are sandboxed."""
 
     home = tmp_path / ".clawksis"
@@ -105,13 +71,8 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home
 
 
-
-
-
 @pytest.fixture
-
 def patched_version(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, str]]:
-
     """Override _installed_version with a controllable lookup table."""
 
     table: dict[str, str] = {}
@@ -121,9 +82,6 @@ def patched_version(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, str]]
     yield table
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # detect_compromised
@@ -131,11 +89,7 @@ def patched_version(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, str]]
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDetectCompromised:
-
     def test_no_match_returns_empty_list(self, fake_advisory, patched_version):
 
         # No matching package installed.
@@ -143,8 +97,6 @@ class TestDetectCompromised:
         hits = adv.detect_compromised(advisories=[fake_advisory])
 
         assert hits == []
-
-
 
     def test_exact_version_match(self, fake_advisory, patched_version):
 
@@ -160,8 +112,6 @@ class TestDetectCompromised:
 
         assert hits[0].installed_version == "6.6.6"
 
-
-
     def test_safe_version_does_not_match(self, fake_advisory, patched_version):
 
         # Package is installed but the version is not in the compromised set.
@@ -172,32 +122,19 @@ class TestDetectCompromised:
 
         assert hits == []
 
-
-
-    def test_empty_compromised_set_matches_any_version(
-
-        self, patched_version
-
-    ):
+    def test_empty_compromised_set_matches_any_version(self, patched_version):
 
         # An advisory with an empty version set is a "any version is suspect"
 
         # wildcard — used when an entire maintainer namespace is owned.
 
         wildcard = adv.Advisory(
-
             id="wildcard",
-
             title="Whole namespace owned",
-
             summary="x",
-
             url="x",
-
             compromised=(("evil-namespace", frozenset()),),
-
             remediation=("uninstall it",),
-
         )
 
         patched_version["evil-namespace"] = "0.0.1"
@@ -209,9 +146,6 @@ class TestDetectCompromised:
         assert hits[0].installed_version == "0.0.1"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Acknowledgement persistence
@@ -219,66 +153,41 @@ class TestDetectCompromised:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestAck:
-
     def test_get_acked_ids_empty_when_no_config(self, monkeypatch):
 
         # load_config raises → returns empty set, doesn't crash.
 
         monkeypatch.setattr(
-
             "clawk_cli.config.load_config",
-
             lambda: (_ for _ in ()).throw(RuntimeError("boom")),
-
         )
 
         assert adv.get_acked_ids() == set()
 
-
-
     def test_filter_unacked_strips_dismissed(self, fake_advisory, monkeypatch):
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: {fake_advisory.id})
 
         assert adv.filter_unacked([hit]) == []
 
-
-
-    def test_filter_unacked_passes_through_unknown(
-
-        self, fake_advisory, monkeypatch
-
-    ):
+    def test_filter_unacked_passes_through_unknown(self, fake_advisory, monkeypatch):
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         assert adv.filter_unacked([hit]) == [hit]
-
-
 
     def test_ack_advisory_persists_id(self, isolated_home, monkeypatch):
 
@@ -288,18 +197,11 @@ class TestAck:
 
         store: dict = {"security": {}}
 
-        monkeypatch.setattr(
-
-            "clawk_cli.config.load_config", lambda: store
-
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: store)
 
         monkeypatch.setattr(
-
             "clawk_cli.config.save_config",
-
             lambda cfg: store.update(cfg) or None,
-
         )
 
         assert adv.ack_advisory("test-advisory-2026-99") is True
@@ -310,24 +212,13 @@ class TestAck:
 
         adv.ack_advisory("test-advisory-2026-99")
 
-        assert (
-
-            store["security"]["acked_advisories"].count("test-advisory-2026-99")
-
-            == 1
-
-        )
-
-
+        assert store["security"]["acked_advisories"].count("test-advisory-2026-99") == 1
 
     def test_ack_advisory_rejects_blank(self, isolated_home):
 
         assert adv.ack_advisory("") is False
 
         assert adv.ack_advisory("   ") is False
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -337,51 +228,33 @@ class TestAck:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestBannerCache:
-
     def test_first_call_returns_due_hits(
-
         self, fake_advisory, isolated_home, monkeypatch
-
     ):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         due = adv.hits_due_for_banner([hit])
 
         assert due == [hit]
 
-
-
     def test_second_call_within_window_suppresses(
-
         self, fake_advisory, isolated_home, monkeypatch
-
     ):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         adv.hits_due_for_banner([hit])
@@ -392,24 +265,16 @@ class TestBannerCache:
 
         assert again == []
 
-
-
     def test_call_after_window_re_banners(
-
         self, fake_advisory, isolated_home, monkeypatch
-
     ):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         adv.hits_due_for_banner([hit])
@@ -427,11 +292,9 @@ class TestBannerCache:
         backdated = []
 
         for line in old_lines:
-
             parts = line.split(None, 1)
 
             if len(parts) == 2:
-
                 backdated.append(f"{parts[0]} {time.time() - 48 * 3600}")
 
         cache_path.write_text("\n".join(backdated) + "\n", encoding="utf-8")
@@ -440,30 +303,17 @@ class TestBannerCache:
 
         assert again == [hit]
 
-
-
-    def test_acked_hits_never_banner(
-
-        self, fake_advisory, isolated_home, monkeypatch
-
-    ):
+    def test_acked_hits_never_banner(self, fake_advisory, isolated_home, monkeypatch):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: {fake_advisory.id})
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         assert adv.hits_due_for_banner([hit]) == []
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -473,21 +323,13 @@ class TestBannerCache:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestRendering:
-
     def test_short_banner_lines_includes_id_and_version(self, fake_advisory):
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         lines = adv.short_banner_lines([hit])
@@ -502,18 +344,12 @@ class TestRendering:
 
         assert "clawk doctor" in joined
 
-
-
     def test_full_remediation_text_contains_all_steps(self, fake_advisory):
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         body = "\n".join(adv.full_remediation_text(hit))
@@ -521,14 +357,11 @@ class TestRendering:
         # All remediation steps must be present.
 
         for step in fake_advisory.remediation:
-
             assert step in body
 
         assert fake_advisory.url in body
 
         assert fake_advisory.summary in body
-
-
 
     def test_render_doctor_section_clean_state(self):
 
@@ -540,24 +373,14 @@ class TestRendering:
 
         assert any("No active security advisories" in line for line in lines)
 
-
-
-    def test_render_doctor_section_with_unacked_hit(
-
-        self, fake_advisory, monkeypatch
-
-    ):
+    def test_render_doctor_section_with_unacked_hit(self, fake_advisory, monkeypatch):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         has_problems, lines = adv.render_doctor_section([hit])
@@ -568,20 +391,14 @@ class TestRendering:
 
         assert fake_advisory.title in body
 
-
-
     def test_gateway_log_message_singular(self, fake_advisory, monkeypatch):
 
         monkeypatch.setattr(adv, "get_acked_ids", lambda: set())
 
         hit = adv.AdvisoryHit(
-
             advisory=fake_advisory,
-
             package="fake-malicious-pkg",
-
             installed_version="6.6.6",
-
         )
 
         msg = adv.gateway_log_message([hit])
@@ -592,14 +409,9 @@ class TestRendering:
 
         assert "fake-malicious-pkg==6.6.6" in msg
 
-
-
     def test_gateway_log_message_returns_none_for_no_hits(self):
 
         assert adv.gateway_log_message([]) is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -609,13 +421,8 @@ class TestRendering:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestRealCatalog:
-
     def test_advisories_well_formed(self):
-
         """Every shipped advisory must be self-consistent.
 
 
@@ -629,7 +436,6 @@ class TestRealCatalog:
         seen_ids: set[str] = set()
 
         for advisory in adv.ADVISORIES:
-
             assert advisory.id, "advisory has empty id"
 
             assert advisory.id not in seen_ids, f"duplicate id {advisory.id}"
@@ -642,16 +448,15 @@ class TestRealCatalog:
 
             assert advisory.remediation, f"{advisory.id}: empty remediation"
 
-            assert advisory.url.startswith("http"), \
+            assert advisory.url.startswith("http"), (
                 f"{advisory.id}: bad url {advisory.url!r}"
+            )
 
-            assert advisory.compromised, \
-                f"{advisory.id}: empty compromised tuple"
+            assert advisory.compromised, f"{advisory.id}: empty compromised tuple"
 
             for pkg, versions in advisory.compromised:
-
                 assert pkg, f"{advisory.id}: empty package name"
 
-                assert isinstance(versions, frozenset), \
+                assert isinstance(versions, frozenset), (
                     f"{advisory.id}: versions must be frozenset"
-
+                )

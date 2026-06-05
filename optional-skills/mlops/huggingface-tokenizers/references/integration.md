@@ -61,8 +61,7 @@ from transformers import PreTrainedTokenizerFast
 # Train custom tokenizer
 tokenizer = Tokenizer(BPE())
 trainer = BpeTrainer(
-    vocab_size=30000,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab_size=30000, special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
 )
 tokenizer.train(files=["corpus.txt"], trainer=trainer)
 
@@ -76,7 +75,7 @@ transformers_tokenizer = PreTrainedTokenizerFast(
     sep_token="[SEP]",
     pad_token="[PAD]",
     cls_token="[CLS]",
-    mask_token="[MASK]"
+    mask_token="[MASK]",
 )
 
 # Save in transformers format
@@ -90,6 +89,7 @@ transformers_tokenizer.save_pretrained("my-tokenizer")
 ```python
 # Load
 from transformers import AutoTokenizer
+
 tokenizer = AutoTokenizer.from_pretrained("my-tokenizer")
 
 # Encode with all transformers features
@@ -98,7 +98,7 @@ outputs = tokenizer(
     padding="max_length",
     truncation=True,
     max_length=128,
-    return_tensors="pt"
+    return_tensors="pt",
 )
 
 print(outputs.keys())
@@ -171,7 +171,7 @@ print(encoded)
 texts = ["Hello world", "How are you?", "I am fine"]
 encoded = tokenizer(texts, padding=True, truncation=True, max_length=10)
 
-print(encoded['input_ids'])
+print(encoded["input_ids"])
 # [[101, 7592, 2088, 102, 0, 0, 0, 0, 0, 0],
 #  [101, 2129, 2024, 2017, 1029, 102, 0, 0, 0, 0],
 #  [101, 1045, 2572, 2986, 102, 0, 0, 0, 0, 0]]
@@ -182,7 +182,7 @@ print(encoded['input_ids'])
 ```python
 # Return PyTorch tensors
 outputs = tokenizer("Hello world", return_tensors="pt")
-print(outputs['input_ids'].shape)  # torch.Size([1, 5])
+print(outputs["input_ids"].shape)  # torch.Size([1, 5])
 
 # Return TensorFlow tensors
 outputs = tokenizer("Hello world", return_tensors="tf")
@@ -260,18 +260,18 @@ text = "Very long document " * 1000
 encodings = tokenizer(
     text,
     max_length=512,
-    stride=128,          # Overlap between chunks
+    stride=128,  # Overlap between chunks
     truncation=True,
     return_overflowing_tokens=True,
-    return_offsets_mapping=True
+    return_offsets_mapping=True,
 )
 
 # Get all chunks
-num_chunks = len(encodings['input_ids'])
+num_chunks = len(encodings["input_ids"])
 print(f"Split into {num_chunks} chunks")
 
 # Each chunk overlaps by stride tokens
-for i, chunk in enumerate(encodings['input_ids']):
+for i, chunk in enumerate(encodings["input_ids"]):
     print(f"Chunk {i}: {len(chunk)} tokens")
 ```
 
@@ -285,10 +285,7 @@ for i, chunk in enumerate(encodings['input_ids']):
 # Get character offsets for each token
 encoded = tokenizer("Hello, world!", return_offsets_mapping=True)
 
-for token, (start, end) in zip(
-    encoded.tokens(),
-    encoded['offset_mapping'][0]
-):
+for token, (start, end) in zip(encoded.tokens(), encoded["offset_mapping"][0]):
     print(f"{token:10s} → [{start:2d}, {end:2d})")
 
 # Output:
@@ -375,16 +372,16 @@ from transformers import BertConfig, BertModel
 
 # Train custom tokenizer
 from tokenizers import Tokenizer, models, trainers
+
 tokenizer = Tokenizer(models.BPE())
 trainer = trainers.BpeTrainer(vocab_size=30000)
 tokenizer.train(files=["data.txt"], trainer=trainer)
 
 # Wrap for transformers
 from transformers import PreTrainedTokenizerFast
+
 fast_tokenizer = PreTrainedTokenizerFast(
-    tokenizer_object=tokenizer,
-    unk_token="[UNK]",
-    pad_token="[PAD]"
+    tokenizer_object=tokenizer, unk_token="[UNK]", pad_token="[PAD]"
 )
 
 # Create model with custom vocab size
@@ -444,7 +441,7 @@ messages = [
     {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "Hello!"},
     {"role": "assistant", "content": "Hi! How can I help?"},
-    {"role": "user", "content": "What's the weather?"}
+    {"role": "user", "content": "What's the weather?"},
 ]
 
 # Apply chat template (if tokenizer has one)
@@ -488,21 +485,20 @@ from datasets import load_dataset
 
 dataset = load_dataset("imdb", split="train[:1000]")
 
+
 # Tokenize in batches
 def tokenize_function(examples):
     return tokenizer(
-        examples["text"],
-        padding="max_length",
-        truncation=True,
-        max_length=512
+        examples["text"], padding="max_length", truncation=True, max_length=512
     )
+
 
 # Map over dataset (batched)
 tokenized_dataset = dataset.map(
     tokenize_function,
     batched=True,
     batch_size=1000,
-    num_proc=4  # Parallel processing
+    num_proc=4,  # Parallel processing
 )
 ```
 
@@ -513,15 +509,17 @@ tokenized_dataset = dataset.map(
 tokenizer = AutoTokenizer.from_pretrained(
     "bert-base-uncased",
     use_fast=True,
-    cache_dir="./cache"  # Cache tokenizer files
+    cache_dir="./cache",  # Cache tokenizer files
 )
 
 # Tokenize with caching
 from functools import lru_cache
 
+
 @lru_cache(maxsize=10000)
 def cached_tokenize(text):
     return tuple(tokenizer.encode(text))
+
 
 # Reuses cached results for repeated inputs
 ```
@@ -534,6 +532,7 @@ from datasets import load_dataset
 
 dataset = load_dataset("pile", split="train", streaming=True)
 
+
 def process_batch(batch):
     # Tokenize
     tokens = tokenizer(batch["text"], truncation=True, max_length=512)
@@ -541,6 +540,7 @@ def process_batch(batch):
     # Process tokens...
 
     return tokens
+
 
 # Process in chunks (memory efficient)
 for batch in dataset.batch(batch_size=1000):
@@ -600,7 +600,7 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
 tokenizer(
     texts,
     padding="max_length",  # or "longest"
-    max_length=128
+    max_length=128,
 )
 ```
 

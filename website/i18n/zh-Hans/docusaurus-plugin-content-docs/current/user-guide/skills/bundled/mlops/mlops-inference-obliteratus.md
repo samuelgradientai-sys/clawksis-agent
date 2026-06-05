@@ -296,9 +296,12 @@ obliteratus run analysis-config.yaml --preset quick
 
 ### Steering Vectors（可逆替代方案）
 与其永久修改权重，可使用推理时 steering：
-```python
-# 仅限 Python API——用于用户自己的项目
-from obliteratus.analysis.steering_vectors import SteeringVectorFactory, SteeringHookManager
+```python# 仅限 Python API——用于用户自己的项目
+
+from obliteratus.analysis.steering_vectors import (
+    SteeringVectorFactory,
+    SteeringHookManager,
+)
 ```
 
 ## 消融策略

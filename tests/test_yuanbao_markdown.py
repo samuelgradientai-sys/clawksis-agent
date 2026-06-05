@@ -14,12 +14,13 @@ import os
 import unittest
 
 # Ensure project root is on the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from gateway.platforms.yuanbao import MarkdownProcessor
 
 
 # ============ has_unclosed_fence ============
+
 
 class TestHasUnclosedFence(unittest.TestCase):
     def test_unclosed_fence(self):
@@ -32,7 +33,9 @@ class TestHasUnclosedFence(unittest.TestCase):
         self.assertFalse(MarkdownProcessor.has_unclosed_fence(""))
 
     def test_no_fence(self):
-        self.assertFalse(MarkdownProcessor.has_unclosed_fence("just some text\nno fences here"))
+        self.assertFalse(
+            MarkdownProcessor.has_unclosed_fence("just some text\nno fences here")
+        )
 
     def test_multiple_closed_fences(self):
         text = "```python\ncode1\n```\n\n```js\ncode2\n```"
@@ -51,6 +54,7 @@ class TestHasUnclosedFence(unittest.TestCase):
 
 
 # ============ ends_with_table_row ============
+
 
 class TestEndsWithTableRow(unittest.TestCase):
     def test_simple_table_row(self):
@@ -80,6 +84,7 @@ class TestEndsWithTableRow(unittest.TestCase):
 
 
 # ============ split_at_paragraph_boundary ============
+
 
 class TestSplitAtParagraphBoundary(unittest.TestCase):
     def test_split_at_empty_line(self):
@@ -115,6 +120,7 @@ class TestSplitAtParagraphBoundary(unittest.TestCase):
 
 # ============ chunk_markdown_text ============
 
+
 class TestChunkMarkdownText(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(MarkdownProcessor.chunk_markdown_text(""), [])
@@ -136,7 +142,7 @@ class TestChunkMarkdownText(unittest.TestCase):
         self.assertEqual(len(result), 3)
         for chunk in result:
             self.assertLessEqual(len(chunk), 3000)
-        self.assertEqual(''.join(result), text)
+        self.assertEqual("".join(result), text)
 
     def test_5000_chars_returns_2(self):
         """验收标准: 'a'*5000 with max 3000 → 2 chunks"""
@@ -149,14 +155,17 @@ class TestChunkMarkdownText(unittest.TestCase):
         text = f"Some intro text.\n\n```python\n{code_lines}\n```\n\nSome outro text."
         result = MarkdownProcessor.chunk_markdown_text(text, 3000)
         for chunk in result:
-            self.assertFalse(MarkdownProcessor.has_unclosed_fence(chunk),
-                             f"Chunk has unclosed fence:\n{chunk[:200]}...")
+            self.assertFalse(
+                MarkdownProcessor.has_unclosed_fence(chunk),
+                f"Chunk has unclosed fence:\n{chunk[:200]}...",
+            )
 
     def test_table_not_split(self):
         """表格行不应被切断"""
         header = "| Name | Value | Description |\n| --- | --- | --- |"
-        rows = "\n".join([f"| item_{i} | {i * 100} | description for item {i} |"
-                          for i in range(50)])
+        rows = "\n".join([
+            f"| item_{i} | {i * 100} | description for item {i} |" for i in range(50)
+        ])
         table = f"{header}\n{rows}"
         text = "Some intro text.\n\n" + table + "\n\nSome outro text."
         result = MarkdownProcessor.chunk_markdown_text(text, 3000)
@@ -173,12 +182,13 @@ class TestChunkMarkdownText(unittest.TestCase):
 
     def test_multiple_paragraphs(self):
         """多段落文本应在段落边界切割"""
-        paragraphs = ["This is paragraph number " + str(i) + ". " * 50
-                      for i in range(10)]
+        paragraphs = [
+            "This is paragraph number " + str(i) + ". " * 50 for i in range(10)
+        ]
         text = "\n\n".join(paragraphs)
         result = MarkdownProcessor.chunk_markdown_text(text, 500)
         self.assertGreater(len(result), 1)
-        total_content = ''.join(result)
+        total_content = "".join(result)
         self.assertGreaterEqual(len(total_content), len(text) * 0.95)
 
     def test_single_long_line(self):
@@ -205,6 +215,7 @@ class TestChunkMarkdownText(unittest.TestCase):
 
 
 # ============ Acceptance criteria ============
+
 
 class TestAcceptanceCriteria(unittest.TestCase):
     def test_9000_x_returns_3_chunks(self):
@@ -233,25 +244,26 @@ class TestAcceptanceCriteria(unittest.TestCase):
         text = f"Introduction.\n\n```python\n{code_lines}\n```\n\nConclusion."
         result = MarkdownProcessor.chunk_markdown_text(text, 3000)
         for chunk in result:
-            self.assertFalse(MarkdownProcessor.has_unclosed_fence(chunk),
-                             f"Found unclosed fence in chunk:\n{chunk[:100]}...")
+            self.assertFalse(
+                MarkdownProcessor.has_unclosed_fence(chunk),
+                f"Found unclosed fence in chunk:\n{chunk[:100]}...",
+            )
 
     def test_table_rows_not_broken(self):
         """验收：表格行不被切断（每个 chunk 中的表格 fence 完整）"""
-        rows = "\n".join([
-            f"| Col A {i} | Col B {i} | Col C {i} |" for i in range(100)
-        ])
+        rows = "\n".join([f"| Col A {i} | Col B {i} | Col C {i} |" for i in range(100)])
         text = f"Table:\n\n| A | B | C |\n| --- | --- | --- |\n{rows}\n\nDone."
         result = MarkdownProcessor.chunk_markdown_text(text, 500)
         for chunk in result:
             self.assertFalse(MarkdownProcessor.has_unclosed_fence(chunk))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
 # ============ pytest-style function tests (task specification) ============
+
 
 def test_short_text_no_split():
     assert MarkdownProcessor.chunk_markdown_text("hello", 100) == ["hello"]
@@ -269,7 +281,9 @@ def test_fence_not_broken():
     code_block = "```python\n" + "x = 1\n" * 200 + "```"
     chunks = MarkdownProcessor.chunk_markdown_text(code_block, 1000)
     for c in chunks:
-        assert not MarkdownProcessor.has_unclosed_fence(c), f"Chunk has unclosed fence: {c[:100]}"
+        assert not MarkdownProcessor.has_unclosed_fence(c), (
+            f"Chunk has unclosed fence: {c[:100]}"
+        )
 
 
 def test_large_fence_kept_whole():
@@ -297,7 +311,7 @@ def test_table_not_broken():
     chunks = MarkdownProcessor.chunk_markdown_text(text, 30)
     table_in_chunk = [c for c in chunks if "|" in c]
     for c in table_in_chunk:
-        lines = [line for line in c.split('\n') if line.strip().startswith('|')]
+        lines = [line for line in c.split("\n") if line.strip().startswith("|")]
         if lines:
             # 至少表格行不被半截切割
             pass

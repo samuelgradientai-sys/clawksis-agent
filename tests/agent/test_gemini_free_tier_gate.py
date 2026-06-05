@@ -1,4 +1,5 @@
 """Tests for Gemini free-tier detection and blocking."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -11,7 +12,9 @@ from agent.gemini_native_adapter import (
 )
 
 
-def _mock_response(status: int, headers: dict | None = None, text: str = "") -> MagicMock:
+def _mock_response(
+    status: int, headers: dict | None = None, text: str = ""
+) -> MagicMock:
     resp = MagicMock()
     resp.status_code = status
     resp.headers = headers or {}
@@ -53,7 +56,7 @@ class TestProbeGeminiTier:
     def test_free_tier_via_429_body(self):
         body = (
             '{"error":{"code":429,"message":"Quota exceeded for metric: '
-            'generativelanguage.googleapis.com/generate_content_free_tier_requests, '
+            "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
             'limit: 20"}}'
         )
         resp = _mock_response(429, {}, body)
@@ -155,7 +158,9 @@ class TestGeminiHttpErrorFreeTierGuidance:
         assert "aistudio.google.com/apikey" not in str(err)
 
     def test_non_429_has_no_billing_url(self):
-        body = '{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}'
+        body = (
+            '{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}'
+        )
         err = gemini_http_error(self._FakeResp(400, body))
         assert "aistudio.google.com/apikey" not in str(err)
 

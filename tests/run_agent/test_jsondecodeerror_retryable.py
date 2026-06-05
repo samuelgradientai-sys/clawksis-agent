@@ -16,6 +16,7 @@ any future refactor of that predicate must preserve the invariant:
     bare ValueError     → IS local validation error (programming bug)
     bare TypeError      → IS local validation error (programming bug)
 """
+
 from __future__ import annotations
 
 import json
@@ -46,7 +47,6 @@ def _mirror_agent_predicate(err: BaseException) -> bool:
 
 
 class TestJSONDecodeErrorIsRetryable:
-
     def test_json_decode_error_is_not_local_validation(self):
         """Provider returning malformed JSON surfaces as JSONDecodeError —
         must be treated as transient so the retry path runs."""
@@ -86,6 +86,7 @@ class TestAgentLoopSourceStillHasCarveOut:
     def test_run_agent_excludes_jsondecodeerror_from_local_validation(self):
         import inspect
         from agent import conversation_loop
+
         # The agent loop body lives in agent/conversation_loop.py after
         # the run_agent.py refactor.  Assert the carve-out is present in
         # the extracted module specifically — if it ever moves back or
@@ -101,7 +102,6 @@ class TestAgentLoopSourceStillHasCarveOut:
             "agent/conversation_loop.py must carve out json.JSONDecodeError "
             "from the is_local_validation_error classification — see #14782."
         )
-
 
 
 class TestNoneTypeNotIterableIsRetryable:
@@ -144,9 +144,12 @@ class TestNoneTypeNotIterableIsRetryable:
 class TestAgentLoopSourceHasNoneTypeCarveOut:
     """Belt-and-suspenders: the production source must include the carve-out."""
 
-    def test_conversation_loop_excludes_nonetype_not_iterable_from_local_validation(self):
+    def test_conversation_loop_excludes_nonetype_not_iterable_from_local_validation(
+        self,
+    ):
         import inspect
         from agent import conversation_loop
+
         src = inspect.getsource(conversation_loop)
         assert "is_local_validation_error" in src
         # The specific check must be present.

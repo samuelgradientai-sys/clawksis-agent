@@ -215,8 +215,12 @@ async def test_branch_preserves_persisted_assistant_metadata():
     assert assistant_kwargs["finish_reason"] == "stop"
     assert assistant_kwargs["reasoning"] == "thinking"
     assert assistant_kwargs["reasoning_content"] == "provider scratchpad"
-    assert assistant_kwargs["reasoning_details"] == [{"type": "summary", "text": "step"}]
-    assert assistant_kwargs["codex_reasoning_items"] == [{"id": "r1", "type": "reasoning"}]
+    assert assistant_kwargs["reasoning_details"] == [
+        {"type": "summary", "text": "step"}
+    ]
+    assert assistant_kwargs["codex_reasoning_items"] == [
+        {"id": "r1", "type": "reasoning"}
+    ]
     assert assistant_kwargs["codex_message_items"] == [{"id": "m1", "type": "message"}]
 
 
@@ -258,7 +262,9 @@ def test_clear_session_boundary_security_state_is_scoped():
     async def _other_handler(choice):
         return f"other:{choice}"
 
-    slash_confirm_mod.register(session_key, "confirm-target", "reload-mcp", _target_handler)
+    slash_confirm_mod.register(
+        session_key, "confirm-target", "reload-mcp", _target_handler
+    )
     slash_confirm_mod.register(other_key, "confirm-other", "reload-mcp", _other_handler)
 
     runner._clear_session_boundary_security_state(session_key)

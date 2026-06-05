@@ -119,33 +119,47 @@ best_mask = masks[np.argmax(scores)]
 
 ### HuggingFace Transformers
 
-```python
-import torch
-from PIL import Image
-from transformers import SamModel, SamProcessor
-
-# 加载模型和处理器
-model = SamModel.from_pretrained("facebook/sam-vit-huge")
-processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
-model.to("cuda")
-
-# 使用点 prompt 处理图像
-image = Image.open("image.jpg")
-input_points = [[[450, 600]]]  # 批量点
-
-inputs = processor(image, input_points=input_points, return_tensors="pt")
-inputs = {k: v.to("cuda") for k, v in inputs.items()}
-
-# 生成掩码
-with torch.no_grad():
-    outputs = model(**inputs)
-
-# 将掩码后处理还原至原始尺寸
-masks = processor.image_processor.post_process_masks(
-    outputs.pred_masks.cpu(),
-    inputs["original_sizes"].cpu(),
-    inputs["reshaped_input_sizes"].cpu()
-)
+```pythonimport torch
+
+from PIL import Image
+
+from transformers import SamModel, SamProcessor
+
+
+# 加载模型和处理器
+
+model = SamModel.from_pretrained("facebook/sam-vit-huge")
+
+processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+
+model.to("cuda")
+
+
+# 使用点 prompt 处理图像
+
+image = Image.open("image.jpg")
+
+input_points = [[[450, 600]]]  # 批量点
+
+
+inputs = processor(image, input_points=input_points, return_tensors="pt")
+
+inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+
+# 生成掩码
+
+with torch.no_grad():
+    outputs = model(**inputs)
+
+
+# 将掩码后处理还原至原始尺寸
+
+masks = processor.image_processor.post_process_masks(
+    outputs.pred_masks.cpu(),
+    inputs["original_sizes"].cpu(),
+    inputs["reshaped_input_sizes"].cpu(),
+)
 ```
 
 ## 核心概念
@@ -188,162 +202,183 @@ SAM Architecture:
 
 ### 点 prompt
 
-```python
-# 单个前景点
-input_point = np.array([[500, 375]])
-input_label = np.array([1])
-
-masks, scores, logits = predictor.predict(
-    point_coords=input_point,
-    point_labels=input_label,
-    multimask_output=True
-)
-
-# 多个点（前景 + 背景）
-input_points = np.array([[500, 375], [600, 400], [450, 300]])
-input_labels = np.array([1, 1, 0])  # 2 个前景，1 个背景
-
-masks, scores, logits = predictor.predict(
-    point_coords=input_points,
-    point_labels=input_labels,
-    multimask_output=False  # prompt 明确时使用单掩码
-)
+```python# 单个前景点
+
+input_point = np.array([[500, 375]])
+
+input_label = np.array([1])
+
+
+masks, scores, logits = predictor.predict(
+    point_coords=input_point, point_labels=input_label, multimask_output=True
+)
+
+
+# 多个点（前景 + 背景）
+
+input_points = np.array([[500, 375], [600, 400], [450, 300]])
+
+input_labels = np.array([1, 1, 0])  # 2 个前景，1 个背景
+
+
+masks, scores, logits = predictor.predict(
+    point_coords=input_points,
+    point_labels=input_labels,
+    multimask_output=False,  # prompt 明确时使用单掩码
+)
 ```
 
 ### 框 prompt
 
-```python
-# 边界框 [x1, y1, x2, y2]
-input_box = np.array([425, 600, 700, 875])
-
-masks, scores, logits = predictor.predict(
-    box=input_box,
-    multimask_output=False
-)
+```python# 边界框 [x1, y1, x2, y2]
+
+input_box = np.array([425, 600, 700, 875])
+
+
+masks, scores, logits = predictor.predict(box=input_box, multimask_output=False)
 ```
 
 ### 组合 prompt
 
-```python
-# 框 + 点，实现精确控制
-masks, scores, logits = predictor.predict(
-    point_coords=np.array([[500, 375]]),
-    point_labels=np.array([1]),
-    box=np.array([400, 300, 700, 600]),
-    multimask_output=False
-)
+```python# 框 + 点，实现精确控制
+
+masks, scores, logits = predictor.predict(
+    point_coords=np.array([[500, 375]]),
+    point_labels=np.array([1]),
+    box=np.array([400, 300, 700, 600]),
+    multimask_output=False,
+)
 ```
 
 ### 迭代精化
 
-```python
-# 初始预测
-masks, scores, logits = predictor.predict(
-    point_coords=np.array([[500, 375]]),
-    point_labels=np.array([1]),
-    multimask_output=True
-)
-
-# 使用先前掩码添加额外点进行精化
-masks, scores, logits = predictor.predict(
-    point_coords=np.array([[500, 375], [550, 400]]),
-    point_labels=np.array([1, 0]),  # 添加背景点
-    mask_input=logits[np.argmax(scores)][None, :, :],  # 使用最佳掩码
-    multimask_output=False
-)
+```python# 初始预测
+
+masks, scores, logits = predictor.predict(
+    point_coords=np.array([[500, 375]]),
+    point_labels=np.array([1]),
+    multimask_output=True,
+)
+
+
+# 使用先前掩码添加额外点进行精化
+
+masks, scores, logits = predictor.predict(
+    point_coords=np.array([[500, 375], [550, 400]]),
+    point_labels=np.array([1, 0]),  # 添加背景点
+    mask_input=logits[np.argmax(scores)][None, :, :],  # 使用最佳掩码
+    multimask_output=False,
+)
 ```
 
 ## 自动掩码生成
 
 ### 基本自动分割
 
-```python
-from segment_anything import SamAutomaticMaskGenerator
-
-# 创建生成器
-mask_generator = SamAutomaticMaskGenerator(sam)
-
-# 生成所有掩码
-masks = mask_generator.generate(image)
-
-# 每个掩码包含：
-# - segmentation: 二值掩码
-# - bbox: [x, y, w, h]
-# - area: 像素数量
-# - predicted_iou: 质量分数
-# - stability_score: 鲁棒性分数
-# - point_coords: 生成点
+```pythonfrom segment_anything import SamAutomaticMaskGenerator
+
+
+# 创建生成器
+
+mask_generator = SamAutomaticMaskGenerator(sam)
+
+
+# 生成所有掩码
+
+masks = mask_generator.generate(image)
+
+
+# 每个掩码包含：
+
+# - segmentation: 二值掩码
+
+# - bbox: [x, y, w, h]
+
+# - area: 像素数量
+
+# - predicted_iou: 质量分数
+
+# - stability_score: 鲁棒性分数
+
+# - point_coords: 生成点
 ```
 
 ### 自定义生成
 
-```python
-mask_generator = SamAutomaticMaskGenerator(
-    model=sam,
-    points_per_side=32,          # 网格密度（越大 = 掩码越多）
-    pred_iou_thresh=0.88,        # 质量阈值
-    stability_score_thresh=0.95,  # 稳定性阈值
-    crop_n_layers=1,             # 多尺度裁剪
-    crop_n_points_downscale_factor=2,
-    min_mask_region_area=100,    # 移除微小掩码
-)
-
-masks = mask_generator.generate(image)
+```pythonmask_generator = SamAutomaticMaskGenerator(
+    model=sam,
+    points_per_side=32,  # 网格密度（越大 = 掩码越多）
+    pred_iou_thresh=0.88,  # 质量阈值
+    stability_score_thresh=0.95,  # 稳定性阈值
+    crop_n_layers=1,  # 多尺度裁剪
+    crop_n_points_downscale_factor=2,
+    min_mask_region_area=100,  # 移除微小掩码
+)
+
+
+masks = mask_generator.generate(image)
 ```
 
 ### 过滤掩码
 
-```python
-# 按面积排序（最大优先）
-masks = sorted(masks, key=lambda x: x['area'], reverse=True)
-
-# 按预测 IoU 过滤
-high_quality = [m for m in masks if m['predicted_iou'] > 0.9]
-
-# 按稳定性分数过滤
-stable_masks = [m for m in masks if m['stability_score'] > 0.95]
+```python# 按面积排序（最大优先）
+
+masks = sorted(masks, key=lambda x: x["area"], reverse=True)
+
+
+# 按预测 IoU 过滤
+
+high_quality = [m for m in masks if m["predicted_iou"] > 0.9]
+
+
+# 按稳定性分数过滤
+
+stable_masks = [m for m in masks if m["stability_score"] > 0.95]
 ```
 
 ## 批量推理
 
 ### 多张图像
 
-```python
-# 高效处理多张图像
-images = [cv2.imread(f"image_{i}.jpg") for i in range(10)]
-
-all_masks = []
-for image in images:
-    predictor.set_image(image)
-    masks, _, _ = predictor.predict(
-        point_coords=np.array([[500, 375]]),
-        point_labels=np.array([1]),
-        multimask_output=True
-    )
-    all_masks.append(masks)
+```python# 高效处理多张图像
+
+images = [cv2.imread(f"image_{i}.jpg") for i in range(10)]
+
+
+all_masks = []
+
+for image in images:
+    predictor.set_image(image)
+
+    masks, _, _ = predictor.predict(
+        point_coords=np.array([[500, 375]]),
+        point_labels=np.array([1]),
+        multimask_output=True,
+    )
+
+    all_masks.append(masks)
 ```
 
 ### 每张图像多个 prompt
 
-```python
-# 高效处理多个 prompt（单次图像编码）
-predictor.set_image(image)
-
-# 批量点 prompt
-points = [
-    np.array([[100, 100]]),
-    np.array([[200, 200]]),
-    np.array([[300, 300]])
-]
-
-all_masks = []
-for point in points:
-    masks, scores, _ = predictor.predict(
-        point_coords=point,
-        point_labels=np.array([1]),
-        multimask_output=True
-    )
-    all_masks.append(masks[np.argmax(scores)])
+```python# 高效处理多个 prompt（单次图像编码）
+
+predictor.set_image(image)
+
+
+# 批量点 prompt
+
+points = [np.array([[100, 100]]), np.array([[200, 200]]), np.array([[300, 300]])]
+
+
+all_masks = []
+
+for point in points:
+    masks, scores, _ = predictor.predict(
+        point_coords=point, point_labels=np.array([1]), multimask_output=True
+    )
+
+    all_masks.append(masks[np.argmax(scores)])
 ```
 
 ## ONNX 部署
@@ -360,116 +395,137 @@ python scripts/export_onnx_model.py \
 
 ### 使用 ONNX 模型
 
-```python
-import onnxruntime
-
-# 加载 ONNX 模型
-ort_session = onnxruntime.InferenceSession("sam_onnx.onnx")
-
-# 运行推理（图像嵌入单独计算）
-masks = ort_session.run(
-    None,
-    {
-        "image_embeddings": image_embeddings,
-        "point_coords": point_coords,
-        "point_labels": point_labels,
-        "mask_input": np.zeros((1, 1, 256, 256), dtype=np.float32),
-        "has_mask_input": np.array([0], dtype=np.float32),
-        "orig_im_size": np.array([h, w], dtype=np.float32)
-    }
-)
+```pythonimport onnxruntime
+
+
+# 加载 ONNX 模型
+
+ort_session = onnxruntime.InferenceSession("sam_onnx.onnx")
+
+
+# 运行推理（图像嵌入单独计算）
+
+masks = ort_session.run(
+    None,
+    {
+        "image_embeddings": image_embeddings,
+        "point_coords": point_coords,
+        "point_labels": point_labels,
+        "mask_input": np.zeros((1, 1, 256, 256), dtype=np.float32),
+        "has_mask_input": np.array([0], dtype=np.float32),
+        "orig_im_size": np.array([h, w], dtype=np.float32),
+    },
+)
 ```
 
 ## 常见工作流
 
 ### 工作流 1：标注工具
 
-```python
-import cv2
-
-# 加载模型
-predictor = SamPredictor(sam)
-predictor.set_image(image)
-
-def on_click(event, x, y, flags, param):
-    if event == cv2.EVENT_LBUTTONDOWN:
-        # 前景点
-        masks, scores, _ = predictor.predict(
-            point_coords=np.array([[x, y]]),
-            point_labels=np.array([1]),
-            multimask_output=True
-        )
-        # 显示最佳掩码
-        display_mask(masks[np.argmax(scores)])
+```pythonimport cv2
+
+
+# 加载模型
+
+predictor = SamPredictor(sam)
+
+predictor.set_image(image)
+
+
+def on_click(event, x, y, flags, param):
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        # 前景点
+
+        masks, scores, _ = predictor.predict(
+            point_coords=np.array([[x, y]]),
+            point_labels=np.array([1]),
+            multimask_output=True,
+        )
+
+        # 显示最佳掩码
+
+        display_mask(masks[np.argmax(scores)])
 ```
 
 ### 工作流 2：对象提取
 
-```python
-def extract_object(image, point):
-    """提取指定点处的对象并设置透明背景。"""
-    predictor.set_image(image)
-
-    masks, scores, _ = predictor.predict(
-        point_coords=np.array([point]),
-        point_labels=np.array([1]),
-        multimask_output=True
-    )
-
-    best_mask = masks[np.argmax(scores)]
-
-    # 创建 RGBA 输出
-    rgba = np.zeros((image.shape[0], image.shape[1], 4), dtype=np.uint8)
-    rgba[:, :, :3] = image
-    rgba[:, :, 3] = best_mask * 255
-
-    return rgba
+```pythondef extract_object(image, point):
+    """提取指定点处的对象并设置透明背景。"""
+
+    predictor.set_image(image)
+
+    masks, scores, _ = predictor.predict(
+        point_coords=np.array([point]),
+        point_labels=np.array([1]),
+        multimask_output=True,
+    )
+
+    best_mask = masks[np.argmax(scores)]
+
+    # 创建 RGBA 输出
+
+    rgba = np.zeros((image.shape[0], image.shape[1], 4), dtype=np.uint8)
+
+    rgba[:, :, :3] = image
+
+    rgba[:, :, 3] = best_mask * 255
+
+    return rgba
 ```
 
 ### 工作流 3：医学图像分割
 
-```python
-# 处理医学图像（灰度转 RGB）
-medical_image = cv2.imread("scan.png", cv2.IMREAD_GRAYSCALE)
-rgb_image = cv2.cvtColor(medical_image, cv2.COLOR_GRAY2RGB)
-
-predictor.set_image(rgb_image)
-
-# 分割感兴趣区域
-masks, scores, _ = predictor.predict(
-    box=np.array([x1, y1, x2, y2]),  # ROI 边界框
-    multimask_output=True
-)
+```python# 处理医学图像（灰度转 RGB）
+
+medical_image = cv2.imread("scan.png", cv2.IMREAD_GRAYSCALE)
+
+rgb_image = cv2.cvtColor(medical_image, cv2.COLOR_GRAY2RGB)
+
+
+predictor.set_image(rgb_image)
+
+
+# 分割感兴趣区域
+
+masks, scores, _ = predictor.predict(
+    box=np.array([x1, y1, x2, y2]),  # ROI 边界框
+    multimask_output=True,
+)
 ```
 
 ## 输出格式
 
 ### 掩码数据结构
 
-```python
-# SamAutomaticMaskGenerator 输出
-{
-    "segmentation": np.ndarray,  # H×W 二值掩码
-    "bbox": [x, y, w, h],        # 边界框
-    "area": int,                 # 像素数量
-    "predicted_iou": float,      # 0-1 质量分数
-    "stability_score": float,    # 0-1 鲁棒性分数
-    "crop_box": [x, y, w, h],    # 生成裁剪区域
-    "point_coords": [[x, y]],    # 输入点
-}
+```python# SamAutomaticMaskGenerator 输出
+
+{
+    "segmentation": np.ndarray,  # H×W 二值掩码
+    "bbox": [x, y, w, h],  # 边界框
+    "area": int,  # 像素数量
+    "predicted_iou": float,  # 0-1 质量分数
+    "stability_score": float,  # 0-1 鲁棒性分数
+    "crop_box": [x, y, w, h],  # 生成裁剪区域
+    "point_coords": [[x, y]],  # 输入点
+}
 ```
 
 ### COCO RLE 格式
 
-```python
-from pycocotools import mask as mask_utils
-
-# 将掩码编码为 RLE
-rle = mask_utils.encode(np.asfortranarray(mask.astype(np.uint8)))
-rle["counts"] = rle["counts"].decode("utf-8")
-
-# 将 RLE 解码为掩码
-decoded_mask = mask_utils.decode(rle)
+```pythonfrom pycocotools import mask as mask_utils
+
+
+# 将掩码编码为 RLE
+
+rle = mask_utils.encode(np.asfortranarray(mask.astype(np.uint8)))
+
+rle["counts"] = rle["counts"].decode("utf-8")
+
+
+# 将 RLE 解码为掩码
+
+decoded_mask = mask_utils.decode(rle)
 ```
 
 ## 性能优化
@@ -487,18 +543,22 @@ torch.cuda.empty_cache()
 
 ### 速度优化
 
-```python
-# 使用半精度
-sam = sam.half()
-
-# 减少自动生成的点数
-mask_generator = SamAutomaticMaskGenerator(
-    model=sam,
-    points_per_side=16,  # 默认为 32
-)
-
-# 使用 ONNX 进行部署
-# 导出时加 --return-single-mask 以加快推理速度
+```python# 使用半精度
+
+sam = sam.half()
+
+
+# 减少自动生成的点数
+
+mask_generator = SamAutomaticMaskGenerator(
+    model=sam,
+    points_per_side=16,  # 默认为 32
+)
+
+
+# 使用 ONNX 进行部署
+
+# 导出时加 --return-single-mask 以加快推理速度
 ```
 
 ## 常见问题

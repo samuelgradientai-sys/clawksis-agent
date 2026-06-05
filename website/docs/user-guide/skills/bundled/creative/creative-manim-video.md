@@ -135,12 +135,14 @@ project-name/
 
 **Use monospace fonts for all text.** Manim's Pango renderer produces broken kerning with proportional fonts at all sizes. See `references/visual-design.md` for full recommendations.
 
-```python
-MONO = "Menlo"  # define once at top of file
-
-Text("Fourier Series", font_size=48, font=MONO, weight=BOLD)  # titles
-Text("n=1: sin(x)", font_size=20, font=MONO)                  # labels
-MathTex(r"\nabla L")                                            # math (uses LaTeX)
+```pythonMONO = "Menlo"  # define once at top of file
+
+
+Text("Fourier Series", font_size=48, font=MONO, weight=BOLD)  # titles
+
+Text("n=1: sin(x)", font_size=20, font=MONO)  # labels
+
+MathTex(r"\nabla L")  # math (uses LaTeX)
 ```
 
 Minimum `font_size=18` for readability.
@@ -163,23 +165,36 @@ Before any code, write `plan.md`. See `references/scene-planning.md` for the com
 
 One class per scene. Every scene is independently renderable.
 
-```python
-from manim import *
-
-BG = "#1C1C1C"
-PRIMARY = "#58C4DD"
-SECONDARY = "#83C167"
-ACCENT = "#FFFF00"
-MONO = "Menlo"
-
-class Scene1_Introduction(Scene):
-    def construct(self):
-        self.camera.background_color = BG
-        title = Text("Why Does This Work?", font_size=48, color=PRIMARY, weight=BOLD, font=MONO)
-        self.add_subcaption("Why does this work?", duration=2)
-        self.play(Write(title), run_time=1.5)
-        self.wait(1.0)
-        self.play(FadeOut(title), run_time=0.5)
+```pythonfrom manim import *
+
+
+BG = "#1C1C1C"
+
+PRIMARY = "#58C4DD"
+
+SECONDARY = "#83C167"
+
+ACCENT = "#FFFF00"
+
+MONO = "Menlo"
+
+
+class Scene1_Introduction(Scene):
+    def construct(self):
+
+        self.camera.background_color = BG
+
+        title = Text(
+            "Why Does This Work?", font_size=48, color=PRIMARY, weight=BOLD, font=MONO
+        )
+
+        self.add_subcaption("Why does this work?", duration=2)
+
+        self.play(Write(title), run_time=1.5)
+
+        self.wait(1.0)
+
+        self.play(FadeOut(title), run_time=0.5)
 ```
 
 Key patterns:
@@ -214,26 +229,25 @@ manim -ql --format=png -s script.py Scene2_CoreConcept  # preview still
 ## Critical Implementation Notes
 
 ### Raw Strings for LaTeX
-```python
-# WRONG: MathTex("\frac{1}{2}")
-# RIGHT:
-MathTex(r"\frac{1}{2}")
+```python# WRONG: MathTex("\frac{1}{2}")
+
+# RIGHT:
+
+MathTex(r"\frac{1}{2}")
 ```
 
 ### buff >= 0.5 for Edge Text
-```python
-label.to_edge(DOWN, buff=0.5)  # never < 0.5
+```pythonlabel.to_edge(DOWN, buff=0.5)  # never < 0.5
 ```
 
 ### FadeOut Before Replacing Text
-```python
-self.play(ReplacementTransform(note1, note2))  # not Write(note2) on top
+```pythonself.play(ReplacementTransform(note1, note2))  # not Write(note2) on top
 ```
 
 ### Never Animate Non-Added Mobjects
-```python
-self.play(Create(circle))  # must add first
-self.play(circle.animate.set_color(RED))  # then animate
+```pythonself.play(Create(circle))  # must add first
+
+self.play(circle.animate.set_color(RED))  # then animate
 ```
 
 ## Performance Targets

@@ -62,7 +62,7 @@ client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
 # Test complex reasoning
 response = client.chat.completions.create(
     model="TheBloke/Llama-2-70B-AWQ",
-    messages=[{"role": "user", "content": "Explain quantum entanglement"}]
+    messages=[{"role": "user", "content": "Explain quantum entanglement"}],
 )
 
 print(response.choices[0].message.content)
@@ -136,11 +136,7 @@ model = AutoGPTQForCausalLM.from_pretrained(model_name, quantize_config)
 calib_data = [...]  # List of sample texts
 
 # Quantize
-quantize_config = BaseQuantizeConfig(
-    bits=4,
-    group_size=128,
-    desc_act=True
-)
+quantize_config = BaseQuantizeConfig(bits=4, group_size=128, desc_act=True)
 model.quantize(calib_data)
 
 # Save

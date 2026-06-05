@@ -1,42 +1,1 @@
-"""Resolve CLAWK_HOME for standalone skill scripts.
-
-Skill scripts may run outside the Clawksis process (e.g. system Python,
-nix env, CI) where ``clawk_constants`` is not importable.  This module
-provides the same ``get_clawk_home()`` and ``display_clawk_home()``
-contracts as ``clawk_constants`` without requiring it on ``sys.path``.
-
-When ``clawk_constants`` IS available it is used directly so that any
-future enhancements (profile resolution, Docker detection, etc.) are
-picked up automatically.  The fallback path replicates the core logic
-from ``clawk_constants.py`` using only the stdlib.
-
-All scripts under ``google-workspace/scripts/`` should import from here
-instead of duplicating the ``CLAWK_HOME = Path(os.getenv(...))`` pattern.
-"""
-
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
-try:
-    from clawk_constants import display_clawk_home as display_clawk_home
-    from clawk_constants import get_clawk_home as get_clawk_home
-except (ModuleNotFoundError, ImportError):
-
-    def get_clawk_home() -> Path:
-        """Return the Clawksis home directory (default: ~/.clawksis).
-
-        Mirrors ``clawk_constants.get_clawk_home()``."""
-        val = os.environ.get("CLAWK_HOME", "").strip()
-        return Path(val) if val else Path.home() / ".clawk"
-
-    def display_clawk_home() -> str:
-        """Return a user-friendly ``~/``-shortened display string.
-
-        Mirrors ``clawk_constants.display_clawk_home()``."""
-        home = get_clawk_home()
-        try:
-            return "~/" + str(home.relative_to(Path.home()))
-        except ValueError:
-            return str(home)
+"""Resolve CLAWK_HOME for standalone skill scripts.Skill scripts may run outside the Clawksis process (e.g. system Python,nix env, CI) where ``clawk_constants`` is not importable.  This moduleprovides the same ``get_clawk_home()`` and ``display_clawk_home()``contracts as ``clawk_constants`` without requiring it on ``sys.path``.When ``clawk_constants`` IS available it is used directly so that anyfuture enhancements (profile resolution, Docker detection, etc.) arepicked up automatically.  The fallback path replicates the core logicfrom ``clawk_constants.py`` using only the stdlib.All scripts under ``google-workspace/scripts/`` should import from hereinstead of duplicating the ``CLAWK_HOME = Path(os.getenv(...))`` pattern."""from __future__ import annotationsimport osfrom pathlib import Pathtry:    from clawk_constants import display_clawk_home as display_clawk_home    from clawk_constants import get_clawk_home as get_clawk_homeexcept (ModuleNotFoundError, ImportError):    def get_clawk_home() -> Path:        """Return the Clawksis home directory (default: ~/.clawksis).        Mirrors ``clawk_constants.get_clawk_home()``."""        val = os.environ.get("CLAWK_HOME", "").strip()        return Path(val) if val else Path.home() / ".clawk"    def display_clawk_home() -> str:        """Return a user-friendly ``~/``-shortened display string.        Mirrors ``clawk_constants.display_clawk_home()``."""        home = get_clawk_home()        try:            return "~/" + str(home.relative_to(Path.home()))        except ValueError:            return str(home)

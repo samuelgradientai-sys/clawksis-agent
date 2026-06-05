@@ -26,24 +26,25 @@ Edit the template once → all clones inherit. Edit the table → clones add/rem
 
 ```python
 # 1. Make a template (the thing to clone)
-template = root.create(buttonCOMP, 'btn_template')
-template.par.w = 80; template.par.h = 80
-template.par.text = 'X'
+template = root.create(buttonCOMP, "btn_template")
+template.par.w = 80
+template.par.h = 80
+template.par.text = "X"
 template.par.bgcolorr = 0.2
 
 # 2. Make a data table (one row per clone)
-data = root.create(tableDAT, 'scene_data')
-data.appendRow(['name', 'color_r', 'color_g', 'color_b'])
-data.appendRow(['Sunset', 1.0, 0.4, 0.0])
-data.appendRow(['Midnight', 0.0, 0.1, 0.4])
-data.appendRow(['Storm', 0.3, 0.3, 0.5])
-data.appendRow(['Forest', 0.0, 0.5, 0.2])
+data = root.create(tableDAT, "scene_data")
+data.appendRow(["name", "color_r", "color_g", "color_b"])
+data.appendRow(["Sunset", 1.0, 0.4, 0.0])
+data.appendRow(["Midnight", 0.0, 0.1, 0.4])
+data.appendRow(["Storm", 0.3, 0.3, 0.5])
+data.appendRow(["Forest", 0.0, 0.5, 0.2])
 
 # 3. Replicator — points at template + data
-rep = root.create(replicatorCOMP, 'scene_buttons')
+rep = root.create(replicatorCOMP, "scene_buttons")
 rep.par.template = template.path
 rep.par.opfromdat = data.path
-rep.par.namefromdatname = 'name'        # use 'name' column for clone names
+rep.par.namefromdatname = "name"  # use 'name' column for clone names
 rep.par.incrementalnumbering = False
 ```
 
@@ -58,13 +59,13 @@ The replicator's docked `replicator1_callbacks` DAT lets you customize each clon
 ```python
 def onReplicate(comp, allOps, newOps, template, master):
     """Called once per replicate cycle. newOps is the list of just-created clones."""
-    data = op('scene_data')
+    data = op("scene_data")
     for i, clone in enumerate(newOps):
-        row = i + 1                 # +1 to skip header
-        clone.par.text = data[row, 'name'].val
-        clone.par.bgcolorr = float(data[row, 'color_r'].val)
-        clone.par.bgcolorg = float(data[row, 'color_g'].val)
-        clone.par.bgcolorb = float(data[row, 'color_b'].val)
+        row = i + 1  # +1 to skip header
+        clone.par.text = data[row, "name"].val
+        clone.par.bgcolorr = float(data[row, "color_r"].val)
+        clone.par.bgcolorg = float(data[row, "color_g"].val)
+        clone.par.bgcolorb = float(data[row, "color_b"].val)
     return
 ```
 
@@ -84,12 +85,13 @@ Or use parameter expressions referencing `digits` (the per-clone index, availabl
 Drop the replicator inside a `containerCOMP` with auto-layout:
 
 ```python
-panel = root.create(containerCOMP, 'scene_panel')
-panel.par.w = 400; panel.par.h = 100
-panel.par.align = 'lefttoright'
+panel = root.create(containerCOMP, "scene_panel")
+panel.par.w = 400
+panel.par.h = 100
+panel.par.align = "lefttoright"
 
 # Move the replicator inside
-rep.parent = panel.path           # or create rep as a child of panel directly
+rep.parent = panel.path  # or create rep as a child of panel directly
 ```
 
 Each clone is a child of the replicator (which itself is a child of the panel). The panel auto-arranges everything.
@@ -103,7 +105,7 @@ For a 2D grid, set `par.align = 'fillresize'` on the container and override `par
 When the data table changes, the replicator regenerates the clones. By default it destroys and recreates everything. To preserve state, set:
 
 ```python
-rep.par.recreatemissing = True       # only add/remove changed rows
+rep.par.recreatemissing = True  # only add/remove changed rows
 rep.par.recreateallonchange = False
 ```
 
@@ -119,9 +121,9 @@ For incremental data ingestion (e.g., from a `webDAT` polling an API), have a `d
 
 ```python
 # Data per scene: name, file path, audio track, BPM
-scene_data.appendRow(['name', 'file', 'audio', 'bpm'])
-scene_data.appendRow(['Intro', '/scenes/intro.tox', '/audio/intro.wav', 110])
-scene_data.appendRow(['Main', '/scenes/main.tox', '/audio/main.wav', 128])
+scene_data.appendRow(["name", "file", "audio", "bpm"])
+scene_data.appendRow(["Intro", "/scenes/intro.tox", "/audio/intro.wav", 110])
+scene_data.appendRow(["Main", "/scenes/main.tox", "/audio/main.wav", 128])
 
 # Replicator clones a buttonCOMP per scene
 # Each button's onClick callback loads the corresponding tox + cues audio

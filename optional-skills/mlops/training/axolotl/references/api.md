@@ -87,8 +87,8 @@ Example 4 (python):
 ```python
 core.trainers.base.AxolotlTrainer.store_metrics(
     metrics,
-    train_eval='train',
-    reduction='mean',
+    train_eval="train",
+    reduction="mean",
 )
 ```
 
@@ -519,7 +519,7 @@ Trains a transformers model by first loading the dataset(s) specified in the axo
 
 Example 1 (python):
 ```python
-cli.train.do_cli(config=Path('examples/'), **kwargs)
+cli.train.do_cli(config=Path("examples/"), **kwargs)
 ```
 
 Example 2 (python):
@@ -957,7 +957,7 @@ Args :param cfg: Parsed doct of the YAML config :param cli_args: dict of additio
 Example 1 (python):
 ```python
 cli.vllm_serve.AxolotlScriptArguments(
-    reasoning_parser='',
+    reasoning_parser="",
     enable_reasoning=None,
 )
 ```
@@ -1261,7 +1261,7 @@ Gets multi-line input from terminal.
 
 Example 1 (python):
 ```python
-cli.inference.do_cli(config=Path('examples/'), gradio=False, **kwargs)
+cli.inference.do_cli(config=Path("examples/"), gradio=False, **kwargs)
 ```
 
 Example 2 (python):
@@ -1792,8 +1792,7 @@ core.trainers.grpo.trainer.AxolotlGRPOSequenceParallelTrainer(
 
 Example 2 (python):
 ```python
-core.trainers.grpo.trainer.AxolotlGRPOSequenceParallelTrainer.get_train_dataloader(
-)
+core.trainers.grpo.trainer.AxolotlGRPOSequenceParallelTrainer.get_train_dataloader()
 ```
 
 Example 3 (python):
@@ -1826,14 +1825,14 @@ Prompt Tokenization Strategy for user defined prompts
 Example 1 (python):
 ```python
 prompt_strategies.user_defined.UserDefinedDatasetConfig(
-    system_prompt='',
-    field_system='system',
-    field_instruction='instruction',
-    field_input='input',
-    field_output='output',
-    format='{instruction} {input} ',
-    no_input_format='{instruction} ',
-    system_format='{system}',
+    system_prompt="",
+    field_system="system",
+    field_instruction="instruction",
+    field_input="input",
+    field_output="output",
+    format="{instruction} {input} ",
+    no_input_format="{instruction} ",
+    system_format="{system}",
 )
 ```
 
@@ -2024,7 +2023,7 @@ Example 1 (python):
 prompt_strategies.stepwise_supervised.StepwiseSupervisedPromptTokenizingStrategy(
     tokenizer,
     sequence_len=2048,
-    step_separator='\n',
+    step_separator="\n",
     max_completion_length=None,
     train_on_last_step_only=False,
 )
@@ -2269,7 +2268,7 @@ Calls transformers’ merge_and_unload on the model given in the axolotl config 
 
 Example 1 (python):
 ```python
-cli.merge_lora.do_cli(config=Path('examples/'), **kwargs)
+cli.merge_lora.do_cli(config=Path("examples/"), **kwargs)
 ```
 
 Example 2 (python):
@@ -2709,12 +2708,12 @@ prompt_strategies.chat_template.ChatTemplatePrompter(
     message_property_mappings=None,
     message_field_training=None,
     message_field_training_detail=None,
-    field_messages='messages',
-    field_system='system',
-    field_tools='tools',
-    field_thinking='reasoning_content',
+    field_messages="messages",
+    field_system="system",
+    field_tools="tools",
+    field_thinking="reasoning_content",
     roles=None,
-    template_thinking_key='reasoning_content',
+    template_thinking_key="reasoning_content",
     chat_template_kwargs=None,
     drop_system_message=False,
 )
@@ -3178,7 +3177,7 @@ cli.config.choose_config(path)
 
 Example 3 (python):
 ```python
-cli.config.load_cfg(config=Path('examples/'), **kwargs)
+cli.config.load_cfg(config=Path("examples/"), **kwargs)
 ```
 
 Example 4 (python):
@@ -3282,9 +3281,9 @@ prompt_strategies.llama2_chat.LLama2ChatTokenizingStrategy(*args, **kwargs)
 Example 4 (python):
 ```python
 prompt_strategies.llama2_chat.Llama2ChatConversation(
-    name='llama2',
+    name="llama2",
     system="[INST] <<SYS>>\nYou are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information.\n<</SYS>>\n\n",
-    roles=('[INST]', '[/INST]'),
+    roles=("[INST]", "[/INST]"),
     messages=list(),
     offset=0,
 )
@@ -3419,7 +3418,7 @@ Evaluates a transformers model by first loading the dataset(s) specified in the 
 
 Example 1 (python):
 ```python
-cli.evaluate.do_cli(config=Path('examples/'), **kwargs)
+cli.evaluate.do_cli(config=Path("examples/"), **kwargs)
 ```
 
 Example 2 (python):
@@ -4137,7 +4136,7 @@ cli.merge_sharded_fsdp_weights.BFloat16CastPlanner()
 
 Example 2 (python):
 ```python
-cli.merge_sharded_fsdp_weights.do_cli(config=Path('examples/'), **kwargs)
+cli.merge_sharded_fsdp_weights.do_cli(config=Path("examples/"), **kwargs)
 ```
 
 Example 3 (python):
@@ -4639,7 +4638,7 @@ Example 1 (python):
 ```python
 core.datasets.transforms.chat_builder.chat_message_transform_builder(
     train_on_inputs=False,
-    conversations_field='messages',
+    conversations_field="messages",
     message_field_role=None,
     message_field_content=None,
     message_field_training=None,
@@ -4838,7 +4837,7 @@ utils.samplers.multipack.MultipackBatchSampler(
     bin_size=200,
     num_processes=None,
     safe_mode=True,
-    mp_start_method='fork',
+    mp_start_method="fork",
     **kwargs,
 )
 ```
@@ -4934,7 +4933,7 @@ utils.collators.batching.BatchSamplerDataCollatorForSeq2Seq(
     pad_to_multiple_of=None,
     label_pad_token_id=-100,
     position_pad_token_id=0,
-    return_tensors='pt',
+    return_tensors="pt",
 )
 ```
 
@@ -4948,7 +4947,7 @@ utils.collators.batching.DataCollatorForSeq2Seq(
     pad_to_multiple_of=None,
     label_pad_token_id=-100,
     position_pad_token_id=0,
-    return_tensors='pt',
+    return_tensors="pt",
 )
 ```
 
@@ -4971,7 +4970,7 @@ utils.collators.batching.V2BatchSamplerDataCollatorForSeq2Seq(
     pad_to_multiple_of=None,
     label_pad_token_id=-100,
     position_pad_token_id=0,
-    return_tensors='pt',
+    return_tensors="pt",
     squash_position_ids=False,
 )
 ```
@@ -5117,7 +5116,7 @@ utils.collators.mm_chat.MultiModalChatDataCollator(
     tokenizer,
     processing_strategy,
     packing=False,
-    return_tensors='pt',
+    return_tensors="pt",
     padding=True,
     pad_to_multiple_of=None,
 )
@@ -5180,7 +5179,7 @@ utils.model_shard_quant.load_and_quantize(
     to_cpu=False,
     to_meta=False,
     verbose=False,
-    quant_method='bnb',
+    quant_method="bnb",
 )
 ```
 
@@ -5205,8 +5204,7 @@ Saves VRAM by smartly offloading to RAM. Tiny hit to performance, since we mask 
 
 Example 1 (python):
 ```python
-monkeypatch.gradient_checkpointing.offload_cpu.CPU_Offloaded_Gradient_Checkpointer(
-)
+monkeypatch.gradient_checkpointing.offload_cpu.CPU_Offloaded_Gradient_Checkpointer()
 ```
 
 ---
@@ -5402,7 +5400,7 @@ Preprocesses dataset specified in axolotl config.
 
 Example 1 (python):
 ```python
-cli.preprocess.do_cli(config=Path('examples/'), **kwargs)
+cli.preprocess.do_cli(config=Path("examples/"), **kwargs)
 ```
 
 Example 2 (python):

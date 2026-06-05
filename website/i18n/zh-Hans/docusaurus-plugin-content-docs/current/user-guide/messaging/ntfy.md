@@ -74,19 +74,17 @@ ntfy 没有原生的已认证用户身份。已发布消息中的 `title` 字段
 
 设置 `NTFY_HOME_CHANNEL` 后，cron 任务即可投递到 ntfy：
 
-```python
-cronjob(
-    action="create",
-    schedule="every 1h",
-    deliver="ntfy",          # uses NTFY_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 1h",
+    deliver="ntfy",  # uses NTFY_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
+)
 ```
 
 或显式指定目标 topic：
 
-```python
-send_message(target="ntfy:alerts-channel", message="Done!")
+```pythonsend_message(target="ntfy:alerts-channel", message="Done!")
 ```
 
 即使 cron 在 gateway 进程外运行，此功能也有效——插件注册了一个 `standalone_sender_fn`，会自行建立 HTTP 连接。

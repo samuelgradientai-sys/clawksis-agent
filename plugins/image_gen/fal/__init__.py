@@ -61,6 +61,7 @@ class FalImageGenProvider(ImageGenProvider):
         # legacy module so this provider tracks whatever logic ships
         # there.
         import tools.image_generation_tool as _it
+
         try:
             return bool(_it.check_fal_api_key())
         except Exception:  # noqa: BLE001 — defensive; never break the picker
@@ -68,6 +69,7 @@ class FalImageGenProvider(ImageGenProvider):
 
     def list_models(self) -> List[Dict[str, Any]]:
         import tools.image_generation_tool as _it
+
         return [
             {
                 "id": model_id,
@@ -81,6 +83,7 @@ class FalImageGenProvider(ImageGenProvider):
 
     def default_model(self) -> Optional[str]:
         import tools.image_generation_tool as _it
+
         return _it.DEFAULT_MODEL
 
     def get_setup_schema(self) -> Dict[str, Any]:
@@ -146,7 +149,11 @@ class FalImageGenProvider(ImageGenProvider):
         try:
             response = json.loads(raw) if isinstance(raw, str) else raw
         except Exception:  # noqa: BLE001
-            response = {"success": False, "image": None, "error": "Invalid JSON from FAL pipeline"}
+            response = {
+                "success": False,
+                "image": None,
+                "error": "Invalid JSON from FAL pipeline",
+            }
 
         if not isinstance(response, dict):
             response = {

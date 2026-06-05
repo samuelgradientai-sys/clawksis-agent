@@ -26,18 +26,17 @@ Each tool module calls `registry.register(...)` at import time.
 
 Every tool file in `tools/` calls `registry.register()` at module level to declare itself. The function signature is:
 
-```python
-registry.register(
-    name="terminal",               # Unique tool name (used in API schemas)
-    toolset="terminal",            # Toolset this tool belongs to
-    schema={...},                  # OpenAI function-calling schema (description, parameters)
-    handler=handle_terminal,       # The function that executes when the tool is called
-    check_fn=check_terminal,       # Optional: returns True/False for availability
-    requires_env=["SOME_VAR"],     # Optional: env vars needed (for UI display)
-    is_async=False,                # Whether the handler is an async coroutine
-    description="Run commands",    # Human-readable description
-    emoji="💻",                    # Emoji for spinner/progress display
-)
+```pythonregistry.register(
+    name="terminal",  # Unique tool name (used in API schemas)
+    toolset="terminal",  # Toolset this tool belongs to
+    schema={...},  # OpenAI function-calling schema (description, parameters)
+    handler=handle_terminal,  # The function that executes when the tool is called
+    check_fn=check_terminal,  # Optional: returns True/False for availability
+    requires_env=["SOME_VAR"],  # Optional: env vars needed (for UI display)
+    is_async=False,  # Whether the handler is an async coroutine
+    description="Run commands",  # Human-readable description
+    emoji="💻",  # Emoji for spinner/progress display
+)
 ```
 
 Each call creates a `ToolEntry` stored in the singleton `ToolRegistry._tools` dict keyed by tool name. If a name collision occurs across toolsets, a warning is logged and the later registration wins.
@@ -46,15 +45,19 @@ Each call creates a `ToolEntry` stored in the singleton `ToolRegistry._tools` di
 
 When `model_tools.py` is imported, it calls `discover_builtin_tools()` from `tools/registry.py`. This function scans every `tools/*.py` file using AST parsing to find modules that contain top-level `registry.register()` calls, then imports them:
 
-```python
-# tools/registry.py (simplified)
-def discover_builtin_tools(tools_dir=None):
-    tools_path = Path(tools_dir) if tools_dir else Path(__file__).parent
-    for path in sorted(tools_path.glob("*.py")):
-        if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
-            continue
-        if _module_registers_tools(path):  # AST check for top-level registry.register()
-            importlib.import_module(f"tools.{path.stem}")
+```python# tools/registry.py (simplified)
+
+
+def discover_builtin_tools(tools_dir=None):
+
+    tools_path = Path(tools_dir) if tools_dir else Path(__file__).parent
+
+    for path in sorted(tools_path.glob("*.py")):
+        if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
+            continue
+
+        if _module_registers_tools(path):  # AST check for top-level registry.register()
+            importlib.import_module(f"tools.{path.stem}")
 ```
 
 This auto-discovery means new tool files are picked up automatically — no manual list to maintain. The AST check only matches top-level `registry.register()` calls (not calls inside functions), so helper modules in `tools/` are not imported.
@@ -76,15 +79,17 @@ Each tool can optionally provide a `check_fn` — a callable that returns `True`
 
 When `registry.get_definitions()` builds the schema list for the model, it runs each tool's `check_fn()`:
 
-```python
-# Simplified from registry.py
-if entry.check_fn:
-    try:
-        available = bool(entry.check_fn())
-    except Exception:
-        available = False   # Exceptions = unavailable
-    if not available:
-        continue            # Skip this tool entirely
+```python# Simplified from registry.py
+
+if entry.check_fn:
+    try:
+        available = bool(entry.check_fn())
+
+    except Exception:
+        available = False  # Exceptions = unavailable
+
+    if not available:
+        continue  # Skip this tool entirely
 ```
 
 Key behaviors:

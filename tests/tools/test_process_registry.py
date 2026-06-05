@@ -1,7 +1,5 @@
 """Tests for tools/process_registry.py — ProcessRegistry query methods, pruning, checkpoint."""
 
-
-
 import json
 
 import os
@@ -19,113 +17,67 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-
 from tools.environments.local import _CLAWK_PROVIDER_ENV_FORCE_PREFIX
 
 from tools.process_registry import (
-
     ProcessRegistry,
-
     ProcessSession,
-
     FINISHED_TTL_SECONDS,
-
     MAX_PROCESSES,
-
 )
 
 
-
-
-
 @pytest.fixture()
-
 def registry():
-
     """Create a fresh ProcessRegistry."""
 
     return ProcessRegistry()
 
 
-
-
-
 def _make_session(
-
     sid="proc_test123",
-
     command="echo hello",
-
     task_id="t1",
-
     exited=False,
-
     exit_code=None,
-
     output="",
-
     started_at=None,
-
 ) -> ProcessSession:
-
     """Helper to create a ProcessSession for testing."""
 
     s = ProcessSession(
-
         id=sid,
-
         command=command,
-
         task_id=task_id,
-
         started_at=started_at or time.time(),
-
         exited=exited,
-
         exit_code=exit_code,
-
         output_buffer=output,
-
     )
 
     return s
 
 
-
-
-
 def _spawn_python_sleep(seconds: float) -> subprocess.Popen:
-
     """Spawn a portable short-lived Python sleep process."""
 
     return subprocess.Popen(
-
         [sys.executable, "-c", f"import time; time.sleep({seconds})"],
-
     )
 
 
-
-
-
 def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.05) -> bool:
-
     """Poll a predicate until it returns truthy or the timeout elapses."""
 
     deadline = time.monotonic() + timeout
 
     while time.monotonic() < deadline:
-
         if predicate():
-
             return True
 
         time.sleep(interval)
 
     return False
-
-
-
 
 
 # =========================================================================
@@ -135,14 +87,10 @@ def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.05) -> bool
 # =========================================================================
 
 
-
 class TestGetAndPoll:
-
     def test_get_not_found(self, registry):
 
         assert registry.get("nonexistent") is None
-
-
 
     def test_get_running(self, registry):
 
@@ -152,8 +100,6 @@ class TestGetAndPoll:
 
         assert registry.get(s.id) is s
 
-
-
     def test_get_finished(self, registry):
 
         s = _make_session(exited=True, exit_code=0)
@@ -162,15 +108,11 @@ class TestGetAndPoll:
 
         assert registry.get(s.id) is s
 
-
-
     def test_poll_not_found(self, registry):
 
         result = registry.poll("nonexistent")
 
         assert result["status"] == "not_found"
-
-
 
     def test_poll_running(self, registry):
 
@@ -186,8 +128,6 @@ class TestGetAndPoll:
 
         assert result["command"] == "echo hello"
 
-
-
     def test_poll_exited(self, registry):
 
         s = _make_session(exited=True, exit_code=0, output="done")
@@ -201,9 +141,6 @@ class TestGetAndPoll:
         assert result["exit_code"] == 0
 
 
-
-
-
 # =========================================================================
 
 # Orphaned-pipe reconciliation (issue #17327)
@@ -211,11 +148,8 @@ class TestGetAndPoll:
 # =========================================================================
 
 
-
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only: uses setsid/fcntl")
-
 class TestOrphanedPipeReconciliation:
-
     """Regression tests for issue #17327.
 
 
@@ -238,10 +172,7 @@ class TestOrphanedPipeReconciliation:
 
     """
 
-
-
     def test_reconcile_flips_exited_when_direct_child_done(self, registry):
-
         """Direct child exited but reader thread is blocked on orphaned pipe."""
 
         # Simulate the orphaned-pipe scenario: direct child exited, but a
@@ -255,18 +186,11 @@ class TestOrphanedPipeReconciliation:
         # inherits the stdout pipe and keeps it open.
 
         proc = subprocess.Popen(
-
             ["sh", "-c", "exec 1>&2; ( sleep 30 ) & disown; exit 0"],
-
             stdout=subprocess.PIPE,
-
             stderr=subprocess.STDOUT,
-
             preexec_fn=os.setsid,
-
         )
-
-
 
         s = _make_session(sid="proc_orphan_test")
 
@@ -276,21 +200,14 @@ class TestOrphanedPipeReconciliation:
 
         registry._running[s.id] = s
 
-
-
         # Wait for the direct child to exit. We don't start a reader thread,
 
         # so session.exited stays False (mimicking the stuck-reader state).
 
         assert _wait_until(lambda: proc.poll() is not None, timeout=5.0), (
-
             "Direct child should exit quickly (sh exits, sleep descendant "
-
             "holds the pipe open)"
-
         )
-
-
 
         # Before the fix: poll would return "running" forever.
 
@@ -301,11 +218,8 @@ class TestOrphanedPipeReconciliation:
         result = registry.poll(s.id)
 
         assert result["status"] == "exited", (
-
             f"Expected reconciled 'exited' status; got {result!r}. "
-
             "This is issue #17327 — reader is blocked on orphaned pipe."
-
         )
 
         assert result["exit_code"] == 0
@@ -316,22 +230,15 @@ class TestOrphanedPipeReconciliation:
 
         assert s.id not in registry._running
 
-
-
         # Clean up the orphaned descendant.
 
         try:
-
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
         except (ProcessLookupError, PermissionError):
-
             pass
 
-
-
     def test_reconcile_noop_when_child_still_running(self, registry):
-
         """Reconcile must NOT flip exited when the direct child is alive."""
 
         proc = _spawn_python_sleep(5.0)
@@ -344,24 +251,17 @@ class TestOrphanedPipeReconciliation:
 
         registry._running[s.id] = s
 
-
-
         result = registry.poll(s.id)
 
         assert result["status"] == "running"
 
         assert s.exited is False
 
-
-
         proc.kill()
 
         proc.wait()
 
-
-
     def test_reconcile_noop_on_already_exited(self, registry):
-
         """Reconcile is a no-op when session.exited is already True."""
 
         s = _make_session(sid="proc_already_exited", exited=True, exit_code=7)
@@ -372,18 +272,13 @@ class TestOrphanedPipeReconciliation:
 
         registry._finished[s.id] = s
 
-
-
         registry._reconcile_local_exit(s)
 
         # Must not overwrite the existing exit_code with proc.poll()'s 0.
 
         assert s.exit_code == 7
 
-
-
     def test_reconcile_noop_on_no_process(self, registry):
-
         """Reconcile is a no-op for sessions without a local Popen (env/PTY)."""
 
         s = _make_session(sid="proc_no_popen")
@@ -396,25 +291,15 @@ class TestOrphanedPipeReconciliation:
 
         assert s.exited is False
 
-
-
     def test_wait_returns_when_reader_blocked(self, registry):
-
         """wait() must also reconcile — not just poll()."""
 
         proc = subprocess.Popen(
-
             ["sh", "-c", "( sleep 30 ) & disown; exit 0"],
-
             stdout=subprocess.PIPE,
-
             stderr=subprocess.STDOUT,
-
             preexec_fn=os.setsid,
-
         )
-
-
 
         s = _make_session(sid="proc_wait_orphan")
 
@@ -424,11 +309,7 @@ class TestOrphanedPipeReconciliation:
 
         registry._running[s.id] = s
 
-
-
         assert _wait_until(lambda: proc.poll() is not None, timeout=5.0)
-
-
 
         start = time.monotonic()
 
@@ -436,28 +317,17 @@ class TestOrphanedPipeReconciliation:
 
         elapsed = time.monotonic() - start
 
-
-
         assert result["status"] == "exited", result
 
         assert elapsed < 5.0, (
-
             f"wait() should return ~immediately via reconcile; took {elapsed:.1f}s"
-
         )
 
-
-
         try:
-
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
         except (ProcessLookupError, PermissionError):
-
             pass
-
-
-
 
 
 # =========================================================================
@@ -467,16 +337,12 @@ class TestOrphanedPipeReconciliation:
 # =========================================================================
 
 
-
 class TestReadLog:
-
     def test_not_found(self, registry):
 
         result = registry.read_log("nonexistent")
 
         assert result["status"] == "not_found"
-
-
 
     def test_read_full_log(self, registry):
 
@@ -489,8 +355,6 @@ class TestReadLog:
         result = registry.read_log(s.id)
 
         assert result["total_lines"] == 50
-
-
 
     def test_read_with_limit(self, registry):
 
@@ -506,8 +370,6 @@ class TestReadLog:
 
         assert "10 lines" in result["showing"]
 
-
-
     def test_read_with_offset(self, registry):
 
         lines = "\n".join([f"line {i}" for i in range(100)])
@@ -521,9 +383,6 @@ class TestReadLog:
         assert "5 lines" in result["showing"]
 
 
-
-
-
 # =========================================================================
 
 # Stdin helpers
@@ -531,16 +390,12 @@ class TestReadLog:
 # =========================================================================
 
 
-
 class TestStdinHelpers:
-
     def test_close_stdin_not_found(self, registry):
 
         result = registry.close_stdin("nonexistent")
 
         assert result["status"] == "not_found"
-
-
 
     def test_close_stdin_pipe_mode(self, registry):
 
@@ -554,17 +409,11 @@ class TestStdinHelpers:
 
         registry._running[s.id] = s
 
-
-
         result = registry.close_stdin(s.id)
-
-
 
         proc.stdin.close.assert_called_once()
 
         assert result["status"] == "ok"
-
-
 
     def test_close_stdin_pty_mode(self, registry):
 
@@ -576,20 +425,13 @@ class TestStdinHelpers:
 
         registry._running[s.id] = s
 
-
-
         result = registry.close_stdin(s.id)
-
-
 
         pty.sendeof.assert_called_once()
 
         assert result["status"] == "ok"
 
-
-
     def test_close_stdin_allows_eof_driven_process_to_finish(self, registry, tmp_path):
-
         """PTY mode: writing data + sending EOF lets an EOF-driven child finish.
 
 
@@ -605,35 +447,24 @@ class TestStdinHelpers:
         """
 
         session = registry.spawn_local(
-
             'python3 -c "import sys; print(sys.stdin.read().strip())"',
-
             cwd=str(tmp_path),
-
             use_pty=True,
-
         )
 
-
-
         try:
-
             time.sleep(0.5)
 
             assert registry.submit_stdin(session.id, "hello")["status"] == "ok"
 
             assert registry.close_stdin(session.id)["status"] == "ok"
 
-
-
             deadline = time.time() + 5
 
             while time.time() < deadline:
-
                 poll = registry.poll(session.id)
 
                 if poll["status"] == "exited":
-
                     assert poll["exit_code"] == 0
 
                     assert "hello" in poll["output_preview"]
@@ -642,16 +473,10 @@ class TestStdinHelpers:
 
                 time.sleep(0.2)
 
-
-
             pytest.fail("process did not exit after stdin was closed")
 
         finally:
-
             registry.kill_process(session.id)
-
-
-
 
 
 # =========================================================================
@@ -661,14 +486,10 @@ class TestStdinHelpers:
 # =========================================================================
 
 
-
 class TestListSessions:
-
     def test_empty(self, registry):
 
         assert registry.list_sessions() == []
-
-
 
     def test_lists_running_and_finished(self, registry):
 
@@ -683,8 +504,6 @@ class TestListSessions:
         result = registry.list_sessions()
 
         assert len(result) == 2
-
-
 
     def test_filter_by_task_id(self, registry):
 
@@ -701,8 +520,6 @@ class TestListSessions:
         assert len(result) == 1
 
         assert result[0]["session_id"] == "proc_1"
-
-
 
     def test_list_entry_fields(self, registry):
 
@@ -723,9 +540,6 @@ class TestListSessions:
         assert "output_preview" in entry
 
 
-
-
-
 # =========================================================================
 
 # Active process queries
@@ -733,9 +547,7 @@ class TestListSessions:
 # =========================================================================
 
 
-
 class TestActiveQueries:
-
     def test_has_active_processes(self, registry):
 
         s = _make_session(task_id="t1")
@@ -745,8 +557,6 @@ class TestActiveQueries:
         assert registry.has_active_processes("t1") is True
 
         assert registry.has_active_processes("t2") is False
-
-
 
     def test_has_active_for_session(self, registry):
 
@@ -760,8 +570,6 @@ class TestActiveQueries:
 
         assert registry.has_active_for_session("other") is False
 
-
-
     def test_exited_not_active(self, registry):
 
         s = _make_session(task_id="t1", exited=True, exit_code=0)
@@ -771,9 +579,6 @@ class TestActiveQueries:
         assert registry.has_active_processes("t1") is False
 
 
-
-
-
 # =========================================================================
 
 # Pruning
@@ -781,19 +586,13 @@ class TestActiveQueries:
 # =========================================================================
 
 
-
 class TestPruning:
-
     def test_prune_expired_finished(self, registry):
 
         old_session = _make_session(
-
             sid="proc_old",
-
             exited=True,
-
             started_at=time.time() - FINISHED_TTL_SECONDS - 100,
-
         )
 
         registry._finished[old_session.id] = old_session
@@ -801,8 +600,6 @@ class TestPruning:
         registry._prune_if_needed()
 
         assert "proc_old" not in registry._finished
-
-
 
     def test_prune_keeps_recent(self, registry):
 
@@ -814,27 +611,18 @@ class TestPruning:
 
         assert "proc_recent" in registry._finished
 
-
-
     def test_prune_over_max_removes_oldest(self, registry):
 
         # Fill up to MAX_PROCESSES
 
         for i in range(MAX_PROCESSES):
-
             s = _make_session(
-
                 sid=f"proc_{i}",
-
                 exited=True,
-
                 started_at=time.time() - i,  # older as i increases
-
             )
 
             registry._finished[s.id] = s
-
-
 
         # Add one more running to trigger prune
 
@@ -844,14 +632,9 @@ class TestPruning:
 
         registry._prune_if_needed()
 
-
-
         total = len(registry._running) + len(registry._finished)
 
         assert total <= MAX_PROCESSES
-
-
-
 
 
 # =========================================================================
@@ -861,14 +644,10 @@ class TestPruning:
 # =========================================================================
 
 
-
 class TestSpawnEnvSanitization:
-
     def test_spawn_local_strips_blocked_vars_from_background_env(self, registry):
 
         captured = {}
-
-
 
         def fake_popen(cmd, **kwargs):
 
@@ -886,49 +665,34 @@ class TestSpawnEnvSanitization:
 
             return proc
 
-
-
         fake_thread = MagicMock()
 
-
-
-        with patch.dict(os.environ, {
-
-            "PATH": "/usr/bin:/bin",
-
-            "HOME": "/home/user",
-
-            "USER": "tester",
-
-            "TELEGRAM_BOT_TOKEN": "bot-secret",
-
-            "FIRECRAWL_API_KEY": "fc-secret",
-
-        }, clear=True), \
-            patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-            patch("subprocess.Popen", side_effect=fake_popen), \
-            patch("threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
-
-            registry.spawn_local(
-
-                "echo hello",
-
-                cwd="/tmp",
-
-                env_vars={
-
-                    "MY_CUSTOM_VAR": "keep-me",
-
-                    "TELEGRAM_BOT_TOKEN": "drop-me",
-
-                    f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}TELEGRAM_BOT_TOKEN": "forced-bot-token",
-
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "PATH": "/usr/bin:/bin",
+                    "HOME": "/home/user",
+                    "USER": "tester",
+                    "TELEGRAM_BOT_TOKEN": "bot-secret",
+                    "FIRECRAWL_API_KEY": "fc-secret",
                 },
-
+                clear=True,
+            ),
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch("threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
+            registry.spawn_local(
+                "echo hello",
+                cwd="/tmp",
+                env_vars={
+                    "MY_CUSTOM_VAR": "keep-me",
+                    "TELEGRAM_BOT_TOKEN": "drop-me",
+                    f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}TELEGRAM_BOT_TOKEN": "forced-bot-token",
+                },
             )
-
-
 
         env = captured["env"]
 
@@ -942,23 +706,16 @@ class TestSpawnEnvSanitization:
 
         assert env["PYTHONUNBUFFERED"] == "1"
 
-
-
     def test_spawn_via_env_uses_backend_temp_dir_for_artifacts(self, registry):
 
         class FakeEnv:
-
             def __init__(self):
 
                 self.commands = []
 
-
-
             def get_temp_dir(self):
 
                 return "/data/data/com.termux/files/usr/tmp"
-
-
 
             def execute(self, command, **kwargs):
 
@@ -966,20 +723,15 @@ class TestSpawnEnvSanitization:
 
                 return {"output": "4321\n"}
 
-
-
         env = FakeEnv()
 
         fake_thread = MagicMock()
 
-
-
-        with patch("tools.process_registry.threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
-
+        with (
+            patch("tools.process_registry.threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_via_env(env, "echo hello")
-
-
 
         bg_command = env.commands[0][0]
 
@@ -997,17 +749,12 @@ class TestSpawnEnvSanitization:
 
         fake_thread.start.assert_called_once()
 
-
-
     def test_spawn_via_env_checks_returncode_when_wrapper_fails(self, registry):
 
         class FakeEnv:
-
             def __init__(self):
 
                 self.commands = []
-
-
 
             def execute(self, command, **kwargs):
 
@@ -1015,20 +762,15 @@ class TestSpawnEnvSanitization:
 
                 return {"output": "syntax error", "returncode": 2}
 
-
-
         env = FakeEnv()
 
         fake_thread = MagicMock()
 
-
-
-        with patch("tools.process_registry.threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
-
+        with (
+            patch("tools.process_registry.threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_via_env(env, "echo hello")
-
-
 
         assert session.exited is True
 
@@ -1044,23 +786,16 @@ class TestSpawnEnvSanitization:
 
         assert session.id not in registry._running
 
-
-
     def test_spawn_via_env_disables_rewrite_for_bg_wrapper(self, registry):
 
         class FakeEnv:
-
             def __init__(self):
 
                 self.commands = []
 
-
-
             def get_temp_dir(self):
 
                 return "/tmp"
-
-
 
             def execute(self, command, **kwargs):
 
@@ -1068,26 +803,19 @@ class TestSpawnEnvSanitization:
 
                 return {"output": "4321\n", "returncode": 0}
 
-
-
         env = FakeEnv()
 
         fake_thread = MagicMock()
 
-
-
-        with patch("tools.process_registry.threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
-
+        with (
+            patch("tools.process_registry.threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             registry.spawn_via_env(env, "echo hello")
-
-
 
         args, kwargs = env.commands[0]
 
         assert kwargs.get("rewrite_compound_background") is False
-
-
 
     def test_env_poller_quotes_temp_paths_with_spaces(self, registry):
 
@@ -1095,25 +823,16 @@ class TestSpawnEnvSanitization:
 
         session.exited = False
 
-
-
         class FakeEnv:
-
             def __init__(self):
 
                 self.commands = []
 
                 self._responses = iter([
-
                     {"output": "hello\n"},
-
                     {"output": "1\n"},
-
                     {"output": "0\n"},
-
                 ])
-
-
 
             def execute(self, command, **kwargs):
 
@@ -1121,39 +840,28 @@ class TestSpawnEnvSanitization:
 
                 return next(self._responses)
 
-
-
         env = FakeEnv()
 
-
-
-        with patch("tools.process_registry.time.sleep", return_value=None), \
-            patch.object(registry, "_move_to_finished"):
-
+        with (
+            patch("tools.process_registry.time.sleep", return_value=None),
+            patch.object(registry, "_move_to_finished"),
+        ):
             registry._env_poller_loop(
-
                 session,
-
                 env,
-
                 "/path with spaces/clawk_bg.log",
-
                 "/path with spaces/clawk_bg.pid",
-
                 "/path with spaces/clawk_bg.exit",
-
             )
-
-
 
         assert env.commands[0][0] == "cat '/path with spaces/clawk_bg.log' 2>/dev/null"
 
-        assert env.commands[1][0] == "kill -0 \"$(cat '/path with spaces/clawk_bg.pid' 2>/dev/null)\" 2>/dev/null; echo $?"
+        assert (
+            env.commands[1][0]
+            == "kill -0 \"$(cat '/path with spaces/clawk_bg.pid' 2>/dev/null)\" 2>/dev/null; echo $?"
+        )
 
         assert env.commands[2][0] == "cat '/path with spaces/clawk_bg.exit' 2>/dev/null"
-
-
-
 
 
 # =========================================================================
@@ -1163,20 +871,13 @@ class TestSpawnEnvSanitization:
 # =========================================================================
 
 
-
 class TestPopenLeakOnSetupFailure:
-
     """Regression for issue #2749: subprocess orphaned when post-Popen setup raises."""
 
-
-
     def test_popen_killed_when_thread_creation_fails(self, registry):
-
         """If Thread() raises after Popen, proc must be killed — not orphaned."""
 
         killed = []
-
-
 
         proc = MagicMock()
 
@@ -1188,25 +889,17 @@ class TestPopenLeakOnSetupFailure:
 
         proc.poll.return_value = None
 
-
-
         def fake_kill():
 
             killed.append(True)
-
-
 
         proc.kill = fake_kill
 
         proc.wait = MagicMock()
 
-
-
         def boom(*args, **kwargs):
 
             raise RuntimeError("Thread creation failed")
-
-
 
         # proc.pid is a MagicMock-backed fake; os.getpgid(fake_pid) would query
 
@@ -1224,29 +917,22 @@ class TestPopenLeakOnSetupFailure:
 
         # proc.kill() and never issues a real killpg.
 
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("threading.Thread", side_effect=boom), \
-             patch("os.getpgid", side_effect=ProcessLookupError), \
-             patch.object(registry, "_write_checkpoint"):
-
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("threading.Thread", side_effect=boom),
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             with pytest.raises(RuntimeError, match="Thread creation failed"):
-
                 registry.spawn_local("echo hello", cwd="/tmp")
-
-
 
         assert killed, "proc.kill() must be called when post-Popen setup raises"
 
-
-
     def test_popen_killed_when_write_checkpoint_fails(self, registry):
-
         """If _write_checkpoint raises after Popen, proc must still be killed."""
 
         killed = []
-
-
 
         proc = MagicMock()
 
@@ -1258,23 +944,15 @@ class TestPopenLeakOnSetupFailure:
 
         proc.poll.return_value = None
 
-
-
         def fake_kill():
 
             killed.append(True)
-
-
 
         proc.kill = fake_kill
 
         proc.wait = MagicMock()
 
-
-
         fake_thread = MagicMock()
-
-
 
         # See note in test_popen_killed_when_thread_creation_fails: force the
 
@@ -1284,29 +962,24 @@ class TestPopenLeakOnSetupFailure:
 
         # process group happens to own the fake PID on the host.
 
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("threading.Thread", return_value=fake_thread), \
-             patch("os.getpgid", side_effect=ProcessLookupError), \
-             patch.object(registry, "_write_checkpoint", side_effect=OSError("disk full")):
-
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("threading.Thread", return_value=fake_thread),
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch.object(
+                registry, "_write_checkpoint", side_effect=OSError("disk full")
+            ),
+        ):
             with pytest.raises(OSError, match="disk full"):
-
                 registry.spawn_local("echo hello", cwd="/tmp")
-
-
 
         assert killed, "proc.kill() must be called when _write_checkpoint raises"
 
-
-
     def test_popen_not_killed_on_success(self, registry):
-
         """Successful spawn must NOT kill the process."""
 
         killed = []
-
-
 
         proc = MagicMock()
 
@@ -1318,39 +991,27 @@ class TestPopenLeakOnSetupFailure:
 
         proc.poll.return_value = None
 
-
-
         def fake_kill():
 
             killed.append(True)
-
-
 
         proc.kill = fake_kill
 
         proc.wait = MagicMock()
 
-
-
         fake_thread = MagicMock()
 
-
-
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("threading.Thread", return_value=fake_thread), \
-             patch.object(registry, "_write_checkpoint"):
-
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_local("echo hello", cwd="/tmp")
-
-
 
         assert not killed, "proc.kill() must NOT be called on successful spawn"
 
         assert session.pid == 7777
-
-
-
 
 
 # =========================================================================
@@ -1360,20 +1021,15 @@ class TestPopenLeakOnSetupFailure:
 # =========================================================================
 
 
-
 class TestCheckpoint:
-
     def test_write_checkpoint(self, registry, tmp_path):
 
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
-
             s = _make_session()
 
             registry._running[s.id] = s
 
             registry._write_checkpoint()
-
-
 
             data = json.loads((tmp_path / "procs.json").read_text())
 
@@ -1381,44 +1037,34 @@ class TestCheckpoint:
 
             assert data[0]["session_id"] == s.id
 
-
-
     def test_recover_no_file(self, registry, tmp_path):
 
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "missing.json"):
-
             assert registry.recover_from_checkpoint() == 0
-
-
 
     def test_recover_dead_pid(self, registry, tmp_path):
 
         checkpoint = tmp_path / "procs.json"
 
-        checkpoint.write_text(json.dumps([{
-
-            "session_id": "proc_dead",
-
-            "command": "sleep 999",
-
-            "pid": 999999999,  # almost certainly not running
-
-            "task_id": "t1",
-
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_dead",
+                    "command": "sleep 999",
+                    "pid": 999999999,  # almost certainly not running
+                    "task_id": "t1",
+                }
+            ])
+        )
 
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
             recovered = registry.recover_from_checkpoint()
 
             assert recovered == 0
 
-
-
     def test_write_checkpoint_includes_watcher_metadata(self, registry, tmp_path):
 
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
-
             s = _make_session()
 
             s.watcher_platform = "telegram"
@@ -1437,8 +1083,6 @@ class TestCheckpoint:
 
             registry._write_checkpoint()
 
-
-
             data = json.loads((tmp_path / "procs.json").read_text())
 
             assert len(data) == 1
@@ -1455,40 +1099,29 @@ class TestCheckpoint:
 
             assert data[0]["watcher_interval"] == 60
 
-
-
     def test_recover_enqueues_watchers(self, registry, tmp_path):
 
         checkpoint = tmp_path / "procs.json"
 
-        checkpoint.write_text(json.dumps([{
-
-            "session_id": "proc_live",
-
-            "command": "sleep 999",
-
-            "pid": os.getpid(),  # current process — guaranteed alive
-
-            "task_id": "t1",
-
-            "session_key": "sk1",
-
-            "watcher_platform": "telegram",
-
-            "watcher_chat_id": "123",
-
-            "watcher_user_id": "u123",
-
-            "watcher_user_name": "alice",
-
-            "watcher_thread_id": "42",
-
-            "watcher_interval": 60,
-
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),  # current process — guaranteed alive
+                    "task_id": "t1",
+                    "session_key": "sk1",
+                    "watcher_platform": "telegram",
+                    "watcher_chat_id": "123",
+                    "watcher_user_id": "u123",
+                    "watcher_user_name": "alice",
+                    "watcher_thread_id": "42",
+                    "watcher_interval": 60,
+                }
+            ])
+        )
 
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
             recovered = registry.recover_from_checkpoint()
 
             assert recovered == 1
@@ -1511,65 +1144,51 @@ class TestCheckpoint:
 
             assert w["check_interval"] == 60
 
-
-
     def test_recover_skips_watcher_when_no_interval(self, registry, tmp_path):
 
         checkpoint = tmp_path / "procs.json"
 
-        checkpoint.write_text(json.dumps([{
-
-            "session_id": "proc_live",
-
-            "command": "sleep 999",
-
-            "pid": os.getpid(),
-
-            "task_id": "t1",
-
-            "watcher_interval": 0,
-
-        }]))
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),
+                    "task_id": "t1",
+                    "watcher_interval": 0,
+                }
+            ])
+        )
 
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
             recovered = registry.recover_from_checkpoint()
 
             assert recovered == 1
 
             assert len(registry.pending_watchers) == 0
 
-
-
     def test_recovery_keeps_live_checkpoint_entries(self, registry, tmp_path):
 
         checkpoint = tmp_path / "procs.json"
 
-        checkpoint.write_text(json.dumps([{
-
-            "session_id": "proc_live",
-
-            "command": "sleep 999",
-
-            "pid": os.getpid(),
-
-            "task_id": "t1",
-
-            "session_key": "sk1",
-
-        }]))
-
-
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "sleep 999",
+                    "pid": os.getpid(),
+                    "task_id": "t1",
+                    "session_key": "sk1",
+                }
+            ])
+        )
 
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
             recovered = registry.recover_from_checkpoint()
 
             assert recovered == 1
 
             assert registry.get("proc_live") is not None
-
-
 
             data = json.loads(checkpoint.read_text())
 
@@ -1581,45 +1200,32 @@ class TestCheckpoint:
 
             assert data != []
 
-
-
     def test_recovery_skips_explicit_sandbox_backed_entries(self, registry, tmp_path):
 
         checkpoint = tmp_path / "procs.json"
 
-        original = [{
-
-            "session_id": "proc_remote",
-
-            "command": "sleep 999",
-
-            "pid": os.getpid(),
-
-            "task_id": "t1",
-
-            "pid_scope": "sandbox",
-
-        }]
+        original = [
+            {
+                "session_id": "proc_remote",
+                "command": "sleep 999",
+                "pid": os.getpid(),
+                "task_id": "t1",
+                "pid_scope": "sandbox",
+            }
+        ]
 
         checkpoint.write_text(json.dumps(original))
 
-
-
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
             recovered = registry.recover_from_checkpoint()
 
             assert recovered == 0
 
             assert registry.get("proc_remote") is None
 
-
-
             data = json.loads(checkpoint.read_text())
 
             assert data == []
-
-
 
     def test_detached_recovered_process_eventually_exits(self, registry, tmp_path):
 
@@ -1627,31 +1233,23 @@ class TestCheckpoint:
 
         checkpoint = tmp_path / "procs.json"
 
-        checkpoint.write_text(json.dumps([{
-
-            "session_id": "proc_live",
-
-            "command": "python -c 'import time; time.sleep(0.4)'",
-
-            "pid": proc.pid,
-
-            "task_id": "t1",
-
-            "session_key": "sk1",
-
-        }]))
-
-
+        checkpoint.write_text(
+            json.dumps([
+                {
+                    "session_id": "proc_live",
+                    "command": "python -c 'import time; time.sleep(0.4)'",
+                    "pid": proc.pid,
+                    "task_id": "t1",
+                    "session_key": "sk1",
+                }
+            ])
+        )
 
         try:
-
             with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
-
                 recovered = registry.recover_from_checkpoint()
 
                 assert recovered == 1
-
-
 
                 session = registry.get("proc_live")
 
@@ -1659,52 +1257,35 @@ class TestCheckpoint:
 
                 assert session.detached is True
 
-
-
                 proc.wait(timeout=5)
 
-
-
                 assert _wait_until(
-
-                    lambda: registry.get("proc_live") is not None
-
-                    and registry.get("proc_live").exited,
-
+                    lambda: (
+                        registry.get("proc_live") is not None
+                        and registry.get("proc_live").exited
+                    ),
                     timeout=5,
-
                 )
-
-
 
                 poll_result = registry.poll("proc_live")
 
                 assert poll_result["status"] == "exited"
-
-
 
                 wait_result = registry.wait("proc_live", timeout=1)
 
                 assert wait_result["status"] == "exited"
 
         finally:
-
             if proc.poll() is None:
-
                 proc.terminate()
 
                 try:
-
                     proc.wait(timeout=5)
 
                 except Exception:
-
                     proc.kill()
 
                     proc.wait(timeout=5)
-
-
-
 
 
 # =========================================================================
@@ -1714,16 +1295,12 @@ class TestCheckpoint:
 # =========================================================================
 
 
-
 class TestKillProcess:
-
     def test_kill_not_found(self, registry):
 
         result = registry.kill_process("nonexistent")
 
         assert result["status"] == "not_found"
-
-
 
     def test_kill_already_exited(self, registry):
 
@@ -1735,8 +1312,6 @@ class TestKillProcess:
 
         assert result["status"] == "already_exited"
 
-
-
     def test_kill_detached_session_uses_host_pid(self, registry):
 
         s = _make_session(sid="proc_detached", command="sleep 999")
@@ -1747,14 +1322,9 @@ class TestKillProcess:
 
         registry._running[s.id] = s
 
-
-
         terminate_calls = []
 
-
-
         class FakeProcess:
-
             def __init__(self, pid):
 
                 self.pid = pid
@@ -1767,14 +1337,9 @@ class TestKillProcess:
 
                 terminate_calls.append(("terminate", self.pid))
 
-
-
         import psutil as _psutil
 
-
-
         try:
-
             # Post-#21561: liveness probe routes through
 
             # ``ProcessRegistry._is_host_pid_alive`` (→
@@ -1785,23 +1350,20 @@ class TestKillProcess:
 
             # touches ``os.kill`` directly. Mock both seams.
 
-            with patch("gateway.status._pid_exists", return_value=True), \
-                 patch.object(_psutil, "Process", side_effect=lambda pid: FakeProcess(pid)):
-
+            with (
+                patch("gateway.status._pid_exists", return_value=True),
+                patch.object(
+                    _psutil, "Process", side_effect=lambda pid: FakeProcess(pid)
+                ),
+            ):
                 result = registry.kill_process(s.id)
-
-
 
             assert result["status"] == "killed"
 
             assert ("terminate", 424242) in terminate_calls
 
         finally:
-
             registry._running.pop(s.id, None)
-
-
-
 
 
 # =========================================================================
@@ -1811,9 +1373,7 @@ class TestKillProcess:
 # =========================================================================
 
 
-
 class TestProcessToolHandler:
-
     def test_list_action(self):
 
         from tools.process_registry import _handle_process
@@ -1822,8 +1382,6 @@ class TestProcessToolHandler:
 
         assert "processes" in result
 
-
-
     def test_poll_missing_session_id(self):
 
         from tools.process_registry import _handle_process
@@ -1831,8 +1389,6 @@ class TestProcessToolHandler:
         result = json.loads(_handle_process({"action": "poll"}))
 
         assert "error" in result
-
-
 
     def test_unknown_action(self):
 
@@ -1843,9 +1399,6 @@ class TestProcessToolHandler:
         assert "error" in result
 
 
-
-
-
 # =========================================================================
 
 # format_process_notification + drain_notifications (shared helpers)
@@ -1853,27 +1406,17 @@ class TestProcessToolHandler:
 # =========================================================================
 
 
-
 from tools.process_registry import format_process_notification
-
-
-
 
 
 def test_format_completion_event():
 
     evt = {
-
         "type": "completion",
-
         "session_id": "proc_abc",
-
         "command": "sleep 5",
-
         "exit_code": 0,
-
         "output": "done",
-
     }
 
     result = format_process_notification(evt)
@@ -1887,25 +1430,15 @@ def test_format_completion_event():
     assert "Output:\ndone]" in result
 
 
-
-
-
 def test_format_watch_match_event():
 
     evt = {
-
         "type": "watch_match",
-
         "session_id": "proc_xyz",
-
         "command": "tail -f log",
-
         "pattern": "ERROR",
-
         "output": "ERROR: disk full",
-
         "suppressed": 0,
-
     }
 
     result = format_process_notification(evt)
@@ -1915,25 +1448,15 @@ def test_format_watch_match_event():
     assert "Matched output:\nERROR: disk full" in result
 
 
-
-
-
 def test_format_watch_match_with_suppressed():
 
     evt = {
-
         "type": "watch_match",
-
         "session_id": "proc_xyz",
-
         "command": "tail -f log",
-
         "pattern": "WARN",
-
         "output": "WARN: low mem",
-
         "suppressed": 3,
-
     }
 
     result = format_process_notification(evt)
@@ -1941,25 +1464,16 @@ def test_format_watch_match_with_suppressed():
     assert "3 earlier matches were suppressed" in result
 
 
-
-
-
 def test_format_watch_disabled_event():
 
     evt = {
-
         "type": "watch_disabled",
-
         "message": "Watch disabled for proc_xyz: too many matches",
-
     }
 
     result = format_process_notification(evt)
 
     assert "[IMPORTANT: Watch disabled for proc_xyz" in result
-
-
-
 
 
 def test_format_returns_none_for_empty_event():
@@ -1973,55 +1487,31 @@ def test_format_returns_none_for_empty_event():
     assert "unknown" in result
 
 
-
-
-
 def test_drain_notifications_returns_pending_events():
 
     from tools.process_registry import process_registry
 
-
-
     while not process_registry.completion_queue.empty():
-
         process_registry.completion_queue.get_nowait()
 
-
-
     process_registry.completion_queue.put({
-
         "type": "completion",
-
         "session_id": "proc_drain1",
-
         "command": "echo hi",
-
         "exit_code": 0,
-
         "output": "hi",
-
     })
 
     process_registry.completion_queue.put({
-
         "type": "watch_match",
-
         "session_id": "proc_drain2",
-
         "command": "tail -f x",
-
         "pattern": "ERR",
-
         "output": "ERR found",
-
         "suppressed": 0,
-
     })
-
-
 
     try:
-
         results = process_registry.drain_notifications()
 
         assert len(results) == 2
@@ -2035,9 +1525,7 @@ def test_drain_notifications_returns_pending_events():
         assert "watch pattern" in results[1][1]
 
     finally:
-
         while not process_registry.completion_queue.empty():
-
             process_registry.completion_queue.get_nowait()
 
         process_registry._completion_consumed.discard("proc_drain1")
@@ -2045,75 +1533,45 @@ def test_drain_notifications_returns_pending_events():
         process_registry._completion_consumed.discard("proc_drain2")
 
 
-
-
-
 def test_drain_notifications_skips_consumed():
 
     from tools.process_registry import process_registry
 
-
-
     while not process_registry.completion_queue.empty():
-
         process_registry.completion_queue.get_nowait()
-
-
 
     process_registry._completion_consumed.add("proc_consumed")
 
     process_registry.completion_queue.put({
-
         "type": "completion",
-
         "session_id": "proc_consumed",
-
         "command": "echo done",
-
         "exit_code": 0,
-
         "output": "done",
-
     })
 
-
-
     try:
-
         results = process_registry.drain_notifications()
 
         assert len(results) == 0
 
     finally:
-
         process_registry._completion_consumed.discard("proc_consumed")
 
         while not process_registry.completion_queue.empty():
-
             process_registry.completion_queue.get_nowait()
-
-
-
 
 
 def test_drain_notifications_empty_queue():
 
     from tools.process_registry import process_registry
 
-
-
     while not process_registry.completion_queue.empty():
-
         process_registry.completion_queue.get_nowait()
-
-
 
     results = process_registry.drain_notifications()
 
     assert results == []
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2123,11 +1581,7 @@ def test_drain_notifications_empty_queue():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestTerminateHostPidWindows:
-
     """Windows branch uses ``taskkill /T /F`` — the documented MS tree-kill
 
     primitive. We can't use psutil's ``children(recursive=True)`` /
@@ -2142,19 +1596,12 @@ class TestTerminateHostPidWindows:
 
     """
 
-
-
     def test_windows_invokes_taskkill_with_tree_and_force_flags(self, monkeypatch):
-
         """The Windows branch must shell out to ``taskkill /PID N /T /F``."""
 
         from tools import process_registry as pr
 
-
-
         captured = {}
-
-
 
         def fake_run(args, **kwargs):
 
@@ -2164,17 +1611,11 @@ class TestTerminateHostPidWindows:
 
             return MagicMock(returncode=0, stderr="", stdout="")
 
-
-
         monkeypatch.setattr(pr, "_IS_WINDOWS", True)
 
         monkeypatch.setattr(pr.subprocess, "run", fake_run)
 
-
-
         pr.ProcessRegistry._terminate_host_pid(12345)
-
-
 
         assert captured["args"][0] == "taskkill"
 
@@ -2186,33 +1627,22 @@ class TestTerminateHostPidWindows:
 
         assert "/F" in captured["args"], "Force flag required for headless Chromium"
 
-
-
     def test_windows_falls_back_to_os_kill_when_taskkill_missing(self, monkeypatch):
-
         """If ``taskkill.exe`` is somehow unavailable, fall back to a bare
 
         ``os.kill(pid, SIGTERM)`` so we at least try to kill the parent."""
 
         from tools import process_registry as pr
 
-
-
         kill_calls = []
-
-
 
         def fake_run(*args, **kwargs):
 
             raise FileNotFoundError("taskkill not found")
 
-
-
         def fake_kill(pid, sig):
 
             kill_calls.append((pid, sig))
-
-
 
         monkeypatch.setattr(pr, "_IS_WINDOWS", True)
 
@@ -2220,18 +1650,11 @@ class TestTerminateHostPidWindows:
 
         monkeypatch.setattr(pr.os, "kill", fake_kill)
 
-
-
         pr.ProcessRegistry._terminate_host_pid(12345)
-
-
 
         assert kill_calls == [(12345, signal.SIGTERM)]
 
-
-
     def test_windows_does_not_call_psutil(self, monkeypatch):
-
         """The Windows branch must NOT exercise the psutil tree-walk
 
         (it's unreliable on Windows — see the function docstring)."""
@@ -2240,19 +1663,12 @@ class TestTerminateHostPidWindows:
 
         import psutil
 
-
-
         psutil_calls = []
 
-
-
         class _BoomProcess:
-
             def __init__(self, pid):
 
                 psutil_calls.append(("Process", pid))
-
-
 
             def children(self, recursive=False):
 
@@ -2260,19 +1676,13 @@ class TestTerminateHostPidWindows:
 
                 return []
 
-
-
             def terminate(self):
 
                 psutil_calls.append(("terminate",))
 
-
-
         def fake_run(args, **kwargs):
 
             return MagicMock(returncode=0, stderr="", stdout="")
-
-
 
         monkeypatch.setattr(pr, "_IS_WINDOWS", True)
 
@@ -2280,27 +1690,15 @@ class TestTerminateHostPidWindows:
 
         monkeypatch.setattr(psutil, "Process", _BoomProcess)
 
-
-
         pr.ProcessRegistry._terminate_host_pid(12345)
 
-
-
         assert psutil_calls == [], (
-
             f"Windows branch must not touch psutil, but saw {psutil_calls!r}"
-
         )
 
 
-
-
-
 class TestTerminateHostPidPosix:
-
     """POSIX branch walks the tree via psutil and SIGTERMs children first."""
-
-
 
     def test_posix_walks_tree_and_terminates_children_then_parent(self, monkeypatch):
 
@@ -2308,33 +1706,21 @@ class TestTerminateHostPidPosix:
 
         import psutil
 
-
-
         terminate_order = []
 
-
-
         class _FakeChild:
-
             def __init__(self, pid):
 
                 self.pid = pid
-
-
 
             def terminate(self):
 
                 terminate_order.append(self.pid)
 
-
-
         class _FakeParent:
-
             def __init__(self, pid):
 
                 self.pid = pid
-
-
 
             def children(self, recursive=False):
 
@@ -2342,31 +1728,19 @@ class TestTerminateHostPidPosix:
 
                 return [_FakeChild(101), _FakeChild(102), _FakeChild(103)]
 
-
-
             def terminate(self):
 
                 terminate_order.append(self.pid)
-
-
 
         monkeypatch.setattr(pr, "_IS_WINDOWS", False)
 
         monkeypatch.setattr(psutil, "Process", _FakeParent)
 
-
-
         pr.ProcessRegistry._terminate_host_pid(12345)
 
-
-
         assert terminate_order == [101, 102, 103, 12345], (
-
             "Children must be terminated before the parent"
-
         )
-
-
 
     def test_posix_no_such_process_swallowed(self, monkeypatch):
 
@@ -2374,25 +1748,17 @@ class TestTerminateHostPidPosix:
 
         import psutil
 
-
-
         def boom(pid):
 
             raise psutil.NoSuchProcess(pid)
-
-
 
         monkeypatch.setattr(pr, "_IS_WINDOWS", False)
 
         monkeypatch.setattr(psutil, "Process", boom)
 
-
-
         # Must not raise.
 
         pr.ProcessRegistry._terminate_host_pid(999999999)
-
-
 
     def test_posix_oserror_falls_back_to_os_kill(self, monkeypatch):
 
@@ -2400,23 +1766,15 @@ class TestTerminateHostPidPosix:
 
         import psutil
 
-
-
         def boom(pid):
 
             raise PermissionError("can't read /proc")
 
-
-
         kill_calls = []
-
-
 
         def fake_kill(pid, sig):
 
             kill_calls.append((pid, sig))
-
-
 
         monkeypatch.setattr(pr, "_IS_WINDOWS", False)
 
@@ -2424,11 +1782,6 @@ class TestTerminateHostPidPosix:
 
         monkeypatch.setattr(pr.os, "kill", fake_kill)
 
-
-
         pr.ProcessRegistry._terminate_host_pid(12345)
 
-
-
         assert kill_calls == [(12345, signal.SIGTERM)]
-

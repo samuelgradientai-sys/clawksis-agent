@@ -28,28 +28,19 @@ result = generator("Your prompt")
 
 ```python
 # Use CUDA GPU
-model = outlines.models.transformers(
-    "microsoft/Phi-3-mini-4k-instruct",
-    device="cuda"
-)
+model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct", device="cuda")
 
 # Use specific GPU
 model = outlines.models.transformers(
     "microsoft/Phi-3-mini-4k-instruct",
-    device="cuda:0"  # GPU 0
+    device="cuda:0",  # GPU 0
 )
 
 # Use CPU
-model = outlines.models.transformers(
-    "microsoft/Phi-3-mini-4k-instruct",
-    device="cpu"
-)
+model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct", device="cpu")
 
 # Use Apple Silicon MPS
-model = outlines.models.transformers(
-    "microsoft/Phi-3-mini-4k-instruct",
-    device="mps"
-)
+model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct", device="mps")
 ```
 
 ### Advanced Configuration
@@ -59,19 +50,14 @@ model = outlines.models.transformers(
 model = outlines.models.transformers(
     "microsoft/Phi-3-mini-4k-instruct",
     device="cuda",
-    model_kwargs={
-        "torch_dtype": "float16"
-    }
+    model_kwargs={"torch_dtype": "float16"},
 )
 
 # 8-bit quantization (less memory)
 model = outlines.models.transformers(
     "microsoft/Phi-3-mini-4k-instruct",
     device="cuda",
-    model_kwargs={
-        "load_in_8bit": True,
-        "device_map": "auto"
-    }
+    model_kwargs={"load_in_8bit": True, "device_map": "auto"},
 )
 
 # 4-bit quantization (even less memory)
@@ -81,8 +67,8 @@ model = outlines.models.transformers(
     model_kwargs={
         "load_in_4bit": True,
         "device_map": "auto",
-        "bnb_4bit_compute_dtype": "float16"
-    }
+        "bnb_4bit_compute_dtype": "float16",
+    },
 )
 
 # Multi-GPU
@@ -91,8 +77,8 @@ model = outlines.models.transformers(
     device="cuda",
     model_kwargs={
         "device_map": "auto",  # Automatic GPU distribution
-        "max_memory": {0: "40GB", 1: "40GB"}  # Per-GPU limits
-    }
+        "max_memory": {0: "40GB", 1: "40GB"},  # Per-GPU limits
+    },
 )
 ```
 
@@ -135,16 +121,11 @@ import outlines
 # Load model manually
 tokenizer = AutoTokenizer.from_pretrained("your-model")
 model_hf = AutoModelForCausalLM.from_pretrained(
-    "your-model",
-    device_map="auto",
-    torch_dtype="float16"
+    "your-model", device_map="auto", torch_dtype="float16"
 )
 
 # Use with Outlines
-model = outlines.models.transformers(
-    model=model_hf,
-    tokenizer=tokenizer
-)
+model = outlines.models.transformers(model=model_hf, tokenizer=tokenizer)
 ```
 
 ## llama.cpp
@@ -157,7 +138,7 @@ import outlines
 # Load GGUF model
 model = outlines.models.llamacpp(
     "./models/llama-3.1-8b-instruct.Q4_K_M.gguf",
-    n_ctx=4096  # Context window
+    n_ctx=4096,  # Context window
 )
 
 # Use with generator
@@ -171,7 +152,7 @@ generator = outlines.generate.json(model, YourModel)
 model = outlines.models.llamacpp(
     "./models/model.gguf",
     n_ctx=4096,
-    n_threads=8  # Use 8 CPU threads
+    n_threads=8,  # Use 8 CPU threads
 )
 
 # GPU offload (partial)
@@ -179,14 +160,14 @@ model = outlines.models.llamacpp(
     "./models/model.gguf",
     n_ctx=4096,
     n_gpu_layers=35,  # Offload 35 layers to GPU
-    n_threads=4       # CPU threads for remaining layers
+    n_threads=4,  # CPU threads for remaining layers
 )
 
 # Full GPU offload
 model = outlines.models.llamacpp(
     "./models/model.gguf",
     n_ctx=8192,
-    n_gpu_layers=-1  # All layers on GPU
+    n_gpu_layers=-1,  # All layers on GPU
 )
 ```
 
@@ -195,14 +176,14 @@ model = outlines.models.llamacpp(
 ```python
 model = outlines.models.llamacpp(
     "./models/llama-3.1-8b.Q4_K_M.gguf",
-    n_ctx=8192,          # Context window (tokens)
-    n_gpu_layers=35,     # GPU layers
-    n_threads=8,         # CPU threads
-    n_batch=512,         # Batch size for prompt processing
-    use_mmap=True,       # Memory-map model file (faster loading)
-    use_mlock=False,     # Lock model in RAM (prevents swapping)
-    seed=42,             # Random seed for reproducibility
-    verbose=False        # Suppress verbose output
+    n_ctx=8192,  # Context window (tokens)
+    n_gpu_layers=35,  # GPU layers
+    n_threads=8,  # CPU threads
+    n_batch=512,  # Batch size for prompt processing
+    use_mmap=True,  # Memory-map model file (faster loading)
+    use_mlock=False,  # Lock model in RAM (prevents swapping)
+    seed=42,  # Random seed for reproducibility
+    verbose=False,  # Suppress verbose output
 )
 ```
 
@@ -265,8 +246,8 @@ model = outlines.models.llamacpp(
     "./models/llama-3.1-8b.Q4_K_M.gguf",
     n_ctx=4096,
     n_gpu_layers=-1,  # Use Metal GPU acceleration
-    use_mmap=True,    # Efficient memory mapping
-    n_threads=8       # Use performance cores
+    use_mmap=True,  # Efficient memory mapping
+    n_threads=8,  # Use performance cores
 )
 ```
 
@@ -290,7 +271,7 @@ generator = outlines.generate.json(model, YourModel)
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-8B-Instruct",
     gpu_memory_utilization=0.9,  # Use 90% of GPU memory
-    max_model_len=4096          # Max sequence length
+    max_model_len=4096,  # Max sequence length
 )
 ```
 
@@ -301,14 +282,14 @@ model = outlines.models.vllm(
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-70B-Instruct",
     tensor_parallel_size=4,  # Use 4 GPUs
-    gpu_memory_utilization=0.9
+    gpu_memory_utilization=0.9,
 )
 
 # Pipeline parallelism (rare, for very large models)
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-405B-Instruct",
     pipeline_parallel_size=8,  # 8-GPU pipeline
-    tensor_parallel_size=4     # 4-GPU tensor split
+    tensor_parallel_size=4,  # 4-GPU tensor split
     # Total: 32 GPUs
 )
 ```
@@ -318,21 +299,15 @@ model = outlines.models.vllm(
 ```python
 # AWQ quantization (4-bit)
 model = outlines.models.vllm(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    quantization="awq",
-    dtype="float16"
+    "meta-llama/Llama-3.1-8B-Instruct", quantization="awq", dtype="float16"
 )
 
 # GPTQ quantization (4-bit)
-model = outlines.models.vllm(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    quantization="gptq"
-)
+model = outlines.models.vllm("meta-llama/Llama-3.1-8B-Instruct", quantization="gptq")
 
 # SqueezeLLM quantization
 model = outlines.models.vllm(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    quantization="squeezellm"
+    "meta-llama/Llama-3.1-8B-Instruct", quantization="squeezellm"
 )
 ```
 
@@ -344,12 +319,12 @@ model = outlines.models.vllm(
     tensor_parallel_size=1,
     gpu_memory_utilization=0.9,
     max_model_len=8192,
-    max_num_seqs=256,           # Max concurrent sequences
-    max_num_batched_tokens=8192, # Max tokens per batch
+    max_num_seqs=256,  # Max concurrent sequences
+    max_num_batched_tokens=8192,  # Max tokens per batch
     dtype="float16",
     trust_remote_code=True,
-    enforce_eager=False,        # Use CUDA graphs (faster)
-    swap_space=4                # CPU swap space (GB)
+    enforce_eager=False,  # Use CUDA graphs (faster)
+    swap_space=4,  # CPU swap space (GB)
 )
 ```
 
@@ -359,7 +334,7 @@ model = outlines.models.vllm(
 # vLLM optimized for high-throughput batch processing
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-8B-Instruct",
-    max_num_seqs=128  # Process 128 sequences in parallel
+    max_num_seqs=128,  # Process 128 sequences in parallel
 )
 
 generator = outlines.generate.json(model, YourModel)
@@ -392,7 +367,7 @@ model = outlines.models.openai(
     "gpt-4o-mini",
     api_key="your-api-key",  # Or set OPENAI_API_KEY env var
     max_tokens=2048,
-    temperature=0.7
+    temperature=0.7,
 )
 ```
 
@@ -484,27 +459,21 @@ model = outlines.models.openai("gpt-3.5-turbo")
 model = outlines.models.transformers(
     "meta-llama/Llama-3.1-8B-Instruct",
     device="cuda",
-    model_kwargs={"torch_dtype": "float16"}
+    model_kwargs={"torch_dtype": "float16"},
 )
 
 # Use flash attention (2-4x faster)
 model = outlines.models.transformers(
     "meta-llama/Llama-3.1-8B-Instruct",
     device="cuda",
-    model_kwargs={
-        "torch_dtype": "float16",
-        "use_flash_attention_2": True
-    }
+    model_kwargs={"torch_dtype": "float16", "use_flash_attention_2": True},
 )
 
 # Use 8-bit quantization (2x less memory)
 model = outlines.models.transformers(
     "meta-llama/Llama-3.1-8B-Instruct",
     device="cuda",
-    model_kwargs={
-        "load_in_8bit": True,
-        "device_map": "auto"
-    }
+    model_kwargs={"load_in_8bit": True, "device_map": "auto"},
 )
 ```
 
@@ -516,15 +485,15 @@ model = outlines.models.llamacpp(
     "./models/model.Q4_K_M.gguf",
     n_gpu_layers=-1,  # All layers on GPU
     n_ctx=8192,
-    n_batch=512       # Larger batch = faster
+    n_batch=512,  # Larger batch = faster
 )
 
 # Optimize for CPU (Apple Silicon)
 model = outlines.models.llamacpp(
     "./models/model.Q4_K_M.gguf",
     n_ctx=4096,
-    n_threads=8,      # Use all performance cores
-    use_mmap=True
+    n_threads=8,  # Use all performance cores
+    use_mmap=True,
 )
 ```
 
@@ -535,15 +504,15 @@ model = outlines.models.llamacpp(
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-8B-Instruct",
     gpu_memory_utilization=0.95,  # Use 95% of GPU
-    max_num_seqs=256,             # High concurrency
-    enforce_eager=False           # Use CUDA graphs
+    max_num_seqs=256,  # High concurrency
+    enforce_eager=False,  # Use CUDA graphs
 )
 
 # Multi-GPU
 model = outlines.models.vllm(
     "meta-llama/Llama-3.1-70B-Instruct",
     tensor_parallel_size=4,  # 4 GPUs
-    gpu_memory_utilization=0.9
+    gpu_memory_utilization=0.9,
 )
 ```
 
@@ -594,12 +563,15 @@ app = FastAPI()
 # Load model once at startup
 model = outlines.models.vllm("meta-llama/Llama-3.1-8B-Instruct")
 
+
 class User(BaseModel):
     name: str
     age: int
     email: str
 
+
 generator = outlines.generate.json(model, User)
+
 
 @app.post("/extract")
 def extract(text: str):

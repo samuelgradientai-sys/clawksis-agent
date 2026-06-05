@@ -9,31 +9,26 @@ from diffusers import (
     UNet2DConditionModel,
     AutoencoderKL,
     DDPMScheduler,
-    StableDiffusionPipeline
+    StableDiffusionPipeline,
 )
 from transformers import CLIPTextModel, CLIPTokenizer
 import torch
 
 # Load components individually
 unet = UNet2DConditionModel.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    subfolder="unet"
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", subfolder="unet"
 )
 vae = AutoencoderKL.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    subfolder="vae"
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", subfolder="vae"
 )
 text_encoder = CLIPTextModel.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    subfolder="text_encoder"
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", subfolder="text_encoder"
 )
 tokenizer = CLIPTokenizer.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    subfolder="tokenizer"
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", subfolder="tokenizer"
 )
 scheduler = DDPMScheduler.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    subfolder="scheduler"
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", subfolder="scheduler"
 )
 
 # Assemble pipeline
@@ -45,7 +40,7 @@ pipe = StableDiffusionPipeline(
     scheduler=scheduler,
     safety_checker=None,
     feature_extractor=None,
-    requires_safety_checker=False
+    requires_safety_checker=False,
 )
 ```
 
@@ -56,12 +51,13 @@ from diffusers import DDIMScheduler, AutoencoderKL, UNet2DConditionModel
 from transformers import CLIPTextModel, CLIPTokenizer
 import torch
 
+
 def custom_generate(
     prompt: str,
     num_steps: int = 50,
     guidance_scale: float = 7.5,
     height: int = 512,
-    width: int = 512
+    width: int = 512,
 ):
     # Load components
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
@@ -81,16 +77,13 @@ def custom_generate(
         padding="max_length",
         max_length=77,
         truncation=True,
-        return_tensors="pt"
+        return_tensors="pt",
     )
     text_embeddings = text_encoder(text_input.input_ids.to(device))[0]
 
     # Unconditional embeddings for classifier-free guidance
     uncond_input = tokenizer(
-        "",
-        padding="max_length",
-        max_length=77,
-        return_tensors="pt"
+        "", padding="max_length", max_length=77, return_tensors="pt"
     )
     uncond_embeddings = text_encoder(uncond_input.input_ids.to(device))[0]
 
@@ -98,10 +91,7 @@ def custom_generate(
     text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
 
     # Initialize latents
-    latents = torch.randn(
-        (1, 4, height // 8, width // 8),
-        device=device
-    )
+    latents = torch.randn((1, 4, height // 8, width // 8), device=device)
     latents = latents * scheduler.init_noise_sigma
 
     # Denoising loop
@@ -113,9 +103,7 @@ def custom_generate(
         # Predict noise
         with torch.no_grad():
             noise_pred = unet(
-                latent_model_input,
-                t,
-                encoder_hidden_states=text_embeddings
+                latent_model_input, t, encoder_hidden_states=text_embeddings
             ).sample
 
         # Classifier-free guidance
@@ -150,15 +138,12 @@ from diffusers.utils import load_image
 import torch
 
 pipe = StableDiffusionPipeline.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    torch_dtype=torch.float16
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16
 ).to("cuda")
 
 # Load IP-Adapter
 pipe.load_ip_adapter(
-    "h94/IP-Adapter",
-    subfolder="models",
-    weight_name="ip-adapter_sd15.bin"
+    "h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin"
 )
 
 # Set IP-Adapter scale
@@ -169,9 +154,7 @@ ip_image = load_image("reference_style.jpg")
 
 # Generate with image + text prompt
 image = pipe(
-    prompt="A portrait in a garden",
-    ip_adapter_image=ip_image,
-    num_inference_steps=50
+    prompt="A portrait in a garden", ip_adapter_image=ip_image, num_inference_steps=50
 ).images[0]
 ```
 
@@ -181,15 +164,10 @@ image = pipe(
 # Use multiple reference images
 pipe.set_ip_adapter_scale([0.5, 0.7])
 
-images = [
-    load_image("style_reference.jpg"),
-    load_image("composition_reference.jpg")
-]
+images = [load_image("style_reference.jpg"), load_image("composition_reference.jpg")]
 
 result = pipe(
-    prompt="A landscape painting",
-    ip_adapter_image=images,
-    num_inference_steps=50
+    prompt="A landscape painting", ip_adapter_image=images, num_inference_steps=50
 ).images[0]
 ```
 
@@ -205,14 +183,14 @@ import torch
 base = StableDiffusionXLPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
     torch_dtype=torch.float16,
-    variant="fp16"
+    variant="fp16",
 ).to("cuda")
 
 # Load refiner
 refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-refiner-1.0",
     torch_dtype=torch.float16,
-    variant="fp16"
+    variant="fp16",
 ).to("cuda")
 
 # Generate with base (partial denoising)
@@ -220,7 +198,7 @@ image = base(
     prompt="A majestic eagle soaring over mountains",
     num_inference_steps=40,
     denoising_end=0.8,
-    output_type="latent"
+    output_type="latent",
 ).images
 
 # Refine with refiner
@@ -228,7 +206,7 @@ refined = refiner(
     prompt="A majestic eagle soaring over mountains",
     image=image,
     num_inference_steps=40,
-    denoising_start=0.8
+    denoising_start=0.8,
 ).images[0]
 ```
 
@@ -242,14 +220,13 @@ import torch
 
 # Load adapter
 adapter = T2IAdapter.from_pretrained(
-    "TencentARC/t2i-adapter-canny-sdxl-1.0",
-    torch_dtype=torch.float16
+    "TencentARC/t2i-adapter-canny-sdxl-1.0", torch_dtype=torch.float16
 )
 
 pipe = StableDiffusionXLAdapterPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
     adapter=adapter,
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 ).to("cuda")
 
 # Get canny edges
@@ -259,7 +236,7 @@ image = pipe(
     prompt="A colorful anime character",
     image=canny_image,
     num_inference_steps=30,
-    adapter_conditioning_scale=0.8
+    adapter_conditioning_scale=0.8,
 ).images[0]
 ```
 
@@ -275,6 +252,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import os
 
+
 class DreamBoothDataset(Dataset):
     def __init__(self, instance_images_path, instance_prompt, tokenizer, size=512):
         self.instance_images_path = instance_images_path
@@ -285,7 +263,7 @@ class DreamBoothDataset(Dataset):
         self.instance_images = [
             os.path.join(instance_images_path, f)
             for f in os.listdir(instance_images_path)
-            if f.endswith(('.png', '.jpg', '.jpeg'))
+            if f.endswith((".png", ".jpg", ".jpeg"))
         ]
 
     def __len__(self):
@@ -301,10 +279,11 @@ class DreamBoothDataset(Dataset):
             padding="max_length",
             max_length=77,
             truncation=True,
-            return_tensors="pt"
+            return_tensors="pt",
         )
 
         return {"image": image, "input_ids": tokens.input_ids.squeeze()}
+
 
 def train_dreambooth(
     pretrained_model: str,
@@ -313,7 +292,7 @@ def train_dreambooth(
     output_dir: str,
     learning_rate: float = 5e-6,
     max_train_steps: int = 800,
-    train_batch_size: int = 1
+    train_batch_size: int = 1,
 ):
     # Load pipeline
     pipe = StableDiffusionPipeline.from_pretrained(pretrained_model)
@@ -322,16 +301,16 @@ def train_dreambooth(
     vae = pipe.vae
     text_encoder = pipe.text_encoder
     tokenizer = pipe.tokenizer
-    noise_scheduler = DDPMScheduler.from_pretrained(pretrained_model, subfolder="scheduler")
+    noise_scheduler = DDPMScheduler.from_pretrained(
+        pretrained_model, subfolder="scheduler"
+    )
 
     # Freeze VAE and text encoder
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
 
     # Create dataset
-    dataset = DreamBoothDataset(
-        instance_data_dir, instance_prompt, tokenizer
-    )
+    dataset = DreamBoothDataset(instance_data_dir, instance_prompt, tokenizer)
     dataloader = DataLoader(dataset, batch_size=train_batch_size, shuffle=True)
 
     # Setup optimizer
@@ -340,7 +319,7 @@ def train_dreambooth(
         "constant",
         optimizer=optimizer,
         num_warmup_steps=0,
-        num_training_steps=max_train_steps
+        num_training_steps=max_train_steps,
     )
 
     # Training loop
@@ -362,7 +341,9 @@ def train_dreambooth(
 
             # Sample noise
             noise = torch.randn_like(latents)
-            timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (latents.shape[0],))
+            timesteps = torch.randint(
+                0, noise_scheduler.num_train_timesteps, (latents.shape[0],)
+            )
             timesteps = timesteps.to(device)
 
             # Add noise
@@ -402,13 +383,14 @@ from peft import LoraConfig, get_peft_model
 from diffusers import StableDiffusionPipeline
 import torch
 
+
 def train_lora(
     base_model: str,
     train_dataset,
     output_dir: str,
     lora_rank: int = 4,
     learning_rate: float = 1e-4,
-    max_train_steps: int = 1000
+    max_train_steps: int = 1000,
 ):
     pipe = StableDiffusionPipeline.from_pretrained(base_model)
     unet = pipe.unet
@@ -418,7 +400,7 @@ def train_lora(
         r=lora_rank,
         lora_alpha=lora_rank,
         target_modules=["to_q", "to_v", "to_k", "to_out.0"],
-        lora_dropout=0.1
+        lora_dropout=0.1,
     )
 
     # Apply LoRA to UNet
@@ -426,10 +408,7 @@ def train_lora(
     unet.print_trainable_parameters()  # Shows ~0.1% trainable
 
     # Train (similar to DreamBooth but only LoRA params)
-    optimizer = torch.optim.AdamW(
-        unet.parameters(),
-        lr=learning_rate
-    )
+    optimizer = torch.optim.AdamW(unet.parameters(), lr=learning_rate)
 
     # ... training loop ...
 
@@ -447,15 +426,11 @@ import torch
 
 # Load with textual inversion
 pipe = StableDiffusionPipeline.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    torch_dtype=torch.float16
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16
 ).to("cuda")
 
 # Load learned embedding
-pipe.load_textual_inversion(
-    "sd-concepts-library/cat-toy",
-    token="<cat-toy>"
-)
+pipe.load_textual_inversion("sd-concepts-library/cat-toy", token="<cat-toy>")
 
 # Use in prompts
 image = pipe("A photo of <cat-toy> on a beach").images[0]
@@ -475,7 +450,7 @@ quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 pipe = StableDiffusionXLPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
     quantization_config=quantization_config,
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 )
 ```
 
@@ -483,14 +458,11 @@ pipe = StableDiffusionXLPipeline.from_pretrained(
 
 ```python
 quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16
+    load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.float16
 )
 
 pipe = StableDiffusionXLPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    quantization_config=quantization_config
+    "stabilityai/stable-diffusion-xl-base-1.0", quantization_config=quantization_config
 )
 ```
 
@@ -510,10 +482,10 @@ app = FastAPI()
 
 # Load model at startup
 pipe = DiffusionPipeline.from_pretrained(
-    "stable-diffusion-v1-5/stable-diffusion-v1-5",
-    torch_dtype=torch.float16
+    "stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16
 ).to("cuda")
 pipe.enable_model_cpu_offload()
+
 
 class GenerationRequest(BaseModel):
     prompt: str
@@ -524,9 +496,11 @@ class GenerationRequest(BaseModel):
     height: int = 512
     seed: int = None
 
+
 class GenerationResponse(BaseModel):
     image_base64: str
     seed: int
+
 
 @app.post("/generate", response_model=GenerationResponse)
 async def generate(request: GenerationRequest):
@@ -542,7 +516,7 @@ async def generate(request: GenerationRequest):
             guidance_scale=request.guidance_scale,
             width=request.width,
             height=request.height,
-            generator=generator
+            generator=generator,
         ).images[0]
 
         # Convert to base64
@@ -554,6 +528,7 @@ async def generate(request: GenerationRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health")
 async def health():
@@ -643,20 +618,19 @@ from diffusers import StableDiffusionPipeline
 from diffusers.callbacks import PipelineCallback
 import torch
 
+
 class ProgressCallback(PipelineCallback):
     def __init__(self):
         self.progress = []
 
     def callback_fn(self, pipe, step_index, timestep, callback_kwargs):
-        self.progress.append({
-            "step": step_index,
-            "timestep": timestep.item()
-        })
+        self.progress.append({"step": step_index, "timestep": timestep.item()})
 
         # Optionally modify latents
         latents = callback_kwargs["latents"]
 
         return callback_kwargs
+
 
 # Use callback
 callback = ProgressCallback()
@@ -664,7 +638,7 @@ callback = ProgressCallback()
 image = pipe(
     prompt="A sunset",
     callback_on_step_end=callback.callback_fn,
-    callback_on_step_end_tensor_inputs=["latents"]
+    callback_on_step_end_tensor_inputs=["latents"],
 ).images[0]
 
 print(f"Generation completed in {len(callback.progress)} steps")
@@ -679,10 +653,11 @@ def early_stop_callback(pipe, step_index, timestep, callback_kwargs):
         pipe._interrupt = True
     return callback_kwargs
 
+
 image = pipe(
     prompt="A landscape",
     num_inference_steps=50,
-    callback_on_step_end=early_stop_callback
+    callback_on_step_end=early_stop_callback,
 ).images[0]
 ```
 
@@ -696,7 +671,7 @@ from diffusers import StableDiffusionXLPipeline
 pipe = StableDiffusionXLPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
     device_map="auto",  # Automatically distribute across GPUs
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 )
 ```
 
@@ -706,10 +681,7 @@ pipe = StableDiffusionXLPipeline.from_pretrained(
 from accelerate import infer_auto_device_map, dispatch_model
 
 # Create device map
-device_map = infer_auto_device_map(
-    pipe.unet,
-    max_memory={0: "10GiB", 1: "10GiB"}
-)
+device_map = infer_auto_device_map(pipe.unet, max_memory={0: "10GiB", 1: "10GiB"})
 
 # Dispatch model
 pipe.unet = dispatch_model(pipe.unet, device_map=device_map)

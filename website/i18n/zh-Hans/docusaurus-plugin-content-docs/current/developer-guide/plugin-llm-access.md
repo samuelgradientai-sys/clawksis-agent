@@ -21,25 +21,28 @@ Plugin 在需要涉及模型但又不属于 agent 对话的场景时使用它。
 
 ## 最简调用
 
-```python
-result = ctx.llm.complete(messages=[{"role": "user", "content": "ping"}])
-return result.text
+```pythonresult = ctx.llm.complete(messages=[{"role": "user", "content": "ping"}])
+
+return result.text
 ```
 
 这就是整个 API 的一行示例。无需密钥、无需 provider 配置、无需 SDK 初始化。Plugin 运行在用户当前使用的任意 provider 和模型上——用户切换 provider 时，plugin 自动跟随。
 
 ## 更完整的对话示例
 
-```python
-result = ctx.llm.complete(
-    messages=[
-        {"role": "system", "content": "Rewrite errors as one short sentence a non-engineer can act on."},
-        {"role": "user",   "content": traceback_text},
-    ],
-    max_tokens=64,
-    purpose="hooks.error-rewrite",
-)
-return result.text
+```pythonresult = ctx.llm.complete(
+    messages=[
+        {
+            "role": "system",
+            "content": "Rewrite errors as one short sentence a non-engineer can act on.",
+        },
+        {"role": "user", "content": traceback_text},
+    ],
+    max_tokens=64,
+    purpose="hooks.error-rewrite",
+)
+
+return result.text
 ```
 
 `purpose` 是一个自由格式的审计字符串——它会出现在 `agent.log` 和 `result.audit` 中，方便运营人员查看哪个 plugin 发起了哪次调用。可选，但对于频繁触发的场景建议填写。
@@ -48,18 +51,18 @@ return result.text
 
 当 plugin 需要有类型的答案时，切换到结构化模式：
 
-```python
-result = ctx.llm.complete_structured(
-    instructions="Score this support reply for urgency (0–1) and pick a category.",
-    input=[{"type": "text", "text": message_body}],
-    json_schema=TRIAGE_SCHEMA,
-    purpose="support.triage",
-    temperature=0.0,
-    max_tokens=128,
-)
-
-if result.parsed["urgency"] > 0.8:
-    await dispatch_to_oncall(result.parsed["category"], message_body)
+```pythonresult = ctx.llm.complete_structured(
+    instructions="Score this support reply for urgency (0–1) and pick a category.",
+    input=[{"type": "text", "text": message_body}],
+    json_schema=TRIAGE_SCHEMA,
+    purpose="support.triage",
+    temperature=0.0,
+    max_tokens=128,
+)
+
+
+if result.parsed["urgency"] > 0.8:
+    await dispatch_to_oncall(result.parsed["category"], message_body)
 ```
 
 宿主向 provider 请求 JSON 输出，在本地作为兜底进行解析，若安装了 `jsonschema` 则对你的 schema 进行验证，最终在 `result.parsed` 上返回一个 Python 对象。如果模型无法生成有效 JSON，`result.parsed` 为 `None`，`result.text` 携带原始响应。
@@ -77,86 +80,99 @@ if result.parsed["urgency"] > 0.8:
 
 ### 对话补全——`/tldr`
 
-```python
-def register(ctx):
-    ctx.register_command(
-        name="tldr",
-        handler=lambda raw: _tldr(ctx, raw),
-        description="Summarise the supplied text in one paragraph.",
-        args_hint="<text>",
-    )
-
-
-def _tldr(ctx, raw_args: str) -> str:
-    text = raw_args.strip()
-    if not text:
-        return "Usage: /tldr <text to summarise>"
-    result = ctx.llm.complete(
-        messages=[
-            {"role": "system",
-             "content": "Summarise the user's text in one tight paragraph. No preamble."},
-            {"role": "user", "content": text},
-        ],
-        max_tokens=256,
-        temperature=0.3,
-        purpose="tldr",
-    )
-    return result.text
+```pythondef register(ctx):
+
+    ctx.register_command(
+        name="tldr",
+        handler=lambda raw: _tldr(ctx, raw),
+        description="Summarise the supplied text in one paragraph.",
+        args_hint="<text>",
+    )
+
+
+def _tldr(ctx, raw_args: str) -> str:
+
+    text = raw_args.strip()
+
+    if not text:
+        return "Usage: /tldr <text to summarise>"
+
+    result = ctx.llm.complete(
+        messages=[
+            {
+                "role": "system",
+                "content": "Summarise the user's text in one tight paragraph. No preamble.",
+            },
+            {"role": "user", "content": text},
+        ],
+        max_tokens=256,
+        temperature=0.3,
+        purpose="tldr",
+    )
+
+    return result.text
 ```
 
 `result.text` 是模型的响应；`result.usage` 携带 token 计数；`result.provider` 和 `result.model` 携带归因信息。
 
 ### 结构化提取——`/paste-to-tasks`
 
-```python
-def register(ctx):
-    ctx.register_command(
-        name="paste-to-tasks",
-        handler=lambda raw: _paste_to_tasks(ctx, raw),
-        description="Turn freeform meeting notes into structured tasks.",
-        args_hint="<text>",
-    )
-
-
-_TASKS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "tasks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "owner":  {"type": "string"},
-                    "action": {"type": "string"},
-                    "due":    {"type": "string", "description": "ISO date or empty"},
-                },
-                "required": ["action"],
-            },
-        },
-    },
-    "required": ["tasks"],
-}
-
-
-def _paste_to_tasks(ctx, raw_args: str) -> str:
-    if not raw_args.strip():
-        return "Usage: /paste-to-tasks <meeting notes>"
-    result = ctx.llm.complete_structured(
-        instructions=(
-            "Extract concrete action items from these meeting notes. "
-            "One task per actionable line. If no owner is named, leave 'owner' blank."
-        ),
-        input=[{"type": "text", "text": raw_args}],
-        json_schema=_TASKS_SCHEMA,
-        schema_name="meeting.tasks",
-        purpose="paste-to-tasks",
-        temperature=0.0,
-        max_tokens=512,
-    )
-    if result.parsed is None:
-        return f"Couldn't parse a response. Raw output:\n{result.text}"
-    lines = [f"- [{t.get('owner') or '?'}] {t['action']}" for t in result.parsed["tasks"]]
-    return "\n".join(lines) or "(no tasks found)"
+```pythondef register(ctx):
+
+    ctx.register_command(
+        name="paste-to-tasks",
+        handler=lambda raw: _paste_to_tasks(ctx, raw),
+        description="Turn freeform meeting notes into structured tasks.",
+        args_hint="<text>",
+    )
+
+
+_TASKS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tasks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "owner": {"type": "string"},
+                    "action": {"type": "string"},
+                    "due": {"type": "string", "description": "ISO date or empty"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    "required": ["tasks"],
+}
+
+
+def _paste_to_tasks(ctx, raw_args: str) -> str:
+
+    if not raw_args.strip():
+        return "Usage: /paste-to-tasks <meeting notes>"
+
+    result = ctx.llm.complete_structured(
+        instructions=(
+            "Extract concrete action items from these meeting notes. "
+            "One task per actionable line. If no owner is named, leave 'owner' blank."
+        ),
+        input=[{"type": "text", "text": raw_args}],
+        json_schema=_TASKS_SCHEMA,
+        schema_name="meeting.tasks",
+        purpose="paste-to-tasks",
+        temperature=0.0,
+        max_tokens=512,
+    )
+
+    if result.parsed is None:
+        return f"Couldn't parse a response. Raw output:\n{result.text}"
+
+    lines = [
+        f"- [{t.get('owner') or '?'}] {t['action']}" for t in result.parsed["tasks"]
+    ]
+
+    return "\n".join(lines) or "(no tasks found)"
 ```
 
 第三个完整示例（包含图像输入）位于
@@ -182,19 +198,19 @@ def _paste_to_tasks(ctx, raw_args: str) -> str:
 
 ### `complete()`
 
-```python
-result = ctx.llm.complete(
-    messages=[{"role": "user", "content": "Hi"}],
-    provider=None,         # 可选，受门控——Clawksis provider id（如 "openrouter"）
-    model=None,            # 可选，受门控——该 provider 期望的任意字符串
-    temperature=None,
-    max_tokens=None,
-    timeout=None,          # 秒
-    agent_id=None,         # 可选，受门控
-    profile=None,          # 可选，受门控——显式指定认证 profile 名称
-    purpose="optional-audit-string",
-)
-# → PluginLlmCompleteResult(text, provider, model, agent_id, usage, audit)
+```pythonresult = ctx.llm.complete(
+    messages=[{"role": "user", "content": "Hi"}],
+    provider=None,  # 可选，受门控——Clawksis provider id（如 "openrouter"）
+    model=None,  # 可选，受门控——该 provider 期望的任意字符串
+    temperature=None,
+    max_tokens=None,
+    timeout=None,  # 秒
+    agent_id=None,  # 可选，受门控
+    profile=None,  # 可选，受门控——显式指定认证 profile 名称
+    purpose="optional-audit-string",
+)
+
+# → PluginLlmCompleteResult(text, provider, model, agent_id, usage, audit)
 ```
 
 普通对话补全。`messages` 采用标准 OpenAI 格式——`{"role": "...", "content": "..."}` 字典列表。多轮 prompt（system + few-shot user/assistant 对 + 最终 user）的用法与 OpenAI SDK 完全一致。
@@ -203,29 +219,30 @@ result = ctx.llm.complete(
 
 ### `complete_structured()`
 
-```python
-result = ctx.llm.complete_structured(
-    instructions="What you want extracted.",
-    input=[
-        {"type": "text",  "text": "..."},
-        {"type": "image", "data": b"...", "mime_type": "image/png"},
-        {"type": "image", "url":  "https://..."},
-    ],
-    json_schema={...},     # 可选——触发解析结果及验证
-    json_mode=False,       # 设为 True 可在不提供 schema 的情况下请求 JSON
-    schema_name=None,      # 可选的人类可读 schema 名称
-    system_prompt=None,
-    provider=None,         # 可选，受门控
-    model=None,            # 可选，受门控
-    temperature=None,
-    max_tokens=None,
-    timeout=None,
-    agent_id=None,
-    profile=None,
-    purpose=None,
-)
-# → PluginLlmStructuredResult(text, provider, model, agent_id,
-#                             usage, parsed, content_type, audit)
+```pythonresult = ctx.llm.complete_structured(
+    instructions="What you want extracted.",
+    input=[
+        {"type": "text", "text": "..."},
+        {"type": "image", "data": b"...", "mime_type": "image/png"},
+        {"type": "image", "url": "https://..."},
+    ],
+    json_schema={...},  # 可选——触发解析结果及验证
+    json_mode=False,  # 设为 True 可在不提供 schema 的情况下请求 JSON
+    schema_name=None,  # 可选的人类可读 schema 名称
+    system_prompt=None,
+    provider=None,  # 可选，受门控
+    model=None,  # 可选，受门控
+    temperature=None,
+    max_tokens=None,
+    timeout=None,
+    agent_id=None,
+    profile=None,
+    purpose=None,
+)
+
+# → PluginLlmStructuredResult(text, provider, model, agent_id,
+
+#                             usage, parsed, content_type, audit)
 ```
 
 输入为有类型的文本或图像块（原始字节会自动 base64 编码为 `data:` URL）。当提供 `json_schema` 或设置 `json_mode=True` 时，宿主通过 `response_format` 向 provider 请求 JSON 输出，在本地作为兜底进行解析，若安装了 `jsonschema` 则对你的 schema 进行验证。
@@ -235,30 +252,37 @@ result = ctx.llm.complete_structured(
 
 ### 异步
 
-```python
-result = await ctx.llm.acomplete(messages=...)
-result = await ctx.llm.acomplete_structured(instructions=..., input=...)
+```pythonresult = await ctx.llm.acomplete(messages=...)
+
+result = await ctx.llm.acomplete_structured(instructions=..., input=...)
 ```
 
 参数和结果类型与对应的同步版本相同。在 gateway 适配器、异步 hook 或任何已运行在 asyncio 事件循环上的 plugin 代码中使用。
 
 ### 结果属性
 
-```python
-@dataclass
-class PluginLlmCompleteResult:
-    text: str                    # 助手的响应
-    provider: str                # 如 "openrouter"、"anthropic"
-    model: str                   # provider 为本次调用返回的模型标识
-    agent_id: str                # 使用了哪个 agent 的模型/认证
-    usage: PluginLlmUsage        # token 数 + 缓存 + 费用估算
-    audit: Dict[str, Any]        # plugin_id、purpose、profile
-
-@dataclass
-class PluginLlmStructuredResult(PluginLlmCompleteResult):
-    parsed: Optional[Any]        # content_type == "json" 时的 JSON 对象
-    content_type: str            # "json" 或 "text"
-    # 提供 schema_name 时 audit 中也会携带该字段
+```python@dataclass
+class PluginLlmCompleteResult:
+    text: str  # 助手的响应
+
+    provider: str  # 如 "openrouter"、"anthropic"
+
+    model: str  # provider 为本次调用返回的模型标识
+
+    agent_id: str  # 使用了哪个 agent 的模型/认证
+
+    usage: PluginLlmUsage  # token 数 + 缓存 + 费用估算
+
+    audit: Dict[str, Any]  # plugin_id、purpose、profile
+
+
+@dataclass
+class PluginLlmStructuredResult(PluginLlmCompleteResult):
+    parsed: Optional[Any]  # content_type == "json" 时的 JSON 对象
+
+    content_type: str  # "json" 或 "text"
+
+    # 提供 schema_name 时 audit 中也会携带该字段
 ```
 
 当 provider 返回相应字段时，`usage` 携带 `input_tokens`、`output_tokens`、`total_tokens`、`cache_read_tokens`、`cache_write_tokens` 和 `cost_usd`。

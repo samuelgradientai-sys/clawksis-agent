@@ -46,22 +46,27 @@ The `events` list determines which events trigger your handler. You can subscrib
 
 #### handler.py
 
-```python
-import json
-from datetime import datetime
-from pathlib import Path
-
-LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
-
-async def handle(event_type: str, context: dict):
-    """Called for each subscribed event. Must be named 'handle'."""
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "event": event_type,
-        **context,
-    }
-    with open(LOG_FILE, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```pythonimport json
+
+from datetime import datetime
+
+from pathlib import Path
+
+
+LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
+
+
+async def handle(event_type: str, context: dict):
+    """Called for each subscribed event. Must be named 'handle'."""
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "event": event_type,
+        **context,
+    }
+
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 **Handler rules:**
@@ -101,25 +106,34 @@ events:
   - agent:step
 ```
 
-```python
-# ~/.clawksis/hooks/long-task-alert/handler.py
-import os
-import httpx
-
-THRESHOLD = 10
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_HOME_CHANNEL")
-
-async def handle(event_type: str, context: dict):
-    iteration = context.get("iteration", 0)
-    if iteration == THRESHOLD and BOT_TOKEN and CHAT_ID:
-        tools = ", ".join(context.get("tool_names", []))
-        text = f"⚠️ Agent has been running for {iteration} steps. Last tools: {tools}"
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": text},
-            )
+```python# ~/.clawksis/hooks/long-task-alert/handler.py
+
+import os
+
+import httpx
+
+
+THRESHOLD = 10
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+CHAT_ID = os.getenv("TELEGRAM_HOME_CHANNEL")
+
+
+async def handle(event_type: str, context: dict):
+
+    iteration = context.get("iteration", 0)
+
+    if iteration == THRESHOLD and BOT_TOKEN and CHAT_ID:
+        tools = ", ".join(context.get("tool_names", []))
+
+        text = f"⚠️ Agent has been running for {iteration} steps. Last tools: {tools}"
+
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": text},
+            )
 ```
 
 #### Command Usage Logger
@@ -134,25 +148,32 @@ events:
   - command:*
 ```
 
-```python
-# ~/.clawksis/hooks/command-logger/handler.py
-import json
-from datetime import datetime
-from pathlib import Path
-
-LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
-
-def handle(event_type: str, context: dict):
-    LOG.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "ts": datetime.now().isoformat(),
-        "command": context.get("command"),
-        "args": context.get("args"),
-        "platform": context.get("platform"),
-        "user": context.get("user_id"),
-    }
-    with open(LOG, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```python# ~/.clawksis/hooks/command-logger/handler.py
+
+import json
+
+from datetime import datetime
+
+from pathlib import Path
+
+
+LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
+
+
+def handle(event_type: str, context: dict):
+
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "ts": datetime.now().isoformat(),
+        "command": context.get("command"),
+        "args": context.get("args"),
+        "platform": context.get("platform"),
+        "user": context.get("user_id"),
+    }
+
+    with open(LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 #### Session Start Webhook
@@ -168,18 +189,25 @@ events:
   - session:reset
 ```
 
-```python
-# ~/.clawksis/hooks/session-webhook/handler.py
-import httpx
-
-WEBHOOK_URL = "https://your-service.example.com/clawk-events"
-
-async def handle(event_type: str, context: dict):
-    async with httpx.AsyncClient() as client:
-        await client.post(WEBHOOK_URL, json={
-            "event": event_type,
-            **context,
-        }, timeout=5)
+```python# ~/.clawksis/hooks/session-webhook/handler.py
+
+import httpx
+
+
+WEBHOOK_URL = "https://your-service.example.com/clawk-events"
+
+
+async def handle(event_type: str, context: dict):
+
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            WEBHOOK_URL,
+            json={
+                "event": event_type,
+                **context,
+            },
+            timeout=5,
+        )
 ```
 
 ### Tutorial: BOOT.md — Run a Startup Checklist on Every Gateway Boot
@@ -228,78 +256,98 @@ events:
 
 **`~/.clawksis/hooks/boot-md/handler.py`**
 
-```python
-"""Run ~/.clawksis/BOOT.md on every gateway startup."""
-
-import logging
-import threading
-from pathlib import Path
-
-logger = logging.getLogger("hooks.boot-md")
-
-BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
-
-
-def _build_prompt(content: str) -> str:
-    return (
-        "You are running a startup boot checklist. Follow the instructions "
-        "below exactly.\n\n"
-        "---\n"
-        f"{content}\n"
-        "---\n\n"
-        "Execute each instruction. Use the send_message tool to deliver any "
-        "messages to platforms like Discord or Slack.\n"
-        "If nothing needs attention and there is nothing to report, reply "
-        "with ONLY: [SILENT]"
-    )
-
-
-def _run_boot_agent(content: str) -> None:
-    """Spawn a one-shot agent and execute the checklist.
-
-    Uses the gateway's resolved model and runtime credentials so this works
-    against custom endpoints, aggregators, and OAuth-based providers alike.
-    """
-    try:
-        from gateway.run import _resolve_gateway_model, _resolve_runtime_agent_kwargs
-        from run_agent import AIAgent
-
-        agent = AIAgent(
-            model=_resolve_gateway_model(),
-            **_resolve_runtime_agent_kwargs(),
-            platform="gateway",
-            quiet_mode=True,
-            skip_context_files=True,
-            skip_memory=True,
-            max_iterations=20,
-        )
-        result = agent.run_conversation(_build_prompt(content))
-        response = result.get("final_response", "")
-        if response and "[SILENT]" not in response:
-            logger.info("boot-md completed: %s", response[:200])
-        else:
-            logger.info("boot-md completed (nothing to report)")
-    except Exception as e:
-        logger.error("boot-md agent failed: %s", e)
-
-
-async def handle(event_type: str, context: dict) -> None:
-    if not BOOT_FILE.exists():
-        return
-    content = BOOT_FILE.read_text(encoding="utf-8").strip()
-    if not content:
-        return
-
-    logger.info("Running BOOT.md (%d chars)", len(content))
-
-    # Background thread so gateway startup isn't blocked on a full agent turn.
-    thread = threading.Thread(
-        target=_run_boot_agent,
-        args=(content,),
-        name="boot-md",
-        daemon=True,
-    )
-    thread.start()
+```python"""Run ~/.clawksis/BOOT.md on every gateway startup."""
+
+import logging
+
+import threading
+
+from pathlib import Path
+
+
+logger = logging.getLogger("hooks.boot-md")
+
+
+BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
+
+
+def _build_prompt(content: str) -> str:
+
+    return (
+        "You are running a startup boot checklist. Follow the instructions "
+        "below exactly.\n\n"
+        "---\n"
+        f"{content}\n"
+        "---\n\n"
+        "Execute each instruction. Use the send_message tool to deliver any "
+        "messages to platforms like Discord or Slack.\n"
+        "If nothing needs attention and there is nothing to report, reply "
+        "with ONLY: [SILENT]"
+    )
+
+
+def _run_boot_agent(content: str) -> None:
+    """Spawn a one-shot agent and execute the checklist.
+
+
+
+    Uses the gateway's resolved model and runtime credentials so this works
+
+    against custom endpoints, aggregators, and OAuth-based providers alike.
+
+    """
+
+    try:
+        from gateway.run import _resolve_gateway_model, _resolve_runtime_agent_kwargs
+
+        from run_agent import AIAgent
+
+        agent = AIAgent(
+            model=_resolve_gateway_model(),
+            **_resolve_runtime_agent_kwargs(),
+            platform="gateway",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            max_iterations=20,
+        )
+
+        result = agent.run_conversation(_build_prompt(content))
+
+        response = result.get("final_response", "")
+
+        if response and "[SILENT]" not in response:
+            logger.info("boot-md completed: %s", response[:200])
+
+        else:
+            logger.info("boot-md completed (nothing to report)")
+
+    except Exception as e:
+        logger.error("boot-md agent failed: %s", e)
+
+
+async def handle(event_type: str, context: dict) -> None:
+
+    if not BOOT_FILE.exists():
+        return
+
+    content = BOOT_FILE.read_text(encoding="utf-8").strip()
+
+    if not content:
+        return
+
+    logger.info("Running BOOT.md (%d chars)", len(content))
+
+    # Background thread so gateway startup isn't blocked on a full agent turn.
+
+    thread = threading.Thread(
+        target=_run_boot_agent,
+        args=(content,),
+        name="boot-md",
+        daemon=True,
+    )
+
+    thread.start()
 ```
 
 The two key lines:
@@ -356,14 +404,19 @@ Gateway hooks only fire in the **gateway** (Telegram, Discord, Slack, WhatsApp, 
 For plugin packaging and registration details, see
 the [Plugins guide](/docs/user-guide/features/plugins).
 
-```python
-def register(ctx):
-    ctx.register_hook("pre_tool_call", my_tool_observer)
-    ctx.register_hook("post_tool_call", my_tool_logger)
-    ctx.register_hook("pre_llm_call", my_memory_callback)
-    ctx.register_hook("post_llm_call", my_sync_callback)
-    ctx.register_hook("on_session_start", my_init_callback)
-    ctx.register_hook("on_session_end", my_cleanup_callback)
+```pythondef register(ctx):
+
+    ctx.register_hook("pre_tool_call", my_tool_observer)
+
+    ctx.register_hook("post_tool_call", my_tool_logger)
+
+    ctx.register_hook("pre_llm_call", my_memory_callback)
+
+    ctx.register_hook("post_llm_call", my_sync_callback)
+
+    ctx.register_hook("on_session_start", my_init_callback)
+
+    ctx.register_hook("on_session_end", my_cleanup_callback)
 ```
 
 **General rules for all hooks:**
@@ -415,8 +468,7 @@ def my_callback(tool_name: str, args: dict, task_id: str, **kwargs):
 
 **Return value — veto the call:**
 
-```python
-return {"action": "block", "message": "Reason the tool call was blocked"}
+```pythonreturn {"action": "block", "message": "Reason the tool call was blocked"}
 ```
 
 The agent short-circuits the tool with `message` as the error returned to the model. The first matching block directive wins (Python plugins registered first, then shell hooks). Any other return value is ignored, so existing observer-only callbacks keep working unchanged.
@@ -425,31 +477,43 @@ The agent short-circuits the tool with `message` as the error returned to the mo
 
 **Example — tool call audit log:**
 
-```python
-import json, logging
-from datetime import datetime
-
-logger = logging.getLogger(__name__)
-
-def audit_tool_call(tool_name, args, task_id, **kwargs):
-    logger.info("TOOL_CALL session=%s tool=%s args=%s",
-                task_id, tool_name, json.dumps(args)[:200])
-
-def register(ctx):
-    ctx.register_hook("pre_tool_call", audit_tool_call)
+```pythonimport json, logging
+
+from datetime import datetime
+
+
+logger = logging.getLogger(__name__)
+
+
+def audit_tool_call(tool_name, args, task_id, **kwargs):
+
+    logger.info(
+        "TOOL_CALL session=%s tool=%s args=%s",
+        task_id,
+        tool_name,
+        json.dumps(args)[:200],
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_tool_call", audit_tool_call)
 ```
 
 **Example — warn on dangerous tools:**
 
-```python
-DANGEROUS = {"terminal", "write_file", "patch"}
-
-def warn_dangerous(tool_name, **kwargs):
-    if tool_name in DANGEROUS:
-        print(f"⚠ Executing potentially dangerous tool: {tool_name}")
-
-def register(ctx):
-    ctx.register_hook("pre_tool_call", warn_dangerous)
+```pythonDANGEROUS = {"terminal", "write_file", "patch"}
+
+
+def warn_dangerous(tool_name, **kwargs):
+
+    if tool_name in DANGEROUS:
+        print(f"⚠ Executing potentially dangerous tool: {tool_name}")
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_tool_call", warn_dangerous)
 ```
 
 ---
@@ -481,26 +545,37 @@ def my_callback(tool_name: str, args: dict, result: str, task_id: str,
 
 **Example — track tool usage metrics:**
 
-```python
-from collections import Counter, defaultdict
-import json
-
-_tool_counts = Counter()
-_error_counts = Counter()
-_latency_ms = defaultdict(list)
-
-def track_metrics(tool_name, result, duration_ms=0, **kwargs):
-    _tool_counts[tool_name] += 1
-    _latency_ms[tool_name].append(duration_ms)
-    try:
-        parsed = json.loads(result)
-        if "error" in parsed:
-            _error_counts[tool_name] += 1
-    except (json.JSONDecodeError, TypeError):
-        pass
-
-def register(ctx):
-    ctx.register_hook("post_tool_call", track_metrics)
+```pythonfrom collections import Counter, defaultdict
+
+import json
+
+
+_tool_counts = Counter()
+
+_error_counts = Counter()
+
+_latency_ms = defaultdict(list)
+
+
+def track_metrics(tool_name, result, duration_ms=0, **kwargs):
+
+    _tool_counts[tool_name] += 1
+
+    _latency_ms[tool_name].append(duration_ms)
+
+    try:
+        parsed = json.loads(result)
+
+        if "error" in parsed:
+            _error_counts[tool_name] += 1
+
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+
+def register(ctx):
+
+    ctx.register_hook("post_tool_call", track_metrics)
 ```
 
 ---
@@ -529,15 +604,21 @@ def my_callback(session_id: str, user_message: str, conversation_history: list,
 
 **Return value:** If the callback returns a dict with a `"context"` key, or a plain non-empty string, the text is appended to the current turn's user message. Return `None` for no injection.
 
-```python
-# Inject context
-return {"context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"}
-
-# Plain string (equivalent)
-return "Recalled memories:\n- User likes Python"
-
-# No injection
-return None
+```python# Inject context
+
+return {
+    "context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"
+}
+
+
+# Plain string (equivalent)
+
+return "Recalled memories:\n- User likes Python"
+
+
+# No injection
+
+return None
 ```
 
 **Where context is injected:** Always the **user message**, never the system prompt. This preserves the prompt cache — the system prompt stays identical across turns, so cached tokens are reused. The system prompt is Clawksis's territory (model guidance, tool enforcement, personality, skills). Plugins contribute context alongside the user's input.
@@ -550,39 +631,55 @@ When **multiple plugins** return context, their outputs are joined with double n
 
 **Example — memory recall:**
 
-```python
-import httpx
-
-MEMORY_API = "https://your-memory-api.example.com"
-
-def recall(session_id, user_message, is_first_turn, **kwargs):
-    try:
-        resp = httpx.post(f"{MEMORY_API}/recall", json={
-            "session_id": session_id,
-            "query": user_message,
-        }, timeout=3)
-        memories = resp.json().get("results", [])
-        if not memories:
-            return None
-        text = "Recalled context:\n" + "\n".join(f"- {m['text']}" for m in memories)
-        return {"context": text}
-    except Exception:
-        return None
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", recall)
+```pythonimport httpx
+
+
+MEMORY_API = "https://your-memory-api.example.com"
+
+
+def recall(session_id, user_message, is_first_turn, **kwargs):
+
+    try:
+        resp = httpx.post(
+            f"{MEMORY_API}/recall",
+            json={
+                "session_id": session_id,
+                "query": user_message,
+            },
+            timeout=3,
+        )
+
+        memories = resp.json().get("results", [])
+
+        if not memories:
+            return None
+
+        text = "Recalled context:\n" + "\n".join(f"- {m['text']}" for m in memories)
+
+        return {"context": text}
+
+    except Exception:
+        return None
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", recall)
 ```
 
 **Example — guardrails:**
 
-```python
-POLICY = "Never execute commands that delete files without explicit user confirmation."
-
-def guardrails(**kwargs):
-    return {"context": POLICY}
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", guardrails)
+```pythonPOLICY = "Never execute commands that delete files without explicit user confirmation."
+
+
+def guardrails(**kwargs):
+
+    return {"context": POLICY}
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", guardrails)
 ```
 
 ---
@@ -615,37 +712,54 @@ def my_callback(session_id: str, user_message: str, assistant_response: str,
 
 **Example — sync to external memory:**
 
-```python
-import httpx
-
-MEMORY_API = "https://your-memory-api.example.com"
-
-def sync_memory(session_id, user_message, assistant_response, **kwargs):
-    try:
-        httpx.post(f"{MEMORY_API}/store", json={
-            "session_id": session_id,
-            "user": user_message,
-            "assistant": assistant_response,
-        }, timeout=5)
-    except Exception:
-        pass  # best-effort
-
-def register(ctx):
-    ctx.register_hook("post_llm_call", sync_memory)
+```pythonimport httpx
+
+
+MEMORY_API = "https://your-memory-api.example.com"
+
+
+def sync_memory(session_id, user_message, assistant_response, **kwargs):
+
+    try:
+        httpx.post(
+            f"{MEMORY_API}/store",
+            json={
+                "session_id": session_id,
+                "user": user_message,
+                "assistant": assistant_response,
+            },
+            timeout=5,
+        )
+
+    except Exception:
+        pass  # best-effort
+
+
+def register(ctx):
+
+    ctx.register_hook("post_llm_call", sync_memory)
 ```
 
 **Example — track response lengths:**
 
-```python
-import logging
-logger = logging.getLogger(__name__)
-
-def log_response_length(session_id, assistant_response, model, **kwargs):
-    logger.info("RESPONSE session=%s model=%s chars=%d",
-                session_id, model, len(assistant_response or ""))
-
-def register(ctx):
-    ctx.register_hook("post_llm_call", log_response_length)
+```pythonimport logging
+
+logger = logging.getLogger(__name__)
+
+
+def log_response_length(session_id, assistant_response, model, **kwargs):
+
+    logger.info(
+        "RESPONSE session=%s model=%s chars=%d",
+        session_id,
+        model,
+        len(assistant_response or ""),
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("post_llm_call", log_response_length)
 ```
 
 ---
@@ -674,19 +788,22 @@ def my_callback(session_id: str, model: str, platform: str, **kwargs):
 
 **Example — initialize a session cache:**
 
-```python
-_session_caches = {}
-
-def init_session(session_id, model, platform, **kwargs):
-    _session_caches[session_id] = {
-        "model": model,
-        "platform": platform,
-        "tool_calls": 0,
-        "started": __import__("datetime").datetime.now().isoformat(),
-    }
-
-def register(ctx):
-    ctx.register_hook("on_session_start", init_session)
+```python_session_caches = {}
+
+
+def init_session(session_id, model, platform, **kwargs):
+
+    _session_caches[session_id] = {
+        "model": model,
+        "platform": platform,
+        "tool_calls": 0,
+        "started": __import__("datetime").datetime.now().isoformat(),
+    }
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_start", init_session)
 ```
 
 ---
@@ -720,41 +837,64 @@ def my_callback(session_id: str, completed: bool, interrupted: bool,
 
 **Example — flush and cleanup:**
 
-```python
-_session_caches = {}
-
-def cleanup_session(session_id, completed, interrupted, **kwargs):
-    cache = _session_caches.pop(session_id, None)
-    if cache:
-        # Flush accumulated data to disk or external service
-        status = "completed" if completed else ("interrupted" if interrupted else "failed")
-        print(f"Session {session_id} ended: {status}, {cache['tool_calls']} tool calls")
-
-def register(ctx):
-    ctx.register_hook("on_session_end", cleanup_session)
+```python_session_caches = {}
+
+
+def cleanup_session(session_id, completed, interrupted, **kwargs):
+
+    cache = _session_caches.pop(session_id, None)
+
+    if cache:
+        # Flush accumulated data to disk or external service
+
+        status = (
+            "completed" if completed else ("interrupted" if interrupted else "failed")
+        )
+
+        print(f"Session {session_id} ended: {status}, {cache['tool_calls']} tool calls")
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_end", cleanup_session)
 ```
 
 **Example — session duration tracking:**
 
-```python
-import time, logging
-logger = logging.getLogger(__name__)
-
-_start_times = {}
-
-def on_start(session_id, **kwargs):
-    _start_times[session_id] = time.time()
-
-def on_end(session_id, completed, interrupted, **kwargs):
-    start = _start_times.pop(session_id, None)
-    if start:
-        duration = time.time() - start
-        logger.info("SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
-                     session_id, duration, completed, interrupted)
-
-def register(ctx):
-    ctx.register_hook("on_session_start", on_start)
-    ctx.register_hook("on_session_end", on_end)
+```pythonimport time, logging
+
+logger = logging.getLogger(__name__)
+
+
+_start_times = {}
+
+
+def on_start(session_id, **kwargs):
+
+    _start_times[session_id] = time.time()
+
+
+def on_end(session_id, completed, interrupted, **kwargs):
+
+    start = _start_times.pop(session_id, None)
+
+    if start:
+        duration = time.time() - start
+
+        logger.info(
+            "SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
+            session_id,
+            duration,
+            completed,
+            interrupted,
+        )
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_start", on_start)
+
+    ctx.register_hook("on_session_end", on_end)
 ```
 
 ---
@@ -837,18 +977,25 @@ def my_callback(parent_session_id: str, child_role: str | None,
 
 **Example — log orchestrator activity:**
 
-```python
-import logging
-logger = logging.getLogger(__name__)
-
-def log_subagent(parent_session_id, child_role, child_status, duration_ms, **kwargs):
-    logger.info(
-        "SUBAGENT parent=%s role=%s status=%s duration_ms=%d",
-        parent_session_id, child_role, child_status, duration_ms,
-    )
-
-def register(ctx):
-    ctx.register_hook("subagent_stop", log_subagent)
+```pythonimport logging
+
+logger = logging.getLogger(__name__)
+
+
+def log_subagent(parent_session_id, child_role, child_status, duration_ms, **kwargs):
+
+    logger.info(
+        "SUBAGENT parent=%s role=%s status=%s duration_ms=%d",
+        parent_session_id,
+        child_role,
+        child_status,
+        duration_ms,
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("subagent_stop", log_subagent)
 ```
 
 :::info
@@ -887,34 +1034,47 @@ def my_callback(event, gateway, session_store, **kwargs):
 
 **Example — drop unauthorized DMs silently without triggering the pairing code:**
 
-```python
-def deny_unauthorized_dms(event, **kwargs):
-    src = event.source
-    if src.chat_type == "dm" and not _is_approved_user(src.user_id):
-        return {"action": "skip", "reason": "unauthorized-dm"}
-    return None
-
-def register(ctx):
-    ctx.register_hook("pre_gateway_dispatch", deny_unauthorized_dms)
+```pythondef deny_unauthorized_dms(event, **kwargs):
+
+    src = event.source
+
+    if src.chat_type == "dm" and not _is_approved_user(src.user_id):
+        return {"action": "skip", "reason": "unauthorized-dm"}
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_gateway_dispatch", deny_unauthorized_dms)
 ```
 
 **Example — rewrite an ambient-message buffer into a single prompt on mention:**
 
-```python
-_buffers = {}
-
-def buffer_or_rewrite(event, **kwargs):
-    key = (event.source.platform, event.source.chat_id)
-    buf = _buffers.setdefault(key, [])
-    if _bot_mentioned(event.text):
-        combined = "\n".join(buf + [event.text])
-        buf.clear()
-        return {"action": "rewrite", "text": combined}
-    buf.append(event.text)
-    return {"action": "skip", "reason": "ambient-buffered"}
-
-def register(ctx):
-    ctx.register_hook("pre_gateway_dispatch", buffer_or_rewrite)
+```python_buffers = {}
+
+
+def buffer_or_rewrite(event, **kwargs):
+
+    key = (event.source.platform, event.source.chat_id)
+
+    buf = _buffers.setdefault(key, [])
+
+    if _bot_mentioned(event.text):
+        combined = "\n".join(buf + [event.text])
+
+        buf.clear()
+
+        return {"action": "rewrite", "text": combined}
+
+    buf.append(event.text)
+
+    return {"action": "skip", "reason": "ambient-buffered"}
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_gateway_dispatch", buffer_or_rewrite)
 ```
 
 ---
@@ -954,19 +1114,25 @@ def my_callback(
 
 **Example — desktop notification on macOS:**
 
-```python
-import subprocess
-
-def notify_approval(command, description, session_key, **kwargs):
-    title = "Clawksis needs approval"
-    body = f"{description}: {command[:80]}"
-    subprocess.Popen([
-        "osascript", "-e",
-        f'display notification "{body}" with title "{title}"',
-    ])
-
-def register(ctx):
-    ctx.register_hook("pre_approval_request", notify_approval)
+```pythonimport subprocess
+
+
+def notify_approval(command, description, session_key, **kwargs):
+
+    title = "Clawksis needs approval"
+
+    body = f"{description}: {command[:80]}"
+
+    subprocess.Popen([
+        "osascript",
+        "-e",
+        f'display notification "{body}" with title "{title}"',
+    ])
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_approval_request", notify_approval)
 ```
 
 ---
@@ -1000,12 +1166,14 @@ Same kwargs as `pre_approval_request`, plus:
 
 **Use cases:** Close the matching desktop notification, record the final decision in an audit log, update metrics, roll forward a rate limiter.
 
-```python
-def log_decision(command, choice, session_key, **kwargs):
-    logger.info("approval %s: %s for session %s", choice, command[:60], session_key)
-
-def register(ctx):
-    ctx.register_hook("post_approval_response", log_decision)
+```pythondef log_decision(command, choice, session_key, **kwargs):
+
+    logger.info("approval %s: %s for session %s", choice, command[:60], session_key)
+
+
+def register(ctx):
+
+    ctx.register_hook("post_approval_response", log_decision)
 ```
 
 ---
@@ -1037,17 +1205,22 @@ def my_callback(
 
 **Use cases:** Redact organization-specific PII from `web_extract` output, wrap long JSON tool responses in a summary header, inject retrieval-augmented hints into `read_file` results, rewrite `delegate_task` subagent reports into a project-specific schema.
 
-```python
-import re
-SECRET = re.compile(r"sk-[A-Za-z0-9]{32,}")
-
-def redact_secrets(tool_name, result, **kwargs):
-    if SECRET.search(result):
-        return SECRET.sub("[REDACTED]", result)
-    return None
-
-def register(ctx):
-    ctx.register_hook("transform_tool_result", redact_secrets)
+```pythonimport re
+
+SECRET = re.compile(r"sk-[A-Za-z0-9]{32,}")
+
+
+def redact_secrets(tool_name, result, **kwargs):
+
+    if SECRET.search(result):
+        return SECRET.sub("[REDACTED]", result)
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_tool_result", redact_secrets)
 ```
 
 Applies to every tool. For terminal-only rewriting see `transform_terminal_output` below — it's narrower and runs earlier in the pipeline (pre-truncation, pre-redaction).
@@ -1082,16 +1255,21 @@ def my_callback(
 
 **Use cases:** Inject summaries for commands that produce massive output (`du -ah`, `find`, `tree`), tag output with a project-specific marker so downstream hooks know how to handle it, strip timing noise that flaps between runs and defeats prompt caching.
 
-```python
-def summarize_find(command, output, **kwargs):
-    if command.startswith("find ") and len(output) > 50_000:
-        lines = output.count("\n")
-        head = "\n".join(output.splitlines()[:40])
-        return f"{head}\n\n[summary: {lines} paths total, showing first 40]"
-    return None
-
-def register(ctx):
-    ctx.register_hook("transform_terminal_output", summarize_find)
+```pythondef summarize_find(command, output, **kwargs):
+
+    if command.startswith("find ") and len(output) > 50_000:
+        lines = output.count("\n")
+
+        head = "\n".join(output.splitlines()[:40])
+
+        return f"{head}\n\n[summary: {lines} paths total, showing first 40]"
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_terminal_output", summarize_find)
 ```
 
 Pairs well with `transform_tool_result` (which covers every other tool).
@@ -1125,16 +1303,20 @@ def my_callback(
 
 **Use cases:** Apply a personality/vocabulary transform (pirate-speak, Spongebob), redact user-specific identifiers from the final text, append a project-specific signature footer, enforce a house style guide without burning tokens on SOUL instructions.
 
-```python
-import os, re
-
-def spongebob(response_text, **kwargs):
-    if os.environ.get("SPONGEBOB_MODE") != "on":
-        return None  # pass through unchanged
-    return re.sub(r"!", "!! Tartar sauce!", response_text)
-
-def register(ctx):
-    ctx.register_hook("transform_llm_output", spongebob)
+```pythonimport os, re
+
+
+def spongebob(response_text, **kwargs):
+
+    if os.environ.get("SPONGEBOB_MODE") != "on":
+        return None  # pass through unchanged
+
+    return re.sub(r"!", "!! Tartar sauce!", response_text)
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_llm_output", spongebob)
 ```
 
 The hook is guarded on a non-empty, non-interrupted response — it will not fire on stop-button interrupts or empty turns. Exceptions are logged as warnings and do not break agent execution.

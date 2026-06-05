@@ -111,34 +111,39 @@ The real `AIAgent.__init__` takes ~60 parameters (credentials, routing, callback
 session context, budget, credential pool, etc.). The signature below is the
 minimum subset you'll usually touch — read `run_agent.py` for the full list.
 
-```python
-class AIAgent:
-    def __init__(self,
-        base_url: str = None,
-        api_key: str = None,
-        provider: str = None,
-        api_mode: str = None,              # "chat_completions" | "codex_responses" | ...
-        model: str = "",                   # empty → resolved from config/provider later
-        max_iterations: int = 90,          # tool-calling iterations (shared with subagents)
-        enabled_toolsets: list = None,
-        disabled_toolsets: list = None,
-        quiet_mode: bool = False,
-        save_trajectories: bool = False,
-        platform: str = None,              # "cli", "telegram", etc.
-        session_id: str = None,
-        skip_context_files: bool = False,
-        skip_memory: bool = False,
-        credential_pool=None,
-        # ... plus callbacks, thread/user/chat IDs, iteration_budget, fallback_model,
-        # checkpoints config, prefill_messages, service_tier, reasoning_config, etc.
-    ): ...
-
-    def chat(self, message: str) -> str:
-        """Simple interface — returns final response string."""
-
-    def run_conversation(self, user_message: str, system_message: str = None,
-                         conversation_history: list = None, task_id: str = None) -> dict:
-        """Full interface — returns dict with final_response + messages."""
+```pythonclass AIAgent:
+    def __init__(
+        self,
+        base_url: str = None,
+        api_key: str = None,
+        provider: str = None,
+        api_mode: str = None,  # "chat_completions" | "codex_responses" | ...
+        model: str = "",  # empty → resolved from config/provider later
+        max_iterations: int = 90,  # tool-calling iterations (shared with subagents)
+        enabled_toolsets: list = None,
+        disabled_toolsets: list = None,
+        quiet_mode: bool = False,
+        save_trajectories: bool = False,
+        platform: str = None,  # "cli", "telegram", etc.
+        session_id: str = None,
+        skip_context_files: bool = False,
+        skip_memory: bool = False,
+        credential_pool=None,
+        # ... plus callbacks, thread/user/chat IDs, iteration_budget, fallback_model,
+        # checkpoints config, prefill_messages, service_tier, reasoning_config, etc.
+    ): ...
+
+    def chat(self, message: str) -> str:
+        """Simple interface — returns final response string."""
+
+    def run_conversation(
+        self,
+        user_message: str,
+        system_message: str = None,
+        conversation_history: list = None,
+        task_id: str = None,
+    ) -> dict:
+        """Full interface — returns dict with final_response + messages."""
 ```
 
 ### Agent Loop
@@ -189,9 +194,15 @@ All slash commands are defined in a central `COMMAND_REGISTRY` list of `CommandD
 ### Adding a Slash Command
 
 1. Add a `CommandDef` entry to `COMMAND_REGISTRY` in `clawk_cli/commands.py`:
-```python
-CommandDef("mycommand", "Description of what it does", "Session",
-           aliases=("mc",), args_hint="[arg]"),
+```python(
+    CommandDef(
+        "mycommand",
+        "Description of what it does",
+        "Session",
+        aliases=("mc",),
+        args_hint="[arg]",
+    ),
+)
 ```
 2. Add handler in `ClawksisCLI.process_command()` in `cli.py`:
 ```python
@@ -199,9 +210,8 @@ elif canonical == "mycommand":
     self._handle_mycommand(cmd_original)
 ```
 3. If the command is available in the gateway, add a handler in `gateway/run.py`:
-```python
-if canonical == "mycommand":
-    return await self._handle_mycommand(event)
+```pythonif canonical == "mycommand":
+    return await self._handle_mycommand(event)
 ```
 4. For persistent settings, use `save_config_value()` in `cli.py`
 
@@ -314,24 +324,31 @@ core Clawksis tool that should ship in the base system.
 Built-in/core tools require changes in **2 files**:
 
 **1. Create `tools/your_tool.py`:**
-```python
-import json, os
-from tools.registry import registry
-
-def check_requirements() -> bool:
-    return bool(os.getenv("EXAMPLE_API_KEY"))
-
-def example_tool(param: str, task_id: str = None) -> str:
-    return json.dumps({"success": True, "data": "..."})
-
-registry.register(
-    name="example_tool",
-    toolset="example",
-    schema={"name": "example_tool", "description": "...", "parameters": {...}},
-    handler=lambda args, **kw: example_tool(param=args.get("param", ""), task_id=kw.get("task_id")),
-    check_fn=check_requirements,
-    requires_env=["EXAMPLE_API_KEY"],
-)
+```pythonimport json, os
+
+from tools.registry import registry
+
+
+def check_requirements() -> bool:
+
+    return bool(os.getenv("EXAMPLE_API_KEY"))
+
+
+def example_tool(param: str, task_id: str = None) -> str:
+
+    return json.dumps({"success": True, "data": "..."})
+
+
+registry.register(
+    name="example_tool",
+    toolset="example",
+    schema={"name": "example_tool", "description": "...", "parameters": {...}},
+    handler=lambda args, **kw: example_tool(
+        param=args.get("param", ""), task_id=kw.get("task_id")
+    ),
+    check_fn=check_requirements,
+    requires_env=["EXAMPLE_API_KEY"],
+)
 ```
 
 **2. Add to `toolsets.py`** — either `_CLAWK_CORE_TOOLS` (all platforms) or a new toolset. **This step is required:** auto-discovery imports the tool and registers its schema, but the tool is only *exposed to an agent* if its name appears in a toolset. `_CLAWK_CORE_TOOLS` is not dead code — it's the default bundle every platform's base toolset inherits from.
@@ -665,12 +682,15 @@ violate them.
    the implementation. No marketing words ("powerful",
    "comprehensive", "seamless", "advanced"). Don't repeat the skill
    name. Verify with:
-   ```python
-   import re, pathlib
-   m = re.search(r'^description: (.*)$',
-                 pathlib.Path('skills/<cat>/<name>/SKILL.md').read_text(),
-                 re.MULTILINE)
-   assert len(m.group(1)) <= 60, len(m.group(1))
+   ```python   import re, pathlib
+
+   m = re.search(
+       r"^description: (.*)$",
+       pathlib.Path("skills/<cat>/<name>/SKILL.md").read_text(),
+       re.MULTILINE,
+   )
+
+   assert len(m.group(1)) <= 60, len(m.group(1))
    ```
 
 2. **Tools referenced in SKILL.md prose must be native Clawksis tools or
@@ -941,24 +961,30 @@ automatically scope to the active profile.
 
 1. **Use `get_clawk_home()` for all CLAWK_HOME paths.** Import from `clawk_constants`.
    NEVER hardcode `~/.clawksis` or `Path.home() / ".clawk"` in code that reads/writes state.
-   ```python
-   # GOOD
-   from clawk_constants import get_clawk_home
-   config_path = get_clawk_home() / "config.yaml"
-
-   # BAD — breaks profiles
-   config_path = Path.home() / ".clawk" / "config.yaml"
+   ```python   # GOOD
+
+   from clawk_constants import get_clawk_home
+
+   config_path = get_clawk_home() / "config.yaml"
+
+
+   # BAD — breaks profiles
+
+   config_path = Path.home() / ".clawk" / "config.yaml"
    ```
 
 2. **Use `display_clawk_home()` for user-facing messages.** Import from `clawk_constants`.
    This returns `~/.clawksis` for default or `~/.clawksis/profiles/<name>` for profiles.
-   ```python
-   # GOOD
-   from clawk_constants import display_clawk_home
-   print(f"Config saved to {display_clawk_home()}/config.yaml")
-
-   # BAD — shows wrong path for profiles
-   print("Config saved to ~/.clawksis/config.yaml")
+   ```python   # GOOD
+
+   from clawk_constants import display_clawk_home
+
+   print(f"Config saved to {display_clawk_home()}/config.yaml")
+
+
+   # BAD — shows wrong path for profiles
+
+   print("Config saved to ~/.clawksis/config.yaml")
    ```
 
 3. **Module-level constants are fine** — they cache `get_clawk_home()` at import time,
@@ -1037,14 +1063,18 @@ The `_isolate_clawk_home` autouse fixture in `tests/conftest.py` redirects `CLAW
 **Profile tests**: When testing profile features, also mock `Path.home()` so that
 `_get_profiles_root()` and `_get_default_clawk_home()` resolve within the temp dir.
 Use the pattern from `tests/clawk_cli/test_profiles.py`:
-```python
-@pytest.fixture
-def profile_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
-    home.mkdir()
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(home))
-    return home
+```python@pytest.fixture
+def profile_env(tmp_path, monkeypatch):
+
+    home = tmp_path / ".clawk"
+
+    home.mkdir()
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    monkeypatch.setenv("CLAWK_HOME", str(home))
+
+    return home
 ```
 
 ---
@@ -1132,34 +1162,46 @@ CI and cost engineering time to "fix."
 
 **Do not write:**
 
-```python
-# catalog snapshot — breaks every model release
-assert "gemini-2.5-pro" in _PROVIDER_MODELS["gemini"]
-assert "MiniMax-M2.7" in models
-
-# config version literal — breaks every schema bump
-assert DEFAULT_CONFIG["_config_version"] == 21
-
-# enumeration count — breaks every time a skill/provider is added
-assert len(_PROVIDER_MODELS["huggingface"]) == 8
+```python# catalog snapshot — breaks every model release
+
+assert "gemini-2.5-pro" in _PROVIDER_MODELS["gemini"]
+
+assert "MiniMax-M2.7" in models
+
+
+# config version literal — breaks every schema bump
+
+assert DEFAULT_CONFIG["_config_version"] == 21
+
+
+# enumeration count — breaks every time a skill/provider is added
+
+assert len(_PROVIDER_MODELS["huggingface"]) == 8
 ```
 
 **Do write:**
 
-```python
-# behavior: does the catalog plumbing work at all?
-assert "gemini" in _PROVIDER_MODELS
-assert len(_PROVIDER_MODELS["gemini"]) >= 1
-
-# behavior: does migration bump the user's version to current latest?
-assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
-
-# invariant: no plan-only model leaks into the legacy list
-assert not (set(moonshot_models) & coding_plan_only_models)
-
-# invariant: every model in the catalog has a context-length entry
-for m in _PROVIDER_MODELS["huggingface"]:
-    assert m.lower() in DEFAULT_CONTEXT_LENGTHS_LOWER
+```python# behavior: does the catalog plumbing work at all?
+
+assert "gemini" in _PROVIDER_MODELS
+
+assert len(_PROVIDER_MODELS["gemini"]) >= 1
+
+
+# behavior: does migration bump the user's version to current latest?
+
+assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
+
+
+# invariant: no plan-only model leaks into the legacy list
+
+assert not (set(moonshot_models) & coding_plan_only_models)
+
+
+# invariant: every model in the catalog has a context-length entry
+
+for m in _PROVIDER_MODELS["huggingface"]:
+    assert m.lower() in DEFAULT_CONTEXT_LENGTHS_LOWER
 ```
 
 The rule: if the test reads like a snapshot of current data, delete it. If

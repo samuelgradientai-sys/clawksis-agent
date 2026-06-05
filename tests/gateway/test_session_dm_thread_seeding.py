@@ -30,6 +30,7 @@ def store(tmp_path, monkeypatch):
     fires — the autouse fixture's CLAWK_HOME override doesn't help here.)
     """
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
     config = GatewayConfig()
     s = SessionStore(sessions_dir=tmp_path, config=config)
@@ -46,7 +47,9 @@ def _dm_source(platform=Platform.SLACK, chat_id="D123", thread_id=None, user_id=
     )
 
 
-def _group_source(platform=Platform.SLACK, chat_id="C456", thread_id=None, user_id="U1"):
+def _group_source(
+    platform=Platform.SLACK, chat_id="C456", thread_id=None, user_id="U1"
+):
     return SessionSource(
         platform=platform,
         chat_id=chat_id,
@@ -87,9 +90,9 @@ class TestDMThreadIsolation:
 
         thread_source = _dm_source(thread_id="1234567890.000001")
         thread_entry = store.get_or_create_session(thread_source)
-        store.append_to_transcript(thread_entry.session_id, {
-            "role": "user", "content": "thread-only message"
-        })
+        store.append_to_transcript(
+            thread_entry.session_id, {"role": "user", "content": "thread-only message"}
+        )
 
         parent_transcript = store.load_transcript(parent_entry.session_id)
         assert len(parent_transcript) == 2
@@ -105,9 +108,9 @@ class TestDMThreadIsolation:
         # Thread A
         thread_a_source = _dm_source(thread_id="1111.000001")
         thread_a_entry = store.get_or_create_session(thread_a_source)
-        store.append_to_transcript(thread_a_entry.session_id, {
-            "role": "user", "content": "thread A message"
-        })
+        store.append_to_transcript(
+            thread_a_entry.session_id, {"role": "user", "content": "thread A message"}
+        )
 
         # Thread B
         thread_b_source = _dm_source(thread_id="2222.000002")
@@ -131,9 +134,9 @@ class TestDMThreadIsolation:
 
         thread_source = _dm_source(thread_id="1234567890.000001")
         thread_entry = store.get_or_create_session(thread_source)
-        store.append_to_transcript(thread_entry.session_id, {
-            "role": "user", "content": "follow-up"
-        })
+        store.append_to_transcript(
+            thread_entry.session_id, {"role": "user", "content": "follow-up"}
+        )
 
         # Get the same thread session again
         thread_entry_again = store.get_or_create_session(thread_source)
@@ -181,7 +184,9 @@ class TestDMThreadIsolationEdgeCases:
 class TestDMThreadIsolationCrossPlatform:
     """Verify thread isolation is consistent across all platforms."""
 
-    @pytest.mark.parametrize("platform", [Platform.SLACK, Platform.TELEGRAM, Platform.DISCORD])
+    @pytest.mark.parametrize(
+        "platform", [Platform.SLACK, Platform.TELEGRAM, Platform.DISCORD]
+    )
     def test_thread_starts_empty_across_platforms(self, store, platform):
         """DM thread sessions start empty regardless of platform."""
         parent_source = _dm_source(platform=platform)

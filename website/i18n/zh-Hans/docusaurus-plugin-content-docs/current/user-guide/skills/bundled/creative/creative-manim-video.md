@@ -135,12 +135,14 @@ project-name/
 
 **所有文字使用等宽字体。** Manim 的 Pango 渲染器在任何大小下使用比例字体都会产生字距错误。完整建议参见 `references/visual-design.md`。
 
-```python
-MONO = "Menlo"  # define once at top of file
-
-Text("Fourier Series", font_size=48, font=MONO, weight=BOLD)  # titles
-Text("n=1: sin(x)", font_size=20, font=MONO)                  # labels
-MathTex(r"\nabla L")                                            # math (uses LaTeX)
+```pythonMONO = "Menlo"  # define once at top of file
+
+
+Text("Fourier Series", font_size=48, font=MONO, weight=BOLD)  # titles
+
+Text("n=1: sin(x)", font_size=20, font=MONO)  # labels
+
+MathTex(r"\nabla L")  # math (uses LaTeX)
 ```
 
 最小 `font_size=18` 以保证可读性。
@@ -163,23 +165,36 @@ MathTex(r"\nabla L")                                            # math (uses LaT
 
 每个场景一个类。每个场景可独立渲染。
 
-```python
-from manim import *
-
-BG = "#1C1C1C"
-PRIMARY = "#58C4DD"
-SECONDARY = "#83C167"
-ACCENT = "#FFFF00"
-MONO = "Menlo"
-
-class Scene1_Introduction(Scene):
-    def construct(self):
-        self.camera.background_color = BG
-        title = Text("Why Does This Work?", font_size=48, color=PRIMARY, weight=BOLD, font=MONO)
-        self.add_subcaption("Why does this work?", duration=2)
-        self.play(Write(title), run_time=1.5)
-        self.wait(1.0)
-        self.play(FadeOut(title), run_time=0.5)
+```pythonfrom manim import *
+
+
+BG = "#1C1C1C"
+
+PRIMARY = "#58C4DD"
+
+SECONDARY = "#83C167"
+
+ACCENT = "#FFFF00"
+
+MONO = "Menlo"
+
+
+class Scene1_Introduction(Scene):
+    def construct(self):
+
+        self.camera.background_color = BG
+
+        title = Text(
+            "Why Does This Work?", font_size=48, color=PRIMARY, weight=BOLD, font=MONO
+        )
+
+        self.add_subcaption("Why does this work?", duration=2)
+
+        self.play(Write(title), run_time=1.5)
+
+        self.wait(1.0)
+
+        self.play(FadeOut(title), run_time=0.5)
 ```
 
 关键模式：
@@ -214,26 +229,25 @@ manim -ql --format=png -s script.py Scene2_CoreConcept  # preview still
 ## 关键实现注意事项
 
 ### LaTeX 使用原始字符串
-```python
-# WRONG: MathTex("\frac{1}{2}")
-# RIGHT:
-MathTex(r"\frac{1}{2}")
+```python# WRONG: MathTex("\frac{1}{2}")
+
+# RIGHT:
+
+MathTex(r"\frac{1}{2}")
 ```
 
 ### 边缘文字 buff >= 0.5
-```python
-label.to_edge(DOWN, buff=0.5)  # never < 0.5
+```pythonlabel.to_edge(DOWN, buff=0.5)  # never < 0.5
 ```
 
 ### 替换文字前先 FadeOut
-```python
-self.play(ReplacementTransform(note1, note2))  # not Write(note2) on top
+```pythonself.play(ReplacementTransform(note1, note2))  # not Write(note2) on top
 ```
 
 ### 永远不要对未添加的 Mobject 执行动画
-```python
-self.play(Create(circle))  # must add first
-self.play(circle.animate.set_color(RED))  # then animate
+```pythonself.play(Create(circle))  # must add first
+
+self.play(circle.animate.set_color(RED))  # then animate
 ```
 
 ## 性能目标

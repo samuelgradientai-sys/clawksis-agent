@@ -19,12 +19,14 @@ Real-world examples of using Outlines for structured generation in production sy
 from pydantic import BaseModel, Field
 import outlines
 
+
 class PersonInfo(BaseModel):
     name: str = Field(description="Full name")
     age: int = Field(ge=0, le=120)
     occupation: str
     email: str = Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
     location: str
+
 
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, PersonInfo)
@@ -54,6 +56,7 @@ class CompanyInfo(BaseModel):
     headquarters: str
     employees: int = Field(gt=0)
     revenue: Optional[str] = None
+
 
 model = outlines.models.transformers("meta-llama/Llama-3.1-8B-Instruct")
 generator = outlines.generate.json(model, CompanyInfo)
@@ -85,6 +88,7 @@ class ProductSpec(BaseModel):
     features: list[str]
     rating: Optional[float] = Field(None, ge=0, le=5)
 
+
 generator = outlines.generate.json(model, ProductSpec)
 
 text = """
@@ -108,6 +112,7 @@ print(f"Features: {', '.join(product.features)}")
 from typing import Literal
 from enum import Enum
 
+
 class Sentiment(str, Enum):
     VERY_POSITIVE = "very_positive"
     POSITIVE = "positive"
@@ -115,12 +120,14 @@ class Sentiment(str, Enum):
     NEGATIVE = "negative"
     VERY_NEGATIVE = "very_negative"
 
+
 class SentimentAnalysis(BaseModel):
     text: str
     sentiment: Sentiment
     confidence: float = Field(ge=0.0, le=1.0)
     aspects: list[str]  # What aspects were mentioned
     reasoning: str
+
 
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, SentimentAnalysis)
@@ -151,12 +158,14 @@ class Category(str, Enum):
     SPORTS = "sports"
     HEALTH = "health"
 
+
 class ArticleClassification(BaseModel):
     primary_category: Category
     secondary_categories: list[Category]
     keywords: list[str] = Field(min_items=3, max_items=10)
     target_audience: Literal["general", "expert", "beginner"]
     reading_level: Literal["elementary", "intermediate", "advanced"]
+
 
 generator = outlines.generate.json(model, ArticleClassification)
 
@@ -186,6 +195,7 @@ class Intent(str, Enum):
     CANCEL = "cancel"
     UPGRADE = "upgrade"
 
+
 class UserMessage(BaseModel):
     original_message: str
     intent: Intent
@@ -194,6 +204,7 @@ class UserMessage(BaseModel):
     sentiment: Literal["positive", "neutral", "negative"]
     action_required: bool
     summary: str
+
 
 generator = outlines.generate.json(model, UserMessage)
 
@@ -223,11 +234,13 @@ class Education(BaseModel):
     institution: str
     year: int
 
+
 class Experience(BaseModel):
     title: str
     company: str
     duration: str
     responsibilities: list[str]
+
 
 class JobApplication(BaseModel):
     full_name: str
@@ -237,6 +250,7 @@ class JobApplication(BaseModel):
     experience: list[Experience]
     skills: list[str]
     availability: str
+
 
 model = outlines.models.transformers("meta-llama/Llama-3.1-8B-Instruct")
 generator = outlines.generate.json(model, JobApplication)
@@ -279,6 +293,7 @@ class InvoiceItem(BaseModel):
     unit_price: float = Field(gt=0)
     total: float = Field(gt=0)
 
+
 class Invoice(BaseModel):
     invoice_number: str
     date: str = Field(pattern=r"\d{4}-\d{2}-\d{2}")
@@ -288,6 +303,7 @@ class Invoice(BaseModel):
     subtotal: float = Field(gt=0)
     tax: float = Field(ge=0)
     total: float = Field(gt=0)
+
 
 generator = outlines.generate.json(model, Invoice)
 
@@ -314,7 +330,9 @@ print(f"Invoice: {invoice.invoice_number}")
 print(f"From: {invoice.vendor} → To: {invoice.customer}")
 print(f"Items: {len(invoice.items)}")
 for item in invoice.items:
-    print(f"  - {item.description}: {item.quantity} × ${item.unit_price} = ${item.total}")
+    print(
+        f"  - {item.description}: {item.quantity} × ${item.unit_price} = ${item.total}"
+    )
 print(f"Total: ${invoice.total}")
 ```
 
@@ -329,6 +347,7 @@ class SurveyResponse(BaseModel):
     favorite_features: list[str]
     improvement_areas: list[str]
     additional_comments: Optional[str] = None
+
 
 generator = outlines.generate.json(model, SurveyResponse)
 
@@ -371,18 +390,22 @@ class Person(BaseModel):
     role: Optional[str] = None
     affiliation: Optional[str] = None
 
+
 class Organization(BaseModel):
     name: str
     type: Optional[str] = None
+
 
 class Location(BaseModel):
     name: str
     type: Literal["city", "state", "country", "region"]
 
+
 class Event(BaseModel):
     name: str
     date: Optional[str] = None
     location: Optional[str] = None
+
 
 class ArticleEntities(BaseModel):
     people: list[Person]
@@ -390,6 +413,7 @@ class ArticleEntities(BaseModel):
     locations: list[Location]
     events: list[Event]
     dates: list[str]
+
 
 model = outlines.models.transformers("meta-llama/Llama-3.1-8B-Instruct")
 generator = outlines.generate.json(model, ArticleEntities)
@@ -429,11 +453,13 @@ class Author(BaseModel):
     email: Optional[str] = None
     affiliation: Optional[str] = None
 
+
 class Reference(BaseModel):
     title: str
     authors: list[str]
     year: int
     source: str
+
 
 class DocumentMetadata(BaseModel):
     title: str
@@ -444,6 +470,7 @@ class DocumentMetadata(BaseModel):
     journal: str
     doi: Optional[str] = None
     references: list[Reference]
+
 
 generator = outlines.generate.json(model, DocumentMetadata)
 
@@ -486,12 +513,14 @@ class Parameter(BaseModel):
     type_hint: str
     default: Optional[str] = None
 
+
 class PythonFunction(BaseModel):
     function_name: str = Field(pattern=r"^[a-z_][a-z0-9_]*$")
     parameters: list[Parameter]
     return_type: str
     docstring: str
     body: list[str]  # Lines of code
+
 
 model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
 generator = outlines.generate.json(model, PythonFunction)
@@ -521,9 +550,12 @@ class SQLQuery(BaseModel):
     order_by: Optional[list[str]] = None
     limit: Optional[int] = None
 
+
 generator = outlines.generate.json(model, SQLQuery)
 
-request = "Get top 10 users who made purchases in the last 30 days, ordered by total spent"
+request = (
+    "Get top 10 users who made purchases in the last 30 days, ordered by total spent"
+)
 
 sql = generator(f"Generate SQL query:\n{request}\n\nQuery:")
 
@@ -550,6 +582,7 @@ class Parameter(BaseModel):
     required: bool
     description: str
 
+
 class APIEndpoint(BaseModel):
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"]
     path: str
@@ -558,6 +591,7 @@ class APIEndpoint(BaseModel):
     request_body: Optional[dict] = None
     response_schema: dict
     status_codes: dict[int, str]
+
 
 generator = outlines.generate.json(model, APIEndpoint)
 
@@ -585,21 +619,23 @@ def batch_extract(texts: list[str], schema: type[BaseModel], model_name: str):
 
     results = []
     for i, text in enumerate(texts):
-        print(f"Processing {i+1}/{len(texts)}...", end="\r")
+        print(f"Processing {i + 1}/{len(texts)}...", end="\r")
         result = generator(f"Extract:\n{text}\n\nData:")
         results.append(result)
 
     return results
+
 
 class Product(BaseModel):
     name: str
     price: float
     category: str
 
+
 texts = [
     "iPhone 15 Pro costs $999 in Electronics",
     "Running Shoes are $89.99 in Sports",
-    "Coffee Maker priced at $49.99 in Home & Kitchen"
+    "Coffee Maker priced at $49.99 in Home & Kitchen",
 ]
 
 products = batch_extract(texts, Product, "microsoft/Phi-3-mini-4k-instruct")
@@ -613,13 +649,14 @@ for product in products:
 ```python
 import csv
 
+
 def process_csv(csv_file: str, schema: type[BaseModel]):
     """Process CSV file and extract structured data."""
     model = outlines.models.transformers("microsoft/Phi-3-mini-4k-instruct")
     generator = outlines.generate.json(model, schema)
 
     results = []
-    with open(csv_file, 'r') as f:
+    with open(csv_file, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
             text = " | ".join(f"{k}: {v}" for k, v in row.items())
@@ -628,11 +665,13 @@ def process_csv(csv_file: str, schema: type[BaseModel]):
 
     return results
 
+
 class Customer(BaseModel):
     name: str
     email: str
     tier: Literal["basic", "premium", "enterprise"]
     mrr: float
+
 
 # customers = process_csv("customers.csv", Customer)
 ```
@@ -643,6 +682,7 @@ class Customer(BaseModel):
 
 ```python
 from pydantic import ValidationError
+
 
 def safe_extract(text: str, schema: type[BaseModel], retries: int = 3):
     """Extract with error handling and retries."""
@@ -671,11 +711,13 @@ def safe_extract(text: str, schema: type[BaseModel], retries: int = 3):
 from functools import lru_cache
 import hashlib
 
+
 @lru_cache(maxsize=1000)
 def cached_extract(text_hash: str, schema_name: str):
     """Cache extraction results."""
     # This would be called with actual extraction logic
     pass
+
 
 def extract_with_cache(text: str, schema: type[BaseModel]):
     """Extract with caching."""
@@ -702,6 +744,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def monitored_extract(text: str, schema: type[BaseModel]):
     """Extract with monitoring and logging."""
@@ -731,6 +774,7 @@ def monitored_extract(text: str, schema: type[BaseModel]):
 import time
 from threading import Lock
 
+
 class RateLimiter:
     def __init__(self, max_requests: int, time_window: int):
         self.max_requests = max_requests
@@ -750,6 +794,7 @@ class RateLimiter:
                 self.requests = []
 
             self.requests.append(now)
+
 
 def rate_limited_extract(texts: list[str], schema: type[BaseModel]):
     """Extract with rate limiting."""

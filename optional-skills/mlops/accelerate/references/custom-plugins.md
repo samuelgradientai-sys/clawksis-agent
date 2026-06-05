@@ -12,6 +12,7 @@ Accelerate allows creating **custom plugins** to extend distributed training str
 from accelerate.utils import DistributedDataParallelKwargs
 from dataclasses import dataclass
 
+
 @dataclass
 class CustomPlugin:
     """Custom training plugin."""
@@ -49,16 +50,16 @@ from accelerate.utils import GradScalerKwargs
 
 # Configure gradient scaler for FP16
 scaler_kwargs = GradScalerKwargs(
-    init_scale=2.**16,        # Initial loss scale
-    growth_factor=2.0,        # Scale growth rate
-    backoff_factor=0.5,       # Scale backoff rate
-    growth_interval=2000,     # Steps between scale increases
-    enabled=True              # Enable scaler
+    init_scale=2.0**16,  # Initial loss scale
+    growth_factor=2.0,  # Scale growth rate
+    backoff_factor=0.5,  # Scale backoff rate
+    growth_interval=2000,  # Steps between scale increases
+    enabled=True,  # Enable scaler
 )
 
 accelerator = Accelerator(
-    mixed_precision='fp16',
-    kwargs_handlers=[scaler_kwargs]  # Pass as kwargs handler
+    mixed_precision="fp16",
+    kwargs_handlers=[scaler_kwargs],  # Pass as kwargs handler
 )
 ```
 
@@ -71,16 +72,14 @@ from accelerate.utils import DistributedDataParallelKwargs
 
 # Configure DDP behavior
 ddp_kwargs = DistributedDataParallelKwargs(
-    bucket_cap_mb=25,                 # Gradient bucketing size
-    find_unused_parameters=False,     # Find unused params (slower)
-    check_reduction=False,            # Check gradient reduction
-    gradient_as_bucket_view=True,     # Memory optimization
-    static_graph=False                # Static computation graph
+    bucket_cap_mb=25,  # Gradient bucketing size
+    find_unused_parameters=False,  # Find unused params (slower)
+    check_reduction=False,  # Check gradient reduction
+    gradient_as_bucket_view=True,  # Memory optimization
+    static_graph=False,  # Static computation graph
 )
 
-accelerator = Accelerator(
-    kwargs_handlers=[ddp_kwargs]
-)
+accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
 ```
 
 **Use case**: Optimize DDP performance for specific models
@@ -92,18 +91,15 @@ from accelerate.utils import FP8RecipeKwargs
 
 # Configure FP8 training (H100)
 fp8_recipe = FP8RecipeKwargs(
-    backend="te",              # TransformerEngine backend
-    margin=0,                  # Scaling margin
-    interval=1,                # Scaling interval
-    fp8_format="HYBRID",       # E4M3 + E5M2 hybrid
-    amax_history_len=1024,     # AMAX history length
-    amax_compute_algo="max"    # AMAX computation algorithm
+    backend="te",  # TransformerEngine backend
+    margin=0,  # Scaling margin
+    interval=1,  # Scaling interval
+    fp8_format="HYBRID",  # E4M3 + E5M2 hybrid
+    amax_history_len=1024,  # AMAX history length
+    amax_compute_algo="max",  # AMAX computation algorithm
 )
 
-accelerator = Accelerator(
-    mixed_precision='fp8',
-    kwargs_handlers=[fp8_recipe]
-)
+accelerator = Accelerator(mixed_precision="fp8", kwargs_handlers=[fp8_recipe])
 ```
 
 **Use case**: Ultra-fast training on H100 GPUs
@@ -118,17 +114,14 @@ from accelerate.utils import DeepSpeedPlugin
 
 # Custom DeepSpeed config
 ds_plugin = DeepSpeedPlugin(
-    zero_stage=3,                     # ZeRO-3
-    offload_optimizer_device="cpu",   # CPU offload optimizer
-    offload_param_device="cpu",       # CPU offload parameters
-    zero3_init_flag=True,             # ZeRO-3 initialization
-    zero3_save_16bit_model=True,      # Save FP16 weights
+    zero_stage=3,  # ZeRO-3
+    offload_optimizer_device="cpu",  # CPU offload optimizer
+    offload_param_device="cpu",  # CPU offload parameters
+    zero3_init_flag=True,  # ZeRO-3 initialization
+    zero3_save_16bit_model=True,  # Save FP16 weights
 )
 
-accelerator = Accelerator(
-    deepspeed_plugin=ds_plugin,
-    mixed_precision='bf16'
-)
+accelerator = Accelerator(deepspeed_plugin=ds_plugin, mixed_precision="bf16")
 ```
 
 ### ZeRO-2 with NVMe Offload
@@ -138,7 +131,7 @@ ds_plugin = DeepSpeedPlugin(
     zero_stage=2,
     offload_optimizer_device="nvme",  # NVMe offload
     offload_param_device="nvme",
-    nvme_path="/local_nvme",          # NVMe mount path
+    nvme_path="/local_nvme",  # NVMe mount path
 )
 ```
 
@@ -148,7 +141,7 @@ ds_plugin = DeepSpeedPlugin(
 import json
 
 # Load custom DeepSpeed config
-with open('deepspeed_config.json', 'r') as f:
+with open("deepspeed_config.json", "r") as f:
     ds_config = json.load(f)
 
 ds_plugin = DeepSpeedPlugin(hf_ds_config=ds_config)
@@ -204,7 +197,7 @@ import functools
 # Custom wrap policy (size-based)
 wrap_policy = functools.partial(
     size_based_auto_wrap_policy,
-    min_num_params=1e6  # Wrap layers with 1M+ params
+    min_num_params=1e6,  # Wrap layers with 1M+ params
 )
 
 fsdp_plugin = FullyShardedDataParallelPlugin(
@@ -220,10 +213,7 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
     use_orig_params=True,  # Use original param shapes
 )
 
-accelerator = Accelerator(
-    fsdp_plugin=fsdp_plugin,
-    mixed_precision='bf16'
-)
+accelerator = Accelerator(fsdp_plugin=fsdp_plugin, mixed_precision="bf16")
 ```
 
 ### FSDP with Transformer Auto-Wrap
@@ -235,12 +225,10 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 # Wrap at transformer block level
 wrap_policy = functools.partial(
     transformer_auto_wrap_policy,
-    transformer_layer_cls={GPT2Block}  # Wrap GPT2Block layers
+    transformer_layer_cls={GPT2Block},  # Wrap GPT2Block layers
 )
 
-fsdp_plugin = FullyShardedDataParallelPlugin(
-    auto_wrap_policy=wrap_policy
-)
+fsdp_plugin = FullyShardedDataParallelPlugin(auto_wrap_policy=wrap_policy)
 ```
 
 ## Creating Custom Training Strategy
@@ -249,6 +237,7 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
 
 ```python
 from accelerate import Accelerator
+
 
 class CustomGradientAccumulation:
     def __init__(self, steps=4, adaptive=False):
@@ -271,6 +260,7 @@ class CustomGradientAccumulation:
             return True
 
         return False
+
 
 # Usage
 custom_accum = CustomGradientAccumulation(steps=8, adaptive=True)
@@ -295,13 +285,13 @@ for batch in dataloader:
 ```python
 import torch
 
+
 class CustomMixedPrecision:
     """Custom mixed precision with dynamic loss scaling."""
 
     def __init__(self, init_scale=2**16, scale_window=2000):
         self.scaler = torch.cuda.amp.GradScaler(
-            init_scale=init_scale,
-            growth_interval=scale_window
+            init_scale=init_scale, growth_interval=scale_window
         )
         self.scale_history = []
 
@@ -312,10 +302,7 @@ class CustomMixedPrecision:
     def unscale_and_clip(self, optimizer, max_norm=1.0):
         """Unscale gradients and clip."""
         self.scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(
-            optimizer.param_groups[0]['params'],
-            max_norm
-        )
+        torch.nn.utils.clip_grad_norm_(optimizer.param_groups[0]["params"], max_norm)
 
     def step(self, optimizer):
         """Optimizer step with scaler update."""
@@ -327,6 +314,7 @@ class CustomMixedPrecision:
         # Track scale changes
         if scale_before != scale_after:
             self.scale_history.append(scale_after)
+
 
 # Usage
 custom_mp = CustomMixedPrecision()
@@ -349,6 +337,7 @@ for batch in dataloader:
 
 ```python
 import torch.distributed as dist
+
 
 class CustomAllReduce:
     """Custom all-reduce with compression."""
@@ -375,6 +364,7 @@ class CustomAllReduce:
         tensor_compressed[indices] = values / dist.get_world_size()
 
         return tensor_compressed.view_as(tensor)
+
 
 # Usage in training loop
 custom_ar = CustomAllReduce(compression_ratio=0.1)
@@ -422,7 +412,7 @@ class CustomPlugin:
 
     def is_compatible(self, accelerator):
         """Check if plugin is compatible with accelerator config."""
-        if self.feature_enabled and accelerator.mixed_precision == 'fp8':
+        if self.feature_enabled and accelerator.mixed_precision == "fp8":
             raise ValueError("Custom plugin not compatible with FP8")
         return True
 ```

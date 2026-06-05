@@ -5,6 +5,7 @@ messages from non-allowlisted users must be silently dropped — matching the co
 behavior in _handle_message. Previously, the busy path skipped the auth check entirely,
 allowing unauthorized users to inject text into another user's running session.
 """
+
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -37,8 +38,15 @@ from gateway.platforms.base import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_event(text="hello", chat_id="123", user_id="user1", user_name="TestUser",
-                platform_val="slack", thread_id="thread-abc"):
+
+def _make_event(
+    text="hello",
+    chat_id="123",
+    user_id="user1",
+    user_name="TestUser",
+    platform_val="slack",
+    thread_id="thread-abc",
+):
     """Build a MessageEvent for a shared thread."""
     source = SessionSource(
         platform=MagicMock(value=platform_val),
@@ -96,6 +104,7 @@ def _make_adapter(platform_val="slack"):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestBusySessionAuthBypass:
     """#17775: Unauthorized users in shared threads must be blocked in the busy path."""

@@ -58,16 +58,20 @@ class TestOAuthFlagOnRefresh:
         by the per-assignment guard at line ~5393 so future refactors can't
         reintroduce the bug."""
         agent.api_mode = "anthropic_messages"
-        agent.provider = "minimax"          # ← third-party
+        agent.provider = "minimax"  # ← third-party
         agent._anthropic_api_key = "***"
         agent._anthropic_client = MagicMock()
         agent._is_anthropic_oauth = False
 
         with (
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-                  return_value=_OAUTH_LIKE_TOKEN),
-            patch("agent.anthropic_adapter.build_anthropic_client",
-                  return_value=MagicMock()),
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value=_OAUTH_LIKE_TOKEN,
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
             result = agent._try_refresh_anthropic_client_credentials()
 
@@ -85,10 +89,14 @@ class TestOAuthFlagOnRefresh:
         agent._is_anthropic_oauth = False
 
         with (
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-                  return_value=_OAUTH_LIKE_TOKEN),
-            patch("agent.anthropic_adapter.build_anthropic_client",
-                  return_value=MagicMock()),
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value=_OAUTH_LIKE_TOKEN,
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
             result = agent._try_refresh_anthropic_client_credentials()
 
@@ -101,7 +109,7 @@ class TestOAuthFlagOnCredentialSwap:
 
     def test_pool_swap_on_third_party_never_flips_oauth(self, agent):
         agent.api_mode = "anthropic_messages"
-        agent.provider = "glm"              # ← Zhipu GLM via /anthropic
+        agent.provider = "glm"  # ← Zhipu GLM via /anthropic
         agent._anthropic_api_key = "old-key"
         agent._anthropic_base_url = "https://open.bigmodel.cn/api/anthropic"
         agent._anthropic_client = MagicMock()
@@ -111,8 +119,9 @@ class TestOAuthFlagOnCredentialSwap:
         entry.runtime_api_key = _OAUTH_LIKE_TOKEN
         entry.runtime_base_url = "https://open.bigmodel.cn/api/anthropic"
 
-        with patch("agent.anthropic_adapter.build_anthropic_client",
-                   return_value=MagicMock()):
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()
+        ):
             agent._swap_credential(entry)
 
         assert agent._is_anthropic_oauth is False
@@ -125,12 +134,16 @@ class TestOAuthFlagOnConstruction:
         with (
             patch("run_agent.get_tool_definitions", return_value=[]),
             patch("run_agent.check_toolset_requirements", return_value={}),
-            patch("agent.anthropic_adapter.build_anthropic_client",
-                  return_value=MagicMock()),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
             # Simulate a stale ANTHROPIC_TOKEN in the env — the init code
             # MUST NOT fall back to it when provider != anthropic.
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-                  return_value=_OAUTH_LIKE_TOKEN),
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value=_OAUTH_LIKE_TOKEN,
+            ),
         ):
             agent = AIAgent(
                 api_key="minimax-key-1234",
@@ -172,10 +185,12 @@ class TestApiKeyTokensAlwaysSafe:
 
     def test_native_anthropic_with_api_key_token(self):
         from agent.anthropic_adapter import _is_oauth_token
+
         assert _is_oauth_token(_API_KEY_TOKEN) is False
 
     def test_third_party_key_shape(self):
         from agent.anthropic_adapter import _is_oauth_token
+
         # Third-party key shapes (MiniMax 'mxp-...', GLM 'glm.sess.', etc.)
         # already return False from _is_oauth_token; the guard adds a second
         # defense line in case future token formats accidentally look OAuth-y.

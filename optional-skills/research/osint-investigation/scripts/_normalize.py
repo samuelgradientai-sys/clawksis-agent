@@ -2,26 +2,54 @@
 
 Used by entity_resolution.py and timing_analysis.py.
 """
+
 from __future__ import annotations
 
 import re
 
 # Legal suffixes / corporate boilerplate to strip during normalization.
 _SUFFIX_TOKENS = {
-    "INC", "INCORPORATED", "LLC", "LLP", "LP", "LTD", "LIMITED",
-    "CORP", "CORPORATION", "CO", "COMPANY",
-    "GROUP", "GRP", "HOLDINGS", "HOLDING",
-    "PARTNERS", "ASSOCIATES",
-    "INTERNATIONAL", "INTL",
-    "ENTERPRISES", "ENTERPRISE",
-    "SERVICES", "SERVICE", "SVCS",
-    "SOLUTIONS", "MANAGEMENT", "MGMT", "CONSULTING",
-    "TECHNOLOGY", "TECHNOLOGIES", "TECH",
-    "INDUSTRIES", "INDUSTRY",
-    "AMERICA", "AMERICAN",
-    "USA", "US",
-    "PLLC", "PC",
-    "TRUST", "FOUNDATION",
+    "INC",
+    "INCORPORATED",
+    "LLC",
+    "LLP",
+    "LP",
+    "LTD",
+    "LIMITED",
+    "CORP",
+    "CORPORATION",
+    "CO",
+    "COMPANY",
+    "GROUP",
+    "GRP",
+    "HOLDINGS",
+    "HOLDING",
+    "PARTNERS",
+    "ASSOCIATES",
+    "INTERNATIONAL",
+    "INTL",
+    "ENTERPRISES",
+    "ENTERPRISE",
+    "SERVICES",
+    "SERVICE",
+    "SVCS",
+    "SOLUTIONS",
+    "MANAGEMENT",
+    "MGMT",
+    "CONSULTING",
+    "TECHNOLOGY",
+    "TECHNOLOGIES",
+    "TECH",
+    "INDUSTRIES",
+    "INDUSTRY",
+    "AMERICA",
+    "AMERICAN",
+    "USA",
+    "US",
+    "PLLC",
+    "PC",
+    "TRUST",
+    "FOUNDATION",
 }
 
 _PUNCT_RE = re.compile(r"[^\w\s]")

@@ -43,8 +43,9 @@ class TestClearStaleOpenaiBaseUrl:
         _clear_stale_openai_base_url()
 
         result = get_env_value("OPENAI_BASE_URL")
-        assert result == "http://localhost:11434/v1", \
+        assert result == "http://localhost:11434/v1", (
             f"Expected OPENAI_BASE_URL to be preserved, got: {result!r}"
+        )
 
     def test_noop_when_no_openai_base_url(self, monkeypatch):
         """No error when OPENAI_BASE_URL is not set."""
@@ -70,5 +71,6 @@ class TestClearStaleOpenaiBaseUrl:
         _clear_stale_openai_base_url()
 
         result = get_env_value("OPENAI_BASE_URL")
-        assert result == "http://localhost:11434/v1", \
+        assert result == "http://localhost:11434/v1", (
             "Should not clear when provider is not configured"
+        )

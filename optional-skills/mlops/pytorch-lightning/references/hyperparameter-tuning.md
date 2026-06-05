@@ -19,6 +19,7 @@ import lightning as L
 from ray import tune
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
+
 class LitModel(L.LightningModule):
     def __init__(self, lr, batch_size):
         super().__init__()
@@ -28,15 +29,16 @@ class LitModel(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.model(batch).mean()
-        self.log('train_loss', loss)
+        self.log("train_loss", loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         val_loss = self.model(batch).mean()
-        self.log('val_loss', val_loss)
+        self.log("val_loss", val_loss)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
+
 
 def train_fn(config):
     """Training function for Ray Tune."""
@@ -45,15 +47,16 @@ def train_fn(config):
     # Add callback to report metrics to Tune
     trainer = L.Trainer(
         max_epochs=10,
-        callbacks=[TuneReportCallback({"loss": "val_loss"}, on="validation_end")]
+        callbacks=[TuneReportCallback({"loss": "val_loss"}, on="validation_end")],
     )
 
     trainer.fit(model, train_loader, val_loader)
 
+
 # Define search space
 config = {
     "lr": tune.loguniform(1e-5, 1e-1),
-    "batch_size": tune.choice([16, 32, 64, 128])
+    "batch_size": tune.choice([16, 32, 64, 128]),
 }
 
 # Run hyperparameter search
@@ -61,7 +64,7 @@ analysis = tune.run(
     train_fn,
     config=config,
     num_samples=20,  # 20 trials
-    resources_per_trial={"gpu": 1}
+    resources_per_trial={"gpu": 1},
 )
 
 # Best hyperparameters
@@ -76,14 +79,14 @@ from ray.tune.schedulers import PopulationBasedTraining
 
 # PBT scheduler
 scheduler = PopulationBasedTraining(
-    time_attr='training_iteration',
-    metric='val_loss',
-    mode='min',
+    time_attr="training_iteration",
+    metric="val_loss",
+    mode="min",
     perturbation_interval=5,  # Perturb every 5 epochs
     hyperparam_mutations={
         "lr": tune.loguniform(1e-5, 1e-1),
-        "batch_size": [16, 32, 64, 128]
-    }
+        "batch_size": [16, 32, 64, 128],
+    },
 )
 
 analysis = tune.run(
@@ -91,7 +94,7 @@ analysis = tune.run(
     config=config,
     num_samples=8,  # Population size
     scheduler=scheduler,
-    resources_per_trial={"gpu": 1}
+    resources_per_trial={"gpu": 1},
 )
 ```
 
@@ -109,12 +112,13 @@ pip install optuna-integration
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 
+
 def objective(trial):
     # Suggest hyperparameters
-    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
-    batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
-    n_layers = trial.suggest_int('n_layers', 1, 3)
-    hidden_size = trial.suggest_int('hidden_size', 64, 512, step=64)
+    lr = trial.suggest_loguniform("lr", 1e-5, 1e-1)
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
+    n_layers = trial.suggest_int("n_layers", 1, 3)
+    hidden_size = trial.suggest_int("hidden_size", 64, 512, step=64)
 
     # Create model
     model = LitModel(lr=lr, n_layers=n_layers, hidden_size=hidden_size)
@@ -126,17 +130,18 @@ def objective(trial):
         max_epochs=20,
         callbacks=[pruning_callback],
         enable_progress_bar=False,
-        logger=False
+        logger=False,
     )
 
     trainer.fit(model, train_loader, val_loader)
 
     return trainer.callback_metrics["val_loss"].item()
 
+
 # Create study
 study = optuna.create_study(
-    direction='minimize',
-    pruner=optuna.pruners.MedianPruner()  # Prune bad trials early
+    direction="minimize",
+    pruner=optuna.pruners.MedianPruner(),  # Prune bad trials early
 )
 
 # Optimize
@@ -157,15 +162,13 @@ optuna.visualization.plot_param_importances(study).show()
 import optuna
 
 # Shared database for distributed optimization
-storage = optuna.storages.RDBStorage(
-    url='postgresql://user:pass@localhost/optuna'
-)
+storage = optuna.storages.RDBStorage(url="postgresql://user:pass@localhost/optuna")
 
 study = optuna.create_study(
-    study_name='distributed_study',
+    study_name="distributed_study",
     storage=storage,
     load_if_exists=True,
-    direction='minimize'
+    direction="minimize",
 )
 
 # Run on multiple machines
@@ -207,6 +210,7 @@ import wandb
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 
+
 def train():
     # Initialize wandb
     wandb.init()
@@ -217,20 +221,18 @@ def train():
         lr=config.lr,
         batch_size=config.batch_size,
         optimizer=config.optimizer,
-        dropout=config.dropout
+        dropout=config.dropout,
     )
 
     # WandB logger
-    wandb_logger = WandbLogger(project='hyperparameter-sweep')
+    wandb_logger = WandbLogger(project="hyperparameter-sweep")
 
-    trainer = L.Trainer(
-        max_epochs=20,
-        logger=wandb_logger
-    )
+    trainer = L.Trainer(max_epochs=20, logger=wandb_logger)
 
     trainer.fit(model, train_loader, val_loader)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     train()
 ```
 
@@ -256,29 +258,27 @@ pip install hyperopt
 ```python
 from hyperopt import hp, fmin, tpe, Trials
 
+
 def objective(params):
     model = LitModel(
-        lr=params['lr'],
-        batch_size=int(params['batch_size']),
-        hidden_size=int(params['hidden_size'])
+        lr=params["lr"],
+        batch_size=int(params["batch_size"]),
+        hidden_size=int(params["hidden_size"]),
     )
 
-    trainer = L.Trainer(
-        max_epochs=10,
-        enable_progress_bar=False,
-        logger=False
-    )
+    trainer = L.Trainer(max_epochs=10, enable_progress_bar=False, logger=False)
 
     trainer.fit(model, train_loader, val_loader)
 
     # Return loss (minimize)
     return trainer.callback_metrics["val_loss"].item()
 
+
 # Define search space
 space = {
-    'lr': hp.loguniform('lr', np.log(1e-5), np.log(1e-1)),
-    'batch_size': hp.quniform('batch_size', 16, 128, 16),
-    'hidden_size': hp.quniform('hidden_size', 64, 512, 64)
+    "lr": hp.loguniform("lr", np.log(1e-5), np.log(1e-1)),
+    "batch_size": hp.quniform("batch_size", 16, 128, 16),
+    "hidden_size": hp.quniform("hidden_size", 64, 512, 64),
 }
 
 # Optimize
@@ -288,7 +288,7 @@ best = fmin(
     space=space,
     algo=tpe.suggest,  # Tree-structured Parzen Estimator
     max_evals=50,
-    trials=trials
+    trials=trials,
 )
 
 print(f"Best hyperparameters: {best}")
@@ -312,6 +312,7 @@ class LitModel(L.LightningModule):
         loss = self.model(batch).mean()
         return loss
 
+
 # Find optimal learning rate
 model = LitModel()
 trainer = L.Trainer(auto_lr_find=True)
@@ -321,6 +322,7 @@ trainer.tune(model, train_loader)
 
 # Or manually
 from lightning.pytorch.tuner import Tuner
+
 tuner = Tuner(trainer)
 lr_finder = tuner.lr_find(model, train_loader)
 
@@ -351,8 +353,9 @@ class LitModel(L.LightningModule):
     def train_dataloader(self):
         return DataLoader(dataset, batch_size=self.batch_size)
 
+
 model = LitModel()
-trainer = L.Trainer(auto_scale_batch_size='binsearch')
+trainer = L.Trainer(auto_scale_batch_size="binsearch")
 
 # Find optimal batch size
 trainer.tune(model)
@@ -374,7 +377,7 @@ from ray.tune.schedulers import ASHAScheduler
 scheduler = ASHAScheduler(
     max_t=100,  # Max epochs
     grace_period=10,  # Min epochs before stopping
-    reduction_factor=2  # Halve resources each round
+    reduction_factor=2,  # Halve resources each round
 )
 
 analysis = tune.run(
@@ -382,7 +385,7 @@ analysis = tune.run(
     config=config,
     num_samples=64,
     scheduler=scheduler,
-    resources_per_trial={"gpu": 1}
+    resources_per_trial={"gpu": 1},
 )
 ```
 
@@ -399,17 +402,14 @@ analysis = tune.run(
 ```python
 from ray.tune.search.bayesopt import BayesOptSearch
 
-search = BayesOptSearch(
-    metric="val_loss",
-    mode="min"
-)
+search = BayesOptSearch(metric="val_loss", mode="min")
 
 analysis = tune.run(
     train_fn,
     config=config,
     num_samples=50,
     search_alg=search,
-    resources_per_trial={"gpu": 1}
+    resources_per_trial={"gpu": 1},
 )
 ```
 
@@ -422,7 +422,7 @@ from ray import tune
 config = {
     "lr": tune.grid_search([1e-5, 1e-4, 1e-3, 1e-2]),
     "batch_size": tune.grid_search([16, 32, 64, 128]),
-    "optimizer": tune.grid_search(['adam', 'sgd', 'adamw'])
+    "optimizer": tune.grid_search(["adam", "sgd", "adamw"]),
 }
 
 # Total trials: 4 × 4 × 3 = 48
@@ -436,14 +436,14 @@ config = {
     "lr": tune.loguniform(1e-5, 1e-1),
     "batch_size": tune.choice([16, 32, 64, 128]),
     "dropout": tune.uniform(0.0, 0.5),
-    "hidden_size": tune.randint(64, 512)
+    "hidden_size": tune.randint(64, 512),
 }
 
 # Random sampling
 analysis = tune.run(
     train_fn,
     config=config,
-    num_samples=100  # 100 random samples
+    num_samples=100,  # 100 random samples
 )
 ```
 
@@ -453,17 +453,14 @@ analysis = tune.run(
 
 ```python
 # Phase 1: Coarse search (fast)
-coarse_config = {
-    "lr": tune.loguniform(1e-5, 1e-1),
-    "batch_size": tune.choice([32, 64])
-}
+coarse_config = {"lr": tune.loguniform(1e-5, 1e-1), "batch_size": tune.choice([32, 64])}
 coarse_analysis = tune.run(train_fn, config=coarse_config, num_samples=10, max_epochs=5)
 
 # Phase 2: Fine-tune around best (slow)
 best_lr = coarse_analysis.best_config["lr"]
 fine_config = {
     "lr": tune.uniform(best_lr * 0.5, best_lr * 2),
-    "batch_size": tune.choice([16, 32, 64, 128])
+    "batch_size": tune.choice([16, 32, 64, 128]),
 }
 fine_analysis = tune.run(train_fn, config=fine_config, num_samples=20, max_epochs=20)
 ```
@@ -478,11 +475,9 @@ def train_fn(config, checkpoint_dir=None):
         max_epochs=100,
         callbacks=[
             TuneReportCheckpointCallback(
-                metrics={"loss": "val_loss"},
-                filename="checkpoint",
-                on="validation_end"
+                metrics={"loss": "val_loss"}, filename="checkpoint", on="validation_end"
             )
-        ]
+        ],
     )
 
     # Resume from checkpoint if exists
@@ -497,6 +492,7 @@ def train_fn(config, checkpoint_dir=None):
 
 ```python
 import GPUtil
+
 
 def train_fn(config):
     # Before training
@@ -522,7 +518,7 @@ analysis = tune.run(
     train_fn,
     config=config,
     resources_per_trial={"gpu": 0.5},  # 2 trials per GPU
-    max_concurrent_trials=2  # Limit concurrent trials
+    max_concurrent_trials=2,  # Limit concurrent trials
 )
 ```
 
@@ -535,7 +531,7 @@ from ray.tune.schedulers import ASHAScheduler
 scheduler = ASHAScheduler(
     max_t=100,
     grace_period=5,  # Stop bad trials after 5 epochs
-    reduction_factor=3
+    reduction_factor=3,
 )
 ```
 

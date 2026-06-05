@@ -397,10 +397,11 @@ Figures should tell a coherent story even if the reader skips the text. Many rea
 ```python
 # SciencePlots: Publication-ready styles
 import matplotlib.pyplot as plt
-plt.style.use(['science', 'ieee'])
+
+plt.style.use(["science", "ieee"])
 
 # Or for Nature-style
-plt.style.use(['science', 'nature'])
+plt.style.use(["science", "nature"])
 ```
 
 ---

@@ -128,9 +128,9 @@ Common causes:
 - No commercial use of output.
 
 Always check effective resolution after creation:
-```python
-n.cook(force=True)
-actual = str(n.width) + 'x' + str(n.height)
+```pythonn.cook(force=True)
+
+actual = str(n.width) + "x" + str(n.height)
 ```
 
 ## 5. Clawksis Configuration
@@ -188,18 +188,19 @@ TOPs connect to TOPs, CHOPs to CHOPs, SOPs to SOPs, DATs to DATs.
 Use converter operators to bridge: choptoTOP, topToCHOP, soptoDAT, etc.
 
 Note: choptoTOP has NO input connectors. Use par.chop reference instead:
-```python
-spec_tex.par.chop = resample_node  # correct
-# NOT: resample.outputConnectors[0].connect(spec_tex.inputConnectors[0])
+```pythonspec_tex.par.chop = resample_node  # correct
+
+# NOT: resample.outputConnectors[0].connect(spec_tex.inputConnectors[0])
 ```
 
 ### Feedback loops
 
 Never create A -> B -> A directly. Use a Feedback TOP:
-```python
-fb = root.create(feedbackTOP, 'fb')
-fb.par.top = comp.path          # reference only, no wire to fb input
-fb.outputConnectors[0].connect(next_node)
+```pythonfb = root.create(feedbackTOP, "fb")
+
+fb.par.top = comp.path  # reference only, no wire to fb input
+
+fb.outputConnectors[0].connect(next_node)
 ```
 "Cook dependency loop detected" warning on the chain is expected and correct.
 
@@ -225,17 +226,17 @@ full compiler output.
 ### H.264/H.265/AV1 requires Commercial license
 
 Use Apple ProRes on macOS (hardware accelerated, not license-restricted):
-```python
-rec.par.videocodec = 'prores'  # Preferred on macOS — lossless, Non-Commercial OK
-# rec.par.videocodec = 'mjpa'  # Fallback — lossy, works everywhere
+```pythonrec.par.videocodec = "prores"  # Preferred on macOS — lossless, Non-Commercial OK
+
+# rec.par.videocodec = 'mjpa'  # Fallback — lossy, works everywhere
 ```
 
 ### MovieFileOut has no .record() method
 
 Use the toggle parameter:
-```python
-rec.par.record = True   # start
-rec.par.record = False  # stop
+```pythonrec.par.record = True  # start
+
+rec.par.record = False  # stop
 ```
 
 ### All exported frames identical

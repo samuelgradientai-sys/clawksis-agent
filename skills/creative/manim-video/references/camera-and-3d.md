@@ -8,20 +8,24 @@ class ZoomExample(MovingCameraScene):
         circle = Circle(radius=2, color=BLUE)
         self.play(Create(circle))
         # Zoom in
-        self.play(self.camera.frame.animate.set(width=4).move_to(circle.get_top()), run_time=2)
+        self.play(
+            self.camera.frame.animate.set(width=4).move_to(circle.get_top()), run_time=2
+        )
         self.wait(2)
         # Zoom back out
-        self.play(self.camera.frame.animate.set(width=14.222).move_to(ORIGIN), run_time=2)
+        self.play(
+            self.camera.frame.animate.set(width=14.222).move_to(ORIGIN), run_time=2
+        )
 ```
 
 ### Camera Operations
 
 ```python
-self.camera.frame.animate.set(width=6)     # zoom in
-self.camera.frame.animate.set(width=20)    # zoom out
+self.camera.frame.animate.set(width=6)  # zoom in
+self.camera.frame.animate.set(width=20)  # zoom out
 self.camera.frame.animate.move_to(target)  # pan
-self.camera.frame.save_state()             # save
-self.play(Restore(self.camera.frame))      # restore
+self.camera.frame.save_state()  # save
+self.play(Restore(self.camera.frame))  # restore
 ```
 
 ## ThreeDScene
@@ -29,11 +33,13 @@ self.play(Restore(self.camera.frame))      # restore
 ```python
 class ThreeDExample(ThreeDScene):
     def construct(self):
-        self.set_camera_orientation(phi=60*DEGREES, theta=-45*DEGREES)
+        self.set_camera_orientation(phi=60 * DEGREES, theta=-45 * DEGREES)
         axes = ThreeDAxes()
         surface = Surface(
             lambda u, v: axes.c2p(u, v, np.sin(u) * np.cos(v)),
-            u_range=[-PI, PI], v_range=[-PI, PI], resolution=(30, 30)
+            u_range=[-PI, PI],
+            v_range=[-PI, PI],
+            resolution=(30, 30),
         )
         surface.set_color_by_gradient(BLUE, GREEN, YELLOW)
         self.play(Create(axes), Create(surface))
@@ -45,8 +51,8 @@ class ThreeDExample(ThreeDScene):
 ### Camera Control in 3D
 
 ```python
-self.set_camera_orientation(phi=70*DEGREES, theta=-45*DEGREES)
-self.move_camera(phi=45*DEGREES, theta=30*DEGREES, run_time=2)
+self.set_camera_orientation(phi=70 * DEGREES, theta=-45 * DEGREES)
+self.move_camera(phi=45 * DEGREES, theta=30 * DEGREES, run_time=2)
 self.begin_ambient_camera_rotation(rate=0.2)
 ```
 
@@ -65,8 +71,7 @@ self.add_fixed_in_frame_mobjects(label)
 
 ```python
 helix = ParametricFunction(
-    lambda t: [np.cos(t), np.sin(t), t / (2*PI)],
-    t_range=[0, 4*PI], color=YELLOW
+    lambda t: [np.cos(t), np.sin(t), t / (2 * PI)], t_range=[0, 4 * PI], color=YELLOW
 )
 ```
 
@@ -83,11 +88,11 @@ Show a magnified inset of a detail while keeping the full view visible:
 class ZoomExample(ZoomedScene):
     def __init__(self, **kwargs):
         super().__init__(
-            zoom_factor=0.3,           # how much of the scene the zoom box covers
-            zoomed_display_height=3,   # size of the inset
+            zoom_factor=0.3,  # how much of the scene the zoom box covers
+            zoomed_display_height=3,  # size of the inset
             zoomed_display_width=3,
             zoomed_camera_frame_starting_position=ORIGIN,
-            **kwargs
+            **kwargs,
         )
 
     def construct(self):
@@ -102,7 +107,10 @@ class ZoomExample(ZoomedScene):
         self.wait(2)
 
         # Deactivate
-        self.play(self.get_zoomed_display_pop_out_animation(), rate_func=lambda t: smooth(1-t))
+        self.play(
+            self.get_zoomed_display_pop_out_animation(),
+            rate_func=lambda t: smooth(1 - t),
+        )
 ```
 
 Use cases: zooming into a specific term in an equation, showing fine detail in a diagram, magnifying a region of a plot.
@@ -114,11 +122,7 @@ Pre-built scene with basis vectors and grid for visualizing matrix transformatio
 ```python
 class LinearTransformExample(LinearTransformationScene):
     def __init__(self, **kwargs):
-        super().__init__(
-            show_coordinates=True,
-            show_basis_vectors=True,
-            **kwargs
-        )
+        super().__init__(show_coordinates=True, show_basis_vectors=True, **kwargs)
 
     def construct(self):
         matrix = [[2, 1], [1, 1]]

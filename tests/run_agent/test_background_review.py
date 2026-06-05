@@ -22,6 +22,7 @@ def _bare_agent() -> AIAgent:
     agent._user_profile_enabled = False
     agent._cached_system_prompt = "test-cached-system-prompt"
     import datetime as _dt
+
     agent.session_start = _dt.datetime(2026, 1, 1, 12, 0, 0)
     agent._MEMORY_REVIEW_PROMPT = "review memory"
     agent._SKILL_REVIEW_PROMPT = "review skills"
@@ -76,7 +77,9 @@ def test_background_review_shuts_down_memory_provider_before_close(monkeypatch):
     ]
 
 
-def test_background_review_summarizer_receives_captured_messages_after_close(monkeypatch):
+def test_background_review_summarizer_receives_captured_messages_after_close(
+    monkeypatch,
+):
     """The action summarizer must see review messages even after close cleanup.
 
     Regression for the bug where ``review_messages`` was snapshot AFTER
@@ -91,9 +94,11 @@ def test_background_review_summarizer_receives_captured_messages_after_close(mon
     review_tool_message = {
         "role": "tool",
         "tool_call_id": "call_bg",
-        "content": json.dumps(
-            {"success": True, "message": "Entry added", "target": "memory"}
-        ),
+        "content": json.dumps({
+            "success": True,
+            "message": "Entry added",
+            "target": "memory",
+        }),
     }
     captured: dict = {}
     events: list[str] = []
@@ -225,9 +230,11 @@ def test_background_review_summary_is_attributed_to_self_improvement_loop(monkey
                 {
                     "role": "tool",
                     "tool_call_id": "call_bg",
-                    "content": json.dumps(
-                        {"success": True, "message": "Entry added", "target": "memory"}
-                    ),
+                    "content": json.dumps({
+                        "success": True,
+                        "message": "Entry added",
+                        "target": "memory",
+                    }),
                 }
             ]
 
@@ -244,7 +251,9 @@ def test_background_review_summary_is_attributed_to_self_improvement_loop(monkey
     monkeypatch.setattr(run_agent_module.threading, "Thread", ImmediateThread)
 
     agent = _bare_agent()
-    agent._safe_print = lambda *a, **kw: captured_prints.append(" ".join(str(x) for x in a))
+    agent._safe_print = lambda *a, **kw: captured_prints.append(
+        " ".join(str(x) for x in a)
+    )
     agent.background_review_callback = lambda msg: captured_bg_callback.append(msg)
 
     AIAgent._spawn_background_review(

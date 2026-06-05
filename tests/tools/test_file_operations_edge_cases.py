@@ -96,8 +96,10 @@ class TestCheckLintBracePaths:
 
     def test_normal_path(self, ops):
         """Normal path without braces should work as before."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(exit_code=0, stdout="")
             result = ops._check_lint("/tmp/test_file.js")
 
@@ -108,8 +110,10 @@ class TestCheckLintBracePaths:
 
     def test_path_with_curly_braces(self, ops):
         """Path containing ``{`` and ``}`` must not raise KeyError/ValueError."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(exit_code=0, stdout="")
             # This would raise KeyError with .format() but works with .replace()
             result = ops._check_lint("/tmp/{test}_file.js")
@@ -120,8 +124,10 @@ class TestCheckLintBracePaths:
 
     def test_path_with_nested_braces(self, ops):
         """Path with complex brace patterns like ``{{var}}`` should be safe."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(exit_code=0, stdout="")
             result = ops._check_lint("/tmp/{{var}}.js")
 
@@ -140,8 +146,10 @@ class TestCheckLintBracePaths:
 
     def test_lint_failure_returns_output(self, ops):
         """When the linter exits non-zero, result should capture output."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(
                 exit_code=1,
                 stdout="SyntaxError: invalid syntax",
@@ -227,26 +235,34 @@ class TestCheckLintDelta:
     def test_clean_post_no_pre_lint(self, ops):
         """Hot path: post-write is clean, pre-lint should be skipped entirely."""
         with patch.object(ops, "_check_lint", wraps=ops._check_lint) as wrapped:
-            r = ops._check_lint_delta("/tmp/a.py", pre_content="x = 0\n", post_content="x = 1\n")
+            r = ops._check_lint_delta(
+                "/tmp/a.py", pre_content="x = 0\n", post_content="x = 1\n"
+            )
             # Post-lint called exactly once (clean), pre-lint never called.
             assert wrapped.call_count == 1
         assert r.success is True
 
     def test_new_file_reports_all_errors(self, ops):
         """No pre-content means no delta refinement — all post errors surface."""
-        r = ops._check_lint_delta("/tmp/new.py", pre_content=None, post_content="def x(:\n")
+        r = ops._check_lint_delta(
+            "/tmp/new.py", pre_content=None, post_content="def x(:\n"
+        )
         assert r.success is False
         assert "SyntaxError" in r.output
 
     def test_broken_file_becomes_good(self, ops):
         """Post-clean short-circuits without any delta refinement."""
-        r = ops._check_lint_delta("/tmp/fix.py", pre_content="def x(:\n", post_content="def x():\n    pass\n")
+        r = ops._check_lint_delta(
+            "/tmp/fix.py", pre_content="def x(:\n", post_content="def x():\n    pass\n"
+        )
         assert r.success is True
 
     def test_introduces_new_error_filters_pre(self, ops):
         """Delta filter drops pre-existing errors, surfaces only new ones."""
-        pre = 'def a(:\n    pass\n'  # line 1 broken
-        post = 'def a():\n    pass\n\ndef b(:\n    pass\n'  # line 1 fixed, line 4 broken
+        pre = "def a(:\n    pass\n"  # line 1 broken
+        post = (
+            "def a():\n    pass\n\ndef b(:\n    pass\n"  # line 1 fixed, line 4 broken
+        )
         r = ops._check_lint_delta("/tmp/d.py", pre_content=pre, post_content=post)
         assert r.success is False
         assert "New lint errors" in r.output or "line 4" in r.output
@@ -254,8 +270,8 @@ class TestCheckLintDelta:
     def test_pre_existing_remains_flagged_but_not_new(self, ops):
         """Single-error parsers (ast) may miss that post is OK — be cautious."""
         # Pre has line-1 error, post keeps it (and doesn't add anything new)
-        pre = 'def a(:\n    pass\n'
-        post = 'def a(:\n    pass\n\nprint(42)\n'  # still line 1 broken
+        pre = "def a(:\n    pass\n"
+        post = "def a(:\n    pass\n\nprint(42)\n"  # still line 1 broken
         r = ops._check_lint_delta("/tmp/d.py", pre_content=pre, post_content=post)
         # File is still broken — don't lie and claim success — but flag it as pre-existing
         assert r.success is False
@@ -310,8 +326,10 @@ class TestPaginationBounds:
                 return MagicMock(exit_code=0, stdout="a.py\n")
             return MagicMock(exit_code=0, stdout="")
 
-        with patch.object(ops, "_has_command", side_effect=lambda cmd: cmd == "rg"), \
-             patch.object(ops, "_exec", side_effect=fake_exec):
+        with (
+            patch.object(ops, "_has_command", side_effect=lambda cmd: cmd == "rg"),
+            patch.object(ops, "_exec", side_effect=fake_exec),
+        ):
             result = ops.search("*.py", target="files", path=".", offset=-4, limit=-2)
 
         assert result.files == ["a.py"]

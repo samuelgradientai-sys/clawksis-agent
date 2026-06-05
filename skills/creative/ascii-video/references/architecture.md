@@ -8,13 +8,14 @@
 
 ```python
 RESOLUTION_PRESETS = {
-    "landscape":  (1920, 1080),  # 16:9 — YouTube, default
-    "portrait":   (1080, 1920),  # 9:16 — TikTok, Reels, Stories
-    "square":     (1080, 1080),  # 1:1  — Instagram feed
-    "ultrawide":  (2560, 1080),  # 21:9 — cinematic
-    "landscape4k":(3840, 2160),  # 16:9 — 4K
+    "landscape": (1920, 1080),  # 16:9 — YouTube, default
+    "portrait": (1080, 1920),  # 9:16 — TikTok, Reels, Stories
+    "square": (1080, 1080),  # 1:1  — Instagram feed
+    "ultrawide": (2560, 1080),  # 21:9 — cinematic
+    "landscape4k": (3840, 2160),  # 16:9 — 4K
     "portrait4k": (2160, 3840),  # 9:16 — 4K portrait
 }
+
 
 def get_resolution(preset="landscape", custom=None):
     """Returns (VW, VH) tuple."""
@@ -90,12 +91,16 @@ Don't hardcode a single font. Choose fonts to match the project's mood. Monospac
 ```python
 import platform
 
+
 def find_font(preferences):
     """Try fonts in order, return first that exists."""
     for name, path in preferences:
         if os.path.exists(path):
             return path
-    raise FileNotFoundError(f"No monospace font found. Tried: {[p for _,p in preferences]}")
+    raise FileNotFoundError(
+        f"No monospace font found. Tried: {[p for _, p in preferences]}"
+    )
+
 
 FONT_PREFS_MACOS = [
     ("Menlo", "/System/Library/Fonts/Menlo.ttc"),
@@ -105,7 +110,10 @@ FONT_PREFS_MACOS = [
 ]
 FONT_PREFS_LINUX = [
     ("DejaVu Sans Mono", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
-    ("Liberation Mono", "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"),
+    (
+        "Liberation Mono",
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    ),
     ("Noto Sans Mono", "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf"),
     ("Ubuntu Mono", "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf"),
 ]
@@ -113,9 +121,16 @@ FONT_PREFS_WINDOWS = [
     ("Consolas", r"C:\Windows\Fonts\consola.ttf"),
     ("Courier New", r"C:\Windows\Fonts\cour.ttf"),
     ("Lucida Console", r"C:\Windows\Fonts\lucon.ttf"),
-    ("Cascadia Code", os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\CascadiaCode.ttf")),
-    ("Cascadia Mono", os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\CascadiaMono.ttf")),
+    (
+        "Cascadia Code",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\CascadiaCode.ttf"),
+    ),
+    (
+        "Cascadia Mono",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\CascadiaMono.ttf"),
+    ),
 ]
+
 
 def _get_font_prefs():
     s = platform.system()
@@ -125,14 +140,15 @@ def _get_font_prefs():
         return FONT_PREFS_WINDOWS
     return FONT_PREFS_LINUX
 
+
 FONT_PREFS = _get_font_prefs()
 ```
 
 **Multi-font rendering**: use different fonts for different layers (e.g., monospace for background, a bolder variant for overlay text). Each GridLayer owns its own font:
 
 ```python
-grid_bg = GridLayer(find_font(FONT_PREFS), 16)       # background
-grid_text = GridLayer(find_font(BOLD_PREFS), 20)      # readable text
+grid_bg = GridLayer(find_font(FONT_PREFS), 16)  # background
+grid_text = GridLayer(find_font(BOLD_PREFS), 20)  # readable text
 ```
 
 ### Collecting All Characters
@@ -141,13 +157,31 @@ Before initializing grids, gather all characters that need bitmap pre-rasterizat
 
 ```python
 all_chars = set()
-for pal in [PAL_DEFAULT, PAL_DENSE, PAL_BLOCKS, PAL_RUNE, PAL_KATA,
-            PAL_GREEK, PAL_MATH, PAL_DOTS, PAL_BRAILLE, PAL_STARS,
-            PAL_HALFFILL, PAL_HATCH, PAL_BINARY, PAL_MUSIC, PAL_BOX,
-            PAL_CIRCUIT, PAL_ARROWS, PAL_HERMES]:  # ... all palettes used in project
+for pal in [
+    PAL_DEFAULT,
+    PAL_DENSE,
+    PAL_BLOCKS,
+    PAL_RUNE,
+    PAL_KATA,
+    PAL_GREEK,
+    PAL_MATH,
+    PAL_DOTS,
+    PAL_BRAILLE,
+    PAL_STARS,
+    PAL_HALFFILL,
+    PAL_HATCH,
+    PAL_BINARY,
+    PAL_MUSIC,
+    PAL_BOX,
+    PAL_CIRCUIT,
+    PAL_ARROWS,
+    PAL_HERMES,
+]:  # ... all palettes used in project
     all_chars.update(pal)
 # Add any overlay text characters
-all_chars.update("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,-:;!?/|")
+all_chars.update(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,-:;!?/|"
+)
 all_chars.discard(" ")  # space is never rendered
 ```
 
@@ -160,8 +194,10 @@ class GridLayer:
     def __init__(self, font_path, font_size, vw=None, vh=None):
         """Initialize grid for any resolution.
         vw, vh: video width/height in pixels. Defaults to global VW, VH."""
-        vw = vw or VW; vh = vh or VH
-        self.vw = vw; self.vh = vh
+        vw = vw or VW
+        vh = vh or VH
+        self.vw = vw
+        self.vh = vh
 
         self.font = ImageFont.truetype(font_path, font_size)
         asc, desc = self.font.getmetrics()
@@ -214,16 +250,20 @@ def render(self, chars, colors, canvas=None):
         canvas = np.zeros((VH, VW, 3), dtype=np.uint8)
     for row in range(self.rows):
         y = self.oy + row * self.ch
-        if y + self.ch > VH: break
+        if y + self.ch > VH:
+            break
         for col in range(self.cols):
             c = chars[row, col]
-            if c == " ": continue
+            if c == " ":
+                continue
             x = self.ox + col * self.cw
-            if x + self.cw > VW: break
+            if x + self.cw > VW:
+                break
             a = self.bm[c]  # float32 bitmap
-            canvas[y:y+self.ch, x:x+self.cw] = np.maximum(
-                canvas[y:y+self.ch, x:x+self.cw],
-                (a[:, :, None] * colors[row, col]).astype(np.uint8))
+            canvas[y : y + self.ch, x : x + self.cw] = np.maximum(
+                canvas[y : y + self.ch, x : x + self.cw],
+                (a[:, :, None] * colors[row, col]).astype(np.uint8),
+            )
     return canvas
 ```
 
@@ -235,7 +275,7 @@ Render multiple grids onto the same canvas for depth:
 
 ```python
 canvas = np.zeros((VH, VW, 3), dtype=np.uint8)
-canvas = grid_lg.render(bg_chars, bg_colors, canvas)   # background layer
+canvas = grid_lg.render(bg_chars, bg_colors, canvas)  # background layer
 canvas = grid_md.render(main_chars, main_colors, canvas)  # main layer
 canvas = grid_sm.render(detail_chars, detail_colors, canvas)  # detail overlay
 ```
@@ -259,55 +299,61 @@ Organized by visual family. Mix and match per project -- don't default to PAL_DE
 
 #### Density / Brightness Palettes
 ```python
-PAL_DEFAULT  = " .`'-:;!><=+*^~?/|(){}[]#&$@%"       # classic ASCII art
-PAL_DENSE    = " .:;+=xX$#@\u2588"                          # simple 11-level ramp
-PAL_MINIMAL  = " .:-=+#@"                               # 8-level, graphic
-PAL_BINARY   = " \u2588"                                      # 2-level, extreme contrast
-PAL_GRADIENT = " \u2591\u2592\u2593\u2588"                              # 4-level block gradient
+PAL_DEFAULT = " .`'-:;!><=+*^~?/|(){}[]#&$@%"  # classic ASCII art
+PAL_DENSE = " .:;+=xX$#@\u2588"  # simple 11-level ramp
+PAL_MINIMAL = " .:-=+#@"  # 8-level, graphic
+PAL_BINARY = " \u2588"  # 2-level, extreme contrast
+PAL_GRADIENT = " \u2591\u2592\u2593\u2588"  # 4-level block gradient
 ```
 
 #### Unicode Block Elements
 ```python
-PAL_BLOCKS   = " \u2591\u2592\u2593\u2588\u2584\u2580\u2590\u258c"                 # standard blocks
+PAL_BLOCKS = " \u2591\u2592\u2593\u2588\u2584\u2580\u2590\u258c"  # standard blocks
 PAL_BLOCKS_EXT = " \u2596\u2597\u2598\u2599\u259a\u259b\u259c\u259d\u259e\u259f\u2591\u2592\u2593\u2588"  # quadrant blocks (more detail)
-PAL_SHADE    = " \u2591\u2592\u2593\u2588\u2587\u2586\u2585\u2584\u2583\u2582\u2581"          # vertical fill progression
+PAL_SHADE = " \u2591\u2592\u2593\u2588\u2587\u2586\u2585\u2584\u2583\u2582\u2581"  # vertical fill progression
 ```
 
 #### Symbolic / Thematic
 ```python
-PAL_MATH     = " \u00b7\u2218\u2219\u2022\u00b0\u00b1\u2213\u00d7\u00f7\u2248\u2260\u2261\u2264\u2265\u221e\u222b\u2211\u220f\u221a\u2207\u2202\u2206\u03a9"    # math symbols
-PAL_BOX      = " \u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c"          # box drawing
-PAL_CIRCUIT  = " .\u00b7\u2500\u2502\u250c\u2510\u2514\u2518\u253c\u25cb\u25cf\u25a1\u25a0\u2206\u2207\u2261"                 # circuit board
-PAL_RUNE     = " .\u16a0\u16a2\u16a6\u16b1\u16b7\u16c1\u16c7\u16d2\u16d6\u16da\u16de\u16df"                   # elder futhark runes
-PAL_ALCHEMIC = " \u2609\u263d\u2640\u2642\u2643\u2644\u2645\u2646\u2647\u2648\u2649\u264a\u264b"            # planetary/alchemical symbols
-PAL_ZODIAC   = " \u2648\u2649\u264a\u264b\u264c\u264d\u264e\u264f\u2650\u2651\u2652\u2653"            # zodiac
-PAL_ARROWS   = " \u2190\u2191\u2192\u2193\u2194\u2195\u2196\u2197\u2198\u2199\u21a9\u21aa\u21bb\u27a1"             # directional arrows
-PAL_MUSIC    = " \u266a\u266b\u266c\u2669\u266d\u266e\u266f\u25cb\u25cf"                       # musical notation
+PAL_MATH = " \u00b7\u2218\u2219\u2022\u00b0\u00b1\u2213\u00d7\u00f7\u2248\u2260\u2261\u2264\u2265\u221e\u222b\u2211\u220f\u221a\u2207\u2202\u2206\u03a9"  # math symbols
+PAL_BOX = " \u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c"  # box drawing
+PAL_CIRCUIT = " .\u00b7\u2500\u2502\u250c\u2510\u2514\u2518\u253c\u25cb\u25cf\u25a1\u25a0\u2206\u2207\u2261"  # circuit board
+PAL_RUNE = " .\u16a0\u16a2\u16a6\u16b1\u16b7\u16c1\u16c7\u16d2\u16d6\u16da\u16de\u16df"  # elder futhark runes
+PAL_ALCHEMIC = " \u2609\u263d\u2640\u2642\u2643\u2644\u2645\u2646\u2647\u2648\u2649\u264a\u264b"  # planetary/alchemical symbols
+PAL_ZODIAC = " \u2648\u2649\u264a\u264b\u264c\u264d\u264e\u264f\u2650\u2651\u2652\u2653"  # zodiac
+PAL_ARROWS = " \u2190\u2191\u2192\u2193\u2194\u2195\u2196\u2197\u2198\u2199\u21a9\u21aa\u21bb\u27a1"  # directional arrows
+PAL_MUSIC = (
+    " \u266a\u266b\u266c\u2669\u266d\u266e\u266f\u25cb\u25cf"  # musical notation
+)
 ```
 
 #### Script / Writing System
 ```python
-PAL_KATA     = " \u00b7\uff66\uff67\uff68\uff69\uff6a\uff6b\uff6c\uff6d\uff6e\uff6f\uff70\uff71\uff72\uff73\uff74\uff75\uff76\uff77"          # katakana halfwidth (matrix rain)
-PAL_GREEK    = " \u03b1\u03b2\u03b3\u03b4\u03b5\u03b6\u03b7\u03b8\u03b9\u03ba\u03bb\u03bc\u03bd\u03be\u03c0\u03c1\u03c3\u03c4\u03c6\u03c8\u03c9"    # Greek lowercase
+PAL_KATA = " \u00b7\uff66\uff67\uff68\uff69\uff6a\uff6b\uff6c\uff6d\uff6e\uff6f\uff70\uff71\uff72\uff73\uff74\uff75\uff76\uff77"  # katakana halfwidth (matrix rain)
+PAL_GREEK = " \u03b1\u03b2\u03b3\u03b4\u03b5\u03b6\u03b7\u03b8\u03b9\u03ba\u03bb\u03bc\u03bd\u03be\u03c0\u03c1\u03c3\u03c4\u03c6\u03c8\u03c9"  # Greek lowercase
 PAL_CYRILLIC = " \u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448"  # Cyrillic lowercase
-PAL_ARABIC   = " \u0627\u0628\u062a\u062b\u062c\u062d\u062e\u062f\u0630\u0631\u0632\u0633\u0634\u0635\u0636\u0637"       # Arabic letters (isolated forms)
+PAL_ARABIC = " \u0627\u0628\u062a\u062b\u062c\u062d\u062e\u062f\u0630\u0631\u0632\u0633\u0634\u0635\u0636\u0637"  # Arabic letters (isolated forms)
 ```
 
 #### Dot / Point Progressions
 ```python
-PAL_DOTS     = " ⋅∘∙●◉◎◆✦★"                   # dot size progression
-PAL_BRAILLE  = " ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠿"  # braille patterns
-PAL_STARS    = " ·✧✦✩✨★✶✳✸"               # star progression
-PAL_HALFFILL = " ◔◑◕◐◒◓◖◗◙"               # directional half-fill progression
-PAL_HATCH    = " ▣▤▥▦▧▨▩"                     # crosshatch density ramp
+PAL_DOTS = " ⋅∘∙●◉◎◆✦★"  # dot size progression
+PAL_BRAILLE = " ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠿"  # braille patterns
+PAL_STARS = " ·✧✦✩✨★✶✳✸"  # star progression
+PAL_HALFFILL = " ◔◑◕◐◒◓◖◗◙"  # directional half-fill progression
+PAL_HATCH = " ▣▤▥▦▧▨▩"  # crosshatch density ramp
 ```
 
 #### Project-Specific (examples -- invent new ones per project)
 ```python
-PAL_HERMES   = " .\u00b7~=\u2248\u221e\u26a1\u263f\u2726\u2605\u2295\u25ca\u25c6\u25b2\u25bc\u25cf\u25a0"   # mythology/tech blend
-PAL_OCEAN    = " ~\u2248\u2248\u2248\u223c\u2307\u2248\u224b\u224c\u2248"                       # water/wave characters
-PAL_ORGANIC  = " .\u00b0\u2218\u2022\u25e6\u25c9\u2742\u273f\u2741\u2743"                 # growing/botanical
-PAL_MACHINE  = " _\u2500\u2502\u250c\u2510\u253c\u2261\u25a0\u2588\u2593\u2592\u2591"             # mechanical/industrial
+PAL_HERMES = " .\u00b7~=\u2248\u221e\u26a1\u263f\u2726\u2605\u2295\u25ca\u25c6\u25b2\u25bc\u25cf\u25a0"  # mythology/tech blend
+PAL_OCEAN = (
+    " ~\u2248\u2248\u2248\u223c\u2307\u2248\u224b\u224c\u2248"  # water/wave characters
+)
+PAL_ORGANIC = (
+    " .\u00b0\u2218\u2022\u25e6\u25c9\u2742\u273f\u2741\u2743"  # growing/botanical
+)
+PAL_MACHINE = " _\u2500\u2502\u250c\u2510\u253c\u2261\u25a0\u2588\u2593\u2592\u2591"  # mechanical/industrial
 ```
 
 ### Creating Custom Palettes
@@ -355,6 +401,7 @@ def val2char_gamma(v, mask, pal, gamma=1.0):
     v_adj = np.power(np.clip(v, 0, 1), gamma)
     return val2char(v_adj, mask, pal)
 
+
 def val2char_step(v, mask, pal, thresholds):
     """Custom threshold mapping. thresholds = list of float breakpoints."""
     out = np.full(v.shape, pal[0], dtype="U1")
@@ -375,11 +422,15 @@ All color computation in HSV for intuitive control, converted at render time:
 def hsv2rgb(h, s, v):
     """Vectorized HSV->RGB. h,s,v are numpy arrays. Returns (R,G,B) uint8 arrays."""
     h = h % 1.0
-    c = v * s; x = c * (1 - np.abs((h*6) % 2 - 1)); m = v - c
+    c = v * s
+    x = c * (1 - np.abs((h * 6) % 2 - 1))
+    m = v - c
     # ... 6 sector assignment ...
-    return (np.clip((r+m)*255, 0, 255).astype(np.uint8),
-            np.clip((g+m)*255, 0, 255).astype(np.uint8),
-            np.clip((b+m)*255, 0, 255).astype(np.uint8))
+    return (
+        np.clip((r + m) * 255, 0, 255).astype(np.uint8),
+        np.clip((g + m) * 255, 0, 255).astype(np.uint8),
+        np.clip((b + m) * 255, 0, 255).astype(np.uint8),
+    )
 ```
 
 ### Color Mapping Strategies
@@ -407,16 +458,53 @@ For non-HSV workflows -- direct RGB color sets for graphic/retro looks:
 
 ```python
 # Named color palettes -- use for flat/graphic styles or per-character coloring
-COLORS_NEON = [(255,0,102), (0,255,153), (102,0,255), (255,255,0), (0,204,255)]
-COLORS_PASTEL = [(255,179,186), (255,223,186), (255,255,186), (186,255,201), (186,225,255)]
-COLORS_MONO_GREEN = [(0,40,0), (0,80,0), (0,140,0), (0,200,0), (0,255,0)]
-COLORS_MONO_AMBER = [(40,20,0), (80,50,0), (140,90,0), (200,140,0), (255,191,0)]
-COLORS_CYBERPUNK = [(255,0,60), (0,255,200), (180,0,255), (255,200,0)]
-COLORS_VAPORWAVE = [(255,113,206), (1,205,254), (185,103,255), (5,255,161)]
-COLORS_EARTH = [(86,58,26), (139,90,43), (189,154,91), (222,193,136), (245,230,193)]
-COLORS_ICE = [(200,230,255), (150,200,240), (100,170,230), (60,130,210), (30,80,180)]
-COLORS_BLOOD = [(80,0,0), (140,10,10), (200,20,20), (255,50,30), (255,100,80)]
-COLORS_FOREST = [(10,30,10), (20,60,15), (30,100,20), (50,150,30), (80,200,50)]
+COLORS_NEON = [
+    (255, 0, 102),
+    (0, 255, 153),
+    (102, 0, 255),
+    (255, 255, 0),
+    (0, 204, 255),
+]
+COLORS_PASTEL = [
+    (255, 179, 186),
+    (255, 223, 186),
+    (255, 255, 186),
+    (186, 255, 201),
+    (186, 225, 255),
+]
+COLORS_MONO_GREEN = [(0, 40, 0), (0, 80, 0), (0, 140, 0), (0, 200, 0), (0, 255, 0)]
+COLORS_MONO_AMBER = [
+    (40, 20, 0),
+    (80, 50, 0),
+    (140, 90, 0),
+    (200, 140, 0),
+    (255, 191, 0),
+]
+COLORS_CYBERPUNK = [(255, 0, 60), (0, 255, 200), (180, 0, 255), (255, 200, 0)]
+COLORS_VAPORWAVE = [(255, 113, 206), (1, 205, 254), (185, 103, 255), (5, 255, 161)]
+COLORS_EARTH = [
+    (86, 58, 26),
+    (139, 90, 43),
+    (189, 154, 91),
+    (222, 193, 136),
+    (245, 230, 193),
+]
+COLORS_ICE = [
+    (200, 230, 255),
+    (150, 200, 240),
+    (100, 170, 230),
+    (60, 130, 210),
+    (30, 80, 180),
+]
+COLORS_BLOOD = [(80, 0, 0), (140, 10, 10), (200, 20, 20), (255, 50, 30), (255, 100, 80)]
+COLORS_FOREST = [
+    (10, 30, 10),
+    (20, 60, 15),
+    (30, 100, 20),
+    (50, 150, 30),
+    (80, 200, 50),
+]
+
 
 def rgb_palette_map(val, mask, palette):
     """Map float array (0-1) to RGB colors from a discrete palette."""
@@ -427,7 +515,9 @@ def rgb_palette_map(val, mask, palette):
     B = np.zeros(val.shape, dtype=np.uint8)
     for i, (r, g, b) in enumerate(palette):
         m = mask & (idx == i)
-        R[m] = r; G[m] = g; B[m] = b
+        R[m] = r
+        G[m] = g
+        B[m] = b
     return R, G, B
 ```
 
@@ -441,15 +531,21 @@ HSV hue is perceptually non-uniform: green occupies far more visual range than b
 ```python
 # --- sRGB <-> Linear sRGB ---
 
+
 def srgb_to_linear(c):
     """Convert sRGB [0,1] to linear light. c: float32 array."""
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
 
+
 def linear_to_srgb(c):
     """Convert linear light to sRGB [0,1]."""
-    return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(np.maximum(c, 0), 1/2.4) - 0.055)
+    return np.where(
+        c <= 0.0031308, c * 12.92, 1.055 * np.power(np.maximum(c, 0), 1 / 2.4) - 0.055
+    )
+
 
 # --- Linear sRGB <-> OKLAB ---
+
 
 def linear_rgb_to_oklab(r, g, b):
     """Linear sRGB to OKLAB. r,g,b: float32 arrays [0,1].
@@ -457,24 +553,31 @@ def linear_rgb_to_oklab(r, g, b):
     l_ = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
     m_ = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
     s_ = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
-    l_c = np.cbrt(l_); m_c = np.cbrt(m_); s_c = np.cbrt(s_)
+    l_c = np.cbrt(l_)
+    m_c = np.cbrt(m_)
+    s_c = np.cbrt(s_)
     L = 0.2104542553 * l_c + 0.7936177850 * m_c - 0.0040720468 * s_c
     a = 1.9779984951 * l_c - 2.4285922050 * m_c + 0.4505937099 * s_c
     b_ = 0.0259040371 * l_c + 0.7827717662 * m_c - 0.8086757660 * s_c
     return L, a, b_
+
 
 def oklab_to_linear_rgb(L, a, b):
     """OKLAB to linear sRGB. Returns (r, g, b) float32 arrays [0,1]."""
     l_ = L + 0.3963377774 * a + 0.2158037573 * b
     m_ = L - 0.1055613458 * a - 0.0638541728 * b
     s_ = L - 0.0894841775 * a - 1.2914855480 * b
-    l_c = l_ ** 3; m_c = m_ ** 3; s_c = s_ ** 3
+    l_c = l_**3
+    m_c = m_**3
+    s_c = s_**3
     r = +4.0767416621 * l_c - 3.3077115913 * m_c + 0.2309699292 * s_c
     g = -1.2684380046 * l_c + 2.6097574011 * m_c - 0.3413193965 * s_c
     b_ = -0.0041960863 * l_c - 0.7034186147 * m_c + 1.7076147010 * s_c
     return np.clip(r, 0, 1), np.clip(g, 0, 1), np.clip(b_, 0, 1)
 
+
 # --- Convenience: sRGB uint8 <-> OKLAB ---
+
 
 def rgb_to_oklab(R, G, B):
     """sRGB uint8 arrays to OKLAB."""
@@ -482,6 +585,7 @@ def rgb_to_oklab(R, G, B):
     g = srgb_to_linear(G.astype(np.float32) / 255.0)
     b = srgb_to_linear(B.astype(np.float32) / 255.0)
     return linear_rgb_to_oklab(r, g, b)
+
 
 def oklab_to_rgb(L, a, b):
     """OKLAB to sRGB uint8 arrays."""
@@ -491,13 +595,16 @@ def oklab_to_rgb(L, a, b):
     B = np.clip(linear_to_srgb(b_) * 255, 0, 255).astype(np.uint8)
     return R, G, B
 
+
 # --- OKLCH (cylindrical form of OKLAB) ---
+
 
 def oklab_to_oklch(L, a, b):
     """OKLAB to OKLCH. Returns (L, C, H) where H is in [0, 1] (normalized)."""
     C = np.sqrt(a**2 + b**2)
     H = (np.arctan2(b, a) / (2 * np.pi)) % 1.0
     return L, C, H
+
 
 def oklch_to_oklab(L, C, H):
     """OKLCH to OKLAB. H in [0, 1]."""
@@ -520,15 +627,18 @@ def lerp_oklab(color_a, color_b, t_array):
     La, aa, ba = rgb_to_oklab(
         np.full_like(t_array, color_a[0], dtype=np.uint8),
         np.full_like(t_array, color_a[1], dtype=np.uint8),
-        np.full_like(t_array, color_a[2], dtype=np.uint8))
+        np.full_like(t_array, color_a[2], dtype=np.uint8),
+    )
     Lb, ab, bb = rgb_to_oklab(
         np.full_like(t_array, color_b[0], dtype=np.uint8),
         np.full_like(t_array, color_b[1], dtype=np.uint8),
-        np.full_like(t_array, color_b[2], dtype=np.uint8))
+        np.full_like(t_array, color_b[2], dtype=np.uint8),
+    )
     L = La + (Lb - La) * t_array
     a = aa + (ab - aa) * t_array
     b = ba + (bb - ba) * t_array
     return oklab_to_rgb(L, a, b)
+
 
 def lerp_oklch(color_a, color_b, t_array, short_path=True):
     """Interpolate through OKLCH (preserves chroma, smooth hue path).
@@ -536,11 +646,13 @@ def lerp_oklch(color_a, color_b, t_array, short_path=True):
     La, aa, ba = rgb_to_oklab(
         np.full_like(t_array, color_a[0], dtype=np.uint8),
         np.full_like(t_array, color_a[1], dtype=np.uint8),
-        np.full_like(t_array, color_a[2], dtype=np.uint8))
+        np.full_like(t_array, color_a[2], dtype=np.uint8),
+    )
     Lb, ab, bb = rgb_to_oklab(
         np.full_like(t_array, color_b[0], dtype=np.uint8),
         np.full_like(t_array, color_b[1], dtype=np.uint8),
-        np.full_like(t_array, color_b[2], dtype=np.uint8))
+        np.full_like(t_array, color_b[2], dtype=np.uint8),
+    )
     L1, C1, H1 = oklab_to_oklch(La, aa, ba)
     L2, C2, H2 = oklab_to_oklch(Lb, ab, bb)
     # Shortest hue path
@@ -563,46 +675,69 @@ Auto-generate harmonious palettes from a seed color:
 ```python
 def harmony_complementary(seed_rgb):
     """Two colors: seed + opposite hue."""
-    L, a, b = rgb_to_oklab(np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]]))
+    L, a, b = rgb_to_oklab(
+        np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]])
+    )
     _, C, H = oklab_to_oklch(L, a, b)
     return [seed_rgb, _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.5) % 1.0)]
 
+
 def harmony_triadic(seed_rgb):
     """Three colors: seed + two at 120-degree offsets."""
-    L, a, b = rgb_to_oklab(np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]]))
+    L, a, b = rgb_to_oklab(
+        np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]])
+    )
     _, C, H = oklab_to_oklch(L, a, b)
-    return [seed_rgb,
-            _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.333) % 1.0),
-            _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.667) % 1.0)]
+    return [
+        seed_rgb,
+        _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.333) % 1.0),
+        _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.667) % 1.0),
+    ]
+
 
 def harmony_analogous(seed_rgb, spread=0.08, n=5):
     """N colors spread evenly around seed hue."""
-    L, a, b = rgb_to_oklab(np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]]))
+    L, a, b = rgb_to_oklab(
+        np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]])
+    )
     _, C, H = oklab_to_oklch(L, a, b)
-    offsets = np.linspace(-spread * (n-1)/2, spread * (n-1)/2, n)
+    offsets = np.linspace(-spread * (n - 1) / 2, spread * (n - 1) / 2, n)
     return [_oklch_to_srgb_tuple(L[0], C[0], (H[0] + off) % 1.0) for off in offsets]
+
 
 def harmony_split_complementary(seed_rgb, split=0.08):
     """Three colors: seed + two flanking the complement."""
-    L, a, b = rgb_to_oklab(np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]]))
+    L, a, b = rgb_to_oklab(
+        np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]])
+    )
     _, C, H = oklab_to_oklch(L, a, b)
     comp = (H[0] + 0.5) % 1.0
-    return [seed_rgb,
-            _oklch_to_srgb_tuple(L[0], C[0], (comp - split) % 1.0),
-            _oklch_to_srgb_tuple(L[0], C[0], (comp + split) % 1.0)]
+    return [
+        seed_rgb,
+        _oklch_to_srgb_tuple(L[0], C[0], (comp - split) % 1.0),
+        _oklch_to_srgb_tuple(L[0], C[0], (comp + split) % 1.0),
+    ]
+
 
 def harmony_tetradic(seed_rgb):
     """Four colors: two complementary pairs at 90-degree offset."""
-    L, a, b = rgb_to_oklab(np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]]))
+    L, a, b = rgb_to_oklab(
+        np.array([seed_rgb[0]]), np.array([seed_rgb[1]]), np.array([seed_rgb[2]])
+    )
     _, C, H = oklab_to_oklch(L, a, b)
-    return [seed_rgb,
-            _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.25) % 1.0),
-            _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.5) % 1.0),
-            _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.75) % 1.0)]
+    return [
+        seed_rgb,
+        _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.25) % 1.0),
+        _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.5) % 1.0),
+        _oklch_to_srgb_tuple(L[0], C[0], (H[0] + 0.75) % 1.0),
+    ]
+
 
 def _oklch_to_srgb_tuple(L, C, H):
     """Helper: single OKLCH -> sRGB (R,G,B) int tuple."""
-    La = np.array([L]); Ca = np.array([C]); Ha = np.array([H])
+    La = np.array([L])
+    Ca = np.array([C])
+    Ha = np.array([H])
     Lo, ao, bo = oklch_to_oklab(La, Ca, Ha)
     R, G, B = oklab_to_rgb(Lo, ao, bo)
     return (int(R[0]), int(G[0]), int(B[0]))
@@ -617,6 +752,7 @@ def hf_oklch_angle(offset=0.0, chroma=0.12, lightness=0.7):
     """OKLCH hue mapped to angle from center. Perceptually uniform rainbow.
     Returns (R, G, B) uint8 color array instead of a float hue.
     NOTE: Use with _render_vf_rgb() variant, not standard _render_vf()."""
+
     def fn(g, f, t, S):
         H = (g.angle / (2 * np.pi) + offset + t * 0.05) % 1.0
         L = np.full_like(H, lightness)
@@ -624,6 +760,7 @@ def hf_oklch_angle(offset=0.0, chroma=0.12, lightness=0.7):
         Lo, ao, bo = oklch_to_oklab(L, C, H)
         R, G, B = oklab_to_rgb(Lo, ao, bo)
         return mkc(R, G, B, g.rows, g.cols)
+
     return fn
 ```
 
@@ -633,28 +770,35 @@ def hf_oklch_angle(offset=0.0, chroma=0.12, lightness=0.7):
 def mkc(R, G, B, rows, cols):
     """Pack 3 uint8 arrays into (rows, cols, 3) color array."""
     o = np.zeros((rows, cols, 3), dtype=np.uint8)
-    o[:,:,0] = R; o[:,:,1] = G; o[:,:,2] = B
+    o[:, :, 0] = R
+    o[:, :, 1] = G
+    o[:, :, 2] = B
     return o
+
 
 def layer_over(base_ch, base_co, top_ch, top_co):
     """Composite top layer onto base. Non-space chars overwrite."""
     m = top_ch != " "
-    base_ch[m] = top_ch[m]; base_co[m] = top_co[m]
+    base_ch[m] = top_ch[m]
+    base_co[m] = top_co[m]
     return base_ch, base_co
+
 
 def layer_blend(base_co, top_co, alpha):
     """Alpha-blend top color layer onto base. alpha is float array (0-1) or scalar."""
     if isinstance(alpha, (int, float)):
         alpha = np.full(base_co.shape[:2], alpha, dtype=np.float32)
-    a = alpha[:,:,None]
+    a = alpha[:, :, None]
     return np.clip(base_co * (1 - a) + top_co * a, 0, 255).astype(np.uint8)
 
-def stamp(ch, co, text, row, col, color=(255,255,255)):
+
+def stamp(ch, co, text, row, col, color=(255, 255, 255)):
     """Write text string at position."""
     for i, c in enumerate(text):
         cc = col + i
         if 0 <= row < ch.shape[0] and 0 <= cc < ch.shape[1]:
-            ch[row, cc] = c; co[row, cc] = color
+            ch[row, cc] = c
+            co[row, cc] = color
 ```
 
 ---
@@ -690,15 +834,35 @@ Split frames across N workers. Each pipes raw RGB to its own ffmpeg subprocess:
 ```python
 def render_batch(batch_id, frame_start, frame_end, features, seg_path):
     r = Renderer()
-    cmd = ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-           "-s", f"{VW}x{VH}", "-r", str(FPS), "-i", "pipe:0",
-           "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-           "-pix_fmt", "yuv420p", seg_path]
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{VW}x{VH}",
+        "-r",
+        str(FPS),
+        "-i",
+        "pipe:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        seg_path,
+    ]
 
     # CRITICAL: stderr to file, not pipe
     stderr_fh = open(os.path.join(workdir, f"err_{batch_id:02d}.log"), "w")
-    pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                            stdout=subprocess.DEVNULL, stderr=stderr_fh)
+    pipe = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_fh
+    )
 
     for fi in range(frame_start, frame_end):
         t = fi / FPS
@@ -723,9 +887,26 @@ with open(concat_path, "w") as cf:
     for seg in segments:
         cf.write(f"file '{seg}'\n")
 
-subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_path,
-                "-i", audio_path, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                "-shortest", output_path])
+subprocess.run([
+    "ffmpeg",
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    concat_path,
+    "-i",
+    audio_path,
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-shortest",
+    output_path,
+])
 ```
 
 ## Effect Function Contract
@@ -760,7 +941,8 @@ Simple scenes that use a single grid can still return `(chars, colors)` and let 
 def fx_simple(r, f, t, S):
     g = r.get_grid("md")
     val = np.sin(g.dist * 0.1 - t * 3) * f.get("bass", 0.3) * 2
-    val = np.clip(val, 0, 1); mask = val > 0.03
+    val = np.clip(val, 0, 1)
+    mask = val > 0.03
     ch = val2char(val, mask, PAL_DEFAULT)
     R, G, B = hsv2rgb(np.full_like(val, 0.6), np.full_like(val, 0.7), val)
     co = mkc(R, G, B, g.rows, g.cols)
@@ -787,14 +969,23 @@ State persists across frames within a single scene/clip. Each worker process (an
 def hsv2rgb_scalar(h, s, v):
     """Single-value HSV to RGB. Returns (R, G, B) tuple of ints 0-255."""
     h = h % 1.0
-    c = v * s; x = c * (1 - abs((h * 6) % 2 - 1)); m = v - c
-    if h * 6 < 1:   r, g, b = c, x, 0
-    elif h * 6 < 2:  r, g, b = x, c, 0
-    elif h * 6 < 3:  r, g, b = 0, c, x
-    elif h * 6 < 4:  r, g, b = 0, x, c
-    elif h * 6 < 5:  r, g, b = x, 0, c
-    else:             r, g, b = c, 0, x
-    return (int((r+m)*255), int((g+m)*255), int((b+m)*255))
+    c = v * s
+    x = c * (1 - abs((h * 6) % 2 - 1))
+    m = v - c
+    if h * 6 < 1:
+        r, g, b = c, x, 0
+    elif h * 6 < 2:
+        r, g, b = x, c, 0
+    elif h * 6 < 3:
+        r, g, b = 0, c, x
+    elif h * 6 < 4:
+        r, g, b = 0, x, c
+    elif h * 6 < 5:
+        r, g, b = x, 0, c
+    else:
+        r, g, b = c, 0, x
+    return (int((r + m) * 255), int((g + m) * 255), int((b + m) * 255))
+
 
 def log(msg):
     """Print timestamped log message."""

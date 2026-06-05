@@ -19,19 +19,15 @@ def summarize_manual_compression(
     if noop:
         headline = f"No changes from compression: {before_count} messages"
         if after_tokens == before_tokens:
-            token_line = (
-                f"Approx request size: ~{before_tokens:,} tokens (unchanged)"
-            )
+            token_line = f"Approx request size: ~{before_tokens:,} tokens (unchanged)"
         else:
             token_line = (
-                f"Approx request size: ~{before_tokens:,} → "
-                f"~{after_tokens:,} tokens"
+                f"Approx request size: ~{before_tokens:,} → ~{after_tokens:,} tokens"
             )
     else:
         headline = f"Compressed: {before_count} → {after_count} messages"
         token_line = (
-            f"Approx request size: ~{before_tokens:,} → "
-            f"~{after_tokens:,} tokens"
+            f"Approx request size: ~{before_tokens:,} → ~{after_tokens:,} tokens"
         )
 
     note = None

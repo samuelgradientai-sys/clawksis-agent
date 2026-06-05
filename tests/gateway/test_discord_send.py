@@ -19,14 +19,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -95,9 +105,7 @@ async def test_send_retries_without_reference_when_reply_target_is_deleted():
     async def fake_send(*, content, reference=None):
         send_calls.append({"content": content, "reference": reference})
         if len(send_calls) == 1:
-            raise RuntimeError(
-                "400 Bad Request (error code: 10008): Unknown Message"
-            )
+            raise RuntimeError("400 Bad Request (error code: 10008): Unknown Message")
         return sent_msgs[len(send_calls) - 2]
 
     channel = SimpleNamespace(
@@ -137,9 +145,7 @@ async def test_send_does_not_retry_on_unrelated_errors():
 
     async def fake_send(*, content, reference=None):
         send_calls.append({"content": content, "reference": reference})
-        raise RuntimeError(
-            "403 Forbidden (error code: 50013): Missing Permissions"
-        )
+        raise RuntimeError("403 Forbidden (error code: 50013): Missing Permissions")
 
     channel = SimpleNamespace(
         fetch_message=AsyncMock(return_value=ref_msg),
@@ -203,7 +209,9 @@ async def test_send_to_forum_creates_thread_post():
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
 
     # thread object has no 'send' so _send_to_forum uses thread.thread
-    thread_ch = SimpleNamespace(id=555, send=AsyncMock(return_value=SimpleNamespace(id=600)))
+    thread_ch = SimpleNamespace(
+        id=555, send=AsyncMock(return_value=SimpleNamespace(id=600))
+    )
     thread = SimpleNamespace(
         id=555,
         message=SimpleNamespace(id=500),
@@ -277,7 +285,6 @@ async def test_send_to_forum_create_thread_failure():
 
     assert result.success is False
     assert "rate limited" in result.error
-
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +362,11 @@ async def test_forum_post_file_uses_filename_when_no_content():
     """Thread name falls back to file.filename when no content is provided."""
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
 
-    thread = SimpleNamespace(id=1, message=SimpleNamespace(id=2), thread=SimpleNamespace(id=1, send=AsyncMock()))
+    thread = SimpleNamespace(
+        id=1,
+        message=SimpleNamespace(id=2),
+        thread=SimpleNamespace(id=1, send=AsyncMock()),
+    )
     forum_channel = _discord_mod.ForumChannel()
     forum_channel.id = 10
     forum_channel.name = "forum"
@@ -406,8 +417,9 @@ async def test_typing_task_removed_after_api_error():
     await adapter.send_typing("12345")
     await asyncio.sleep(0.1)
 
-    assert "12345" not in adapter._typing_tasks, \
+    assert "12345" not in adapter._typing_tasks, (
         "Stale task should be removed after API error"
+    )
 
 
 @pytest.mark.asyncio
@@ -427,8 +439,9 @@ async def test_typing_restartable_after_error():
     adapter._client.http.request = AsyncMock()
     await adapter.send_typing("12345")
 
-    assert "12345" in adapter._typing_tasks, \
+    assert "12345" in adapter._typing_tasks, (
         "Should restart typing after previous failure"
+    )
 
 
 @pytest.mark.asyncio

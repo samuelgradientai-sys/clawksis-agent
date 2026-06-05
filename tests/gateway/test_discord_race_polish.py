@@ -61,10 +61,17 @@ async def test_concurrent_joins_do_not_double_connect():
     channel.connect = lambda: slow_connect(channel)
 
     from plugins.platforms.discord import adapter as discord_mod
-    with patch.object(discord_mod, "VoiceReceiver",
-                      MagicMock(return_value=MagicMock(start=lambda: None))):
-        with patch.object(discord_mod.asyncio, "ensure_future",
-                          lambda _c: asyncio.create_task(asyncio.sleep(0))):
+
+    with patch.object(
+        discord_mod,
+        "VoiceReceiver",
+        MagicMock(return_value=MagicMock(start=lambda: None)),
+    ):
+        with patch.object(
+            discord_mod.asyncio,
+            "ensure_future",
+            lambda _c: asyncio.create_task(asyncio.sleep(0)),
+        ):
             t1 = asyncio.create_task(adapter.join_voice_channel(channel))
             t2 = asyncio.create_task(adapter.join_voice_channel(channel))
             await asyncio.sleep(0.05)

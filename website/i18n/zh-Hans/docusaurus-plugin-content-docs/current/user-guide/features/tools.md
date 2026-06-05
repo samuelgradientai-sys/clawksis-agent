@@ -154,17 +154,24 @@ Docker 可通过 `terminal.docker_forward_env` 接受显式的环境变量白名
 
 启动后台进程并进行管理：
 
-```python
-terminal(command="pytest -v tests/", background=true)
-# 返回：{"session_id": "proc_abc123", "pid": 12345}
-
-# 然后使用 process 工具进行管理：
-process(action="list")       # 显示所有运行中的进程
-process(action="poll", session_id="proc_abc123")   # 检查状态
-process(action="wait", session_id="proc_abc123")   # 阻塞直到完成
-process(action="log", session_id="proc_abc123")    # 完整输出
-process(action="kill", session_id="proc_abc123")   # 终止进程
-process(action="write", session_id="proc_abc123", data="y")  # 发送输入
+```pythonterminal(command="pytest -v tests/", background=true)
+
+# 返回：{"session_id": "proc_abc123", "pid": 12345}
+
+
+# 然后使用 process 工具进行管理：
+
+process(action="list")  # 显示所有运行中的进程
+
+process(action="poll", session_id="proc_abc123")  # 检查状态
+
+process(action="wait", session_id="proc_abc123")  # 阻塞直到完成
+
+process(action="log", session_id="proc_abc123")  # 完整输出
+
+process(action="kill", session_id="proc_abc123")  # 终止进程
+
+process(action="write", session_id="proc_abc123", data="y")  # 发送输入
 ```
 
 PTY 模式（`pty=true`）可启用 Codex 和 Claude Code 等交互式 CLI 工具。

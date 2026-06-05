@@ -12,10 +12,12 @@ class TestMinimaxContextLengths:
 
     def test_minimax_prefix_has_correct_context(self):
         from agent.model_metadata import DEFAULT_CONTEXT_LENGTHS
+
         assert DEFAULT_CONTEXT_LENGTHS["minimax"] == 204_800
 
     def test_minimax_models_resolve_via_prefix(self):
         from agent.model_metadata import get_model_context_length
+
         # M2.x models resolve to 204,800 via the "minimax" catch-all
         for model in ("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2"):
             ctx = get_model_context_length(model, "")
@@ -23,6 +25,7 @@ class TestMinimaxContextLengths:
 
     def test_minimax_m3_resolves_to_1m(self):
         from agent.model_metadata import get_model_context_length
+
         # M3 must beat the generic "minimax" catch-all (204,800) and resolve to
         # a 1M-class context. The exact value depends on the source: our
         # hardcoded catalog says 1,000,000; the OpenRouter catalog reports
@@ -41,6 +44,7 @@ class TestMinimaxM3StaleCacheGuard:
 
     def test_suggests_minimax_m3(self):
         from agent.model_metadata import _model_name_suggests_minimax_m3
+
         assert _model_name_suggests_minimax_m3("MiniMax-M3")
         assert _model_name_suggests_minimax_m3("minimax/minimax-m3")
         assert not _model_name_suggests_minimax_m3("MiniMax-M2.7")
@@ -50,6 +54,7 @@ class TestMinimaxM3StaleCacheGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         import agent.model_metadata as mm
+
         importlib.reload(mm)
         base = "https://api.minimaxi.com/anthropic"
         mm.save_context_length("MiniMax-M3", base, 204_800)
@@ -68,6 +73,7 @@ class TestMinimaxM3StaleCacheGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         import agent.model_metadata as mm
+
         importlib.reload(mm)
         base = "https://api.minimaxi.com/anthropic"
         mm.save_context_length("MiniMax-M3", base, 1_000_000)
@@ -80,6 +86,7 @@ class TestMinimaxM3StaleCacheGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         import agent.model_metadata as mm
+
         importlib.reload(mm)
         base = "https://api.minimaxi.com/anthropic"
         # 204,800 is the CORRECT value for M2.x — guard must not touch it.
@@ -89,7 +96,6 @@ class TestMinimaxM3StaleCacheGuard:
                 slug, base_url=base, api_key="", provider="minimax-cn"
             )
             assert ctx == 204_800, f"{slug} should stay 204800, got {ctx}"
-
 
 
 class TestMinimaxThinkingSupport:
@@ -103,6 +109,7 @@ class TestMinimaxThinkingSupport:
 
     def test_minimax_m27_gets_manual_thinking(self):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="MiniMax-M2.7",
             messages=[{"role": "user", "content": "hello"}],
@@ -118,6 +125,7 @@ class TestMinimaxThinkingSupport:
 
     def test_minimax_m25_gets_manual_thinking(self):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="MiniMax-M2.5",
             messages=[{"role": "user", "content": "hello"}],
@@ -130,6 +138,7 @@ class TestMinimaxThinkingSupport:
 
     def test_thinking_still_works_for_claude(self):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="claude-sonnet-4-20250514",
             messages=[{"role": "user", "content": "hello"}],
@@ -167,12 +176,14 @@ class TestMinimaxAuxModel:
         # the only path to a non-empty aux value).
         import model_tools  # noqa: F401
         from agent.auxiliary_client import _get_aux_model_for_provider
+
         assert _get_aux_model_for_provider("minimax") == "MiniMax-M3"
         assert _get_aux_model_for_provider("minimax-cn") == "MiniMax-M3"
 
     def test_minimax_aux_not_highspeed(self):
         import model_tools  # noqa: F401
         from agent.auxiliary_client import _get_aux_model_for_provider
+
         assert "highspeed" not in _get_aux_model_for_provider("minimax")
         assert "highspeed" not in _get_aux_model_for_provider("minimax-cn")
 
@@ -193,6 +204,7 @@ class TestMinimaxBetaHeaders:
     def _build_and_get_betas(self, api_key, base_url=None):
         """Build client, return the anthropic-beta header string."""
         from agent.anthropic_adapter import build_anthropic_client
+
         with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client(api_key, base_url=base_url)
             kwargs = mock_sdk.Anthropic.call_args[1]
@@ -252,25 +264,36 @@ class TestMinimaxBetaHeaders:
 
     def test_common_betas_none_url(self):
         from agent.anthropic_adapter import _common_betas_for_base_url, _COMMON_BETAS
+
         assert _common_betas_for_base_url(None) == _COMMON_BETAS
 
     def test_common_betas_empty_url(self):
         from agent.anthropic_adapter import _common_betas_for_base_url, _COMMON_BETAS
+
         assert _common_betas_for_base_url("") == _COMMON_BETAS
 
     def test_common_betas_minimax_url(self):
-        from agent.anthropic_adapter import _common_betas_for_base_url, _TOOL_STREAMING_BETA
+        from agent.anthropic_adapter import (
+            _common_betas_for_base_url,
+            _TOOL_STREAMING_BETA,
+        )
+
         betas = _common_betas_for_base_url("https://api.minimax.io/anthropic")
         assert _TOOL_STREAMING_BETA not in betas
         assert len(betas) > 0  # still has other betas
 
     def test_common_betas_minimax_cn_url(self):
-        from agent.anthropic_adapter import _common_betas_for_base_url, _TOOL_STREAMING_BETA
+        from agent.anthropic_adapter import (
+            _common_betas_for_base_url,
+            _TOOL_STREAMING_BETA,
+        )
+
         betas = _common_betas_for_base_url("https://api.minimaxi.com/anthropic")
         assert _TOOL_STREAMING_BETA not in betas
 
     def test_common_betas_regular_url(self):
         from agent.anthropic_adapter import _common_betas_for_base_url, _COMMON_BETAS
+
         assert _common_betas_for_base_url("https://api.anthropic.com") == _COMMON_BETAS
 
 
@@ -285,23 +308,31 @@ class TestMinimaxApiMode:
 
     def test_minimax_returns_anthropic_messages(self):
         from clawk_cli.providers import determine_api_mode
+
         assert determine_api_mode("minimax") == "anthropic_messages"
 
     def test_minimax_cn_returns_anthropic_messages(self):
         from clawk_cli.providers import determine_api_mode
+
         assert determine_api_mode("minimax-cn") == "anthropic_messages"
 
     def test_minimax_with_url_also_works(self):
         from clawk_cli.providers import determine_api_mode
+
         # Even with explicit base_url, provider lookup takes priority
-        assert determine_api_mode("minimax", "https://api.minimax.io/anthropic") == "anthropic_messages"
+        assert (
+            determine_api_mode("minimax", "https://api.minimax.io/anthropic")
+            == "anthropic_messages"
+        )
 
     def test_anthropic_still_returns_anthropic_messages(self):
         from clawk_cli.providers import determine_api_mode
+
         assert determine_api_mode("anthropic") == "anthropic_messages"
 
     def test_openai_returns_chat_completions(self):
         from clawk_cli.providers import determine_api_mode
+
         # Sanity check: standard providers are unaffected
         result = determine_api_mode("deepseek")
         assert result == "chat_completions"
@@ -316,18 +347,22 @@ class TestMinimaxMaxOutput:
 
     def test_minimax_m27_output_limit(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("MiniMax-M2.7") == 131_072
 
     def test_minimax_m25_output_limit(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("MiniMax-M2.5") == 131_072
 
     def test_minimax_m2_output_limit(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("MiniMax-M2") == 131_072
 
     def test_claude_output_unaffected(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         # Sanity: Claude limits are not broken by the MiniMax entry
         assert _get_anthropic_max_output("claude-sonnet-4-6") == 64_000
 
@@ -341,75 +376,117 @@ class TestMinimaxPreserveDots:
 
     def test_minimax_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="minimax", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_minimax_cn_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="minimax-cn", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_minimax_url_preserves_dots(self):
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="custom", base_url="https://api.minimax.io/anthropic")
+
+        agent = SimpleNamespace(
+            provider="custom", base_url="https://api.minimax.io/anthropic"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_minimax_cn_url_preserves_dots(self):
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="custom", base_url="https://api.minimaxi.com/anthropic")
+
+        agent = SimpleNamespace(
+            provider="custom", base_url="https://api.minimaxi.com/anthropic"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_anthropic_does_not_preserve_dots(self):
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="anthropic", base_url="https://api.anthropic.com")
+
+        agent = SimpleNamespace(
+            provider="anthropic", base_url="https://api.anthropic.com"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is False
 
     def test_opencode_zen_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="opencode-zen", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_opencode_zen_url_preserves_dots(self):
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="custom", base_url="https://opencode.ai/zen/v1")
+
+        agent = SimpleNamespace(
+            provider="custom", base_url="https://opencode.ai/zen/v1"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_zai_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="zai", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_bigmodel_cn_url_preserves_dots(self):
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="custom", base_url="https://open.bigmodel.cn/api/paas/v4")
+
+        agent = SimpleNamespace(
+            provider="custom", base_url="https://open.bigmodel.cn/api/paas/v4"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_normalize_preserves_m25_free_dot(self):
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name("minimax-m2.5-free", preserve_dots=True) == "minimax-m2.5-free"
+
+        assert (
+            normalize_model_name("minimax-m2.5-free", preserve_dots=True)
+            == "minimax-m2.5-free"
+        )
 
     def test_normalize_preserves_m27_dot(self):
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name("MiniMax-M2.7", preserve_dots=True) == "MiniMax-M2.7"
+
+        assert (
+            normalize_model_name("MiniMax-M2.7", preserve_dots=True) == "MiniMax-M2.7"
+        )
 
     def test_normalize_preserves_non_anthropic_dots_without_preserve(self):
         from agent.anthropic_adapter import normalize_model_name
+
         # Non-Anthropic model families use dots as canonical version separators;
         # only Claude/Anthropic names are hyphen-normalized by default.
-        assert normalize_model_name("MiniMax-M2.7", preserve_dots=False) == "MiniMax-M2.7"
+        assert (
+            normalize_model_name("MiniMax-M2.7", preserve_dots=False) == "MiniMax-M2.7"
+        )
 
     def test_normalize_still_converts_claude_dots_without_preserve(self):
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name("claude-opus-4.6", preserve_dots=False) == "claude-opus-4-6"
+
+        assert (
+            normalize_model_name("claude-opus-4.6", preserve_dots=False)
+            == "claude-opus-4-6"
+        )
 
 
 class TestMinimaxSwitchModelCredentialGuard:
@@ -427,6 +504,7 @@ class TestMinimaxSwitchModelCredentialGuard:
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
+
             agent = AIAgent.__new__(AIAgent)
             agent.provider = "anthropic"
             agent.model = "claude-sonnet-4"
@@ -441,10 +519,14 @@ class TestMinimaxSwitchModelCredentialGuard:
             agent._anthropic_client = MagicMock()
             agent._fallback_chain = []
 
-        with patch("agent.anthropic_adapter.build_anthropic_client") as mock_build, \
-             patch("agent.anthropic_adapter.resolve_anthropic_token", return_value="sk-ant-leaked") as mock_resolve, \
-             patch("agent.anthropic_adapter._is_oauth_token", return_value=False):
-
+        with (
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value="sk-ant-leaked",
+            ) as mock_resolve,
+            patch("agent.anthropic_adapter._is_oauth_token", return_value=False),
+        ):
             agent.switch_model(
                 new_model="MiniMax-M2.7",
                 new_provider="minimax",

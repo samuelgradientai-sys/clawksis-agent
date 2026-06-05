@@ -62,7 +62,11 @@ description: Whitespace test
 """
         _create_skill("ws-skill", skill)
         # Agent sends patch with no leading whitespace (common LLM behaviour)
-        result = _patch_skill("ws-skill", "def hello():\n    print(\"hi\")", "def hello():\n    print(\"hello world\")")
+        result = _patch_skill(
+            "ws-skill",
+            'def hello():\n    print("hi")',
+            'def hello():\n    print("hello world")',
+        )
         assert result["success"] is True
         content = (self.skills_dir / "ws-skill" / "SKILL.md").read_text()
         assert 'print("hello world")' in content
@@ -86,7 +90,7 @@ description: Indentation test
         result = _patch_skill(
             "indent-skill",
             "1. First step\n2. Second step",
-            "1. Updated first\n2. Updated second"
+            "1. Updated first\n2. Updated second",
         )
         assert result["success"] is True
         content = (self.skills_dir / "indent-skill" / "SKILL.md").read_text()
@@ -129,7 +133,9 @@ word word word
 
     def test_no_match_returns_preview(self):
         _create_skill("test-skill", SKILL_CONTENT)
-        result = _patch_skill("test-skill", "this does not exist anywhere", "replacement")
+        result = _patch_skill(
+            "test-skill", "this does not exist anywhere", "replacement"
+        )
         assert result["success"] is False
         assert "file_preview" in result
 
@@ -143,10 +149,12 @@ word word word
             "test-skill",
             "function hello() {\nconsole.log('hi');\n}",
             "function hello() {\nconsole.log('hello world');\n}",
-            file_path="references/code.js"
+            file_path="references/code.js",
         )
         assert result["success"] is True
-        content = (self.skills_dir / "test-skill" / "references" / "code.js").read_text()
+        content = (
+            self.skills_dir / "test-skill" / "references" / "code.js"
+        ).read_text()
         assert "hello world" in content
 
     def test_patch_preserves_frontmatter_validation(self):
@@ -155,7 +163,10 @@ word word word
         # Try to destroy the frontmatter via patch
         result = _patch_skill("test-skill", "---\nname: test-skill", "BROKEN")
         assert result["success"] is False
-        assert "structure" in result["error"].lower() or "frontmatter" in result["error"].lower()
+        assert (
+            "structure" in result["error"].lower()
+            or "frontmatter" in result["error"].lower()
+        )
 
     def test_skill_manage_patch_uses_fuzzy(self):
         """The dispatcher should route to the fuzzy-matching patch."""

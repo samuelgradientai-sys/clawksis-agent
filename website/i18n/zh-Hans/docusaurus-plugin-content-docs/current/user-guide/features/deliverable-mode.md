@@ -49,14 +49,13 @@ Agent 需要使用的机制很简单：将文件渲染到绝对路径（例如 `
 
 如果使用 Clawksis 的 kanban（看板）多 agent 工作流，worker 可以在调用 `kanban_complete` 时附加可交付文件：
 
-```python
-kanban_complete(
-    summary="rendered Q3 revenue chart and report",
-    artifacts=[
-        "/tmp/q3-revenue.png",
-        "/tmp/q3-report.pdf",
-    ],
-)
+```pythonkanban_complete(
+    summary="rendered Q3 revenue chart and report",
+    artifacts=[
+        "/tmp/q3-revenue.png",
+        "/tmp/q3-report.pdf",
+    ],
+)
 ```
 
 当 gateway 通知器将"任务完成"消息发送给在 Slack/Telegram 等平台订阅该任务的用户时，也会将每个 artifact 作为原生附件上传到对应聊天中。用户在同一位置获得可交付成果和摘要。

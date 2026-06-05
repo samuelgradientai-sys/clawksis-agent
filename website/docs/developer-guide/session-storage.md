@@ -179,69 +179,81 @@ _CHECKPOINT_EVERY_N_WRITES = 50
 
 ### Initialize
 
-```python
-from clawk_state import SessionDB
-
-db = SessionDB()                           # Default: ~/.clawksis/state.db
-db = SessionDB(db_path=Path("/tmp/test.db"))  # Custom path
+```pythonfrom clawk_state import SessionDB
+
+
+db = SessionDB()  # Default: ~/.clawksis/state.db
+
+db = SessionDB(db_path=Path("/tmp/test.db"))  # Custom path
 ```
 
 ### Create and Manage Sessions
 
-```python
-# Create a new session
-db.create_session(
-    session_id="sess_abc123",
-    source="cli",
-    model="anthropic/claude-sonnet-4.6",
-    user_id="user_1",
-    parent_session_id=None,  # or previous session ID for lineage
-)
-
-# End a session
-db.end_session("sess_abc123", end_reason="user_exit")
-
-# Reopen a session (clear ended_at/end_reason)
-db.reopen_session("sess_abc123")
+```python# Create a new session
+
+db.create_session(
+    session_id="sess_abc123",
+    source="cli",
+    model="anthropic/claude-sonnet-4.6",
+    user_id="user_1",
+    parent_session_id=None,  # or previous session ID for lineage
+)
+
+
+# End a session
+
+db.end_session("sess_abc123", end_reason="user_exit")
+
+
+# Reopen a session (clear ended_at/end_reason)
+
+db.reopen_session("sess_abc123")
 ```
 
 ### Store Messages
 
-```python
-msg_id = db.append_message(
-    session_id="sess_abc123",
-    role="assistant",
-    content="Here's the answer...",
-    tool_calls=[{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
-    token_count=150,
-    finish_reason="stop",
-    reasoning="Let me think about this...",
-)
+```pythonmsg_id = db.append_message(
+    session_id="sess_abc123",
+    role="assistant",
+    content="Here's the answer...",
+    tool_calls=[{"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}],
+    token_count=150,
+    finish_reason="stop",
+    reasoning="Let me think about this...",
+)
 ```
 
 ### Retrieve Messages
 
-```python
-# Raw messages with all metadata
-messages = db.get_messages("sess_abc123")
-
-# OpenAI conversation format (for API replay)
-conversation = db.get_messages_as_conversation("sess_abc123")
-# Returns: [{"role": "user", "content": "..."}, {"role": "assistant", ...}]
+```python# Raw messages with all metadata
+
+messages = db.get_messages("sess_abc123")
+
+
+# OpenAI conversation format (for API replay)
+
+conversation = db.get_messages_as_conversation("sess_abc123")
+
+# Returns: [{"role": "user", "content": "..."}, {"role": "assistant", ...}]
 ```
 
 ### Session Titles
 
-```python
-# Set a title (must be unique among non-NULL titles)
-db.set_session_title("sess_abc123", "Fix Docker Build")
-
-# Resolve by title (returns most recent in lineage)
-session_id = db.resolve_session_by_title("Fix Docker Build")
-
-# Auto-generate next title in lineage
-next_title = db.get_next_title_in_lineage("Fix Docker Build")
-# Returns: "Fix Docker Build #2"
+```python# Set a title (must be unique among non-NULL titles)
+
+db.set_session_title("sess_abc123", "Fix Docker Build")
+
+
+# Resolve by title (returns most recent in lineage)
+
+session_id = db.resolve_session_by_title("Fix Docker Build")
+
+
+# Auto-generate next title in lineage
+
+next_title = db.get_next_title_in_lineage("Fix Docker Build")
+
+# Returns: "Fix Docker Build #2"
 ```
 
 
@@ -252,8 +264,7 @@ sanitization of user input.
 
 ### Basic Search
 
-```python
-results = db.search_messages("docker deployment")
+```pythonresults = db.search_messages("docker deployment")
 ```
 
 ### FTS5 Query Syntax
@@ -268,15 +279,19 @@ results = db.search_messages("docker deployment")
 
 ### Filtered Search
 
-```python
-# Search only CLI sessions
-results = db.search_messages("error", source_filter=["cli"])
-
-# Exclude gateway sessions
-results = db.search_messages("bug", exclude_sources=["telegram", "discord"])
-
-# Search only user messages
-results = db.search_messages("help", role_filter=["user"])
+```python# Search only CLI sessions
+
+results = db.search_messages("error", source_filter=["cli"])
+
+
+# Exclude gateway sessions
+
+results = db.search_messages("bug", exclude_sources=["telegram", "discord"])
+
+
+# Search only user messages
+
+results = db.search_messages("help", role_filter=["user"])
 ```
 
 ### Search Results Format
@@ -365,22 +380,31 @@ LIMIT 10;
 
 ## Export and Cleanup
 
-```python
-# Export a single session with messages
-data = db.export_session("sess_abc123")
-
-# Export all sessions (with messages) as list of dicts
-all_data = db.export_all(source="cli")
-
-# Delete old sessions (only ended sessions)
-deleted_count = db.prune_sessions(older_than_days=90)
-deleted_count = db.prune_sessions(older_than_days=30, source="telegram")
-
-# Clear messages but keep the session record
-db.clear_messages("sess_abc123")
-
-# Delete session and all messages
-db.delete_session("sess_abc123")
+```python# Export a single session with messages
+
+data = db.export_session("sess_abc123")
+
+
+# Export all sessions (with messages) as list of dicts
+
+all_data = db.export_all(source="cli")
+
+
+# Delete old sessions (only ended sessions)
+
+deleted_count = db.prune_sessions(older_than_days=90)
+
+deleted_count = db.prune_sessions(older_than_days=30, source="telegram")
+
+
+# Clear messages but keep the session record
+
+db.clear_messages("sess_abc123")
+
+
+# Delete session and all messages
+
+db.delete_session("sess_abc123")
 ```
 
 

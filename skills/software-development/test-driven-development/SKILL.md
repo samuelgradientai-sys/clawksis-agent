@@ -59,30 +59,39 @@ Implement fresh from tests. Period.
 Write one minimal test showing what should happen.
 
 **Good test:**
-```python
-def test_retries_failed_operations_3_times():
-    attempts = 0
-    def operation():
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            raise Exception('fail')
-        return 'success'
-
-    result = retry_operation(operation)
-
-    assert result == 'success'
-    assert attempts == 3
+```pythondef test_retries_failed_operations_3_times():
+
+    attempts = 0
+
+    def operation():
+
+        nonlocal attempts
+
+        attempts += 1
+
+        if attempts < 3:
+            raise Exception("fail")
+
+        return "success"
+
+    result = retry_operation(operation)
+
+    assert result == "success"
+
+    assert attempts == 3
 ```
 Clear name, tests real behavior, one thing.
 
 **Bad test:**
-```python
-def test_retry_works():
-    mock = MagicMock()
-    mock.side_effect = [Exception(), Exception(), 'success']
-    result = retry_operation(mock)
-    assert result == 'success'  # What about retry count? Timing?
+```pythondef test_retry_works():
+
+    mock = MagicMock()
+
+    mock.side_effect = [Exception(), Exception(), "success"]
+
+    result = retry_operation(mock)
+
+    assert result == "success"  # What about retry count? Timing?
 ```
 Vague name, tests mock not real code.
 
@@ -115,17 +124,19 @@ Confirm:
 Write the simplest code to pass the test. Nothing more.
 
 **Good:**
-```python
-def add(a, b):
-    return a + b  # Nothing extra
+```pythondef add(a, b):
+
+    return a + b  # Nothing extra
 ```
 
 **Bad:**
-```python
-def add(a, b):
-    result = a + b
-    logging.info(f"Adding {a} + {b} = {result}")  # Extra!
-    return result
+```pythondef add(a, b):
+
+    result = a + b
+
+    logging.info(f"Adding {a} + {b} = {result}")  # Extra!
+
+    return result
 ```
 
 Don't add features, refactor other code, or "improve" beyond the test.
@@ -286,38 +297,52 @@ Can't check all boxes? You skipped TDD. Start over.
 
 Use the `terminal` tool to run tests at each step:
 
-```python
-# RED — verify failure
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# GREEN — verify pass
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# Full suite — verify no regressions
-terminal("pytest tests/ -q")
+```python# RED — verify failure
+
+terminal("pytest tests/test_feature.py::test_name -v")
+
+
+# GREEN — verify pass
+
+terminal("pytest tests/test_feature.py::test_name -v")
+
+
+# Full suite — verify no regressions
+
+terminal("pytest tests/ -q")
 ```
 
 ### With delegate_task
 
 When dispatching subagents for implementation, enforce TDD in the goal:
 
-```python
-delegate_task(
-    goal="Implement [feature] using strict TDD",
-    context="""
-    Follow test-driven-development skill:
-    1. Write failing test FIRST
-    2. Run test to verify it fails
-    3. Write minimal code to pass
-    4. Run test to verify it passes
-    5. Refactor if needed
-    6. Commit
-
-    Project test command: pytest tests/ -q
-    Project structure: [describe relevant files]
-    """,
-    toolsets=['terminal', 'file']
-)
+```pythondelegate_task(
+    goal="Implement [feature] using strict TDD",
+    context="""
+
+    Follow test-driven-development skill:
+
+    1. Write failing test FIRST
+
+    2. Run test to verify it fails
+
+    3. Write minimal code to pass
+
+    4. Run test to verify it passes
+
+    5. Refactor if needed
+
+    6. Commit
+
+
+
+    Project test command: pytest tests/ -q
+
+    Project structure: [describe relevant files]
+
+    """,
+    toolsets=["terminal", "file"],
+)
 ```
 
 ### With systematic-debugging

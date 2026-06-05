@@ -191,9 +191,8 @@ TERMINAL_DOCKER_IMAGE=clawk-sandbox:latest
 
 - 建议在打开文件时显式指定 UTF-8 编码：
 
-```python
-with open("results.txt", "w", encoding="utf-8") as f:
-    f.write("✓ All good\n")
+```pythonwith open("results.txt", "w", encoding="utf-8") as f:
+    f.write("✓ All good\n")
 ```
 
 - 在 PowerShell 中，也可以将当前会话的控制台和原生命令输出切换为 UTF-8：

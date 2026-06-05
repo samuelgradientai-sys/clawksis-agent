@@ -124,15 +124,18 @@ ddgs text -q "fastapi tutorial" -m 5 -o json
 
 适用场景：通用研究、公司信息、文档查询。
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.text("python async programming", max_results=5):
-        print(r["title"])
-        print(r["href"])
-        print(r.get("body", "")[:200])
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.text("python async programming", max_results=5):
+        print(r["title"])
+
+        print(r["href"])
+
+        print(r.get("body", "")[:200])
+
+        print()
 ```
 
 返回字段：`title`、`href`、`body`
@@ -141,15 +144,18 @@ with DDGS() as ddgs:
 
 适用场景：时事动态、突发新闻、最新更新。
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.news("AI regulation 2026", max_results=5):
-        print(r["date"], "-", r["title"])
-        print(r.get("source", ""), "|", r["url"])
-        print(r.get("body", "")[:200])
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.news("AI regulation 2026", max_results=5):
+        print(r["date"], "-", r["title"])
+
+        print(r.get("source", ""), "|", r["url"])
+
+        print(r.get("body", "")[:200])
+
+        print()
 ```
 
 返回字段：`date`、`title`、`body`、`url`、`image`、`source`
@@ -158,16 +164,20 @@ with DDGS() as ddgs:
 
 适用场景：视觉参考、产品图片、示意图。
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.images("semiconductor chip", max_results=5):
-        print(r["title"])
-        print(r["image"])
-        print(r.get("thumbnail", ""))
-        print(r.get("source", ""))
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.images("semiconductor chip", max_results=5):
+        print(r["title"])
+
+        print(r["image"])
+
+        print(r.get("thumbnail", ""))
+
+        print(r.get("source", ""))
+
+        print()
 ```
 
 返回字段：`title`、`image`、`thumbnail`、`url`、`height`、`width`、`source`
@@ -176,17 +186,22 @@ with DDGS() as ddgs:
 
 适用场景：教程、演示、讲解视频。
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    for r in ddgs.videos("FastAPI tutorial", max_results=5):
-        print(r["title"])
-        print(r.get("content", ""))
-        print(r.get("duration", ""))
-        print(r.get("provider", ""))
-        print(r.get("published", ""))
-        print()
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    for r in ddgs.videos("FastAPI tutorial", max_results=5):
+        print(r["title"])
+
+        print(r.get("content", ""))
+
+        print(r.get("duration", ""))
+
+        print(r.get("provider", ""))
+
+        print(r.get("published", ""))
+
+        print()
 ```
 
 返回字段：`title`、`content`、`description`、`duration`、`provider`、`published`、`statistics`、`uploader`
@@ -212,13 +227,14 @@ ddgs text -q "fastapi deployment guide" -m 3 -o json
 
 Python 示例，仅在确认该运行时已安装 `ddgs` 后使用：
 
-```python
-from ddgs import DDGS
-
-with DDGS() as ddgs:
-    results = list(ddgs.text("fastapi deployment guide", max_results=3))
-    for r in results:
-        print(r["title"], "->", r["href"])
+```pythonfrom ddgs import DDGS
+
+
+with DDGS() as ddgs:
+    results = list(ddgs.text("fastapi deployment guide", max_results=3))
+
+    for r in results:
+        print(r["title"], "->", r["href"])
 ```
 
 然后使用 `web_extract` 或其他内容获取工具提取最佳 URL 的内容。

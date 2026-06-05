@@ -84,8 +84,7 @@ Bridged callbacks:
 
 Because `AIAgent` runs in a worker thread while ACP I/O lives on the main event loop, the bridge uses:
 
-```python
-asyncio.run_coroutine_threadsafe(...)
+```pythonasyncio.run_coroutine_threadsafe(...)
 ```
 
 ### Permission bridge

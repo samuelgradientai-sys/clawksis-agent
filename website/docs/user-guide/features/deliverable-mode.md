@@ -79,14 +79,13 @@ mutilated.
 If you use Clawksis' kanban multi-agent workflow, workers can attach
 deliverable files to their `kanban_complete` call:
 
-```python
-kanban_complete(
-    summary="rendered Q3 revenue chart and report",
-    artifacts=[
-        "/tmp/q3-revenue.png",
-        "/tmp/q3-report.pdf",
-    ],
-)
+```pythonkanban_complete(
+    summary="rendered Q3 revenue chart and report",
+    artifacts=[
+        "/tmp/q3-revenue.png",
+        "/tmp/q3-report.pdf",
+    ],
+)
 ```
 
 When the gateway notifier delivers the "task completed" message to whoever

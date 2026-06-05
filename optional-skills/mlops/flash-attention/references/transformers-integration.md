@@ -19,7 +19,7 @@ model = AutoModel.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
     attn_implementation="flash_attention_2",
     torch_dtype=torch.float16,
-    device_map="auto"
+    device_map="auto",
 )
 ```
 
@@ -74,7 +74,7 @@ model = AutoModelForCausalLM.from_pretrained(
     model_id,
     attn_implementation="flash_attention_2",
     torch_dtype=torch.float16,
-    device_map="auto"
+    device_map="auto",
 )
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -96,7 +96,7 @@ model = AutoModelForCausalLM.from_pretrained(
     attn_implementation="flash_attention_2",
     torch_dtype=torch.bfloat16,  # Better for long context
     device_map="auto",
-    max_position_embeddings=32768  # Extended context
+    max_position_embeddings=32768,  # Extended context
 )
 
 # Process long document (32K tokens)
@@ -114,7 +114,7 @@ from transformers import AutoModelForCausalLM
 model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
     attn_implementation="flash_attention_2",
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 )
 
 training_args = TrainingArguments(
@@ -123,14 +123,10 @@ training_args = TrainingArguments(
     gradient_accumulation_steps=4,
     num_train_epochs=3,
     fp16=True,  # Must match model dtype
-    optim="adamw_torch_fused"  # Fast optimizer
+    optim="adamw_torch_fused",  # Fast optimizer
 )
 
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_dataset
-)
+trainer = Trainer(model=model, args=training_args, train_dataset=train_dataset)
 
 trainer.train()
 ```
@@ -147,7 +143,7 @@ model = AutoModelForCausalLM.from_pretrained(
     attn_implementation="flash_attention_2",
     torch_dtype=torch.float16,
     device_map="auto",  # Automatic multi-GPU placement
-    max_memory={0: "20GB", 1: "20GB"}  # Limit per GPU
+    max_memory={0: "20GB", 1: "20GB"},  # Limit per GPU
 )
 ```
 
@@ -188,7 +184,7 @@ Check support list above. If not supported, use PyTorch SDPA as fallback:
 model = AutoModelForCausalLM.from_pretrained(
     "model-name",
     attn_implementation="sdpa",  # PyTorch native (still faster)
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 )
 ```
 
@@ -203,7 +199,7 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.float16,
     device_map="auto",
     max_memory={0: "18GB"},  # Reserve memory for KV cache
-    low_cpu_mem_usage=True
+    low_cpu_mem_usage=True,
 )
 ```
 
@@ -215,8 +211,9 @@ Ensure dtype matches:
 # Model and inputs must both be float16/bfloat16
 model = model.to(torch.float16)
 inputs = tokenizer(..., return_tensors="pt").to("cuda")
-inputs = {k: v.to(torch.float16) if v.dtype == torch.float32 else v
-          for k, v in inputs.items()}
+inputs = {
+    k: v.to(torch.float16) if v.dtype == torch.float32 else v for k, v in inputs.items()
+}
 ```
 
 ### Issue: Different outputs vs standard attention
@@ -225,11 +222,11 @@ Flash Attention is numerically equivalent but uses different computation order. 
 
 ```python
 # Compare outputs
-model_standard = AutoModelForCausalLM.from_pretrained("model-name", torch_dtype=torch.float16)
+model_standard = AutoModelForCausalLM.from_pretrained(
+    "model-name", torch_dtype=torch.float16
+)
 model_flash = AutoModelForCausalLM.from_pretrained(
-    "model-name",
-    attn_implementation="flash_attention_2",
-    torch_dtype=torch.float16
+    "model-name", attn_implementation="flash_attention_2", torch_dtype=torch.float16
 )
 
 inputs = tokenizer("Test", return_tensors="pt").to("cuda")
@@ -254,7 +251,7 @@ Or disable Flash Attention:
 model = AutoModelForCausalLM.from_pretrained(
     "model-name",
     attn_implementation="eager",  # Standard PyTorch
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
 )
 ```
 
@@ -275,7 +272,7 @@ model = AutoModelForCausalLM.from_pretrained(
     attn_implementation="flash_attention_2",
     torch_dtype=torch.bfloat16,  # Better for training
     device_map="auto",
-    low_cpu_mem_usage=True
+    low_cpu_mem_usage=True,
 )
 
 # Enable gradient checkpointing for memory
@@ -288,6 +285,6 @@ training_args = TrainingArguments(
     gradient_accumulation_steps=2,
     bf16=True,  # Match model dtype
     optim="adamw_torch_fused",
-    gradient_checkpointing=True
+    gradient_checkpointing=True,
 )
 ```

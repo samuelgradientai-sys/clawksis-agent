@@ -24,14 +24,16 @@ def _build_messages_with_multimodal_tool_result():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{
-                "id": "call_abc",
-                "type": "function",
-                "function": {
-                    "name": "vision_analyze",
-                    "arguments": '{"image_url": "/tmp/foo.png", "question": "describe"}',
-                },
-            }],
+            "tool_calls": [
+                {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {
+                        "name": "vision_analyze",
+                        "arguments": '{"image_url": "/tmp/foo.png", "question": "describe"}',
+                    },
+                }
+            ],
         },
         {
             "role": "tool",
@@ -39,7 +41,10 @@ def _build_messages_with_multimodal_tool_result():
             "tool_call_id": "call_abc",
             "content": [
                 {"type": "text", "text": "Image loaded."},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,XYZ"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,XYZ"},
+                },
             ],
         },
     ]
@@ -56,8 +61,9 @@ class TestMultimodalToolResultConversion:
         out = outputs[0]
         assert out["call_id"] == "call_abc"
         # Output should be a LIST (array form), not a string
-        assert isinstance(out["output"], list), \
+        assert isinstance(out["output"], list), (
             f"Expected array output for multimodal tool result, got {type(out['output']).__name__}: {out['output']!r}"
+        )
         types = [p.get("type") for p in out["output"]]
         assert "input_text" in types
         assert "input_image" in types
@@ -75,14 +81,20 @@ class TestMultimodalToolResultConversion:
         msgs = [
             {"role": "user", "content": "hi"},
             {
-                "role": "assistant", "content": "",
-                "tool_calls": [{
-                    "id": "call_x", "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                }],
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_x",
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    }
+                ],
             },
             {
-                "role": "tool", "name": "terminal", "tool_call_id": "call_x",
+                "role": "tool",
+                "name": "terminal",
+                "tool_call_id": "call_x",
                 "content": "ls output here",
             },
         ]
@@ -121,7 +133,9 @@ class TestPreflightAcceptsArrayOutput:
         raw = [
             {
                 "type": "function_call",
-                "call_id": "call_abc", "name": "vision_analyze", "arguments": "{}",
+                "call_id": "call_abc",
+                "name": "vision_analyze",
+                "arguments": "{}",
             },
             {
                 "type": "function_call_output",
@@ -144,7 +158,9 @@ class TestPreflightAcceptsArrayOutput:
         raw = [
             {
                 "type": "function_call",
-                "call_id": "call_x", "name": "vision_analyze", "arguments": "{}",
+                "call_id": "call_x",
+                "name": "vision_analyze",
+                "arguments": "{}",
             },
             {
                 "type": "function_call_output",
@@ -160,7 +176,9 @@ class TestPreflightAcceptsArrayOutput:
         raw = [
             {
                 "type": "function_call",
-                "call_id": "call_x", "name": "terminal", "arguments": "{}",
+                "call_id": "call_x",
+                "name": "terminal",
+                "arguments": "{}",
             },
             {
                 "type": "function_call_output",

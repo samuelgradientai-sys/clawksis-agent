@@ -20,6 +20,7 @@ Both prongs together close the FD-recycling window. The tests below pin
 each prong individually and one end-to-end test simulates the reporter's
 timeline at object granularity (no network, no real sockets).
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,7 +28,6 @@ import socket as _socket
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,9 @@ def test_force_close_tcp_sockets_shutdown_only_no_close():
     n = force_close_tcp_sockets(client)
 
     assert n == 1
-    assert sock.shutdown_calls == 1, "shutdown() must run — it's how we unblock the worker"
+    assert sock.shutdown_calls == 1, (
+        "shutdown() must run — it's how we unblock the worker"
+    )
     assert sock.close_calls == 0, (
         "close() must NOT run from this helper — releasing the FD here is the "
         "race that wrote TLS bytes into kanban.db (#29507)"
@@ -130,7 +132,9 @@ def test_force_close_tcp_sockets_handles_multiple_pool_entries():
 
     socks = [_FakeSocket(), _FakeSocket(), _FakeSocket()]
     entries = [
-        SimpleNamespace(_connection=SimpleNamespace(_network_stream=SimpleNamespace(_sock=s)))
+        SimpleNamespace(
+            _connection=SimpleNamespace(_network_stream=SimpleNamespace(_sock=s))
+        )
         for s in socks
     ]
     pool = SimpleNamespace(_connections=entries)
@@ -267,7 +271,9 @@ def test_close_from_owner_thread_pops_and_full_close():
         if request_client is None:
             return None
         if stranger:
-            agent._abort_request_openai_client(request_client, reason="request_complete")
+            agent._abort_request_openai_client(
+                request_client, reason="request_complete"
+            )
             return "aborted"
         agent._close_request_openai_client(request_client, reason="request_complete")
         return "closed"
@@ -330,6 +336,7 @@ def test_stranger_then_owner_close_sequence_runs_full_close_exactly_once():
     # Test thread plays the stranger.
     # Give the owner a moment to set the holder.
     import time as _t
+
     _t.sleep(0.05)
     close_once("interrupt_abort")
     nonlocal_stranger_event.set()

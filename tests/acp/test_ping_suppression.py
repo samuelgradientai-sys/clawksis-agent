@@ -96,7 +96,9 @@ class _FakeAgent:
     async def initialize(self, **kwargs):  # noqa: ANN003
         from acp.schema import AgentCapabilities, InitializeResponse
 
-        return InitializeResponse(protocol_version=1, agent_capabilities=AgentCapabilities())
+        return InitializeResponse(
+            protocol_version=1, agent_capabilities=AgentCapabilities()
+        )
 
     async def new_session(self, cwd, mcp_servers=None, **kwargs):  # noqa: ANN001, ANN003
         from acp.schema import NewSessionResponse

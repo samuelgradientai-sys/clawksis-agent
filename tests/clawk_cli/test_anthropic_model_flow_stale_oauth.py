@@ -6,7 +6,6 @@ Claude Code credentials are available. The fast-path silently proceeds to
 model selection with a broken token instead of offering re-auth.
 """
 
-
 from clawk_cli.config import save_env_value
 
 
@@ -30,14 +29,14 @@ class TestStaleOAuthTokenDetection:
             "agent.anthropic_adapter.read_claude_code_credentials",
             lambda: {
                 "accessToken": "expired-cc-token",
-                "refreshToken": "",          # No refresh — can't recover
-                "expiresAt": 0,               # Already expired
+                "refreshToken": "",  # No refresh — can't recover
+                "expiresAt": 0,  # Already expired
                 "source": "claude_code_credentials_file",
             },
         )
         monkeypatch.setattr(
             "agent.anthropic_adapter.is_claude_code_token_valid",
-            lambda creds: False,             # Explicitly expired
+            lambda creds: False,  # Explicitly expired
         )
         monkeypatch.setattr(
             "agent.anthropic_adapter._is_oauth_token",
@@ -51,9 +50,12 @@ class TestStaleOAuthTokenDetection:
 
         # Simulate user types "3" (Cancel) when prompted for re-auth
         monkeypatch.setattr("builtins.input", lambda _: "3")
-        monkeypatch.setattr("clawk_cli.secret_prompt.masked_secret_prompt", lambda _: "")
+        monkeypatch.setattr(
+            "clawk_cli.secret_prompt.masked_secret_prompt", lambda _: ""
+        )
 
         from clawk_cli.main import _model_flow_anthropic
+
         cfg = {}
 
         _model_flow_anthropic(cfg)
@@ -78,7 +80,7 @@ class TestStaleOAuthTokenDetection:
 
         monkeypatch.setattr(
             "agent.anthropic_adapter.read_claude_code_credentials",
-            lambda: None,   # No CC creds
+            lambda: None,  # No CC creds
         )
         monkeypatch.setattr(
             "agent.anthropic_adapter.is_claude_code_token_valid",
@@ -93,6 +95,7 @@ class TestStaleOAuthTokenDetection:
         monkeypatch.setattr("builtins.input", lambda _: "1")
 
         from clawk_cli.main import _model_flow_anthropic
+
         cfg = {}
 
         _model_flow_anthropic(cfg)
@@ -101,7 +104,9 @@ class TestStaleOAuthTokenDetection:
         # Should show "Use existing credentials" menu, NOT auth method choice
         assert "Use existing" in output or "credentials" in output.lower()
 
-    def test_valid_oauth_token_with_refresh_available_skips_reauth(self, tmp_path, monkeypatch, capsys):
+    def test_valid_oauth_token_with_refresh_available_skips_reauth(
+        self, tmp_path, monkeypatch, capsys
+    ):
         """
         When ANTHROPIC_TOKEN is OAuth and valid cc_creds with refresh exist,
         the flow should use existing credentials (no forced re-auth).
@@ -137,6 +142,7 @@ class TestStaleOAuthTokenDetection:
         monkeypatch.setattr("builtins.input", lambda _: "1")
 
         from clawk_cli.main import _model_flow_anthropic
+
         cfg = {}
 
         _model_flow_anthropic(cfg)
@@ -159,9 +165,7 @@ class TestStaleOAuthGuardLogic:
         cc_available = False
 
         existing_is_stale_oauth = (
-            bool(existing_key) and
-            _is_oauth_token(existing_key) and
-            not cc_available
+            bool(existing_key) and _is_oauth_token(existing_key) and not cc_available
         )
         has_creds = (bool(existing_key) and not existing_is_stale_oauth) or cc_available
 
@@ -178,9 +182,7 @@ class TestStaleOAuthGuardLogic:
         cc_available = True
 
         existing_is_stale_oauth = (
-            bool(existing_key) and
-            _is_oauth_token(existing_key) and
-            not cc_available
+            bool(existing_key) and _is_oauth_token(existing_key) and not cc_available
         )
         has_creds = (bool(existing_key) and not existing_is_stale_oauth) or cc_available
 
@@ -197,9 +199,7 @@ class TestStaleOAuthGuardLogic:
         cc_available = False
 
         existing_is_stale_oauth = (
-            bool(existing_key) and
-            _is_oauth_token(existing_key) and
-            not cc_available
+            bool(existing_key) and _is_oauth_token(existing_key) and not cc_available
         )
         has_creds = (bool(existing_key) and not existing_is_stale_oauth) or cc_available
 

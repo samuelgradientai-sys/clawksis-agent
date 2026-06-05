@@ -13,6 +13,7 @@ from __future__ import annotations
 
 def test_default_per_platform_streaming_flags():
     from clawk_cli.config import DEFAULT_CONFIG
+
     plats = DEFAULT_CONFIG["display"]["platforms"]
     assert plats["telegram"]["streaming"] is True
     assert plats["discord"]["streaming"] is False
@@ -54,6 +55,7 @@ def test_dashboard_schema_exposes_per_platform_streaming():
     """Because the web settings schema is built from DEFAULT_CONFIG, the
     per-platform streaming toggles surface in the dashboard automatically."""
     import pytest
+
     pytest.importorskip("fastapi")  # web_server requires fastapi/uvicorn
     from clawk_cli.web_server import CONFIG_SCHEMA
 

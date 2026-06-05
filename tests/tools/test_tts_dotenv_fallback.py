@@ -45,8 +45,10 @@ class TestDotenvFallbackPerProvider:
     def test_elevenlabs_reads_dotenv_key(self, tmp_path):
         from tools import tts_tool
 
-        with patch.object(tts_tool, "get_env_value", return_value="el-dotenv-key"), \
-             patch.object(tts_tool, "_import_elevenlabs") as mock_import:
+        with (
+            patch.object(tts_tool, "get_env_value", return_value="el-dotenv-key"),
+            patch.object(tts_tool, "_import_elevenlabs") as mock_import,
+        ):
             mock_client = MagicMock()
             mock_client.text_to_speech.convert.return_value = iter([b"audio"])
             mock_import.return_value = MagicMock(return_value=mock_client)
@@ -74,8 +76,10 @@ class TestDotenvFallbackPerProvider:
             response.raise_for_status = MagicMock()
             return response
 
-        with patch.object(xai_http, "get_env_value", return_value="xai-dotenv-key"), \
-             patch("requests.post", side_effect=fake_post):
+        with (
+            patch.object(xai_http, "get_env_value", return_value="xai-dotenv-key"),
+            patch("requests.post", side_effect=fake_post),
+        ):
             tts_tool._generate_xai_tts("hi", str(tmp_path / "out.mp3"), {})
 
         assert captured["headers"]["Authorization"] == "Bearer xai-dotenv-key"
@@ -95,8 +99,10 @@ class TestDotenvFallbackPerProvider:
             response.raise_for_status = MagicMock()
             return response
 
-        with patch.object(tts_tool, "get_env_value", return_value="mm-dotenv-key"), \
-             patch("requests.post", side_effect=fake_post):
+        with (
+            patch.object(tts_tool, "get_env_value", return_value="mm-dotenv-key"),
+            patch("requests.post", side_effect=fake_post),
+        ):
             tts_tool._generate_minimax_tts("hi", str(tmp_path / "out.mp3"), {})
 
         assert captured["headers"]["Authorization"] == "Bearer mm-dotenv-key"
@@ -118,8 +124,12 @@ class TestDotenvFallbackPerProvider:
             )
             return client
 
-        with patch.object(tts_tool, "get_env_value", return_value="mistral-dotenv-key"), \
-             patch.object(tts_tool, "_import_mistral_client", return_value=fake_mistral_factory):
+        with (
+            patch.object(tts_tool, "get_env_value", return_value="mistral-dotenv-key"),
+            patch.object(
+                tts_tool, "_import_mistral_client", return_value=fake_mistral_factory
+            ),
+        ):
             tts_tool._generate_mistral_tts("hi", str(tmp_path / "out.mp3"), {})
 
         assert seen_keys == ["mistral-dotenv-key"]
@@ -163,8 +173,10 @@ class TestDotenvFallbackPerProvider:
                 return "gemini-dotenv-key"
             return None
 
-        with patch.object(tts_tool, "get_env_value", side_effect=fake_get_env_value), \
-             patch("requests.post", side_effect=fake_post):
+        with (
+            patch.object(tts_tool, "get_env_value", side_effect=fake_get_env_value),
+            patch("requests.post", side_effect=fake_post),
+        ):
             tts_tool._generate_gemini_tts("hi", str(tmp_path / "out.wav"), {})
 
         assert "GEMINI_API_KEY" in seen_lookups
@@ -179,7 +191,9 @@ class TestRegressionGuard:
     key while ``os.environ`` does not.
     """
 
-    def test_import_after_config_env_patch_uses_restored_dotenv_loader(self, tmp_path, monkeypatch):
+    def test_import_after_config_env_patch_uses_restored_dotenv_loader(
+        self, tmp_path, monkeypatch
+    ):
         """Importing TTS while clawk_cli.config.get_env_value is patched must
         not freeze that temporary helper into this module forever.
         """
@@ -206,19 +220,22 @@ class TestRegressionGuard:
                 response.raise_for_status = MagicMock()
                 return response
 
-            with patch(
-                "clawk_cli.config.load_env",
-                return_value={"MINIMAX_API_KEY": "dotenv-secret"},
-            ), patch("requests.post", side_effect=fake_post):
-                tts_tool._generate_minimax_tts(
-                    "hi", str(tmp_path / "out.mp3"), {}
-                )
+            with (
+                patch(
+                    "clawk_cli.config.load_env",
+                    return_value={"MINIMAX_API_KEY": "dotenv-secret"},
+                ),
+                patch("requests.post", side_effect=fake_post),
+            ):
+                tts_tool._generate_minimax_tts("hi", str(tmp_path / "out.mp3"), {})
 
             assert captured["headers"]["Authorization"] == "Bearer dotenv-secret"
         finally:
             importlib.reload(tts_tool)
 
-    def test_minimax_missing_when_only_in_dotenv_before_fix(self, tmp_path, monkeypatch):
+    def test_minimax_missing_when_only_in_dotenv_before_fix(
+        self, tmp_path, monkeypatch
+    ):
         from tools import tts_tool
 
         monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
@@ -233,6 +250,7 @@ class TestRegressionGuard:
             # Sanity-check: get_env_value resolves through load_env when
             # os.environ is empty.
             from clawk_cli.config import get_env_value as live_get
+
             assert live_get("MINIMAX_API_KEY") == "dotenv-secret"
 
             # And the production code path now consumes the resolved value
@@ -250,9 +268,7 @@ class TestRegressionGuard:
                 return response
 
             with patch("requests.post", side_effect=fake_post):
-                tts_tool._generate_minimax_tts(
-                    "hi", str(tmp_path / "out.mp3"), {}
-                )
+                tts_tool._generate_minimax_tts("hi", str(tmp_path / "out.mp3"), {})
 
             assert captured["headers"]["Authorization"] == "Bearer dotenv-secret"
 
@@ -266,12 +282,15 @@ class TestRegressionGuard:
 
         monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
 
-        with patch(
-            "clawk_cli.config.load_env",
-            return_value={"MINIMAX_API_KEY": "dotenv-secret"},
-        ), patch.object(tts_tool, "_import_edge_tts", side_effect=ImportError), \
-             patch.object(tts_tool, "_import_elevenlabs", side_effect=ImportError), \
-             patch.object(tts_tool, "_import_openai_client", side_effect=ImportError), \
-             patch.object(tts_tool, "_check_neutts_available", return_value=False), \
-             patch.object(tts_tool, "_check_kittentts_available", return_value=False):
+        with (
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"MINIMAX_API_KEY": "dotenv-secret"},
+            ),
+            patch.object(tts_tool, "_import_edge_tts", side_effect=ImportError),
+            patch.object(tts_tool, "_import_elevenlabs", side_effect=ImportError),
+            patch.object(tts_tool, "_import_openai_client", side_effect=ImportError),
+            patch.object(tts_tool, "_check_neutts_available", return_value=False),
+            patch.object(tts_tool, "_check_kittentts_available", return_value=False),
+        ):
             assert tts_tool.check_tts_requirements() is True

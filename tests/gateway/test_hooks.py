@@ -12,9 +12,7 @@ def _create_hook(hooks_dir, hook_name, events, handler_code):
     hook_dir = hooks_dir / hook_name
     hook_dir.mkdir(parents=True)
     (hook_dir / "HOOK.yaml").write_text(
-        f"name: {hook_name}\n"
-        f"description: Test hook\n"
-        f"events: {events}\n"
+        f"name: {hook_name}\ndescription: Test hook\nevents: {events}\n"
     )
     (hook_dir / "handler.py").write_text(handler_code)
     return hook_dir
@@ -34,8 +32,12 @@ def _patch_no_builtins(reg):
 
 class TestDiscoverAndLoad:
     def test_loads_valid_hook(self, tmp_path):
-        _create_hook(tmp_path, "my-hook", '["agent:start"]',
-                      "def handle(event_type, context):\n    pass\n")
+        _create_hook(
+            tmp_path,
+            "my-hook",
+            '["agent:start"]',
+            "def handle(event_type, context):\n    pass\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
@@ -82,7 +84,9 @@ class TestDiscoverAndLoad:
     def test_skips_no_handle_function(self, tmp_path):
         hook_dir = tmp_path / "no-handle"
         hook_dir.mkdir()
-        (hook_dir / "HOOK.yaml").write_text("name: no-handle\nevents: ['agent:start']\n")
+        (hook_dir / "HOOK.yaml").write_text(
+            "name: no-handle\nevents: ['agent:start']\n"
+        )
         (hook_dir / "handler.py").write_text("def something_else(): pass\n")
 
         reg = HookRegistry()
@@ -93,16 +97,22 @@ class TestDiscoverAndLoad:
 
     def test_nonexistent_hooks_dir(self, tmp_path):
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path / "nonexistent"), _patch_no_builtins(reg):
+        with (
+            patch("gateway.hooks.HOOKS_DIR", tmp_path / "nonexistent"),
+            _patch_no_builtins(reg),
+        ):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
 
     def test_multiple_hooks(self, tmp_path):
-        _create_hook(tmp_path, "hook-a", '["agent:start"]',
-                      "def handle(e, c): pass\n")
-        _create_hook(tmp_path, "hook-b", '["session:start", "session:reset"]',
-                      "def handle(e, c): pass\n")
+        _create_hook(tmp_path, "hook-a", '["agent:start"]', "def handle(e, c): pass\n")
+        _create_hook(
+            tmp_path,
+            "hook-b",
+            '["session:start", "session:reset"]',
+            "def handle(e, c): pass\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
@@ -116,10 +126,14 @@ class TestEmit:
     async def test_emit_calls_sync_handler(self, tmp_path):
         results = []
 
-        _create_hook(tmp_path, "sync-hook", '["agent:start"]',
-                      "results = []\n"
-                      "def handle(event_type, context):\n"
-                      "    results.append(event_type)\n")
+        _create_hook(
+            tmp_path,
+            "sync-hook",
+            '["agent:start"]',
+            "results = []\n"
+            "def handle(event_type, context):\n"
+            "    results.append(event_type)\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path):
@@ -138,9 +152,7 @@ class TestEmit:
 
         hook_dir = tmp_path / "async-hook"
         hook_dir.mkdir()
-        (hook_dir / "HOOK.yaml").write_text(
-            "name: async-hook\nevents: ['agent:end']\n"
-        )
+        (hook_dir / "HOOK.yaml").write_text("name: async-hook\nevents: ['agent:end']\n")
         (hook_dir / "handler.py").write_text(
             "import asyncio\n"
             "results = []\n"
@@ -162,10 +174,14 @@ class TestEmit:
     async def test_wildcard_matching(self, tmp_path):
         results = []
 
-        _create_hook(tmp_path, "wildcard-hook", '["command:*"]',
-                      "results = []\n"
-                      "def handle(event_type, context):\n"
-                      "    results.append(event_type)\n")
+        _create_hook(
+            tmp_path,
+            "wildcard-hook",
+            '["command:*"]',
+            "results = []\n"
+            "def handle(event_type, context):\n"
+            "    results.append(event_type)\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path):
@@ -187,9 +203,12 @@ class TestEmit:
 
     @pytest.mark.asyncio
     async def test_handler_error_does_not_propagate(self, tmp_path):
-        _create_hook(tmp_path, "bad-hook", '["agent:start"]',
-                      "def handle(event_type, context):\n"
-                      "    raise ValueError('boom')\n")
+        _create_hook(
+            tmp_path,
+            "bad-hook",
+            '["agent:start"]',
+            "def handle(event_type, context):\n    raise ValueError('boom')\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path):
@@ -204,10 +223,14 @@ class TestEmit:
     async def test_emit_default_context(self, tmp_path):
         captured = []
 
-        _create_hook(tmp_path, "ctx-hook", '["agent:start"]',
-                      "captured = []\n"
-                      "def handle(event_type, context):\n"
-                      "    captured.append(context)\n")
+        _create_hook(
+            tmp_path,
+            "ctx-hook",
+            '["agent:start"]',
+            "captured = []\n"
+            "def handle(event_type, context):\n"
+            "    captured.append(context)\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path):

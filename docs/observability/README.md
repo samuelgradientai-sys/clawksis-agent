@@ -18,22 +18,27 @@ provider requests, tool arguments, or execution callbacks.
 
 Plugins register observer callbacks from `register(ctx)`:
 
-```python
-def register(ctx):
-    ctx.register_hook("pre_api_request", on_pre_api_request)
-    ctx.register_hook("post_api_request", on_post_api_request)
-    ctx.register_hook("pre_tool_call", on_pre_tool_call)
-    ctx.register_hook("post_tool_call", on_post_tool_call)
+```pythondef register(ctx):
+
+    ctx.register_hook("pre_api_request", on_pre_api_request)
+
+    ctx.register_hook("post_api_request", on_post_api_request)
+
+    ctx.register_hook("pre_tool_call", on_pre_tool_call)
+
+    ctx.register_hook("post_tool_call", on_post_tool_call)
 ```
 
 Every hook callback receives keyword arguments. Plugins should accept
 `**kwargs` so additive fields remain backward-compatible:
 
-```python
-def on_post_tool_call(**kwargs):
-    tool_name = kwargs.get("tool_name")
-    status = kwargs.get("status")
-    result = kwargs.get("result")
+```pythondef on_post_tool_call(**kwargs):
+
+    tool_name = kwargs.get("tool_name")
+
+    status = kwargs.get("status")
+
+    result = kwargs.get("result")
 ```
 
 The plugin manager injects this field into every hook payload:
@@ -258,47 +263,54 @@ Plugin authors should preserve this property:
 
 Minimal observer plugin:
 
-```python
-def register(ctx):
-    ctx.register_hook("pre_api_request", on_pre_api_request)
-    ctx.register_hook("post_api_request", on_post_api_request)
-    ctx.register_hook("pre_tool_call", on_pre_tool_call)
-    ctx.register_hook("post_tool_call", on_post_tool_call)
-
-
-def on_pre_api_request(**kwargs):
-    start_llm_span(
-        request_id=kwargs.get("api_request_id"),
-        turn_id=kwargs.get("turn_id"),
-        request=kwargs.get("request"),
-        model=kwargs.get("model"),
-    )
-
-
-def on_post_api_request(**kwargs):
-    finish_llm_span(
-        request_id=kwargs.get("api_request_id"),
-        response=kwargs.get("response"),
-        usage=kwargs.get("usage"),
-        duration=kwargs.get("api_duration"),
-    )
-
-
-def on_pre_tool_call(**kwargs):
-    start_tool_span(
-        call_id=kwargs.get("tool_call_id"),
-        name=kwargs.get("tool_name"),
-        args=kwargs.get("args"),
-    )
-
-
-def on_post_tool_call(**kwargs):
-    finish_tool_span(
-        call_id=kwargs.get("tool_call_id"),
-        result=kwargs.get("result"),
-        status=kwargs.get("status"),
-        duration_ms=kwargs.get("duration_ms"),
-    )
+```pythondef register(ctx):
+
+    ctx.register_hook("pre_api_request", on_pre_api_request)
+
+    ctx.register_hook("post_api_request", on_post_api_request)
+
+    ctx.register_hook("pre_tool_call", on_pre_tool_call)
+
+    ctx.register_hook("post_tool_call", on_post_tool_call)
+
+
+def on_pre_api_request(**kwargs):
+
+    start_llm_span(
+        request_id=kwargs.get("api_request_id"),
+        turn_id=kwargs.get("turn_id"),
+        request=kwargs.get("request"),
+        model=kwargs.get("model"),
+    )
+
+
+def on_post_api_request(**kwargs):
+
+    finish_llm_span(
+        request_id=kwargs.get("api_request_id"),
+        response=kwargs.get("response"),
+        usage=kwargs.get("usage"),
+        duration=kwargs.get("api_duration"),
+    )
+
+
+def on_pre_tool_call(**kwargs):
+
+    start_tool_span(
+        call_id=kwargs.get("tool_call_id"),
+        name=kwargs.get("tool_name"),
+        args=kwargs.get("args"),
+    )
+
+
+def on_post_tool_call(**kwargs):
+
+    finish_tool_span(
+        call_id=kwargs.get("tool_call_id"),
+        result=kwargs.get("result"),
+        status=kwargs.get("status"),
+        duration_ms=kwargs.get("duration_ms"),
+    )
 ```
 
 Use `session_id`, `turn_id`, `api_request_id`, and `tool_call_id` for span

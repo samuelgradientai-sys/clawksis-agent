@@ -53,7 +53,7 @@ If you do `node.par.nonexistent = value`, TD raises `tdAttributeError` and stops
 node.par.nonexistent = value
 
 # CORRECT — defensive access:
-if hasattr(node.par, 'nonexistent'):
+if hasattr(node.par, "nonexistent"):
     node.par.nonexistent = value
 ```
 
@@ -64,8 +64,9 @@ menuNames: ['useinput','eighth','quarter','half','2x','4x','8x','fit','limit','c
 ```
 Always use the string form. Setting `outputresolution = 9` may silently fail.
 ```python
-node.par.outputresolution = 'custom'  # correct
-node.par.resolutionw = 1280; node.par.resolutionh = 720
+node.par.outputresolution = "custom"  # correct
+node.par.resolutionw = 1280
+node.par.resolutionh = 720
 ```
 Discover valid values: `list(node.par.outputresolution.menuNames)`
 
@@ -77,7 +78,7 @@ There is NO built-in time uniform for GLSL TOPs. GLSL MAT has `uTDGeneral.second
 
 **PRIMARY — GLSL TOP Vectors/Values page:**
 ```python
-gl.par.value0name = 'uTime'
+gl.par.value0name = "uTime"
 gl.par.value0.expr = "absTime.seconds"
 # In GLSL: uniform float uTime;
 ```
@@ -86,10 +87,11 @@ gl.par.value0.expr = "absTime.seconds"
 
 CRITICAL: set format to `rgba32float` — default 8-bit clamps to 0-1:
 ```python
-t = root.create(constantTOP, 'time_driver')
-t.par.format = 'rgba32float'
-t.par.outputresolution = 'custom'
-t.par.resolutionw = 1; t.par.resolutionh = 1
+t = root.create(constantTOP, "time_driver")
+t.par.format = "rgba32float"
+t.par.outputresolution = "custom"
+t.par.resolutionw = 1
+t.par.resolutionh = 1
 t.par.colorr.expr = "absTime.seconds % 1000.0"
 t.outputConnectors[0].connect(glsl.inputConnectors[0])
 ```
@@ -118,8 +120,8 @@ GLSL code with special characters can corrupt JSON payloads. Write the shader to
 ```python
 # Agent side: write shader to /tmp/shader.glsl via write_file
 # TD side:
-sd = root.create(textDAT, 'shader_code')
-with open('/tmp/shader.glsl', 'r') as f:
+sd = root.create(textDAT, "shader_code")
+with open("/tmp/shader.glsl", "r") as f:
     sd.text = f.read()
 ```
 
@@ -143,7 +145,7 @@ Creating nodes with the same names you just destroyed in the SAME script causes 
 ```python
 # td_execute_python:
 for c in list(root.children):
-    if c.valid and c.name.startswith('my_'):
+    if c.valid and c.name.startswith("my_"):
         c.destroy()
 # ... then create my_audio, my_shader etc. in same script → CRASHES
 ```
@@ -152,11 +154,11 @@ for c in list(root.children):
 ```python
 # Call 1: td_execute_python — clean only
 for c in list(root.children):
-    if c.valid and c.name.startswith('my_'):
+    if c.valid and c.name.startswith("my_"):
         c.destroy()
 
 # Call 2: td_execute_python — build (separate MCP call)
-audio = root.create(audiofileinCHOP, 'my_audio')
+audio = root.create(audiofileinCHOP, "my_audio")
 # ... rest of build
 ```
 
@@ -166,8 +168,8 @@ The feedbackTOP's `top` parameter references which TOP to delay. Do NOT also wir
 
 Correct setup:
 ```python
-fb = root.create(feedbackTOP, 'fb_delay')
-fb.par.top = comp.path          # reference only — no wire to fb input
+fb = root.create(feedbackTOP, "fb_delay")
+fb.par.top = comp.path  # reference only — no wire to fb input
 fb.outputConnectors[0].connect(xf)  # fb output -> transform -> fade -> comp
 ```
 
@@ -186,7 +188,7 @@ New TD files start with `/project1` as the main container. System nodes live at 
 Setting `resolutionw=1920` silently clamps to 1280. Always check effective resolution after creation:
 ```python
 n.cook(force=True)
-actual = str(n.width) + 'x' + str(n.height)
+actual = str(n.width) + "x" + str(n.height)
 ```
 
 ## Recording & Codecs
@@ -206,13 +208,13 @@ For image sequences: `rec.par.type = 'imagesequence'`, `rec.par.imagefiletype = 
 
 Use the toggle parameter instead:
 ```python
-rec.par.record = True   # start recording
+rec.par.record = True  # start recording
 rec.par.record = False  # stop recording
 ```
 
 When setting file path and starting recording in the same script, use delayFrames:
 ```python
-rec.par.file = '/tmp/new_output.mov'
+rec.par.file = "/tmp/new_output.mov"
 run("op('/project1/recorder').par.record = True", delayFrames=2)
 ```
 
@@ -233,16 +235,16 @@ rec.par.record = False
 # Step 2: Reset audio to beginning
 audio.par.play = False
 audio.par.cue = True
-audio.par.cuepoint = 0      # may need cuepointunit=0 too
+audio.par.cuepoint = 0  # may need cuepointunit=0 too
 # Verify: audio.par.cue.eval() should be True
 
 # Step 3: Set output file path
-rec.par.file = '/tmp/output.mov'
+rec.par.file = "/tmp/output.mov"
 
 # Step 4: Release cue + start playing + start recording (with frame delay)
 audio.par.cue = False
 audio.par.play = True
-audio.par.playmode = 2      # Sequential — plays once through
+audio.par.playmode = 2  # Sequential — plays once through
 run("op('/project1/recorder').par.record = True", delayFrames=3)
 ```
 
@@ -265,8 +267,8 @@ NEVER set as just the DAT name. NEVER use ParMode.EXPRESSION. ALWAYS ensure the 
 ### 21. td.Panel is NOT subscriptable — use attribute access
 
 ```python
-comp.panel.select      # correct (attribute access, returns float)
-comp.panel['select']   # WRONG — 'td.Panel' object is not subscriptable
+comp.panel.select  # correct (attribute access, returns float)
+comp.panel["select"]  # WRONG — 'td.Panel' object is not subscriptable
 ```
 
 ### 22. ALWAYS use relative paths in script callbacks
@@ -274,7 +276,7 @@ comp.panel['select']   # WRONG — 'td.Panel' object is not subscriptable
 In scriptTOP/CHOP/SOP/DAT callbacks, use paths relative to `scriptOp` or `me`:
 ```python
 root = scriptOp.parent().parent()
-dat = root.op('pixel_data')
+dat = root.op("pixel_data")
 ```
 NEVER hardcode absolute paths like `op('/project1/myComp/child')` — they break when containers are renamed or copied.
 
@@ -282,7 +284,7 @@ NEVER hardcode absolute paths like `op('/project1/myComp/child')` — they break
 
 Channel names are `kup`, `kdown`, `kleft`, `kright`, `ka`, `kb`, etc. — NOT `up`, `down`, `a`, `b`. Always verify with:
 ```python
-channels = [c.name for c in op('/project1/keyboard1').chans()]
+channels = [c.name for c in op("/project1/keyboard1").chans()]
 ```
 
 ### 24. expressCHOP cook-only properties — false positive errors
@@ -300,7 +302,7 @@ vertex.x, vertex.y, vertex.z
 vertex.point.P[0], vertex.point.P[1], vertex.point.P[2]
 # Or for SOP point positions:
 pt = sop.points()[i]
-pos = pt.P    # use P[0], P[1], P[2]
+pos = pt.P  # use P[0], P[1], P[2]
 ```
 
 ## Audio
@@ -320,9 +322,9 @@ AudioSpectrum at 44100Hz with `timeslice=False` outputs the ENTIRE audio file as
 If the CHOP-to-TOP still gets too many samples, set `layout = 'rowscropped'` on the choptoTOP.
 
 ```python
-spectrum.par.fftsize = '256'      # STRING, not int — enum values
-spectrum.par.timeslice = True     # MUST be True for real-time audio reactivity
-spectex.par.layout = 'rowscropped'  # handles oversized CHOP inputs
+spectrum.par.fftsize = "256"  # STRING, not int — enum values
+spectrum.par.timeslice = True  # MUST be True for real-time audio reactivity
+spectex.par.layout = "rowscropped"  # handles oversized CHOP inputs
 ```
 
 **resampleCHOP has NO `numsamples` param.** It uses `rate`, `start`, `end`, `method`. Don't guess — always `td_get_par_info('resampleCHOP')` first.
@@ -330,7 +332,7 @@ spectex.par.layout = 'rowscropped'  # handles oversized CHOP inputs
 ### 28. CHOP To TOP has NO input connectors — use par.chop reference
 
 ```python
-spec_tex = root.create(choptoTOP, 'spectrum_tex')
+spec_tex = root.create(choptoTOP, "spectrum_tex")
 spec_tex.par.chop = resample  # correct: parameter reference
 # NOT: resample.outputConnectors[0].connect(spec_tex.inputConnectors[0])  # WRONG
 ```
@@ -344,16 +346,19 @@ Node errors and broken connections produce no output. Always check:
 for c in list(root.children):
     e = c.errors()
     w = c.warnings()
-    if e: print(c.name, 'ERR:', e)
-    if w: print(c.name, 'WARN:', w)
+    if e:
+        print(c.name, "ERR:", e)
+    if w:
+        print(c.name, "WARN:", w)
 ```
 
 ### 30. Window COMP param for display target is `winop`
 
 ```python
-win = root.create(windowCOMP, 'display')
-win.par.winop = '/project1/logo_out'
-win.par.winw = 1280; win.par.winh = 720
+win = root.create(windowCOMP, "display")
+win.par.winop = "/project1/logo_out"
+win.par.winw = 1280
+win.par.winh = 720
 win.par.winopen.pulse()
 ```
 
@@ -486,7 +491,7 @@ op("/project1/shader_code").text = shader_string
 However, the `result` variable (if you set one) does NOT appear verbatim — use `print()` for anything you need to read back:
 ```python
 # CORRECT — appears in response:
-print('value:', some_value)
+print("value:", some_value)
 
 # WRONG — not reliably in response:
 result = some_value
@@ -498,7 +503,7 @@ For structured data, use dedicated inspection tools (`td_get_operator_info`, `td
 
 The response text from `td_get_operator_info` has `[fps 60.0/60]` appended after the JSON object. This causes `json.loads()` to fail with "Extra data" errors. Strip it before parsing:
 ```python
-clean = response_text.rsplit('[fps', 1)[0]
+clean = response_text.rsplit("[fps", 1)[0]
 data = json.loads(clean)
 ```
 
@@ -586,7 +591,7 @@ Setting `moviefileoutTOP.par.input` programmatically does NOT work. All forms fa
 
 **Workaround — frame capture + ffmpeg:**
 ```python
-out = op('/project1/out')
+out = op("/project1/out")
 for i in range(300):
     delay = i * 5
     run(f"op('/project1/out').save('/tmp/frames/f_{i:04d}.png')", delayFrames=delay)
@@ -596,11 +601,11 @@ for i in range(300):
 ### 53. Batch frame capture — use `me.fetch`/`me.store` for state across calls
 
 ```python
-start = me.fetch('cap_frame', 0)
+start = me.fetch("cap_frame", 0)
 for i in range(60):
     frame = start + i
-    op('/project1/out').save(f'/tmp/frames/frame_{str(frame).zfill(4)}.png')
-me.store('cap_frame', start + 60)
+    op("/project1/out").save(f"/tmp/frames/frame_{str(frame).zfill(4)}.png")
+me.store("cap_frame", start + 60)
 ```
 Call 5 times for 300 frames. Each picks up where the last left off.
 
@@ -624,7 +629,7 @@ void main() {
 ```python
 # WRONG — all frames identical
 for i in range(300):
-    op('/project1/out').save(f'frames/f_{i:04d}.png')
+    op("/project1/out").save(f"frames/f_{i:04d}.png")
 
 # CORRECT — use run() with delayFrames
 for i in range(300):
@@ -642,7 +647,10 @@ With feedback TOP opacity 0.7+, the buffer dominates output. Switching input pro
 for i in range(300):
     idx = (i // 8) % num_inputs
     delay = i * 5
-    run(f"op('/project1/vswitch').par.index={idx}; op('/project1/out').save('f_{i:04d}.png')", delayFrames=delay)
+    run(
+        f"op('/project1/vswitch').par.index={idx}; op('/project1/out').save('f_{i:04d}.png')",
+        delayFrames=delay,
+    )
 ```
 
 ### 57. Large td_execute_python scripts fail — split into incremental calls
@@ -656,10 +664,10 @@ for i in range(300):
 ### 59. TOX reverse-engineering workflow
 
 ```python
-comp = root.loadTox(r'/path/to/file.tox')
-comp.name = '_study_comp'
+comp = root.loadTox(r"/path/to/file.tox")
+comp.name = "_study_comp"
 for child in comp.children:
-    print(f'{child.name} ({child.OPType})')
+    print(f"{child.name} ({child.OPType})")
 # Use td_get_operators_info, td_read_dat, check custom params
 ```
 
@@ -671,12 +679,12 @@ TD auto-renames: `slider_brightness` → `slider_brightness1`. Always check name
 
 ```python
 # CORRECT
-proj.create('audiofileinCHOP', 'audio_in')
-proj.create('glslTOP', 'render')
+proj.create("audiofileinCHOP", "audio_in")
+proj.create("glslTOP", "render")
 
 # WRONG — raises "Unknown operator type"
-proj.create('audiofilein', 'audio_in')
-proj.create('glsl', 'render')
+proj.create("audiofilein", "audio_in")
+proj.create("glsl", "render")
 ```
 
 ### 62. Reparenting COMPs — use copyOPs, not connect()
@@ -692,13 +700,13 @@ source.destroy()
 
 ```python
 # CRASHES TD — don't do this
-echop = root.create(expressionCHOP, 'slider_ctrl')
+echop = root.create(expressionCHOP, "slider_ctrl")
 echop.par.chan0expr = 'op("/project1/controls/slider_brightness1").par.value0'
 
 # WORKING — parameterCHOP as bridge
-pchop = root.create(parameterCHOP, 'slider_vals')
-pchop.par.ops = '/project1/controls'
-pchop.par.parameters = 'value0'
+pchop = root.create(parameterCHOP, "slider_vals")
+pchop.par.ops = "/project1/controls"
+pchop.par.parameters = "value0"
 pchop.par.custom = True
 pchop.par.builtin = False
 ```

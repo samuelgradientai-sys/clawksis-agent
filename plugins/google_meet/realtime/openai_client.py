@@ -59,6 +59,7 @@ class RealtimeSession:
         sample_rate: int = 24000,
     ) -> None:
         import threading as _threading
+
         self.api_key = api_key
         self.model = model
         self.voice = voice
@@ -90,18 +91,16 @@ class RealtimeSession:
         except TypeError:
             self._ws = connect(url, extra_headers=headers)
 
-        self._send_json(
-            {
-                "type": "session.update",
-                "session": {
-                    "voice": self.voice,
-                    "instructions": self.instructions,
-                    "modalities": ["audio", "text"],
-                    "output_audio_format": "pcm16",
-                    "input_audio_format": "pcm16",
-                },
-            }
-        )
+        self._send_json({
+            "type": "session.update",
+            "session": {
+                "voice": self.voice,
+                "instructions": self.instructions,
+                "modalities": ["audio", "text"],
+                "output_audio_format": "pcm16",
+                "input_audio_format": "pcm16",
+            },
+        })
 
     def close(self) -> None:
         if self._ws is not None:
@@ -125,22 +124,18 @@ class RealtimeSession:
 
         start = time.monotonic()
 
-        self._send_json(
-            {
-                "type": "conversation.item.create",
-                "item": {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": text}],
-                },
-            }
-        )
-        self._send_json(
-            {
-                "type": "response.create",
-                "response": {"modalities": ["audio"]},
-            }
-        )
+        self._send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": text}],
+            },
+        })
+        self._send_json({
+            "type": "response.create",
+            "response": {"modalities": ["audio"]},
+        })
 
         bytes_written = 0
         sink_fp = None
@@ -160,7 +155,11 @@ class RealtimeSession:
                     # Connection closed by peer.
                     break
                 try:
-                    frame = json.loads(raw) if isinstance(raw, (str, bytes, bytearray)) else raw
+                    frame = (
+                        json.loads(raw)
+                        if isinstance(raw, (str, bytes, bytearray))
+                        else raw
+                    )
                 except (TypeError, ValueError):
                     continue
                 if not isinstance(frame, dict):
@@ -183,7 +182,11 @@ class RealtimeSession:
                     rid = (frame.get("response") or {}).get("id")
                     if rid:
                         self._last_response_id = rid
-                elif ftype in {"response.done", "response.completed", "response.cancelled"}:
+                elif ftype in {
+                    "response.done",
+                    "response.completed",
+                    "response.cancelled",
+                }:
                     break
                 elif ftype == "error":
                     err = frame.get("error") or frame
@@ -283,15 +286,17 @@ class RealtimeSpeaker:
             # new writes via mtime, and delete-then-recreate is a race.
             self.queue_path.write_text("")
             return
-        self.queue_path.write_text(
-            "\n".join(json.dumps(e) for e in remaining) + "\n"
-        )
+        self.queue_path.write_text("\n".join(json.dumps(e) for e in remaining) + "\n")
 
     def _append_processed(self, entry: dict, result: dict) -> None:
         if self.processed_path is None:
             return
         self.processed_path.parent.mkdir(parents=True, exist_ok=True)
-        record = {"id": entry.get("id"), "text": entry.get("text", ""), "result": result}
+        record = {
+            "id": entry.get("id"),
+            "text": entry.get("text", ""),
+            "result": result,
+        }
         with open(self.processed_path, "a", encoding="utf-8") as fp:
             fp.write(json.dumps(record) + "\n")
 
@@ -327,6 +332,6 @@ class RealtimeSpeaker:
                 self._rewrite_queue(latest[1:])
             else:
                 # Fallback: drop-by-id anywhere in the queue.
-                self._rewrite_queue(
-                    [e for e in latest if e.get("id") != head.get("id")]
-                )
+                self._rewrite_queue([
+                    e for e in latest if e.get("id") != head.get("id")
+                ])

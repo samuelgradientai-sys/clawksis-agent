@@ -22,16 +22,10 @@ Sonnet 4.5 per the contributor's measurement).
 
 """
 
-
-
 from unittest.mock import patch
 
 
-
-
-
 def _make_agent_stub(agent_cls):
-
     """Create a minimal AIAgent-like object with just enough state for _spawn_background_review."""
 
     agent = object.__new__(agent_cls)
@@ -61,11 +55,8 @@ def _make_agent_stub(agent_cls):
     agent.status_callback = None
 
     agent._cached_system_prompt = (
-
         "PARENT-SYSTEM-PROMPT-BYTES — must be inherited verbatim "
-
         "for prefix-cache parity"
-
     )
 
     import datetime as _dt
@@ -87,36 +78,21 @@ def _make_agent_stub(agent_cls):
     return agent
 
 
-
-
-
 class _SyncThread:
-
     """Drop-in replacement for threading.Thread that runs the target inline."""
-
-
 
     def __init__(self, *, target=None, daemon=None, name=None):
 
         self._target = target
 
-
-
     def start(self):
 
         if self._target:
-
             self._target()
 
 
-
-
-
 class _ReviewAgentRecorder:
-
     """Stand-in for the review-fork AIAgent that records the prompt assignment."""
-
-
 
     def __init__(self, *args, **kwargs):
 
@@ -138,30 +114,20 @@ class _ReviewAgentRecorder:
 
         self.suppress_status_output = None
 
-
-
     def run_conversation(self, *args, **kwargs):
 
         raise RuntimeError("stop after recording state — don't actually call the API")
 
-
-
     def shutdown_memory_provider(self):
 
         pass
-
-
 
     def close(self):
 
         pass
 
 
-
-
-
 def test_review_fork_inherits_parent_cached_system_prompt():
-
     """The review fork's _cached_system_prompt must equal the parent's byte-for-byte.
 
 
@@ -178,23 +144,15 @@ def test_review_fork_inherits_parent_cached_system_prompt():
 
     import run_agent
 
-
-
     agent = _make_agent_stub(run_agent.AIAgent)
-
-
 
     captured = {}
 
     parent_prompt = agent._cached_system_prompt
 
-
-
     # Hook the assignment site: record what gets put on the review agent.
 
     real_recorder_init = _ReviewAgentRecorder.__init__
-
-
 
     def _recorder_init(self, *args, **kwargs):
 
@@ -206,65 +164,42 @@ def test_review_fork_inherits_parent_cached_system_prompt():
 
         # via __setattr__ on this instance.
 
-
-
-    with patch.object(run_agent, "AIAgent", _ReviewAgentRecorder), \
-         patch("threading.Thread", _SyncThread):
-
+    with (
+        patch.object(run_agent, "AIAgent", _ReviewAgentRecorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         # Wrap the recorder's __setattr__ so we can see the _cached_system_prompt
 
         # write that _spawn_background_review performs after construction.
 
         orig_setattr = _ReviewAgentRecorder.__setattr__
 
-
-
         def _spy_setattr(self, name, value):
 
             if name == "_cached_system_prompt":
-
                 captured["written_prompt"] = value
 
             orig_setattr(self, name, value)
 
-
-
         with patch.object(_ReviewAgentRecorder, "__setattr__", _spy_setattr):
-
             agent._spawn_background_review(
-
                 messages_snapshot=[],
-
                 review_memory=True,
-
                 review_skills=False,
-
             )
 
-
-
     assert "written_prompt" in captured, (
-
         "_spawn_background_review never assigned _cached_system_prompt on the review agent"
-
     )
 
     assert captured["written_prompt"] == parent_prompt, (
-
         f"Review fork's _cached_system_prompt diverged from parent's. "
-
         f"Got {captured['written_prompt']!r}, expected {parent_prompt!r}. "
-
         "This breaks Anthropic/OpenRouter prefix-cache parity (#25322)."
-
     )
 
 
-
-
-
 def test_review_fork_pins_session_start_and_session_id():
-
     """Defensive complement to cached-system-prompt inheritance.
 
 
@@ -281,18 +216,11 @@ def test_review_fork_pins_session_start_and_session_id():
 
     import run_agent
 
-
-
     agent = _make_agent_stub(run_agent.AIAgent)
-
-
 
     captured = {}
 
-
-
     class _Recorder:
-
         def __init__(self, *args, **kwargs):
 
             self._cached_system_prompt = None
@@ -317,8 +245,6 @@ def test_review_fork_pins_session_start_and_session_id():
 
             self.session_id = None
 
-
-
         def run_conversation(self, *args, **kwargs):
 
             captured["session_start"] = self.session_start
@@ -327,73 +253,45 @@ def test_review_fork_pins_session_start_and_session_id():
 
             raise RuntimeError("stop after recording")
 
-
-
         def shutdown_memory_provider(self):
 
             pass
-
-
 
         def close(self):
 
             pass
 
-
-
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
-
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
-
             messages_snapshot=[],
-
             review_memory=True,
-
             review_skills=False,
-
         )
 
-
-
     assert captured.get("session_start") == agent.session_start, (
-
         "Review fork did not inherit parent's session_start — "
-
         "system-prompt rebuild paths would diverge."
-
     )
 
     assert captured.get("session_id") == agent.session_id, (
-
         "Review fork did not inherit parent's session_id — "
-
         "system-prompt rebuild paths would diverge."
-
     )
 
 
-
-
-
 def test_review_fork_inherits_parent_toolset_config():
-
     """``tools[]`` byte-stability: fork must inherit parent's toolset config."""
 
     import run_agent
 
-
-
     agent = _make_agent_stub(run_agent.AIAgent)
-
-
 
     captured = {}
 
-
-
     class _Recorder:
-
         def __init__(self, *args, **kwargs):
 
             captured["enabled_toolsets"] = kwargs.get("enabled_toolsets")
@@ -422,54 +320,34 @@ def test_review_fork_inherits_parent_toolset_config():
 
             self.session_id = None
 
-
-
         def run_conversation(self, *args, **kwargs):
 
             raise RuntimeError("stop after recording — don't actually call the API")
-
-
 
         def shutdown_memory_provider(self):
 
             pass
 
-
-
         def close(self):
 
             pass
 
-
-
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
-
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
-
             messages_snapshot=[],
-
             review_memory=True,
-
             review_skills=False,
-
         )
 
-
-
     assert captured.get("enabled_toolsets") == agent.enabled_toolsets, (
-
         f"enabled_toolsets mismatch: {captured.get('enabled_toolsets')!r} "
-
         f"vs expected {agent.enabled_toolsets!r}"
-
     )
 
     assert captured.get("disabled_toolsets") == agent.disabled_toolsets, (
-
         f"disabled_toolsets mismatch: {captured.get('disabled_toolsets')!r} "
-
         f"vs expected {agent.disabled_toolsets!r}"
-
     )
-

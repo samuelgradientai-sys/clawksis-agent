@@ -104,118 +104,155 @@ works exactly as before.
 
 New method for Chat Completions API streaming:
 
-```python
-def _run_streaming_chat_completion(self, api_kwargs: dict):
-    """Stream a chat completion, emitting text tokens via stream_callback.
-    
-    Returns a fake response object compatible with the non-streaming code path.
-    Falls back to non-streaming on any error.
-    """
-    stream_kwargs = dict(api_kwargs)
-    stream_kwargs["stream"] = True
-    stream_kwargs["stream_options"] = {"include_usage": True}
-    
-    accumulated_content = []
-    accumulated_tool_calls = {}  # index -> {id, name, arguments}
-    final_usage = None
-    
-    try:
-        stream = self.client.chat.completions.create(**stream_kwargs)
-        
-        for chunk in stream:
-            if not chunk.choices:
-                # Usage-only chunk (final)
-                if chunk.usage:
-                    final_usage = chunk.usage
-                continue
-            
-            delta = chunk.choices[0].delta
-            
-            # Text content — emit via callback
-            if delta.content:
-                accumulated_content.append(delta.content)
-                if self.stream_callback:
-                    try:
-                        self.stream_callback(delta.content)
-                    except Exception:
-                        pass
-            
-            # Tool call deltas — accumulate silently
-            if delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    idx = tc_delta.index
-                    if idx not in accumulated_tool_calls:
-                        accumulated_tool_calls[idx] = {
-                            "id": tc_delta.id or "",
-                            "name": "", "arguments": ""
-                        }
-                    if tc_delta.function:
-                        if tc_delta.function.name:
-                            accumulated_tool_calls[idx]["name"] = tc_delta.function.name
-                        if tc_delta.function.arguments:
-                            accumulated_tool_calls[idx]["arguments"] += tc_delta.function.arguments
-        
-        # Build fake response compatible with existing code
-        tool_calls = []
-        for idx in sorted(accumulated_tool_calls):
-            tc = accumulated_tool_calls[idx]
-            if tc["name"]:
-                tool_calls.append(SimpleNamespace(
-                    id=tc["id"], type="function",
-                    function=SimpleNamespace(name=tc["name"], arguments=tc["arguments"]),
-                ))
-        
-        return SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content="".join(accumulated_content) or "",
-                    tool_calls=tool_calls or None,
-                    role="assistant",
-                ),
-                finish_reason="tool_calls" if tool_calls else "stop",
-            )],
-            usage=final_usage,
-            model=self.model,
-        )
-    
-    except Exception as e:
-        logger.debug("Streaming failed, falling back to non-streaming: %s", e)
-        return self.client.chat.completions.create(**api_kwargs)
+```pythondef _run_streaming_chat_completion(self, api_kwargs: dict):
+    """Stream a chat completion, emitting text tokens via stream_callback.
+
+
+
+    Returns a fake response object compatible with the non-streaming code path.
+
+    Falls back to non-streaming on any error.
+
+    """
+
+    stream_kwargs = dict(api_kwargs)
+
+    stream_kwargs["stream"] = True
+
+    stream_kwargs["stream_options"] = {"include_usage": True}
+
+    accumulated_content = []
+
+    accumulated_tool_calls = {}  # index -> {id, name, arguments}
+
+    final_usage = None
+
+    try:
+        stream = self.client.chat.completions.create(**stream_kwargs)
+
+        for chunk in stream:
+            if not chunk.choices:
+                # Usage-only chunk (final)
+
+                if chunk.usage:
+                    final_usage = chunk.usage
+
+                continue
+
+            delta = chunk.choices[0].delta
+
+            # Text content — emit via callback
+
+            if delta.content:
+                accumulated_content.append(delta.content)
+
+                if self.stream_callback:
+                    try:
+                        self.stream_callback(delta.content)
+
+                    except Exception:
+                        pass
+
+            # Tool call deltas — accumulate silently
+
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+
+                    if idx not in accumulated_tool_calls:
+                        accumulated_tool_calls[idx] = {
+                            "id": tc_delta.id or "",
+                            "name": "",
+                            "arguments": "",
+                        }
+
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            accumulated_tool_calls[idx]["name"] = tc_delta.function.name
+
+                        if tc_delta.function.arguments:
+                            accumulated_tool_calls[idx]["arguments"] += (
+                                tc_delta.function.arguments
+                            )
+
+        # Build fake response compatible with existing code
+
+        tool_calls = []
+
+        for idx in sorted(accumulated_tool_calls):
+            tc = accumulated_tool_calls[idx]
+
+            if tc["name"]:
+                tool_calls.append(
+                    SimpleNamespace(
+                        id=tc["id"],
+                        type="function",
+                        function=SimpleNamespace(
+                            name=tc["name"], arguments=tc["arguments"]
+                        ),
+                    )
+                )
+
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="".join(accumulated_content) or "",
+                        tool_calls=tool_calls or None,
+                        role="assistant",
+                    ),
+                    finish_reason="tool_calls" if tool_calls else "stop",
+                )
+            ],
+            usage=final_usage,
+            model=self.model,
+        )
+
+    except Exception as e:
+        logger.debug("Streaming failed, falling back to non-streaming: %s", e)
+
+        return self.client.chat.completions.create(**api_kwargs)
 ```
 
 #### 1c. Modify _run_codex_stream() for Responses API (~10 lines)
 
 The method already iterates the stream. Add callback emission:
 
-```python
-def _run_codex_stream(self, api_kwargs: dict):
-    with self.client.responses.stream(**api_kwargs) as stream:
-        for event in stream:
-            # Emit text deltas if streaming callback is set
-            if self.stream_callback and hasattr(event, 'type'):
-                if event.type == 'response.output_text.delta':
-                    try:
-                        self.stream_callback(event.delta)
-                    except Exception:
-                        pass
-        return stream.get_final_response()
+```pythondef _run_codex_stream(self, api_kwargs: dict):
+
+    with self.client.responses.stream(**api_kwargs) as stream:
+        for event in stream:
+            # Emit text deltas if streaming callback is set
+
+            if self.stream_callback and hasattr(event, "type"):
+                if event.type == "response.output_text.delta":
+                    try:
+                        self.stream_callback(event.delta)
+
+                    except Exception:
+                        pass
+
+        return stream.get_final_response()
 ```
 
 #### 1d. Modify _interruptible_api_call() (~5 lines)
 
 Add the streaming branch:
 
-```python
-def _call():
-    try:
-        if self.api_mode == "codex_responses":
-            result["response"] = self._run_codex_stream(api_kwargs)
-        elif self.stream_callback is not None:
-            result["response"] = self._run_streaming_chat_completion(api_kwargs)
-        else:
-            result["response"] = self.client.chat.completions.create(**api_kwargs)
-    except Exception as e:
-        result["error"] = e
+```pythondef _call():
+
+    try:
+        if self.api_mode == "codex_responses":
+            result["response"] = self._run_codex_stream(api_kwargs)
+
+        elif self.stream_callback is not None:
+            result["response"] = self._run_streaming_chat_completion(api_kwargs)
+
+        else:
+            result["response"] = self.client.chat.completions.create(**api_kwargs)
+
+    except Exception as e:
+        result["error"] = e
 ```
 
 #### 1e. Signal end-of-stream to consumers (~5 lines)
@@ -223,13 +260,14 @@ def _call():
 After the API call returns, signal the callback that streaming is done
 so consumers can finalize (remove cursor, close SSE, etc.):
 
-```python
-# In run_conversation(), after _interruptible_api_call returns:
-if self.stream_callback:
-    try:
-        self.stream_callback(None)  # None = end of stream signal
-    except Exception:
-        pass
+```python# In run_conversation(), after _interruptible_api_call returns:
+
+if self.stream_callback:
+    try:
+        self.stream_callback(None)  # None = end of stream signal
+
+    except Exception:
+        pass
 ```
 
 Consumers check: `if delta is None: finalize()`
@@ -252,115 +290,148 @@ Consumers check: `if delta is None: finalize()`
 
 In `_run_agent()`, before creating the AIAgent:
 
-```python
-# Read streaming config
-_streaming_enabled = False
-try:
-    # Check per-platform override first
-    platform_key = source.platform.value if source.platform else ""
-    _stream_cfg = {}  # loaded from config.yaml streaming section
-    if _stream_cfg.get(platform_key) is not None:
-        _streaming_enabled = bool(_stream_cfg[platform_key])
-    else:
-        _streaming_enabled = bool(_stream_cfg.get("enabled", False))
-except Exception:
-    pass
-# Env var override
-if os.getenv("CLAWK_STREAMING_ENABLED", "").lower() in ("true", "1", "yes"):
-    _streaming_enabled = True
+```python# Read streaming config
+
+_streaming_enabled = False
+
+try:
+    # Check per-platform override first
+
+    platform_key = source.platform.value if source.platform else ""
+
+    _stream_cfg = {}  # loaded from config.yaml streaming section
+
+    if _stream_cfg.get(platform_key) is not None:
+        _streaming_enabled = bool(_stream_cfg[platform_key])
+
+    else:
+        _streaming_enabled = bool(_stream_cfg.get("enabled", False))
+
+except Exception:
+    pass
+
+# Env var override
+
+if os.getenv("CLAWK_STREAMING_ENABLED", "").lower() in ("true", "1", "yes"):
+    _streaming_enabled = True
 ```
 
 #### 2b. Set up queue + callback (~15 lines)
 
-```python
-_stream_q = None
-_stream_done = None
-_stream_msg_id = [None]  # mutable ref for the async task
-
-if _streaming_enabled:
-    import queue as _q
-    _stream_q = _q.Queue()
-    _stream_done = threading.Event()
-    
-    def _on_token(delta):
-        if delta is None:
-            _stream_done.set()
-        else:
-            _stream_q.put(delta)
+```python_stream_q = None
+
+_stream_done = None
+
+_stream_msg_id = [None]  # mutable ref for the async task
+
+
+if _streaming_enabled:
+    import queue as _q
+
+    _stream_q = _q.Queue()
+
+    _stream_done = threading.Event()
+
+    def _on_token(delta):
+
+        if delta is None:
+            _stream_done.set()
+
+        else:
+            _stream_q.put(delta)
 ```
 
 Pass `stream_callback=_on_token` to the AIAgent constructor.
 
 #### 2c. Telegram/Discord stream preview task (~50 lines)
 
-```python
-async def stream_preview():
-    """Progressively edit a message with streaming tokens."""
-    if not _stream_q:
-        return
-    adapter = self.adapters.get(source.platform)
-    if not adapter:
-        return
-    
-    accumulated = []
-    token_count = 0
-    last_edit = 0.0
-    MIN_TOKENS = 20          # Don't show until enough context
-    EDIT_INTERVAL = 1.5      # Respect Telegram rate limits
-    
-    try:
-        while not _stream_done.is_set():
-            try:
-                chunk = _stream_q.get(timeout=0.1)
-                accumulated.append(chunk)
-                token_count += 1
-            except queue.Empty:
-                continue
-            
-            now = time.monotonic()
-            if token_count >= MIN_TOKENS and (now - last_edit) >= EDIT_INTERVAL:
-                preview = "".join(accumulated) + " ▌"
-                if _stream_msg_id[0] is None:
-                    r = await adapter.send(
-                        chat_id=source.chat_id,
-                        content=preview,
-                        metadata=_thread_metadata,
-                    )
-                    if r.success and r.message_id:
-                        _stream_msg_id[0] = r.message_id
-                else:
-                    await adapter.edit_message(
-                        chat_id=source.chat_id,
-                        message_id=_stream_msg_id[0],
-                        content=preview,
-                    )
-                last_edit = now
-        
-        # Drain remaining tokens
-        while not _stream_q.empty():
-            accumulated.append(_stream_q.get_nowait())
-        
-        # Final edit — remove cursor, show complete text
-        if _stream_msg_id[0] and accumulated:
-            await adapter.edit_message(
-                chat_id=source.chat_id,
-                message_id=_stream_msg_id[0],
-                content="".join(accumulated),
-            )
-    
-    except asyncio.CancelledError:
-        # Clean up on cancel
-        if _stream_msg_id[0] and accumulated:
-            try:
-                await adapter.edit_message(
-                    chat_id=source.chat_id,
-                    message_id=_stream_msg_id[0],
-                    content="".join(accumulated),
-                )
-            except Exception:
-                pass
-    except Exception as e:
-        logger.debug("stream_preview error: %s", e)
+```pythonasync def stream_preview():
+    """Progressively edit a message with streaming tokens."""
+
+    if not _stream_q:
+        return
+
+    adapter = self.adapters.get(source.platform)
+
+    if not adapter:
+        return
+
+    accumulated = []
+
+    token_count = 0
+
+    last_edit = 0.0
+
+    MIN_TOKENS = 20  # Don't show until enough context
+
+    EDIT_INTERVAL = 1.5  # Respect Telegram rate limits
+
+    try:
+        while not _stream_done.is_set():
+            try:
+                chunk = _stream_q.get(timeout=0.1)
+
+                accumulated.append(chunk)
+
+                token_count += 1
+
+            except queue.Empty:
+                continue
+
+            now = time.monotonic()
+
+            if token_count >= MIN_TOKENS and (now - last_edit) >= EDIT_INTERVAL:
+                preview = "".join(accumulated) + " ▌"
+
+                if _stream_msg_id[0] is None:
+                    r = await adapter.send(
+                        chat_id=source.chat_id,
+                        content=preview,
+                        metadata=_thread_metadata,
+                    )
+
+                    if r.success and r.message_id:
+                        _stream_msg_id[0] = r.message_id
+
+                else:
+                    await adapter.edit_message(
+                        chat_id=source.chat_id,
+                        message_id=_stream_msg_id[0],
+                        content=preview,
+                    )
+
+                last_edit = now
+
+        # Drain remaining tokens
+
+        while not _stream_q.empty():
+            accumulated.append(_stream_q.get_nowait())
+
+        # Final edit — remove cursor, show complete text
+
+        if _stream_msg_id[0] and accumulated:
+            await adapter.edit_message(
+                chat_id=source.chat_id,
+                message_id=_stream_msg_id[0],
+                content="".join(accumulated),
+            )
+
+    except asyncio.CancelledError:
+        # Clean up on cancel
+
+        if _stream_msg_id[0] and accumulated:
+            try:
+                await adapter.edit_message(
+                    chat_id=source.chat_id,
+                    message_id=_stream_msg_id[0],
+                    content="".join(accumulated),
+                )
+
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.debug("stream_preview error: %s", e)
 ```
 
 #### 2d. Skip final send if already streamed (~10 lines)
@@ -420,45 +491,59 @@ they don't support message editing.
 
 In `_chat_once()` or wherever the agent is invoked:
 
-```python
-if streaming_enabled:
-    _stream_q = queue.Queue()
-    _stream_done = threading.Event()
-    
-    def _cli_stream_callback(delta):
-        if delta is None:
-            _stream_done.set()
-        else:
-            _stream_q.put(delta)
-    
-    agent.stream_callback = _cli_stream_callback
+```pythonif streaming_enabled:
+    _stream_q = queue.Queue()
+
+    _stream_done = threading.Event()
+
+    def _cli_stream_callback(delta):
+
+        if delta is None:
+            _stream_done.set()
+
+        else:
+            _stream_q.put(delta)
+
+    agent.stream_callback = _cli_stream_callback
 ```
 
 #### 3b. Token display thread/task (~30 lines)
 
 Start a thread that reads the queue and prints tokens:
 
-```python
-def _stream_display():
-    """Print tokens to terminal as they arrive."""
-    first_token = True
-    while not _stream_done.is_set():
-        try:
-            delta = _stream_q.get(timeout=0.1)
-        except queue.Empty:
-            continue
-        if first_token:
-            # Print response box top border
-            _cprint(f"\n{top}")
-            first_token = False
-        sys.stdout.write(delta)
-        sys.stdout.flush()
-    # Drain remaining
-    while not _stream_q.empty():
-        sys.stdout.write(_stream_q.get_nowait())
-    sys.stdout.flush()
-    # Print bottom border
-    _cprint(f"\n\n{bot}")
+```pythondef _stream_display():
+    """Print tokens to terminal as they arrive."""
+
+    first_token = True
+
+    while not _stream_done.is_set():
+        try:
+            delta = _stream_q.get(timeout=0.1)
+
+        except queue.Empty:
+            continue
+
+        if first_token:
+            # Print response box top border
+
+            _cprint(f"\n{top}")
+
+            first_token = False
+
+        sys.stdout.write(delta)
+
+        sys.stdout.flush()
+
+    # Drain remaining
+
+    while not _stream_q.empty():
+        sys.stdout.write(_stream_q.get_nowait())
+
+    sys.stdout.flush()
+
+    # Print bottom border
+
+    _cprint(f"\n\n{bot}")
 ```
 
 **Integration challenge: prompt_toolkit**
@@ -491,17 +576,19 @@ token-by-token SSE when the agent supports it.
 
 #### 4a. Wire streaming callback for stream=true requests (~20 lines)
 
-```python
-if stream:
-    _stream_q = queue.Queue()
-    
-    def _api_stream_callback(delta):
-        _stream_q.put(delta)  # None = done
-    
-    # Pass callback to _run_agent
-    result, usage = await self._run_agent(
-        ..., stream_callback=_api_stream_callback,
-    )
+```pythonif stream:
+    _stream_q = queue.Queue()
+
+    def _api_stream_callback(delta):
+
+        _stream_q.put(delta)  # None = done
+
+    # Pass callback to _run_agent
+
+    result, usage = await self._run_agent(
+        ...,
+        stream_callback=_api_stream_callback,
+    )
 ```
 
 #### 4b. Real SSE writer (~40 lines)
@@ -545,15 +632,19 @@ loop. The queue bridges them. But `_run_agent()` currently awaits the full
 result before returning. For real streaming, we need to start the agent in
 the background and stream tokens while it runs:
 
-```python
-# Start agent in background
-agent_task = asyncio.create_task(self._run_agent_async(...))
-
-# Stream tokens while agent runs
-await self._write_real_sse(request, ..., stream_q)
-
-# Agent is done by now (stream_q received None)
-result, usage = await agent_task
+```python# Start agent in background
+
+agent_task = asyncio.create_task(self._run_agent_async(...))
+
+
+# Stream tokens while agent runs
+
+await self._write_real_sse(request, ..., stream_q)
+
+
+# Agent is done by now (stream_q received None)
+
+result, usage = await agent_task
 ```
 
 This requires splitting `_run_agent` into an async version that doesn't

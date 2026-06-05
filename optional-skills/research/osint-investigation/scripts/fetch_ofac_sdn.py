@@ -9,6 +9,7 @@ The SDN CSV uses a specific 12-column format with no header row:
     tonnage, grt, vess_flag, vess_owner, remarks
 Address and AKA records live in separate files. We fetch all three and join.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,15 +27,33 @@ ADD_URL = "https://www.treasury.gov/ofac/downloads/add.csv"
 ALT_URL = "https://www.treasury.gov/ofac/downloads/alt.csv"
 
 SDN_COLS = [
-    "ent_num", "sdn_name", "sdn_type", "program", "title",
-    "call_sign", "vess_type", "tonnage", "grt", "vess_flag",
-    "vess_owner", "remarks",
+    "ent_num",
+    "sdn_name",
+    "sdn_type",
+    "program",
+    "title",
+    "call_sign",
+    "vess_type",
+    "tonnage",
+    "grt",
+    "vess_flag",
+    "vess_owner",
+    "remarks",
 ]
 ADD_COLS = [
-    "ent_num", "add_num", "address", "city_state_zip", "country", "add_remarks",
+    "ent_num",
+    "add_num",
+    "address",
+    "city_state_zip",
+    "country",
+    "add_remarks",
 ]
 ALT_COLS = [
-    "ent_num", "alt_num", "alt_type", "alt_name", "alt_remarks",
+    "ent_num",
+    "alt_num",
+    "alt_type",
+    "alt_name",
+    "alt_remarks",
 ]
 
 COLUMNS = [
@@ -114,7 +133,9 @@ def fetch(
         ent_num = _strip_quotes(r["ent_num"])
         if not ent_num:
             continue
-        sdn_type = _TYPE_MAP.get(_strip_quotes(r["sdn_type"]).lower(), _strip_quotes(r["sdn_type"]))
+        sdn_type = _TYPE_MAP.get(
+            _strip_quotes(r["sdn_type"]).lower(), _strip_quotes(r["sdn_type"])
+        )
         if entity_type and sdn_type != entity_type:
             continue
         progs = _strip_quotes(r["program"])
@@ -131,22 +152,20 @@ def fetch(
                     dob = ch.split(maxsplit=1)[1] if " " in ch else ""
                 elif ch.upper().startswith("POB"):
                     pob = ch.split(maxsplit=1)[1] if " " in ch else ""
-        rows.append(
-            {
-                "entity_id": ent_num,
-                "name": _strip_quotes(r["sdn_name"]),
-                "entity_type": sdn_type,
-                "program_list": "; ".join(p.strip() for p in progs.split(";") if p.strip()),
-                "title": _strip_quotes(r["title"]),
-                "nationalities": "",  # not in this CSV; available in XML format
-                "aka_list": "; ".join(aka_by_ent.get(ent_num, [])),
-                "addresses": "; ".join(addr_by_ent.get(ent_num, [])),
-                "dob": dob,
-                "pob": pob,
-                "remarks": remarks,
-                "last_updated": "",
-            }
-        )
+        rows.append({
+            "entity_id": ent_num,
+            "name": _strip_quotes(r["sdn_name"]),
+            "entity_type": sdn_type,
+            "program_list": "; ".join(p.strip() for p in progs.split(";") if p.strip()),
+            "title": _strip_quotes(r["title"]),
+            "nationalities": "",  # not in this CSV; available in XML format
+            "aka_list": "; ".join(aka_by_ent.get(ent_num, [])),
+            "addresses": "; ".join(addr_by_ent.get(ent_num, [])),
+            "dob": dob,
+            "pob": pob,
+            "remarks": remarks,
+            "last_updated": "",
+        })
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -158,7 +177,9 @@ def fetch(
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--program", help="Filter to specific sanctions program (e.g. SDGT, IRAN)")
+    p.add_argument(
+        "--program", help="Filter to specific sanctions program (e.g. SDGT, IRAN)"
+    )
     p.add_argument(
         "--entity-type",
         choices=["individual", "entity", "vessel", "aircraft"],

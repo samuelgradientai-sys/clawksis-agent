@@ -7,6 +7,7 @@ directly.
 The scripts are primarily __main__-executable entry points; pytest
 isn't expected to collect individual test functions from them.
 """
+
 import pytest
 
 

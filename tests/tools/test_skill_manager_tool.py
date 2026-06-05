@@ -1,7 +1,5 @@
 """Tests for tools/skill_manager_tool.py — skill creation, editing, and deletion."""
 
-
-
 import json
 
 from contextlib import contextmanager
@@ -11,58 +9,36 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 import pytest
 
 
-
 from tools.skill_manager_tool import (
-
     _validate_name,
-
     _validate_category,
-
     _validate_frontmatter,
-
     _validate_file_path,
-
     _create_skill,
-
     _edit_skill,
-
     _patch_skill,
-
     _delete_skill,
-
     _write_file,
-
     _remove_file,
-
     skill_manage,
-
     MAX_NAME_LENGTH,
-
 )
 
 
-
-
-
 @contextmanager
-
 def _skill_dir(tmp_path):
-
     """Patch both SKILLS_DIR and get_all_skills_dirs so _find_skill searches
 
     only the temp directory — not the real ~/.clawksis/skills/."""
 
-    with patch("tools.skill_manager_tool.SKILLS_DIR", tmp_path), \
-         patch("agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]):
-
+    with (
+        patch("tools.skill_manager_tool.SKILLS_DIR", tmp_path),
+        patch("agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]),
+    ):
         yield
-
-
-
 
 
 VALID_SKILL_CONTENT = """\
@@ -85,7 +61,6 @@ Step 1: Do the thing.
 """
 
 
-
 VALID_SKILL_CONTENT_2 = """\
 ---
 
@@ -106,9 +81,6 @@ Step 1: Do the new thing.
 """
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _validate_name
@@ -116,11 +88,7 @@ Step 1: Do the new thing.
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestValidateName:
-
     def test_valid_names(self):
 
         assert _validate_name("my-skill") is None
@@ -131,13 +99,9 @@ class TestValidateName:
 
         assert _validate_name("a") is None
 
-
-
     def test_empty_name(self):
 
         assert _validate_name("") == "Skill name is required."
-
-
 
     def test_too_long(self):
 
@@ -145,23 +109,17 @@ class TestValidateName:
 
         assert err == f"Skill name exceeds {MAX_NAME_LENGTH} characters."
 
-
-
     def test_uppercase_rejected(self):
 
         err = _validate_name("MySkill")
 
         assert "Invalid skill name 'MySkill'" in err
 
-
-
     def test_starts_with_hyphen_rejected(self):
 
         err = _validate_name("-invalid")
 
         assert "Invalid skill name '-invalid'" in err
-
-
 
     def test_special_chars_rejected(self):
 
@@ -178,11 +136,7 @@ class TestValidateName:
         assert "Invalid skill name 'skill@name'" in err
 
 
-
-
-
 class TestValidateCategory:
-
     def test_valid_categories(self):
 
         assert _validate_category(None) is None
@@ -193,24 +147,17 @@ class TestValidateCategory:
 
         assert _validate_category("mlops-v2") is None
 
-
-
     def test_path_traversal_rejected(self):
 
         err = _validate_category("../escape")
 
         assert "Invalid category '../escape'" in err
 
-
-
     def test_absolute_path_rejected(self):
 
         err = _validate_category("/tmp/escape")
 
         assert "Invalid category '/tmp/escape'" in err
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -220,16 +167,10 @@ class TestValidateCategory:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestValidateFrontmatter:
-
     def test_valid_content(self):
 
         assert _validate_frontmatter(VALID_SKILL_CONTENT) is None
-
-
 
     def test_empty_content(self):
 
@@ -237,56 +178,55 @@ class TestValidateFrontmatter:
 
         assert _validate_frontmatter("   ") == "Content cannot be empty."
 
-
-
     def test_no_frontmatter(self):
 
         err = _validate_frontmatter("# Just a heading\nSome content.\n")
 
-        assert err == "SKILL.md must start with YAML frontmatter (---). See existing skills for format."
-
-
+        assert (
+            err
+            == "SKILL.md must start with YAML frontmatter (---). See existing skills for format."
+        )
 
     def test_unclosed_frontmatter(self):
 
         content = "---\nname: test\ndescription: desc\nBody content.\n"
 
-        assert _validate_frontmatter(content) == "SKILL.md frontmatter is not closed. Ensure you have a closing '---' line."
-
-
+        assert (
+            _validate_frontmatter(content)
+            == "SKILL.md frontmatter is not closed. Ensure you have a closing '---' line."
+        )
 
     def test_missing_name_field(self):
 
         content = "---\ndescription: desc\n---\n\nBody.\n"
 
-        assert _validate_frontmatter(content) == "Frontmatter must include 'name' field."
-
-
+        assert (
+            _validate_frontmatter(content) == "Frontmatter must include 'name' field."
+        )
 
     def test_missing_description_field(self):
 
         content = "---\nname: test\n---\n\nBody.\n"
 
-        assert _validate_frontmatter(content) == "Frontmatter must include 'description' field."
-
-
+        assert (
+            _validate_frontmatter(content)
+            == "Frontmatter must include 'description' field."
+        )
 
     def test_no_body_after_frontmatter(self):
 
         content = "---\nname: test\ndescription: desc\n---\n"
 
-        assert _validate_frontmatter(content) == "SKILL.md must have content after the frontmatter (instructions, procedures, etc.)."
-
-
+        assert (
+            _validate_frontmatter(content)
+            == "SKILL.md must have content after the frontmatter (instructions, procedures, etc.)."
+        )
 
     def test_invalid_yaml(self):
 
         content = "---\n: invalid: yaml: {{{\n---\n\nBody.\n"
 
         assert "YAML frontmatter parse error" in _validate_frontmatter(content)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -296,11 +236,7 @@ class TestValidateFrontmatter:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestValidateFilePath:
-
     def test_valid_paths(self):
 
         assert _validate_file_path("references/api.md") is None
@@ -311,21 +247,15 @@ class TestValidateFilePath:
 
         assert _validate_file_path("assets/image.png") is None
 
-
-
     def test_empty_path(self):
 
         assert _validate_file_path("") == "file_path is required."
-
-
 
     def test_path_traversal_blocked(self):
 
         err = _validate_file_path("references/../../../etc/passwd")
 
         assert err == "Path traversal ('..') is not allowed."
-
-
 
     def test_disallowed_subdirectory(self):
 
@@ -335,8 +265,6 @@ class TestValidateFilePath:
 
         assert "'secret/hidden.txt'" in err
 
-
-
     def test_directory_only_rejected(self):
 
         err = _validate_file_path("references")
@@ -344,8 +272,6 @@ class TestValidateFilePath:
         assert "Provide a file path, not just a directory" in err
 
         assert "'references/myfile.md'" in err
-
-
 
     def test_root_level_file_rejected(self):
 
@@ -356,9 +282,6 @@ class TestValidateFilePath:
         assert "'malicious.py'" in err
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # CRUD operations
@@ -366,27 +289,19 @@ class TestValidateFilePath:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCreateSkill:
-
     def test_create_skill(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _create_skill("my-skill", VALID_SKILL_CONTENT)
 
         assert result["success"] is True
 
         assert (tmp_path / "my-skill" / "SKILL.md").exists()
 
-
-
     def test_create_with_category(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _create_skill("my-skill", VALID_SKILL_CONTENT, category="devops")
 
         assert result["success"] is True
@@ -395,12 +310,9 @@ class TestCreateSkill:
 
         assert result["category"] == "devops"
 
-
-
     def test_create_duplicate_blocked(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _create_skill("my-skill", VALID_SKILL_CONTENT)
@@ -409,27 +321,19 @@ class TestCreateSkill:
 
         assert "already exists" in result["error"]
 
-
-
     def test_create_invalid_name(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _create_skill("Invalid Name!", VALID_SKILL_CONTENT)
 
         assert result["success"] is False
 
-
-
     def test_create_invalid_content(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _create_skill("my-skill", "no frontmatter here")
 
         assert result["success"] is False
-
-
 
     def test_create_rejects_category_traversal(self, tmp_path):
 
@@ -437,22 +341,19 @@ class TestCreateSkill:
 
         skills_dir.mkdir()
 
-
-
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
-
-            result = _create_skill("my-skill", VALID_SKILL_CONTENT, category="../escape")
-
-
+        with (
+            patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir),
+            patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]),
+        ):
+            result = _create_skill(
+                "my-skill", VALID_SKILL_CONTENT, category="../escape"
+            )
 
         assert result["success"] is False
 
         assert "Invalid category '../escape'" in result["error"]
 
         assert not (tmp_path / "escape").exists()
-
-
 
     def test_create_rejects_absolute_category(self, tmp_path):
 
@@ -462,14 +363,13 @@ class TestCreateSkill:
 
         outside = tmp_path / "outside"
 
-
-
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
-
-            result = _create_skill("my-skill", VALID_SKILL_CONTENT, category=str(outside))
-
-
+        with (
+            patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir),
+            patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]),
+        ):
+            result = _create_skill(
+                "my-skill", VALID_SKILL_CONTENT, category=str(outside)
+            )
 
         assert result["success"] is False
 
@@ -478,15 +378,10 @@ class TestCreateSkill:
         assert not (outside / "my-skill" / "SKILL.md").exists()
 
 
-
-
-
 class TestEditSkill:
-
     def test_edit_existing_skill(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _edit_skill("my-skill", VALID_SKILL_CONTENT_2)
@@ -497,24 +392,18 @@ class TestEditSkill:
 
         assert "Updated description" in content
 
-
-
     def test_edit_nonexistent_skill(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _edit_skill("nonexistent", VALID_SKILL_CONTENT)
 
         assert result["success"] is False
 
         assert "not found" in result["error"]
 
-
-
     def test_edit_invalid_content_rejected(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _edit_skill("my-skill", "no frontmatter")
@@ -528,15 +417,10 @@ class TestEditSkill:
         assert "A test skill" in content
 
 
-
-
-
 class TestPatchSkill:
-
     def test_patch_unique_match(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _patch_skill("my-skill", "Do the thing.", "Do the new thing.")
@@ -547,21 +431,19 @@ class TestPatchSkill:
 
         assert "Do the new thing." in content
 
-
-
     def test_patch_nonexistent_string(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _patch_skill("my-skill", "this text does not exist", "replacement")
 
         assert result["success"] is False
 
-        assert "not found" in result["error"].lower() or "could not find" in result["error"].lower()
-
-
+        assert (
+            "not found" in result["error"].lower()
+            or "could not find" in result["error"].lower()
+        )
 
     def test_patch_ambiguous_match_rejected(self, tmp_path):
 
@@ -585,7 +467,6 @@ word word
 """
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", content)
 
             result = _patch_skill("my-skill", "word", "replaced")
@@ -593,8 +474,6 @@ word word
         assert result["success"] is False
 
         assert "match" in result["error"].lower()
-
-
 
     def test_patch_replace_all(self, tmp_path):
 
@@ -618,38 +497,31 @@ word word
 """
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", content)
 
             result = _patch_skill("my-skill", "word", "replaced", replace_all=True)
 
         assert result["success"] is True
 
-
-
     def test_patch_supporting_file(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             _write_file("my-skill", "references/api.md", "old text here")
 
-            result = _patch_skill("my-skill", "old text", "new text", file_path="references/api.md")
+            result = _patch_skill(
+                "my-skill", "old text", "new text", file_path="references/api.md"
+            )
 
         assert result["success"] is True
-
-
 
     def test_patch_skill_not_found(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _patch_skill("nonexistent", "old", "new")
 
         assert result["success"] is False
-
-
 
     def test_patch_supporting_file_symlink_escape_blocked(self, tmp_path):
 
@@ -657,10 +529,7 @@ word word
 
         outside_file.write_text("old text here")
 
-
-
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             link = tmp_path / "my-skill" / "references" / "evil.md"
@@ -668,18 +537,14 @@ word word
             link.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-
                 link.symlink_to(outside_file)
 
             except OSError:
-
                 pytest.skip("Symlinks not supported")
 
-
-
-            result = _patch_skill("my-skill", "old text", "new text", file_path="references/evil.md")
-
-
+            result = _patch_skill(
+                "my-skill", "old text", "new text", file_path="references/evil.md"
+            )
 
         assert result["success"] is False
 
@@ -688,15 +553,10 @@ word word
         assert outside_file.read_text() == "old text here"
 
 
-
-
-
 class TestDeleteSkill:
-
     def test_delete_existing(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _delete_skill("my-skill")
@@ -705,34 +565,25 @@ class TestDeleteSkill:
 
         assert not (tmp_path / "my-skill").exists()
 
-
-
     def test_delete_nonexistent(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _delete_skill("nonexistent")
 
         assert result["success"] is False
 
-
-
     def test_delete_cleans_empty_category_dir(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT, category="devops")
 
             _delete_skill("my-skill")
 
         assert not (tmp_path / "devops").exists()
 
-
-
     def test_delete_with_absorbed_into_valid_target(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("umbrella", VALID_SKILL_CONTENT)
 
             _create_skill("narrow", VALID_SKILL_CONTENT)
@@ -747,12 +598,9 @@ class TestDeleteSkill:
 
         assert (tmp_path / "umbrella").exists()
 
-
-
     def test_delete_with_absorbed_into_empty_string_means_pruned(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("stale-skill", VALID_SKILL_CONTENT)
 
             result = _delete_skill("stale-skill", absorbed_into="")
@@ -763,12 +611,9 @@ class TestDeleteSkill:
 
         assert "absorbed into" not in result["message"]
 
-
-
     def test_delete_with_absorbed_into_nonexistent_target_rejected(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("narrow", VALID_SKILL_CONTENT)
 
             result = _delete_skill("narrow", absorbed_into="ghost-umbrella")
@@ -781,12 +626,9 @@ class TestDeleteSkill:
 
         assert (tmp_path / "narrow").exists()
 
-
-
     def test_delete_with_absorbed_into_equals_self_rejected(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("narrow", VALID_SKILL_CONTENT)
 
             result = _delete_skill("narrow", absorbed_into="narrow")
@@ -797,14 +639,11 @@ class TestDeleteSkill:
 
         assert (tmp_path / "narrow").exists()
 
-
-
     def test_delete_with_absorbed_into_whitespace_only_treated_as_prune(self, tmp_path):
 
         # Leading/trailing whitespace only: .strip() → "" → pruned path
 
         with _skill_dir(tmp_path):
-
             _create_skill("narrow", VALID_SKILL_CONTENT)
 
             result = _delete_skill("narrow", absorbed_into="   ")
@@ -813,8 +652,6 @@ class TestDeleteSkill:
 
         assert "absorbed into" not in result["message"]
 
-
-
     def test_delete_without_absorbed_into_backward_compat(self, tmp_path):
 
         # Legacy callers that don't pass the arg still work — the curator
@@ -822,15 +659,11 @@ class TestDeleteSkill:
         # reconciler falls back to its heuristic+YAML logic for such deletes.
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _delete_skill("my-skill")
 
         assert result["success"] is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -840,46 +673,35 @@ class TestDeleteSkill:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestWriteFile:
-
     def test_write_reference_file(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
-            result = _write_file("my-skill", "references/api.md", "# API\nEndpoint docs.")
+            result = _write_file(
+                "my-skill", "references/api.md", "# API\nEndpoint docs."
+            )
 
         assert result["success"] is True
 
         assert (tmp_path / "my-skill" / "references" / "api.md").exists()
 
-
-
     def test_write_to_nonexistent_skill(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             result = _write_file("nonexistent", "references/doc.md", "content")
 
         assert result["success"] is False
 
-
-
     def test_write_to_disallowed_path(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _write_file("my-skill", "secret/evil.py", "malicious")
 
         assert result["success"] is False
-
-
 
     def test_write_symlink_escape_blocked(self, tmp_path):
 
@@ -887,10 +709,7 @@ class TestWriteFile:
 
         outside_dir.mkdir()
 
-
-
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             link = tmp_path / "my-skill" / "references" / "escape"
@@ -898,18 +717,12 @@ class TestWriteFile:
             link.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-
                 link.symlink_to(outside_dir, target_is_directory=True)
 
             except OSError:
-
                 pytest.skip("Symlinks not supported")
 
-
-
             result = _write_file("my-skill", "references/escape/owned.md", "malicious")
-
-
 
         assert result["success"] is False
 
@@ -918,15 +731,10 @@ class TestWriteFile:
         assert not (outside_dir / "owned.md").exists()
 
 
-
-
-
 class TestRemoveFile:
-
     def test_remove_existing_file(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             _write_file("my-skill", "references/api.md", "content")
@@ -937,19 +745,14 @@ class TestRemoveFile:
 
         assert not (tmp_path / "my-skill" / "references" / "api.md").exists()
 
-
-
     def test_remove_nonexistent_file(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             result = _remove_file("my-skill", "references/nope.md")
 
         assert result["success"] is False
-
-
 
     def test_remove_symlink_escape_blocked(self, tmp_path):
 
@@ -961,10 +764,7 @@ class TestRemoveFile:
 
         outside_file.write_text("content")
 
-
-
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             link = tmp_path / "my-skill" / "references" / "escape"
@@ -972,27 +772,18 @@ class TestRemoveFile:
             link.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-
                 link.symlink_to(outside_dir, target_is_directory=True)
 
             except OSError:
-
                 pytest.skip("Symlinks not supported")
 
-
-
             result = _remove_file("my-skill", "references/escape/keep.txt")
-
-
 
         assert result["success"] is False
 
         assert "escapes" in result["error"].lower()
 
         assert outside_file.exists()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1002,15 +793,10 @@ class TestRemoveFile:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSkillManageDispatcher:
-
     def test_unknown_action(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             raw = skill_manage(action="explode", name="test")
 
         result = json.loads(raw)
@@ -1019,12 +805,9 @@ class TestSkillManageDispatcher:
 
         assert "Unknown action" in result["error"]
 
-
-
     def test_create_without_content(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             raw = skill_manage(action="create", name="test")
 
         result = json.loads(raw)
@@ -1033,22 +816,16 @@ class TestSkillManageDispatcher:
 
         assert "content" in result["error"].lower()
 
-
-
     def test_patch_without_old_string(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             raw = skill_manage(action="patch", name="test")
 
         result = json.loads(raw)
 
         assert result["success"] is False
 
-
-
     def test_full_create_via_dispatcher(self, tmp_path):
-
         """Foreground create does NOT mark the skill as agent-created.
 
 
@@ -1064,8 +841,9 @@ class TestSkillManageDispatcher:
         """
 
         with _skill_dir(tmp_path):
-
-            raw = skill_manage(action="create", name="test-skill", content=VALID_SKILL_CONTENT)
+            raw = skill_manage(
+                action="create", name="test-skill", content=VALID_SKILL_CONTENT
+            )
 
             from tools.skill_usage import load_usage
 
@@ -1083,10 +861,7 @@ class TestSkillManageDispatcher:
 
         assert rec.get("created_by") in {None, "", False}
 
-
-
     def test_create_from_background_review_marks_agent_created(self, tmp_path):
-
         """Background-review fork creates ARE marked as agent-created."""
 
         from tools.skill_provenance import set_current_write_origin, BACKGROUND_REVIEW
@@ -1094,13 +869,9 @@ class TestSkillManageDispatcher:
         token = set_current_write_origin(BACKGROUND_REVIEW)
 
         try:
-
             with _skill_dir(tmp_path):
-
                 raw = skill_manage(
-
                     action="create", name="review-sediment", content=VALID_SKILL_CONTENT
-
                 )
 
                 from tools.skill_usage import load_usage
@@ -1108,7 +879,6 @@ class TestSkillManageDispatcher:
                 usage = load_usage()
 
         finally:
-
             from tools.skill_provenance import reset_current_write_origin
 
             reset_current_write_origin(token)
@@ -1119,8 +889,6 @@ class TestSkillManageDispatcher:
 
         assert usage["review-sediment"]["created_by"] == "agent"
 
-
-
     def test_delete_via_dispatcher_threads_absorbed_into(self, tmp_path):
 
         # Dispatcher must plumb absorbed_into through to _delete_skill so the
@@ -1128,7 +896,6 @@ class TestSkillManageDispatcher:
         # validation + message suffix paths are exercised end-to-end.
 
         with _skill_dir(tmp_path):
-
             skill_manage(action="create", name="umbrella", content=VALID_SKILL_CONTENT)
 
             skill_manage(action="create", name="narrow", content=VALID_SKILL_CONTENT)
@@ -1141,12 +908,9 @@ class TestSkillManageDispatcher:
 
         assert "absorbed into 'umbrella'" in result["message"]
 
-
-
     def test_delete_via_dispatcher_rejects_missing_absorbed_target(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             skill_manage(action="create", name="narrow", content=VALID_SKILL_CONTENT)
 
             raw = skill_manage(action="delete", name="narrow", absorbed_into="ghost")
@@ -1158,206 +922,153 @@ class TestSkillManageDispatcher:
         assert "does not exist" in result["error"]
 
 
-
-
-
 class TestSecurityScanGate:
-
     """_security_scan_skill is gated by skills.guard_agent_created config flag."""
 
-
-
     def test_scan_noop_when_flag_off(self, tmp_path):
-
         """Default config (flag off) short-circuits before running scan_skill."""
 
         from tools.skill_manager_tool import _security_scan_skill
 
-
-
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=False), \
-             patch("tools.skill_manager_tool.scan_skill") as mock_scan:
-
+        with (
+            patch(
+                "tools.skill_manager_tool._guard_agent_created_enabled",
+                return_value=False,
+            ),
+            patch("tools.skill_manager_tool.scan_skill") as mock_scan,
+        ):
             result = _security_scan_skill(tmp_path)
-
-
 
         assert result is None
 
         mock_scan.assert_not_called()  # scan never ran
 
-
-
     def test_scan_runs_when_flag_on(self, tmp_path):
-
         """When flag is on, scan_skill is invoked and its verdict is honored."""
 
         from tools.skill_manager_tool import _security_scan_skill
 
         from tools.skills_guard import ScanResult
 
-
-
         # Fake a safe scan result — caller should return None (allow)
 
         fake_result = ScanResult(
-
             skill_name="test",
-
             source="agent-created",
-
             trust_level="agent-created",
-
             verdict="safe",
-
             findings=[],
-
             summary="ok",
-
         )
 
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
-             patch("tools.skill_manager_tool.scan_skill", return_value=fake_result) as mock_scan:
-
+        with (
+            patch(
+                "tools.skill_manager_tool._guard_agent_created_enabled",
+                return_value=True,
+            ),
+            patch(
+                "tools.skill_manager_tool.scan_skill", return_value=fake_result
+            ) as mock_scan,
+        ):
             result = _security_scan_skill(tmp_path)
-
-
 
         assert result is None
 
         mock_scan.assert_called_once()
 
-
-
     def test_scan_blocks_dangerous_when_flag_on(self, tmp_path):
-
         """Dangerous verdict + flag on → returns an error string for the agent."""
 
         from tools.skill_manager_tool import _security_scan_skill
 
         from tools.skills_guard import ScanResult, Finding
 
-
-
         finding = Finding(
-
-            pattern_id="test", severity="critical", category="exfiltration",
-
-            file="SKILL.md", line=1, match="curl $TOKEN", description="test",
-
+            pattern_id="test",
+            severity="critical",
+            category="exfiltration",
+            file="SKILL.md",
+            line=1,
+            match="curl $TOKEN",
+            description="test",
         )
 
         fake_result = ScanResult(
-
             skill_name="test",
-
             source="agent-created",
-
             trust_level="agent-created",
-
             verdict="dangerous",
-
             findings=[finding],
-
             summary="dangerous",
-
         )
 
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
-             patch("tools.skill_manager_tool.scan_skill", return_value=fake_result):
-
+        with (
+            patch(
+                "tools.skill_manager_tool._guard_agent_created_enabled",
+                return_value=True,
+            ),
+            patch("tools.skill_manager_tool.scan_skill", return_value=fake_result),
+        ):
             result = _security_scan_skill(tmp_path)
-
-
 
         assert result is not None
 
         assert "Security scan blocked" in result
 
-
-
     def test_guard_flag_reads_config_default_false(self):
-
         """_guard_agent_created_enabled returns False when config doesn't set it."""
 
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
-
-
         with patch("clawk_cli.config.load_config", return_value={"skills": {}}):
-
             assert _guard_agent_created_enabled() is False
 
-
-
     def test_guard_flag_reads_config_when_set(self):
-
         """_guard_agent_created_enabled returns True when user explicitly enables."""
 
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
-
-
-        with patch("clawk_cli.config.load_config",
-
-                   return_value={"skills": {"guard_agent_created": True}}):
-
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"skills": {"guard_agent_created": True}},
+        ):
             assert _guard_agent_created_enabled() is True
 
-
-
     def test_guard_flag_handles_config_error(self):
-
         """If load_config raises, _guard_agent_created_enabled defaults to False (fail-safe off)."""
 
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
-
-
         with patch("clawk_cli.config.load_config", side_effect=RuntimeError("boom")):
-
             assert _guard_agent_created_enabled() is False
 
-
-
     def test_guard_flag_quoted_false_stays_disabled(self):
-
         """Quoted 'false' from YAML edits must not enable the guard."""
 
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
-
-
         for quoted in ("false", "False", "0", "no", "off"):
-
-            with patch("clawk_cli.config.load_config",
-
-                       return_value={"skills": {"guard_agent_created": quoted}}):
-
-                assert _guard_agent_created_enabled() is False, \
+            with patch(
+                "clawk_cli.config.load_config",
+                return_value={"skills": {"guard_agent_created": quoted}},
+            ):
+                assert _guard_agent_created_enabled() is False, (
                     f"guard_agent_created={quoted!r} must coerce to False"
-
-
+                )
 
     def test_guard_flag_quoted_true_enables(self):
-
         """Quoted truthy strings must enable the guard."""
 
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
-
-
         for quoted in ("true", "True", "1", "yes", "on"):
-
-            with patch("clawk_cli.config.load_config",
-
-                       return_value={"skills": {"guard_agent_created": quoted}}):
-
-                assert _guard_agent_created_enabled() is True, \
+            with patch(
+                "clawk_cli.config.load_config",
+                return_value={"skills": {"guard_agent_created": quoted}},
+            ):
+                assert _guard_agent_created_enabled() is True, (
                     f"guard_agent_created={quoted!r} must coerce to True"
-
-
-
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1367,26 +1078,20 @@ class TestSecurityScanGate:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @contextmanager
-
 def _two_roots(local_dir: Path, external_dir: Path):
-
     """Patch the skill manager so local SKILLS_DIR = local_dir and
 
     get_all_skills_dirs() returns [local_dir, external_dir] in order."""
 
-    with patch("tools.skill_manager_tool.SKILLS_DIR", local_dir), \
-         patch("agent.skill_utils.get_all_skills_dirs",
-
-               return_value=[local_dir, external_dir]):
-
+    with (
+        patch("tools.skill_manager_tool.SKILLS_DIR", local_dir),
+        patch(
+            "agent.skill_utils.get_all_skills_dirs",
+            return_value=[local_dir, external_dir],
+        ),
+    ):
         yield
-
-
-
 
 
 def _write_external_skill(external_dir: Path, name: str = "ext-skill") -> Path:
@@ -1396,21 +1101,14 @@ def _write_external_skill(external_dir: Path, name: str = "ext-skill") -> Path:
     skill_dir.mkdir(parents=True)
 
     (skill_dir / "SKILL.md").write_text(
-
         f"---\nname: {name}\ndescription: An external skill.\n---\n\n"
-
         "# External\n\nBody with OLD_MARKER here.\n"
-
     )
 
     return skill_dir
 
 
-
-
-
 class TestExternalSkillMutations:
-
     """Verify skill_manage can patch/edit/write/remove/delete skills that live
 
     under skills.external_dirs — in place, without duplicating to local.
@@ -1427,25 +1125,19 @@ class TestExternalSkillMutations:
 
     """
 
-
-
     def test_patch_external_skill_writes_in_place(self, tmp_path):
 
         local = tmp_path / "local"
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         skill_dir = _write_external_skill(external)
 
-
-
         with _two_roots(local, external):
-
             result = _patch_skill("ext-skill", "OLD_MARKER", "NEW_MARKER")
-
-
 
         assert result["success"] is True, result
 
@@ -1455,33 +1147,24 @@ class TestExternalSkillMutations:
 
         assert not (local / "ext-skill").exists()
 
-
-
     def test_edit_external_skill_writes_in_place(self, tmp_path):
 
         local = tmp_path / "local"
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         skill_dir = _write_external_skill(external)
 
-
-
         new_content = (
-
             "---\nname: ext-skill\ndescription: Rewritten.\n---\n\n"
-
             "# Rewritten\n\nBrand new body.\n"
-
         )
 
         with _two_roots(local, external):
-
             result = _edit_skill("ext-skill", new_content)
-
-
 
         assert result["success"] is True, result
 
@@ -1489,25 +1172,19 @@ class TestExternalSkillMutations:
 
         assert not (local / "ext-skill").exists()
 
-
-
     def test_write_file_on_external_skill(self, tmp_path):
 
         local = tmp_path / "local"
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         skill_dir = _write_external_skill(external)
 
-
-
         with _two_roots(local, external):
-
             result = _write_file("ext-skill", "references/notes.md", "# Notes\n")
-
-
 
         assert result["success"] is True, result
 
@@ -1515,15 +1192,14 @@ class TestExternalSkillMutations:
 
         assert not (local / "ext-skill").exists()
 
-
-
     def test_remove_file_on_external_skill(self, tmp_path):
 
         local = tmp_path / "local"
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         skill_dir = _write_external_skill(external)
 
@@ -1531,19 +1207,12 @@ class TestExternalSkillMutations:
 
         (skill_dir / "references" / "notes.md").write_text("# Notes\n")
 
-
-
         with _two_roots(local, external):
-
             result = _remove_file("ext-skill", "references/notes.md")
-
-
 
         assert result["success"] is True, result
 
         assert not (skill_dir / "references" / "notes.md").exists()
-
-
 
     def test_delete_external_skill_removes_skill_not_root(self, tmp_path):
 
@@ -1551,17 +1220,13 @@ class TestExternalSkillMutations:
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         skill_dir = _write_external_skill(external)
 
-
-
         with _two_roots(local, external):
-
             result = _delete_skill("ext-skill")
-
-
 
         assert result["success"] is True, result
 
@@ -1571,10 +1236,7 @@ class TestExternalSkillMutations:
 
         assert external.exists() and external.is_dir()
 
-
-
     def test_delete_external_skill_cleans_empty_category(self, tmp_path):
-
         """When a skill lives under external/<category>/<name>, deleting the
 
         last skill in the category should rmdir the empty category dir but
@@ -1585,7 +1247,8 @@ class TestExternalSkillMutations:
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
 
         cat_dir = external / "team"
 
@@ -1596,20 +1259,12 @@ class TestExternalSkillMutations:
         skill_dir.mkdir()
 
         (skill_dir / "SKILL.md").write_text(
-
             "---\nname: ext-skill\ndescription: An external skill.\n---\n\n"
-
             "# External\n\nBody.\n"
-
         )
 
-
-
         with _two_roots(local, external):
-
             result = _delete_skill("ext-skill")
-
-
 
         assert result["success"] is True, result
 
@@ -1617,12 +1272,9 @@ class TestExternalSkillMutations:
 
         assert not cat_dir.exists()  # empty category cleaned up
 
-        assert external.exists()     # but never the external root
-
-
+        assert external.exists()  # but never the external root
 
     def test_create_still_writes_to_local_root(self, tmp_path):
-
         """Creating a new skill always lands in local SKILLS_DIR, never
 
         external_dirs — create is unchanged by this PR."""
@@ -1631,28 +1283,20 @@ class TestExternalSkillMutations:
 
         external = tmp_path / "vault"
 
-        local.mkdir(); external.mkdir()
-
-
+        local.mkdir()
+        external.mkdir()
 
         with _two_roots(local, external):
-
-            result = _create_skill("fresh-skill", VALID_SKILL_CONTENT.replace(
-
-                "name: test-skill", "name: fresh-skill"))
-
-
+            result = _create_skill(
+                "fresh-skill",
+                VALID_SKILL_CONTENT.replace("name: test-skill", "name: fresh-skill"),
+            )
 
         assert result["success"] is True, result
 
         assert (local / "fresh-skill" / "SKILL.md").exists()
 
         assert not (external / "fresh-skill").exists()
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1666,17 +1310,11 @@ class TestExternalSkillMutations:
 # ---------------------------------------------------------------------------
 
 
-
 class TestPinnedGuard:
-
     """Delete is refused on pinned skills; patch/edit/write_file/remove_file are allowed."""
 
-
-
     @staticmethod
-
     def _pin(name: str):
-
         """Return a patch context that marks *name* as pinned in skill_usage."""
 
         def _fake_get_record(skill_name, _name=name):
@@ -1685,18 +1323,13 @@ class TestPinnedGuard:
 
         return patch("tools.skill_usage.get_record", side_effect=_fake_get_record)
 
-
-
     def test_edit_allowed_when_pinned(self, tmp_path):
-
         """Pin does NOT block edit — agent can still improve pinned skills."""
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             with self._pin("my-skill"):
-
                 result = _edit_skill("my-skill", VALID_SKILL_CONTENT_2)
 
         assert result["success"] is True, result
@@ -1707,16 +1340,12 @@ class TestPinnedGuard:
 
         assert "A test skill" not in content
 
-
-
     def test_patch_allowed_when_pinned(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             with self._pin("my-skill"):
-
                 result = _patch_skill("my-skill", "Do the thing.", "Do the new thing.")
 
         assert result["success"] is True, result
@@ -1725,44 +1354,35 @@ class TestPinnedGuard:
 
         assert "Do the new thing." in content
 
-
-
     def test_patch_supporting_file_allowed_when_pinned(self, tmp_path):
-
         """Supporting-file patches also go through on pinned skills."""
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             _write_file("my-skill", "references/api.md", "original")
 
             with self._pin("my-skill"):
-
                 result = _patch_skill(
-
-                    "my-skill", "original", "modified",
-
+                    "my-skill",
+                    "original",
+                    "modified",
                     file_path="references/api.md",
-
                 )
 
         assert result["success"] is True, result
 
-        assert (tmp_path / "my-skill" / "references" / "api.md").read_text() == "modified"
-
-
+        assert (
+            tmp_path / "my-skill" / "references" / "api.md"
+        ).read_text() == "modified"
 
     def test_delete_refuses_pinned(self, tmp_path):
-
         """Delete is the one action pin still blocks — it's the irrecoverable one."""
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             with self._pin("my-skill"):
-
                 result = _delete_skill("my-skill")
 
         assert result["success"] is False
@@ -1777,44 +1397,35 @@ class TestPinnedGuard:
 
         assert (tmp_path / "my-skill" / "SKILL.md").exists()
 
-
-
     def test_write_file_allowed_when_pinned(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             with self._pin("my-skill"):
-
                 result = _write_file("my-skill", "references/api.md", "content")
 
         assert result["success"] is True, result
 
-        assert (tmp_path / "my-skill" / "references" / "api.md").read_text() == "content"
-
-
+        assert (
+            tmp_path / "my-skill" / "references" / "api.md"
+        ).read_text() == "content"
 
     def test_remove_file_allowed_when_pinned(self, tmp_path):
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
             _write_file("my-skill", "references/api.md", "content")
 
             with self._pin("my-skill"):
-
                 result = _remove_file("my-skill", "references/api.md")
 
         assert result["success"] is True, result
 
         assert not (tmp_path / "my-skill" / "references" / "api.md").exists()
 
-
-
     def test_unpinned_skills_still_editable(self, tmp_path):
-
         """Sanity check: the guard doesn't fire for unpinned skills on delete.
 
 
@@ -1826,13 +1437,11 @@ class TestPinnedGuard:
         """
 
         with _skill_dir(tmp_path):
-
             _create_skill("pinned-one", VALID_SKILL_CONTENT)
 
             _create_skill("free-one", VALID_SKILL_CONTENT)
 
             with self._pin("pinned-one"):
-
                 blocked = _delete_skill("pinned-one")
 
                 allowed = _delete_skill("free-one")
@@ -1841,10 +1450,7 @@ class TestPinnedGuard:
 
         assert allowed["success"] is True
 
-
-
     def test_broken_sidecar_fails_open(self, tmp_path):
-
         """If skill_usage.get_record raises, we allow delete through.
 
 
@@ -1856,14 +1462,12 @@ class TestPinnedGuard:
         """
 
         with _skill_dir(tmp_path):
-
             _create_skill("my-skill", VALID_SKILL_CONTENT)
 
-            with patch("tools.skill_usage.get_record",
-
-                       side_effect=RuntimeError("sidecar broken")):
-
+            with patch(
+                "tools.skill_usage.get_record",
+                side_effect=RuntimeError("sidecar broken"),
+            ):
                 result = _delete_skill("my-skill")
 
         assert result["success"] is True
-

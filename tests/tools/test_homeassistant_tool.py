@@ -28,13 +28,44 @@ from tools.homeassistant_tool import (
 # ---------------------------------------------------------------------------
 
 SAMPLE_STATES = [
-    {"entity_id": "light.bedroom", "state": "on", "attributes": {"friendly_name": "Bedroom Light", "brightness": 200}},
-    {"entity_id": "light.kitchen", "state": "off", "attributes": {"friendly_name": "Kitchen Light"}},
-    {"entity_id": "switch.fan", "state": "on", "attributes": {"friendly_name": "Living Room Fan"}},
-    {"entity_id": "sensor.temperature", "state": "22.5", "attributes": {"friendly_name": "Kitchen Temperature", "unit_of_measurement": "C"}},
-    {"entity_id": "climate.thermostat", "state": "heat", "attributes": {"friendly_name": "Main Thermostat", "current_temperature": 21}},
-    {"entity_id": "binary_sensor.motion", "state": "off", "attributes": {"friendly_name": "Hallway Motion"}},
-    {"entity_id": "sensor.humidity", "state": "55", "attributes": {"friendly_name": "Bedroom Humidity", "area": "bedroom"}},
+    {
+        "entity_id": "light.bedroom",
+        "state": "on",
+        "attributes": {"friendly_name": "Bedroom Light", "brightness": 200},
+    },
+    {
+        "entity_id": "light.kitchen",
+        "state": "off",
+        "attributes": {"friendly_name": "Kitchen Light"},
+    },
+    {
+        "entity_id": "switch.fan",
+        "state": "on",
+        "attributes": {"friendly_name": "Living Room Fan"},
+    },
+    {
+        "entity_id": "sensor.temperature",
+        "state": "22.5",
+        "attributes": {
+            "friendly_name": "Kitchen Temperature",
+            "unit_of_measurement": "C",
+        },
+    },
+    {
+        "entity_id": "climate.thermostat",
+        "state": "heat",
+        "attributes": {"friendly_name": "Main Thermostat", "current_temperature": 21},
+    },
+    {
+        "entity_id": "binary_sensor.motion",
+        "state": "off",
+        "attributes": {"friendly_name": "Hallway Motion"},
+    },
+    {
+        "entity_id": "sensor.humidity",
+        "state": "55",
+        "attributes": {"friendly_name": "Bedroom Humidity", "area": "bedroom"},
+    },
 ]
 
 
@@ -225,9 +256,9 @@ class TestDomainBlocklist:
 
     @pytest.mark.parametrize("domain", sorted(_BLOCKED_DOMAINS))
     def test_blocked_domain_rejected(self, domain):
-        result = json.loads(_handle_call_service({
-            "domain": domain, "service": "any_service"
-        }))
+        result = json.loads(
+            _handle_call_service({"domain": domain, "service": "any_service"})
+        )
         assert "error" in result
         assert "blocked" in result["error"].lower()
 
@@ -235,9 +266,13 @@ class TestDomainBlocklist:
         """Safe domains like 'light' should not be blocked (will fail on network, not blocklist)."""
         # This will try to make a real HTTP call and fail, but the important thing
         # is it does NOT return a "blocked" error
-        result = json.loads(_handle_call_service({
-            "domain": "light", "service": "turn_on", "entity_id": "light.test"
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "light",
+                "service": "turn_on",
+                "entity_id": "light.test",
+            })
+        )
         # Should fail with a network/connection error, not a "blocked" error
         if "error" in result:
             assert "blocked" not in result["error"].lower()
@@ -287,20 +322,22 @@ class TestEntityIdValidation:
         assert "Invalid entity_id" in result["error"]
 
     def test_call_service_rejects_invalid_entity_id(self):
-        result = json.loads(_handle_call_service({
-            "domain": "light",
-            "service": "turn_on",
-            "entity_id": "../../../etc/passwd",
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "light",
+                "service": "turn_on",
+                "entity_id": "../../../etc/passwd",
+            })
+        )
         assert "error" in result
         assert "Invalid entity_id" in result["error"]
 
     def test_call_service_allows_no_entity_id(self):
         """Some services (like scene.turn_on) don't need entity_id."""
         # Will fail on network, but should NOT fail on entity_id validation
-        result = json.loads(_handle_call_service({
-            "domain": "scene", "service": "turn_on"
-        }))
+        result = json.loads(
+            _handle_call_service({"domain": "scene", "service": "turn_on"})
+        )
         if "error" in result:
             assert "Invalid entity_id" not in result["error"]
 
@@ -338,12 +375,14 @@ class TestCallServiceStringData:
 
     def test_invalid_json_string_returns_error(self):
         """Malformed JSON string in data returns a clear error."""
-        result = json.loads(_handle_call_service({
-            "domain": "light",
-            "service": "turn_on",
-            "entity_id": "light.bedroom",
-            "data": "{not valid json}",
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "light",
+                "service": "turn_on",
+                "entity_id": "light.bedroom",
+                "data": "{not valid json}",
+            })
+        )
         assert "error" in result
         assert "Invalid JSON" in result["error"]
 
@@ -419,28 +458,34 @@ class TestServiceNameValidation:
 
     def test_handler_rejects_traversal_domain(self):
         """_handle_call_service must reject domain with path traversal."""
-        result = json.loads(_handle_call_service({
-            "domain": "../../api/config",
-            "service": "turn_on",
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "../../api/config",
+                "service": "turn_on",
+            })
+        )
         assert "error" in result
         assert "Invalid domain" in result["error"]
 
     def test_handler_rejects_traversal_service(self):
         """_handle_call_service must reject service with path traversal."""
-        result = json.loads(_handle_call_service({
-            "domain": "light",
-            "service": "../../api/config",
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "light",
+                "service": "../../api/config",
+            })
+        )
         assert "error" in result
         assert "Invalid service" in result["error"]
 
     def test_handler_rejects_blocklist_bypass_traversal(self):
         """Blocklist bypass via shell_command/../light must be caught by format validation."""
-        result = json.loads(_handle_call_service({
-            "domain": "shell_command/../light",
-            "service": "turn_on",
-        }))
+        result = json.loads(
+            _handle_call_service({
+                "domain": "shell_command/../light",
+                "service": "turn_on",
+            })
+        )
         assert "error" in result
         # Must be rejected as "Invalid domain", not slip through the blocklist
         assert "Invalid domain" in result["error"]
@@ -505,7 +550,11 @@ class TestRegistration:
 
         monkeypatch.delenv("HASS_TOKEN", raising=False)
         invalidate_check_fn_cache()
-        defs = registry.get_definitions({"ha_list_entities", "ha_get_state", "ha_call_service"})
+        defs = registry.get_definitions({
+            "ha_list_entities",
+            "ha_get_state",
+            "ha_call_service",
+        })
         assert len(defs) == 0
 
     def test_check_fn_includes_when_token_set(self, monkeypatch):
@@ -514,5 +563,9 @@ class TestRegistration:
 
         monkeypatch.setenv("HASS_TOKEN", "test-token")
         invalidate_check_fn_cache()
-        defs = registry.get_definitions({"ha_list_entities", "ha_get_state", "ha_call_service"})
+        defs = registry.get_definitions({
+            "ha_list_entities",
+            "ha_get_state",
+            "ha_call_service",
+        })
         assert len(defs) == 3

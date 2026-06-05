@@ -16,15 +16,19 @@ description: "通过 RPC 工具访问实现程序化 Python 执行——将多�
 4. 脚本在子进程中运行——工具调用通过套接字传回 Clawksis
 5. 只有脚本的 `print()` 输出会返回给 LLM；中间工具结果不会进入上下文窗口
 
-```python
-# The agent can write scripts like:
-from clawk_tools import web_search, web_extract
-
-results = web_search("Python 3.13 features", limit=5)
-for r in results["data"]["web"]:
-    content = web_extract([r["url"]])
-    # ... filter and process ...
-print(summary)
+```python# The agent can write scripts like:
+
+from clawk_tools import web_search, web_extract
+
+
+results = web_search("Python 3.13 features", limit=5)
+
+for r in results["data"]["web"]:
+    content = web_extract([r["url"]])
+
+    # ... filter and process ...
+
+print(summary)
 ```
 
 **脚本内可用工具：** `web_search`、`web_extract`、`read_file`、`write_file`、`search_files`、`patch`、`terminal`（仅前台模式）。
@@ -43,87 +47,113 @@ print(summary)
 
 ### 数据处理流水线
 
-```python
-from clawk_tools import search_files, read_file
-import json
-
-# Find all config files and extract database settings
-matches = search_files("database", path=".", file_glob="*.yaml", limit=20)
-configs = []
-for match in matches.get("matches", []):
-    content = read_file(match["path"])
-    configs.append({"file": match["path"], "preview": content["content"][:200]})
-
-print(json.dumps(configs, indent=2))
+```pythonfrom clawk_tools import search_files, read_file
+
+import json
+
+
+# Find all config files and extract database settings
+
+matches = search_files("database", path=".", file_glob="*.yaml", limit=20)
+
+configs = []
+
+for match in matches.get("matches", []):
+    content = read_file(match["path"])
+
+    configs.append({"file": match["path"], "preview": content["content"][:200]})
+
+
+print(json.dumps(configs, indent=2))
 ```
 
 ### 多步骤网络调研
 
-```python
-from clawk_tools import web_search, web_extract
-import json
-
-# Search, extract, and summarize in one turn
-results = web_search("Rust async runtime comparison 2025", limit=5)
-summaries = []
-for r in results["data"]["web"]:
-    page = web_extract([r["url"]])
-    for p in page.get("results", []):
-        if p.get("content"):
-            summaries.append({
-                "title": r["title"],
-                "url": r["url"],
-                "excerpt": p["content"][:500]
-            })
-
-print(json.dumps(summaries, indent=2))
+```pythonfrom clawk_tools import web_search, web_extract
+
+import json
+
+
+# Search, extract, and summarize in one turn
+
+results = web_search("Rust async runtime comparison 2025", limit=5)
+
+summaries = []
+
+for r in results["data"]["web"]:
+    page = web_extract([r["url"]])
+
+    for p in page.get("results", []):
+        if p.get("content"):
+            summaries.append({
+                "title": r["title"],
+                "url": r["url"],
+                "excerpt": p["content"][:500],
+            })
+
+
+print(json.dumps(summaries, indent=2))
 ```
 
 ### 批量文件重构
 
-```python
-from clawk_tools import search_files, read_file, patch
-
-# Find all Python files using deprecated API and fix them
-matches = search_files("old_api_call", path="src/", file_glob="*.py")
-fixed = 0
-for match in matches.get("matches", []):
-    result = patch(
-        path=match["path"],
-        old_string="old_api_call(",
-        new_string="new_api_call(",
-        replace_all=True
-    )
-    if "error" not in str(result):
-        fixed += 1
-
-print(f"Fixed {fixed} files out of {len(matches.get('matches', []))} matches")
+```pythonfrom clawk_tools import search_files, read_file, patch
+
+
+# Find all Python files using deprecated API and fix them
+
+matches = search_files("old_api_call", path="src/", file_glob="*.py")
+
+fixed = 0
+
+for match in matches.get("matches", []):
+    result = patch(
+        path=match["path"],
+        old_string="old_api_call(",
+        new_string="new_api_call(",
+        replace_all=True,
+    )
+
+    if "error" not in str(result):
+        fixed += 1
+
+
+print(f"Fixed {fixed} files out of {len(matches.get('matches', []))} matches")
 ```
 
 ### 构建与测试流水线
 
-```python
-from clawk_tools import terminal, read_file
-import json
-
-# Run tests, parse results, and report
-result = terminal("cd /project && python -m pytest --tb=short -q 2>&1", timeout=120)
-output = result.get("output", "")
-
-# Parse test output
-passed = output.count(" passed")
-failed = output.count(" failed")
-errors = output.count(" error")
-
-report = {
-    "passed": passed,
-    "failed": failed,
-    "errors": errors,
-    "exit_code": result.get("exit_code", -1),
-    "summary": output[-500:] if len(output) > 500 else output
-}
-
-print(json.dumps(report, indent=2))
+```pythonfrom clawk_tools import terminal, read_file
+
+import json
+
+
+# Run tests, parse results, and report
+
+result = terminal("cd /project && python -m pytest --tb=short -q 2>&1", timeout=120)
+
+output = result.get("output", "")
+
+
+# Parse test output
+
+passed = output.count(" passed")
+
+failed = output.count(" failed")
+
+errors = output.count(" error")
+
+
+report = {
+    "passed": passed,
+    "failed": failed,
+    "errors": errors,
+    "exit_code": result.get("exit_code", -1),
+    "summary": output[-500:] if len(output) > 500 else output,
+}
+
+
+print(json.dumps(report, indent=2))
 ```
 
 ## 执行模式

@@ -86,6 +86,7 @@ _EXT_TO_MIME: dict[str, str] = {
 
 # ============ 工具函数 ============
 
+
 def guess_mime_type(filename: str) -> str:
     """根据文件扩展名猜测 MIME 类型。"""
     ext = os.path.splitext(filename)[-1].lower()
@@ -97,7 +98,17 @@ def is_image(filename: str, mime_type: str = "") -> bool:
     if mime_type.startswith("image/"):
         return True
     ext = os.path.splitext(filename)[-1].lower()
-    return ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".tiff", ".ico"}
+    return ext in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".heic",
+        ".tiff",
+        ".ico",
+    }
 
 
 def get_image_format(mime_type: str) -> int:
@@ -115,8 +126,8 @@ def generate_file_id() -> str:
     return secrets.token_hex(16)
 
 
-
 # ============ 图片尺寸解析（纯 Python，无需 Pillow） ============
+
 
 def parse_image_size(data: bytes) -> Optional[dict[str, int]]:
     """
@@ -151,11 +162,11 @@ def _parse_jpeg_size(buf: bytes) -> Optional[dict[str, int]]:
             continue
         marker = buf[i + 1]
         if marker in {0xC0, 0xC2}:
-            h = struct.unpack(">H", buf[i + 5: i + 7])[0]
-            w = struct.unpack(">H", buf[i + 7: i + 9])[0]
+            h = struct.unpack(">H", buf[i + 5 : i + 7])[0]
+            w = struct.unpack(">H", buf[i + 7 : i + 9])[0]
             return {"width": w, "height": h}
         if i + 3 < len(buf):
-            i += 2 + struct.unpack(">H", buf[i + 2: i + 4])[0]
+            i += 2 + struct.unpack(">H", buf[i + 2 : i + 4])[0]
         else:
             break
     return None
@@ -199,6 +210,7 @@ def _parse_webp_size(buf: bytes) -> Optional[dict[str, int]]:
 
 # ============ URL 下载 ============
 
+
 async def download_url(
     url: str,
     max_size_mb: int = DEFAULT_MAX_SIZE_MB,
@@ -241,9 +253,7 @@ async def download_url(
             async for chunk in resp.aiter_bytes(65536):
                 downloaded += len(chunk)
                 if downloaded > max_bytes:
-                    raise ValueError(
-                        f"文件过大: 已超过 {max_size_mb} MB 限制"
-                    )
+                    raise ValueError(f"文件过大: 已超过 {max_size_mb} MB 限制")
                 chunks.append(chunk)
 
         data = b"".join(chunks)
@@ -251,6 +261,7 @@ async def download_url(
 
 
 # ============ COS 鉴权（HMAC-SHA1） ============
+
 
 def _cos_sign(
     method: str,
@@ -291,8 +302,12 @@ def _cos_sign(
 
     # Step 2: HttpString
     # 参数和头部需按字典序排列，key 小写
-    sorted_params = sorted((k.lower(), urllib.parse.quote(str(v), safe="") ) for k, v in params.items())
-    sorted_headers = sorted((k.lower(), urllib.parse.quote(str(v), safe="") ) for k, v in headers.items())
+    sorted_params = sorted(
+        (k.lower(), urllib.parse.quote(str(v), safe="")) for k, v in params.items()
+    )
+    sorted_headers = sorted(
+        (k.lower(), urllib.parse.quote(str(v), safe="")) for k, v in headers.items()
+    )
 
     url_param_list = ";".join(k for k, _ in sorted_params)
     url_params = "&".join(f"{k}={v}" for k, v in sorted_params)
@@ -335,6 +350,7 @@ def _cos_sign(
 
 
 # ============ 主要公开 API ============
+
 
 async def get_cos_credentials(
     app_key: str,
@@ -407,9 +423,7 @@ async def get_cos_credentials(
     required_fields = ["bucketName", "location"]
     missing = [f for f in required_fields if not data.get(f)]
     if missing:
-        raise RuntimeError(
-            f"genUploadInfo 返回字段不完整: 缺少字段 {missing}"
-        )
+        raise RuntimeError(f"genUploadInfo 返回字段不完整: 缺少字段 {missing}")
 
     return data
 
@@ -519,7 +533,11 @@ async def upload_to_cos(
 
     logger.info(
         "COS PUT: bucket=%s region=%s key=%s size=%d mime=%s",
-        bucket, region, cos_key, file_size, content_type,
+        bucket,
+        region,
+        cos_key,
+        file_size,
+        content_type,
     )
 
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -545,12 +563,14 @@ async def upload_to_cos(
 
     logger.info(
         "COS 上传成功: url=%s size=%d",
-        result["url"], file_size,
+        result["url"],
+        file_size,
     )
     return result
 
 
 # ============ TIM 媒体消息构建 ============
+
 
 def build_image_msg_body(
     url: str,
@@ -588,7 +608,7 @@ def build_image_msg_body(
                 "image_format": image_format,
                 "image_info_array": [
                     {
-                        "type": 1,       # 1 = 原图
+                        "type": 1,  # 1 = 原图
                         "size": size,
                         "width": width,
                         "height": height,
@@ -635,6 +655,7 @@ def build_file_msg_body(
 
 
 # ============ 内部工具 ============
+
 
 def _basename_from_url(url: str) -> str:
     """从 URL 提取文件名。"""

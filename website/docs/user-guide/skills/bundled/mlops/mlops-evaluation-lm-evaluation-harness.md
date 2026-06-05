@@ -214,55 +214,73 @@ Avoid for frequent eval (too slow):
 
 Integrate with training script:
 
-```python
-# In training loop
-if step % eval_interval == 0:
-    model.save_pretrained(f"checkpoints/step-{step}")
-
-    # Run evaluation
-    os.system(f"./eval_checkpoint.sh checkpoints step-{step}")
+```python# In training loop
+
+if step % eval_interval == 0:
+    model.save_pretrained(f"checkpoints/step-{step}")
+
+    # Run evaluation
+
+    os.system(f"./eval_checkpoint.sh checkpoints step-{step}")
 ```
 
 Or use PyTorch Lightning callbacks:
 
-```python
-from pytorch_lightning import Callback
-
-class EvalHarnessCallback(Callback):
-    def on_validation_epoch_end(self, trainer, pl_module):
-        step = trainer.global_step
-        checkpoint_path = f"checkpoints/step-{step}"
-
-        # Save checkpoint
-        trainer.save_checkpoint(checkpoint_path)
-
-        # Run lm-eval
-        os.system(f"lm_eval --model hf --model_args pretrained={checkpoint_path} ...")
+```pythonfrom pytorch_lightning import Callback
+
+
+class EvalHarnessCallback(Callback):
+    def on_validation_epoch_end(self, trainer, pl_module):
+
+        step = trainer.global_step
+
+        checkpoint_path = f"checkpoints/step-{step}"
+
+        # Save checkpoint
+
+        trainer.save_checkpoint(checkpoint_path)
+
+        # Run lm-eval
+
+        os.system(f"lm_eval --model hf --model_args pretrained={checkpoint_path} ...")
 ```
 
 **Step 4: Plot learning curves**
 
-```python
-import json
-import matplotlib.pyplot as plt
-
-# Load all results
-steps = []
-mmlu_scores = []
-
-for file in sorted(glob.glob("results/step-*.json")):
-    with open(file) as f:
-        data = json.load(f)
-        step = int(file.split("-")[1].split(".")[0])
-        steps.append(step)
-        mmlu_scores.append(data["results"]["mmlu"]["acc"])
-
-# Plot
-plt.plot(steps, mmlu_scores)
-plt.xlabel("Training Step")
-plt.ylabel("MMLU Accuracy")
-plt.title("Training Progress")
-plt.savefig("training_curve.png")
+```pythonimport json
+
+import matplotlib.pyplot as plt
+
+
+# Load all results
+
+steps = []
+
+mmlu_scores = []
+
+
+for file in sorted(glob.glob("results/step-*.json")):
+    with open(file) as f:
+        data = json.load(f)
+
+        step = int(file.split("-")[1].split(".")[0])
+
+        steps.append(step)
+
+        mmlu_scores.append(data["results"]["mmlu"]["acc"])
+
+
+# Plot
+
+plt.plot(steps, mmlu_scores)
+
+plt.xlabel("Training Step")
+
+plt.ylabel("MMLU Accuracy")
+
+plt.title("Training Progress")
+
+plt.savefig("training_curve.png")
 ```
 
 ### Workflow 3: Compare multiple models
@@ -312,35 +330,47 @@ done < models.txt
 
 **Step 3: Generate comparison table**
 
-```python
-import json
-import pandas as pd
-
-models = [
-    "meta-llama-Llama-2-7b-hf",
-    "meta-llama-Llama-2-13b-hf",
-    "mistralai-Mistral-7B-v0.1",
-    "microsoft-phi-2"
-]
-
-tasks = ["mmlu", "gsm8k", "hellaswag", "truthfulqa"]
-
-results = []
-for model in models:
-    with open(f"results/{model}.json") as f:
-        data = json.load(f)
-        row = {"Model": model.replace("-", "/")}
-        for task in tasks:
-            # Get primary metric for each task
-            metrics = data["results"][task]
-            if "acc" in metrics:
-                row[task.upper()] = f"{metrics['acc']:.3f}"
-            elif "exact_match" in metrics:
-                row[task.upper()] = f"{metrics['exact_match']:.3f}"
-        results.append(row)
-
-df = pd.DataFrame(results)
-print(df.to_markdown(index=False))
+```pythonimport json
+
+import pandas as pd
+
+
+models = [
+    "meta-llama-Llama-2-7b-hf",
+    "meta-llama-Llama-2-13b-hf",
+    "mistralai-Mistral-7B-v0.1",
+    "microsoft-phi-2",
+]
+
+
+tasks = ["mmlu", "gsm8k", "hellaswag", "truthfulqa"]
+
+
+results = []
+
+for model in models:
+    with open(f"results/{model}.json") as f:
+        data = json.load(f)
+
+        row = {"Model": model.replace("-", "/")}
+
+        for task in tasks:
+            # Get primary metric for each task
+
+            metrics = data["results"][task]
+
+            if "acc" in metrics:
+                row[task.upper()] = f"{metrics['acc']:.3f}"
+
+            elif "exact_match" in metrics:
+                row[task.upper()] = f"{metrics['exact_match']:.3f}"
+
+        results.append(row)
+
+
+df = pd.DataFrame(results)
+
+print(df.to_markdown(index=False))
 ```
 
 Output:

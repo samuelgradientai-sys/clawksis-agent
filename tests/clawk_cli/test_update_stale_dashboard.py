@@ -72,11 +72,13 @@ def _ps_runner(stdout: str):
     scan path without having to re-stub every unrelated subprocess call
     made later in ``_kill_stale_dashboard_processes``.
     """
+
     def _side_effect(args, *a, **kw):
         if isinstance(args, (list, tuple)) and args and args[0] == "ps":
             return MagicMock(returncode=0, stdout=stdout, stderr="")
         # Any other subprocess.run (e.g. taskkill) — benign success stub.
         return MagicMock(returncode=0, stdout="", stderr="")
+
     return _side_effect
 
 
@@ -99,7 +101,10 @@ class TestFindStaleDashboardPids:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout=_ps_line(12345, "python3 -m clawk_cli.main dashboard --port 9119") + "\n",
+                stdout=_ps_line(
+                    12345, "python3 -m clawk_cli.main dashboard --port 9119"
+                )
+                + "\n",
                 stderr="",
             )
             assert _find_stale_dashboard_pids() == [12345]
@@ -112,7 +117,8 @@ class TestFindStaleDashboardPids:
                     _ps_line(12345, "python3 -m clawk_cli.main dashboard --port 9119"),
                     _ps_line(12346, "clawk dashboard --port 9120 --no-open"),
                     _ps_line(12347, "python /home/x/clawk_cli/main.py dashboard"),
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             assert sorted(_find_stale_dashboard_pids()) == [12345, 12346, 12347]
@@ -124,7 +130,8 @@ class TestFindStaleDashboardPids:
                 stdout="\n".join([
                     _ps_line(os.getpid(), "python3 -m clawk_cli.main dashboard"),
                     _ps_line(12345, "clawk dashboard --port 9119"),
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             pids = _find_stale_dashboard_pids()
@@ -137,6 +144,7 @@ class TestFindStaleDashboardPids:
 
     def test_ps_timeout_returns_empty(self):
         import subprocess as sp
+
         with patch("subprocess.run", side_effect=sp.TimeoutExpired("ps", 10)):
             assert _find_stale_dashboard_pids() == []
 
@@ -149,9 +157,13 @@ class TestFindStaleDashboardPids:
                 returncode=0,
                 stdout="\n".join([
                     _ps_line(12345, "python3 -m clawk_cli.main dashboard --port 9119"),
-                    _ps_line(22222, "python3 -m clawk_cli.main chat -q 'rewrite my dashboard'"),
+                    _ps_line(
+                        22222,
+                        "python3 -m clawk_cli.main chat -q 'rewrite my dashboard'",
+                    ),
                     _ps_line(33333, "node /opt/grafana/dashboard-server.js"),
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             pids = _find_stale_dashboard_pids()
@@ -164,7 +176,8 @@ class TestFindStaleDashboardPids:
                 stdout="\n".join([
                     _ps_line(99999, "grep clawk dashboard"),
                     _ps_line(12345, "clawk dashboard --port 9119"),
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             pids = _find_stale_dashboard_pids()
@@ -179,7 +192,8 @@ class TestFindStaleDashboardPids:
                     "notapid clawk dashboard --bad",
                     _ps_line(12345, "clawk dashboard --port 9119"),
                     "   ",
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             pids = _find_stale_dashboard_pids()
@@ -196,7 +210,8 @@ class TestFindStaleDashboardPids:
                     _ps_line(11111, "clawk dashboard --port 9119"),
                     _ps_line(22222, "clawk dashboard --port 9120"),
                     _ps_line(33333, "clawk dashboard --port 9121"),
-                ]) + "\n",
+                ])
+                + "\n",
                 stderr="",
             )
             # Exclude the desktop-managed backend PID
@@ -251,10 +266,13 @@ class TestKillStaleDashboardPosix:
                 raise ProcessLookupError
             # SIGTERM itself: succeed silently.
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[12345, 12346]), \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch(
+                "clawk_cli.main._find_stale_dashboard_pids", return_value=[12345, 12346]
+            ),
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             _kill_stale_dashboard_processes()
 
         # Both got SIGTERM.
@@ -283,11 +301,12 @@ class TestKillStaleDashboardPosix:
                 return
             # Any other signal — also fine.
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[99999]), \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=[0.0] + [10.0] * 20):
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[99999]),
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=[0.0] + [10.0] * 20),
+        ):
             # monotonic jumps past the 3s deadline on the second read so the
             # grace loop exits immediately after one iteration.
             _kill_stale_dashboard_processes()
@@ -303,13 +322,15 @@ class TestKillStaleDashboardPosix:
         """os.kill raising PermissionError (e.g. another user's process)
         must not abort clawk update — it's reported as a failure and we
         move on."""
+
         def fake_kill(pid, sig):
             raise PermissionError("Operation not permitted")
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[12345]), \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]),
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             _kill_stale_dashboard_processes()  # must not raise
 
         out = capsys.readouterr().out
@@ -319,13 +340,15 @@ class TestKillStaleDashboardPosix:
     def test_process_already_gone_counts_as_stopped(self, capsys):
         """ProcessLookupError on the initial SIGTERM means the process
         already exited between detection and the kill — treat as success."""
+
         def fake_kill(pid, sig):
             raise ProcessLookupError
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[12345]), \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]),
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             _kill_stale_dashboard_processes()
 
         out = capsys.readouterr().out
@@ -343,19 +366,27 @@ class TestKillStaleDashboardWindows:
             # taskkill returns 0 on success
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[12345, 12346]), \
-             patch("subprocess.run", side_effect=fake_run) as mock_run:
+        with (
+            patch(
+                "clawk_cli.main._find_stale_dashboard_pids", return_value=[12345, 12346]
+            ),
+            patch("subprocess.run", side_effect=fake_run) as mock_run,
+        ):
             _kill_stale_dashboard_processes()
 
         # Each PID triggered a taskkill /PID <n> /F invocation.
         taskkill_calls = [
-            c for c in mock_run.call_args_list
+            c
+            for c in mock_run.call_args_list
             if c.args and isinstance(c.args[0], list) and c.args[0][:1] == ["taskkill"]
         ]
         assert len(taskkill_calls) == 2
-        assert ["taskkill", "/PID", "12345", "/F"] in [c.args[0] for c in taskkill_calls]
-        assert ["taskkill", "/PID", "12346", "/F"] in [c.args[0] for c in taskkill_calls]
+        assert ["taskkill", "/PID", "12345", "/F"] in [
+            c.args[0] for c in taskkill_calls
+        ]
+        assert ["taskkill", "/PID", "12346", "/F"] in [
+            c.args[0] for c in taskkill_calls
+        ]
 
         out = capsys.readouterr().out
         assert "✓ stopped PID 12345" in out
@@ -365,12 +396,14 @@ class TestKillStaleDashboardWindows:
         monkeypatch.setattr(sys, "platform", "win32")
 
         def fake_run(args, *a, **kw):
-            return MagicMock(returncode=128, stdout="",
-                             stderr="ERROR: Access is denied.")
+            return MagicMock(
+                returncode=128, stdout="", stderr="ERROR: Access is denied."
+            )
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[12345]), \
-             patch("subprocess.run", side_effect=fake_run):
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]),
+            patch("subprocess.run", side_effect=fake_run),
+        ):
             _kill_stale_dashboard_processes()  # must not raise
 
         out = capsys.readouterr().out
@@ -400,8 +433,7 @@ class TestWindowsWmicEncoding:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "CommandLine=python -m clawk_cli.main dashboard\n"
-                    "ProcessId=12345\n"
+                    "CommandLine=python -m clawk_cli.main dashboard\nProcessId=12345\n"
                 ),
                 stderr="",
             )
@@ -429,8 +461,6 @@ class TestWindowsWmicEncoding:
         ``None.split('\\n')`` and aborting `clawk update` (#17049)."""
         monkeypatch.setattr(sys, "platform", "win32")
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=None, stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=None, stderr="")
             # Must not raise.
             assert _find_stale_dashboard_pids() == []

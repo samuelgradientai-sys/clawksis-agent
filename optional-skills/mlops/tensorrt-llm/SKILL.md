@@ -51,25 +51,28 @@ pip install tensorrt_llm==1.2.0rc3
 
 ### Basic inference
 
-```python
-from tensorrt_llm import LLM, SamplingParams
-
-# Initialize model
-llm = LLM(model="meta-llama/Meta-Llama-3-8B")
-
-# Configure sampling
-sampling_params = SamplingParams(
-    max_tokens=100,
-    temperature=0.7,
-    top_p=0.9
-)
-
-# Generate
-prompts = ["Explain quantum computing"]
-outputs = llm.generate(prompts, sampling_params)
-
-for output in outputs:
-    print(output.text)
+```pythonfrom tensorrt_llm import LLM, SamplingParams
+
+
+# Initialize model
+
+llm = LLM(model="meta-llama/Meta-Llama-3-8B")
+
+
+# Configure sampling
+
+sampling_params = SamplingParams(max_tokens=100, temperature=0.7, top_p=0.9)
+
+
+# Generate
+
+prompts = ["Explain quantum computing"]
+
+outputs = llm.generate(prompts, sampling_params)
+
+
+for output in outputs:
+    print(output.text)
 ```
 
 ### Serving with trtllm-serve
@@ -116,43 +119,37 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ### Quantized model (FP8)
 
-```python
-from tensorrt_llm import LLM
-
-# Load FP8 quantized model (2× faster, 50% memory)
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-70B",
-    dtype="fp8",
-    max_num_tokens=8192
-)
-
-# Inference same as before
-outputs = llm.generate(["Summarize this article..."])
+```pythonfrom tensorrt_llm import LLM
+
+
+# Load FP8 quantized model (2× faster, 50% memory)
+
+llm = LLM(model="meta-llama/Meta-Llama-3-70B", dtype="fp8", max_num_tokens=8192)
+
+
+# Inference same as before
+
+outputs = llm.generate(["Summarize this article..."])
 ```
 
 ### Multi-GPU deployment
 
-```python
-# Tensor parallelism across 8 GPUs
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-405B",
-    tensor_parallel_size=8,
-    dtype="fp8"
-)
+```python# Tensor parallelism across 8 GPUs
+
+llm = LLM(model="meta-llama/Meta-Llama-3-405B", tensor_parallel_size=8, dtype="fp8")
 ```
 
 ### Batch inference
 
-```python
-# Process 100 prompts efficiently
-prompts = [f"Question {i}: ..." for i in range(100)]
-
-outputs = llm.generate(
-    prompts,
-    sampling_params=SamplingParams(max_tokens=200)
-)
-
-# Automatic in-flight batching for maximum throughput
+```python# Process 100 prompts efficiently
+
+prompts = [f"Question {i}: ..." for i in range(100)]
+
+
+outputs = llm.generate(prompts, sampling_params=SamplingParams(max_tokens=200))
+
+
+# Automatic in-flight batching for maximum throughput
 ```
 
 ## Performance benchmarks

@@ -1,6 +1,5 @@
 """Tests for config.yaml structure validation (validate_config_structure)."""
 
-
 from clawk_cli.config import validate_config_structure, ConfigIssue
 
 
@@ -39,7 +38,9 @@ class TestCustomProvidersValidation:
         })
         warnings = [i for i in issues if i.severity == "warning"]
         # Should flag base_url, api_key as looking like custom_providers entry fields
-        misplaced = [i for i in warnings if "custom_providers entry fields" in i.message]
+        misplaced = [
+            i for i in warnings if "custom_providers entry fields" in i.message
+        ]
         assert len(misplaced) == 1
 
     def test_dict_detects_nested_fallback(self):
@@ -51,7 +52,9 @@ class TestCustomProvidersValidation:
             },
         })
         errors = [i for i in issues if i.severity == "error"]
-        assert any("fallback_model" in i.message and "inside" in i.message for i in errors)
+        assert any(
+            "fallback_model" in i.message and "inside" in i.message for i in errors
+        )
 
     def test_valid_list_no_issues(self):
         """Properly formatted custom_providers should produce no issues."""
@@ -153,7 +156,9 @@ class TestFallbackModelValidation:
                 {"model": "claude-sonnet-4-6"},
             ],
         })
-        assert any("fallback_model[1]" in i.message and "provider" in i.message for i in issues)
+        assert any(
+            "fallback_model[1]" in i.message and "provider" in i.message for i in issues
+        )
 
     def test_fallback_list_entry_missing_model(self):
         issues = validate_config_structure({
@@ -161,13 +166,18 @@ class TestFallbackModelValidation:
                 {"provider": "openrouter"},
             ],
         })
-        assert any("fallback_model[0]" in i.message and "model" in i.message for i in issues)
+        assert any(
+            "fallback_model[0]" in i.message and "model" in i.message for i in issues
+        )
 
     def test_fallback_list_entry_not_a_dict(self):
         issues = validate_config_structure({
             "fallback_model": ["openrouter:anthropic/claude-sonnet-4"],
         })
-        assert any("fallback_model[0]" in i.message and "should be a dict" in i.message for i in issues)
+        assert any(
+            "fallback_model[0]" in i.message and "should be a dict" in i.message
+            for i in issues
+        )
 
 
 class TestMissingModelSection:

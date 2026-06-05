@@ -110,37 +110,41 @@ Key patterns:
 
 Always catch both `ImportError` and `NotImplementedError`:
 
-```python
-try:
-    from simple_term_menu import TerminalMenu
-    menu = TerminalMenu(options)
-    idx = menu.show()
-except (ImportError, NotImplementedError):
-    # Fallback: numbered menu
-    for i, opt in enumerate(options):
-        print(f"  {i+1}. {opt}")
-    idx = int(input("Choice: ")) - 1
+```pythontry:
+    from simple_term_menu import TerminalMenu
+
+    menu = TerminalMenu(options)
+
+    idx = menu.show()
+
+except (ImportError, NotImplementedError):
+    # Fallback: numbered menu
+
+    for i, opt in enumerate(options):
+        print(f"  {i + 1}. {opt}")
+
+    idx = int(input("Choice: ")) - 1
 ```
 
 ### 2. File encoding
 
 Some environments may save `.env` files in non-UTF-8 encodings:
 
-```python
-try:
-    load_dotenv(env_path)
-except UnicodeDecodeError:
-    load_dotenv(env_path, encoding="latin-1")
+```pythontry:
+    load_dotenv(env_path)
+
+except UnicodeDecodeError:
+    load_dotenv(env_path, encoding="latin-1")
 ```
 
 ### 3. Process management
 
 `os.setsid()`, `os.killpg()`, and signal handling differ across platforms:
 
-```python
-import platform
-if platform.system() != "Windows":
-    kwargs["preexec_fn"] = os.setsid
+```pythonimport platform
+
+if platform.system() != "Windows":
+    kwargs["preexec_fn"] = os.setsid
 ```
 
 ### 4. Path separators

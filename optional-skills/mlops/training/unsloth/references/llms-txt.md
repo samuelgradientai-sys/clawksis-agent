@@ -2624,17 +2624,24 @@ Example 1 (python):
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=8,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
 )
 ```
 
@@ -2642,8 +2649,17 @@ Example 2 (python):
 ```python
 def formatting_prompts_func(examples):
     convos = examples["messages"]
-    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
-    return { "text" : texts, }
+    texts = [
+        tokenizer.apply_chat_template(
+            convo, tokenize=False, add_generation_prompt=False
+        )
+        for convo in convos
+    ]
+    return {
+        "text": texts,
+    }
+
+
 pass
 
 from datasets import load_dataset
@@ -2655,18 +2671,22 @@ dataset
 Example 3 (python):
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
 Example 4 (python):
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 ---
@@ -2711,11 +2731,12 @@ Then use 2 different learning rates - a 2-10x smaller one for the `lm_head` or `
 Example 1 (python):
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "LORA_MODEL_NAME",
-    max_seq_length = max_seq_length,
-    dtype = dtype,
-    load_in_4bit = load_in_4bit,
+    model_name="LORA_MODEL_NAME",
+    max_seq_length=max_seq_length,
+    dtype=dtype,
+    load_in_4bit=load_in_4bit,
 )
 trainer = Trainer(...)
 trainer.train()
@@ -2725,11 +2746,19 @@ Example 2 (python):
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",
-                      "lm_head", "embed_tokens",],
-    lora_alpha = 16,
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+        "lm_head",
+        "embed_tokens",
+    ],
+    lora_alpha=16,
 )
 ```
 
@@ -6711,12 +6740,32 @@ If you already have Docker desktop, all you need to do is run the command below 
 Example 1 (python):
 ```python
 messages = [
-    {"role" : "user", "content" : "What is 1+1?"},
-    {"role" : "assistant", "content" : "2"},
-    {"role": "user",  "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30."},
-    {"role": "assistant",  "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.", "thinking" : ""},
-    {"role": "assistant", "content": "", "tool_calls": [{"name": "get_current_temperature", "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}'}]},
-    {"role": "tool", "name": "get_current_temperature", "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}'},
+    {"role": "user", "content": "What is 1+1?"},
+    {"role": "assistant", "content": "2"},
+    {
+        "role": "user",
+        "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30.",
+    },
+    {
+        "role": "assistant",
+        "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.",
+        "thinking": "",
+    },
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "name": "get_current_temperature",
+                "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}',
+            }
+        ],
+    },
+    {
+        "role": "tool",
+        "name": "get_current_temperature",
+        "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}',
+    },
 ]
 ```
 
@@ -6923,9 +6972,9 @@ Example 3 (py):
 ```py
 prompt_1 = 'How many "r" are in strawberry?'
 
-prompt_2 = 'John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?'
+prompt_2 = "John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?"
 
-prompt_3 = '9.11 and 9.8, which is greater?'
+prompt_3 = "9.11 and 9.8, which is greater?"
 ```
 
 Example 4 (py):
@@ -7213,19 +7262,18 @@ Example 1 (python):
 ```python
 model = FastVisionModel.get_peft_model(
     model,
-    finetune_vision_layers     = True, # False if not finetuning vision layers
-    finetune_language_layers   = True, # False if not finetuning language layers
-    finetune_attention_modules = True, # False if not finetuning attention layers
-    finetune_mlp_modules       = True, # False if not finetuning MLP layers
-
-    r = 16,                           # The larger, the higher the accuracy, but might overfit
-    lora_alpha = 16,                  # Recommended alpha == r at least
-    lora_dropout = 0,
-    bias = "none",
-    random_state = 3407,
-    use_rslora = False,               # We support rank stabilized LoRA
-    loftq_config = None,               # And LoftQ
-    target_modules = "all-linear",    # Optional now! Can specify a list if needed
+    finetune_vision_layers=True,  # False if not finetuning vision layers
+    finetune_language_layers=True,  # False if not finetuning language layers
+    finetune_attention_modules=True,  # False if not finetuning attention layers
+    finetune_mlp_modules=True,  # False if not finetuning MLP layers
+    r=16,  # The larger, the higher the accuracy, but might overfit
+    lora_alpha=16,  # Recommended alpha == r at least
+    lora_dropout=0,
+    bias="none",
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
+    target_modules="all-linear",  # Optional now! Can specify a list if needed
     modules_to_save=[
         "lm_head",
         "embed_tokens",
@@ -7244,12 +7292,14 @@ Dataset({
 Example 3 (python):
 ```python
 [
-{ "role": "user",
-  "content": [{"type": "text",  "text": instruction}, {"type": "image", "image": image} ]
-},
-{ "role": "assistant",
-  "content": [{"type": "text",  "text": answer} ]
-},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image", "image": image},
+        ],
+    },
+    {"role": "assistant", "content": [{"type": "text", "text": answer}]},
 ]
 ```
 
@@ -8345,18 +8395,22 @@ Note that `pip install unsloth` will not work for this setup, as we need to use 
 Example 1 (python):
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
 Example 2 (python):
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 Example 3 (unknown):
@@ -10340,7 +10394,7 @@ from unsloth import FastModel
 model_name = "unsloth/orpheus-3b-0.1-pretrained"
 model, tokenizer = FastModel.from_pretrained(
     model_name,
-    load_in_4bit=False  # use 4-bit precision (QLoRA)
+    load_in_4bit=False,  # use 4-bit precision (QLoRA)
 )
 ```
 
@@ -10492,8 +10546,8 @@ After saving your finetune, you can simply do:
 
 Example 1 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_16bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_16bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_16bit", token="")
 ```
 
 Example 2 (python):
@@ -10504,8 +10558,8 @@ tokenizer.save_pretrained("tokenizer")
 
 Example 3 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "lora")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "lora", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="lora")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="lora", token="")
 ```
 
 Example 4 (bash):
@@ -11672,15 +11726,15 @@ All supported quantization options for `quantization_method` are listed below:
 
 Example 1 (python):
 ```python
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q4_k_m")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q8_0")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "f16")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q4_k_m")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q8_0")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="f16")
 ```
 
 Example 2 (python):
 ```python
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q4_k_m")
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q8_0")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q4_k_m")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q8_0")
 ```
 
 ---

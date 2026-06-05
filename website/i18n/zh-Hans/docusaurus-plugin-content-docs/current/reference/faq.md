@@ -125,11 +125,12 @@ Clawksis 本身**免费且开源**（MIT 许可证）。您只需为所选提供
 
 可以。导入 `AIAgent` 类，以编程方式使用 Clawksis：
 
-```python
-from run_agent import AIAgent
-
-agent = AIAgent(model="anthropic/claude-opus-4.7")
-response = agent.chat("Explain quantum computing briefly")
+```pythonfrom run_agent import AIAgent
+
+
+agent = AIAgent(model="anthropic/claude-opus-4.7")
+
+response = agent.chat("Explain quantum computing briefly")
 ```
 
 完整 API 用法请参阅 [Python 库指南](../user-guide/features/code-execution.md)。

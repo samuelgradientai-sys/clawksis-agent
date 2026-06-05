@@ -41,8 +41,18 @@ def _write_wav(path: str, samples, sample_rate: int = 24000) -> None:
         f.write(struct.pack("<I", 36 + data_size))
         f.write(b"WAVE")
         f.write(b"fmt ")
-        f.write(struct.pack("<IHHIIHH", 16, 1, num_channels, sample_rate,
-                            byte_rate, block_align, bits_per_sample))
+        f.write(
+            struct.pack(
+                "<IHHIIHH",
+                16,
+                1,
+                num_channels,
+                sample_rate,
+                byte_rate,
+                block_align,
+                bits_per_sample,
+            )
+        )
         f.write(b"data")
         f.write(struct.pack("<I", data_size))
         f.write(pcm.tobytes())
@@ -53,9 +63,14 @@ def main():
     parser.add_argument("--text", required=True, help="Text to synthesize")
     parser.add_argument("--out", required=True, help="Output WAV path")
     parser.add_argument("--ref-audio", required=True, help="Reference voice audio path")
-    parser.add_argument("--ref-text", required=True, help="Reference voice transcript path")
-    parser.add_argument("--model", default="neuphonic/neutts-air-q4-gguf",
-                        help="HuggingFace backbone model repo")
+    parser.add_argument(
+        "--ref-text", required=True, help="Reference voice transcript path"
+    )
+    parser.add_argument(
+        "--model",
+        default="neuphonic/neutts-air-q4-gguf",
+        help="HuggingFace backbone model repo",
+    )
     parser.add_argument("--device", default="cpu", help="Device (cpu/cuda/mps)")
     args = parser.parse_args()
 
@@ -75,7 +90,10 @@ def main():
     try:
         from neutts import NeuTTS
     except ImportError:
-        print("Error: neutts not installed. Run: python -m pip install -U neutts[all]", file=sys.stderr)
+        print(
+            "Error: neutts not installed. Run: python -m pip install -U neutts[all]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     tts = NeuTTS(
@@ -93,6 +111,7 @@ def main():
 
     try:
         import soundfile as sf
+
         sf.write(str(out_path), wav, 24000)
     except ImportError:
         _write_wav(str(out_path), wav, 24000)

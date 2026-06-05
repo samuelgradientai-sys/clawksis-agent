@@ -198,12 +198,14 @@ For complex logic, use Python functions in `utils.py`.
 ```python
 def process_docs(dataset):
     """Preprocess documents."""
+
     def _process(doc):
         # Custom preprocessing
         doc["question"] = doc["question"].strip().lower()
         return doc
 
     return dataset.map(_process)
+
 
 def doc_to_text(doc):
     """Custom prompt formatting."""
@@ -214,9 +216,11 @@ def doc_to_text(doc):
         return f"Context: {context}\nQuestion: {question}\nAnswer:"
     return f"Question: {question}\nAnswer:"
 
+
 def doc_to_target(doc):
     """Custom target extraction."""
     return doc["answer"].strip().lower()
+
 
 def aggregate_scores(items):
     """Custom metric aggregation."""
@@ -292,6 +296,7 @@ metadata:
 from sklearn.metrics import f1_score
 import re
 
+
 def medical_f1(predictions, references):
     """Custom F1 for medical terms."""
     pred_terms = set(extract_medical_terms(predictions[0]))
@@ -309,12 +314,17 @@ def medical_f1(predictions, references):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
 
-    return 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    return (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) > 0
+        else 0
+    )
+
 
 def extract_medical_terms(text):
     """Extract medical terminology."""
     # Custom logic
-    return re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b', text)
+    return re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", text)
 ```
 
 ### Example 2: Code Evaluation
@@ -358,6 +368,7 @@ metadata:
 import subprocess
 import json
 
+
 def execute_code(predictions, references):
     """Execute generated code against test cases."""
     generated_code = predictions[0]
@@ -373,17 +384,16 @@ def execute_code(predictions, references):
     except Exception:
         return 0.0
 
+
 def execute_with_timeout(code, input_data, timeout=5):
     """Safely execute code with timeout."""
     # Implementation with subprocess and timeout
     pass
 
+
 def process_code_results(doc, results):
     """Process code execution results."""
-    return {
-        "passed": results[0] == 1.0,
-        "generated_code": results[1]
-    }
+    return {"passed": results[0] == 1.0, "generated_code": results[1]}
 ```
 
 ### Example 3: Instruction Following
@@ -423,7 +433,8 @@ process_docs: !function utils.add_constraint_checkers
 ```python
 from sentence_transformers import SentenceTransformer, util
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 def check_constraints(predictions, references):
     """Check if response satisfies constraints."""
@@ -439,6 +450,7 @@ def check_constraints(predictions, references):
 
     return satisfied / total if total > 0 else 1.0
 
+
 def verify_constraint(response, constraint):
     """Verify single constraint."""
     if constraint["type"] == "length":
@@ -448,18 +460,22 @@ def verify_constraint(response, constraint):
     # Add more constraint types
     return True
 
+
 def semantic_similarity(predictions, references):
     """Compute semantic similarity."""
     pred_embedding = model.encode(predictions[0])
     ref_embedding = model.encode(references[0])
     return float(util.cos_sim(pred_embedding, ref_embedding))
 
+
 def add_constraint_checkers(dataset):
     """Parse constraints into verifiable format."""
+
     def _parse(doc):
         # Parse constraint string into structured format
         doc["parsed_constraints"] = parse_constraints(doc.get("constraints", ""))
         return doc
+
     return dataset.map(_parse)
 ```
 

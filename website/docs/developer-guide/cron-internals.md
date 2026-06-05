@@ -134,11 +134,13 @@ Create a daily funding report → attach "ai-funding-daily-report" skill
 
 Jobs can also attach a Python script via the `script` field. The script runs *before* each agent turn, and its stdout is injected into the prompt as context. This enables data collection and change detection patterns:
 
-```python
-# ~/.clawksis/scripts/check_competitors.py
-import requests, json
-# Fetch competitor release notes, diff against last run
-# Print summary to stdout — agent analyzes and reports
+```python# ~/.clawksis/scripts/check_competitors.py
+
+import requests, json
+
+# Fetch competitor release notes, diff against last run
+
+# Print summary to stdout — agent analyzes and reports
 ```
 
 The script timeout defaults to 120 seconds. `_get_script_timeout()` resolves the limit through a three-layer chain:

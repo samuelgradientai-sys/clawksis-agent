@@ -44,6 +44,7 @@ def _fake_run_on_mcp_loop(coro_or_factory, timeout=30):
                 if getattr(srv, "_rpc_lock", None) is None:
                     srv._rpc_lock = asyncio.Lock()
             return await coro
+
         return loop.run_until_complete(_install_lock_and_run())
     finally:
         loop.close()
@@ -57,8 +58,10 @@ def _patch_mcp_server():
     # ~L2008) to serialize JSON-RPC against the server — build it inside the
     # fresh loop that _fake_run_on_mcp_loop spins up, not at fixture import.
     fake_server = SimpleNamespace(session=fake_session, _rpc_lock=None)
-    with patch.dict(mcp_tool._servers, {"test-server": fake_server}), \
-         patch("tools.mcp_tool._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop):
+    with (
+        patch.dict(mcp_tool._servers, {"test-server": fake_server}),
+        patch("tools.mcp_tool._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop),
+    ):
         yield fake_session
 
 
@@ -100,7 +103,11 @@ class TestStructuredContentPreservation:
         metadata in structuredContent.  Agent must see file contents."""
         session = _patch_mcp_server
         file_text = "import os\nprint('hello')\n"
-        metadata = {"fileName": "main.py", "filePath": "/tmp/main.py", "fileType": "python"}
+        metadata = {
+            "fileName": "main.py",
+            "filePath": "/tmp/main.py",
+            "fileType": "python",
+        }
         session.call_tool = AsyncMock(
             return_value=_FakeCallToolResult(
                 content=[_FakeContentBlock(file_text)],

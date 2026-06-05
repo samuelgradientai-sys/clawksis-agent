@@ -68,6 +68,7 @@ def _make_fake_popen(captured: dict, fds: list):
     the first iteration.  Every fd handed out is appended to ``fds`` so the
     caller can clean up after the test.
     """
+
     def fake_popen(cmd, **kwargs):
         captured["cwd"] = kwargs.get("cwd")
         captured["env"] = kwargs.get("env", {})
@@ -81,6 +82,7 @@ def _make_fake_popen(captured: dict, fds: list):
         proc.stdout = stdout
         proc.stdin = MagicMock()
         return proc
+
     return fake_popen
 
 
@@ -102,7 +104,9 @@ class TestRunBashCwdRecovery:
         wedged = tmp_path / "wedge-repro"
         wedged.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(wedged), timeout=10)
 
         # The previous tool call deleted the working directory.
@@ -112,10 +116,12 @@ class TestRunBashCwdRecovery:
         captured = {}
         fds: list = []
         try:
-            with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
-                 patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)), \
-                 patch("tools.terminal_tool._interrupt_event", _fake_interrupt()), \
-                 caplog.at_level("WARNING", logger="tools.environments.local"):
+            with (
+                patch("tools.environments.local._find_bash", return_value="/bin/bash"),
+                patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)),
+                patch("tools.terminal_tool._interrupt_event", _fake_interrupt()),
+                caplog.at_level("WARNING", logger="tools.environments.local"),
+            ):
                 env.execute("echo hello")
         finally:
             _close_fds(fds)
@@ -131,16 +137,20 @@ class TestRunBashCwdRecovery:
         assert any("missing on disk" in rec.message for rec in caplog.records)
 
     def test_no_warning_when_cwd_still_exists(self, tmp_path, caplog):
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(tmp_path), timeout=10)
 
         captured = {}
         fds: list = []
         try:
-            with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
-                 patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)), \
-                 patch("tools.terminal_tool._interrupt_event", _fake_interrupt()), \
-                 caplog.at_level("WARNING", logger="tools.environments.local"):
+            with (
+                patch("tools.environments.local._find_bash", return_value="/bin/bash"),
+                patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)),
+                patch("tools.terminal_tool._interrupt_event", _fake_interrupt()),
+                caplog.at_level("WARNING", logger="tools.environments.local"),
+            ):
                 env.execute("echo hello")
         finally:
             _close_fds(fds)
@@ -157,7 +167,9 @@ class TestUpdateCwdRejectsMissingPaths:
         original = tmp_path / "starting"
         original.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(original), timeout=10)
 
         # Simulate the stale-marker case: the prior command's ``pwd -P`` left
@@ -176,7 +188,9 @@ class TestUpdateCwdRejectsMissingPaths:
         new_dir = tmp_path / "next"
         new_dir.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(original), timeout=10)
 
         with open(env._cwd_file, "w") as f:

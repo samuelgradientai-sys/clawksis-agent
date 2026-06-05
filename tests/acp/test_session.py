@@ -39,12 +39,16 @@ class TestCreateSession:
 
     def test_create_session_registers_task_cwd(self, manager, monkeypatch):
         calls = []
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: calls.append((task_id, cwd)))
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd",
+            lambda task_id, cwd: calls.append((task_id, cwd)),
+        )
         state = manager.create_session(cwd="/tmp/work")
         assert calls == [(state.session_id, "/tmp/work")]
 
-
-    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(self, monkeypatch):
+    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(
+        self, monkeypatch
+    ):
         captured = {}
 
         def fake_register_task_env_overrides(task_id, overrides):
@@ -78,8 +82,6 @@ class TestCreateSession:
         assert manager.get_session("does-not-exist") is None
 
 
-
-
 # ---------------------------------------------------------------------------
 # WSL cwd translation
 # ---------------------------------------------------------------------------
@@ -89,22 +91,35 @@ class TestWslCwdTranslation:
     def test_translate_acp_cwd_converts_windows_drive_path_when_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip") == "/mnt/e/Projects/AI/paperclip"
+        assert (
+            acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip")
+            == "/mnt/e/Projects/AI/paperclip"
+        )
 
     def test_translate_acp_cwd_handles_forward_slashes_when_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert acp_session._translate_acp_cwd("D:/work/project") == "/mnt/d/work/project"
+        assert (
+            acp_session._translate_acp_cwd("D:/work/project") == "/mnt/d/work/project"
+        )
 
-    def test_translate_acp_cwd_leaves_windows_drive_path_unchanged_off_wsl(self, monkeypatch):
+    def test_translate_acp_cwd_leaves_windows_drive_path_unchanged_off_wsl(
+        self, monkeypatch
+    ):
         monkeypatch.setattr("clawk_constants._wsl_detected", False)
 
-        assert acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip") == r"E:\Projects\AI\paperclip"
+        assert (
+            acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip")
+            == r"E:\Projects\AI\paperclip"
+        )
 
     def test_translate_acp_cwd_leaves_posix_path_unchanged_on_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert acp_session._translate_acp_cwd("/mnt/e/Projects/AI/paperclip") == "/mnt/e/Projects/AI/paperclip"
+        assert (
+            acp_session._translate_acp_cwd("/mnt/e/Projects/AI/paperclip")
+            == "/mnt/e/Projects/AI/paperclip"
+        )
 
     def test_create_session_stores_translated_cwd_on_wsl(self, manager, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
@@ -130,6 +145,7 @@ class TestWslCwdTranslation:
 
         assert updated is not None
         assert updated.cwd == "/mnt/c/Users/foo/project"
+
 
 # ---------------------------------------------------------------------------
 # fork
@@ -238,7 +254,9 @@ class TestListAndCleanup:
 class TestPersistence:
     """Verify that sessions are persisted to SessionDB and can be restored."""
 
-    def test_create_session_includes_registered_mcp_toolsets(self, tmp_path, monkeypatch):
+    def test_create_session_includes_registered_mcp_toolsets(
+        self, tmp_path, monkeypatch
+    ):
         captured = {}
 
         def fake_resolve_runtime_provider(requested=None, **kwargs):
@@ -253,16 +271,22 @@ class TestPersistence:
 
         def fake_agent(**kwargs):
             captured.update(kwargs)
-            return SimpleNamespace(model=kwargs.get("model"), enabled_toolsets=kwargs.get("enabled_toolsets"))
+            return SimpleNamespace(
+                model=kwargs.get("model"),
+                enabled_toolsets=kwargs.get("enabled_toolsets"),
+            )
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": "openrouter", "default": "test-model"},
-            "mcp_servers": {
-                "olympus": {"command": "python", "enabled": True},
-                "exa": {"url": "https://exa.ai/mcp"},
-                "disabled": {"command": "python", "enabled": False},
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {
+                "model": {"provider": "openrouter", "default": "test-model"},
+                "mcp_servers": {
+                    "olympus": {"command": "python", "enabled": True},
+                    "exa": {"url": "https://exa.ai/mcp"},
+                    "disabled": {"command": "python", "enabled": False},
+                },
             },
-        })
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -373,7 +397,10 @@ class TestPersistence:
 
     def test_list_sessions_prefers_title_then_preview(self, manager):
         state = manager.create_session(cwd="/named")
-        state.history.append({"role": "user", "content": "Investigate broken ACP history in Zed"})
+        state.history.append({
+            "role": "user",
+            "content": "Investigate broken ACP history in Zed",
+        })
         manager.save_session(state.session_id)
         db = manager._get_db()
         db.set_session_title(state.session_id, "Fix Zed ACP history")
@@ -395,7 +422,10 @@ class TestPersistence:
         manager.save_session(newer.session_id)
 
         listing = manager.list_sessions(cwd="/ordered")
-        assert [item["session_id"] for item in listing[:2]] == [newer.session_id, older.session_id]
+        assert [item["session_id"] for item in listing[:2]] == [
+            newer.session_id,
+            older.session_id,
+        ]
         assert listing[0]["updated_at"]
         assert listing[1]["updated_at"]
 
@@ -444,7 +474,10 @@ class TestPersistence:
         """ACP sessions stored in SessionDB are searchable via FTS5."""
         state = manager.create_session()
         state.history.append({"role": "user", "content": "how do I configure nginx"})
-        state.history.append({"role": "assistant", "content": "Here is the nginx config..."})
+        state.history.append({
+            "role": "assistant",
+            "content": "Here is the nginx config...",
+        })
         manager.save_session(state.session_id)
 
         db = manager._get_db()
@@ -459,8 +492,13 @@ class TestPersistence:
         state.history.append({
             "role": "assistant",
             "content": None,
-            "tool_calls": [{"id": "tc_1", "type": "function",
-                            "function": {"name": "terminal", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "tc_1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": "{}"},
+                }
+            ],
         })
         state.history.append({
             "role": "tool",
@@ -501,17 +539,23 @@ class TestPersistence:
 
         restored = manager.get_session(state.session_id)
         assert restored is not None
-        assert restored.history == [{
-            "role": "assistant",
-            "content": "hello",
-            "reasoning": "step-by-step",
-            "reasoning_details": [
-                {"type": "thinking", "thinking": "first thought"},
-            ],
-            "codex_reasoning_items": [
-                {"type": "reasoning", "id": "rs_123", "encrypted_content": "enc_blob"},
-            ],
-        }]
+        assert restored.history == [
+            {
+                "role": "assistant",
+                "content": "hello",
+                "reasoning": "step-by-step",
+                "reasoning_details": [
+                    {"type": "thinking", "thinking": "first thought"},
+                ],
+                "codex_reasoning_items": [
+                    {
+                        "type": "reasoning",
+                        "id": "rs_123",
+                        "encrypted_content": "enc_blob",
+                    },
+                ],
+            }
+        ]
 
     def test_restore_preserves_persisted_provider_snapshot(self, tmp_path, monkeypatch):
         """Restored ACP sessions should keep their original runtime provider."""
@@ -521,7 +565,9 @@ class TestPersistence:
             provider = requested or runtime_choice["provider"]
             return {
                 "provider": provider,
-                "api_mode": "anthropic_messages" if provider == "anthropic" else "chat_completions",
+                "api_mode": "anthropic_messages"
+                if provider == "anthropic"
+                else "chat_completions",
                 "base_url": f"https://{provider}.example/v1",
                 "api_key": f"{provider}-key",
                 "command": None,
@@ -536,9 +582,15 @@ class TestPersistence:
                 api_mode=kwargs.get("api_mode"),
             )
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": runtime_choice["provider"], "default": "test-model"}
-        })
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {
+                "model": {
+                    "provider": runtime_choice["provider"],
+                    "default": "test-model",
+                }
+            },
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -576,9 +628,10 @@ class TestPersistence:
         def fake_agent(**kwargs):
             return SimpleNamespace(model=kwargs.get("model"), _print_fn=None)
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": "openrouter", "default": "test-model"}
-        })
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"provider": "openrouter", "default": "test-model"}},
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -591,7 +644,10 @@ class TestPersistence:
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
-        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        with (
+            contextlib.redirect_stdout(stdout_buf),
+            contextlib.redirect_stderr(stderr_buf),
+        ):
             state.agent._print_fn("ACP noise")
 
         assert stdout_buf.getvalue() == ""

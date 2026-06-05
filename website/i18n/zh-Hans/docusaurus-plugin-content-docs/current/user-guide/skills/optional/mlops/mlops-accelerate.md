@@ -71,44 +71,63 @@ accelerate launch train.py
 ### 工作流 1：从单 GPU 到多 GPU
 
 **原始脚本**：
-```python
-# train.py
-import torch
-
-model = torch.nn.Linear(10, 2).to('cuda')
-optimizer = torch.optim.Adam(model.parameters())
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
-
-for epoch in range(10):
-    for batch in dataloader:
-        batch = batch.to('cuda')
-        optimizer.zero_grad()
-        loss = model(batch).mean()
-        loss.backward()
-        optimizer.step()
+```python# train.py
+
+import torch
+
+
+model = torch.nn.Linear(10, 2).to("cuda")
+
+optimizer = torch.optim.Adam(model.parameters())
+
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
+
+
+for epoch in range(10):
+    for batch in dataloader:
+        batch = batch.to("cuda")
+
+        optimizer.zero_grad()
+
+        loss = model(batch).mean()
+
+        loss.backward()
+
+        optimizer.step()
 ```
 
 **使用 Accelerate**（新增 4 行）：
-```python
-# train.py
-import torch
-from accelerate import Accelerator  # +1
-
-accelerator = Accelerator()  # +2
-
-model = torch.nn.Linear(10, 2)
-optimizer = torch.optim.Adam(model.parameters())
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
-
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)  # +3
-
-for epoch in range(10):
-    for batch in dataloader:
-        # 无需 .to('cuda') — 自动处理！
-        optimizer.zero_grad()
-        loss = model(batch).mean()
-        accelerator.backward(loss)  # +4
-        optimizer.step()
+```python# train.py
+
+import torch
+
+from accelerate import Accelerator  # +1
+
+
+accelerator = Accelerator()  # +2
+
+
+model = torch.nn.Linear(10, 2)
+
+optimizer = torch.optim.Adam(model.parameters())
+
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
+
+
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)  # +3
+
+
+for epoch in range(10):
+    for batch in dataloader:
+        # 无需 .to('cuda') — 自动处理！
+
+        optimizer.zero_grad()
+
+        loss = model(batch).mean()
+
+        accelerator.backward(loss)  # +4
+
+        optimizer.step()
 ```
 
 **配置**（交互式）：
@@ -140,44 +159,55 @@ accelerate launch --multi_gpu --num_processes 16 \
 ### 工作流 2：混合精度训练
 
 **启用 FP16/BF16**：
-```python
-from accelerate import Accelerator
-
-# FP16（带梯度缩放）
-accelerator = Accelerator(mixed_precision='fp16')
-
-# BF16（无缩放，更稳定）
-accelerator = Accelerator(mixed_precision='bf16')
-
-# FP8（H100+）
-accelerator = Accelerator(mixed_precision='fp8')
-
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
-
-# 其余均自动处理！
-for batch in dataloader:
-    with accelerator.autocast():  # 可选，已自动完成
-        loss = model(batch)
-    accelerator.backward(loss)
+```pythonfrom accelerate import Accelerator
+
+
+# FP16（带梯度缩放）
+
+accelerator = Accelerator(mixed_precision="fp16")
+
+
+# BF16（无缩放，更稳定）
+
+accelerator = Accelerator(mixed_precision="bf16")
+
+
+# FP8（H100+）
+
+accelerator = Accelerator(mixed_precision="fp8")
+
+
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
+
+
+# 其余均自动处理！
+
+for batch in dataloader:
+    with accelerator.autocast():  # 可选，已自动完成
+        loss = model(batch)
+
+    accelerator.backward(loss)
 ```
 
 ### 工作流 3：DeepSpeed ZeRO 集成
 
 **启用 DeepSpeed ZeRO-2**：
-```python
-from accelerate import Accelerator
-
-accelerator = Accelerator(
-    mixed_precision='bf16',
-    deepspeed_plugin={
-        "zero_stage": 2,  # ZeRO-2
-        "offload_optimizer": False,
-        "gradient_accumulation_steps": 4
-    }
-)
-
-# 代码与之前完全相同！
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
+```pythonfrom accelerate import Accelerator
+
+
+accelerator = Accelerator(
+    mixed_precision="bf16",
+    deepspeed_plugin={
+        "zero_stage": 2,  # ZeRO-2
+        "offload_optimizer": False,
+        "gradient_accumulation_steps": 4,
+    },
+)
+
+
+# 代码与之前完全相同！
+
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 ```
 
 **或通过配置**：
@@ -208,21 +238,20 @@ accelerate launch --config_file deepspeed_config.json train.py
 ### 工作流 4：FSDP（全分片数据并行）
 
 **启用 FSDP**：
-```python
-from accelerate import Accelerator, FullyShardedDataParallelPlugin
-
-fsdp_plugin = FullyShardedDataParallelPlugin(
-    sharding_strategy="FULL_SHARD",  # 等价于 ZeRO-3
-    auto_wrap_policy="TRANSFORMER_AUTO_WRAP",
-    cpu_offload=False
-)
-
-accelerator = Accelerator(
-    mixed_precision='bf16',
-    fsdp_plugin=fsdp_plugin
-)
-
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
+```pythonfrom accelerate import Accelerator, FullyShardedDataParallelPlugin
+
+
+fsdp_plugin = FullyShardedDataParallelPlugin(
+    sharding_strategy="FULL_SHARD",  # 等价于 ZeRO-3
+    auto_wrap_policy="TRANSFORMER_AUTO_WRAP",
+    cpu_offload=False,
+)
+
+
+accelerator = Accelerator(mixed_precision="bf16", fsdp_plugin=fsdp_plugin)
+
+
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 ```
 
 **或通过配置**：
@@ -234,19 +263,24 @@ accelerate config
 ### 工作流 5：梯度累积
 
 **累积梯度**：
-```python
-from accelerate import Accelerator
-
-accelerator = Accelerator(gradient_accumulation_steps=4)
-
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
-
-for batch in dataloader:
-    with accelerator.accumulate(model):  # 自动处理累积
-        optimizer.zero_grad()
-        loss = model(batch)
-        accelerator.backward(loss)
-        optimizer.step()
+```pythonfrom accelerate import Accelerator
+
+
+accelerator = Accelerator(gradient_accumulation_steps=4)
+
+
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
+
+
+for batch in dataloader:
+    with accelerator.accumulate(model):  # 自动处理累积
+        optimizer.zero_grad()
+
+        loss = model(batch)
+
+        accelerator.backward(loss)
+
+        optimizer.step()
 ```
 
 **有效批大小**：`batch_size * num_gpus * gradient_accumulation_steps`
@@ -278,43 +312,49 @@ for batch in dataloader:
 **问题：设备放置错误**
 
 不要手动移动到设备：
-```python
-# 错误
-batch = batch.to('cuda')
-
-# 正确
-# Accelerate 在 prepare() 之后自动处理
+```python# 错误
+
+batch = batch.to("cuda")
+
+
+# 正确
+
+# Accelerate 在 prepare() 之后自动处理
 ```
 
 **问题：梯度累积不生效**
 
 使用上下文管理器：
-```python
-# 正确
-with accelerator.accumulate(model):
-    optimizer.zero_grad()
-    accelerator.backward(loss)
-    optimizer.step()
+```python# 正确
+
+with accelerator.accumulate(model):
+    optimizer.zero_grad()
+
+    accelerator.backward(loss)
+
+    optimizer.step()
 ```
 
 **问题：分布式环境下的检查点保存**
 
 使用 accelerator 方法：
-```python
-# 仅在主进程保存
-if accelerator.is_main_process:
-    accelerator.save_state('checkpoint/')
-
-# 在所有进程上加载
-accelerator.load_state('checkpoint/')
+```python# 仅在主进程保存
+
+if accelerator.is_main_process:
+    accelerator.save_state("checkpoint/")
+
+
+# 在所有进程上加载
+
+accelerator.load_state("checkpoint/")
 ```
 
 **问题：FSDP 结果不一致**
 
 确保使用相同的随机种子：
-```python
-from accelerate.utils import set_seed
-set_seed(42)
+```pythonfrom accelerate.utils import set_seed
+
+set_seed(42)
 ```
 
 ## 高级主题

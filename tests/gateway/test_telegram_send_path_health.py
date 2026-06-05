@@ -5,6 +5,7 @@ can enter a wedged state where ``bot.send_message()`` returns a valid Message
 but nothing reaches the recipient.  ``_send_path_degraded`` short-circuits
 ``send()`` so cron's live-adapter branch falls through to standalone HTTP.
 """
+
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -77,9 +78,7 @@ async def test_reconnect_storm_sets_and_heartbeat_clears_flag(monkeypatch):
     adapter._app.bot = MagicMock()
     adapter._app.bot.get_me = AsyncMock(return_value=MagicMock())
     adapter._polling_error_callback_ref = AsyncMock()
-    monkeypatch.setattr(
-        "gateway.platforms.telegram.Update", MagicMock(ALL_TYPES=[])
-    )
+    monkeypatch.setattr("gateway.platforms.telegram.Update", MagicMock(ALL_TYPES=[]))
 
     await adapter._handle_polling_network_error(OSError("Bad Gateway"))
     assert adapter._send_path_degraded is True

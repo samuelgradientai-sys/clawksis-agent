@@ -127,12 +127,12 @@ class TestDeepSeekModelGating:
     @pytest.mark.parametrize(
         "model",
         [
-            "deepseek-chat",         # V3 alias
-            "deepseek-v3-0324",      # explicit V3
-            "deepseek-v3.1",         # V3 minor revisions
-            "",                       # bare/unknown
-            None,                     # missing
-            "deepseek-unknown",      # unrecognized
+            "deepseek-chat",  # V3 alias
+            "deepseek-v3-0324",  # explicit V3
+            "deepseek-v3.1",  # V3 minor revisions
+            "",  # bare/unknown
+            None,  # missing
+            "deepseek-unknown",  # unrecognized
         ],
     )
     def test_non_thinking_models_emit_nothing(self, deepseek_profile, model):
@@ -181,7 +181,9 @@ class TestDeepSeekFullKwargsIntegration:
             provider_name="deepseek",
         )
         assert "reasoning_effort" not in kwargs
-        assert "extra_body" not in kwargs or "thinking" not in kwargs.get("extra_body", {})
+        assert "extra_body" not in kwargs or "thinking" not in kwargs.get(
+            "extra_body", {}
+        )
 
 
 class TestDeepSeekAuxModel:
@@ -200,8 +202,10 @@ class TestDeepSeekAuxModel:
 
     def test_consumer_api_returns_deepseek_chat(self):
         from agent.auxiliary_client import _get_aux_model_for_provider
+
         assert _get_aux_model_for_provider("deepseek") == "deepseek-chat"
 
     def test_consumer_api_returns_non_empty(self):
         from agent.auxiliary_client import _get_aux_model_for_provider
+
         assert _get_aux_model_for_provider("deepseek") != ""

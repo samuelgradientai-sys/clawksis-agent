@@ -296,9 +296,12 @@ obliteratus run analysis-config.yaml --preset quick
 
 ### Steering Vectors (Reversible Alternative)
 Instead of permanent weight modification, use inference-time steering:
-```python
-# Python API only — for user's own projects
-from obliteratus.analysis.steering_vectors import SteeringVectorFactory, SteeringHookManager
+```python# Python API only — for user's own projects
+
+from obliteratus.analysis.steering_vectors import (
+    SteeringVectorFactory,
+    SteeringHookManager,
+)
 ```
 
 ## Ablation Strategies

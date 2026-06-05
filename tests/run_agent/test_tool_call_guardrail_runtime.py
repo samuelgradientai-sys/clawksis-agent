@@ -36,9 +36,13 @@ def _mock_response(content="Hello", finish_reason="stop", tool_calls=None):
     return SimpleNamespace(choices=[choice], model="test/model", usage=None)
 
 
-def _make_agent(*tool_names: str, max_iterations: int = 10, config: dict | None = None) -> AIAgent:
+def _make_agent(
+    *tool_names: str, max_iterations: int = 10, config: dict | None = None
+) -> AIAgent:
     with (
-        patch("run_agent.get_tool_definitions", return_value=_make_tool_defs(*tool_names)),
+        patch(
+            "run_agent.get_tool_definitions", return_value=_make_tool_defs(*tool_names)
+        ),
         patch("run_agent.check_toolset_requirements", return_value={}),
         patch("clawk_cli.config.load_config", return_value=config or {}),
         patch("run_agent.OpenAI"),
@@ -60,7 +64,9 @@ def _make_agent(*tool_names: str, max_iterations: int = 10, config: dict | None 
     return agent
 
 
-def _seed_exact_failures(agent: AIAgent, tool_name: str, args: dict, count: int = 2) -> None:
+def _seed_exact_failures(
+    agent: AIAgent, tool_name: str, args: dict, count: int = 2
+) -> None:
     for _ in range(count):
         agent._tool_guardrails.after_call(
             tool_name,
@@ -98,7 +104,9 @@ def test_default_sequential_path_warns_repeated_exact_failure_without_blocking_e
     msg = SimpleNamespace(content="", tool_calls=[tc])
     messages = []
 
-    with patch("run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})) as mock_hfc:
+    with patch(
+        "run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})
+    ) as mock_hfc:
         agent._execute_tool_calls_sequential(msg, messages, "task-1")
 
     mock_hfc.assert_called_once()
@@ -124,7 +132,9 @@ def test_config_enabled_hard_stop_blocks_repeated_exact_failure_before_execution
     msg = SimpleNamespace(content="", tool_calls=[tc])
     messages = []
 
-    with patch("run_agent.handle_function_call", return_value="SHOULD_NOT_RUN") as mock_hfc:
+    with patch(
+        "run_agent.handle_function_call", return_value="SHOULD_NOT_RUN"
+    ) as mock_hfc:
         agent._execute_tool_calls_sequential(msg, messages, "task-1")
 
     mock_hfc.assert_not_called()
@@ -144,7 +154,9 @@ def test_sequential_after_call_appends_guidance_to_tool_result_without_extra_mes
     msg = SimpleNamespace(content="", tool_calls=[tc])
     messages = []
 
-    with patch("run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})):
+    with patch(
+        "run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})
+    ):
         agent._execute_tool_calls_sequential(msg, messages, "task-1")
 
     assert [m["role"] for m in messages] == ["tool"]
@@ -172,7 +184,9 @@ def test_same_tool_failure_warning_tells_model_to_recover_with_tools():
     msg = SimpleNamespace(content="", tool_calls=[tc])
     messages = []
 
-    with patch("run_agent.handle_function_call", return_value=json.dumps({"exit_code": 1})):
+    with patch(
+        "run_agent.handle_function_call", return_value=json.dumps({"exit_code": 1})
+    ):
         agent._execute_tool_calls_sequential(msg, messages, "task-1")
 
     content = messages[0]["content"]
@@ -191,8 +205,14 @@ def test_config_enabled_hard_stop_concurrent_path_does_not_submit_blocked_calls_
     _seed_exact_failures(agent, "web_search", blocked_args)
     starts = []
     progress_events = []
-    agent.tool_start_callback = lambda tool_call_id, name, args: starts.append((tool_call_id, name, args))
-    agent.tool_progress_callback = lambda event, name, preview, args, **kw: progress_events.append((event, name, args, kw))
+    agent.tool_start_callback = lambda tool_call_id, name, args: starts.append((
+        tool_call_id,
+        name,
+        args,
+    ))
+    agent.tool_progress_callback = lambda event, name, preview, args, **kw: (
+        progress_events.append((event, name, args, kw))
+    )
     calls = [
         _mock_tool_call("web_search", json.dumps(blocked_args), "c-block"),
         _mock_tool_call("web_search", json.dumps(allowed_args), "c-allow"),
@@ -214,7 +234,9 @@ def test_config_enabled_hard_stop_concurrent_path_does_not_submit_blocked_calls_
     assert json.loads(messages[1]["content"]) == {"ok": "allowed"}
     assert starts == [("c-allow", "web_search", allowed_args)]
     started_events = [event for event in progress_events if event[0] == "tool.started"]
-    completed_events = [event for event in progress_events if event[0] == "tool.completed"]
+    completed_events = [
+        event for event in progress_events if event[0] == "tool.completed"
+    ]
     assert started_events == [("tool.started", "web_search", allowed_args, {})]
     assert len(completed_events) == 1
     assert completed_events[0][1] == "web_search"
@@ -228,8 +250,13 @@ def test_plugin_pre_tool_block_wins_without_counting_as_toolguard_block():
     messages = []
 
     with (
-        patch("clawk_cli.plugins.get_pre_tool_call_block_message", return_value="plugin policy"),
-        patch("run_agent.handle_function_call", return_value="SHOULD_NOT_RUN") as mock_hfc,
+        patch(
+            "clawk_cli.plugins.get_pre_tool_call_block_message",
+            return_value="plugin policy",
+        ),
+        patch(
+            "run_agent.handle_function_call", return_value="SHOULD_NOT_RUN"
+        ) as mock_hfc,
     ):
         agent._execute_tool_calls_sequential(msg, messages, "task-1")
 
@@ -249,11 +276,15 @@ def test_default_run_conversation_warns_without_guardrail_halt():
         )
         for i in range(1, 4)
     ]
-    responses.append(_mock_response(content="done", finish_reason="stop", tool_calls=None))
+    responses.append(
+        _mock_response(content="done", finish_reason="stop", tool_calls=None)
+    )
     agent.client.chat.completions.create.side_effect = responses
 
     with (
-        patch("run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})) as mock_hfc,
+        patch(
+            "run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})
+        ) as mock_hfc,
         patch.object(agent, "_persist_session"),
         patch.object(agent, "_save_trajectory"),
         patch.object(agent, "_cleanup_task_resources"),
@@ -264,7 +295,9 @@ def test_default_run_conversation_warns_without_guardrail_halt():
     assert result["turn_exit_reason"].startswith("text_response")
     assert "guardrail" not in result
     assert result["final_response"] == "done"
-    tool_contents = [m["content"] for m in result["messages"] if m.get("role") == "tool"]
+    tool_contents = [
+        m["content"] for m in result["messages"] if m.get("role") == "tool"
+    ]
     assert any("repeated_exact_failure_warning" in content for content in tool_contents)
 
 
@@ -282,7 +315,9 @@ def test_config_enabled_hard_stop_run_conversation_returns_controlled_guardrail_
     agent.client.chat.completions.create.side_effect = responses
 
     with (
-        patch("run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})) as mock_hfc,
+        patch(
+            "run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})
+        ) as mock_hfc,
         patch.object(agent, "_persist_session"),
         patch.object(agent, "_save_trajectory"),
         patch.object(agent, "_cleanup_task_resources"),
@@ -299,10 +334,18 @@ def test_config_enabled_hard_stop_run_conversation_returns_controlled_guardrail_
     assert result["guardrail"]["code"] == "repeated_exact_failure_block"
     assert result["guardrail"]["tool_name"] == "web_search"
 
-    assistant_tool_calls = [m for m in result["messages"] if m.get("role") == "assistant" and m.get("tool_calls")]
+    assistant_tool_calls = [
+        m
+        for m in result["messages"]
+        if m.get("role") == "assistant" and m.get("tool_calls")
+    ]
     for assistant_msg in assistant_tool_calls:
         call_ids = [tc["id"] for tc in assistant_msg["tool_calls"]]
-        following_results = [m for m in result["messages"] if m.get("role") == "tool" and m.get("tool_call_id") in call_ids]
+        following_results = [
+            m
+            for m in result["messages"]
+            if m.get("role") == "tool" and m.get("tool_call_id") in call_ids
+        ]
         assert len(following_results) == len(call_ids)
 
 
@@ -335,7 +378,9 @@ def test_guardrail_halt_emits_final_response_through_stream_delta_callback():
     agent._disable_streaming = True
 
     with (
-        patch("run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})),
+        patch(
+            "run_agent.handle_function_call", return_value=json.dumps({"error": "boom"})
+        ),
         patch.object(agent, "_persist_session"),
         patch.object(agent, "_save_trajectory"),
         patch.object(agent, "_cleanup_task_resources"),

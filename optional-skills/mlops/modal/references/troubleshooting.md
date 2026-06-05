@@ -47,13 +47,13 @@ pip install modal --prefer-binary
 image = modal.Image.debian_slim().pip_install(
     "torch==2.1.0",
     "transformers==4.36.0",  # Pin versions
-    "accelerate==0.25.0"
+    "accelerate==0.25.0",
 )
 
 # Use compatible CUDA versions
 image = modal.Image.from_registry(
     "nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04",  # Match PyTorch CUDA
-    add_python="3.11"
+    add_python="3.11",
 )
 ```
 
@@ -68,9 +68,7 @@ base = modal.Image.debian_slim().pip_install("torch")
 ml = base.pip_install("transformers")  # Install after torch
 
 # Use uv for better resolution
-image = modal.Image.debian_slim().uv_pip_install(
-    "torch", "transformers"
-)
+image = modal.Image.debian_slim().uv_pip_install("torch", "transformers")
 ```
 
 ### Large image builds timeout
@@ -81,12 +79,17 @@ image = modal.Image.debian_slim().uv_pip_install(
 ```python
 # Split into multiple layers (better caching)
 base = modal.Image.debian_slim().pip_install("torch")  # Cached
-ml = base.pip_install("transformers", "datasets")      # Cached
-app = ml.copy_local_dir("./src", "/app")               # Rebuilds on code change
+ml = base.pip_install("transformers", "datasets")  # Cached
+app = ml.copy_local_dir("./src", "/app")  # Rebuilds on code change
 
 # Download models during build, not runtime
-image = modal.Image.debian_slim().pip_install("transformers").run_commands(
-    "python -c 'from transformers import AutoModel; AutoModel.from_pretrained(\"bert-base\")'"
+image = (
+    modal.Image
+    .debian_slim()
+    .pip_install("transformers")
+    .run_commands(
+        "python -c 'from transformers import AutoModel; AutoModel.from_pretrained(\"bert-base\")'"
+    )
 )
 ```
 
@@ -102,15 +105,16 @@ image = modal.Image.debian_slim().pip_install("transformers").run_commands(
 @app.function(gpu="T4")  # Must specify GPU
 def my_function():
     import torch
+
     assert torch.cuda.is_available()
+
 
 # Check CUDA compatibility in image
 image = modal.Image.from_registry(
-    "nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04",
-    add_python="3.11"
+    "nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04", add_python="3.11"
 ).pip_install(
     "torch",
-    index_url="https://download.pytorch.org/whl/cu121"  # Match CUDA
+    index_url="https://download.pytorch.org/whl/cu121",  # Match CUDA
 )
 ```
 
@@ -125,10 +129,12 @@ image = modal.Image.from_registry(
 def train():
     pass
 
+
 # Enable memory optimization
 @app.function(gpu="A100")
 def memory_optimized():
     import torch
+
     torch.backends.cuda.enable_flash_sdp(True)
 
     # Use gradient checkpointing
@@ -147,14 +153,13 @@ def memory_optimized():
 ```python
 # Use strict GPU selection
 @app.function(gpu="H100!")  # H100! prevents auto-upgrade to H200
-
 # Specify exact memory variant
 @app.function(gpu="A100-80GB")  # Not just "A100"
-
 # Check GPU at runtime
 @app.function(gpu="A100")
 def check_gpu():
     import subprocess
+
     result = subprocess.run(["nvidia-smi"], capture_output=True, text=True)
     print(result.stdout)
 ```
@@ -170,10 +175,11 @@ def check_gpu():
 # Keep containers warm
 @app.function(
     container_idle_timeout=600,  # Keep warm 10 min
-    keep_warm=1                  # Always keep 1 container ready
+    keep_warm=1,  # Always keep 1 container ready
 )
 def low_latency():
     pass
+
 
 # Load model during container start
 @app.cls(gpu="A100")
@@ -183,8 +189,10 @@ class Model:
         # This runs once at container start, not per request
         self.model = load_heavy_model()
 
+
 # Cache model in volume
 volume = modal.Volume.from_name("models", create_if_missing=True)
+
 
 @app.function(volumes={"/cache": volume})
 def cached_model():
@@ -207,17 +215,21 @@ def cached_model():
 def memory_heavy():
     pass
 
+
 # Increase timeout
 @app.function(timeout=3600)  # 1 hour
 def long_running():
     pass
 
+
 # Handle signals gracefully
 import signal
+
 
 def handler(signum, frame):
     cleanup()
     exit(0)
+
 
 signal.signal(signal.SIGTERM, handler)
 ```
@@ -231,6 +243,7 @@ signal.signal(signal.SIGTERM, handler)
 **Solutions**:
 ```python
 volume = modal.Volume.from_name("my-volume", create_if_missing=True)
+
 
 @app.function(volumes={"/data": volume})
 def write_data():
@@ -265,10 +278,12 @@ def read_data():
 # Ensure volume exists
 volume = modal.Volume.from_name("my-volume", create_if_missing=True)
 
+
 # Use absolute path
 @app.function(volumes={"/data": volume})  # Not "./data"
 def my_function():
     pass
+
 
 # Check volume in dashboard
 # modal volume list
@@ -288,8 +303,10 @@ def my_function():
 def slow_endpoint():
     pass
 
+
 # Return streaming response for long operations
 from fastapi.responses import StreamingResponse
+
 
 @app.function()
 @modal.asgi_app()
@@ -298,6 +315,7 @@ def streaming_app():
         for i in range(100):
             yield f"data: {i}\n\n"
             await process_chunk(i)
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 ```
 
@@ -335,6 +353,7 @@ web_app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.function()
 @modal.asgi_app()
 def cors_enabled():
@@ -368,6 +387,7 @@ modal secret list
 @app.function(secrets=[modal.Secret.from_name("my-secret")])
 def use_secret():
     import os
+
     value = os.environ.get("KEY")  # Use get() to handle missing
     if not value:
         raise ValueError("KEY not set in secret")
@@ -385,6 +405,7 @@ def use_secret():
 @app.function(schedule=modal.Cron("0 0 * * *"))  # Daily at midnight UTC
 def daily_job():
     pass
+
 
 # Check timezone (Modal uses UTC)
 # "0 8 * * *" = 8am UTC, not local time
@@ -415,7 +436,9 @@ def hourly_job():
 
 ```python
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
+
 
 @app.function()
 def debug_function():
@@ -460,6 +483,7 @@ def debug_environment():
 
     # CUDA info
     import torch
+
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"GPU: {torch.cuda.get_device_name(0)}")

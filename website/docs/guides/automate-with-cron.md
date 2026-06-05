@@ -33,35 +33,51 @@ Create the monitoring script:
 mkdir -p ~/.clawksis/scripts
 ```
 
-```python title="~/.clawksis/scripts/watch-site.py"
-import hashlib, json, os, urllib.request
-
-URL = "https://example.com/pricing"
-STATE_FILE = os.path.expanduser("~/.clawksis/scripts/.watch-site-state.json")
-
-# Fetch current content
-req = urllib.request.Request(URL, headers={"User-Agent": "Clawksis-Monitor/1.0"})
-content = urllib.request.urlopen(req, timeout=30).read().decode()
-current_hash = hashlib.sha256(content.encode()).hexdigest()
-
-# Load previous state
-prev_hash = None
-if os.path.exists(STATE_FILE):
-    with open(STATE_FILE) as f:
-        prev_hash = json.load(f).get("hash")
-
-# Save current state
-with open(STATE_FILE, "w") as f:
-    json.dump({"hash": current_hash, "url": URL}, f)
-
-# Output for the agent
-if prev_hash and prev_hash != current_hash:
-    print(f"CHANGE DETECTED on {URL}")
-    print(f"Previous hash: {prev_hash}")
-    print(f"Current hash: {current_hash}")
-    print(f"\nCurrent content (first 2000 chars):\n{content[:2000]}")
-else:
-    print("NO_CHANGE")
+```python title="~/.clawksis/scripts/watch-site.py"import hashlib, json, os, urllib.request
+
+
+URL = "https://example.com/pricing"
+
+STATE_FILE = os.path.expanduser("~/.clawksis/scripts/.watch-site-state.json")
+
+
+# Fetch current content
+
+req = urllib.request.Request(URL, headers={"User-Agent": "Clawksis-Monitor/1.0"})
+
+content = urllib.request.urlopen(req, timeout=30).read().decode()
+
+current_hash = hashlib.sha256(content.encode()).hexdigest()
+
+
+# Load previous state
+
+prev_hash = None
+
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE) as f:
+        prev_hash = json.load(f).get("hash")
+
+
+# Save current state
+
+with open(STATE_FILE, "w") as f:
+    json.dump({"hash": current_hash, "url": URL}, f)
+
+
+# Output for the agent
+
+if prev_hash and prev_hash != current_hash:
+    print(f"CHANGE DETECTED on {URL}")
+
+    print(f"Previous hash: {prev_hash}")
+
+    print(f"Current hash: {current_hash}")
+
+    print(f"\nCurrent content (first 2000 chars):\n{content[:2000]}")
+
+else:
+    print("NO_CHANGE")
 ```
 
 Set up the cron job:
@@ -132,33 +148,52 @@ Notice how the prompt includes the exact `gh` commands. The cron agent has no me
 
 Scrape data at regular intervals, save to files, and detect trends over time. This pattern combines a script (for collection) with the agent (for analysis).
 
-```python title="~/.clawksis/scripts/collect-prices.py"
-import json, os, urllib.request
-from datetime import datetime
-
-DATA_DIR = os.path.expanduser("~/.clawksis/data/prices")
-os.makedirs(DATA_DIR, exist_ok=True)
-
-# Fetch current data (example: crypto prices)
-url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
-data = json.loads(urllib.request.urlopen(url, timeout=30).read())
-
-# Append to history file
-entry = {"timestamp": datetime.now().isoformat(), "prices": data}
-history_file = os.path.join(DATA_DIR, "history.jsonl")
-with open(history_file, "a") as f:
-    f.write(json.dumps(entry) + "\n")
-
-# Load recent history for analysis
-lines = open(history_file).readlines()
-recent = [json.loads(l) for l in lines[-24:]]  # Last 24 data points
-
-# Output for the agent
-print(f"Current: BTC=${data['bitcoin']['usd']}, ETH=${data['ethereum']['usd']}")
-print(f"Data points collected: {len(lines)} total, showing last {len(recent)}")
-print(f"\nRecent history:")
-for r in recent[-6:]:
-    print(f"  {r['timestamp']}: BTC=${r['prices']['bitcoin']['usd']}, ETH=${r['prices']['ethereum']['usd']}")
+```python title="~/.clawksis/scripts/collect-prices.py"import json, os, urllib.request
+
+from datetime import datetime
+
+
+DATA_DIR = os.path.expanduser("~/.clawksis/data/prices")
+
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+# Fetch current data (example: crypto prices)
+
+url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+
+data = json.loads(urllib.request.urlopen(url, timeout=30).read())
+
+
+# Append to history file
+
+entry = {"timestamp": datetime.now().isoformat(), "prices": data}
+
+history_file = os.path.join(DATA_DIR, "history.jsonl")
+
+with open(history_file, "a") as f:
+    f.write(json.dumps(entry) + "\n")
+
+
+# Load recent history for analysis
+
+lines = open(history_file).readlines()
+
+recent = [json.loads(l) for l in lines[-24:]]  # Last 24 data points
+
+
+# Output for the agent
+
+print(f"Current: BTC=${data['bitcoin']['usd']}, ETH=${data['ethereum']['usd']}")
+
+print(f"Data points collected: {len(lines)} total, showing last {len(recent)}")
+
+print(f"\nRecent history:")
+
+for r in recent[-6:]:
+    print(
+        f"  {r['timestamp']}: BTC=${r['prices']['bitcoin']['usd']}, ETH=${r['prices']['ethereum']['usd']}"
+    )
 ```
 
 ```bash
@@ -192,15 +227,14 @@ Chain skills together for complex scheduled tasks. Skills are loaded in order be
 
 From the tool directly:
 
-```python
-cronjob(
-    action="create",
-    skills=["arxiv", "obsidian"],
-    prompt="Search arXiv for papers on 'language model reasoning' from the past day. Save the top 3 as Obsidian notes.",
-    schedule="0 8 * * *",
-    name="Paper digest",
-    deliver="local"
-)
+```pythoncronjob(
+    action="create",
+    skills=["arxiv", "obsidian"],
+    prompt="Search arXiv for papers on 'language model reasoning' from the past day. Save the top 3 as Obsidian notes.",
+    schedule="0 8 * * *",
+    name="Paper digest",
+    deliver="local",
+)
 ```
 
 Skills are loaded in order — `arxiv` first (teaches the agent how to search papers), then `obsidian` (teaches how to write notes). The prompt ties them together.

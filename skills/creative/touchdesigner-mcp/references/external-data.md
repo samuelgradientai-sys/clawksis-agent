@@ -14,10 +14,10 @@ Common production needs:
 ## Web DAT — HTTP Requests
 
 ```python
-web = root.create(webDAT, 'api_call')
-web.par.url = 'https://api.example.com/v1/status'
-web.par.fetchmethod = 'get'           # 'get' | 'post' | 'put' | 'delete'
-web.par.format = 'auto'                # 'auto' | 'text' | 'json'
+web = root.create(webDAT, "api_call")
+web.par.url = "https://api.example.com/v1/status"
+web.par.fetchmethod = "get"  # 'get' | 'post' | 'put' | 'delete'
+web.par.format = "auto"  # 'auto' | 'text' | 'json'
 web.par.timeout = 5.0
 ```
 
@@ -36,9 +36,9 @@ Or via expression on a CHOP value-change (chopExecuteDAT — see `dat-scripting.
 Use `webclientDAT` (more flexible) or set `webDAT` headers via the headers DAT:
 
 ```python
-web_headers = root.create(tableDAT, 'headers')
-web_headers.appendRow(['Authorization', 'Bearer YOUR_TOKEN'])
-web_headers.appendRow(['Accept', 'application/json'])
+web_headers = root.create(tableDAT, "headers")
+web_headers.appendRow(["Authorization", "Bearer YOUR_TOKEN"])
+web_headers.appendRow(["Accept", "application/json"])
 web.par.headers = web_headers.path
 ```
 
@@ -47,11 +47,12 @@ web.par.headers = web_headers.path
 ```python
 import json
 
+
 def onTableChange(dat):
-    response = dat.text          # raw response body
+    response = dat.text  # raw response body
     data = json.loads(response)
     # Update a tableDAT or store in a constantCHOP for downstream use
-    op('/project1/api_status').par.value0 = data['count']
+    op("/project1/api_status").par.value0 = data["count"]
     return
 ```
 
@@ -61,13 +62,14 @@ Wire this in a `datExecuteDAT` watching the webDAT.
 
 ```python
 # timerCHOP fires every N seconds
-timer = root.create(timerCHOP, 'poll_timer')
+timer = root.create(timerCHOP, "poll_timer")
 timer.par.length = 5.0
 timer.par.cycle = True
 
+
 # chopExecuteDAT on the timer's 'cycles' channel pulses the webDAT
 def offToOn(channel, sampleIndex, val, prev):
-    op('/project1/api_call').par.fetch.pulse()
+    op("/project1/api_call").par.fetch.pulse()
     return
 ```
 
@@ -78,10 +80,10 @@ def offToOn(channel, sampleIndex, val, prev):
 `webclientDAT` is the modern replacement for `webDAT` — supports streaming responses, chunked transfer, custom auth.
 
 ```python
-client = root.create(webclientDAT, 'api')
-client.par.method = 'POST'
-client.par.url = 'https://api.example.com/events'
-client.par.uploadtype = 'json'
+client = root.create(webclientDAT, "api")
+client.par.method = "POST"
+client.par.url = "https://api.example.com/events"
+client.par.uploadtype = "json"
 client.par.uploaddata = '{"event": "scene_change", "scene": 3}'
 client.par.request.pulse()
 ```
@@ -98,7 +100,7 @@ Hosts a tiny HTTP server inside TD. Useful for:
 - Webhook receivers from external services
 
 ```python
-server = root.create(webserverDAT, 'control_server')
+server = root.create(webserverDAT, "control_server")
 server.par.port = 8080
 server.par.active = True
 
@@ -109,18 +111,18 @@ In the auto-created `webserver1_callbacks` DAT:
 
 ```python
 def onHTTPRequest(webServerDAT, request, response):
-    path = request['uri']
-    if path == '/status':
-        response['statusCode'] = 200
-        response['data'] = '{"fps": 60, "scene": "active"}'
-    elif path == '/scene':
-        idx = int(request['args'].get('index', 0))
-        op('/project1/scene_switch').par.index = idx
-        response['statusCode'] = 200
-        response['data'] = 'OK'
+    path = request["uri"]
+    if path == "/status":
+        response["statusCode"] = 200
+        response["data"] = '{"fps": 60, "scene": "active"}'
+    elif path == "/scene":
+        idx = int(request["args"].get("index", 0))
+        op("/project1/scene_switch").par.index = idx
+        response["statusCode"] = 200
+        response["data"] = "OK"
     else:
-        response['statusCode'] = 404
-        response['data'] = 'Not Found'
+        response["statusCode"] = 404
+        response["data"] = "Not Found"
     return response
 ```
 
@@ -137,8 +139,8 @@ For low-latency bidirectional streams (chat, live data feeds, controllers).
 ### Client
 
 ```python
-ws = root.create(websocketDAT, 'ws_client')
-ws.par.netaddress = 'wss://api.example.com/socket'
+ws = root.create(websocketDAT, "ws_client")
+ws.par.netaddress = "wss://api.example.com/socket"
 ws.par.active = True
 ```
 
@@ -149,12 +151,15 @@ def onConnect(dat):
     dat.sendText('{"action": "subscribe", "channel": "ticks"}')
     return
 
+
 def onReceiveText(dat, rowIndex, message):
     # message is a string; parse JSON, dispatch to ops
     import json
+
     data = json.loads(message)
-    op('/project1/price_chop').par.value0 = data['price']
+    op("/project1/price_chop").par.value0 = data["price"]
     return
+
 
 def onDisconnect(dat):
     # Optionally schedule a reconnect
@@ -164,8 +169,8 @@ def onDisconnect(dat):
 ### Server
 
 ```python
-ws = root.create(websocketDAT, 'ws_server')
-ws.par.mode = 'server'
+ws = root.create(websocketDAT, "ws_server")
+ws.par.mode = "server"
 ws.par.port = 9001
 ws.par.active = True
 ```
@@ -177,25 +182,28 @@ Same callback structure with an additional `clientID` arg.
 ## MQTT — Pub/Sub for IoT
 
 ```python
-mqtt = root.create(mqttClientDAT, 'iot')
-mqtt.par.brokeraddress = 'broker.hivemq.com'
+mqtt = root.create(mqttClientDAT, "iot")
+mqtt.par.brokeraddress = "broker.hivemq.com"
 mqtt.par.brokerport = 1883
-mqtt.par.clientid = 'td_install_01'
+mqtt.par.clientid = "td_install_01"
 mqtt.par.connect.pulse()
+
 
 # Subscribe in callbacks DAT:
 def onConnect(dat):
-    dat.subscribe('home/lights/+', qos=1)
+    dat.subscribe("home/lights/+", qos=1)
     return
+
 
 def onReceive(dat, topic, payload, qos, retained, dup):
     # payload is bytes — decode if JSON
-    msg = payload.decode('utf-8')
+    msg = payload.decode("utf-8")
     # Dispatch by topic
     return
 
+
 # Publish from anywhere:
-op('iot').publish('show/scene', 'sunset', qos=0, retain=False)
+op("iot").publish("show/scene", "sunset", qos=0, retain=False)
 ```
 
 For Mosquitto / HiveMQ self-hosted brokers use the same setup with `tcp://192.168.x.x` and your local port.
@@ -205,8 +213,8 @@ For Mosquitto / HiveMQ self-hosted brokers use the same setup with `tcp://192.16
 ## Serial DAT — Arduino, USB Devices
 
 ```python
-serial = root.create(serialDAT, 'arduino')
-serial.par.port = '/dev/cu.usbmodem14101'   # macOS — check Arduino IDE
+serial = root.create(serialDAT, "arduino")
+serial.par.port = "/dev/cu.usbmodem14101"  # macOS — check Arduino IDE
 # Windows: 'COM3', 'COM4', etc.
 serial.par.baudrate = 115200
 serial.par.active = True
@@ -217,15 +225,15 @@ In callbacks:
 ```python
 def onReceive(dat, rowIndex, line):
     # Each newline-terminated line from Arduino arrives here
-    parts = line.split(',')
-    op('/project1/sensors').par.value0 = float(parts[0])
-    op('/project1/sensors').par.value1 = float(parts[1])
+    parts = line.split(",")
+    op("/project1/sensors").par.value0 = float(parts[0])
+    op("/project1/sensors").par.value1 = float(parts[1])
     return
 ```
 
 Send to Arduino:
 ```python
-op('arduino').send('LED_ON\n')
+op("arduino").send("LED_ON\n")
 ```
 
 ---
@@ -235,10 +243,10 @@ op('arduino').send('LED_ON\n')
 For talking to non-HTTP servers (game servers, custom protocols, legacy systems).
 
 ```python
-tcp = root.create(tcpipDAT, 'show_control')
-tcp.par.netaddress = '192.168.1.50'
+tcp = root.create(tcpipDAT, "show_control")
+tcp.par.netaddress = "192.168.1.50"
 tcp.par.port = 7000
-tcp.par.protocol = 'tcp'        # 'tcp' | 'udp'
+tcp.par.protocol = "tcp"  # 'tcp' | 'udp'
 tcp.par.active = True
 ```
 

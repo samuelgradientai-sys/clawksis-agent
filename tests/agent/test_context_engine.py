@@ -12,6 +12,7 @@ from agent.context_compressor import ContextCompressor
 # A minimal concrete engine for testing the ABC
 # ---------------------------------------------------------------------------
 
+
 class StubEngine(ContextEngine):
     """Minimal engine that satisfies the ABC without doing real work."""
 
@@ -34,7 +35,9 @@ class StubEngine(ContextEngine):
         tokens = prompt_tokens if prompt_tokens is not None else self.last_prompt_tokens
         return tokens >= self.threshold_tokens
 
-    def compress(self, messages: List[Dict[str, Any]], current_tokens: int = None) -> List[Dict[str, Any]]:
+    def compress(
+        self, messages: List[Dict[str, Any]], current_tokens: int = None
+    ) -> List[Dict[str, Any]]:
         self._compress_called = True
         self.compression_count += 1
         # Trivial: just return as-is
@@ -58,6 +61,7 @@ class StubEngine(ContextEngine):
 # ABC contract tests
 # ---------------------------------------------------------------------------
 
+
 class TestContextEngineABC:
     """Verify the ABC enforces the required interface."""
 
@@ -67,10 +71,12 @@ class TestContextEngineABC:
 
     def test_missing_methods_raises(self):
         """A subclass missing required methods cannot be instantiated."""
+
         class Incomplete(ContextEngine):
             @property
             def name(self):
                 return "incomplete"
+
         with pytest.raises(TypeError):
             Incomplete()
 
@@ -80,7 +86,9 @@ class TestContextEngineABC:
         assert engine.name == "stub"
 
     def test_compressor_is_context_engine(self):
-        c = ContextCompressor(model="test", quiet_mode=True, config_context_length=200000)
+        c = ContextCompressor(
+            model="test", quiet_mode=True, config_context_length=200000
+        )
         assert isinstance(c, ContextEngine)
         assert c.name == "compressor"
 
@@ -88,6 +96,7 @@ class TestContextEngineABC:
 # ---------------------------------------------------------------------------
 # Default method behavior
 # ---------------------------------------------------------------------------
+
 
 class TestDefaults:
     """Verify ABC default implementations work correctly."""
@@ -129,8 +138,8 @@ class TestDefaults:
 # StubEngine behavior
 # ---------------------------------------------------------------------------
 
-class TestStubEngine:
 
+class TestStubEngine:
     def test_should_compress(self):
         engine = StubEngine(context_length=100000, threshold_pct=0.50)
         assert not engine.should_compress(40000)
@@ -159,7 +168,11 @@ class TestStubEngine:
 
     def test_update_from_response(self):
         engine = StubEngine()
-        engine.update_from_response({"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200})
+        engine.update_from_response({
+            "prompt_tokens": 1000,
+            "completion_tokens": 200,
+            "total_tokens": 1200,
+        })
         assert engine.last_prompt_tokens == 1000
         assert engine.last_completion_tokens == 200
 
@@ -168,11 +181,14 @@ class TestStubEngine:
 # ContextCompressor session reset via ABC
 # ---------------------------------------------------------------------------
 
+
 class TestCompressorSessionReset:
     """Verify ContextCompressor.on_session_reset() clears all state."""
 
     def test_reset_clears_state(self):
-        c = ContextCompressor(model="test", quiet_mode=True, config_context_length=200000)
+        c = ContextCompressor(
+            model="test", quiet_mode=True, config_context_length=200000
+        )
         c.last_prompt_tokens = 50000
         c.compression_count = 3
         c._previous_summary = "some old summary"
@@ -194,11 +210,13 @@ class TestCompressorSessionReset:
 # Plugin slot (PluginManager integration)
 # ---------------------------------------------------------------------------
 
+
 class TestPluginContextEngineSlot:
     """Test register_context_engine on PluginContext."""
 
     def test_register_engine(self):
         from clawk_cli.plugins import PluginManager, PluginContext, PluginManifest
+
         mgr = PluginManager()
         manifest = PluginManifest(name="test-lcm")
         ctx = PluginContext(manifest, mgr)
@@ -211,6 +229,7 @@ class TestPluginContextEngineSlot:
 
     def test_reject_second_engine(self):
         from clawk_cli.plugins import PluginManager, PluginContext, PluginManifest
+
         mgr = PluginManager()
         manifest = PluginManifest(name="test-lcm")
         ctx = PluginContext(manifest, mgr)
@@ -224,6 +243,7 @@ class TestPluginContextEngineSlot:
 
     def test_reject_non_engine(self):
         from clawk_cli.plugins import PluginManager, PluginContext, PluginManifest
+
         mgr = PluginManager()
         manifest = PluginManifest(name="test-bad")
         ctx = PluginContext(manifest, mgr)

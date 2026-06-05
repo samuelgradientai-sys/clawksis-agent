@@ -125,11 +125,12 @@ Both persist across sessions. See [Memory](../user-guide/features/memory.md) and
 
 Yes. Import the `AIAgent` class and use Clawksis programmatically:
 
-```python
-from run_agent import AIAgent
-
-agent = AIAgent(model="anthropic/claude-opus-4.7")
-response = agent.chat("Explain quantum computing briefly")
+```pythonfrom run_agent import AIAgent
+
+
+agent = AIAgent(model="anthropic/claude-opus-4.7")
+
+response = agent.chat("Explain quantum computing briefly")
 ```
 
 See the [Python Library guide](../user-guide/features/code-execution.md) for full API usage.

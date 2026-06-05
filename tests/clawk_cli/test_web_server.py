@@ -1,7 +1,5 @@
 """Tests for clawk_cli.web_server and related config utilities."""
 
-
-
 import os
 
 import json
@@ -13,23 +11,14 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
-
 import pytest
 
 
-
 from clawk_cli.config import (
-
     reload_env,
-
     redact_key,
-
     OPTIONAL_ENV_VARS,
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -37,9 +26,6 @@ from clawk_cli.config import (
 # Shared fixtures
 
 # ---------------------------------------------------------------------------
-
-
-
 
 
 # Path to the test-only example-dashboard plugin. Lives under
@@ -53,19 +39,15 @@ from clawk_cli.config import (
 # below.
 
 _EXAMPLE_PLUGIN_FIXTURE = (
-
-    Path(__file__).resolve().parent.parent / "fixtures" / "plugins" / "example-dashboard"
-
+    Path(__file__).resolve().parent.parent
+    / "fixtures"
+    / "plugins"
+    / "example-dashboard"
 )
 
 
-
-
-
 @pytest.fixture
-
 def _install_example_plugin(_isolate_clawk_home):
-
     """Drop the example-dashboard fixture into the per-test CLAWK_HOME
 
     user-plugins directory and force the web_server's dashboard plugin
@@ -108,8 +90,6 @@ def _install_example_plugin(_isolate_clawk_home):
 
     from clawk_cli import web_server
 
-
-
     user_plugins_dir = get_clawk_home() / "plugins"
 
     user_plugins_dir.mkdir(parents=True, exist_ok=True)
@@ -117,12 +97,9 @@ def _install_example_plugin(_isolate_clawk_home):
     dst = user_plugins_dir / "example-dashboard"
 
     if dst.exists():
-
         shutil.rmtree(dst)
 
     shutil.copytree(_EXAMPLE_PLUGIN_FIXTURE, dst)
-
-
 
     # Snapshot the existing routes BEFORE mounting so we can:
 
@@ -137,8 +114,6 @@ def _install_example_plugin(_isolate_clawk_home):
     app = web_server.app
 
     original_routes = list(app.router.routes)
-
-
 
     # Bust the module-level cache and re-discover so the example plugin
 
@@ -162,8 +137,6 @@ def _install_example_plugin(_isolate_clawk_home):
 
     web_server._mount_plugin_api_routes()
 
-
-
     # ``include_router`` appends the new routes to the END of
 
     # ``app.router.routes``. That works fine at import time — the SPA
@@ -185,21 +158,15 @@ def _install_example_plugin(_isolate_clawk_home):
     new_routes = [r for r in app.router.routes if r not in original_routes]
 
     for route in new_routes:
-
         app.router.routes.remove(route)
 
     for offset, route in enumerate(new_routes):
-
         app.router.routes.insert(offset, route)
 
-
-
     try:
-
         yield
 
     finally:
-
         # Restore the original route list — drops the example plugin's
 
         # routes so the next test sees a clean app — and clear the
@@ -211,9 +178,6 @@ def _install_example_plugin(_isolate_clawk_home):
         web_server._dashboard_plugins_cache = None
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # reload_env tests
@@ -221,17 +185,10 @@ def _install_example_plugin(_isolate_clawk_home):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestReloadEnv:
-
     """Tests for reload_env() — re-reads .env into os.environ."""
 
-
-
     def test_adds_new_vars(self, tmp_path):
-
         """reload_env() adds vars from .env that are not in os.environ."""
 
         env_file = tmp_path / ".env"
@@ -239,7 +196,6 @@ class TestReloadEnv:
         env_file.write_text("TEST_RELOAD_VAR=hello123\n")
 
         with patch.dict(reload_env.__globals__, {"get_env_path": lambda: env_file}):
-
             os.environ.pop("TEST_RELOAD_VAR", None)
 
             count = reload_env()
@@ -250,10 +206,7 @@ class TestReloadEnv:
 
         os.environ.pop("TEST_RELOAD_VAR", None)
 
-
-
     def test_updates_changed_vars(self, tmp_path):
-
         """reload_env() updates vars whose value changed on disk."""
 
         env_file = tmp_path / ".env"
@@ -261,7 +214,6 @@ class TestReloadEnv:
         env_file.write_text("TEST_RELOAD_VAR=old_value\n")
 
         with patch.dict(reload_env.__globals__, {"get_env_path": lambda: env_file}):
-
             os.environ["TEST_RELOAD_VAR"] = "old_value"
 
             # Now change the file
@@ -276,10 +228,7 @@ class TestReloadEnv:
 
         os.environ.pop("TEST_RELOAD_VAR", None)
 
-
-
     def test_removes_deleted_known_vars(self, tmp_path):
-
         """reload_env() removes known Clawksis vars not present in .env."""
 
         env_file = tmp_path / ".env"
@@ -291,7 +240,6 @@ class TestReloadEnv:
         known_key = next(iter(OPTIONAL_ENV_VARS.keys()))
 
         with patch.dict(reload_env.__globals__, {"get_env_path": lambda: env_file}):
-
             os.environ[known_key] = "stale_value"
 
             count = reload_env()
@@ -300,10 +248,7 @@ class TestReloadEnv:
 
             assert count >= 1
 
-
-
     def test_does_not_remove_unknown_vars(self, tmp_path):
-
         """reload_env() preserves non-Clawksis env vars even when absent from .env."""
 
         env_file = tmp_path / ".env"
@@ -311,7 +256,6 @@ class TestReloadEnv:
         env_file.write_text("")
 
         with patch.dict(reload_env.__globals__, {"get_env_path": lambda: env_file}):
-
             os.environ["MY_CUSTOM_UNRELATED_VAR"] = "keep_me"
 
             reload_env()
@@ -321,9 +265,6 @@ class TestReloadEnv:
         os.environ.pop("MY_CUSTOM_UNRELATED_VAR", None)
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # redact_key tests
@@ -331,11 +272,7 @@ class TestReloadEnv:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestRedactKey:
-
     def test_long_key_shows_prefix_suffix(self):
 
         result = redact_key("sk-1234567890abcdef")
@@ -346,13 +283,9 @@ class TestRedactKey:
 
         assert "..." in result
 
-
-
     def test_short_key_fully_masked(self):
 
         assert redact_key("short") == "***"
-
-
 
     def test_empty_key(self):
 
@@ -361,11 +294,7 @@ class TestRedactKey:
         assert "not set" in result.lower() or result == "***" or "\x1b" in result
 
 
-
-
-
 class TestSessionTokenInjection:
-
     """The desktop shell mints CLAWK_DASHBOARD_SESSION_TOKEN and signs its
 
     /api + /api/ws calls with it. The backend must adopt that token, else every
@@ -376,31 +305,23 @@ class TestSessionTokenInjection:
 
     """
 
-
-
     def test_honors_injected_token(self, monkeypatch):
 
         import importlib
 
         import clawk_cli.web_server as ws
 
-
-
         monkeypatch.setenv("CLAWK_DASHBOARD_SESSION_TOKEN", "desktop-seeded-token")
 
         try:
-
             importlib.reload(ws)
 
             assert ws._SESSION_TOKEN == "desktop-seeded-token"
 
         finally:
-
             monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
 
             importlib.reload(ws)
-
-
 
     def test_falls_back_to_random_token(self, monkeypatch):
 
@@ -408,18 +329,11 @@ class TestSessionTokenInjection:
 
         import clawk_cli.web_server as ws
 
-
-
         monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
 
         importlib.reload(ws)
 
-
-
         assert ws._SESSION_TOKEN and len(ws._SESSION_TOKEN) >= 32
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -429,30 +343,18 @@ class TestSessionTokenInjection:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestWebServerEndpoints:
-
     """Test the FastAPI REST endpoints using Starlette TestClient."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup_test_client(self, monkeypatch, _isolate_clawk_home):
-
         """Create a TestClient and isolate the state DB under the test CLAWK_HOME."""
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         import clawk_state
 
@@ -460,17 +362,13 @@ class TestWebServerEndpoints:
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
-        monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db")
-
-
+        monkeypatch.setattr(
+            clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db"
+        )
 
         self.client = TestClient(app)
 
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
-
-
 
     def test_get_status(self):
 
@@ -486,10 +384,7 @@ class TestWebServerEndpoints:
 
         assert "active_sessions" in data
 
-
-
     def test_get_sessions_uses_only_persisted_cwd(self, monkeypatch):
-
         """Session rows without persisted cwd must not inherit TERMINAL_CWD.
 
 
@@ -502,29 +397,19 @@ class TestWebServerEndpoints:
 
         from clawk_state import SessionDB
 
-
-
         monkeypatch.setenv("TERMINAL_CWD", "/tmp/global-default")
-
-
 
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="session-no-cwd", source="cli")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.get("/api/sessions?limit=20&offset=0")
 
         assert resp.status_code == 200
-
-
 
         rows = resp.json()["sessions"]
 
@@ -532,10 +417,7 @@ class TestWebServerEndpoints:
 
         assert row["cwd"] is None
 
-
-
     def test_get_sessions_forwards_min_messages(self, monkeypatch):
-
         """The ?min_messages= filter must reach SessionDB.
 
 
@@ -550,15 +432,10 @@ class TestWebServerEndpoints:
 
         captured = {}
 
-
-
         class _FakeDB:
-
             def __init__(self, *args, **kwargs):
 
                 pass
-
-
 
             def list_sessions_rich(self, limit, offset, min_message_count=0, **kwargs):
 
@@ -566,25 +443,17 @@ class TestWebServerEndpoints:
 
                 return []
 
-
-
             def session_count(self, min_message_count=0, **kwargs):
 
                 captured["count"] = min_message_count
 
                 return 0
 
-
-
             def close(self):
 
                 pass
 
-
-
         monkeypatch.setattr("clawk_state.SessionDB", _FakeDB)
-
-
 
         resp = self.client.get("/api/sessions?limit=5&offset=0&min_messages=3")
 
@@ -594,29 +463,20 @@ class TestWebServerEndpoints:
 
         assert captured["count"] == 3
 
-
-
     def test_rename_session_updates_title(self):
-
         """PATCH /api/sessions/{id} renames a session (regression: the route
 
         was missing entirely, so the desktop rename dialog got a 405)."""
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="rename-me", source="cli")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.patch("/api/sessions/rename-me", json={"title": "My Chat"})
 
@@ -624,39 +484,27 @@ class TestWebServerEndpoints:
 
         assert resp.json() == {"ok": True, "title": "My Chat"}
 
-
-
         db = SessionDB()
 
         try:
-
             assert db.get_session_title("rename-me") == "My Chat"
 
         finally:
-
             db.close()
-
-
 
     def test_rename_session_clears_title_when_empty(self):
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="clear-me", source="cli")
 
             db.set_session_title("clear-me", "Has A Title")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.patch("/api/sessions/clear-me", json={"title": ""})
 
@@ -664,19 +512,13 @@ class TestWebServerEndpoints:
 
         assert resp.json() == {"ok": True, "title": ""}
 
-
-
         db = SessionDB()
 
         try:
-
             assert db.get_session_title("clear-me") is None
 
         finally:
-
             db.close()
-
-
 
     def test_rename_session_not_found(self):
 
@@ -684,37 +526,26 @@ class TestWebServerEndpoints:
 
         assert resp.status_code == 404
 
-
-
     def test_archive_session_via_patch(self):
-
         """PATCH archived=true soft-hides a session; archived=false restores it."""
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="arch-me", source="cli")
 
             db.append_message(session_id="arch-me", role="user", content="hi")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.patch("/api/sessions/arch-me", json={"archived": True})
 
         assert resp.status_code == 200
 
         assert resp.json()["archived"] is True
-
-
 
         # Hidden from the default list, surfaced by archived=only.
 
@@ -726,8 +557,6 @@ class TestWebServerEndpoints:
 
         assert any(s["id"] == "arch-me" for s in only["sessions"])
 
-
-
         resp = self.client.patch("/api/sessions/arch-me", json={"archived": False})
 
         assert resp.status_code == 200
@@ -736,33 +565,22 @@ class TestWebServerEndpoints:
 
         assert any(s["id"] == "arch-me" for s in restored["sessions"])
 
-
-
     def test_patch_session_without_fields_is_400(self):
-
         """An existing session + empty body is a bad request, not a 404."""
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="no-fields", source="cli")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.patch("/api/sessions/no-fields", json={})
 
         assert resp.status_code == 400
-
-
 
     def test_get_sessions_rejects_unknown_archived_value(self):
 
@@ -770,34 +588,24 @@ class TestWebServerEndpoints:
 
         assert resp.status_code == 400
 
-
-
     def test_get_sessions_rejects_unknown_order_value(self):
 
         resp = self.client.get("/api/sessions?order=sideways")
 
         assert resp.status_code == 400
 
-
-
     def test_get_sessions_order_recent_surfaces_compression_tip(self):
-
         """A long-running conversation that auto-compresses must stay on the
 
         first page by recency, listed under its live continuation id."""
 
         import time as _time
 
-
-
         from clawk_state import SessionDB
-
-
 
         db = SessionDB()
 
         try:
-
             old = _time.time() - 86_400
 
             # Old conversation that later compresses into a fresh continuation.
@@ -813,34 +621,37 @@ class TestWebServerEndpoints:
             db.end_session("root-old", "compression")
 
             db._conn.execute(
-
                 "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?",
-
                 (old, old + 10, "root-old"),
-
             )
 
-            db.create_session(session_id="tip-new", source="cli", parent_session_id="root-old")
+            db.create_session(
+                session_id="tip-new", source="cli", parent_session_id="root-old"
+            )
 
-            db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?", (old + 10, "tip-new"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at = ? WHERE id = ?", (old + 10, "tip-new")
+            )
 
-            db.append_message(session_id="tip-new", role="user", content="continued just now")
+            db.append_message(
+                session_id="tip-new", role="user", content="continued just now"
+            )
 
             # A brand-new unrelated session started after the root but before now.
 
             db.create_session(session_id="mid", source="cli")
 
-            db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?", (_time.time() - 3600, "mid"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at = ? WHERE id = ?",
+                (_time.time() - 3600, "mid"),
+            )
 
             db.append_message(session_id="mid", role="user", content="hello")
 
             db._conn.commit()
 
         finally:
-
             db.close()
-
-
 
         rows = self.client.get("/api/sessions?order=recent&limit=5").json()["sessions"]
 
@@ -856,10 +667,7 @@ class TestWebServerEndpoints:
 
         assert tip.get("_lineage_root_id") == "root-old"
 
-
-
     def test_search_dedupes_compression_lineage_to_tip(self):
-
         """A conversation that auto-compresses leaves the matched term in both
 
         the root segment and the continuation. Search must collapse them to a
@@ -870,53 +678,53 @@ class TestWebServerEndpoints:
 
         import time as _time
 
-
-
         from clawk_state import SessionDB
-
-
 
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="search-root", source="cli")
 
-            db.append_message(session_id="search-root", role="user", content="distinctneedle in the root")
+            db.append_message(
+                session_id="search-root",
+                role="user",
+                content="distinctneedle in the root",
+            )
 
             db.end_session("search-root", "compression")
 
             now = _time.time()
 
             db._conn.execute(
-
                 "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?",
-
                 (now - 100, now - 90, "search-root"),
-
             )
 
-            db.create_session(session_id="search-tip", source="cli", parent_session_id="search-root")
+            db.create_session(
+                session_id="search-tip", source="cli", parent_session_id="search-root"
+            )
 
-            db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?", (now - 90, "search-tip"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at = ? WHERE id = ?",
+                (now - 90, "search-tip"),
+            )
 
-            db.append_message(session_id="search-tip", role="user", content="distinctneedle again in the tip")
+            db.append_message(
+                session_id="search-tip",
+                role="user",
+                content="distinctneedle again in the tip",
+            )
 
             db._conn.commit()
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.get("/api/sessions/search?q=distinctneedle")
 
         assert resp.status_code == 200
 
         results = resp.json()["results"]
-
-
 
         lineage_hits = [r for r in results if r.get("lineage_root") == "search-root"]
 
@@ -932,10 +740,7 @@ class TestWebServerEndpoints:
 
         assert hit["lineage_root"] == "search-root"
 
-
-
     def test_search_keeps_branch_specific_hits_on_branch(self):
-
         """Branch sessions share parent_session_id, but they are not compression
 
         continuations. A query that only exists in the branch must open the
@@ -944,45 +749,47 @@ class TestWebServerEndpoints:
 
         import time as _time
 
-
-
         from clawk_state import SessionDB
-
-
 
         db = SessionDB()
 
         try:
-
             now = _time.time()
 
             db.create_session(session_id="branch-parent", source="cli")
 
-            db.append_message(session_id="branch-parent", role="user", content="ancestor context")
+            db.append_message(
+                session_id="branch-parent", role="user", content="ancestor context"
+            )
 
             db.end_session("branch-parent", "branched")
 
             db._conn.execute(
-
                 "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?",
-
                 (now - 100, now - 90, "branch-parent"),
-
             )
 
-            db.create_session(session_id="branch-child", source="cli", parent_session_id="branch-parent")
+            db.create_session(
+                session_id="branch-child",
+                source="cli",
+                parent_session_id="branch-parent",
+            )
 
-            db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?", (now - 80, "branch-child"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at = ? WHERE id = ?",
+                (now - 80, "branch-child"),
+            )
 
-            db.append_message(session_id="branch-child", role="user", content="branchspecificneedle only here")
+            db.append_message(
+                session_id="branch-child",
+                role="user",
+                content="branchspecificneedle only here",
+            )
 
             db._conn.commit()
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.get("/api/sessions/search?q=branchspecificneedle")
 
@@ -990,63 +797,46 @@ class TestWebServerEndpoints:
 
         results = resp.json()["results"]
 
-
-
         assert any(
-
-            r["session_id"] == "branch-child" and r.get("lineage_root") == "branch-child"
-
+            r["session_id"] == "branch-child"
+            and r.get("lineage_root") == "branch-child"
             for r in results
-
         )
-
-
 
     def test_get_sessions_archived_is_boolean(self):
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="bool-arch", source="cli")
 
             db.append_message(session_id="bool-arch", role="user", content="hi")
 
         finally:
-
             db.close()
 
-
-
-        row = next(s for s in self.client.get("/api/sessions").json()["sessions"] if s["id"] == "bool-arch")
+        row = next(
+            s
+            for s in self.client.get("/api/sessions").json()["sessions"]
+            if s["id"] == "bool-arch"
+        )
 
         assert row["archived"] is False
 
-
-
     def test_rename_response_omits_archived_when_not_set(self):
-
         """Title-only PATCH keeps its legacy {ok, title} response shape."""
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="title-only", source="cli")
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.patch("/api/sessions/title-only", json={"title": "Hi"})
 
@@ -1054,98 +844,61 @@ class TestWebServerEndpoints:
 
         assert "archived" not in resp.json()
 
-
-
     def test_audio_transcription_endpoint(self, monkeypatch):
 
         import tools.transcription_tools as transcription_tools
 
-
-
         captured = {}
-
-
 
         def fake_transcribe_audio(path):
 
             captured["path"] = path
 
             return {
-
                 "success": True,
-
                 "transcript": "hello from voice mode",
-
                 "provider": "test",
-
             }
 
-
-
-        monkeypatch.setattr(transcription_tools, "transcribe_audio", fake_transcribe_audio)
-
-
-
-        resp = self.client.post(
-
-            "/api/audio/transcribe",
-
-            json={
-
-                "data_url": "data:audio/webm;base64,aGVsbG8=",
-
-                "mime_type": "audio/webm",
-
-            },
-
+        monkeypatch.setattr(
+            transcription_tools, "transcribe_audio", fake_transcribe_audio
         )
 
-
+        resp = self.client.post(
+            "/api/audio/transcribe",
+            json={
+                "data_url": "data:audio/webm;base64,aGVsbG8=",
+                "mime_type": "audio/webm",
+            },
+        )
 
         assert resp.status_code == 200
 
         assert resp.json() == {
-
             "ok": True,
-
             "transcript": "hello from voice mode",
-
             "provider": "test",
-
         }
 
         assert captured["path"].endswith(".webm")
 
         assert not Path(captured["path"]).exists()
 
-
-
     def test_audio_transcription_rejects_invalid_base64(self):
 
         resp = self.client.post(
-
             "/api/audio/transcribe",
-
             json={
-
                 "data_url": "data:audio/webm;base64,not base64",
-
                 "mime_type": "audio/webm",
-
             },
-
         )
-
-
 
         assert resp.status_code == 400
 
         assert "base64" in resp.json()["detail"]
 
-
-
     def test_desktop_audio_routes_registered(self):
-
         """All three desktop voice endpoints must exist.
 
 
@@ -1162,8 +915,6 @@ class TestWebServerEndpoints:
 
         from clawk_cli.web_server import app
 
-
-
         paths = {getattr(r, "path", None) for r in app.routes}
 
         assert "/api/audio/transcribe" in paths
@@ -1172,19 +923,13 @@ class TestWebServerEndpoints:
 
         assert "/api/audio/elevenlabs/voices" in paths
 
-
-
     def test_elevenlabs_voices_unavailable_without_key(self, monkeypatch):
 
         import clawk_cli.web_server as web_server
 
-
-
         monkeypatch.setattr(web_server, "load_env", lambda: {})
 
         monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-
-
 
         resp = self.client.get("/api/audio/elevenlabs/voices")
 
@@ -1192,37 +937,23 @@ class TestWebServerEndpoints:
 
         assert resp.json() == {"available": False, "voices": []}
 
-
-
     def test_speak_text_returns_base64_data_url(self, monkeypatch, tmp_path):
 
         import tools.tts_tool as tts_tool
-
-
 
         audio_file = tmp_path / "speech.mp3"
 
         audio_file.write_bytes(b"ID3fake-audio-bytes")
 
-
-
         def fake_tts(text):
 
             return json.dumps({
-
                 "success": True,
-
                 "file_path": str(audio_file),
-
                 "provider": "test",
-
             })
 
-
-
         monkeypatch.setattr(tts_tool, "text_to_speech_tool", fake_tts)
-
-
 
         resp = self.client.post("/api/audio/speak", json={"text": "hello there"})
 
@@ -1242,25 +973,17 @@ class TestWebServerEndpoints:
 
         assert not audio_file.exists()
 
-
-
     def test_speak_text_requires_nonempty_text(self):
 
         resp = self.client.post("/api/audio/speak", json={"text": "   "})
 
         assert resp.status_code == 400
 
-
-
     def test_update_clawk_returns_docker_guidance_without_spawning(self, monkeypatch):
 
         import clawk_cli.web_server as web_server
 
-
-
         spawned = False
-
-
 
         def fail_spawn(*_args, **_kwargs):
 
@@ -1270,8 +993,6 @@ class TestWebServerEndpoints:
 
             raise AssertionError("docker update guard should not spawn clawk update")
 
-
-
         monkeypatch.setattr(web_server, "detect_install_method", lambda _root: "docker")
 
         monkeypatch.setattr(web_server, "_spawn_clawk_action", fail_spawn)
@@ -1280,11 +1001,7 @@ class TestWebServerEndpoints:
 
         web_server._ACTION_RESULTS.pop("clawk-update", None)
 
-
-
         resp = self.client.post("/api/clawksis/update")
-
-
 
         assert resp.status_code == 200
 
@@ -1302,8 +1019,6 @@ class TestWebServerEndpoints:
 
         assert spawned is False
 
-
-
         status = self.client.get("/api/actions/clawk-update/status")
 
         assert status.status_code == 200
@@ -1316,39 +1031,29 @@ class TestWebServerEndpoints:
 
         assert status_data["pid"] is None
 
-        assert any("docker pull nousresearch/clawksis-agent:latest" in line for line in status_data["lines"])
-
-
+        assert any(
+            "docker pull nousresearch/clawksis-agent:latest" in line
+            for line in status_data["lines"]
+        )
 
     def test_update_clawk_spawns_on_non_docker_install(self, monkeypatch):
 
         import clawk_cli.web_server as web_server
 
-
-
         class Proc:
-
             pid = 12345
-
-
 
             def poll(self):
 
                 return None
 
-
-
         calls = []
-
-
 
         def fake_spawn(subcommand, name):
 
             calls.append((subcommand, name))
 
             return Proc()
-
-
 
         monkeypatch.setattr(web_server, "detect_install_method", lambda _root: "git")
 
@@ -1358,11 +1063,7 @@ class TestWebServerEndpoints:
 
         web_server._ACTION_RESULTS.pop("clawk-update", None)
 
-
-
         resp = self.client.post("/api/clawksis/update")
-
-
 
         assert resp.status_code == 200
 
@@ -1370,139 +1071,111 @@ class TestWebServerEndpoints:
 
         assert calls == [(["update"], "clawk-update")]
 
-
-
     def test_get_status_filters_unconfigured_gateway_platforms(self, monkeypatch):
 
         import gateway.config as gateway_config
 
         import clawk_cli.web_server as web_server
 
-
-
         class _Platform:
-
             def __init__(self, value):
 
                 self.value = value
 
-
-
         class _GatewayConfig:
-
             def get_connected_platforms(self):
 
                 return [_Platform("telegram")]
 
-
-
         monkeypatch.setattr(web_server, "get_running_pid", lambda: 1234)
 
         monkeypatch.setattr(
-
             web_server,
-
             "read_runtime_status",
-
             lambda: {
-
                 "gateway_state": "running",
-
                 "updated_at": "2026-04-12T00:00:00+00:00",
-
                 "platforms": {
-
-                    "telegram": {"state": "connected", "updated_at": "2026-04-12T00:00:00+00:00"},
-
-                    "whatsapp": {"state": "retrying", "updated_at": "2026-04-12T00:00:00+00:00"},
-
-                    "feishu": {"state": "connected", "updated_at": "2026-04-12T00:00:00+00:00"},
-
+                    "telegram": {
+                        "state": "connected",
+                        "updated_at": "2026-04-12T00:00:00+00:00",
+                    },
+                    "whatsapp": {
+                        "state": "retrying",
+                        "updated_at": "2026-04-12T00:00:00+00:00",
+                    },
+                    "feishu": {
+                        "state": "connected",
+                        "updated_at": "2026-04-12T00:00:00+00:00",
+                    },
                 },
-
             },
-
         )
 
         monkeypatch.setattr(web_server, "check_config_version", lambda: (1, 1))
 
-        monkeypatch.setattr(gateway_config, "load_gateway_config", lambda: _GatewayConfig())
-
-
+        monkeypatch.setattr(
+            gateway_config, "load_gateway_config", lambda: _GatewayConfig()
+        )
 
         resp = self.client.get("/api/status")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json()["gateway_platforms"] == {
-
-            "telegram": {"state": "connected", "updated_at": "2026-04-12T00:00:00+00:00"},
-
+            "telegram": {
+                "state": "connected",
+                "updated_at": "2026-04-12T00:00:00+00:00",
+            },
         }
 
-
-
-    def test_get_status_hides_stale_platforms_when_gateway_not_running(self, monkeypatch):
+    def test_get_status_hides_stale_platforms_when_gateway_not_running(
+        self, monkeypatch
+    ):
 
         import gateway.config as gateway_config
 
         import clawk_cli.web_server as web_server
 
-
-
         class _GatewayConfig:
-
             def get_connected_platforms(self):
 
                 return []
 
-
-
         monkeypatch.setattr(web_server, "get_running_pid", lambda: None)
 
         monkeypatch.setattr(
-
             web_server,
-
             "read_runtime_status",
-
             lambda: {
-
                 "gateway_state": "startup_failed",
-
                 "updated_at": "2026-04-12T00:00:00+00:00",
-
                 "platforms": {
-
-                    "whatsapp": {"state": "retrying", "updated_at": "2026-04-12T00:00:00+00:00"},
-
-                    "feishu": {"state": "connected", "updated_at": "2026-04-12T00:00:00+00:00"},
-
+                    "whatsapp": {
+                        "state": "retrying",
+                        "updated_at": "2026-04-12T00:00:00+00:00",
+                    },
+                    "feishu": {
+                        "state": "connected",
+                        "updated_at": "2026-04-12T00:00:00+00:00",
+                    },
                 },
-
             },
-
         )
 
         monkeypatch.setattr(web_server, "check_config_version", lambda: (1, 1))
 
-        monkeypatch.setattr(gateway_config, "load_gateway_config", lambda: _GatewayConfig())
-
-
+        monkeypatch.setattr(
+            gateway_config, "load_gateway_config", lambda: _GatewayConfig()
+        )
 
         resp = self.client.get("/api/status")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json()["gateway_state"] == "startup_failed"
 
         assert resp.json()["gateway_platforms"] == {}
-
-
 
     def test_get_config_schema(self):
 
@@ -1530,8 +1203,6 @@ class TestWebServerEndpoints:
 
         assert "general" in data["category_order"]
 
-
-
     def test_get_config_defaults(self):
 
         resp = self.client.get("/api/config/defaults")
@@ -1541,8 +1212,6 @@ class TestWebServerEndpoints:
         defaults = resp.json()
 
         assert "model" in defaults
-
-
 
     def test_get_env_vars(self):
 
@@ -1556,21 +1225,15 @@ class TestWebServerEndpoints:
 
         assert any(k.endswith("_API_KEY") or k.endswith("_TOKEN") for k in data.keys())
 
-
-
     def test_get_env_vars_marks_channel_managed_keys(self):
 
         from clawk_cli.web_server import _channel_managed_env_keys
-
-
 
         data = self.client.get("/api/env").json()
 
         # Every entry carries the classification the Keys page relies on.
 
         assert all("channel_managed" in info for info in data.values())
-
-
 
         channel_keys = _channel_managed_env_keys()
 
@@ -1579,32 +1242,21 @@ class TestWebServerEndpoints:
         # everything else stays visible on the Keys page.
 
         for key, info in data.items():
-
             assert info["channel_managed"] is (key in channel_keys)
-
-
 
     def test_platform_scoped_messaging_env_vars_are_channel_managed(self):
 
         from clawk_cli.web_server import (
-
             _MESSAGING_KEYS_PAGE_KEYS,
-
             _build_catalog_entry,
-
             _channel_managed_env_keys,
-
         )
-
-
 
         discord = _build_catalog_entry("discord")
 
         assert "DISCORD_HOME_CHANNEL" in discord["env_vars"]
 
         assert "DISCORD_ALLOW_ALL_USERS" in discord["env_vars"]
-
-
 
         managed = _channel_managed_env_keys()
 
@@ -1618,10 +1270,7 @@ class TestWebServerEndpoints:
 
         assert "GATEWAY_PROXY_URL" in _MESSAGING_KEYS_PAGE_KEYS
 
-
-
     def test_reveal_env_var(self, tmp_path):
-
         """POST /api/env/reveal should return the real unredacted value."""
 
         from clawk_cli.config import save_env_value
@@ -1631,13 +1280,9 @@ class TestWebServerEndpoints:
         save_env_value("TEST_REVEAL_KEY", "super-secret-value-12345")
 
         resp = self.client.post(
-
             "/api/env/reveal",
-
             json={"key": "TEST_REVEAL_KEY"},
-
             headers={_SESSION_HEADER_NAME: _SESSION_TOKEN},
-
         )
 
         assert resp.status_code == 200
@@ -1648,30 +1293,20 @@ class TestWebServerEndpoints:
 
         assert data["value"] == "super-secret-value-12345"
 
-
-
     def test_reveal_env_var_not_found(self):
-
         """POST /api/env/reveal should 404 for unknown keys."""
 
         from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
 
         resp = self.client.post(
-
             "/api/env/reveal",
-
             json={"key": "NONEXISTENT_KEY_XYZ"},
-
             headers={_SESSION_HEADER_NAME: _SESSION_TOKEN},
-
         )
 
         assert resp.status_code == 404
 
-
-
     def test_reveal_env_var_no_token(self, tmp_path):
-
         """POST /api/env/reveal without token should return 401."""
 
         from starlette.testclient import TestClient
@@ -1687,19 +1322,13 @@ class TestWebServerEndpoints:
         unauth_client = TestClient(app)
 
         resp = unauth_client.post(
-
             "/api/env/reveal",
-
             json={"key": "TEST_REVEAL_NOAUTH"},
-
         )
 
         assert resp.status_code == 401
 
-
-
     def test_reveal_env_var_bad_token(self, tmp_path):
-
         """POST /api/env/reveal with wrong token should return 401."""
 
         from clawk_cli.config import save_env_value
@@ -1709,157 +1338,110 @@ class TestWebServerEndpoints:
         save_env_value("TEST_REVEAL_BADAUTH", "secret-value")
 
         resp = self.client.post(
-
             "/api/env/reveal",
-
             json={"key": "TEST_REVEAL_BADAUTH"},
-
             headers={_SESSION_HEADER_NAME: "wrong-token-here"},
-
         )
 
         assert resp.status_code == 401
 
-
-
-    def test_reveal_env_var_custom_session_header_ignores_proxy_authorization(self, tmp_path):
-
+    def test_reveal_env_var_custom_session_header_ignores_proxy_authorization(
+        self, tmp_path
+    ):
         """A valid dashboard session header should coexist with proxy auth."""
 
         from clawk_cli.config import save_env_value
 
         from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
         save_env_value("TEST_REVEAL_PROXY_AUTH", "secret-value")
 
         resp = self.client.post(
-
             "/api/env/reveal",
-
             json={"key": "TEST_REVEAL_PROXY_AUTH"},
-
             headers={
-
                 _SESSION_HEADER_NAME: _SESSION_TOKEN,
-
                 "Authorization": "Basic dXNlcjpwYXNz",
-
             },
-
         )
-
-
 
         assert resp.status_code == 200
 
         assert resp.json()["value"] == "secret-value"
 
-
-
     def test_reveal_env_var_legacy_authorization_header_still_works(self, tmp_path):
-
         """Keep old dashboard bundles working while the new header rolls out."""
 
         from clawk_cli.config import save_env_value
 
         from clawk_cli.web_server import _SESSION_TOKEN
 
-
-
         save_env_value("TEST_REVEAL_LEGACY_AUTH", "secret-value")
 
         resp = self.client.post(
-
             "/api/env/reveal",
-
             json={"key": "TEST_REVEAL_LEGACY_AUTH"},
-
             headers={"Authorization": f"Bearer {_SESSION_TOKEN}"},
-
         )
 
-
-
         assert resp.status_code == 200
-
-
 
     def test_get_messaging_platforms(self):
 
         resp = self.client.get("/api/messaging/platforms")
 
-
-
         assert resp.status_code == 200
 
         platforms = resp.json()["platforms"]
 
-        telegram = next(platform for platform in platforms if platform["id"] == "telegram")
+        telegram = next(
+            platform for platform in platforms if platform["id"] == "telegram"
+        )
 
         assert telegram["name"] == "Telegram"
 
         assert telegram["enabled"] is False
 
-        assert any(field["key"] == "TELEGRAM_BOT_TOKEN" and field["required"] for field in telegram["env_vars"])
-
-
+        assert any(
+            field["key"] == "TELEGRAM_BOT_TOKEN" and field["required"]
+            for field in telegram["env_vars"]
+        )
 
     def test_messaging_catalog_covers_gateway_platforms(self):
-
         """Catalog is derived from the Platform enum, so every built-in shows up."""
 
         from gateway.config import Platform
-
-
 
         resp = self.client.get("/api/messaging/platforms")
 
         platforms = {entry["id"] for entry in resp.json()["platforms"]}
 
-
-
         for member in Platform.__members__.values():
-
             if member.value == "local":
-
                 continue
 
-            assert member.value in platforms, f"Missing gateway platform {member.value} from /api/messaging/platforms"
-
-
+            assert member.value in platforms, (
+                f"Missing gateway platform {member.value} from /api/messaging/platforms"
+            )
 
     def test_messaging_catalog_includes_plugin_platforms(self, monkeypatch):
-
         """Plugin-registered adapters appear in the catalog without per-platform code."""
 
         from gateway.platform_registry import PlatformEntry, platform_registry
 
-
-
         entry = PlatformEntry(
-
             name="ircfake",
-
             label="IRC (test)",
-
             adapter_factory=lambda cfg: None,
-
             check_fn=lambda: True,
-
             required_env=["IRC_SERVER"],
-
             install_hint="Connect to IRC.",
-
             source="plugin",
-
         )
 
         platform_registry.register(entry)
 
         try:
-
             resp = self.client.get("/api/messaging/platforms")
 
             ids = {row["id"]: row for row in resp.json()["platforms"]}
@@ -1868,35 +1450,25 @@ class TestWebServerEndpoints:
 
             assert ids["ircfake"]["name"] == "IRC (test)"
 
-            assert any(field["key"] == "IRC_SERVER" and field["required"] for field in ids["ircfake"]["env_vars"])
+            assert any(
+                field["key"] == "IRC_SERVER" and field["required"]
+                for field in ids["ircfake"]["env_vars"]
+            )
 
         finally:
-
             platform_registry.unregister("ircfake")
-
-
 
     def test_update_messaging_platform_saves_env_and_enablement(self):
 
         from clawk_cli.config import load_config, load_env
 
-
-
         resp = self.client.put(
-
             "/api/messaging/platforms/telegram",
-
             json={
-
                 "enabled": False,
-
                 "env": {"TELEGRAM_BOT_TOKEN": "1234567890abcdef"},
-
             },
-
         )
-
-
 
         assert resp.status_code == 200
 
@@ -1904,27 +1476,21 @@ class TestWebServerEndpoints:
 
         assert load_config()["platforms"]["telegram"]["enabled"] is False
 
-
-
         status = self.client.get("/api/messaging/platforms").json()["platforms"]
 
         telegram = next(platform for platform in status if platform["id"] == "telegram")
 
         assert telegram["enabled"] is False
 
-
-
     def test_messaging_platform_test_reports_missing_required_setup(self):
 
-        resp = self.client.put("/api/messaging/platforms/discord", json={"enabled": True})
+        resp = self.client.put(
+            "/api/messaging/platforms/discord", json={"enabled": True}
+        )
 
         assert resp.status_code == 200
 
-
-
         resp = self.client.post("/api/messaging/platforms/discord/test")
-
-
 
         assert resp.status_code == 200
 
@@ -1936,10 +1502,7 @@ class TestWebServerEndpoints:
 
         assert "DISCORD_BOT_TOKEN" in data["message"]
 
-
-
     def test_session_token_endpoint_removed(self):
-
         """GET /api/auth/session-token should no longer exist (token injected via HTML)."""
 
         resp = self.client.get("/api/auth/session-token")
@@ -1953,19 +1516,14 @@ class TestWebServerEndpoints:
         # Either way, it must NOT return the token as JSON
 
         try:
-
             data = resp.json()
 
             assert "token" not in data
 
         except Exception:
-
             pass  # Not JSON — that's fine (SPA HTML)
 
-
-
     def test_unauthenticated_api_blocked(self):
-
         """API requests without the session token should be rejected."""
 
         from starlette.testclient import TestClient
@@ -2002,10 +1560,7 @@ class TestWebServerEndpoints:
 
         assert resp.status_code == 200
 
-
-
     def test_path_traversal_blocked(self):
-
         """Verify URL-encoded path traversal is blocked."""
 
         # %2e%2e = ..
@@ -2017,15 +1572,11 @@ class TestWebServerEndpoints:
         assert resp.status_code in {200, 404}
 
         if resp.status_code == 200:
-
             # Should be the SPA fallback, not the system file
 
             assert "root:" not in resp.text
 
-
-
     def test_path_traversal_dotdot_blocked(self):
-
         """Direct .. path traversal via encoded sequences."""
 
         resp = self.client.get("/%2e%2e/clawk_cli/web_server.py")
@@ -2033,13 +1584,9 @@ class TestWebServerEndpoints:
         assert resp.status_code in {200, 404}
 
         if resp.status_code == 200:
-
             assert "FastAPI" not in resp.text  # Should not serve the actual source
 
-
-
     def test_set_model_main_nous_applies_gateway_defaults(self, monkeypatch):
-
         """Switching the main provider to Nous calls apply_nous_managed_defaults
 
         (mirroring the CLI's post-model-selection Tool Gateway routing) and
@@ -2048,11 +1595,7 @@ class TestWebServerEndpoints:
 
         import clawk_cli.nous_subscription as ns
 
-
-
         called = {}
-
-
 
         def fake_apply(config, *, enabled_toolsets=None, force_fresh=False):
 
@@ -2068,18 +1611,11 @@ class TestWebServerEndpoints:
 
             return {"web"}
 
-
-
         monkeypatch.setattr(ns, "apply_nous_managed_defaults", fake_apply)
 
-
-
         resp = self.client.post(
-
             "/api/model/set",
-
             json={"scope": "main", "provider": "nous", "model": "clawk-4"},
-
         )
 
         assert resp.status_code == 200
@@ -2094,32 +1630,26 @@ class TestWebServerEndpoints:
 
         assert called["force_fresh"] is True
 
-
-
     def test_set_model_main_non_nous_skips_gateway_defaults(self, monkeypatch):
-
         """Non-Nous providers must NOT trigger Tool Gateway auto-routing."""
 
         import clawk_cli.nous_subscription as ns
 
-
-
         def boom(*args, **kwargs):  # pragma: no cover - must not be called
 
-            raise AssertionError("apply_nous_managed_defaults called for non-nous provider")
-
-
+            raise AssertionError(
+                "apply_nous_managed_defaults called for non-nous provider"
+            )
 
         monkeypatch.setattr(ns, "apply_nous_managed_defaults", boom)
 
-
-
         resp = self.client.post(
-
             "/api/model/set",
-
-            json={"scope": "main", "provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
-
+            json={
+                "scope": "main",
+                "provider": "openrouter",
+                "model": "anthropic/claude-opus-4.8",
+            },
         )
 
         assert resp.status_code == 200
@@ -2130,10 +1660,7 @@ class TestWebServerEndpoints:
 
         assert data.get("gateway_tools", []) == []
 
-
-
     def test_apply_main_model_assignment_base_url_and_context_reconcile(self):
-
         """The shared main-slot assignment helper must persist base_url only for
 
         custom providers, clear stale base_url for hosted ones, and always drop
@@ -2144,14 +1671,13 @@ class TestWebServerEndpoints:
 
         from clawk_cli.web_server import _apply_main_model_assignment
 
-
-
         # Custom + base_url → persisted; stale context_length dropped.
 
         out = _apply_main_model_assignment(
-
-            {"context_length": 8192}, "custom", "llama-3.1-8b", "http://127.0.0.1:8000/v1"
-
+            {"context_length": 8192},
+            "custom",
+            "llama-3.1-8b",
+            "http://127.0.0.1:8000/v1",
         )
 
         assert out["provider"] == "custom"
@@ -2162,33 +1688,25 @@ class TestWebServerEndpoints:
 
         assert "context_length" not in out
 
-
-
         # Hosted provider → stale base_url cleared (no base_url supplied).
 
         out = _apply_main_model_assignment(
-
-            {"base_url": "http://127.0.0.1:8000/v1"}, "openrouter", "anthropic/claude-opus-4.8"
-
+            {"base_url": "http://127.0.0.1:8000/v1"},
+            "openrouter",
+            "anthropic/claude-opus-4.8",
         )
 
         assert out["provider"] == "openrouter"
 
         assert out["base_url"] == ""
 
-
-
         # Custom WITHOUT a base_url → don't invent one, clear any stale value.
 
         out = _apply_main_model_assignment(
-
             {"base_url": "http://stale:1/v1"}, "custom", "m"
-
         )
 
         assert out["base_url"] == ""
-
-
 
         # Non-dict input is coerced to a fresh dict (never raises).
 
@@ -2196,44 +1714,31 @@ class TestWebServerEndpoints:
 
         assert out == {"provider": "custom", "default": "m", "base_url": "http://x/v1"}
 
-
-
     def test_parse_model_ids_handles_openai_and_bare_shapes(self):
-
         """Model discovery must tolerate the common /v1/models shapes and
 
         never raise (so a slightly non-standard local endpoint still works)."""
 
         from clawk_cli.web_server import _parse_model_ids
 
-
-
         class FakeResp:
-
             def __init__(self, payload, ok=True):
 
                 self._payload = payload
 
                 self.is_success = ok
 
-
-
             def json(self):
 
                 if isinstance(self._payload, Exception):
-
                     raise self._payload
 
                 return self._payload
 
-
-
         # OpenAI / vLLM / llama.cpp shape.
 
         assert _parse_model_ids(
-
             FakeResp({"data": [{"id": "llama-3.1-8b"}, {"id": "qwen2.5-7b"}]})
-
         ) == ["llama-3.1-8b", "qwen2.5-7b"]
 
         # Bare list of ids.
@@ -2252,10 +1757,7 @@ class TestWebServerEndpoints:
 
         assert _parse_model_ids(FakeResp(ValueError("bad json"))) == []
 
-
-
     def test_set_model_main_custom_persists_base_url(self):
-
         """Custom/local providers must persist model.base_url so the runtime
 
         resolver (which ignores OPENAI_BASE_URL) can route to a self-hosted
@@ -2266,24 +1768,14 @@ class TestWebServerEndpoints:
 
         from clawk_cli.config import load_config
 
-
-
         resp = self.client.post(
-
             "/api/model/set",
-
             json={
-
                 "scope": "main",
-
                 "provider": "custom",
-
                 "model": "llama-3.1-8b",
-
                 "base_url": "http://127.0.0.1:8000/v1",
-
             },
-
         )
 
         assert resp.status_code == 200
@@ -2296,8 +1788,6 @@ class TestWebServerEndpoints:
 
         assert data["base_url"] == "http://127.0.0.1:8000/v1"
 
-
-
         model_cfg = load_config().get("model")
 
         assert isinstance(model_cfg, dict)
@@ -2308,47 +1798,35 @@ class TestWebServerEndpoints:
 
         assert model_cfg["base_url"] == "http://127.0.0.1:8000/v1"
 
-
-
     def test_set_model_main_non_custom_clears_stale_base_url(self):
-
         """Switching to a hosted provider must clear a stale base_url so the
 
         resolver picks that provider's own default endpoint."""
 
         from clawk_cli.config import load_config, save_config
 
-
-
         cfg = load_config()
 
         cfg["model"] = {
-
             "provider": "custom",
-
             "default": "llama-3.1-8b",
-
             "base_url": "http://127.0.0.1:8000/v1",
-
         }
 
         save_config(cfg)
 
-
-
         resp = self.client.post(
-
             "/api/model/set",
-
-            json={"scope": "main", "provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
-
+            json={
+                "scope": "main",
+                "provider": "openrouter",
+                "model": "anthropic/claude-opus-4.8",
+            },
         )
 
         assert resp.status_code == 200
 
         assert resp.json()["base_url"] == ""
-
-
 
         model_cfg = load_config().get("model")
 
@@ -2356,32 +1834,20 @@ class TestWebServerEndpoints:
 
         assert model_cfg.get("base_url", "") == ""
 
-
-
     def test_set_model_main_gateway_failure_does_not_block_save(self, monkeypatch):
-
         """A Portal/gateway hiccup must never prevent saving the model."""
 
         import clawk_cli.nous_subscription as ns
-
-
 
         def boom(*args, **kwargs):
 
             raise RuntimeError("portal unreachable")
 
-
-
         monkeypatch.setattr(ns, "apply_nous_managed_defaults", boom)
 
-
-
         resp = self.client.post(
-
             "/api/model/set",
-
             json={"scope": "main", "provider": "nous", "model": "clawk-4"},
-
         )
 
         assert resp.status_code == 200
@@ -2392,49 +1858,45 @@ class TestWebServerEndpoints:
 
         assert data.get("gateway_tools", []) == []
 
-
-
     def test_recommended_default_nous_honors_free_tier(self, monkeypatch):
-
         """For a free-tier Nous user, the recommended default must be a free
 
         model (mirroring `clawk model`), not the first curated paid entry."""
 
         import clawk_cli.models as models_mod
 
-
-
-        monkeypatch.setattr(models_mod, "get_curated_nous_model_ids", lambda: ["paid/expensive", "free/cheap"])
-
         monkeypatch.setattr(
-
-            models_mod, "get_pricing_for_provider",
-
-            lambda provider: {"paid/expensive": {"input": "1"}, "free/cheap": {"input": "0"}},
-
+            models_mod,
+            "get_curated_nous_model_ids",
+            lambda: ["paid/expensive", "free/cheap"],
         )
 
-        monkeypatch.setattr(models_mod, "check_nous_free_tier", lambda *, force_fresh=False: True)
+        monkeypatch.setattr(
+            models_mod,
+            "get_pricing_for_provider",
+            lambda provider: {
+                "paid/expensive": {"input": "1"},
+                "free/cheap": {"input": "0"},
+            },
+        )
 
         monkeypatch.setattr(
+            models_mod, "check_nous_free_tier", lambda *, force_fresh=False: True
+        )
 
-            models_mod, "union_with_portal_free_recommendations",
-
+        monkeypatch.setattr(
+            models_mod,
+            "union_with_portal_free_recommendations",
             lambda ids, pricing, url: (ids, pricing),
-
         )
 
         # Free partition keeps only the free model selectable.
 
         monkeypatch.setattr(
-
-            models_mod, "partition_nous_models_by_tier",
-
+            models_mod,
+            "partition_nous_models_by_tier",
             lambda ids, pricing, free_tier: (["free/cheap"], ["paid/expensive"]),
-
         )
-
-
 
         resp = self.client.get("/api/model/recommended-default?provider=nous")
 
@@ -2448,31 +1910,28 @@ class TestWebServerEndpoints:
 
         assert data["free_tier"] is True
 
-
-
     def test_recommended_default_nous_paid_uses_curated_default(self, monkeypatch):
-
         """A paid Nous user gets the first curated/paid-augmented model."""
 
         import clawk_cli.models as models_mod
 
-
-
-        monkeypatch.setattr(models_mod, "get_curated_nous_model_ids", lambda: ["top/model", "other/model"])
+        monkeypatch.setattr(
+            models_mod,
+            "get_curated_nous_model_ids",
+            lambda: ["top/model", "other/model"],
+        )
 
         monkeypatch.setattr(models_mod, "get_pricing_for_provider", lambda provider: {})
 
-        monkeypatch.setattr(models_mod, "check_nous_free_tier", lambda *, force_fresh=False: False)
-
         monkeypatch.setattr(
-
-            models_mod, "union_with_portal_paid_recommendations",
-
-            lambda ids, pricing, url: (ids, pricing),
-
+            models_mod, "check_nous_free_tier", lambda *, force_fresh=False: False
         )
 
-
+        monkeypatch.setattr(
+            models_mod,
+            "union_with_portal_paid_recommendations",
+            lambda ids, pricing, url: (ids, pricing),
+        )
 
         resp = self.client.get("/api/model/recommended-default?provider=nous")
 
@@ -2486,25 +1945,16 @@ class TestWebServerEndpoints:
 
         assert data["free_tier"] is False
 
-
-
     def test_recommended_default_handles_failure_gracefully(self, monkeypatch):
-
         """Endpoint never 500s — returns empty model on internal error."""
 
         import clawk_cli.models as models_mod
-
-
 
         def boom():
 
             raise RuntimeError("portal down")
 
-
-
         monkeypatch.setattr(models_mod, "get_curated_nous_model_ids", boom)
-
-
 
         resp = self.client.get("/api/model/recommended-default?provider=nous")
 
@@ -2517,9 +1967,6 @@ class TestWebServerEndpoints:
         assert data["free_tier"] is None
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _build_schema_from_config tests
@@ -2527,11 +1974,7 @@ class TestWebServerEndpoints:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestBuildSchemaFromConfig:
-
     def test_produces_expected_field_count(self):
 
         from clawk_cli.web_server import CONFIG_SCHEMA
@@ -2540,19 +1983,14 @@ class TestBuildSchemaFromConfig:
 
         assert len(CONFIG_SCHEMA) > 100
 
-
-
     def test_schema_entries_have_required_fields(self):
 
         from clawk_cli.web_server import CONFIG_SCHEMA
 
         for key, entry in list(CONFIG_SCHEMA.items())[:10]:
-
             assert "type" in entry, f"Missing type for {key}"
 
             assert "category" in entry, f"Missing category for {key}"
-
-
 
     def test_overrides_applied(self):
 
@@ -2561,7 +1999,6 @@ class TestBuildSchemaFromConfig:
         # terminal.backend should be a select with options
 
         if "terminal.backend" in CONFIG_SCHEMA:
-
             entry = CONFIG_SCHEMA["terminal.backend"]
 
             assert entry["type"] == "select"
@@ -2569,8 +2006,6 @@ class TestBuildSchemaFromConfig:
             assert "options" in entry
 
             assert "local" in entry["options"]
-
-
 
     def test_empty_prefix_produces_correct_keys(self):
 
@@ -2584,32 +2019,22 @@ class TestBuildSchemaFromConfig:
 
         assert "nested.key" in schema
 
-
-
     def test_top_level_scalars_get_general_category(self):
-
         """Top-level scalar fields should be in 'general' category."""
 
         from clawk_cli.web_server import CONFIG_SCHEMA
 
         assert CONFIG_SCHEMA["model"]["category"] == "general"
 
-
-
     def test_nested_keys_get_parent_category(self):
-
         """Nested fields should use the top-level parent as their category."""
 
         from clawk_cli.web_server import CONFIG_SCHEMA
 
         if "agent.max_turns" in CONFIG_SCHEMA:
-
             assert CONFIG_SCHEMA["agent.max_turns"]["category"] == "agent"
 
-
-
     def test_category_merge_applied(self):
-
         """Small categories should be merged into larger ones."""
 
         from clawk_cli.web_server import CONFIG_SCHEMA
@@ -2622,10 +2047,7 @@ class TestBuildSchemaFromConfig:
 
         assert "context" not in categories  # merged into agent
 
-
-
     def test_no_single_field_categories(self):
-
         """After merging, no category should have just 1 field."""
 
         from clawk_cli.web_server import CONFIG_SCHEMA
@@ -2635,11 +2057,9 @@ class TestBuildSchemaFromConfig:
         cats = Counter(e["category"] for e in CONFIG_SCHEMA.values())
 
         for cat, count in cats.items():
-
-            assert count >= 2, f"Category '{cat}' has only {count} field(s) — should be merged"
-
-
-
+            assert count >= 2, (
+                f"Category '{cat}' has only {count} field(s) — should be merged"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -2649,25 +2069,16 @@ class TestBuildSchemaFromConfig:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestConfigRoundTrip:
-
     """Verify config survives GET → edit → PUT without data loss."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup(self):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
@@ -2676,10 +2087,7 @@ class TestConfigRoundTrip:
 
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def test_get_config_no_internal_keys(self):
-
         """GET /api/config should not expose _config_version or _model_meta."""
 
         config = self.client.get("/api/config").json()
@@ -2688,46 +2096,30 @@ class TestConfigRoundTrip:
 
         assert not internal, f"Internal keys leaked to frontend: {internal}"
 
-
-
     def test_get_config_model_is_string(self):
-
         """GET /api/config should normalize model dict to a string."""
 
         config = self.client.get("/api/config").json()
 
-        assert isinstance(config.get("model"), str), \
+        assert isinstance(config.get("model"), str), (
             f"model should be string, got {type(config.get('model'))}"
-
-
+        )
 
     def test_round_trip_preserves_model_subkeys(self):
-
         """Save and reload should not lose model.provider, model.base_url, etc."""
 
         from clawk_cli.config import load_config, save_config
 
-
-
         # Set up a config with model as a dict (the common user config form)
 
         save_config({
-
             "model": {
-
                 "default": "anthropic/claude-sonnet-4",
-
                 "provider": "openrouter",
-
                 "base_url": "https://openrouter.ai/api/v1",
-
                 "api_mode": "openai",
-
             }
-
         })
-
-
 
         before = load_config()
 
@@ -2735,42 +2127,34 @@ class TestConfigRoundTrip:
 
         original_keys = set(before["model"].keys())
 
-
-
         # GET → PUT unchanged
 
         web_config = self.client.get("/api/config").json()
 
-        assert isinstance(web_config.get("model"), str), "GET should normalize model to string"
-
-
+        assert isinstance(web_config.get("model"), str), (
+            "GET should normalize model to string"
+        )
 
         self.client.put("/api/config", json={"config": web_config})
 
-
-
         after = load_config()
 
-        assert isinstance(after.get("model"), dict), "model should still be a dict after save"
+        assert isinstance(after.get("model"), dict), (
+            "model should still be a dict after save"
+        )
 
-        assert set(after["model"].keys()) >= original_keys, \
+        assert set(after["model"].keys()) >= original_keys, (
             f"Lost model subkeys: {original_keys - set(after['model'].keys())}"
-
-
+        )
 
     def test_edit_model_name_preserved(self):
-
         """Changing the model string should update model.default on disk."""
 
         from clawk_cli.config import load_config
 
-
-
         web_config = self.client.get("/api/config").json()
 
         original_model = web_config["model"]
-
-
 
         # Change model
 
@@ -2778,19 +2162,13 @@ class TestConfigRoundTrip:
 
         self.client.put("/api/config", json={"config": web_config})
 
-
-
         after = load_config()
 
         if isinstance(after.get("model"), dict):
-
             assert after["model"]["default"] == "test/editing-model"
 
         else:
-
             assert after["model"] == "test/editing-model"
-
-
 
         # Restore
 
@@ -2798,41 +2176,27 @@ class TestConfigRoundTrip:
 
         self.client.put("/api/config", json={"config": web_config})
 
-
-
     def test_edit_nested_value(self):
-
         """Editing a nested config value should persist correctly."""
 
         from clawk_cli.config import load_config
-
-
 
         web_config = self.client.get("/api/config").json()
 
         original_turns = web_config.get("agent", {}).get("max_turns")
 
-
-
         # Change max_turns
 
         if "agent" not in web_config:
-
             web_config["agent"] = {}
 
         web_config["agent"]["max_turns"] = 42
 
-
-
         self.client.put("/api/config", json={"config": web_config})
-
-
 
         after = load_config()
 
         assert after.get("agent", {}).get("max_turns") == 42
-
-
 
         # Restore
 
@@ -2840,10 +2204,7 @@ class TestConfigRoundTrip:
 
         self.client.put("/api/config", json={"config": web_config})
 
-
-
     def test_schema_types_match_config_values(self):
-
         """Every schema field should have a matching-type value in the config."""
 
         config = self.client.get("/api/config").json()
@@ -2852,8 +2213,6 @@ class TestConfigRoundTrip:
 
         schema = schema_resp["fields"]
 
-
-
         def get_nested(obj, path):
 
             parts = path.split(".")
@@ -2861,49 +2220,36 @@ class TestConfigRoundTrip:
             cur = obj
 
             for p in parts:
-
                 if cur is None or not isinstance(cur, dict):
-
                     return None
 
                 cur = cur.get(p)
 
             return cur
 
-
-
         mismatches = []
 
         for key, entry in schema.items():
-
             val = get_nested(config, key)
 
             if val is None:
-
                 continue  # not set in user config — fine
 
             expected = entry["type"]
 
             if expected in {"string", "select"} and not isinstance(val, str):
-
                 mismatches.append(f"{key}: expected str, got {type(val).__name__}")
 
             elif expected == "number" and not isinstance(val, (int, float)):
-
                 mismatches.append(f"{key}: expected number, got {type(val).__name__}")
 
             elif expected == "boolean" and not isinstance(val, bool):
-
                 mismatches.append(f"{key}: expected bool, got {type(val).__name__}")
 
             elif expected == "list" and not isinstance(val, list):
-
                 mismatches.append(f"{key}: expected list, got {type(val).__name__}")
 
         assert not mismatches, f"Type mismatches:\n" + "\n".join(mismatches)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2913,28 +2259,17 @@ class TestConfigRoundTrip:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestNewEndpoints:
-
     """Tests for session detail, logs, cron, skills, tools, raw config, analytics."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup(self, monkeypatch, _isolate_clawk_home):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         import clawk_state
 
@@ -2942,17 +2277,13 @@ class TestNewEndpoints:
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
-        monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db")
-
-
+        monkeypatch.setattr(
+            clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db"
+        )
 
         self.client = TestClient(app)
 
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
-
-
 
     def test_get_logs_default(self):
 
@@ -2968,15 +2299,11 @@ class TestNewEndpoints:
 
         assert isinstance(data["lines"], list)
 
-
-
     def test_get_logs_invalid_file(self):
 
         resp = self.client.get("/api/logs?file=nonexistent")
 
         assert resp.status_code == 400
-
-
 
     def test_cron_list(self):
 
@@ -2986,27 +2313,19 @@ class TestNewEndpoints:
 
         assert isinstance(resp.json(), list)
 
-
-
     def test_cron_job_not_found(self):
 
         resp = self.client.get("/api/cron/jobs/nonexistent-id")
 
         assert resp.status_code == 404
 
-
-
     # --- Profiles ---
-
-
 
     def test_profiles_list_includes_default(self):
 
         from clawk_constants import get_clawk_home
 
         get_clawk_home().mkdir(parents=True, exist_ok=True)
-
-
 
         resp = self.client.get("/api/profiles")
 
@@ -3016,26 +2335,19 @@ class TestNewEndpoints:
 
         assert "default" in names
 
-
-
     def test_profiles_list_falls_back_when_profile_listing_fails(self, monkeypatch):
 
         from clawk_constants import get_clawk_home
 
         import clawk_cli.profiles as profiles_mod
 
-
-
         clawk_home = get_clawk_home()
 
         clawk_home.mkdir(parents=True, exist_ok=True)
 
         (clawk_home / "config.yaml").write_text(
-
             "model:\n  provider: openrouter\n  name: anthropic/claude-sonnet-4.6\n",
-
             encoding="utf-8",
-
         )
 
         named = clawk_home / "profiles" / "multi-agent"
@@ -3046,25 +2358,17 @@ class TestNewEndpoints:
 
         (named / "skills" / "demo").mkdir(parents=True)
 
-        (named / "skills" / "demo" / "SKILL.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
-
-
-
-        monkeypatch.setattr(
-
-            profiles_mod,
-
-            "list_profiles",
-
-            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
-
+        (named / "skills" / "demo" / "SKILL.md").write_text(
+            "---\nname: demo\n---\n", encoding="utf-8"
         )
 
-
+        monkeypatch.setattr(
+            profiles_mod,
+            "list_profiles",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
 
         resp = self.client.get("/api/profiles")
-
-
 
         assert resp.status_code == 200
 
@@ -3078,8 +2382,6 @@ class TestNewEndpoints:
 
         assert profiles["multi-agent"]["skill_count"] == 1
 
-
-
     def test_profiles_create_rename_delete_round_trip(self, monkeypatch):
 
         # Stub gateway service teardown so the test doesn't shell out to
@@ -3088,35 +2390,26 @@ class TestNewEndpoints:
 
         import clawk_cli.profiles as profiles_mod
 
-        monkeypatch.setattr(profiles_mod, "_cleanup_gateway_service", lambda *a, **kw: None)
-
-
+        monkeypatch.setattr(
+            profiles_mod, "_cleanup_gateway_service", lambda *a, **kw: None
+        )
 
         created = self.client.post("/api/profiles", json={"name": "test-prof"})
 
         assert created.status_code == 200
 
-
-
         renamed = self.client.patch(
-
             "/api/profiles/test-prof",
-
             json={"new_name": "test-prof-2"},
-
         )
 
         assert renamed.status_code == 200
-
-
 
         names = [p["name"] for p in self.client.get("/api/profiles").json()["profiles"]]
 
         assert "test-prof" not in names
 
         assert "test-prof-2" in names
-
-
 
         deleted = self.client.delete("/api/profiles/test-prof-2")
 
@@ -3126,53 +2419,35 @@ class TestNewEndpoints:
 
         assert "test-prof-2" not in names
 
-
-
     def test_profile_setup_command_uses_named_profile_wrapper(self):
 
         from clawk_constants import get_clawk_home
 
-
-
         (get_clawk_home() / "profiles" / "coder").mkdir(parents=True)
 
-
-
         resp = self.client.get("/api/profiles/coder/setup-command")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json()["command"] == "coder setup"
 
-
-
     def test_profile_setup_command_uses_clawk_for_default_profile(self):
 
         from clawk_constants import get_clawk_home
 
-
-
         get_clawk_home().mkdir(parents=True, exist_ok=True)
 
-
-
         resp = self.client.get("/api/profiles/default/setup-command")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json()["command"] == "clawk setup"
 
-
-
-    def test_profiles_create_creates_wrapper_alias_when_safe(self, monkeypatch, tmp_path):
+    def test_profiles_create_creates_wrapper_alias_when_safe(
+        self, monkeypatch, tmp_path
+    ):
 
         import clawk_cli.profiles as profiles_mod
-
-
 
         wrapper_dir = tmp_path / "bin"
 
@@ -3180,17 +2455,10 @@ class TestNewEndpoints:
 
         monkeypatch.setattr(profiles_mod, "_get_wrapper_dir", lambda: wrapper_dir)
 
-
-
         resp = self.client.post(
-
             "/api/profiles",
-
             json={"name": "writer", "clone_from_default": False},
-
         )
-
-
 
         assert resp.status_code == 200
 
@@ -3200,15 +2468,13 @@ class TestNewEndpoints:
 
         assert wrapper_path.read_text() == '#!/bin/sh\nexec clawk -p writer "$@"\n'
 
-
-
-    def test_profiles_create_with_clone_from_default_copies_default_skills(self, monkeypatch):
+    def test_profiles_create_with_clone_from_default_copies_default_skills(
+        self, monkeypatch
+    ):
 
         from clawk_constants import get_clawk_home
 
         import clawk_cli.profiles as profiles_mod
-
-
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
@@ -3216,31 +2482,34 @@ class TestNewEndpoints:
 
         default_skill.mkdir(parents=True)
 
-        (default_skill / "SKILL.md").write_text("---\nname: new-skill\n---\n", encoding="utf-8")
-
-
-
-        resp = self.client.post(
-
-            "/api/profiles",
-
-            json={"name": "cloned", "clone_from_default": True},
-
+        (default_skill / "SKILL.md").write_text(
+            "---\nname: new-skill\n---\n", encoding="utf-8"
         )
 
-
+        resp = self.client.post(
+            "/api/profiles",
+            json={"name": "cloned", "clone_from_default": True},
+        )
 
         assert resp.status_code == 200
 
-        cloned_skill = get_clawk_home() / "profiles" / "cloned" / "skills" / "custom" / "new-skill" / "SKILL.md"
+        cloned_skill = (
+            get_clawk_home()
+            / "profiles"
+            / "cloned"
+            / "skills"
+            / "custom"
+            / "new-skill"
+            / "SKILL.md"
+        )
 
         assert cloned_skill.exists()
 
-        profiles = {p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]}
+        profiles = {
+            p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]
+        }
 
         assert profiles["cloned"]["skill_count"] == 1
-
-
 
     def test_profiles_create_without_clone_seeds_bundled_skills(self, monkeypatch):
 
@@ -3248,11 +2517,7 @@ class TestNewEndpoints:
 
         import clawk_cli.profiles as profiles_mod
 
-
-
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
-
-
 
         def fake_seed(profile_dir, quiet=False):
 
@@ -3260,37 +2525,38 @@ class TestNewEndpoints:
 
             skill_dir.mkdir(parents=True)
 
-            (skill_dir / "SKILL.md").write_text("---\nname: plan\n---\n", encoding="utf-8")
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: plan\n---\n", encoding="utf-8"
+            )
 
             return {"copied": ["plan"]}
 
-
-
         monkeypatch.setattr(profiles_mod, "seed_profile_skills", fake_seed)
 
-
-
         resp = self.client.post(
-
             "/api/profiles",
-
             json={"name": "fresh", "clone_from_default": False},
-
         )
-
-
 
         assert resp.status_code == 200
 
-        seeded_skill = get_clawk_home() / "profiles" / "fresh" / "skills" / "software-development" / "plan" / "SKILL.md"
+        seeded_skill = (
+            get_clawk_home()
+            / "profiles"
+            / "fresh"
+            / "skills"
+            / "software-development"
+            / "plan"
+            / "SKILL.md"
+        )
 
         assert seeded_skill.exists()
 
-        profiles = {p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]}
+        profiles = {
+            p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]
+        }
 
         assert profiles["fresh"]["skill_count"] == 1
-
-
 
     def test_profile_open_terminal_uses_macos_terminal(self, monkeypatch):
 
@@ -3298,21 +2564,17 @@ class TestNewEndpoints:
 
         import clawk_cli.web_server as web_server
 
-
-
         (get_clawk_home() / "profiles" / "coder").mkdir(parents=True)
 
         calls = []
 
         monkeypatch.setattr(web_server.sys, "platform", "darwin")
 
-        monkeypatch.setattr(web_server.subprocess, "Popen", lambda args, **kwargs: calls.append(args))
-
-
+        monkeypatch.setattr(
+            web_server.subprocess, "Popen", lambda args, **kwargs: calls.append(args)
+        )
 
         resp = self.client.post("/api/profiles/coder/open-terminal")
-
-
 
         assert resp.status_code == 200
 
@@ -3322,15 +2584,11 @@ class TestNewEndpoints:
 
         assert "coder setup" in " ".join(calls[0])
 
-
-
     def test_profile_open_terminal_uses_windows_cmd(self, monkeypatch):
 
         from clawk_constants import get_clawk_home
 
         import clawk_cli.web_server as web_server
-
-
 
         (get_clawk_home() / "profiles" / "coder").mkdir(parents=True)
 
@@ -3338,13 +2596,11 @@ class TestNewEndpoints:
 
         monkeypatch.setattr(web_server.sys, "platform", "win32")
 
-        monkeypatch.setattr(web_server.subprocess, "Popen", lambda args, **kwargs: calls.append(args))
-
-
+        monkeypatch.setattr(
+            web_server.subprocess, "Popen", lambda args, **kwargs: calls.append(args)
+        )
 
         resp = self.client.post("/api/profiles/coder/open-terminal")
-
-
 
         assert resp.status_code == 200
 
@@ -3354,15 +2610,11 @@ class TestNewEndpoints:
 
         assert calls[0][-1] == "coder setup"
 
-
-
     def test_profiles_create_rejects_invalid_name(self):
 
         resp = self.client.post("/api/profiles", json={"name": "Has Spaces"})
 
         assert resp.status_code == 400
-
-
 
     def test_profiles_delete_default_forbidden(self):
 
@@ -3370,23 +2622,19 @@ class TestNewEndpoints:
 
         assert resp.status_code == 400
 
-
-
     def test_profiles_delete_not_found(self):
 
         resp = self.client.delete("/api/profiles/does-not-exist")
 
         assert resp.status_code == 404
 
-
-
     def test_profile_soul_round_trip(self, monkeypatch):
 
         import clawk_cli.profiles as profiles_mod
 
-        monkeypatch.setattr(profiles_mod, "_cleanup_gateway_service", lambda *a, **kw: None)
-
-
+        monkeypatch.setattr(
+            profiles_mod, "_cleanup_gateway_service", lambda *a, **kw: None
+        )
 
         self.client.post("/api/profiles", json={"name": "soul-prof"})
 
@@ -3396,29 +2644,18 @@ class TestNewEndpoints:
 
         assert get1.json()["exists"] is True
 
-
-
         put = self.client.put(
-
             "/api/profiles/soul-prof/soul",
-
             json={"content": "# Edited soul"},
-
         )
 
         assert put.status_code == 200
-
-
 
         got = self.client.get("/api/profiles/soul-prof/soul").json()
 
         assert got["content"] == "# Edited soul"
 
-
-
         self.client.delete("/api/profiles/soul-prof")
-
-
 
     def test_profile_soul_unknown_profile_404(self):
 
@@ -3426,19 +2663,13 @@ class TestNewEndpoints:
 
         assert resp.status_code == 404
 
-
-
     # --- New profiles endpoints: active / description / model / describe-auto ---
-
-
 
     def test_profiles_active_defaults(self):
 
         from clawk_constants import get_clawk_home
 
         get_clawk_home().mkdir(parents=True, exist_ok=True)
-
-
 
         resp = self.client.get("/api/profiles/active")
 
@@ -3450,19 +2681,13 @@ class TestNewEndpoints:
 
         assert data["current"] == "default"
 
-
-
     def test_profiles_set_active_round_trip(self, monkeypatch):
 
         import clawk_cli.profiles as profiles_mod
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "router"})
-
-
 
         resp = self.client.post("/api/profiles/active", json={"name": "router"})
 
@@ -3472,15 +2697,11 @@ class TestNewEndpoints:
 
         assert self.client.get("/api/profiles/active").json()["active"] == "router"
 
-
-
     def test_profiles_set_active_unknown_404(self):
 
         resp = self.client.post("/api/profiles/active", json={"name": "ghost"})
 
         assert resp.status_code == 404
-
-
 
     def test_profile_description_round_trip(self, monkeypatch):
 
@@ -3488,18 +2709,11 @@ class TestNewEndpoints:
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "desc-prof"})
 
-
-
         put = self.client.put(
-
             "/api/profiles/desc-prof/description",
-
             json={"description": "Handles code review"},
-
         )
 
         assert put.status_code == 200
@@ -3510,27 +2724,21 @@ class TestNewEndpoints:
 
         assert body["description_auto"] is False
 
-
-
-        profiles = {p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]}
+        profiles = {
+            p["name"]: p for p in self.client.get("/api/profiles").json()["profiles"]
+        }
 
         assert profiles["desc-prof"]["description"] == "Handles code review"
 
         assert profiles["desc-prof"]["description_auto"] is False
 
-
-
     def test_profile_description_unknown_404(self):
 
         resp = self.client.put(
-
             "/api/profiles/nope/description", json={"description": "x"}
-
         )
 
         assert resp.status_code == 404
-
-
 
     def test_profile_model_round_trip(self, monkeypatch):
 
@@ -3540,25 +2748,16 @@ class TestNewEndpoints:
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "model-prof"})
 
-
-
         resp = self.client.put(
-
             "/api/profiles/model-prof/model",
-
             json={"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
-
         )
 
         assert resp.status_code == 200
 
         assert resp.json()["provider"] == "openrouter"
-
-
 
         import yaml
 
@@ -3570,29 +2769,20 @@ class TestNewEndpoints:
 
         assert cfg["model"]["default"] == "anthropic/claude-sonnet-4.6"
 
-
-
     def test_profile_model_requires_provider_and_model(self, monkeypatch):
 
         import clawk_cli.profiles as profiles_mod
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "model-prof2"})
 
         resp = self.client.put(
-
             "/api/profiles/model-prof2/model",
-
             json={"provider": "", "model": ""},
-
         )
 
         assert resp.status_code == 400
-
-
 
     def test_profile_describe_auto_success(self, monkeypatch):
 
@@ -3600,29 +2790,17 @@ class TestNewEndpoints:
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "auto-prof"})
-
-
 
         from clawk_cli import profile_describer
 
         monkeypatch.setattr(
-
             profile_describer,
-
             "describe_profile",
-
             lambda name, overwrite=False: profile_describer.DescribeOutcome(
-
                 name, True, "described", description="Generated blurb"
-
             ),
-
         )
-
-
 
         resp = self.client.post("/api/profiles/auto-prof/describe-auto", json={})
 
@@ -3636,37 +2814,23 @@ class TestNewEndpoints:
 
         assert body["description_auto"] is True
 
-
-
     def test_profile_describe_auto_failure_is_not_auto(self, monkeypatch):
 
         import clawk_cli.profiles as profiles_mod
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
 
-
-
         self.client.post("/api/profiles", json={"name": "auto-fail"})
-
-
 
         from clawk_cli import profile_describer
 
         monkeypatch.setattr(
-
             profile_describer,
-
             "describe_profile",
-
             lambda name, overwrite=False: profile_describer.DescribeOutcome(
-
                 name, False, "no aux client", description=None
-
             ),
-
         )
-
-
 
         resp = self.client.post("/api/profiles/auto-fail/describe-auto", json={})
 
@@ -3677,8 +2841,6 @@ class TestNewEndpoints:
         assert body["ok"] is False
 
         assert body["description_auto"] is False
-
-
 
     def test_skills_list(self):
 
@@ -3691,12 +2853,9 @@ class TestNewEndpoints:
         assert isinstance(skills, list)
 
         if skills:
-
             assert "name" in skills[0]
 
             assert "enabled" in skills[0]
-
-
 
     def test_skills_list_includes_disabled_skills(self, monkeypatch):
 
@@ -3706,71 +2865,56 @@ class TestNewEndpoints:
 
         import clawk_cli.web_server as web_server
 
-
-
         def _fake_find_all_skills(*, skip_disabled=False):
 
             if skip_disabled:
-
                 return [
-
-                    {"name": "active-skill", "description": "active", "category": "demo"},
-
-                    {"name": "disabled-skill", "description": "disabled", "category": "demo"},
-
+                    {
+                        "name": "active-skill",
+                        "description": "active",
+                        "category": "demo",
+                    },
+                    {
+                        "name": "disabled-skill",
+                        "description": "disabled",
+                        "category": "demo",
+                    },
                 ]
 
             return [
-
                 {"name": "active-skill", "description": "active", "category": "demo"},
-
             ]
-
-
 
         monkeypatch.setattr(skills_tool, "_find_all_skills", _fake_find_all_skills)
 
-        monkeypatch.setattr(skills_config, "get_disabled_skills", lambda config: {"disabled-skill"})
+        monkeypatch.setattr(
+            skills_config, "get_disabled_skills", lambda config: {"disabled-skill"}
+        )
 
-        monkeypatch.setattr(web_server, "load_config", lambda: {"skills": {"disabled": ["disabled-skill"]}})
-
-
+        monkeypatch.setattr(
+            web_server,
+            "load_config",
+            lambda: {"skills": {"disabled": ["disabled-skill"]}},
+        )
 
         resp = self.client.get("/api/skills")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json() == [
-
             {
-
                 "name": "active-skill",
-
                 "description": "active",
-
                 "category": "demo",
-
                 "enabled": True,
-
             },
-
             {
-
                 "name": "disabled-skill",
-
                 "description": "disabled",
-
                 "category": "demo",
-
                 "enabled": False,
-
             },
-
         ]
-
-
 
     def test_toolsets_list(self):
 
@@ -3783,14 +2927,11 @@ class TestNewEndpoints:
         assert isinstance(toolsets, list)
 
         if toolsets:
-
             assert "name" in toolsets[0]
 
             assert "label" in toolsets[0]
 
             assert "enabled" in toolsets[0]
-
-
 
     def test_toolsets_list_matches_cli_enabled_state(self, monkeypatch):
 
@@ -3800,136 +2941,82 @@ class TestNewEndpoints:
 
         import clawk_cli.web_server as web_server
 
-
-
         monkeypatch.setattr(
-
             tools_config,
-
             "_get_effective_configurable_toolsets",
-
             lambda: [
-
                 ("web", "🔍 Web Search & Scraping", "web_search, web_extract"),
-
                 ("skills", "📚 Skills", "list, view, manage"),
-
                 ("memory", "💾 Memory", "persistent memory across sessions"),
-
             ],
-
         )
 
         monkeypatch.setattr(
-
             tools_config,
-
             "_get_platform_tools",
-
-            lambda config, platform, include_default_mcp_servers=False: {"web", "skills"},
-
+            lambda config, platform, include_default_mcp_servers=False: {
+                "web",
+                "skills",
+            },
         )
 
         monkeypatch.setattr(
-
             tools_config,
-
             "_toolset_has_keys",
-
             lambda ts_key, config=None: ts_key != "web",
-
         )
 
         monkeypatch.setattr(
-
             toolsets_module,
-
             "resolve_toolset",
-
             lambda name: {
-
                 "web": ["web_search", "web_extract"],
-
                 "skills": ["skills_list", "skill_view"],
-
                 "memory": ["memory_read"],
-
             }[name],
-
         )
 
-        monkeypatch.setattr(web_server, "load_config", lambda: {"platform_toolsets": {"cli": ["web", "skills"]}})
-
-
+        monkeypatch.setattr(
+            web_server,
+            "load_config",
+            lambda: {"platform_toolsets": {"cli": ["web", "skills"]}},
+        )
 
         resp = self.client.get("/api/tools/toolsets")
-
-
 
         assert resp.status_code == 200
 
         assert resp.json() == [
-
             {
-
                 "name": "web",
-
                 "label": "Web Search & Scraping",
-
                 "description": "web_search, web_extract",
-
                 "enabled": True,
-
                 "available": True,
-
                 "configured": False,
-
                 "tools": ["web_extract", "web_search"],
-
             },
-
             {
-
                 "name": "skills",
-
                 "label": "Skills",
-
                 "description": "list, view, manage",
-
                 "enabled": True,
-
                 "available": True,
-
                 "configured": True,
-
                 "tools": ["skill_view", "skills_list"],
-
             },
-
             {
-
                 "name": "memory",
-
                 "label": "Memory",
-
                 "description": "persistent memory across sessions",
-
                 "enabled": False,
-
                 "available": False,
-
                 "configured": True,
-
                 "tools": ["memory_read"],
-
             },
-
         ]
 
-
-
     def test_toggle_toolset_enable_disable(self):
-
         """PUT /api/tools/toolsets/{name} round-trips through config and the list view."""
 
         # Enable a toolset that is off-by-default so the state change is observable.
@@ -3946,13 +3033,9 @@ class TestNewEndpoints:
 
         assert body["enabled"] is True
 
-
-
         listing = {t["name"]: t for t in self.client.get("/api/tools/toolsets").json()}
 
         assert listing["x_search"]["enabled"] is True
-
-
 
         # Disable it again.
 
@@ -3962,28 +3045,19 @@ class TestNewEndpoints:
 
         assert resp.json()["enabled"] is False
 
-
-
         listing = {t["name"]: t for t in self.client.get("/api/tools/toolsets").json()}
 
         assert listing["x_search"]["enabled"] is False
 
-
-
     def test_toggle_toolset_unknown_returns_400(self):
 
         resp = self.client.put(
-
             "/api/tools/toolsets/not_a_real_toolset", json={"enabled": True}
-
         )
 
         assert resp.status_code == 400
 
-
-
     def test_get_toolset_config_returns_provider_matrix(self):
-
         """GET .../config returns provider rows with structured env_vars."""
 
         resp = self.client.get("/api/tools/toolsets/tts/config")
@@ -4013,7 +3087,6 @@ class TestNewEndpoints:
         assert data["active_provider"] is None or data["active_provider"] in names
 
         for prov in data["providers"]:
-
             assert "name" in prov
 
             assert "is_active" in prov
@@ -4023,7 +3096,6 @@ class TestNewEndpoints:
             assert isinstance(prov["env_vars"], list)
 
             for ev in prov["env_vars"]:
-
                 assert "key" in ev
 
                 assert "is_set" in ev
@@ -4037,17 +3109,12 @@ class TestNewEndpoints:
         active = [p["name"] for p in data["providers"] if p["is_active"]]
 
         if active:
-
             assert data["active_provider"] == active[0]
 
         else:
-
             assert data["active_provider"] is None
 
-
-
     def test_get_toolset_config_reflects_selected_provider(self):
-
         """Selecting a provider is reflected in the next /config read.
 
 
@@ -4063,16 +3130,11 @@ class TestNewEndpoints:
         """
 
         sel = self.client.put(
-
             "/api/tools/toolsets/web/provider",
-
             json={"provider": "Firecrawl Self-Hosted"},
-
         )
 
         assert sel.status_code == 200
-
-
 
         resp = self.client.get("/api/tools/toolsets/web/config")
 
@@ -4092,10 +3154,7 @@ class TestNewEndpoints:
 
         assert active[0] == "Firecrawl Self-Hosted"
 
-
-
     def test_get_toolset_config_no_category_toolset(self):
-
         """A toolset without a TOOL_CATEGORIES entry returns has_category False."""
 
         resp = self.client.get("/api/tools/toolsets/todo/config")
@@ -4110,26 +3169,18 @@ class TestNewEndpoints:
 
         assert data["providers"] == []
 
-
-
     def test_get_toolset_config_unknown_returns_400(self):
 
         resp = self.client.get("/api/tools/toolsets/not_a_real_toolset/config")
 
         assert resp.status_code == 400
 
-
-
     def test_select_toolset_provider_persists_backend(self):
-
         """PUT .../provider writes the backend selection to config."""
 
         resp = self.client.put(
-
             "/api/tools/toolsets/web/provider",
-
             json={"provider": "Firecrawl Self-Hosted"},
-
         )
 
         assert resp.status_code == 200
@@ -4142,43 +3193,29 @@ class TestNewEndpoints:
 
         assert body["provider"] == "Firecrawl Self-Hosted"
 
-
-
         from clawk_cli.config import load_config
 
         cfg = load_config()
 
         assert cfg["web"]["backend"] == "firecrawl"
 
-
-
     def test_select_toolset_provider_unknown_provider_returns_400(self):
 
         resp = self.client.put(
-
             "/api/tools/toolsets/web/provider",
-
             json={"provider": "No Such Provider"},
-
         )
 
         assert resp.status_code == 400
-
-
 
     def test_select_toolset_provider_unknown_toolset_returns_400(self):
 
         resp = self.client.put(
-
             "/api/tools/toolsets/not_a_real_toolset/provider",
-
             json={"provider": "whatever"},
-
         )
 
         assert resp.status_code == 400
-
-
 
     def test_config_raw_get(self):
 
@@ -4188,37 +3225,25 @@ class TestNewEndpoints:
 
         assert "yaml" in resp.json()
 
-
-
     def test_config_raw_put_valid(self):
 
         resp = self.client.put(
-
             "/api/config/raw",
-
             json={"yaml_text": "model: test\ntoolsets:\n  - all\n"},
-
         )
 
         assert resp.status_code == 200
 
         assert resp.json()["ok"] is True
 
-
-
     def test_config_raw_put_invalid(self):
 
         resp = self.client.put(
-
             "/api/config/raw",
-
             json={"yaml_text": "- this is a list not a dict"},
-
         )
 
         assert resp.status_code == 400
-
-
 
     def test_analytics_usage(self):
 
@@ -4243,122 +3268,71 @@ class TestNewEndpoints:
         assert "total_api_calls" in data["totals"]
 
         assert data["skills"] == {
-
             "summary": {
-
                 "total_skill_loads": 0,
-
                 "total_skill_edits": 0,
-
                 "total_skill_actions": 0,
-
                 "distinct_skills_used": 0,
-
             },
-
             "top_skills": [],
-
         }
-
-
 
     def test_analytics_usage_includes_skill_breakdown(self):
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(
-
                 session_id="skills-analytics-test",
-
                 source="cli",
-
                 model="anthropic/claude-sonnet-4",
-
             )
 
             db.update_token_counts(
-
                 "skills-analytics-test",
-
                 input_tokens=120,
-
                 output_tokens=45,
-
             )
 
             db.append_message(
-
                 "skills-analytics-test",
-
                 role="assistant",
-
                 content="Loading and updating skills.",
-
                 tool_calls=[
-
                     {
-
                         "function": {
-
                             "name": "skill_view",
-
                             "arguments": '{"name":"github-pr-workflow"}',
-
                         }
-
                     },
-
                     {
-
                         "function": {
-
                             "name": "skill_manage",
-
                             "arguments": '{"name":"github-code-review"}',
-
                         }
-
                     },
-
                 ],
-
             )
 
         finally:
-
             db.close()
-
-
 
         resp = self.client.get("/api/analytics/usage?days=7")
 
         assert resp.status_code == 200
 
-
-
         data = resp.json()
 
         assert data["skills"]["summary"] == {
-
             "total_skill_loads": 1,
-
             "total_skill_edits": 1,
-
             "total_skill_actions": 2,
-
             "distinct_skills_used": 2,
-
         }
 
         assert len(data["skills"]["top_skills"]) == 2
-
-
 
         top_skill = data["skills"]["top_skills"][0]
 
@@ -4372,10 +3346,7 @@ class TestNewEndpoints:
 
         assert top_skill["last_used_at"] is not None
 
-
-
     def test_session_token_endpoint_removed(self):
-
         """GET /api/auth/session-token no longer exists."""
 
         resp = self.client.get("/api/auth/session-token")
@@ -4385,17 +3356,12 @@ class TestNewEndpoints:
         assert resp.status_code in {200, 404}
 
         try:
-
             data = resp.json()
 
             assert "token" not in data
 
         except Exception:
-
             pass
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -4405,35 +3371,20 @@ class TestNewEndpoints:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestModelContextLength:
-
     """Tests for model_context_length in normalize/denormalize and /api/model/info."""
 
-
-
     def test_normalize_extracts_context_length_from_dict(self):
-
         """normalize should surface context_length from model dict."""
 
         from clawk_cli.web_server import _normalize_config_for_web
 
-
-
         cfg = {
-
             "model": {
-
                 "default": "anthropic/claude-opus-4.6",
-
                 "provider": "openrouter",
-
                 "context_length": 200000,
-
             }
-
         }
 
         result = _normalize_config_for_web(cfg)
@@ -4442,15 +3393,10 @@ class TestModelContextLength:
 
         assert result["model_context_length"] == 200000
 
-
-
     def test_normalize_bare_string_model_yields_zero(self):
-
         """normalize should set model_context_length=0 for bare string model."""
 
         from clawk_cli.web_server import _normalize_config_for_web
-
-
 
         result = _normalize_config_for_web({"model": "anthropic/claude-sonnet-4"})
 
@@ -4458,15 +3404,10 @@ class TestModelContextLength:
 
         assert result["model_context_length"] == 0
 
-
-
     def test_normalize_dict_without_context_length_yields_zero(self):
-
         """normalize should default to 0 when model dict has no context_length."""
 
         from clawk_cli.web_server import _normalize_config_for_web
-
-
 
         cfg = {"model": {"default": "test/model", "provider": "openrouter"}}
 
@@ -4474,15 +3415,10 @@ class TestModelContextLength:
 
         assert result["model_context_length"] == 0
 
-
-
     def test_normalize_non_int_context_length_yields_zero(self):
-
         """normalize should coerce non-int context_length to 0."""
 
         from clawk_cli.web_server import _normalize_config_for_web
-
-
 
         cfg = {"model": {"default": "test/model", "context_length": "invalid"}}
 
@@ -4490,34 +3426,22 @@ class TestModelContextLength:
 
         assert result["model_context_length"] == 0
 
-
-
     def test_denormalize_writes_context_length_into_model_dict(self):
-
         """denormalize should write model_context_length back into model dict."""
 
         from clawk_cli.web_server import _denormalize_config_from_web
 
         from clawk_cli.config import save_config
 
-
-
         # Set up disk config with model as a dict
 
         save_config({
-
             "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"}
-
         })
 
-
-
         result = _denormalize_config_from_web({
-
             "model": "anthropic/claude-opus-4.6",
-
             "model_context_length": 100000,
-
         })
 
         assert isinstance(result["model"], dict)
@@ -4526,70 +3450,44 @@ class TestModelContextLength:
 
         assert "model_context_length" not in result  # virtual field removed
 
-
-
     def test_denormalize_zero_removes_context_length(self):
-
         """denormalize with model_context_length=0 should remove context_length key."""
 
         from clawk_cli.web_server import _denormalize_config_from_web
 
         from clawk_cli.config import save_config
 
-
-
         save_config({
-
             "model": {
-
                 "default": "anthropic/claude-opus-4.6",
-
                 "provider": "openrouter",
-
                 "context_length": 50000,
-
             }
-
         })
 
-
-
         result = _denormalize_config_from_web({
-
             "model": "anthropic/claude-opus-4.6",
-
             "model_context_length": 0,
-
         })
 
         assert isinstance(result["model"], dict)
 
         assert "context_length" not in result["model"]
 
-
-
     def test_denormalize_upgrades_bare_string_to_dict(self):
-
         """denormalize should upgrade bare string model to dict when context_length set."""
 
         from clawk_cli.web_server import _denormalize_config_from_web
 
         from clawk_cli.config import save_config
 
-
-
         # Disk has model as bare string
 
         save_config({"model": "anthropic/claude-sonnet-4"})
 
-
-
         result = _denormalize_config_from_web({
-
             "model": "anthropic/claude-sonnet-4",
-
             "model_context_length": 65000,
-
         })
 
         assert isinstance(result["model"], dict)
@@ -4598,58 +3496,34 @@ class TestModelContextLength:
 
         assert result["model"]["context_length"] == 65000
 
-
-
     def test_denormalize_bare_string_stays_string_when_zero(self):
-
         """denormalize should keep bare string model as string when context_length=0."""
 
         from clawk_cli.web_server import _denormalize_config_from_web
 
         from clawk_cli.config import save_config
 
-
-
         save_config({"model": "anthropic/claude-sonnet-4"})
 
-
-
         result = _denormalize_config_from_web({
-
             "model": "anthropic/claude-sonnet-4",
-
             "model_context_length": 0,
-
         })
 
         assert result["model"] == "anthropic/claude-sonnet-4"
 
-
-
     def test_denormalize_coerces_string_context_length(self):
-
         """denormalize should handle string model_context_length from frontend."""
 
         from clawk_cli.web_server import _denormalize_config_from_web
 
         from clawk_cli.config import save_config
 
-
-
-        save_config({
-
-            "model": {"default": "test/model", "provider": "openrouter"}
-
-        })
-
-
+        save_config({"model": {"default": "test/model", "provider": "openrouter"}})
 
         result = _denormalize_config_from_web({
-
             "model": "test/model",
-
             "model_context_length": "32000",
-
         })
 
         assert isinstance(result["model"], dict)
@@ -4657,14 +3531,8 @@ class TestModelContextLength:
         assert result["model"]["context_length"] == 32000
 
 
-
-
-
 class TestModelContextLengthSchema:
-
     """Tests for model_context_length placement in CONFIG_SCHEMA."""
-
-
 
     def test_schema_has_model_context_length(self):
 
@@ -4672,10 +3540,7 @@ class TestModelContextLengthSchema:
 
         assert "model_context_length" in CONFIG_SCHEMA
 
-
-
     def test_schema_model_context_length_after_model(self):
-
         """model_context_length should appear immediately after model in schema."""
 
         from clawk_cli.web_server import CONFIG_SCHEMA
@@ -4685,8 +3550,6 @@ class TestModelContextLengthSchema:
         model_idx = keys.index("model")
 
         assert keys[model_idx + 1] == "model_context_length"
-
-
 
     def test_schema_model_context_length_is_number(self):
 
@@ -4699,32 +3562,21 @@ class TestModelContextLengthSchema:
         assert "category" in entry
 
 
-
-
-
 class TestModelInfoEndpoint:
-
     """Tests for GET /api/model/info endpoint."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup(self):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
 
         from clawk_cli.web_server import app
 
         self.client = TestClient(app)
-
-
 
     def test_model_info_returns_200(self):
 
@@ -4746,35 +3598,26 @@ class TestModelInfoEndpoint:
 
         assert "capabilities" in data
 
-
-
     def test_model_info_with_dict_config(self, monkeypatch):
 
         import clawk_cli.web_server as ws
 
+        monkeypatch.setattr(
+            ws,
+            "load_config",
+            lambda: {
+                "model": {
+                    "default": "anthropic/claude-opus-4.6",
+                    "provider": "openrouter",
+                    "context_length": 100000,
+                }
+            },
+        )
 
-
-        monkeypatch.setattr(ws, "load_config", lambda: {
-
-            "model": {
-
-                "default": "anthropic/claude-opus-4.6",
-
-                "provider": "openrouter",
-
-                "context_length": 100000,
-
-            }
-
-        })
-
-
-
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
-
+        with patch(
+            "agent.model_metadata.get_model_context_length", return_value=200000
+        ):
             resp = self.client.get("/api/model/info")
-
-
 
         data = resp.json()
 
@@ -4788,27 +3631,25 @@ class TestModelInfoEndpoint:
 
         assert data["effective_context_length"] == 100000  # override wins
 
-
-
     def test_model_info_auto_detect_when_no_override(self, monkeypatch):
 
         import clawk_cli.web_server as ws
 
+        monkeypatch.setattr(
+            ws,
+            "load_config",
+            lambda: {
+                "model": {
+                    "default": "anthropic/claude-opus-4.6",
+                    "provider": "openrouter",
+                }
+            },
+        )
 
-
-        monkeypatch.setattr(ws, "load_config", lambda: {
-
-            "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"}
-
-        })
-
-
-
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
-
+        with patch(
+            "agent.model_metadata.get_model_context_length", return_value=200000
+        ):
             resp = self.client.get("/api/model/info")
-
-
 
         data = resp.json()
 
@@ -4818,17 +3659,11 @@ class TestModelInfoEndpoint:
 
         assert data["effective_context_length"] == 200000  # auto wins
 
-
-
     def test_model_info_empty_model(self, monkeypatch):
 
         import clawk_cli.web_server as ws
 
-
-
         monkeypatch.setattr(ws, "load_config", lambda: {"model": ""})
-
-
 
         resp = self.client.get("/api/model/info")
 
@@ -4838,27 +3673,18 @@ class TestModelInfoEndpoint:
 
         assert data["effective_context_length"] == 0
 
-
-
     def test_model_info_bare_string_model(self, monkeypatch):
 
         import clawk_cli.web_server as ws
 
+        monkeypatch.setattr(
+            ws, "load_config", lambda: {"model": "anthropic/claude-sonnet-4"}
+        )
 
-
-        monkeypatch.setattr(ws, "load_config", lambda: {
-
-            "model": "anthropic/claude-sonnet-4"
-
-        })
-
-
-
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
-
+        with patch(
+            "agent.model_metadata.get_model_context_length", return_value=200000
+        ):
             resp = self.client.get("/api/model/info")
-
-
 
         data = resp.json()
 
@@ -4870,21 +3696,20 @@ class TestModelInfoEndpoint:
 
         assert data["effective_context_length"] == 200000
 
-
-
     def test_model_info_capabilities(self, monkeypatch):
 
         import clawk_cli.web_server as ws
 
-
-
-        monkeypatch.setattr(ws, "load_config", lambda: {
-
-            "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"}
-
-        })
-
-
+        monkeypatch.setattr(
+            ws,
+            "load_config",
+            lambda: {
+                "model": {
+                    "default": "anthropic/claude-opus-4.6",
+                    "provider": "openrouter",
+                }
+            },
+        )
 
         mock_caps = MagicMock()
 
@@ -4900,14 +3725,11 @@ class TestModelInfoEndpoint:
 
         mock_caps.model_family = "claude-opus"
 
-
-
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000), \
-             patch("agent.models_dev.get_model_capabilities", return_value=mock_caps):
-
+        with (
+            patch("agent.model_metadata.get_model_context_length", return_value=200000),
+            patch("agent.models_dev.get_model_capabilities", return_value=mock_caps),
+        ):
             resp = self.client.get("/api/model/info")
-
-
 
         caps = resp.json()["capabilities"]
 
@@ -4921,38 +3743,24 @@ class TestModelInfoEndpoint:
 
         assert caps["model_family"] == "claude-opus"
 
-
-
     def test_model_info_graceful_on_metadata_error(self, monkeypatch):
-
         """Endpoint should return zeros on import/resolution errors, not 500."""
 
         import clawk_cli.web_server as ws
 
+        monkeypatch.setattr(ws, "load_config", lambda: {"model": "some/obscure-model"})
 
-
-        monkeypatch.setattr(ws, "load_config", lambda: {
-
-            "model": "some/obscure-model"
-
-        })
-
-
-
-        with patch("agent.model_metadata.get_model_context_length", side_effect=Exception("boom")):
-
+        with patch(
+            "agent.model_metadata.get_model_context_length",
+            side_effect=Exception("boom"),
+        ):
             resp = self.client.get("/api/model/info")
-
-
 
         assert resp.status_code == 200
 
         data = resp.json()
 
         assert data["auto_context_length"] == 0
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -4962,17 +3770,10 @@ class TestModelInfoEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestProbeGatewayHealth:
-
     """Tests for _probe_gateway_health() — cross-container gateway detection."""
 
-
-
     def test_returns_false_when_no_url_configured(self, monkeypatch):
-
         """When GATEWAY_HEALTH_URL is unset, the probe returns (False, None)."""
 
         import clawk_cli.web_server as ws
@@ -4985,10 +3786,7 @@ class TestProbeGatewayHealth:
 
         assert body is None
 
-
-
     def test_normalizes_url_with_health_suffix(self, monkeypatch):
-
         """If the user sets the URL to include /health, it's stripped to base."""
 
         import clawk_cli.web_server as ws
@@ -5005,15 +3803,11 @@ class TestProbeGatewayHealth:
 
         original_urlopen = ws.urllib.request.urlopen
 
-
-
         def mock_urlopen(req, **kwargs):
 
             calls.append(req.full_url)
 
             raise ConnectionError("mock")
-
-
 
         monkeypatch.setattr(ws.urllib.request, "urlopen", mock_urlopen)
 
@@ -5025,10 +3819,7 @@ class TestProbeGatewayHealth:
 
         assert "http://gw:8642/health" in calls
 
-
-
     def test_normalizes_url_with_health_detailed_suffix(self, monkeypatch):
-
         """If the user sets the URL to include /health/detailed, it's stripped to base."""
 
         import clawk_cli.web_server as ws
@@ -5039,15 +3830,11 @@ class TestProbeGatewayHealth:
 
         calls = []
 
-
-
         def mock_urlopen(req, **kwargs):
 
             calls.append(req.full_url)
 
             raise ConnectionError("mock")
-
-
 
         monkeypatch.setattr(ws.urllib.request, "urlopen", mock_urlopen)
 
@@ -5057,10 +3844,7 @@ class TestProbeGatewayHealth:
 
         assert "http://gw:8642/health" in calls
 
-
-
     def test_successful_detailed_probe(self, monkeypatch):
-
         """Successful /health/detailed probe returns (True, body_dict)."""
 
         import clawk_cli.web_server as ws
@@ -5069,19 +3853,11 @@ class TestProbeGatewayHealth:
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
 
-
-
         response_body = json.dumps({
-
             "status": "ok",
-
             "gateway_state": "running",
-
             "pid": 42,
-
         })
-
-
 
         mock_resp = MagicMock()
 
@@ -5093,8 +3869,6 @@ class TestProbeGatewayHealth:
 
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-
-
         monkeypatch.setattr(ws.urllib.request, "urlopen", lambda req, **kw: mock_resp)
 
         alive, body = ws._probe_gateway_health()
@@ -5105,10 +3879,7 @@ class TestProbeGatewayHealth:
 
         assert body["pid"] == 42
 
-
-
     def test_detailed_fails_falls_back_to_simple_health(self, monkeypatch):
-
         """If /health/detailed fails, falls back to /health."""
 
         import clawk_cli.web_server as ws
@@ -5117,18 +3888,13 @@ class TestProbeGatewayHealth:
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
 
-
-
         call_count = [0]
-
-
 
         def mock_urlopen(req, **kwargs):
 
             call_count[0] += 1
 
             if call_count[0] == 1:
-
                 raise ConnectionError("detailed failed")
 
             mock_resp = MagicMock()
@@ -5143,8 +3909,6 @@ class TestProbeGatewayHealth:
 
             return mock_resp
 
-
-
         monkeypatch.setattr(ws.urllib.request, "urlopen", mock_urlopen)
 
         alive, body = ws._probe_gateway_health()
@@ -5156,28 +3920,17 @@ class TestProbeGatewayHealth:
         assert call_count[0] == 2
 
 
-
-
-
 class TestStatusRemoteGateway:
-
     """Tests for /api/status with remote gateway health fallback."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup_test_client(self):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
@@ -5185,15 +3938,10 @@ class TestStatusRemoteGateway:
 
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def test_status_falls_back_to_remote_probe(self, monkeypatch):
-
         """When local PID check fails and remote probe succeeds, gateway shows running."""
 
         import clawk_cli.web_server as ws
-
-
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
 
@@ -5201,19 +3949,19 @@ class TestStatusRemoteGateway:
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642")
 
-        monkeypatch.setattr(ws, "_probe_gateway_health", lambda: (True, {
-
-            "status": "ok",
-
-            "gateway_state": "running",
-
-            "platforms": {"telegram": {"state": "connected"}},
-
-            "pid": 999,
-
-        }))
-
-
+        monkeypatch.setattr(
+            ws,
+            "_probe_gateway_health",
+            lambda: (
+                True,
+                {
+                    "status": "ok",
+                    "gateway_state": "running",
+                    "platforms": {"telegram": {"state": "connected"}},
+                    "pid": 999,
+                },
+            ),
+        )
 
         resp = self.client.get("/api/status")
 
@@ -5229,25 +3977,21 @@ class TestStatusRemoteGateway:
 
         assert data["gateway_health_url"] == "http://gw:8642"
 
-
-
     def test_status_remote_probe_not_attempted_when_local_pid_found(self, monkeypatch):
-
         """When local PID check succeeds, the remote probe is never called."""
 
         import clawk_cli.web_server as ws
 
-
-
         monkeypatch.setattr(ws, "get_running_pid", lambda: 1234)
 
-        monkeypatch.setattr(ws, "read_runtime_status", lambda: {
-
-            "gateway_state": "running",
-
-            "platforms": {},
-
-        })
+        monkeypatch.setattr(
+            ws,
+            "read_runtime_status",
+            lambda: {
+                "gateway_state": "running",
+                "platforms": {},
+            },
+        )
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642")
 
@@ -5255,19 +3999,13 @@ class TestStatusRemoteGateway:
 
         original = ws._probe_gateway_health
 
-
-
         def track_probe():
 
             probe_called[0] = True
 
             return original()
 
-
-
         monkeypatch.setattr(ws, "_probe_gateway_health", track_probe)
-
-
 
         resp = self.client.get("/api/status")
 
@@ -5275,23 +4013,16 @@ class TestStatusRemoteGateway:
 
         assert not probe_called[0]
 
-
-
     def test_status_remote_probe_not_attempted_when_no_url(self, monkeypatch):
-
         """When GATEWAY_HEALTH_URL is unset, no probe is attempted."""
 
         import clawk_cli.web_server as ws
-
-
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
 
         monkeypatch.setattr(ws, "read_runtime_status", lambda: None)
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", None)
-
-
 
         resp = self.client.get("/api/status")
 
@@ -5303,15 +4034,10 @@ class TestStatusRemoteGateway:
 
         assert data["gateway_health_url"] is None
 
-
-
     def test_status_remote_running_null_pid(self, monkeypatch):
-
         """Remote gateway running but PID not in response — pid should be None."""
 
         import clawk_cli.web_server as ws
-
-
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
 
@@ -5319,13 +4045,16 @@ class TestStatusRemoteGateway:
 
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642")
 
-        monkeypatch.setattr(ws, "_probe_gateway_health", lambda: (True, {
-
-            "status": "ok",
-
-        }))
-
-
+        monkeypatch.setattr(
+            ws,
+            "_probe_gateway_health",
+            lambda: (
+                True,
+                {
+                    "status": "ok",
+                },
+            ),
+        )
 
         resp = self.client.get("/api/status")
 
@@ -5340,9 +4069,6 @@ class TestStatusRemoteGateway:
         assert data["gateway_state"] == "running"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Dashboard theme normaliser tests
@@ -5350,14 +4076,8 @@ class TestStatusRemoteGateway:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestNormaliseThemeDefinition:
-
     """Tests for _normalise_theme_definition() — parses YAML theme files."""
-
-
 
     def test_rejects_missing_name(self):
 
@@ -5369,8 +4089,6 @@ class TestNormaliseThemeDefinition:
 
         assert _normalise_theme_definition({"name": "   "}) is None
 
-
-
     def test_rejects_non_dict(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
@@ -5381,20 +4099,14 @@ class TestNormaliseThemeDefinition:
 
         assert _normalise_theme_definition([1, 2, 3]) is None
 
-
-
     def test_loose_colors_shorthand(self):
-
         """Bare hex strings under `colors` parse as {hex, alpha=1.0}."""
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         result = _normalise_theme_definition({
-
             "name": "loose",
-
             "colors": {"background": "#000000", "midground": "#ffffff"},
-
         })
 
         assert result is not None
@@ -5409,28 +4121,18 @@ class TestNormaliseThemeDefinition:
 
         assert result["palette"]["foreground"]["alpha"] == 0.0
 
-
-
     def test_full_palette_form(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         result = _normalise_theme_definition({
-
             "name": "full",
-
             "palette": {
-
                 "background": {"hex": "#0a1628", "alpha": 1.0},
-
                 "midground": {"hex": "#a8d0ff", "alpha": 0.9},
-
                 "warmGlow": "rgba(255, 0, 0, 0.5)",
-
                 "noiseOpacity": 0.5,
-
             },
-
         })
 
         assert result["palette"]["background"]["hex"] == "#0a1628"
@@ -5440,8 +4142,6 @@ class TestNormaliseThemeDefinition:
         assert result["palette"]["warmGlow"] == "rgba(255, 0, 0, 0.5)"
 
         assert result["palette"]["noiseOpacity"] == 0.5
-
-
 
     def test_default_typography_applied_when_missing(self):
 
@@ -5461,24 +4161,16 @@ class TestNormaliseThemeDefinition:
 
         assert typo["letterSpacing"] == "0"
 
-
-
     def test_partial_typography_merges_with_defaults(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         result = _normalise_theme_definition({
-
             "name": "partial",
-
             "typography": {
-
                 "fontSans": "MyFont, sans-serif",
-
                 "baseSize": "12px",
-
             },
-
         })
 
         assert result["typography"]["fontSans"] == "MyFont, sans-serif"
@@ -5488,8 +4180,6 @@ class TestNormaliseThemeDefinition:
         # fontMono defaulted
 
         assert "monospace" in result["typography"]["fontMono"]
-
-
 
     def test_layout_defaults(self):
 
@@ -5501,67 +4191,44 @@ class TestNormaliseThemeDefinition:
 
         assert result["layout"]["density"] == "comfortable"
 
-
-
     def test_invalid_density_falls_back(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         result = _normalise_theme_definition({
-
             "name": "bad",
-
             "layout": {"density": "ultra-spacious"},
-
         })
 
         assert result["layout"]["density"] == "comfortable"
-
-
 
     def test_valid_densities_accepted(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         for d in ("compact", "comfortable", "spacious"):
-
             r = _normalise_theme_definition({"name": "x", "layout": {"density": d}})
 
             assert r["layout"]["density"] == d
-
-
 
     def test_color_overrides_filter_unknown_keys(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         result = _normalise_theme_definition({
-
             "name": "o",
-
             "colorOverrides": {
-
                 "card": "#123456",
-
                 "fakeToken": "#abcdef",
-
                 "primary": 42,  # non-string rejected
-
                 "destructive": "#ff0000",
-
             },
-
         })
 
         assert result["colorOverrides"] == {
-
             "card": "#123456",
-
             "destructive": "#ff0000",
-
         }
-
-
 
     def test_color_overrides_omitted_when_empty(self):
 
@@ -5571,57 +4238,38 @@ class TestNormaliseThemeDefinition:
 
         assert "colorOverrides" not in result
 
-
-
     def test_alpha_clamped_to_unit_range(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "c",
-
             "palette": {"background": {"hex": "#000", "alpha": 99.5}},
-
         })
 
         assert r["palette"]["background"]["alpha"] == 1.0
 
         r2 = _normalise_theme_definition({
-
             "name": "c",
-
             "palette": {"background": {"hex": "#000", "alpha": -5}},
-
         })
 
         assert r2["palette"]["background"]["alpha"] == 0.0
-
-
 
     def test_invalid_alpha_uses_default(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "c",
-
             "palette": {"background": {"hex": "#000", "alpha": "not a number"}},
-
         })
 
         assert r["palette"]["background"]["alpha"] == 1.0
 
 
-
-
-
 class TestDiscoverUserThemes:
-
     """Tests for _discover_user_themes() — scans ~/.clawksis/dashboard-themes/."""
-
-
 
     def test_returns_empty_when_dir_missing(self, tmp_path, monkeypatch):
 
@@ -5630,8 +4278,6 @@ class TestDiscoverUserThemes:
         from clawk_cli import web_server
 
         assert web_server._discover_user_themes() == []
-
-
 
     def test_loads_and_normalises_yaml(self, tmp_path, monkeypatch):
 
@@ -5642,23 +4288,14 @@ class TestDiscoverUserThemes:
         themes_dir.mkdir()
 
         (themes_dir / "ocean.yaml").write_text(
-
             "name: ocean\n"
-
             "label: Ocean\n"
-
             "palette:\n"
-
             "  background:\n"
-
-            "    hex: \"#0a1628\"\n"
-
+            '    hex: "#0a1628"\n'
             "    alpha: 1.0\n"
-
             "layout:\n"
-
             "  density: spacious\n"
-
         )
 
         from clawk_cli import web_server
@@ -5678,8 +4315,6 @@ class TestDiscoverUserThemes:
         # defaults filled in
 
         assert "fontSans" in results[0]["typography"]
-
-
 
     def test_malformed_yaml_skipped(self, tmp_path, monkeypatch):
 
@@ -5708,18 +4343,12 @@ class TestDiscoverUserThemes:
         assert len(results) == 1  # only the valid one
 
 
-
-
-
 class TestNormaliseThemeExtensions:
-
     """Tests for the extended normaliser fields (assets, customCSS,
 
     componentStyles, layoutVariant) — the surfaces themes use to reskin
 
     the dashboard without shipping code."""
-
-
 
     def test_layout_variant_defaults_to_standard(self):
 
@@ -5729,19 +4358,14 @@ class TestNormaliseThemeExtensions:
 
         assert result["layoutVariant"] == "standard"
 
-
-
     def test_layout_variant_accepts_known_values(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         for variant in ("standard", "cockpit", "tiled"):
-
             r = _normalise_theme_definition({"name": "t", "layoutVariant": variant})
 
             assert r["layoutVariant"] == variant
-
-
 
     def test_layout_variant_rejects_unknown(self):
 
@@ -5755,30 +4379,19 @@ class TestNormaliseThemeExtensions:
 
         assert r2["layoutVariant"] == "standard"
 
-
-
     def test_assets_named_slots_passthrough(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "assets": {
-
                 "bg": "https://example.com/bg.jpg",
-
                 "hero": "linear-gradient(180deg, red, blue)",
-
                 "crest": "/ds-assets/crest.svg",
-
                 "logo": "  ",  # whitespace-only — dropped
-
                 "notAKnownKey": "ignored",
-
             },
-
         })
 
         assert r["assets"]["bg"] == "https://example.com/bg.jpg"
@@ -5791,43 +4404,26 @@ class TestNormaliseThemeExtensions:
 
         assert "notAKnownKey" not in r["assets"]  # unknown slot ignored
 
-
-
     def test_assets_custom_block(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "assets": {
-
                 "custom": {
-
                     "scan-lines": "/img/scan.png",
-
                     "my_overlay": "/img/ov.png",
-
                     "bad key!": "x",  # non-alnum key — rejected
-
-                    "empty": "",        # empty value — rejected
-
+                    "empty": "",  # empty value — rejected
                 },
-
             },
-
         })
 
         assert r["assets"]["custom"] == {
-
             "scan-lines": "/img/scan.png",
-
             "my_overlay": "/img/ov.png",
-
         }
-
-
 
     def test_assets_absent_means_no_field(self):
 
@@ -5837,8 +4433,6 @@ class TestNormaliseThemeExtensions:
 
         assert "assets" not in r
 
-
-
     def test_custom_css_passthrough_and_capped(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
@@ -5846,16 +4440,11 @@ class TestNormaliseThemeExtensions:
         # Small CSS passes through verbatim.
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "customCSS": "body { color: red; }",
-
         })
 
         assert r["customCSS"] == "body { color: red; }"
-
-
 
         # 40 KiB of CSS gets clipped to the 32 KiB cap.
 
@@ -5865,80 +4454,56 @@ class TestNormaliseThemeExtensions:
 
         assert len(r2["customCSS"]) <= 32 * 1024
 
-
-
     def test_custom_css_empty_dropped(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         for val in ("", "   \n\t", None):
-
             r = _normalise_theme_definition({"name": "t", "customCSS": val})
 
             assert "customCSS" not in r
-
-
 
     def test_component_styles_per_bucket(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "componentStyles": {
-
                 "card": {
-
                     "clipPath": "polygon(0 0, 100% 0, 100% 100%, 0 100%)",
-
                     "boxShadow": "inset 0 0 0 1px red",
-
                     "bad prop!": "ignored",  # non-alnum prop rejected
-
                 },
-
                 "header": {"background": "linear-gradient(red, blue)"},
-
                 "rogueBucket": {"foo": "bar"},  # not a known bucket — rejected
-
             },
-
         })
 
         assert r["componentStyles"]["card"] == {
-
             "clipPath": "polygon(0 0, 100% 0, 100% 100%, 0 100%)",
-
             "boxShadow": "inset 0 0 0 1px red",
-
         }
 
-        assert r["componentStyles"]["header"]["background"].startswith("linear-gradient")
+        assert r["componentStyles"]["header"]["background"].startswith(
+            "linear-gradient"
+        )
 
         assert "rogueBucket" not in r["componentStyles"]
-
-
 
     def test_component_styles_empty_buckets_dropped(self):
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "componentStyles": {
-
-                "card": {},        # empty — dropped entirely
-
-                "header": {"bad prop!": "ignored"},  # all props rejected — bucket dropped
-
+                "card": {},  # empty — dropped entirely
+                "header": {
+                    "bad prop!": "ignored"
+                },  # all props rejected — bucket dropped
                 "footer": {"background": "black"},
-
             },
-
         })
 
         assert "card" not in r.get("componentStyles", {})
@@ -5947,30 +4512,20 @@ class TestNormaliseThemeExtensions:
 
         assert r["componentStyles"]["footer"]["background"] == "black"
 
-
-
     def test_component_styles_accepts_numeric_values(self):
-
         """Numeric values (e.g. opacity: 0.8) are coerced to strings."""
 
         from clawk_cli.web_server import _normalise_theme_definition
 
         r = _normalise_theme_definition({
-
             "name": "t",
-
             "componentStyles": {"card": {"opacity": 0.8, "zIndex": 5}},
-
         })
 
         assert r["componentStyles"]["card"] == {"opacity": "0.8", "zIndex": "5"}
 
 
-
-
-
 class TestBulkDeleteSessionsEndpoint:
-
     """Tests for ``POST /api/sessions/bulk-delete`` — backs the
 
     dashboard's "Delete N selected" flow on the sessions page.
@@ -5999,21 +4554,14 @@ class TestBulkDeleteSessionsEndpoint:
 
     """
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup_test_client(self, monkeypatch, _isolate_clawk_home):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         import clawk_state
 
@@ -6021,15 +4569,9 @@ class TestBulkDeleteSessionsEndpoint:
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
         monkeypatch.setattr(
-
             clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db"
-
         )
-
-
 
         self.client = TestClient(app)
 
@@ -6037,27 +4579,18 @@ class TestBulkDeleteSessionsEndpoint:
 
         self.auth_client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def _seed(self, ids):
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             for sid in ids:
-
                 db.create_session(session_id=sid, source="cli")
 
         finally:
-
             db.close()
-
-
 
     def test_requires_auth(self):
 
@@ -6065,32 +4598,23 @@ class TestBulkDeleteSessionsEndpoint:
 
         assert resp.status_code == 401
 
-
-
     def test_deletes_listed_sessions_only(self):
 
         from clawk_state import SessionDB
 
-
-
         self._seed(["a", "b", "c"])
 
         resp = self.auth_client.post(
-
             "/api/sessions/bulk-delete", json={"ids": ["a", "b"]}
-
         )
 
         assert resp.status_code == 200
 
         assert resp.json() == {"ok": True, "deleted": 2}
 
-
-
         db = SessionDB()
 
         try:
-
             assert db.get_session("a") is None
 
             assert db.get_session("b") is None
@@ -6098,13 +4622,9 @@ class TestBulkDeleteSessionsEndpoint:
             assert db.get_session("c") is not None
 
         finally:
-
             db.close()
 
-
-
     def test_unknown_ids_silently_skipped(self):
-
         """The endpoint never 404s on a missing ID — it returns the
 
         real deleted count so a UI selection that raced against
@@ -6114,49 +4634,33 @@ class TestBulkDeleteSessionsEndpoint:
         self._seed(["real"])
 
         resp = self.auth_client.post(
-
             "/api/sessions/bulk-delete",
-
             json={"ids": ["real", "ghost1", "ghost2"]},
-
         )
 
         assert resp.status_code == 200
 
         assert resp.json() == {"ok": True, "deleted": 1}
 
-
-
     def test_empty_list_is_noop(self):
-
         """``ids: []`` returns ``deleted: 0`` (200, not 400) — the UI
 
         treats an empty selection as a no-op rather than an error."""
 
-        resp = self.auth_client.post(
-
-            "/api/sessions/bulk-delete", json={"ids": []}
-
-        )
+        resp = self.auth_client.post("/api/sessions/bulk-delete", json={"ids": []})
 
         assert resp.status_code == 200
 
         assert resp.json() == {"ok": True, "deleted": 0}
 
-
-
     def test_payload_cap_enforced(self):
-
         """501 IDs returns 400 — a hard cap stops a runaway selection
 
         from holding the SQLite writer for an extended window."""
 
         resp = self.auth_client.post(
-
             "/api/sessions/bulk-delete",
-
             json={"ids": [f"s{i}" for i in range(501)]},
-
         )
 
         assert resp.status_code == 400
@@ -6166,19 +4670,13 @@ class TestBulkDeleteSessionsEndpoint:
         # deleted=0 — but it's not the cap path).
 
         resp = self.auth_client.post(
-
             "/api/sessions/bulk-delete",
-
             json={"ids": [f"s{i}" for i in range(500)]},
-
         )
 
         assert resp.status_code == 200
 
-
-
     def test_route_order_not_shadowed_by_session_id(self):
-
         """Pin the route-ordering contract: ``POST /api/sessions/bulk-delete``
 
         must hit the bulk handler, not be re-interpreted via the
@@ -6187,11 +4685,7 @@ class TestBulkDeleteSessionsEndpoint:
 
         response carries our ``ok`` + ``deleted`` keys."""
 
-        resp = self.auth_client.post(
-
-            "/api/sessions/bulk-delete", json={"ids": []}
-
-        )
+        resp = self.auth_client.post("/api/sessions/bulk-delete", json={"ids": []})
 
         assert resp.status_code == 200
 
@@ -6200,21 +4694,13 @@ class TestBulkDeleteSessionsEndpoint:
         assert body.get("ok") is True
 
         assert "deleted" in body, (
-
             "If this assertion fails, /api/sessions/bulk-delete is "
-
             "being shadowed by /api/sessions/{session_id} — check "
-
             "registration order in clawk_cli/web_server.py."
-
         )
 
 
-
-
-
 class TestDeleteEmptySessionsEndpoint:
-
     """Tests for ``GET /api/sessions/empty/count`` and
 
     ``DELETE /api/sessions/empty`` — the bulk-delete endpoints backing
@@ -6247,21 +4733,14 @@ class TestDeleteEmptySessionsEndpoint:
 
     """
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup_test_client(self, monkeypatch, _isolate_clawk_home):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         import clawk_state
 
@@ -6269,19 +4748,13 @@ class TestDeleteEmptySessionsEndpoint:
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
         # Pin the SessionDB to the isolated CLAWK_HOME so each test
 
         # starts with a clean state.db.
 
         monkeypatch.setattr(
-
             clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db"
-
         )
-
-
 
         self.client = TestClient(app)
 
@@ -6289,10 +4762,7 @@ class TestDeleteEmptySessionsEndpoint:
 
         self.auth_client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def _seed(self):
-
         """Build the standard test corpus:
 
 
@@ -6309,12 +4779,9 @@ class TestDeleteEmptySessionsEndpoint:
 
         from clawk_state import SessionDB
 
-
-
         db = SessionDB()
 
         try:
-
             db.create_session(session_id="empty1", source="cli")
 
             db.end_session("empty1", end_reason="done")
@@ -6323,19 +4790,13 @@ class TestDeleteEmptySessionsEndpoint:
 
             db.end_session("empty2", end_reason="done")
 
-
-
             db.create_session(session_id="hasmsg", source="cli")
 
             db.append_message("hasmsg", role="user", content="hello")
 
             db.end_session("hasmsg", end_reason="done")
 
-
-
             db.create_session(session_id="live", source="cli")
-
-
 
             db.create_session(session_id="archived", source="cli")
 
@@ -6344,23 +4805,16 @@ class TestDeleteEmptySessionsEndpoint:
             db.set_session_archived("archived", True)
 
         finally:
-
             db.close()
 
-
-
     def test_count_endpoint_requires_auth(self):
-
         """GET /api/sessions/empty/count must 401 without the session token."""
 
         resp = self.client.get("/api/sessions/empty/count")
 
         assert resp.status_code == 401
 
-
-
     def test_delete_endpoint_requires_auth(self):
-
         """DELETE /api/sessions/empty must 401 without the session token.
 
 
@@ -6375,10 +4829,7 @@ class TestDeleteEmptySessionsEndpoint:
 
         assert resp.status_code == 401
 
-
-
     def test_count_returns_only_empty_ended_unarchived(self):
-
         """With the standard corpus, the count is exactly 2 — only
 
         ``empty1`` and ``empty2`` qualify (``hasmsg`` has a message,
@@ -6393,10 +4844,7 @@ class TestDeleteEmptySessionsEndpoint:
 
         assert resp.json() == {"count": 2}
 
-
-
     def test_delete_returns_count_and_removes_only_empties(self):
-
         """DELETE returns the deleted count and removes only the
 
         empty-ended-unarchived rows — same shape contract as the
@@ -6404,8 +4852,6 @@ class TestDeleteEmptySessionsEndpoint:
         DB-level method's unit tests."""
 
         from clawk_state import SessionDB
-
-
 
         self._seed()
 
@@ -6415,12 +4861,9 @@ class TestDeleteEmptySessionsEndpoint:
 
         assert resp.json() == {"ok": True, "deleted": 2}
 
-
-
         db = SessionDB()
 
         try:
-
             assert db.get_session("empty1") is None
 
             assert db.get_session("empty2") is None
@@ -6440,13 +4883,9 @@ class TestDeleteEmptySessionsEndpoint:
             assert db.count_empty_sessions() == 0
 
         finally:
-
             db.close()
 
-
-
     def test_delete_with_no_empties_returns_zero(self):
-
         """No empty sessions → endpoint returns ``deleted: 0`` (200,
 
         not 404). The dashboard relies on this no-op path to surface
@@ -6459,10 +4898,7 @@ class TestDeleteEmptySessionsEndpoint:
 
         assert resp.json() == {"ok": True, "deleted": 0}
 
-
-
     def test_route_order_empty_not_shadowed_by_session_id(self):
-
         """Pin the route-ordering contract: ``DELETE /api/sessions/empty``
 
         must hit the bulk handler, not the templated single-session
@@ -6486,31 +4922,20 @@ class TestDeleteEmptySessionsEndpoint:
         body = resp.json()
 
         assert "deleted" in body, (
-
             "If this assertion fails, the literal /api/sessions/empty "
-
             "route is being shadowed by the templated /api/sessions/"
-
             "{session_id} route — check registration order in "
-
             "clawk_cli/web_server.py."
-
         )
 
 
-
-
-
 class TestPluginAPIAuth:
-
     """Tests that plugin API routes require the session token (issue #19533)."""
 
-
-
     @pytest.fixture(autouse=True)
-
-    def _setup_test_client(self, monkeypatch, _isolate_clawk_home, _install_example_plugin):
-
+    def _setup_test_client(
+        self, monkeypatch, _isolate_clawk_home, _install_example_plugin
+    ):
         """Create a TestClient without the session token header.
 
 
@@ -6526,14 +4951,10 @@ class TestPluginAPIAuth:
         """
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         import clawk_state
 
@@ -6541,11 +4962,9 @@ class TestPluginAPIAuth:
 
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
-
-
-        monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db")
-
-
+        monkeypatch.setattr(
+            clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db"
+        )
 
         self.client = TestClient(app)
 
@@ -6553,10 +4972,7 @@ class TestPluginAPIAuth:
 
         self.auth_client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def test_plugin_route_requires_auth(self):
-
         """Plugin API routes should return 401 without a valid session token."""
 
         # Use a known plugin route (kanban board)
@@ -6565,10 +4981,7 @@ class TestPluginAPIAuth:
 
         assert resp.status_code == 401
 
-
-
     def test_plugin_route_allows_auth(self):
-
         """Plugin API routes should work with a valid session token.
 
 
@@ -6593,28 +5006,20 @@ class TestPluginAPIAuth:
 
         assert resp.status_code == 401
 
-
-
         # With auth: handler runs.
 
         resp = self.auth_client.get("/api/plugins/example/hello")
 
         assert resp.status_code == 200
 
-
-
     def test_plugin_post_requires_auth(self):
-
         """Plugin POST routes should return 401 without a valid session token."""
 
         resp = self.client.post("/api/plugins/kanban/tasks", json={"title": "test"})
 
         assert resp.status_code == 401
 
-
-
     def test_plugin_patch_requires_auth(self):
-
         """Plugin PATCH routes should return 401 without a valid session token.
 
 
@@ -6628,29 +5033,20 @@ class TestPluginAPIAuth:
         """
 
         resp = self.client.patch(
-
             "/api/plugins/kanban/tasks/t_fake",
-
             json={"title": "renamed"},
-
         )
 
         assert resp.status_code == 401
 
-
-
     def test_plugin_delete_requires_auth(self):
-
         """Plugin DELETE routes should return 401 without a valid session token."""
 
         resp = self.client.delete("/api/plugins/kanban/tasks/t_fake")
 
         assert resp.status_code == 401
 
-
-
     def test_non_kanban_plugin_route_requires_auth(self):
-
         """Auth must be plugin-agnostic, not kanban-specific.
 
 
@@ -6681,10 +5077,7 @@ class TestPluginAPIAuth:
 
         assert resp.status_code == 401
 
-
-
     def test_plugin_websocket_unaffected_by_http_middleware(self):
-
         """The kanban /events WebSocket has its own ``?token=`` check;
 
         the HTTP middleware change must not start gating WS upgrades.
@@ -6701,28 +5094,18 @@ class TestPluginAPIAuth:
 
         from starlette.websockets import WebSocketDisconnect
 
-
-
         # Without a token the WS endpoint must close the upgrade itself
 
         # (its own _check_ws_token), NOT 401 from the HTTP middleware.
 
         try:
-
-            with self.client.websocket_connect(
-
-                "/api/plugins/kanban/events"
-
-            ):
-
+            with self.client.websocket_connect("/api/plugins/kanban/events"):
                 pass  # if we got here without disconnect, the WS accepted us
 
         except WebSocketDisconnect:
-
             pass  # expected — WS endpoint rejected via its own check
 
         except Exception:
-
             # The kanban plugin may not be mounted in this test environment,
 
             # in which case the route doesn't exist at all (3xx/4xx during
@@ -6734,16 +5117,10 @@ class TestPluginAPIAuth:
             pass
 
 
-
-
-
 class TestDashboardPluginManifestExtensions:
-
     """Tests for the extended plugin manifest fields (tab.override,
 
     tab.hidden, slots) read by _discover_dashboard_plugins()."""
-
-
 
     def _write_plugin(self, tmp_path, name, manifest):
 
@@ -6757,25 +5134,21 @@ class TestDashboardPluginManifestExtensions:
 
         return plug_dir
 
-
-
     def test_override_and_hidden_carried_through(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        self._write_plugin(tmp_path, "skin-home", {
-
-            "name": "skin-home",
-
-            "label": "Skin Home",
-
-            "tab": {"path": "/skin-home", "override": "/", "hidden": True},
-
-            "slots": ["sidebar", "header-left"],
-
-            "entry": "dist/index.js",
-
-        })
+        self._write_plugin(
+            tmp_path,
+            "skin-home",
+            {
+                "name": "skin-home",
+                "label": "Skin Home",
+                "tab": {"path": "/skin-home", "override": "/", "hidden": True},
+                "slots": ["sidebar", "header-left"],
+                "entry": "dist/index.js",
+            },
+        )
 
         from clawk_cli import web_server
 
@@ -6793,23 +5166,20 @@ class TestDashboardPluginManifestExtensions:
 
         assert entry["slots"] == ["sidebar", "header-left"]
 
-
-
     def test_override_requires_leading_slash(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        self._write_plugin(tmp_path, "bad-override", {
-
-            "name": "bad-override",
-
-            "label": "Bad",
-
-            "tab": {"path": "/bad", "override": "no-leading-slash"},
-
-            "entry": "dist/index.js",
-
-        })
+        self._write_plugin(
+            tmp_path,
+            "bad-override",
+            {
+                "name": "bad-override",
+                "label": "Bad",
+                "tab": {"path": "/bad", "override": "no-leading-slash"},
+                "entry": "dist/index.js",
+            },
+        )
 
         from clawk_cli import web_server
 
@@ -6821,23 +5191,20 @@ class TestDashboardPluginManifestExtensions:
 
         assert "override" not in entry["tab"]
 
-
-
     def test_slots_default_empty(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        self._write_plugin(tmp_path, "no-slots", {
-
-            "name": "no-slots",
-
-            "label": "No Slots",
-
-            "tab": {"path": "/no-slots"},
-
-            "entry": "dist/index.js",
-
-        })
+        self._write_plugin(
+            tmp_path,
+            "no-slots",
+            {
+                "name": "no-slots",
+                "label": "No Slots",
+                "tab": {"path": "/no-slots"},
+                "entry": "dist/index.js",
+            },
+        )
 
         from clawk_cli import web_server
 
@@ -6853,25 +5220,21 @@ class TestDashboardPluginManifestExtensions:
 
         assert "override" not in entry["tab"]
 
-
-
     def test_slots_filters_non_string_entries(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        self._write_plugin(tmp_path, "mixed-slots", {
-
-            "name": "mixed-slots",
-
-            "label": "Mixed",
-
-            "tab": {"path": "/mixed-slots"},
-
-            "slots": ["sidebar", "", 42, None, "header-right"],
-
-            "entry": "dist/index.js",
-
-        })
+        self._write_plugin(
+            tmp_path,
+            "mixed-slots",
+            {
+                "name": "mixed-slots",
+                "label": "Mixed",
+                "tab": {"path": "/mixed-slots"},
+                "slots": ["sidebar", "", 42, None, "header-right"],
+                "entry": "dist/index.js",
+            },
+        )
 
         from clawk_cli import web_server
 
@@ -6883,10 +5246,7 @@ class TestDashboardPluginManifestExtensions:
 
         assert entry["slots"] == ["sidebar", "header-right"]
 
-
-
     def test_page_scoped_slots_preserved(self, tmp_path, monkeypatch):
-
         """Page-scoped slot names (e.g. ``sessions:top``) round-trip through
 
         the manifest loader untouched.  The backend has no allowlist — the
@@ -6897,39 +5257,27 @@ class TestDashboardPluginManifestExtensions:
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        self._write_plugin(tmp_path, "page-slots", {
-
-            "name": "page-slots",
-
-            "label": "Page Slots",
-
-            "tab": {"path": "/page-slots", "hidden": True},
-
-            "slots": [
-
-                "sessions:top",
-
-                "analytics:bottom",
-
-                "logs:top",
-
-                "skills:bottom",
-
-                "config:top",
-
-                "env:bottom",
-
-                "docs:top",
-
-                "cron:bottom",
-
-                "chat:top",
-
-            ],
-
-            "entry": "dist/index.js",
-
-        })
+        self._write_plugin(
+            tmp_path,
+            "page-slots",
+            {
+                "name": "page-slots",
+                "label": "Page Slots",
+                "tab": {"path": "/page-slots", "hidden": True},
+                "slots": [
+                    "sessions:top",
+                    "analytics:bottom",
+                    "logs:top",
+                    "skills:bottom",
+                    "config:top",
+                    "env:bottom",
+                    "docs:top",
+                    "cron:bottom",
+                    "chat:top",
+                ],
+                "entry": "dist/index.js",
+            },
+        )
 
         from clawk_cli import web_server
 
@@ -6940,29 +5288,16 @@ class TestDashboardPluginManifestExtensions:
         entry = next(p for p in plugins if p["name"] == "page-slots")
 
         assert entry["slots"] == [
-
             "sessions:top",
-
             "analytics:bottom",
-
             "logs:top",
-
             "skills:bottom",
-
             "config:top",
-
             "env:bottom",
-
             "docs:top",
-
             "cron:bottom",
-
             "chat:top",
-
         ]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -6982,38 +5317,22 @@ class TestDashboardPluginManifestExtensions:
 # ---------------------------------------------------------------------------
 
 
-
 import sys
 
 
-
-
-
 skip_on_windows = pytest.mark.skipif(
-
     sys.platform.startswith("win"), reason="PTY bridge is POSIX-only"
-
 )
 
 
-
-
-
 @skip_on_windows
-
 class TestPtyWebSocket:
-
     @pytest.fixture(autouse=True)
-
     def _setup(self, monkeypatch, _isolate_clawk_home):
 
         from starlette.testclient import TestClient
 
-
-
         import clawk_cli.web_server as ws
-
-
 
         # Avoid exec'ing the actual TUI in tests: every test below installs
 
@@ -7027,8 +5346,6 @@ class TestPtyWebSocket:
 
         self.client = TestClient(ws.app)
 
-
-
     def _url(self, token: str | None = None, **params: str) -> str:
 
         tok = token if token is not None else self.token
@@ -7039,43 +5356,29 @@ class TestPtyWebSocket:
 
         from urllib.parse import urlencode
 
-
-
         q = {"token": tok, **params}
 
         return f"/api/pty?{urlencode(q)}"
 
-
-
     def test_resolve_chat_argv_uses_dashboard_scroll_env(self, monkeypatch):
-
         """Dashboard chat runs the TUI in browser-scrollback mode."""
 
         import clawk_cli.main as main_mod
 
-
-
         monkeypatch.setattr(
-
             main_mod,
-
             "_make_tui_argv",
-
-            lambda project_root, tui_dev=False: (["node", "dist/entry.js"], "/tmp/ui-tui"),
-
+            lambda project_root, tui_dev=False: (
+                ["node", "dist/entry.js"],
+                "/tmp/ui-tui",
+            ),
         )
 
-
-
         _argv, _cwd, env = self.ws_module._resolve_chat_argv()
-
-
 
         assert env["CLAWK_TUI_INLINE"] == "1"
 
         assert env["CLAWK_TUI_DISABLE_MOUSE"] == "1"
-
-
 
     def test_rejects_when_embedded_chat_disabled(self, monkeypatch):
 
@@ -7083,92 +5386,57 @@ class TestPtyWebSocket:
 
         from starlette.websockets import WebSocketDisconnect
 
-
-
         with pytest.raises(WebSocketDisconnect) as exc:
-
             with self.client.websocket_connect(self._url()):
-
                 pass
 
         assert exc.value.code == 4404
 
-
-
     def test_rejects_missing_token(self, monkeypatch):
 
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
-
         )
 
         from starlette.websockets import WebSocketDisconnect
 
-
-
         with pytest.raises(WebSocketDisconnect) as exc:
-
             with self.client.websocket_connect("/api/pty"):
-
                 pass
 
         assert exc.value.code == 4401
-
-
 
     def test_rejects_bad_token(self, monkeypatch):
 
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
-
         )
 
         from starlette.websockets import WebSocketDisconnect
 
-
-
         with pytest.raises(WebSocketDisconnect) as exc:
-
             with self.client.websocket_connect(self._url(token="wrong")):
-
                 pass
 
         assert exc.value.code == 4401
 
-
-
     def test_streams_child_stdout_to_client(self, monkeypatch):
 
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             lambda resume=None, sidecar_url=None: (
-
                 ["/bin/sh", "-c", "printf clawk-ws-ok"],
-
                 None,
-
                 None,
-
             ),
-
         )
 
         with self.client.websocket_connect(self._url()) as conn:
-
             # Drain frames until we see the needle or time out.  TestClient's
 
             # recv_bytes blocks; loop until we have the signal byte string.
@@ -7177,31 +5445,22 @@ class TestPtyWebSocket:
 
             import time
 
-
-
             deadline = time.monotonic() + 5.0
 
             while time.monotonic() < deadline:
-
                 try:
-
                     frame = conn.receive_bytes()
 
                 except Exception:
-
                     break
 
                 if frame:
-
                     buf += frame
 
                 if b"clawk-ws-ok" in buf:
-
                     break
 
             assert b"clawk-ws-ok" in buf
-
-
 
     def test_client_input_reaches_child_stdin(self, monkeypatch):
 
@@ -7210,42 +5469,30 @@ class TestPtyWebSocket:
         # the full duplex path.
 
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
-
         )
 
         with self.client.websocket_connect(self._url()) as conn:
-
             conn.send_bytes(b"round-trip-payload\n")
 
             buf = b""
 
             import time
 
-
-
             deadline = time.monotonic() + 5.0
 
             while time.monotonic() < deadline:
-
                 frame = conn.receive_bytes()
 
                 if frame:
-
                     buf += frame
 
                 if b"round-trip-payload" in buf:
-
                     break
 
             assert b"round-trip-payload" in buf
-
-
 
     def test_resize_escape_is_forwarded(self, monkeypatch):
 
@@ -7257,56 +5504,35 @@ class TestPtyWebSocket:
 
         import sys
 
-
-
         winsize_script = (
-
             "import fcntl, struct, termios, time; "
-
             "time.sleep(0.5); "
-
             "rows, cols, *_ = struct.unpack('HHHH', "
-
             "fcntl.ioctl(0, termios.TIOCGWINSZ, b'\\0' * 8)); "
-
             "print(cols); print(rows)"
-
         )
 
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             # sleep gives the test time to push the resize before the child reads the ioctl.
-
             lambda resume=None, sidecar_url=None: (
-
                 [sys.executable, "-c", winsize_script],
-
                 None,
-
                 None,
-
             ),
-
         )
 
         with self.client.websocket_connect(self._url()) as conn:
-
             conn.send_text("\x1b[RESIZE:99;41]")
 
             buf = b""
 
             import time
 
-
-
             deadline = time.monotonic() + 5.0
 
             while time.monotonic() < deadline:
-
                 # receive_bytes() blocks; once the child prints its winsize and
 
                 # exits, the PTY closes and further reads raise. Without this
@@ -7316,72 +5542,55 @@ class TestPtyWebSocket:
                 # (flaky failure) instead of failing fast on the assert below.
 
                 try:
-
                     frame = conn.receive_bytes()
 
                 except Exception:
-
                     break
 
                 if frame:
-
                     buf += frame
 
                 if b"99" in buf and b"41" in buf:
-
                     break
 
             assert b"99" in buf and b"41" in buf
-
-
 
     def test_unavailable_platform_closes_with_message(self, monkeypatch):
 
         from clawk_cli.pty_bridge import PtyUnavailableError
 
-
-
         def _raise(argv, **kwargs):
 
             raise PtyUnavailableError("pty missing for tests")
 
-
-
         monkeypatch.setattr(
-
             self.ws_module,
-
             "_resolve_chat_argv",
-
             lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
-
         )
 
         # Patch PtyBridge.spawn at the web_server module's binding.
 
         import clawk_cli.web_server as ws_mod
 
-
-
-        monkeypatch.setattr(ws_mod.PtyBridge, "spawn", classmethod(lambda cls, *a, **k: _raise(*a, **k)))
-
-
+        monkeypatch.setattr(
+            ws_mod.PtyBridge, "spawn", classmethod(lambda cls, *a, **k: _raise(*a, **k))
+        )
 
         with self.client.websocket_connect(self._url()) as conn:
-
             # Expect a final text frame with the error message, then close.
 
             msg = conn.receive_text()
 
-            assert "pty missing" in msg or "unavailable" in msg.lower() or "pty" in msg.lower()
-
-
+            assert (
+                "pty missing" in msg
+                or "unavailable" in msg.lower()
+                or "pty" in msg.lower()
+            )
 
     def test_resume_parameter_is_forwarded_to_argv(self, monkeypatch):
 
         captured: dict = {}
-
-
 
         def fake_resolve(resume=None, sidecar_url=None):
 
@@ -7389,30 +5598,20 @@ class TestPtyWebSocket:
 
             return (["/bin/sh", "-c", "printf resume-arg-ok"], None, None)
 
-
-
         monkeypatch.setattr(self.ws_module, "_resolve_chat_argv", fake_resolve)
 
-
-
         with self.client.websocket_connect(self._url(resume="sess-42")) as conn:
-
             # Drain briefly so the handler actually invokes the resolver.
 
             try:
-
                 conn.receive_bytes()
 
             except Exception:
-
                 pass
 
         assert captured.get("resume") == "sess-42"
 
-
-
     def test_channel_param_propagates_sidecar_url(self, monkeypatch):
-
         """When /api/pty is opened with ?channel=, the PTY child gets a
 
         CLAWK_TUI_SIDECAR_URL env var pointing back at /api/pub on the
@@ -7421,49 +5620,30 @@ class TestPtyWebSocket:
 
         captured: dict = {}
 
-
-
         def fake_resolve(resume=None, sidecar_url=None):
 
             captured["sidecar_url"] = sidecar_url
 
             return (["/bin/sh", "-c", "printf sidecar-ok"], None, None)
 
-
-
         monkeypatch.setattr(self.ws_module, "_resolve_chat_argv", fake_resolve)
 
         monkeypatch.setattr(
-
             self.ws_module.app.state, "bound_host", "127.0.0.1", raising=False
-
         )
 
-        monkeypatch.setattr(
-
-            self.ws_module.app.state, "bound_port", 9119, raising=False
-
-        )
-
-
+        monkeypatch.setattr(self.ws_module.app.state, "bound_port", 9119, raising=False)
 
         headers = {"host": "127.0.0.1:9119", "origin": "http://127.0.0.1:9119"}
 
         with self.client.websocket_connect(
-
             self._url(channel="abc-123"), headers=headers
-
         ) as conn:
-
             try:
-
                 conn.receive_bytes()
 
             except Exception:
-
                 pass
-
-
 
         url = captured.get("sidecar_url") or ""
 
@@ -7473,10 +5653,7 @@ class TestPtyWebSocket:
 
         assert "token=" in url
 
-
-
     def test_pub_broadcasts_to_events_subscribers(self):
-
         """A frame handed to _broadcast_event is sent verbatim to every
 
         subscriber registered on that channel — and not to subscribers on
@@ -7507,25 +5684,16 @@ class TestPtyWebSocket:
 
         from clawk_cli import web_server as ws_mod
 
-
-
         class _FakeSub:
-
             def __init__(self):
 
                 self.sent: list[str] = []
-
-
 
             async def send_text(self, payload: str) -> None:
 
                 self.sent.append(payload)
 
-
-
         app = ws_mod.app
-
-
 
         async def _run():
 
@@ -7537,8 +5705,6 @@ class TestPtyWebSocket:
 
             frame = '{"type":"tool.start","payload":{"tool_id":"t1"}}'
 
-
-
             event_channels, event_lock = ws_mod._get_event_state(app)
 
             # Register two subscribers on the target channel and one on a
@@ -7546,36 +5712,25 @@ class TestPtyWebSocket:
             # different channel, exactly as the /api/events handler does.
 
             async with event_lock:
-
-                event_channels.setdefault("broadcast-test", set()).update(
-
-                    {sub_a1, sub_a2}
-
-                )
+                event_channels.setdefault("broadcast-test", set()).update({
+                    sub_a1,
+                    sub_a2,
+                })
 
                 event_channels.setdefault("other-channel", set()).add(sub_other)
 
             try:
-
                 await ws_mod._broadcast_event(app, "broadcast-test", frame)
 
             finally:
-
                 async with event_lock:
-
                     event_channels.pop("broadcast-test", None)
 
                     event_channels.pop("other-channel", None)
 
-
-
             return sub_a1, sub_a2, sub_other, frame
 
-
-
         sub_a1, sub_a2, sub_other, frame = asyncio.run(_run())
-
-
 
         # Every subscriber on the channel got the frame verbatim, exactly once.
 
@@ -7587,28 +5742,15 @@ class TestPtyWebSocket:
 
         assert sub_other.sent == []
 
-
-
     def test_events_rejects_missing_channel(self):
 
         from starlette.websockets import WebSocketDisconnect
 
-
-
         with pytest.raises(WebSocketDisconnect) as exc:
-
-            with self.client.websocket_connect(
-
-                f"/api/events?token={self.token}"
-
-            ):
-
+            with self.client.websocket_connect(f"/api/events?token={self.token}"):
                 pass
 
         assert exc.value.code == 4400
-
-
-
 
 
 def test_resolve_chat_argv_injects_gateway_ws_url(monkeypatch):
@@ -7617,27 +5759,17 @@ def test_resolve_chat_argv_injects_gateway_ws_url(monkeypatch):
 
     import clawk_cli.web_server as ws
 
-
-
     monkeypatch.setattr(
-
         cli_main,
-
         "_make_tui_argv",
-
         lambda *_args, **_kwargs: (["node", "fake-tui.js"], Path("/tmp")),
-
     )
 
     monkeypatch.setattr(ws.app.state, "bound_host", "127.0.0.1", raising=False)
 
     monkeypatch.setattr(ws.app.state, "bound_port", 9119, raising=False)
 
-
-
     _argv, _cwd, env = ws._resolve_chat_argv()
-
-
 
     assert env is not None
 
@@ -7648,11 +5780,7 @@ def test_resolve_chat_argv_injects_gateway_ws_url(monkeypatch):
     assert "token=" in gateway_url
 
 
-
-
-
 class TestDashboardPluginStaticAssetAllowlist:
-
     """``/dashboard-plugins/<name>/<path>`` is unauthenticated by design —
 
     the SPA loads plugin JS via ``<script src>`` and CSS via
@@ -7675,12 +5803,10 @@ class TestDashboardPluginStaticAssetAllowlist:
 
     """
 
-
-
     @pytest.fixture(autouse=True)
-
-    def _setup_test_client(self, monkeypatch, _isolate_clawk_home, _install_example_plugin):
-
+    def _setup_test_client(
+        self, monkeypatch, _isolate_clawk_home, _install_example_plugin
+    ):
         """Create a TestClient and install the example-dashboard fixture.
 
 
@@ -7700,25 +5826,16 @@ class TestDashboardPluginStaticAssetAllowlist:
         """
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
-
-
 
         from clawk_cli.web_server import app
 
-
-
         self.client = TestClient(app)
 
-
-
     def test_python_source_is_404(self):
-
         """The example plugin's ``plugin_api.py`` must NOT be served as
 
         a static asset, even though the file exists under the plugin's
@@ -7729,10 +5846,7 @@ class TestDashboardPluginStaticAssetAllowlist:
 
         assert resp.status_code == 404
 
-
-
     def test_pycache_is_404(self):
-
         """Same protection for compiled Python (``.pyc``) inside the
 
         plugin's ``__pycache__/``. Real plugins ship these as a
@@ -7746,9 +5860,7 @@ class TestDashboardPluginStaticAssetAllowlist:
         # generates during the dashboard test boot.
 
         resp = self.client.get(
-
             "/dashboard-plugins/example/__pycache__/plugin_api.cpython-311.pyc"
-
         )
 
         # 404 either way (file may not exist on this CI Python version);
@@ -7757,10 +5869,7 @@ class TestDashboardPluginStaticAssetAllowlist:
 
         assert resp.status_code == 404
 
-
-
     def test_manifest_json_still_served(self):
-
         """JSON files remain browser-fetchable — manifests, localized
 
         data, source maps, etc. all sit in this bucket."""
@@ -7777,35 +5886,23 @@ class TestDashboardPluginStaticAssetAllowlist:
 
         assert body.get("name") == "example"
 
-
-
     def test_unknown_plugin_is_404(self):
-
         """Existing behaviour preserved: nonexistent plugin name → 404."""
 
         resp = self.client.get(
-
             "/dashboard-plugins/_definitely_not_a_plugin_/manifest.json"
-
         )
 
         assert resp.status_code == 404
 
-
-
     def test_path_traversal_still_blocked(self):
-
         """The allowlist is on top of the existing ``.resolve()`` /
 
         ``is_relative_to()`` check — a ``.js`` named file at an
 
         out-of-base path is still rejected as traversal, not served."""
 
-        resp = self.client.get(
-
-            "/dashboard-plugins/example/..%2Fplugin_api.py"
-
-        )
+        resp = self.client.get("/dashboard-plugins/example/..%2Fplugin_api.py")
 
         # 403 traversal-blocked OR 404 (depending on URL decode order)
 
@@ -7814,11 +5911,7 @@ class TestDashboardPluginStaticAssetAllowlist:
         assert resp.status_code in (403, 404)
 
 
-
-
-
 def _fake_httpx_client(*, status: int | None = None, raise_exc: bool = False):
-
     """Build a drop-in for httpx.Client whose .get() returns a canned status
 
     (or raises a transport error). Patched in for the credential-validate probe
@@ -7826,92 +5919,61 @@ def _fake_httpx_client(*, status: int | None = None, raise_exc: bool = False):
     so tests never touch the network."""
 
     class _Resp:
-
         def __init__(self, code):
 
             self.status_code = code
 
-
-
         @property
-
         def is_success(self):
 
             return 200 <= self.status_code < 300
 
-
-
     class _Client:
-
         def __init__(self, *a, **k):
 
             pass
-
-
 
         def __enter__(self):
 
             return self
 
-
-
         def __exit__(self, *a):
 
             return False
 
-
-
         def get(self, *a, **k):
 
             if raise_exc:
-
                 raise RuntimeError("connection refused")
 
             return _Resp(status)
 
-
-
     return _Client
 
 
-
-
-
 class TestValidateProviderCredential:
-
     """Live-probe credential validation (/api/providers/validate)."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _setup_test_client(self, monkeypatch, _isolate_clawk_home):
 
         try:
-
             from starlette.testclient import TestClient
 
         except ImportError:
-
             pytest.skip("fastapi/starlette not installed")
 
-
-
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
-
-
 
         self.client = TestClient(app)
 
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
-
-
     def _post(self, key, value):
 
-        return self.client.post("/api/providers/validate", json={"key": key, "value": value})
-
-
+        return self.client.post(
+            "/api/providers/validate", json={"key": key, "value": value}
+        )
 
     def test_rejected_key_blocks(self, monkeypatch):
 
@@ -7921,8 +5983,6 @@ class TestValidateProviderCredential:
 
         assert data["ok"] is False and data["reachable"] is True
 
-
-
     def test_valid_key_passes(self, monkeypatch):
 
         monkeypatch.setattr("httpx.Client", _fake_httpx_client(status=200))
@@ -7930,8 +5990,6 @@ class TestValidateProviderCredential:
         data = self._post("OPENAI_API_KEY", "sk-real").json()
 
         assert data["ok"] is True and data["reachable"] is True
-
-
 
     def test_rate_limited_counts_as_valid(self, monkeypatch):
 
@@ -7941,8 +5999,6 @@ class TestValidateProviderCredential:
 
         assert data["ok"] is True
 
-
-
     def test_network_error_is_unreachable_not_blocking(self, monkeypatch):
 
         monkeypatch.setattr("httpx.Client", _fake_httpx_client(raise_exc=True))
@@ -7950,8 +6006,6 @@ class TestValidateProviderCredential:
         data = self._post("OPENROUTER_API_KEY", "sk-real").json()
 
         assert data["ok"] is False and data["reachable"] is False
-
-
 
     def test_unknown_provider_is_not_validated(self):
 
@@ -7961,13 +6015,8 @@ class TestValidateProviderCredential:
 
         assert data["ok"] is True and data["reachable"] is False
 
-
-
     def test_empty_value_rejected(self):
 
         data = self._post("OPENAI_API_KEY", "   ").json()
 
         assert data["ok"] is False
-
-
-

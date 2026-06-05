@@ -67,151 +67,206 @@ pip install faiss-gpu
 
 ### 基本用法
 
-```python
-import faiss
-import numpy as np
-
-# 创建示例数据（1000 个向量，128 维）
-d = 128
-nb = 1000
-vectors = np.random.random((nb, d)).astype('float32')
-
-# 创建索引
-index = faiss.IndexFlatL2(d)  # L2 距离
-index.add(vectors)             # 添加向量
-
-# 搜索
-k = 5  # 查找 5 个最近邻
-query = np.random.random((1, d)).astype('float32')
-distances, indices = index.search(query, k)
-
-print(f"Nearest neighbors: {indices}")
-print(f"Distances: {distances}")
+```pythonimport faiss
+
+import numpy as np
+
+
+# 创建示例数据（1000 个向量，128 维）
+
+d = 128
+
+nb = 1000
+
+vectors = np.random.random((nb, d)).astype("float32")
+
+
+# 创建索引
+
+index = faiss.IndexFlatL2(d)  # L2 距离
+
+index.add(vectors)  # 添加向量
+
+
+# 搜索
+
+k = 5  # 查找 5 个最近邻
+
+query = np.random.random((1, d)).astype("float32")
+
+distances, indices = index.search(query, k)
+
+
+print(f"Nearest neighbors: {indices}")
+
+print(f"Distances: {distances}")
 ```
 
 ## 索引类型
 
 ### 1. Flat（精确搜索）
 
-```python
-# L2（欧氏）距离
-index = faiss.IndexFlatL2(d)
-
-# 内积（归一化后等同于余弦相似度）
-index = faiss.IndexFlatIP(d)
-
-# 速度最慢，精度最高
+```python# L2（欧氏）距离
+
+index = faiss.IndexFlatL2(d)
+
+
+# 内积（归一化后等同于余弦相似度）
+
+index = faiss.IndexFlatIP(d)
+
+
+# 速度最慢，精度最高
 ```
 
 ### 2. IVF（倒排文件）- 快速近似搜索
 
-```python
-# 创建量化器
-quantizer = faiss.IndexFlatL2(d)
-
-# 含 100 个聚类的 IVF 索引
-nlist = 100
-index = faiss.IndexIVFFlat(quantizer, d, nlist)
-
-# 在数据上训练
-index.train(vectors)
-
-# 添加向量
-index.add(vectors)
-
-# 搜索（nprobe = 搜索的聚类数）
-index.nprobe = 10
-distances, indices = index.search(query, k)
+```python# 创建量化器
+
+quantizer = faiss.IndexFlatL2(d)
+
+
+# 含 100 个聚类的 IVF 索引
+
+nlist = 100
+
+index = faiss.IndexIVFFlat(quantizer, d, nlist)
+
+
+# 在数据上训练
+
+index.train(vectors)
+
+
+# 添加向量
+
+index.add(vectors)
+
+
+# 搜索（nprobe = 搜索的聚类数）
+
+index.nprobe = 10
+
+distances, indices = index.search(query, k)
 ```
 
 ### 3. HNSW（分层小世界图）- 质量/速度最佳平衡
 
-```python
-# HNSW 索引
-M = 32  # 每层连接数
-index = faiss.IndexHNSWFlat(d, M)
-
-# 无需训练
-index.add(vectors)
-
-# 搜索
-distances, indices = index.search(query, k)
+```python# HNSW 索引
+
+M = 32  # 每层连接数
+
+index = faiss.IndexHNSWFlat(d, M)
+
+
+# 无需训练
+
+index.add(vectors)
+
+
+# 搜索
+
+distances, indices = index.search(query, k)
 ```
 
 ### 4. 乘积量化（Product Quantization）- 内存高效
 
-```python
-# PQ 可将内存减少 16-32 倍
-m = 8   # 子量化器数量
-nbits = 8
-index = faiss.IndexPQ(d, m, nbits)
-
-# 训练并添加
-index.train(vectors)
-index.add(vectors)
+```python# PQ 可将内存减少 16-32 倍
+
+m = 8  # 子量化器数量
+
+nbits = 8
+
+index = faiss.IndexPQ(d, m, nbits)
+
+
+# 训练并添加
+
+index.train(vectors)
+
+index.add(vectors)
 ```
 
 ## 保存与加载
 
-```python
-# 保存索引
-faiss.write_index(index, "large.index")
-
-# 加载索引
-index = faiss.read_index("large.index")
-
-# 继续使用
-distances, indices = index.search(query, k)
+```python# 保存索引
+
+faiss.write_index(index, "large.index")
+
+
+# 加载索引
+
+index = faiss.read_index("large.index")
+
+
+# 继续使用
+
+distances, indices = index.search(query, k)
 ```
 
 ## GPU 加速
 
-```python
-# 单 GPU
-res = faiss.StandardGpuResources()
-index_cpu = faiss.IndexFlatL2(d)
-index_gpu = faiss.index_cpu_to_gpu(res, 0, index_cpu)  # GPU 0
-
-# 多 GPU
-index_gpu = faiss.index_cpu_to_all_gpus(index_cpu)
-
-# 比 CPU 快 10-100 倍
+```python# 单 GPU
+
+res = faiss.StandardGpuResources()
+
+index_cpu = faiss.IndexFlatL2(d)
+
+index_gpu = faiss.index_cpu_to_gpu(res, 0, index_cpu)  # GPU 0
+
+
+# 多 GPU
+
+index_gpu = faiss.index_cpu_to_all_gpus(index_cpu)
+
+
+# 比 CPU 快 10-100 倍
 ```
 
 ## LangChain 集成
 
-```python
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-
-# 创建 FAISS 向量存储
-vectorstore = FAISS.from_documents(docs, OpenAIEmbeddings())
-
-# 保存
-vectorstore.save_local("faiss_index")
-
-# 加载
-vectorstore = FAISS.load_local(
-    "faiss_index",
-    OpenAIEmbeddings(),
-    allow_dangerous_deserialization=True
-)
-
-# 搜索
-results = vectorstore.similarity_search("query", k=5)
+```pythonfrom langchain_community.vectorstores import FAISS
+
+from langchain_openai import OpenAIEmbeddings
+
+
+# 创建 FAISS 向量存储
+
+vectorstore = FAISS.from_documents(docs, OpenAIEmbeddings())
+
+
+# 保存
+
+vectorstore.save_local("faiss_index")
+
+
+# 加载
+
+vectorstore = FAISS.load_local(
+    "faiss_index", OpenAIEmbeddings(), allow_dangerous_deserialization=True
+)
+
+
+# 搜索
+
+results = vectorstore.similarity_search("query", k=5)
 ```
 
 ## LlamaIndex 集成
 
-```python
-from llama_index.vector_stores.faiss import FaissVectorStore
-import faiss
-
-# 创建 FAISS 索引
-d = 1536
-faiss_index = faiss.IndexFlatL2(d)
-
-vector_store = FaissVectorStore(faiss_index=faiss_index)
+```pythonfrom llama_index.vector_stores.faiss import FaissVectorStore
+
+import faiss
+
+
+# 创建 FAISS 索引
+
+d = 1536
+
+faiss_index = faiss.IndexFlatL2(d)
+
+
+vector_store = FaissVectorStore(faiss_index=faiss_index)
 ```
 
 ## 最佳实践

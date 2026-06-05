@@ -13,6 +13,7 @@ To run:
 
 The pattern mirrors `scripts/parrot_openrouter.py` (the working reference).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -109,17 +110,25 @@ class MyEvaluator(Evaluator[MyOrganism, EvaluationResult, MyFailureCase]):
         for i, (inp, expected) in enumerate(self.TRAINABLE):
             actual = organism.run(inp)
             if actual != expected:
-                train_fails.append(MyFailureCase(
-                    input=inp, expected=expected, actual=actual,
-                    data_point_id=f"trainable_{i}",
-                ))
+                train_fails.append(
+                    MyFailureCase(
+                        input=inp,
+                        expected=expected,
+                        actual=actual,
+                        data_point_id=f"trainable_{i}",
+                    )
+                )
         for i, (inp, expected) in enumerate(self.HOLDOUT):
             actual = organism.run(inp)
             if actual != expected:
-                hold_fails.append(MyFailureCase(
-                    input=inp, expected=expected, actual=actual,
-                    data_point_id=f"holdout_{i}",
-                ))
+                hold_fails.append(
+                    MyFailureCase(
+                        input=inp,
+                        expected=expected,
+                        actual=actual,
+                        data_point_id=f"holdout_{i}",
+                    )
+                )
         n_total = len(self.TRAINABLE) + len(self.HOLDOUT)
         n_ok = n_total - len(train_fails) - len(hold_fails)
         return EvaluationResult(
@@ -228,9 +237,13 @@ def main() -> int:
 
     print("Evaluating initial organism...")
     for snap in loop.run(num_iterations=args.num_iterations):
-        (out / "snapshots" / f"iteration_{snap.iteration}.pkl").write_bytes(snap.snapshot)
+        (out / "snapshots" / f"iteration_{snap.iteration}.pkl").write_bytes(
+            snap.snapshot
+        )
         _, best = snap.best_organism_result
-        print(f"iter={snap.iteration} pop={snap.population_size} best_score={best.score:.3f}")
+        print(
+            f"iter={snap.iteration} pop={snap.population_size} best_score={best.score:.3f}"
+        )
 
     print(f"\nDone. Results in: {out}")
     return 0

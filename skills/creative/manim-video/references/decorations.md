@@ -8,11 +8,11 @@ Draws a rectangle around any mobject. The go-to for highlighting:
 
 ```python
 highlight = SurroundingRectangle(
-    equation[2],            # the term to highlight
+    equation[2],  # the term to highlight
     color=YELLOW,
-    buff=0.15,              # padding between content and border
-    corner_radius=0.1,      # rounded corners
-    stroke_width=2
+    buff=0.15,  # padding between content and border
+    corner_radius=0.1,  # rounded corners
+    stroke_width=2,
 )
 self.play(Create(highlight))
 self.wait(1)
@@ -79,8 +79,8 @@ arrow = Arrow(
     end=target.get_top(),
     color=YELLOW,
     stroke_width=2,
-    buff=0.1,                    # gap between arrow tip and target
-    max_tip_length_to_length_ratio=0.15  # small arrowhead
+    buff=0.1,  # gap between arrow tip and target
+    max_tip_length_to_length_ratio=0.15,  # small arrowhead
 )
 self.play(GrowArrow(arrow), FadeIn(label))
 ```
@@ -91,8 +91,8 @@ self.play(GrowArrow(arrow), FadeIn(label))
 arrow = CurvedArrow(
     start_point=source.get_right(),
     end_point=target.get_left(),
-    angle=PI/4,                  # curve angle
-    color=PRIMARY
+    angle=PI / 4,  # curve angle
+    color=PRIMARY,
 )
 ```
 
@@ -101,8 +101,7 @@ arrow = CurvedArrow(
 ```python
 # LabeledArrow: arrow with built-in text label
 arr = LabeledArrow(
-    Text("gradient", font_size=16, font="Menlo"),
-    start=point_a, end=point_b, color=RED
+    Text("gradient", font_size=16, font="Menlo"), start=point_a, end=point_b, color=RED
 )
 ```
 
@@ -110,10 +109,7 @@ arr = LabeledArrow(
 
 ```python
 # Dashed line (for asymptotes, construction lines, implied connections)
-asymptote = DashedLine(
-    axes.c2p(2, -3), axes.c2p(2, 3),
-    color=YELLOW, dash_length=0.15
-)
+asymptote = DashedLine(axes.c2p(2, -3), axes.c2p(2, 3), color=YELLOW, dash_length=0.15)
 
 # Make any VMobject dashed
 dashed_circle = DashedVMobject(Circle(radius=2, color=BLUE), num_dashes=30)
@@ -170,8 +166,8 @@ eq.set_color_by_tex(r"\partial", RED)
 
 ```python
 eq = MathTex(r"a", r"+", r"b", r"=", r"c")
-eq[0].set_color(RED)    # "a"
-eq[2].set_color(BLUE)   # "b"
+eq[0].set_color(RED)  # "a"
+eq[2].set_color(BLUE)  # "b"
 eq[4].set_color(GREEN)  # "c"
 ```
 

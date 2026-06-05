@@ -12,6 +12,7 @@ Datasets:
 The Parties dataset has the names. We search by name and optionally join to
 Master to get the doc type and date.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,9 +64,7 @@ COLUMNS = [
 def _filing_url(document_id: str) -> str:
     if not document_id:
         return ""
-    return (
-        f"https://a836-acris.nyc.gov/DS/DocumentSearch/DocumentImageView?doc_id={document_id}"
-    )
+    return f"https://a836-acris.nyc.gov/DS/DocumentSearch/DocumentImageView?doc_id={document_id}"
 
 
 def fetch(
@@ -128,26 +127,26 @@ def fetch(
     for p in parties:
         did = p.get("document_id", "") or ""
         m = masters.get(did, {})
-        out_rows.append(
-            {
-                "document_id": did,
-                "name": p.get("name", "") or "",
-                "party_type": p.get("party_type", "") or "",
-                "party_role": PARTY_TYPE.get(p.get("party_type", ""), ""),
-                "address_1": p.get("address_1", "") or "",
-                "address_2": p.get("address_2", "") or "",
-                "city": p.get("city", "") or "",
-                "state": p.get("state", "") or "",
-                "zip": p.get("zip", "") or "",
-                "country": p.get("country", "") or "",
-                "doc_type": m.get("doc_type", "") or "",
-                "doc_date": (m.get("document_date", "") or "")[:10],
-                "recorded_date": (m.get("recorded_datetime", "") or "")[:10],
-                "borough": BOROUGH.get(m.get("recorded_borough", ""), m.get("recorded_borough", "")),
-                "amount": m.get("document_amt", "") or "",
-                "filing_url": _filing_url(did),
-            }
-        )
+        out_rows.append({
+            "document_id": did,
+            "name": p.get("name", "") or "",
+            "party_type": p.get("party_type", "") or "",
+            "party_role": PARTY_TYPE.get(p.get("party_type", ""), ""),
+            "address_1": p.get("address_1", "") or "",
+            "address_2": p.get("address_2", "") or "",
+            "city": p.get("city", "") or "",
+            "state": p.get("state", "") or "",
+            "zip": p.get("zip", "") or "",
+            "country": p.get("country", "") or "",
+            "doc_type": m.get("doc_type", "") or "",
+            "doc_date": (m.get("document_date", "") or "")[:10],
+            "recorded_date": (m.get("recorded_datetime", "") or "")[:10],
+            "borough": BOROUGH.get(
+                m.get("recorded_borough", ""), m.get("recorded_borough", "")
+            ),
+            "amount": m.get("document_amt", "") or "",
+            "filing_url": _filing_url(did),
+        })
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -171,7 +170,9 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--name", help="Party name substring (case-insensitive)")
     p.add_argument("--address", help="Address line 1 substring")
     p.add_argument(

@@ -65,22 +65,24 @@ Never transcribe numbers from memory or from a summary — open the workbook, re
 ### Use the firm template when one is mounted
 If `./templates/firm-template.pptx` exists, load it so the deck inherits branded colors, fonts, and master layouts.
 
-```python
-from pptx import Presentation
-from pathlib import Path
-
-template = Path("./templates/firm-template.pptx")
-prs = Presentation(str(template)) if template.exists() else Presentation()
+```pythonfrom pptx import Presentation
+
+from pathlib import Path
+
+
+template = Path("./templates/firm-template.pptx")
+
+prs = Presentation(str(template)) if template.exists() else Presentation()
 ```
 
 ### Charts: PNG-from-model beats native pptx charts
 When fidelity matters (the model's chart styling must match the deck exactly), render the chart to PNG from the source workbook and embed the image. Native `pptx.chart` charts are fragile and often don't match firm conventions.
 
-```python
-from pptx.util import Inches
-slide.shapes.add_picture("./out/charts/football_field.png",
-                         Inches(1), Inches(2),
-                         width=Inches(8))
+```pythonfrom pptx.util import Inches
+
+slide.shapes.add_picture(
+    "./out/charts/football_field.png", Inches(1), Inches(2), width=Inches(8)
+)
 ```
 
 ### No external sends
@@ -88,76 +90,109 @@ This skill writes a file. It never emails, uploads, or posts. Orchestration laye
 
 ## Skeleton
 
-```python
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pathlib import Path
-
-template = Path("./templates/firm-template.pptx")
-prs = Presentation(str(template)) if template.exists() else Presentation()
-
-# Title slide
-slide = prs.slides.add_slide(prs.slide_layouts[0])
-slide.shapes.title.text = "Project Aurora — Strategic Alternatives"
-slide.placeholders[1].text = "Preliminary Discussion Materials"
-
-# Valuation summary slide (title-only layout)
-slide = prs.slides.add_slide(prs.slide_layouts[5])
-slide.shapes.title.text = "Valuation implies $38–$52 per share across methodologies"
-
-# Add a table bound to model outputs
-rows, cols = 5, 4
-tbl_shape = slide.shapes.add_table(rows, cols,
-                                   Inches(0.5), Inches(1.5),
-                                   Inches(9), Inches(3))
-tbl = tbl_shape.table
-headers = ["Methodology", "Low ($)", "Mid ($)", "High ($)"]
-for c, h in enumerate(headers):
-    tbl.cell(0, c).text = h
-
-# In a real deck, read these from the model workbook with openpyxl
-data = [
-    ("Trading comps",     "35", "41", "48"),
-    ("Precedent M&A",     "39", "45", "52"),
-    ("DCF (base)",        "36", "43", "51"),
-    ("LBO (10% IRR)",     "33", "38", "44"),
-]
-for r, row in enumerate(data, start=1):
-    for c, val in enumerate(row):
-        tbl.cell(r, c).text = val
-
-# Embed a chart rendered from the model
-slide = prs.slides.add_slide(prs.slide_layouts[5])
-slide.shapes.title.text = "Football field — current price $42"
-slide.shapes.add_picture("./out/charts/football_field.png",
-                         Inches(1), Inches(1.8), width=Inches(8))
-
-Path("./out").mkdir(exist_ok=True)
-prs.save("./out/pitch-aurora.pptx")
+```pythonfrom pptx import Presentation
+
+from pptx.util import Inches, Pt
+
+from pptx.dml.color import RGBColor
+
+from pathlib import Path
+
+
+template = Path("./templates/firm-template.pptx")
+
+prs = Presentation(str(template)) if template.exists() else Presentation()
+
+
+# Title slide
+
+slide = prs.slides.add_slide(prs.slide_layouts[0])
+
+slide.shapes.title.text = "Project Aurora — Strategic Alternatives"
+
+slide.placeholders[1].text = "Preliminary Discussion Materials"
+
+
+# Valuation summary slide (title-only layout)
+
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+
+slide.shapes.title.text = "Valuation implies $38–$52 per share across methodologies"
+
+
+# Add a table bound to model outputs
+
+rows, cols = 5, 4
+
+tbl_shape = slide.shapes.add_table(
+    rows, cols, Inches(0.5), Inches(1.5), Inches(9), Inches(3)
+)
+
+tbl = tbl_shape.table
+
+headers = ["Methodology", "Low ($)", "Mid ($)", "High ($)"]
+
+for c, h in enumerate(headers):
+    tbl.cell(0, c).text = h
+
+
+# In a real deck, read these from the model workbook with openpyxl
+
+data = [
+    ("Trading comps", "35", "41", "48"),
+    ("Precedent M&A", "39", "45", "52"),
+    ("DCF (base)", "36", "43", "51"),
+    ("LBO (10% IRR)", "33", "38", "44"),
+]
+
+for r, row in enumerate(data, start=1):
+    for c, val in enumerate(row):
+        tbl.cell(r, c).text = val
+
+
+# Embed a chart rendered from the model
+
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+
+slide.shapes.title.text = "Football field — current price $42"
+
+slide.shapes.add_picture(
+    "./out/charts/football_field.png", Inches(1), Inches(1.8), width=Inches(8)
+)
+
+
+Path("./out").mkdir(exist_ok=True)
+
+prs.save("./out/pitch-aurora.pptx")
 ```
 
 ## Binding deck numbers to the source workbook
 
 Read named ranges or specific cells from your Excel model so deck numbers never drift.
 
-```python
-from openpyxl import load_workbook
-
-wb = load_workbook("./out/model.xlsx", data_only=True)
-def nr(name):
-    """Resolve a named range to its current computed value."""
-    rng = wb.defined_names[name]
-    sheet, coord = next(rng.destinations)
-    return wb[sheet][coord].value
-
-revenue_fy24 = nr("RevenueFY24")
-implied_mid  = nr("ImpliedSharePriceBase")
+```pythonfrom openpyxl import load_workbook
+
+
+wb = load_workbook("./out/model.xlsx", data_only=True)
+
+
+def nr(name):
+    """Resolve a named range to its current computed value."""
+
+    rng = wb.defined_names[name]
+
+    sheet, coord = next(rng.destinations)
+
+    return wb[sheet][coord].value
+
+
+revenue_fy24 = nr("RevenueFY24")
+
+implied_mid = nr("ImpliedSharePriceBase")
 ```
 
 Then build deck content using those values:
-```python
-slide.shapes.title.text = f"Implied share price of ${implied_mid:.2f} (base case)"
+```pythonslide.shapes.title.text = f"Implied share price of ${implied_mid:.2f} (base case)"
 ```
 
 Remember to recalculate the workbook before reading it — openpyxl only sees computed values if something has already calculated the sheet. Run the recalc helper in the `excel-author` skill first, or open/save through a real Excel session.

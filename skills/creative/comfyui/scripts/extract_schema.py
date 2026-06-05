@@ -32,16 +32,26 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
-    OUTPUT_NODES, PARAM_PATTERNS, PROMPT_FIELDS,
-    is_link, iter_embedding_refs, iter_model_deps, iter_nodes, unwrap_workflow,
+    OUTPUT_NODES,
+    PARAM_PATTERNS,
+    PROMPT_FIELDS,
+    is_link,
+    iter_embedding_refs,
+    iter_model_deps,
+    iter_nodes,
+    unwrap_workflow,
 )
 
 
 # Sampler nodes whose `positive` / `negative` connections we trace
 SAMPLER_NODE_FAMILY = {
-    "KSampler", "KSamplerAdvanced",
-    "SamplerCustom", "SamplerCustomAdvanced",
-    "BasicGuider", "CFGGuider", "DualCFGGuider",
+    "KSampler",
+    "KSamplerAdvanced",
+    "SamplerCustom",
+    "SamplerCustomAdvanced",
+    "BasicGuider",
+    "CFGGuider",
+    "DualCFGGuider",
 }
 
 
@@ -105,7 +115,10 @@ def find_negative_prompt_node(workflow: dict) -> str | None:
         src = trace_to_node(workflow, neg)
         if src and isinstance(workflow.get(src), dict):
             cls = workflow[src].get("class_type", "")
-            if cls.startswith("CLIPTextEncode") or cls in {"smZ CLIPTextEncode", "BNK_CLIPTextEncodeAdvanced"}:
+            if cls.startswith("CLIPTextEncode") or cls in {
+                "smZ CLIPTextEncode",
+                "BNK_CLIPTextEncodeAdvanced",
+            }:
                 return src
     return None
 
@@ -121,7 +134,10 @@ def find_positive_prompt_node(workflow: dict) -> str | None:
         src = trace_to_node(workflow, pos)
         if src and isinstance(workflow.get(src), dict):
             cls = workflow[src].get("class_type", "")
-            if cls.startswith("CLIPTextEncode") or cls in {"smZ CLIPTextEncode", "BNK_CLIPTextEncodeAdvanced"}:
+            if cls.startswith("CLIPTextEncode") or cls in {
+                "smZ CLIPTextEncode",
+                "BNK_CLIPTextEncodeAdvanced",
+            }:
                 return src
     return None
 
@@ -178,7 +194,10 @@ def extract_schema(workflow: dict) -> dict:
                 else:
                     # Fallback: use _meta.title hints if present
                     meta_title = (node.get("_meta") or {}).get("title", "").lower()
-                    if any(t_ in meta_title for t_ in ("negative", "neg", "-prompt", "anti")):
+                    if any(
+                        t_ in meta_title
+                        for t_ in ("negative", "neg", "-prompt", "anti")
+                    ):
                         actual_name = "negative_prompt"
 
             raw_params.append({
@@ -202,8 +221,10 @@ def extract_schema(workflow: dict) -> dict:
         if len(entries) == 1:
             r = entries[0]
             parameters[name] = {
-                "node_id": r["node_id"], "field": r["field"],
-                "type": r["type"], "value": r["value"],
+                "node_id": r["node_id"],
+                "field": r["field"],
+                "type": r["type"],
+                "value": r["value"],
                 "class_type": r["class_type"],
             }
         else:
@@ -212,8 +233,10 @@ def extract_schema(workflow: dict) -> dict:
             for r in entries:
                 full_name = f"{name}_{r['node_id']}"
                 parameters[full_name] = {
-                    "node_id": r["node_id"], "field": r["field"],
-                    "type": r["type"], "value": r["value"],
+                    "node_id": r["node_id"],
+                    "field": r["field"],
+                    "type": r["type"],
+                    "value": r["value"],
                     "class_type": r["class_type"],
                     "alias_of": name,
                 }
@@ -254,11 +277,17 @@ def extract_schema(workflow: dict) -> dict:
         "model_dep_count": len(model_deps),
         "embedding_dep_count": len(embedding_deps),
         "has_negative_prompt": "negative_prompt" in parameters,
-        "has_seed": "seed" in parameters or any(p.startswith("seed_") for p in parameters),
+        "has_seed": "seed" in parameters
+        or any(p.startswith("seed_") for p in parameters),
         "is_video_workflow": any(
-            workflow.get(n, {}).get("class_type", "") in {
-                "VHS_VideoCombine", "SaveVideo", "SaveAnimatedWEBP", "SaveAnimatedPNG",
-            } for n in output_nodes
+            workflow.get(n, {}).get("class_type", "")
+            in {
+                "VHS_VideoCombine",
+                "SaveVideo",
+                "SaveAnimatedWEBP",
+                "SaveAnimatedPNG",
+            }
+            for n in output_nodes
         ),
     }
 
@@ -272,11 +301,14 @@ def extract_schema(workflow: dict) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Extract controllable parameters from a ComfyUI workflow")
+    p = argparse.ArgumentParser(
+        description="Extract controllable parameters from a ComfyUI workflow"
+    )
     p.add_argument("workflow", help="Path to workflow API JSON file")
     p.add_argument("--output", "-o", help="Output file (default: stdout)")
-    p.add_argument("--summary-only", action="store_true",
-                   help="Only print the summary block")
+    p.add_argument(
+        "--summary-only", action="store_true", help="Only print the summary block"
+    )
     args = p.parse_args(argv)
 
     wf_path = Path(args.workflow).expanduser()

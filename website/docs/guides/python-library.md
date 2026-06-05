@@ -40,15 +40,17 @@ The same environment variables used by the CLI are required when using Clawksis 
 
 The simplest way to use Clawksis is the `chat()` method — pass a message, get a string back:
 
-```python
-from run_agent import AIAgent
-
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    quiet_mode=True,
-)
-response = agent.chat("What is the capital of France?")
-print(response)
+```pythonfrom run_agent import AIAgent
+
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    quiet_mode=True,
+)
+
+response = agent.chat("What is the capital of France?")
+
+print(response)
 ```
 
 `chat()` handles the full conversation loop internally — tool calls, retries, everything — and returns just the final text response.
@@ -63,19 +65,21 @@ Always set `quiet_mode=True` when embedding Clawksis in your own code. Without i
 
 For more control over the conversation, use `run_conversation()` directly. It returns a dictionary with the full response, message history, and metadata:
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    quiet_mode=True,
-)
-
-result = agent.run_conversation(
-    user_message="Search for recent Python 3.13 features",
-    task_id="my-task-1",
-)
-
-print(result["final_response"])
-print(f"Messages exchanged: {len(result['messages'])}")
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    quiet_mode=True,
+)
+
+
+result = agent.run_conversation(
+    user_message="Search for recent Python 3.13 features",
+    task_id="my-task-1",
+)
+
+
+print(result["final_response"])
+
+print(f"Messages exchanged: {len(result['messages'])}")
 ```
 
 The returned dictionary contains:
@@ -86,11 +90,10 @@ The returned dictionary contains:
 
 You can also pass a custom system message that overrides the ephemeral system prompt for that call:
 
-```python
-result = agent.run_conversation(
-    user_message="Explain quicksort",
-    system_message="You are a computer science tutor. Use simple analogies.",
-)
+```pythonresult = agent.run_conversation(
+    user_message="Explain quicksort",
+    system_message="You are a computer science tutor. Use simple analogies.",
+)
 ```
 
 ---
@@ -99,20 +102,22 @@ result = agent.run_conversation(
 
 Control which toolsets the agent has access to using `enabled_toolsets` or `disabled_toolsets`:
 
-```python
-# Only enable web tools (browsing, search)
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    enabled_toolsets=["web"],
-    quiet_mode=True,
-)
-
-# Enable everything except terminal access
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    disabled_toolsets=["terminal"],
-    quiet_mode=True,
-)
+```python# Only enable web tools (browsing, search)
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    enabled_toolsets=["web"],
+    quiet_mode=True,
+)
+
+
+# Enable everything except terminal access
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    disabled_toolsets=["terminal"],
+    quiet_mode=True,
+)
 ```
 
 :::tip
@@ -125,22 +130,27 @@ Use `enabled_toolsets` when you want a minimal, locked-down agent (e.g., only we
 
 Maintain conversation state across multiple turns by passing the message history back in:
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    quiet_mode=True,
-)
-
-# First turn
-result1 = agent.run_conversation("My name is Alice")
-history = result1["messages"]
-
-# Second turn — agent remembers the context
-result2 = agent.run_conversation(
-    "What's my name?",
-    conversation_history=history,
-)
-print(result2["final_response"])  # "Your name is Alice."
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    quiet_mode=True,
+)
+
+
+# First turn
+
+result1 = agent.run_conversation("My name is Alice")
+
+history = result1["messages"]
+
+
+# Second turn — agent remembers the context
+
+result2 = agent.run_conversation(
+    "What's my name?",
+    conversation_history=history,
+)
+
+print(result2["final_response"])  # "Your name is Alice."
 ```
 
 The `conversation_history` parameter accepts the `messages` list from a previous result. The agent copies it internally, so your original list is never mutated.
@@ -151,15 +161,16 @@ The `conversation_history` parameter accepts the `messages` list from a previous
 
 Enable trajectory saving to capture conversations in ShareGPT format — useful for generating training data or debugging:
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4.6",
-    save_trajectories=True,
-    quiet_mode=True,
-)
-
-agent.chat("Write a Python function to sort a list")
-# Saves to trajectory_samples.jsonl in ShareGPT format
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4.6",
+    save_trajectories=True,
+    quiet_mode=True,
+)
+
+
+agent.chat("Write a Python function to sort a list")
+
+# Saves to trajectory_samples.jsonl in ShareGPT format
 ```
 
 Each conversation is appended as a single JSONL line, making it easy to collect datasets from automated runs.
@@ -170,15 +181,16 @@ Each conversation is appended as a single JSONL line, making it easy to collect 
 
 Use `ephemeral_system_prompt` to set a custom system prompt that guides the agent's behavior but is **not** saved to trajectory files (keeping your training data clean):
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    ephemeral_system_prompt="You are a SQL expert. Only answer database questions.",
-    quiet_mode=True,
-)
-
-response = agent.chat("How do I write a JOIN query?")
-print(response)
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    ephemeral_system_prompt="You are a SQL expert. Only answer database questions.",
+    quiet_mode=True,
+)
+
+
+response = agent.chat("How do I write a JOIN query?")
+
+print(response)
 ```
 
 This is ideal for building specialized agents — a code reviewer, a documentation writer, a SQL assistant — all using the same underlying tooling.
@@ -195,30 +207,37 @@ python batch_runner.py --input prompts.jsonl --output results.jsonl
 
 Each prompt gets its own `task_id` and isolated environment. If you need custom batch logic, you can build your own using `AIAgent` directly:
 
-```python
-import concurrent.futures
-from run_agent import AIAgent
-
-prompts = [
-    "Explain recursion",
-    "What is a hash table?",
-    "How does garbage collection work?",
-]
-
-def process_prompt(prompt):
-    # Create a fresh agent per task for thread safety
-    agent = AIAgent(
-        model="anthropic/claude-sonnet-4",
-        quiet_mode=True,
-        skip_memory=True,
-    )
-    return agent.chat(prompt)
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-    results = list(executor.map(process_prompt, prompts))
-
-for prompt, result in zip(prompts, results):
-    print(f"Q: {prompt}\nA: {result}\n")
+```pythonimport concurrent.futures
+
+from run_agent import AIAgent
+
+
+prompts = [
+    "Explain recursion",
+    "What is a hash table?",
+    "How does garbage collection work?",
+]
+
+
+def process_prompt(prompt):
+
+    # Create a fresh agent per task for thread safety
+
+    agent = AIAgent(
+        model="anthropic/claude-sonnet-4",
+        quiet_mode=True,
+        skip_memory=True,
+    )
+
+    return agent.chat(prompt)
+
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    results = list(executor.map(process_prompt, prompts))
+
+
+for prompt, result in zip(prompts, results):
+    print(f"Q: {prompt}\nA: {result}\n")
 ```
 
 :::warning
@@ -231,78 +250,100 @@ Always create a **new `AIAgent` instance per thread or task**. The agent maintai
 
 ### FastAPI Endpoint
 
-```python
-from fastapi import FastAPI
-from pydantic import BaseModel
-from run_agent import AIAgent
-
-app = FastAPI()
-
-class ChatRequest(BaseModel):
-    message: str
-    model: str = "anthropic/claude-sonnet-4"
-
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    agent = AIAgent(
-        model=request.model,
-        quiet_mode=True,
-        skip_context_files=True,
-        skip_memory=True,
-    )
-    response = agent.chat(request.message)
-    return {"response": response}
+```pythonfrom fastapi import FastAPI
+
+from pydantic import BaseModel
+
+from run_agent import AIAgent
+
+
+app = FastAPI()
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+    model: str = "anthropic/claude-sonnet-4"
+
+
+@app.post("/chat")
+async def chat(request: ChatRequest):
+
+    agent = AIAgent(
+        model=request.model,
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+
+    response = agent.chat(request.message)
+
+    return {"response": response}
 ```
 
 ### Discord Bot
 
-```python
-import discord
-from run_agent import AIAgent
-
-client = discord.Client(intents=discord.Intents.default())
-
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    if message.content.startswith("!clawk "):
-        query = message.content[8:]
-        agent = AIAgent(
-            model="anthropic/claude-sonnet-4",
-            quiet_mode=True,
-            skip_context_files=True,
-            skip_memory=True,
-            platform="discord",
-        )
-        response = agent.chat(query)
-        await message.channel.send(response[:2000])
-
-client.run("YOUR_DISCORD_TOKEN")
+```pythonimport discord
+
+from run_agent import AIAgent
+
+
+client = discord.Client(intents=discord.Intents.default())
+
+
+@client.event
+async def on_message(message):
+
+    if message.author == client.user:
+        return
+
+    if message.content.startswith("!clawk "):
+        query = message.content[8:]
+
+        agent = AIAgent(
+            model="anthropic/claude-sonnet-4",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="discord",
+        )
+
+        response = agent.chat(query)
+
+        await message.channel.send(response[:2000])
+
+
+client.run("YOUR_DISCORD_TOKEN")
 ```
 
 ### CI/CD Pipeline Step
 
-```python
-#!/usr/bin/env python3
-"""CI step: auto-review a PR diff."""
-import subprocess
-from run_agent import AIAgent
-
-diff = subprocess.check_output(["git", "diff", "main...HEAD"]).decode()
-
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    quiet_mode=True,
-    skip_context_files=True,
-    skip_memory=True,
-    disabled_toolsets=["terminal", "browser"],
-)
-
-review = agent.chat(
-    f"Review this PR diff for bugs, security issues, and style problems:\n\n{diff}"
-)
-print(review)
+```python#!/usr/bin/env python3
+
+"""CI step: auto-review a PR diff."""
+
+import subprocess
+
+from run_agent import AIAgent
+
+
+diff = subprocess.check_output(["git", "diff", "main...HEAD"]).decode()
+
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    quiet_mode=True,
+    skip_context_files=True,
+    skip_memory=True,
+    disabled_toolsets=["terminal", "browser"],
+)
+
+
+review = agent.chat(
+    f"Review this PR diff for bugs, security issues, and style problems:\n\n{diff}"
+)
+
+print(review)
 ```
 
 ---

@@ -180,33 +180,42 @@ Tool definitions include `name`, `description`, `parameters`, and `required`
 
 Trajectories are standard JSONL — load with any JSON-lines reader:
 
-```python
-import json
-
-def load_trajectories(path: str):
-    """Load trajectory entries from a JSONL file."""
-    entries = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                entries.append(json.loads(line))
-    return entries
-
-# Filter to successful completions only
-successful = [e for e in load_trajectories("trajectory_samples.jsonl")
-              if e.get("completed")]
-
-# Extract just the conversations for training
-training_data = [e["conversations"] for e in successful]
+```pythonimport json
+
+
+def load_trajectories(path: str):
+    """Load trajectory entries from a JSONL file."""
+
+    entries = []
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+
+            if line:
+                entries.append(json.loads(line))
+
+    return entries
+
+
+# Filter to successful completions only
+
+successful = [
+    e for e in load_trajectories("trajectory_samples.jsonl") if e.get("completed")
+]
+
+
+# Extract just the conversations for training
+
+training_data = [e["conversations"] for e in successful]
 ```
 
 ### Loading for HuggingFace Datasets
 
-```python
-from datasets import load_dataset
-
-ds = load_dataset("json", data_files="trajectory_samples.jsonl")
+```pythonfrom datasets import load_dataset
+
+
+ds = load_dataset("json", data_files="trajectory_samples.jsonl")
 ```
 
 The normalized `tool_stats` schema ensures all entries have the same columns,

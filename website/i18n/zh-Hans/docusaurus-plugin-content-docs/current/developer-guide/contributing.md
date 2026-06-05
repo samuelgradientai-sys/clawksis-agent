@@ -110,37 +110,41 @@ Clawksis 官方支持 **Linux、macOS、WSL2 以及原生 Windows（通过 Power
 
 始终同时捕获 `ImportError` 和 `NotImplementedError`：
 
-```python
-try:
-    from simple_term_menu import TerminalMenu
-    menu = TerminalMenu(options)
-    idx = menu.show()
-except (ImportError, NotImplementedError):
-    # 回退：编号菜单
-    for i, opt in enumerate(options):
-        print(f"  {i+1}. {opt}")
-    idx = int(input("Choice: ")) - 1
+```pythontry:
+    from simple_term_menu import TerminalMenu
+
+    menu = TerminalMenu(options)
+
+    idx = menu.show()
+
+except (ImportError, NotImplementedError):
+    # 回退：编号菜单
+
+    for i, opt in enumerate(options):
+        print(f"  {i + 1}. {opt}")
+
+    idx = int(input("Choice: ")) - 1
 ```
 
 ### 2. 文件编码
 
 某些环境可能以非 UTF-8 编码保存 `.env` 文件：
 
-```python
-try:
-    load_dotenv(env_path)
-except UnicodeDecodeError:
-    load_dotenv(env_path, encoding="latin-1")
+```pythontry:
+    load_dotenv(env_path)
+
+except UnicodeDecodeError:
+    load_dotenv(env_path, encoding="latin-1")
 ```
 
 ### 3. 进程管理
 
 `os.setsid()`、`os.killpg()` 以及信号处理在各平台间存在差异：
 
-```python
-import platform
-if platform.system() != "Windows":
-    kwargs["preexec_fn"] = os.setsid
+```pythonimport platform
+
+if platform.system() != "Windows":
+    kwargs["preexec_fn"] = os.setsid
 ```
 
 ### 4. 路径分隔符

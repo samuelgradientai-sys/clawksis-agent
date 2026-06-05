@@ -119,22 +119,25 @@ def check_<platform>_requirements() -> bool:
 
 Add the platform to the `Platform` enum:
 
-```python
-class Platform(Enum):
-    ...
-    YOUR_PLATFORM = "your_platform"
+```pythonclass Platform(Enum):
+    ...
+
+    YOUR_PLATFORM = "your_platform"
 ```
 
 Add env var loading in `_apply_env_overrides()`:
 
-```python
-# Your Platform
-your_token = os.getenv("YOUR_PLATFORM_TOKEN")
-if your_token:
-    if Platform.YOUR_PLATFORM not in config.platforms:
-        config.platforms[Platform.YOUR_PLATFORM] = PlatformConfig()
-    config.platforms[Platform.YOUR_PLATFORM].enabled = True
-    config.platforms[Platform.YOUR_PLATFORM].token = your_token
+```python# Your Platform
+
+your_token = os.getenv("YOUR_PLATFORM_TOKEN")
+
+if your_token:
+    if Platform.YOUR_PLATFORM not in config.platforms:
+        config.platforms[Platform.YOUR_PLATFORM] = PlatformConfig()
+
+    config.platforms[Platform.YOUR_PLATFORM].enabled = True
+
+    config.platforms[Platform.YOUR_PLATFORM].token = your_token
 ```
 
 Update `get_connected_platforms()` if your platform doesn't use token/api_key
@@ -299,15 +302,14 @@ platforms = {
 
 Add to the `_PLATFORMS` list:
 
-```python
-{
-    "key": "your_platform",
-    "label": "Your Platform",
-    "emoji": "📱",
-    "token_var": "YOUR_PLATFORM_TOKEN",
-    "setup_instructions": [...],
-    "vars": [...],
-}
+```python{
+    "key": "your_platform",
+    "label": "Your Platform",
+    "emoji": "📱",
+    "token_var": "YOUR_PLATFORM_TOKEN",
+    "setup_instructions": [...],
+    "vars": [...],
+}
 ```
 
 If your platform needs custom setup logic (connectivity testing, QR codes,

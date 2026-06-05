@@ -67,28 +67,26 @@ A cron job can load one or more skills before it runs the prompt.
 
 ### Single skill
 
-```python
-cronjob(
-    action="create",
-    skill="blogwatcher",
-    prompt="Check the configured feeds and summarize anything new.",
-    schedule="0 9 * * *",
-    name="Morning feeds",
-)
+```pythoncronjob(
+    action="create",
+    skill="blogwatcher",
+    prompt="Check the configured feeds and summarize anything new.",
+    schedule="0 9 * * *",
+    name="Morning feeds",
+)
 ```
 
 ### Multiple skills
 
 Skills are loaded in order. The prompt becomes the task instruction layered on top of those skills.
 
-```python
-cronjob(
-    action="create",
-    skills=["blogwatcher", "maps"],
-    prompt="Look for new local events and interesting nearby places, then combine them into one short brief.",
-    schedule="every 6h",
-    name="Local brief",
-)
+```pythoncronjob(
+    action="create",
+    skills=["blogwatcher", "maps"],
+    prompt="Look for new local events and interesting nearby places, then combine them into one short brief.",
+    schedule="every 6h",
+    name="Local brief",
+)
 ```
 
 This is useful when you want a scheduled agent to inherit reusable workflows without stuffing the full skill text into the cron prompt itself.
@@ -104,14 +102,14 @@ clawk cron create "every 1d at 09:00" \
   --workdir /home/me/projects/acme
 ```
 
-```python
-# From a chat, via the cronjob tool
-cronjob(
-    action="create",
-    schedule="every 1d at 09:00",
-    workdir="/home/me/projects/acme",
-    prompt="Audit open PRs, summarize CI health, and post to #eng",
-)
+```python# From a chat, via the cronjob tool
+
+cronjob(
+    action="create",
+    schedule="every 1d at 09:00",
+    workdir="/home/me/projects/acme",
+    prompt="Audit open PRs, summarize CI health, and post to #eng",
+)
 ```
 
 When `workdir` is set:
@@ -136,14 +134,14 @@ clawk cron create "every 1d at 03:00" \
   --profile night-ops
 ```
 
-```python
-# From a chat, via the cronjob tool
-cronjob(
-    action="create",
-    schedule="every 1d at 03:00",
-    prompt="Tail the security log and flag anomalies",
-    profile="night-ops",
-)
+```python# From a chat, via the cronjob tool
+
+cronjob(
+    action="create",
+    schedule="every 1d at 03:00",
+    prompt="Tail the security log and flag anomalies",
+    profile="night-ops",
+)
 ```
 
 Use `--profile default` to explicitly pin to the root Clawksis profile. The named profile must already exist; the scheduler refuses to create profiles on the fly. To clear a profile pin during `cron edit`, pass an empty string (`--profile ""` or `profile=""`) — the job reverts to running in whatever profile the scheduler itself is in.
@@ -384,10 +382,14 @@ Ping me on Telegram if RAM is over 85%, every 5 minutes.
 
 Clawksis will write the check script to `~/.clawksis/scripts/` via `write_file`, then call:
 
-```python
-cronjob(action="create", schedule="every 5m",
-        script="memory-watchdog.sh", no_agent=True,
-        deliver="telegram", name="memory-watchdog")
+```pythoncronjob(
+    action="create",
+    schedule="every 5m",
+    script="memory-watchdog.sh",
+    no_agent=True,
+    deliver="telegram",
+    name="memory-watchdog",
+)
 ```
 
 It picks `no_agent=True` automatically when the message content is fully determined by the script (watchdogs, threshold alerts, heartbeats). The same tool also lets the agent pause, resume, edit, and remove jobs — so the whole lifecycle is chat-driven without anyone touching the CLI.
@@ -398,33 +400,38 @@ See the [Script-Only Cron Jobs guide](/guides/cron-script-only) for worked examp
 
 Cron jobs run in isolated sessions with no memory of previous runs. But sometimes one job's output is exactly what the next job needs. The `context_from` parameter wires that connection automatically — Job B's prompt gets Job A's most recent output prepended as context at runtime.
 
-```python
-# Job 1: Collect raw data
-cronjob(
-    action="create",
-    prompt="Fetch the top 10 AI/ML stories from Hacker News. Save them to ~/.clawksis/data/briefs/raw.md in markdown format with title, URL, and score.",
-    schedule="0 7 * * *",
-    name="AI News Collector",
-)
-
-# Job 2: Triage — receives Job 1's output as context
-# Get Job 1's ID from: cronjob(action="list")
-cronjob(
-    action="create",
-    prompt="Read ~/.clawksis/data/briefs/raw.md. Score each story 1–10 for engagement potential and novelty. Output the top 5 to ~/.clawksis/data/briefs/ranked.md.",
-    schedule="30 7 * * *",
-    context_from="<job1_id>",
-    name="AI News Triage",
-)
-
-# Job 3: Ship — receives Job 2's output as context
-cronjob(
-    action="create",
-    prompt="Read ~/.clawksis/data/briefs/ranked.md. Write 3 tweet drafts (hook + body + hashtags). Deliver to telegram:7976161601.",
-    schedule="0 8 * * *",
-    context_from="<job2_id>",
-    name="AI News Brief",
-)
+```python# Job 1: Collect raw data
+
+cronjob(
+    action="create",
+    prompt="Fetch the top 10 AI/ML stories from Hacker News. Save them to ~/.clawksis/data/briefs/raw.md in markdown format with title, URL, and score.",
+    schedule="0 7 * * *",
+    name="AI News Collector",
+)
+
+
+# Job 2: Triage — receives Job 1's output as context
+
+# Get Job 1's ID from: cronjob(action="list")
+
+cronjob(
+    action="create",
+    prompt="Read ~/.clawksis/data/briefs/raw.md. Score each story 1–10 for engagement potential and novelty. Output the top 5 to ~/.clawksis/data/briefs/ranked.md.",
+    schedule="30 7 * * *",
+    context_from="<job1_id>",
+    name="AI News Triage",
+)
+
+
+# Job 3: Ship — receives Job 2's output as context
+
+cronjob(
+    action="create",
+    prompt="Read ~/.clawksis/data/briefs/ranked.md. Write 3 tweet drafts (hook + body + hashtags). Deliver to telegram:7976161601.",
+    schedule="0 8 * * *",
+    context_from="<job2_id>",
+    name="AI News Brief",
+)
 ```
 
 **How it works:**
@@ -504,13 +511,12 @@ every 1d     → Every day
 
 You can override it:
 
-```python
-cronjob(
-    action="create",
-    prompt="...",
-    schedule="every 2h",
-    repeat=5,
-)
+```pythoncronjob(
+    action="create",
+    prompt="...",
+    schedule="every 2h",
+    repeat=5,
+)
 ```
 
 ## Managing jobs programmatically
@@ -560,16 +566,22 @@ If your cron job attaches a pre-check script (via `script=`), the script can dec
 
 …and cron skips the agent run entirely for this tick. Useful for frequent polls (every 1–5 min) that only need to wake the LLM when state actually changed — otherwise you pay for zero-content agent turns over and over.
 
-```python
-# pre-check script
-import json, sys
-latest = fetch_latest_issue_count()
-prev = read_state("issue_count")
-if latest == prev:
-    print(json.dumps({"wakeAgent": False}))   # skip this tick
-    sys.exit(0)
-write_state("issue_count", latest)
-print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
+```python# pre-check script
+
+import json, sys
+
+latest = fetch_latest_issue_count()
+
+prev = read_state("issue_count")
+
+if latest == prev:
+    print(json.dumps({"wakeAgent": False}))  # skip this tick
+
+    sys.exit(0)
+
+write_state("issue_count", latest)
+
+print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
 ```
 
 When `wakeAgent` is omitted, the default is `true` (wake the agent as usual).
@@ -625,18 +637,23 @@ cronjob(action="create", name="nightly-analysis",
 
 **SQL-count gate** — only run when there are new rows to process in your own database. The script can also pass the count through to the agent via `context`, so the agent knows how much it's looking at without re-querying.
 
-```python
-#!/usr/bin/env python
-# ~/.clawksis/scripts/new-rows.py
-import json, sqlite3
-conn = sqlite3.connect("/home/me/data/app.db")
-n = conn.execute(
-    "SELECT COUNT(*) FROM messages WHERE ts > strftime('%s','now','-2 hours')"
-).fetchone()[0]
-if n < 1:
-    print(json.dumps({"wakeAgent": False}))
-else:
-    print(json.dumps({"wakeAgent": True, "context": {"new_rows": n}}))
+```python#!/usr/bin/env python
+
+# ~/.clawksis/scripts/new-rows.py
+
+import json, sqlite3
+
+conn = sqlite3.connect("/home/me/data/app.db")
+
+n = conn.execute(
+    "SELECT COUNT(*) FROM messages WHERE ts > strftime('%s','now','-2 hours')"
+).fetchone()[0]
+
+if n < 1:
+    print(json.dumps({"wakeAgent": False}))
+
+else:
+    print(json.dumps({"wakeAgent": True, "context": {"new_rows": n}}))
 ```
 
 ```text

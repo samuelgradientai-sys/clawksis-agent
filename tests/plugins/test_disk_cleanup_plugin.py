@@ -24,8 +24,6 @@ Covers the bundled plugin at ``plugins/disk-cleanup/``:
 
 """
 
-
-
 import importlib
 
 import json
@@ -35,17 +33,11 @@ import sys
 from pathlib import Path
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture(autouse=True)
-
 def _isolate_env(tmp_path, monkeypatch):
-
     """Isolate CLAWK_HOME for each test.
 
 
@@ -67,22 +59,14 @@ def _isolate_env(tmp_path, monkeypatch):
     yield clawk_home
 
 
-
-
-
 def _load_lib():
-
     """Import the plugin's library module directly from the repo path."""
 
     repo_root = Path(__file__).resolve().parents[2]
 
     lib_path = repo_root / "plugins" / "disk-cleanup" / "disk_cleanup.py"
 
-    spec = importlib.util.spec_from_file_location(
-
-        "disk_cleanup_under_test", lib_path
-
-    )
+    spec = importlib.util.spec_from_file_location("disk_cleanup_under_test", lib_path)
 
     mod = importlib.util.module_from_spec(spec)
 
@@ -91,11 +75,7 @@ def _load_lib():
     return mod
 
 
-
-
-
 def _load_plugin_init():
-
     """Import the plugin's __init__.py (which depends on the library)."""
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -105,13 +85,9 @@ def _load_plugin_init():
     # Use the PluginManager's module naming convention so relative imports work.
 
     spec = importlib.util.spec_from_file_location(
-
         "clawk_plugins.disk_cleanup",
-
         plugin_dir / "__init__.py",
-
         submodule_search_locations=[str(plugin_dir)],
-
     )
 
     # Ensure parent namespace package exists for the relative `. import disk_cleanup`
@@ -119,7 +95,6 @@ def _load_plugin_init():
     import types
 
     if "clawk_plugins" not in sys.modules:
-
         ns = types.ModuleType("clawk_plugins")
 
         ns.__path__ = []
@@ -139,9 +114,6 @@ def _load_plugin_init():
     return mod
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Library tests
@@ -149,9 +121,7 @@ def _load_plugin_init():
 # ---------------------------------------------------------------------------
 
 
-
 class TestIsSafePath:
-
     def test_accepts_path_under_clawk_home(self, _isolate_env):
 
         dg = _load_lib()
@@ -164,15 +134,11 @@ class TestIsSafePath:
 
         assert dg.is_safe_path(p) is True
 
-
-
     def test_rejects_outside_clawk_home(self, _isolate_env):
 
         dg = _load_lib()
 
         assert dg.is_safe_path(Path("/etc/passwd")) is False
-
-
 
     def test_accepts_tmp_clawk_prefix(self, _isolate_env, tmp_path):
 
@@ -180,15 +146,11 @@ class TestIsSafePath:
 
         assert dg.is_safe_path(Path("/tmp/clawk-abc/x.log")) is True
 
-
-
     def test_rejects_plain_tmp(self, _isolate_env):
 
         dg = _load_lib()
 
         assert dg.is_safe_path(Path("/tmp/other.log")) is False
-
-
 
     def test_rejects_windows_mount(self, _isolate_env):
 
@@ -197,11 +159,7 @@ class TestIsSafePath:
         assert dg.is_safe_path(Path("/mnt/c/Users/x/test.txt")) is False
 
 
-
-
-
 class TestGuessCategory:
-
     def test_test_prefix(self, _isolate_env):
 
         dg = _load_lib()
@@ -211,8 +169,6 @@ class TestGuessCategory:
         p.write_text("x")
 
         assert dg.guess_category(p) == "test"
-
-
 
     def test_tmp_prefix(self, _isolate_env):
 
@@ -224,8 +180,6 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) == "test"
 
-
-
     def test_dot_test_suffix(self, _isolate_env):
 
         dg = _load_lib()
@@ -235,8 +189,6 @@ class TestGuessCategory:
         p.write_text("x")
 
         assert dg.guess_category(p) == "test"
-
-
 
     def test_skips_protected_top_level(self, _isolate_env):
 
@@ -254,8 +206,6 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) is None
 
-
-
     def test_cron_subtree_categorised(self, _isolate_env):
 
         dg = _load_lib()
@@ -272,10 +222,7 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) == "cron-output"
 
-
-
     def test_cron_jobs_json_not_tracked(self, _isolate_env):
-
         """Regression for #32164: the cron registry must never be tracked."""
 
         dg = _load_lib()
@@ -290,10 +237,7 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) is None
 
-
-
     def test_cron_tick_lock_not_tracked(self, _isolate_env):
-
         """Regression for #32164: cron tick-lock is control-plane state."""
 
         dg = _load_lib()
@@ -308,10 +252,7 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) is None
 
-
-
     def test_cronjobs_top_level_not_tracked(self, _isolate_env):
-
         """The legacy ``cronjobs`` alias is also control-plane at the top."""
 
         dg = _load_lib()
@@ -326,8 +267,6 @@ class TestGuessCategory:
 
         assert dg.guess_category(p) is None
 
-
-
     def test_ordinary_file_returns_none(self, _isolate_env):
 
         dg = _load_lib()
@@ -339,17 +278,10 @@ class TestGuessCategory:
         assert dg.guess_category(p) is None
 
 
-
-
-
 class TestStaleCronEntryMigration:
-
     """Regression tests for #37721 — stale cron-output entries in tracked.json."""
 
-
-
     def test_quick_skips_stale_cron_output_for_jobs_json(self, _isolate_env):
-
         """A stale tracked.json entry with category="cron-output" for
 
         cron/jobs.json must NOT be deleted by quick().
@@ -376,8 +308,6 @@ class TestStaleCronEntryMigration:
 
         jobs_json.write_text('{"jobs": []}')
 
-
-
         # Simulate a stale tracked.json entry from before #34840 by
 
         # directly writing the tracked file (track() would reject it).
@@ -386,19 +316,16 @@ class TestStaleCronEntryMigration:
 
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
 
-        tracked_file.write_text(json.dumps([{
-
-            "path": str(jobs_json),
-
-            "category": "cron-output",
-
-            "timestamp": "2025-01-01T00:00:00+00:00",  # very old
-
-            "size": 123,
-
-        }]))
-
-
+        tracked_file.write_text(
+            json.dumps([
+                {
+                    "path": str(jobs_json),
+                    "category": "cron-output",
+                    "timestamp": "2025-01-01T00:00:00+00:00",  # very old
+                    "size": 123,
+                }
+            ])
+        )
 
         summary = dg.quick()
 
@@ -412,10 +339,7 @@ class TestStaleCronEntryMigration:
 
         assert len(remaining) == 0
 
-
-
     def test_quick_skips_stale_cron_output_for_cron_dir(self, _isolate_env):
-
         """Stale entry for the cron/ directory itself must not be deleted."""
 
         dg = _load_lib()
@@ -430,25 +354,20 @@ class TestStaleCronEntryMigration:
 
         (output_dir / "run.md").write_text("x")
 
-
-
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
 
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
 
-        tracked_file.write_text(json.dumps([{
-
-            "path": str(cron_dir),
-
-            "category": "cron-output",
-
-            "timestamp": "2025-01-01T00:00:00+00:00",
-
-            "size": 0,
-
-        }]))
-
-
+        tracked_file.write_text(
+            json.dumps([
+                {
+                    "path": str(cron_dir),
+                    "category": "cron-output",
+                    "timestamp": "2025-01-01T00:00:00+00:00",
+                    "size": 0,
+                }
+            ])
+        )
 
         summary = dg.quick()
 
@@ -456,10 +375,7 @@ class TestStaleCronEntryMigration:
 
         assert cron_dir.exists()
 
-
-
     def test_quick_skips_protected_cron_paths_defense_in_depth(self, _isolate_env):
-
         """Defense-in-depth: even if guess_category returned cron-output
 
         (hypothetically), protected cron paths are never deleted."""
@@ -474,8 +390,6 @@ class TestStaleCronEntryMigration:
 
         tick_lock.write_text("")
 
-
-
         # Manually inject a stale entry with "test" category (would normally
 
         # be auto-deleted) — the protected path guard must still block it.
@@ -484,19 +398,16 @@ class TestStaleCronEntryMigration:
 
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
 
-        tracked_file.write_text(json.dumps([{
-
-            "path": str(tick_lock),
-
-            "category": "test",
-
-            "timestamp": "2025-01-01T00:00:00+00:00",
-
-            "size": 0,
-
-        }]))
-
-
+        tracked_file.write_text(
+            json.dumps([
+                {
+                    "path": str(tick_lock),
+                    "category": "test",
+                    "timestamp": "2025-01-01T00:00:00+00:00",
+                    "size": 0,
+                }
+            ])
+        )
 
         summary = dg.quick()
 
@@ -504,10 +415,7 @@ class TestStaleCronEntryMigration:
 
         assert tick_lock.exists()
 
-
-
     def test_dry_run_omits_stale_cron_output(self, _isolate_env):
-
         """dry_run() should also skip stale cron-output entries."""
 
         dg = _load_lib()
@@ -520,25 +428,20 @@ class TestStaleCronEntryMigration:
 
         jobs_json.write_text("[]")
 
-
-
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
 
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
 
-        tracked_file.write_text(json.dumps([{
-
-            "path": str(jobs_json),
-
-            "category": "cron-output",
-
-            "timestamp": "2025-01-01T00:00:00+00:00",
-
-            "size": 123,
-
-        }]))
-
-
+        tracked_file.write_text(
+            json.dumps([
+                {
+                    "path": str(jobs_json),
+                    "category": "cron-output",
+                    "timestamp": "2025-01-01T00:00:00+00:00",
+                    "size": 123,
+                }
+            ])
+        )
 
         auto, prompt = dg.dry_run()
 
@@ -546,10 +449,7 @@ class TestStaleCronEntryMigration:
 
         assert len(prompt) == 0
 
-
-
     def test_legitimate_cron_output_still_deleted(self, _isolate_env):
-
         """A valid cron-output entry under cron/output/ must still be deleted."""
 
         dg = _load_lib()
@@ -562,33 +462,26 @@ class TestStaleCronEntryMigration:
 
         run_md.write_text("x")
 
-
-
         # Old enough to be deleted (>14 days)
 
         from datetime import datetime, timezone, timedelta
 
         old_ts = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
 
-
-
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
 
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
 
-        tracked_file.write_text(json.dumps([{
-
-            "path": str(run_md),
-
-            "category": "cron-output",
-
-            "timestamp": old_ts,
-
-            "size": 10,
-
-        }]))
-
-
+        tracked_file.write_text(
+            json.dumps([
+                {
+                    "path": str(run_md),
+                    "category": "cron-output",
+                    "timestamp": old_ts,
+                    "size": 10,
+                }
+            ])
+        )
 
         summary = dg.quick()
 
@@ -597,11 +490,7 @@ class TestStaleCronEntryMigration:
         assert not run_md.exists()
 
 
-
-
-
 class TestTrackForgetQuick:
-
     def test_track_then_quick_deletes_test(self, _isolate_env):
 
         dg = _load_lib()
@@ -618,8 +507,6 @@ class TestTrackForgetQuick:
 
         assert not p.exists()
 
-
-
     def test_track_dedup(self, _isolate_env):
 
         dg = _load_lib()
@@ -634,8 +521,6 @@ class TestTrackForgetQuick:
 
         assert dg.track(str(p), "test", silent=True) is False
 
-
-
     def test_track_rejects_outside_home(self, _isolate_env):
 
         dg = _load_lib()
@@ -646,15 +531,11 @@ class TestTrackForgetQuick:
 
         assert dg.track(outside, "test", silent=True) is False
 
-
-
     def test_track_skips_missing(self, _isolate_env):
 
         dg = _load_lib()
 
         assert dg.track(str(_isolate_env / "nope.txt"), "test", silent=True) is False
-
-
 
     def test_forget_removes_entry(self, _isolate_env):
 
@@ -669,8 +550,6 @@ class TestTrackForgetQuick:
         assert dg.forget(str(p)) == 1
 
         assert p.exists()  # forget does NOT delete the file
-
-
 
     def test_quick_preserves_unexpired_temp(self, _isolate_env):
 
@@ -688,28 +567,20 @@ class TestTrackForgetQuick:
 
         assert p.exists()
 
-
-
     def test_quick_preserves_protected_top_level_dirs(self, _isolate_env):
 
         dg = _load_lib()
 
         for d in ("logs", "memories", "sessions", "cron", "cache"):
-
             (_isolate_env / d).mkdir()
 
         dg.quick()
 
         for d in ("logs", "memories", "sessions", "cron", "cache"):
-
             assert (_isolate_env / d).exists(), f"{d}/ should be preserved"
 
 
-
-
-
 class TestStatus:
-
     def test_empty_status(self, _isolate_env):
 
         dg = _load_lib()
@@ -719,8 +590,6 @@ class TestStatus:
         assert s["total_tracked"] == 0
 
         assert s["top10"] == []
-
-
 
     def test_status_with_entries(self, _isolate_env):
 
@@ -745,11 +614,7 @@ class TestStatus:
         assert "big.tmp" in rendered
 
 
-
-
-
 class TestDryRun:
-
     def test_classifies_by_category(self, _isolate_env):
 
         dg = _load_lib()
@@ -773,9 +638,6 @@ class TestDryRun:
         assert any(i["path"] == str(test_f) for i in auto)
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Plugin hooks tests
@@ -783,9 +645,7 @@ class TestDryRun:
 # ---------------------------------------------------------------------------
 
 
-
 class TestPostToolCallHook:
-
     def test_write_file_test_pattern_tracked(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -795,15 +655,11 @@ class TestPostToolCallHook:
         p.write_text("x")
 
         pi._on_post_tool_call(
-
             tool_name="write_file",
-
             args={"path": str(p), "content": "x"},
-
             result="OK",
-
-            task_id="t1", session_id="s1",
-
+            task_id="t1",
+            session_id="s1",
         )
 
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
@@ -814,8 +670,6 @@ class TestPostToolCallHook:
 
         assert data[0]["category"] == "test"
 
-
-
     def test_write_file_non_test_not_tracked(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -825,22 +679,16 @@ class TestPostToolCallHook:
         p.write_text("x")
 
         pi._on_post_tool_call(
-
             tool_name="write_file",
-
             args={"path": str(p), "content": "x"},
-
             result="OK",
-
-            task_id="t2", session_id="s2",
-
+            task_id="t2",
+            session_id="s2",
         )
 
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
 
         assert not tracked_file.exists() or tracked_file.read_text().strip() == "[]"
-
-
 
     def test_terminal_command_picks_up_paths(self, _isolate_env):
 
@@ -851,15 +699,11 @@ class TestPostToolCallHook:
         p.write_text("x")
 
         pi._on_post_tool_call(
-
             tool_name="terminal",
-
             args={"command": f"touch {p}"},
-
             result=f"created {p}\n",
-
-            task_id="t3", session_id="s3",
-
+            task_id="t3",
+            session_id="s3",
         )
 
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
@@ -868,22 +712,16 @@ class TestPostToolCallHook:
 
         assert any(Path(i["path"]) == p.resolve() for i in data)
 
-
-
     def test_ignores_unrelated_tool(self, _isolate_env):
 
         pi = _load_plugin_init()
 
         pi._on_post_tool_call(
-
             tool_name="read_file",
-
             args={"path": str(_isolate_env / "test_x.py")},
-
             result="contents",
-
-            task_id="t4", session_id="s4",
-
+            task_id="t4",
+            session_id="s4",
         )
 
         # read_file should never trigger tracking.
@@ -893,11 +731,7 @@ class TestPostToolCallHook:
         assert not tracked_file.exists() or tracked_file.read_text().strip() == "[]"
 
 
-
-
-
 class TestOnSessionEndHook:
-
     def test_runs_quick_when_test_files_tracked(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -907,15 +741,11 @@ class TestOnSessionEndHook:
         p.write_text("x")
 
         pi._on_post_tool_call(
-
             tool_name="write_file",
-
             args={"path": str(p), "content": "x"},
-
             result="OK",
-
-            task_id="", session_id="s1",
-
+            task_id="",
+            session_id="s1",
         )
 
         assert p.exists()
@@ -923,8 +753,6 @@ class TestOnSessionEndHook:
         pi._on_session_end(session_id="s1", completed=True, interrupted=False)
 
         assert not p.exists(), "test file should be auto-deleted"
-
-
 
     def test_noop_when_no_test_tracked(self, _isolate_env):
 
@@ -935,9 +763,6 @@ class TestOnSessionEndHook:
         pi._on_session_end(session_id="empty", completed=True, interrupted=False)
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Slash command
@@ -945,9 +770,7 @@ class TestOnSessionEndHook:
 # ---------------------------------------------------------------------------
 
 
-
 class TestSlashCommand:
-
     def test_help(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -958,8 +781,6 @@ class TestSlashCommand:
 
         assert "status" in out
 
-
-
     def test_status_empty(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -968,21 +789,13 @@ class TestSlashCommand:
 
         assert "nothing tracked" in out
 
-
-
     def test_track_rejects_missing(self, _isolate_env):
 
         pi = _load_plugin_init()
 
-        out = pi._handle_slash(
-
-            f"track {_isolate_env / 'nope.txt'} temp"
-
-        )
+        out = pi._handle_slash(f"track {_isolate_env / 'nope.txt'} temp")
 
         assert "Not tracked" in out
-
-
 
     def test_track_rejects_bad_category(self, _isolate_env):
 
@@ -995,8 +808,6 @@ class TestSlashCommand:
         out = pi._handle_slash(f"track {p} banana")
 
         assert "Unknown category" in out
-
-
 
     def test_track_and_forget(self, _isolate_env):
 
@@ -1014,8 +825,6 @@ class TestSlashCommand:
 
         assert "Removed 1" in out
 
-
-
     def test_unknown_subcommand(self, _isolate_env):
 
         pi = _load_plugin_init()
@@ -1023,8 +832,6 @@ class TestSlashCommand:
         out = pi._handle_slash("foobar")
 
         assert "Unknown subcommand" in out
-
-
 
     def test_quick_on_empty(self, _isolate_env):
 
@@ -1035,9 +842,6 @@ class TestSlashCommand:
         assert "Cleaned 0 files" in out
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Bundled-plugin discovery
@@ -1045,11 +849,8 @@ class TestSlashCommand:
 # ---------------------------------------------------------------------------
 
 
-
 class TestBundledDiscovery:
-
     def _write_enabled_config(self, clawk_home, names):
-
         """Write plugins.enabled allow-list to config.yaml."""
 
         import yaml
@@ -1058,10 +859,7 @@ class TestBundledDiscovery:
 
         cfg_path.write_text(yaml.safe_dump({"plugins": {"enabled": list(names)}}))
 
-
-
     def test_disk_cleanup_discovered_but_not_loaded_by_default(self, _isolate_env):
-
         """Bundled plugins are discovered but NOT loaded without opt-in."""
 
         from clawk_cli import plugins as pmod
@@ -1084,10 +882,7 @@ class TestBundledDiscovery:
 
         assert loaded.error and "not enabled" in loaded.error
 
-
-
     def test_disk_cleanup_loads_when_enabled(self, _isolate_env):
-
         """Adding to plugins.enabled activates the bundled plugin."""
 
         self._write_enabled_config(_isolate_env, ["disk-cleanup"])
@@ -1108,27 +903,21 @@ class TestBundledDiscovery:
 
         assert "disk-cleanup" in loaded.commands_registered
 
-
-
     def test_disabled_beats_enabled(self, _isolate_env):
-
         """plugins.disabled wins even if the plugin is also in plugins.enabled."""
 
         import yaml
 
         cfg_path = _isolate_env / "config.yaml"
 
-        cfg_path.write_text(yaml.safe_dump({
-
-            "plugins": {
-
-                "enabled": ["disk-cleanup"],
-
-                "disabled": ["disk-cleanup"],
-
-            }
-
-        }))
+        cfg_path.write_text(
+            yaml.safe_dump({
+                "plugins": {
+                    "enabled": ["disk-cleanup"],
+                    "disabled": ["disk-cleanup"],
+                }
+            })
+        )
 
         from clawk_cli import plugins as pmod
 
@@ -1142,18 +931,13 @@ class TestBundledDiscovery:
 
         assert loaded.error == "disabled via config"
 
-
-
     def test_memory_and_context_engine_subdirs_skipped(self, _isolate_env):
-
         """Bundled scan must NOT pick up plugins/memory or plugins/context_engine
 
         as top-level plugins — they have their own discovery paths."""
 
         self._write_enabled_config(
-
             _isolate_env, ["memory", "context_engine", "disk-cleanup"]
-
         )
 
         from clawk_cli import plugins as pmod
@@ -1165,4 +949,3 @@ class TestBundledDiscovery:
         assert "memory" not in mgr._plugins
 
         assert "context_engine" not in mgr._plugins
-

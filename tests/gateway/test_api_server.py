@@ -24,8 +24,6 @@ Tests cover:
 
 """
 
-
-
 import asyncio
 
 import json
@@ -41,7 +39,6 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-
 import pytest
 
 from aiohttp import web
@@ -49,29 +46,17 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 
-
 from gateway.config import GatewayConfig, Platform, PlatformConfig
 
 from gateway.platforms.api_server import (
-
     APIServerAdapter,
-
     ResponseStore,
-
     _IdempotencyCache,
-
     _derive_chat_session_id,
-
     check_api_server_requirements,
-
     cors_middleware,
-
     security_headers_middleware,
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -81,25 +66,15 @@ from gateway.platforms.api_server import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCheckRequirements:
-
     def test_returns_true_when_aiohttp_available(self):
 
         assert check_api_server_requirements() is True
 
-
-
     @patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", False)
-
     def test_returns_false_without_aiohttp(self):
 
         assert check_api_server_requirements() is False
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -109,11 +84,7 @@ class TestCheckRequirements:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestResponseStore:
-
     def test_put_and_get(self):
 
         store = ResponseStore(max_size=10)
@@ -122,15 +93,11 @@ class TestResponseStore:
 
         assert store.get("resp_1") == {"output": "hello"}
 
-
-
     def test_get_missing_returns_none(self):
 
         store = ResponseStore(max_size=10)
 
         assert store.get("resp_missing") is None
-
-
 
     def test_lru_eviction(self):
 
@@ -151,8 +118,6 @@ class TestResponseStore:
         assert store.get("resp_2") is not None
 
         assert len(store) == 3
-
-
 
     def test_access_refreshes_lru(self):
 
@@ -176,8 +141,6 @@ class TestResponseStore:
 
         assert store.get("resp_1") is not None
 
-
-
     def test_update_existing_key(self):
 
         store = ResponseStore(max_size=10)
@@ -189,8 +152,6 @@ class TestResponseStore:
         assert store.get("resp_1") == {"output": "v2"}
 
         assert len(store) == 1
-
-
 
     def test_delete_existing(self):
 
@@ -204,18 +165,13 @@ class TestResponseStore:
 
         assert len(store) == 0
 
-
-
     def test_delete_missing(self):
 
         store = ResponseStore(max_size=10)
 
         assert store.delete("resp_missing") is False
 
-
-
     def test_delete_clears_conversation_mapping(self):
-
         """Deleting a response also removes conversation mappings that reference it."""
 
         store = ResponseStore(max_size=10)
@@ -230,10 +186,7 @@ class TestResponseStore:
 
         assert store.get_conversation("chat-a") is None
 
-
-
     def test_eviction_clears_conversation_mapping(self):
-
         """LRU eviction also removes conversation mappings for evicted responses."""
 
         store = ResponseStore(max_size=2)
@@ -258,12 +211,8 @@ class TestResponseStore:
 
         assert store.get_conversation("chat-b") == "resp_2"
 
-
-
     @pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits are platform-specific")
-
     def test_file_store_created_owner_only_under_permissive_umask(self, tmp_path):
-
         """response_store.db must be 0o600 on creation even under umask 022."""
 
         db_path = tmp_path / "response_store.db"
@@ -273,32 +222,23 @@ class TestResponseStore:
         old_umask = os.umask(0o022)
 
         try:
-
             store = ResponseStore(max_size=10, db_path=str(db_path))
 
             store.put(
-
                 "resp_secret",
-
                 {
-
                     "response": {"id": "resp_secret"},
-
-                    "conversation_history": [{"role": "tool", "content": "dummy-marker"}],
-
+                    "conversation_history": [
+                        {"role": "tool", "content": "dummy-marker"}
+                    ],
                 },
-
             )
 
         finally:
-
             os.umask(old_umask)
 
             if store is not None:
-
                 store.close()
-
-
 
         assert stat.S_IMODE(db_path.stat().st_mode) == 0o600
 
@@ -309,19 +249,11 @@ class TestResponseStore:
         # sidecar files actually exist.
 
         for sidecar in (
-
             db_path.with_name(db_path.name + "-wal"),
-
             db_path.with_name(db_path.name + "-shm"),
-
         ):
-
             if sidecar.exists():
-
                 assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -331,13 +263,8 @@ class TestResponseStore:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestIdempotencyCache:
-
     @pytest.mark.asyncio
-
     async def test_concurrent_same_key_and_fingerprint_runs_once(self):
 
         cache = _IdempotencyCache()
@@ -347,8 +274,6 @@ class TestIdempotencyCache:
         started = asyncio.Event()
 
         calls = 0
-
-
 
         async def compute():
 
@@ -362,32 +287,21 @@ class TestIdempotencyCache:
 
             return ("response", {"total_tokens": 1})
 
-
-
         first = asyncio.create_task(cache.get_or_set("idem-key", "fp-1", compute))
 
         second = asyncio.create_task(cache.get_or_set("idem-key", "fp-1", compute))
-
-
 
         await started.wait()
 
         assert calls == 1
 
-
-
         gate.set()
 
         first_result, second_result = await asyncio.gather(first, second)
 
-
-
         assert first_result == second_result == ("response", {"total_tokens": 1})
 
-
-
     @pytest.mark.asyncio
-
     async def test_different_fingerprint_does_not_reuse_inflight_task(self):
 
         cache = _IdempotencyCache()
@@ -398,8 +312,6 @@ class TestIdempotencyCache:
 
         calls = 0
 
-
-
         async def compute():
 
             nonlocal calls
@@ -409,39 +321,27 @@ class TestIdempotencyCache:
             result = calls
 
             if calls == 2:
-
                 started.set()
 
             await gate.wait()
 
             return result
 
-
-
         first = asyncio.create_task(cache.get_or_set("idem-key", "fp-1", compute))
 
         second = asyncio.create_task(cache.get_or_set("idem-key", "fp-2", compute))
-
-
 
         await started.wait()
 
         assert calls == 2
 
-
-
         gate.set()
 
         results = await asyncio.gather(first, second)
 
-
-
         assert sorted(results) == [1, 2]
 
-
-
     @pytest.mark.asyncio
-
     async def test_cancelled_waiter_does_not_drop_shared_inflight_task(self):
 
         cache = _IdempotencyCache()
@@ -451,8 +351,6 @@ class TestIdempotencyCache:
         started = asyncio.Event()
 
         calls = 0
-
-
 
         async def compute():
 
@@ -466,25 +364,16 @@ class TestIdempotencyCache:
 
             return "response"
 
-
-
         first = asyncio.create_task(cache.get_or_set("idem-key", "fp-1", compute))
-
-
 
         await started.wait()
 
         assert calls == 1
 
-
-
         first.cancel()
 
         with pytest.raises(asyncio.CancelledError):
-
             await first
-
-
 
         second = asyncio.create_task(cache.get_or_set("idem-key", "fp-1", compute))
 
@@ -492,14 +381,9 @@ class TestIdempotencyCache:
 
         assert calls == 1
 
-
-
         gate.set()
 
         assert await second == "response"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -509,11 +393,7 @@ class TestIdempotencyCache:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestAdapterInit:
-
     def test_default_config(self):
 
         config = PlatformConfig(enabled=True)
@@ -528,26 +408,16 @@ class TestAdapterInit:
 
         assert adapter.platform == Platform.API_SERVER
 
-
-
     def test_custom_config_from_extra(self):
 
         config = PlatformConfig(
-
             enabled=True,
-
             extra={
-
                 "host": "0.0.0.0",
-
                 "port": 9999,
-
                 "key": "sk-test",
-
                 "cors_origins": ["http://localhost:3000"],
-
             },
-
         )
 
         adapter = APIServerAdapter(config)
@@ -560,8 +430,6 @@ class TestAdapterInit:
 
         assert adapter._cors_origins == ("http://localhost:3000",)
 
-
-
     def test_config_from_env(self, monkeypatch):
 
         monkeypatch.setenv("API_SERVER_HOST", "10.0.0.1")
@@ -570,7 +438,9 @@ class TestAdapterInit:
 
         monkeypatch.setenv("API_SERVER_KEY", "sk-env")
 
-        monkeypatch.setenv("API_SERVER_CORS_ORIGINS", "http://localhost:3000, http://127.0.0.1:3000")
+        monkeypatch.setenv(
+            "API_SERVER_CORS_ORIGINS", "http://localhost:3000, http://127.0.0.1:3000"
+        )
 
         config = PlatformConfig(enabled=True)
 
@@ -583,14 +453,9 @@ class TestAdapterInit:
         assert adapter._api_key == "sk-env"
 
         assert adapter._cors_origins == (
-
             "http://localhost:3000",
-
             "http://127.0.0.1:3000",
-
         )
-
-
 
     def test_invalid_port_from_env_falls_back_to_default(self, monkeypatch):
 
@@ -602,80 +467,55 @@ class TestAdapterInit:
 
         assert adapter._port == 8642
 
-
-
     def test_create_agent_forwards_config_reasoning_effort(self, monkeypatch):
 
         captured = {}
 
-
-
         class FakeAgent:
-
             def __init__(self, **kwargs):
 
                 captured.update(kwargs)
 
-
-
         monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
 
         monkeypatch.setattr(
-
             "gateway.run._resolve_runtime_agent_kwargs",
-
             lambda: {
-
                 "provider": "openai-codex",
-
                 "base_url": "https://example.test/v1",
-
                 "api_mode": "codex_responses",
-
             },
-
         )
 
         monkeypatch.setattr("gateway.run._resolve_gateway_model", lambda: "gpt-5.5")
 
         monkeypatch.setattr(
-
             "gateway.run._load_gateway_config",
-
             lambda: {"agent": {"reasoning_effort": "xhigh"}},
-
         )
 
         monkeypatch.setattr(
-
             "gateway.run.GatewayRunner._load_reasoning_config",
-
             staticmethod(lambda: {"enabled": True, "effort": "xhigh"}),
-
         )
 
-        monkeypatch.setattr("gateway.run.GatewayRunner._load_fallback_model", staticmethod(lambda: None))
+        monkeypatch.setattr(
+            "gateway.run.GatewayRunner._load_fallback_model", staticmethod(lambda: None)
+        )
 
-        monkeypatch.setattr("clawk_cli.tools_config._get_platform_tools", lambda *_: set())
-
-
+        monkeypatch.setattr(
+            "clawk_cli.tools_config._get_platform_tools", lambda *_: set()
+        )
 
         adapter = APIServerAdapter(PlatformConfig(enabled=True))
 
         monkeypatch.setattr(adapter, "_ensure_session_db", lambda: None)
 
-
-
         agent = adapter._create_agent(session_id="api-session")
-
-
 
         assert isinstance(agent, FakeAgent)
 
         assert captured["reasoning_config"] == {"enabled": True, "effort": "xhigh"}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -685,11 +525,7 @@ class TestAdapterInit:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestAuth:
-
     def test_no_key_configured_allows_all(self):
 
         config = PlatformConfig(enabled=True)
@@ -702,8 +538,6 @@ class TestAuth:
 
         assert adapter._check_auth(mock_request) is None
 
-
-
     def test_valid_key_passes(self):
 
         config = PlatformConfig(enabled=True, extra={"key": "sk-test123"})
@@ -715,8 +549,6 @@ class TestAuth:
         mock_request.headers = {"Authorization": "Bearer sk-test123"}
 
         assert adapter._check_auth(mock_request) is None
-
-
 
     def test_invalid_key_returns_401(self):
 
@@ -734,8 +566,6 @@ class TestAuth:
 
         assert result.status == 401
 
-
-
     def test_missing_auth_header_returns_401(self):
 
         config = PlatformConfig(enabled=True, extra={"key": "sk-test123"})
@@ -751,8 +581,6 @@ class TestAuth:
         assert result is not None
 
         assert result.status == 401
-
-
 
     def test_malformed_auth_header_returns_401(self):
 
@@ -771,9 +599,6 @@ class TestAuth:
         assert result.status == 401
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Helpers for HTTP tests
@@ -781,21 +606,15 @@ class TestAuth:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _make_adapter(api_key: str = "", cors_origins=None) -> APIServerAdapter:
-
     """Create an adapter with optional API key."""
 
     extra = {}
 
     if api_key:
-
         extra["key"] = api_key
 
     if cors_origins is not None:
-
         extra["cors_origins"] = cors_origins
 
     config = PlatformConfig(enabled=True, extra=extra)
@@ -803,14 +622,12 @@ def _make_adapter(api_key: str = "", cors_origins=None) -> APIServerAdapter:
     return APIServerAdapter(config)
 
 
-
-
-
 def _create_app(adapter: APIServerAdapter) -> web.Application:
-
     """Create the aiohttp app from the adapter (without starting the full server)."""
 
-    mws = [mw for mw in (cors_middleware, security_headers_middleware) if mw is not None]
+    mws = [
+        mw for mw in (cors_middleware, security_headers_middleware) if mw is not None
+    ]
 
     app = web.Application(middlewares=mws)
 
@@ -836,32 +653,23 @@ def _create_app(adapter: APIServerAdapter) -> web.Application:
 
     app.router.add_get("/v1/responses/{response_id}", adapter._handle_get_response)
 
-    app.router.add_delete("/v1/responses/{response_id}", adapter._handle_delete_response)
+    app.router.add_delete(
+        "/v1/responses/{response_id}", adapter._handle_delete_response
+    )
 
     return app
 
 
-
-
-
 @pytest.fixture
-
 def adapter():
 
     return _make_adapter()
 
 
-
-
-
 @pytest.fixture
-
 def auth_adapter():
 
     return _make_adapter(api_key="sk-secret")
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -871,13 +679,8 @@ def auth_adapter():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestAgentExecution:
-
     @pytest.mark.asyncio
-
     async def test_run_agent_uses_session_id_as_task_id(self, adapter):
 
         mock_agent = MagicMock()
@@ -890,21 +693,12 @@ class TestAgentExecution:
 
         mock_agent.session_total_tokens = 3
 
-
-
         with patch.object(adapter, "_create_agent", return_value=mock_agent):
-
             result, usage = await adapter._run_agent(
-
                 user_message="hello",
-
                 conversation_history=[],
-
                 session_id="session-123",
-
             )
-
-
 
         # _run_agent annotates result with the effective agent.session_id
 
@@ -921,17 +715,10 @@ class TestAgentExecution:
         assert usage == {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}
 
         mock_agent.run_conversation.assert_called_once_with(
-
             user_message="hello",
-
             conversation_history=[],
-
             task_id="session-123",
-
         )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -941,30 +728,32 @@ class TestAgentExecution:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestHealthEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_security_headers_present(self, adapter):
-
         """Responses should include basic security headers."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health")
 
             assert resp.status == 200
 
-            assert resp.headers.get("Content-Security-Policy") == "default-src 'none'; frame-ancestors 'none'"
+            assert (
+                resp.headers.get("Content-Security-Policy")
+                == "default-src 'none'; frame-ancestors 'none'"
+            )
 
-            assert resp.headers.get("Permissions-Policy") == "camera=(), microphone=(), geolocation=()"
+            assert (
+                resp.headers.get("Permissions-Policy")
+                == "camera=(), microphone=(), geolocation=()"
+            )
 
-            assert resp.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+            assert (
+                resp.headers.get("Strict-Transport-Security")
+                == "max-age=31536000; includeSubDomains"
+            )
 
             assert resp.headers.get("X-Content-Type-Options") == "nosniff"
 
@@ -974,16 +763,12 @@ class TestHealthEndpoint:
 
             assert resp.headers.get("Referrer-Policy") == "no-referrer"
 
-
-
     @pytest.mark.asyncio
-
     async def test_health_returns_ok(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health")
 
             assert resp.status == 200
@@ -994,18 +779,13 @@ class TestHealthEndpoint:
 
             assert data["platform"] == "clawksis-agent"
 
-
-
     @pytest.mark.asyncio
-
     async def test_v1_health_alias_returns_ok(self, adapter):
-
         """GET /v1/health should return the same response as /health."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/health")
 
             assert resp.status == 200
@@ -1017,9 +797,6 @@ class TestHealthEndpoint:
             assert data["platform"] == "clawksis-agent"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # /health/detailed endpoint
@@ -1027,35 +804,24 @@ class TestHealthEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestHealthDetailedEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_health_detailed_returns_ok(self, adapter):
-
         """GET /health/detailed returns status, platform, and runtime fields."""
 
         app = _create_app(adapter)
 
-        with patch("gateway.status.read_runtime_status", return_value={
-
-            "gateway_state": "running",
-
-            "platforms": {"telegram": {"state": "connected"}},
-
-            "active_agents": 2,
-
-            "exit_reason": None,
-
-            "updated_at": "2026-04-14T00:00:00Z",
-
-        }):
-
+        with patch(
+            "gateway.status.read_runtime_status",
+            return_value={
+                "gateway_state": "running",
+                "platforms": {"telegram": {"state": "connected"}},
+                "active_agents": 2,
+                "exit_reason": None,
+                "updated_at": "2026-04-14T00:00:00Z",
+            },
+        ):
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/health/detailed")
 
                 assert resp.status == 200
@@ -1076,20 +842,14 @@ class TestHealthDetailedEndpoint:
 
                 assert "updated_at" in data
 
-
-
     @pytest.mark.asyncio
-
     async def test_health_detailed_no_runtime_status(self, adapter):
-
         """When gateway_state.json is missing, fields are None."""
 
         app = _create_app(adapter)
 
         with patch("gateway.status.read_runtime_status", return_value=None):
-
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/health/detailed")
 
                 assert resp.status == 200
@@ -1102,26 +862,17 @@ class TestHealthDetailedEndpoint:
 
                 assert data["platforms"] == {}
 
-
-
     @pytest.mark.asyncio
-
     async def test_health_detailed_does_not_require_auth(self, auth_adapter):
-
         """Health detailed endpoint should be accessible without auth, like /health."""
 
         app = _create_app(auth_adapter)
 
         with patch("gateway.status.read_runtime_status", return_value=None):
-
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/health/detailed")
 
                 assert resp.status == 200
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1131,19 +882,13 @@ class TestHealthDetailedEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestModelsEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_models_returns_clawk_agent(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/models")
 
             assert resp.status == 200
@@ -1158,22 +903,19 @@ class TestModelsEndpoint:
 
             assert data["data"][0]["owned_by"] == "clawk"
 
-
-
     @pytest.mark.asyncio
-
     async def test_models_returns_profile_name(self):
-
         """When running under a named profile, /v1/models advertises the profile name."""
 
-        with patch("gateway.platforms.api_server.APIServerAdapter._resolve_model_name", return_value="lucas"):
-
+        with patch(
+            "gateway.platforms.api_server.APIServerAdapter._resolve_model_name",
+            return_value="lucas",
+        ):
             adapter = _make_adapter()
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/models")
 
             assert resp.status == 200
@@ -1184,12 +926,8 @@ class TestModelsEndpoint:
 
             assert data["data"][0]["root"] == "lucas"
 
-
-
     @pytest.mark.asyncio
-
     async def test_models_returns_explicit_model_name(self):
-
         """Explicit model_name in config overrides profile name."""
 
         extra = {"model_name": "my-custom-agent"}
@@ -1200,68 +938,46 @@ class TestModelsEndpoint:
 
         assert adapter._model_name == "my-custom-agent"
 
-
-
     def test_resolve_model_name_explicit(self):
 
         assert APIServerAdapter._resolve_model_name("my-bot") == "my-bot"
 
-
-
     def test_resolve_model_name_default_profile(self):
-
         """Default profile falls back to 'clawksis-agent'."""
 
-        with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
-
+        with patch(
+            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        ):
             assert APIServerAdapter._resolve_model_name("") == "clawksis-agent"
 
-
-
     def test_resolve_model_name_named_profile(self):
-
         """Named profile uses the profile name as model name."""
 
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="lucas"):
-
             assert APIServerAdapter._resolve_model_name("") == "lucas"
 
-
-
     @pytest.mark.asyncio
-
     async def test_models_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/models")
 
             assert resp.status == 401
 
-
-
     @pytest.mark.asyncio
-
     async def test_models_with_valid_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get(
-
                 "/v1/models",
-
                 headers={"Authorization": "Bearer sk-secret"},
-
             )
 
             assert resp.status == 200
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1271,19 +987,13 @@ class TestModelsEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCapabilitiesEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_capabilities_advertises_plugin_safe_contract(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/capabilities")
 
             assert resp.status == 200
@@ -1314,36 +1024,35 @@ class TestCapabilitiesEndpoint:
 
             assert data["features"]["run_events_sse"] is True
 
-            assert data["features"]["session_continuity_header"] == "X-Clawksis-Session-Id"
+            assert (
+                data["features"]["session_continuity_header"] == "X-Clawksis-Session-Id"
+            )
 
             assert data["endpoints"]["run_status"]["path"] == "/v1/runs/{run_id}"
 
-            assert data["endpoints"]["skills"] == {"method": "GET", "path": "/v1/skills"}
+            assert data["endpoints"]["skills"] == {
+                "method": "GET",
+                "path": "/v1/skills",
+            }
 
-            assert data["endpoints"]["toolsets"] == {"method": "GET", "path": "/v1/toolsets"}
-
-
+            assert data["endpoints"]["toolsets"] == {
+                "method": "GET",
+                "path": "/v1/toolsets",
+            }
 
     @pytest.mark.asyncio
-
     async def test_capabilities_requires_auth_when_key_configured(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/capabilities")
 
             assert resp.status == 401
 
-
-
             authed = await cli.get(
-
                 "/v1/capabilities",
-
                 headers={"Authorization": "Bearer sk-secret"},
-
             )
 
             assert authed.status == 200
@@ -1353,9 +1062,6 @@ class TestCapabilitiesEndpoint:
             assert data["auth"]["required"] is True
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # /v1/skills and /v1/toolsets endpoints
@@ -1363,35 +1069,30 @@ class TestCapabilitiesEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSkillsEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_skills_returns_list_envelope(self, adapter):
 
         fake_skills = [
-
-            {"name": "github", "description": "GitHub workflow skill", "category": "github"},
-
-            {"name": "ascii-art", "description": "ASCII art generation", "category": "creative"},
-
+            {
+                "name": "github",
+                "description": "GitHub workflow skill",
+                "category": "github",
+            },
+            {
+                "name": "ascii-art",
+                "description": "ASCII art generation",
+                "category": "creative",
+            },
         ]
 
         with patch(
-
             "tools.skills_tool._find_all_skills",
-
             return_value=list(fake_skills),
-
         ):
-
             app = _create_app(adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/skills")
 
                 assert resp.status == 200
@@ -1405,27 +1106,18 @@ class TestSkillsEndpoint:
                 assert names == ["ascii-art", "github"]
 
                 for entry in data["data"]:
-
                     assert set(entry.keys()) >= {"name", "description", "category"}
 
-
-
     @pytest.mark.asyncio
-
     async def test_skills_handles_enumeration_failure(self, adapter):
 
         with patch(
-
             "tools.skills_tool._find_all_skills",
-
             side_effect=RuntimeError("boom"),
-
         ):
-
             app = _create_app(adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/skills")
 
                 assert resp.status == 500
@@ -1434,88 +1126,58 @@ class TestSkillsEndpoint:
 
                 assert "error" in data
 
-
-
     @pytest.mark.asyncio
-
     async def test_skills_requires_auth_when_key_configured(self, auth_adapter):
 
         with patch("tools.skills_tool._find_all_skills", return_value=[]):
-
             app = _create_app(auth_adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/skills")
 
                 assert resp.status == 401
 
-
-
                 authed = await cli.get(
-
                     "/v1/skills",
-
                     headers={"Authorization": "Bearer sk-secret"},
-
                 )
 
                 assert authed.status == 200
 
 
-
-
-
 class TestToolsetsEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_toolsets_returns_resolved_tools(self, adapter):
 
         fake_toolsets = [
-
             ("default", "Default Tools", "Core tools"),
-
             ("web", "Web Tools", "Search and extract"),
-
         ]
 
-        with patch(
-
-            "clawk_cli.tools_config._get_effective_configurable_toolsets",
-
-            return_value=fake_toolsets,
-
-        ), patch(
-
-            "clawk_cli.tools_config._get_platform_tools",
-
-            return_value={"default"},
-
-        ), patch(
-
-            "clawk_cli.tools_config._toolset_has_keys",
-
-            return_value=True,
-
-        ), patch(
-
-            "toolsets.resolve_toolset",
-
-            side_effect=lambda name: {
-
-                "default": ["terminal", "read_file"],
-
-                "web": ["web_search"],
-
-            }[name],
-
+        with (
+            patch(
+                "clawk_cli.tools_config._get_effective_configurable_toolsets",
+                return_value=fake_toolsets,
+            ),
+            patch(
+                "clawk_cli.tools_config._get_platform_tools",
+                return_value={"default"},
+            ),
+            patch(
+                "clawk_cli.tools_config._toolset_has_keys",
+                return_value=True,
+            ),
+            patch(
+                "toolsets.resolve_toolset",
+                side_effect=lambda name: {
+                    "default": ["terminal", "read_file"],
+                    "web": ["web_search"],
+                }[name],
+            ),
         ):
-
             app = _create_app(adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/toolsets")
 
                 assert resp.status == 200
@@ -1538,64 +1200,43 @@ class TestToolsetsEndpoint:
 
                 assert by_name["default"]["configured"] is True
 
-
-
     @pytest.mark.asyncio
-
     async def test_toolsets_handles_resolution_failure_per_toolset(self, adapter):
-
         """If one toolset fails to resolve, others still appear with empty tools."""
 
         fake_toolsets = [
-
             ("broken", "Broken", "fails"),
-
             ("ok", "OK", "works"),
-
         ]
-
-
 
         def _resolve(name):
 
             if name == "broken":
-
                 raise RuntimeError("nope")
 
             return ["some_tool"]
 
-
-
-        with patch(
-
-            "clawk_cli.tools_config._get_effective_configurable_toolsets",
-
-            return_value=fake_toolsets,
-
-        ), patch(
-
-            "clawk_cli.tools_config._get_platform_tools",
-
-            return_value=set(),
-
-        ), patch(
-
-            "clawk_cli.tools_config._toolset_has_keys",
-
-            return_value=False,
-
-        ), patch(
-
-            "toolsets.resolve_toolset",
-
-            side_effect=_resolve,
-
+        with (
+            patch(
+                "clawk_cli.tools_config._get_effective_configurable_toolsets",
+                return_value=fake_toolsets,
+            ),
+            patch(
+                "clawk_cli.tools_config._get_platform_tools",
+                return_value=set(),
+            ),
+            patch(
+                "clawk_cli.tools_config._toolset_has_keys",
+                return_value=False,
+            ),
+            patch(
+                "toolsets.resolve_toolset",
+                side_effect=_resolve,
+            ),
         ):
-
             app = _create_app(adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/toolsets")
 
                 assert resp.status == 200
@@ -1608,48 +1249,32 @@ class TestToolsetsEndpoint:
 
                 assert by_name["ok"]["tools"] == ["some_tool"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_toolsets_requires_auth_when_key_configured(self, auth_adapter):
 
-        with patch(
-
-            "clawk_cli.tools_config._get_effective_configurable_toolsets",
-
-            return_value=[],
-
-        ), patch(
-
-            "clawk_cli.tools_config._get_platform_tools",
-
-            return_value=set(),
-
+        with (
+            patch(
+                "clawk_cli.tools_config._get_effective_configurable_toolsets",
+                return_value=[],
+            ),
+            patch(
+                "clawk_cli.tools_config._get_platform_tools",
+                return_value=set(),
+            ),
         ):
-
             app = _create_app(auth_adapter)
 
             async with TestClient(TestServer(app)) as cli:
-
                 resp = await cli.get("/v1/toolsets")
 
                 assert resp.status == 401
 
-
-
                 authed = await cli.get(
-
                     "/v1/toolsets",
-
                     headers={"Authorization": "Bearer sk-secret"},
-
                 )
 
                 assert authed.status == 200
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1659,27 +1284,17 @@ class TestToolsetsEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestChatCompletionsEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_invalid_json_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/chat/completions",
-
                 data="not json",
-
                 headers={"Content-Type": "application/json"},
-
             )
 
             assert resp.status == 400
@@ -1688,16 +1303,12 @@ class TestChatCompletionsEndpoint:
 
             assert "Invalid JSON" in data["error"]["message"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_missing_messages_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post("/v1/chat/completions", json={"model": "test"})
 
             assert resp.status == 400
@@ -1706,26 +1317,20 @@ class TestChatCompletionsEndpoint:
 
             assert "messages" in data["error"]["message"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_empty_messages_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            resp = await cli.post("/v1/chat/completions", json={"model": "test", "messages": []})
+            resp = await cli.post(
+                "/v1/chat/completions", json={"model": "test", "messages": []}
+            )
 
             assert resp.status == 400
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_true_returns_sse(self, adapter):
-
         """stream=true returns SSE format with the full response."""
 
         app = _create_app(adapter)
@@ -1739,37 +1344,25 @@ class TestChatCompletionsEndpoint:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     cb("Hello!")
 
                     cb(None)  # End signal
 
                 return (
-
                     {"final_response": "Hello!", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
-            with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", side_effect=_mock_run_agent
+            ) as mock_run:
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "hi"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
@@ -1786,57 +1379,35 @@ class TestChatCompletionsEndpoint:
 
                 assert "Hello!" in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_string_false_returns_json_completion(self, adapter):
-
         """Quoted false must not route chat completions into SSE mode."""
 
         mock_result = {
-
             "final_response": "Hello! How can I help you today?",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     mock_result,
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "messages": [{"role": "user", "content": "Hello"}],
-
                         "stream": "false",
-
                     },
-
                 )
-
-
 
             assert resp.status == 200
 
@@ -1846,14 +1417,15 @@ class TestChatCompletionsEndpoint:
 
             assert data["object"] == "chat.completion"
 
-            assert data["choices"][0]["message"]["content"] == mock_result["final_response"]
-
-
+            assert (
+                data["choices"][0]["message"]["content"]
+                == mock_result["final_response"]
+            )
 
     @pytest.mark.asyncio
-
-    async def test_stream_task_done_callback_enqueues_eos_for_chat_completions(self, adapter):
-
+    async def test_stream_task_done_callback_enqueues_eos_for_chat_completions(
+        self, adapter
+    ):
         """Regression guard for #24451: completion callback must signal SSE EOS."""
 
         app = _create_app(adapter)
@@ -1861,22 +1433,15 @@ class TestChatCompletionsEndpoint:
         async with TestClient(TestServer(app)) as cli:
 
             class _FakeTask:
-
                 def __init__(self):
 
                     self.callbacks = []
-
-
 
                 def add_done_callback(self, cb):
 
                     self.callbacks.append(cb)
 
-
-
             fake_task = _FakeTask()
-
-
 
             def _fake_ensure_future(coro):
 
@@ -1886,57 +1451,37 @@ class TestChatCompletionsEndpoint:
 
                 return fake_task
 
-
-
             with (
-
                 patch.object(
-
                     adapter,
-
                     "_run_agent",
-
                     new=AsyncMock(
-
                         return_value=(
-
                             {"final_response": "ok", "messages": [], "api_calls": 1},
-
                             {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-
                         )
-
                     ),
-
                 ),
-
-                patch("gateway.platforms.api_server.asyncio.ensure_future", side_effect=_fake_ensure_future),
-
-                patch.object(adapter, "_write_sse_chat_completion", new_callable=AsyncMock) as mock_write_sse,
-
+                patch(
+                    "gateway.platforms.api_server.asyncio.ensure_future",
+                    side_effect=_fake_ensure_future,
+                ),
+                patch.object(
+                    adapter, "_write_sse_chat_completion", new_callable=AsyncMock
+                ) as mock_write_sse,
             ):
-
                 mock_write_sse.return_value = web.Response(status=200, text="ok")
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "hi"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
-
-
 
             assert len(fake_task.callbacks) == 1
 
@@ -1948,19 +1493,13 @@ class TestChatCompletionsEndpoint:
 
             assert stream_q.get_nowait() is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_sends_keepalive_during_quiet_tool_gap(self, adapter):
-
         """Idle SSE streams should send keepalive comments while tools run silently."""
 
         import asyncio
 
         import gateway.platforms.api_server as api_server_mod
-
-
 
         app = _create_app(adapter)
 
@@ -1971,7 +1510,6 @@ class TestChatCompletionsEndpoint:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     cb("Working")
 
                     await asyncio.sleep(0.65)
@@ -1979,37 +1517,27 @@ class TestChatCompletionsEndpoint:
                     cb("...done")
 
                 return (
-
-                    {"final_response": "Working...done", "messages": [], "api_calls": 1},
-
+                    {
+                        "final_response": "Working...done",
+                        "messages": [],
+                        "api_calls": 1,
+                    },
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
             with (
-
-                patch.object(api_server_mod, "CHAT_COMPLETIONS_SSE_KEEPALIVE_SECONDS", 0.01),
-
+                patch.object(
+                    api_server_mod, "CHAT_COMPLETIONS_SSE_KEEPALIVE_SECONDS", 0.01
+                ),
                 patch.object(adapter, "_run_agent", side_effect=_mock_run_agent),
-
             ):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "do the thing"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
@@ -2024,12 +1552,8 @@ class TestChatCompletionsEndpoint:
 
                 assert "[DONE]" in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_survives_tool_call_none_sentinel(self, adapter):
-
         """stream_delta_callback(None) mid-stream (tool calls) must NOT kill the SSE stream.
 
 
@@ -2046,8 +1570,6 @@ class TestChatCompletionsEndpoint:
 
         import asyncio
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
@@ -2057,51 +1579,43 @@ class TestChatCompletionsEndpoint:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     # Simulate: agent streams partial text, then fires None
 
                     # (tool call box-close signal), then streams the final answer
 
                     cb("Thinking")
 
-                    cb(None)          # mid-stream None from tool calls
+                    cb(None)  # mid-stream None from tool calls
 
                     await asyncio.sleep(0.05)  # simulate tool execution delay
 
                     cb(" about it...")
 
-                    cb(None)          # another None (possible second tool round)
+                    cb(None)  # another None (possible second tool round)
 
                     await asyncio.sleep(0.05)
 
                     cb(" The answer is 42.")
 
                 return (
-
-                    {"final_response": "Thinking about it... The answer is 42.", "messages": [], "api_calls": 3},
-
+                    {
+                        "final_response": "Thinking about it... The answer is 42.",
+                        "messages": [],
+                        "api_calls": 3,
+                    },
                     {"input_tokens": 20, "output_tokens": 15, "total_tokens": 35},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
-                        "messages": [{"role": "user", "content": "What is the answer?"}],
-
+                        "messages": [
+                            {"role": "user", "content": "What is the answer?"}
+                        ],
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
@@ -2120,17 +1634,11 @@ class TestChatCompletionsEndpoint:
 
                 assert " about it..." in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_includes_tool_progress(self, adapter):
-
         """tool_start_callback fires → progress appears as custom SSE event, not in delta.content."""
 
         import asyncio
-
-
 
         app = _create_app(adapter)
 
@@ -2145,41 +1653,30 @@ class TestChatCompletionsEndpoint:
                 # Simulate the structured tool start the gateway now consumes.
 
                 if ts_cb:
-
                     ts_cb("call_terminal_1", "terminal", {"command": "ls -la"})
 
                 if cb:
-
                     await asyncio.sleep(0.05)
 
                     cb("Here are the files.")
 
                 return (
-
-                    {"final_response": "Here are the files.", "messages": [], "api_calls": 1},
-
+                    {
+                        "final_response": "Here are the files.",
+                        "messages": [],
+                        "api_calls": 1,
+                    },
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "list files"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
@@ -2213,42 +1710,33 @@ class TestChatCompletionsEndpoint:
                 import json as _json
 
                 for line in body.splitlines():
-
                     if line.startswith("data: ") and line.strip() != "data: [DONE]":
-
                         try:
-
-                            chunk = _json.loads(line[len("data: "):])
+                            chunk = _json.loads(line[len("data: ") :])
 
                         except _json.JSONDecodeError:
-
                             continue
 
                         if chunk.get("object") == "chat.completion.chunk":
-
                             for choice in chunk.get("choices", []):
-
                                 content = choice.get("delta", {}).get("content", "")
 
                                 # Tool emoji markers must never leak into content
 
-                                assert "ls -la" not in content or content == "Here are the files."
+                                assert (
+                                    "ls -la" not in content
+                                    or content == "Here are the files."
+                                )
 
                 # Final content must also be present
 
                 assert "Here are the files." in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_tool_progress_skips_internal_events(self, adapter):
-
         """Internal tool calls (name starting with ``_``) are not streamed."""
 
         import asyncio
-
-
 
         app = _create_app(adapter)
 
@@ -2261,43 +1749,30 @@ class TestChatCompletionsEndpoint:
                 ts_cb = kwargs.get("tool_start_callback")
 
                 if ts_cb:
-
-                    ts_cb("call_internal_1", "_thinking", {"text": "some internal state"})
+                    ts_cb(
+                        "call_internal_1", "_thinking", {"text": "some internal state"}
+                    )
 
                     ts_cb("call_search_1", "web_search", {"query": "Python docs"})
 
                 if cb:
-
                     await asyncio.sleep(0.05)
 
                     cb("Found it.")
 
                 return (
-
                     {"final_response": "Found it.", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "search"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
@@ -2328,12 +1803,8 @@ class TestChatCompletionsEndpoint:
 
                 assert '"toolCallId": "call_search_1"' in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_emits_tool_lifecycle_with_call_id(self, adapter):
-
         """Regression for #16588.
 
 
@@ -2364,8 +1835,6 @@ class TestChatCompletionsEndpoint:
 
         import json as _json
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
@@ -2385,52 +1854,34 @@ class TestChatCompletionsEndpoint:
                 # not wired so each tool start emits exactly one event.
 
                 if ts_cb:
-
                     ts_cb("call_terminal_1", "terminal", {"command": "ls -la"})
 
                 if tc_cb:
-
                     tc_cb("call_terminal_1", "terminal", {"command": "ls -la"}, "ok")
 
                 if cb:
-
                     await asyncio.sleep(0.05)
 
                     cb("done.")
 
                 return (
-
                     {"final_response": "done.", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "list"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
 
                 body = await resp.text()
-
-
 
             # Walk the SSE body and collect *(status, toolCallId)* pairs
 
@@ -2445,28 +1896,20 @@ class TestChatCompletionsEndpoint:
             lines = body.splitlines()
 
             for i, line in enumerate(lines):
-
                 if line.strip() != "event: clawk.tool.progress":
-
                     continue
 
-                for follow in lines[i + 1: i + 4]:
-
+                for follow in lines[i + 1 : i + 4]:
                     if follow.startswith("data: "):
-
                         try:
-
-                            payload = _json.loads(follow[len("data: "):])
+                            payload = _json.loads(follow[len("data: ") :])
 
                         except _json.JSONDecodeError:
-
                             break
 
                         pairs.append((payload.get("status"), payload.get("toolCallId")))
 
                         break
-
-
 
             # Each tool start must emit exactly one event (no duplicate
 
@@ -2476,18 +1919,18 @@ class TestChatCompletionsEndpoint:
 
             # aggregate.
 
-            assert len(pairs) == 2, f"expected 2 events (running+completed), got {pairs}"
+            assert len(pairs) == 2, (
+                f"expected 2 events (running+completed), got {pairs}"
+            )
 
             assert pairs[0] == ("running", "call_terminal_1"), pairs
 
             assert pairs[1] == ("completed", "call_terminal_1"), pairs
 
-
-
     @pytest.mark.asyncio
-
-    async def test_stream_tool_lifecycle_skips_internal_and_orphan_completes(self, adapter):
-
+    async def test_stream_tool_lifecycle_skips_internal_and_orphan_completes(
+        self, adapter
+    ):
         """Internal tools (``_thinking``-style) and ``completed`` events
 
         without a prior matching ``running`` must produce no lifecycle
@@ -2497,8 +1940,6 @@ class TestChatCompletionsEndpoint:
         ``status: completed`` updates they cannot correlate."""
 
         import asyncio
-
-
 
         app = _create_app(adapter)
 
@@ -2515,58 +1956,39 @@ class TestChatCompletionsEndpoint:
                 # Internal tool — must be filtered.
 
                 if ts_cb:
-
                     ts_cb("call_internal_1", "_thinking", {})
 
                 if tc_cb:
-
                     tc_cb("call_internal_1", "_thinking", {}, "")
 
                 # Completion without start — orphan, must be dropped.
 
                 if tc_cb:
-
                     tc_cb("call_orphan_1", "web_search", {}, "ok")
 
                 if cb:
-
                     await asyncio.sleep(0.05)
 
                     cb("ok.")
 
                 return (
-
                     {"final_response": "ok.", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "test",
-
                         "messages": [{"role": "user", "content": "ok"}],
-
                         "stream": True,
-
                     },
-
                 )
 
                 assert resp.status == 200
 
                 body = await resp.text()
-
-
 
             # Neither the internal call_id nor the orphan call_id should
 
@@ -2580,75 +2002,50 @@ class TestChatCompletionsEndpoint:
 
             assert '"status": "completed"' not in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_no_user_message_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/chat/completions",
-
                 json={
-
                     "model": "test",
-
                     "messages": [{"role": "system", "content": "You are helpful."}],
-
                 },
-
             )
 
             assert resp.status == 400
 
-
-
     @pytest.mark.asyncio
-
     async def test_successful_completion(self, adapter):
-
         """Test a successful chat completion with mocked agent."""
 
         mock_result = {
-
             "final_response": "Hello! How can I help you today?",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "messages": [{"role": "user", "content": "Hello"}],
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "Hello"}],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -2664,61 +2061,46 @@ class TestChatCompletionsEndpoint:
 
             assert data["choices"][0]["message"]["role"] == "assistant"
 
-            assert data["choices"][0]["message"]["content"] == "Hello! How can I help you today?"
+            assert (
+                data["choices"][0]["message"]["content"]
+                == "Hello! How can I help you today?"
+            )
 
             assert data["choices"][0]["finish_reason"] == "stop"
 
             assert "usage" in data
 
-
-
     @pytest.mark.asyncio
-
     async def test_system_prompt_extracted(self, adapter):
-
         """System messages from the client are passed as ephemeral_system_prompt."""
 
         mock_result = {
-
             "final_response": "I am a pirate! Arrr!",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "messages": [
-
-                            {"role": "system", "content": "You are a pirate."},
-
-                            {"role": "user", "content": "Hello"},
-
-                        ],
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [
+                            {"role": "system", "content": "You are a pirate."},
+                            {"role": "user", "content": "Hello"},
+                        ],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -2726,53 +2108,40 @@ class TestChatCompletionsEndpoint:
 
             call_kwargs = mock_run.call_args
 
-            assert call_kwargs.kwargs.get("ephemeral_system_prompt") == "You are a pirate."
+            assert (
+                call_kwargs.kwargs.get("ephemeral_system_prompt") == "You are a pirate."
+            )
 
             assert call_kwargs.kwargs.get("user_message") == "Hello"
 
-
-
     @pytest.mark.asyncio
-
     async def test_conversation_history_passed(self, adapter):
-
         """Previous user/assistant messages become conversation_history."""
 
         mock_result = {"final_response": "3", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "messages": [
-
-                            {"role": "user", "content": "1+1=?"},
-
-                            {"role": "assistant", "content": "2"},
-
-                            {"role": "user", "content": "Now add 1 more"},
-
-                        ],
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [
+                            {"role": "user", "content": "1+1=?"},
+                            {"role": "assistant", "content": "2"},
+                            {"role": "user", "content": "Now add 1 more"},
+                        ],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -2782,41 +2151,35 @@ class TestChatCompletionsEndpoint:
 
             assert len(call_kwargs["conversation_history"]) == 2
 
-            assert call_kwargs["conversation_history"][0] == {"role": "user", "content": "1+1=?"}
+            assert call_kwargs["conversation_history"][0] == {
+                "role": "user",
+                "content": "1+1=?",
+            }
 
-            assert call_kwargs["conversation_history"][1] == {"role": "assistant", "content": "2"}
-
-
+            assert call_kwargs["conversation_history"][1] == {
+                "role": "assistant",
+                "content": "2",
+            }
 
     @pytest.mark.asyncio
-
     async def test_agent_error_returns_500(self, adapter):
-
         """Agent exception returns 500."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.side_effect = RuntimeError("Provider failed")
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "messages": [{"role": "user", "content": "Hello"}],
-
                     },
-
                 )
-
-
 
             assert resp.status == 500
 
@@ -2824,130 +2187,100 @@ class TestChatCompletionsEndpoint:
 
             assert "Provider failed" in data["error"]["message"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_stable_session_id_across_turns(self, adapter):
-
         """Same conversation (same first user message) produces the same session_id."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         session_ids = []
 
         async with TestClient(TestServer(app)) as cli:
-
             # Turn 1: single user message
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "messages": [{"role": "user", "content": "Hello"}],
-
                     },
-
                 )
 
                 session_ids.append(mock_run.call_args.kwargs["session_id"])
-
-
 
             # Turn 2: same first message, conversation grew
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "messages": [
-
                             {"role": "user", "content": "Hello"},
-
                             {"role": "assistant", "content": "Hi there!"},
-
                             {"role": "user", "content": "How are you?"},
-
                         ],
-
                     },
-
                 )
 
                 session_ids.append(mock_run.call_args.kwargs["session_id"])
 
+        assert session_ids[0] == session_ids[1], (
+            "Session ID should be stable across turns"
+        )
 
-
-        assert session_ids[0] == session_ids[1], "Session ID should be stable across turns"
-
-        assert session_ids[0].startswith("api-"), "Derived session IDs should have api- prefix"
-
-
+        assert session_ids[0].startswith("api-"), (
+            "Derived session IDs should have api- prefix"
+        )
 
     @pytest.mark.asyncio
-
     async def test_different_conversations_get_different_session_ids(self, adapter):
-
         """Different first messages produce different session_ids."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         session_ids = []
 
         async with TestClient(TestServer(app)) as cli:
-
             for first_msg in ["Hello", "Goodbye"]:
-
-                with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                    mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+                with patch.object(
+                    adapter, "_run_agent", new_callable=AsyncMock
+                ) as mock_run:
+                    mock_run.return_value = (
+                        mock_result,
+                        {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                    )
 
                     await cli.post(
-
                         "/v1/chat/completions",
-
                         json={
-
                             "model": "clawksis-agent",
-
                             "messages": [{"role": "user", "content": first_msg}],
-
                         },
-
                     )
 
                     session_ids.append(mock_run.call_args.kwargs["session_id"])
 
-
-
         assert session_ids[0] != session_ids[1]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2957,13 +2290,8 @@ class TestChatCompletionsEndpoint:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDeriveChatSessionId:
-
     def test_deterministic(self):
-
         """Same inputs always produce the same session ID."""
 
         a = _derive_chat_session_id("sys", "hello")
@@ -2972,13 +2300,9 @@ class TestDeriveChatSessionId:
 
         assert a == b
 
-
-
     def test_prefix(self):
 
         assert _derive_chat_session_id(None, "hi").startswith("api-")
-
-
 
     def test_different_system_prompt(self):
 
@@ -2988,8 +2312,6 @@ class TestDeriveChatSessionId:
 
         assert a != b
 
-
-
     def test_different_first_message(self):
 
         a = _derive_chat_session_id(None, "Hello")
@@ -2998,18 +2320,12 @@ class TestDeriveChatSessionId:
 
         assert a != b
 
-
-
     def test_none_system_prompt(self):
-
         """None system prompt doesn't crash."""
 
         sid = _derive_chat_session_id(None, "test")
 
         assert isinstance(sid, str) and len(sid) > 4
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -3019,19 +2335,13 @@ class TestDeriveChatSessionId:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestResponsesEndpoint:
-
     @pytest.mark.asyncio
-
     async def test_missing_input_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post("/v1/responses", json={"model": "test"})
 
             assert resp.status == 400
@@ -3040,71 +2350,48 @@ class TestResponsesEndpoint:
 
             assert "input" in data["error"]["message"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_invalid_json_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/responses",
-
                 data="not json",
-
                 headers={"Content-Type": "application/json"},
-
             )
 
             assert resp.status == 400
 
-
-
     @pytest.mark.asyncio
-
     async def test_successful_response_with_string_input(self, adapter):
-
         """String input is wrapped in a user message."""
 
         mock_result = {
-
             "final_response": "Paris is the capital of France.",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "What is the capital of France?",
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "What is the capital of France?",
+                    },
+                )
 
             assert resp.status == 200
 
@@ -3122,49 +2409,38 @@ class TestResponsesEndpoint:
 
             assert data["output"][0]["content"][0]["type"] == "output_text"
 
-            assert data["output"][0]["content"][0]["text"] == "Paris is the capital of France."
-
-
+            assert (
+                data["output"][0]["content"][0]["text"]
+                == "Paris is the capital of France."
+            )
 
     @pytest.mark.asyncio
-
     async def test_successful_response_with_array_input(self, adapter):
-
         """Array input with role/content objects."""
 
         mock_result = {"final_response": "Done", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": [
-
-                            {"role": "user", "content": "Hello"},
-
-                            {"role": "user", "content": "What is 2+2?"},
-
-                        ],
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": [
+                            {"role": "user", "content": "Hello"},
+                            {"role": "user", "content": "What is 2+2?"},
+                        ],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -3176,43 +2452,31 @@ class TestResponsesEndpoint:
 
             assert len(call_kwargs["conversation_history"]) == 1
 
-
-
     @pytest.mark.asyncio
-
     async def test_instructions_as_ephemeral_prompt(self, adapter):
-
         """The instructions field maps to ephemeral_system_prompt."""
 
         mock_result = {"final_response": "Ahoy!", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "Hello",
-
-                        "instructions": "Talk like a pirate.",
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "Hello",
+                        "instructions": "Talk like a pirate.",
+                    },
+                )
 
             assert resp.status == 200
 
@@ -3220,45 +2484,33 @@ class TestResponsesEndpoint:
 
             assert call_kwargs["ephemeral_system_prompt"] == "Talk like a pirate."
 
-
-
     @pytest.mark.asyncio
-
     async def test_previous_response_id_chaining(self, adapter):
-
         """Test that responses can be chained via previous_response_id."""
 
         mock_result_1 = {
-
             "final_response": "2",
-
             "messages": [{"role": "assistant", "content": "2"}],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             # First request
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result_1, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp1 = await cli.post(
-
-                    "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "What is 1+1?"},
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result_1,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp1 = await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "What is 1+1?"},
+                )
 
             assert resp1.status == 200
 
@@ -3266,43 +2518,30 @@ class TestResponsesEndpoint:
 
             response_id = data1["id"]
 
-
-
             # Second request chaining from the first
 
             mock_result_2 = {
-
                 "final_response": "3",
-
                 "messages": [{"role": "assistant", "content": "3"}],
-
                 "api_calls": 1,
-
             }
 
-
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result_2, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp2 = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "Now add 1 more",
-
-                        "previous_response_id": response_id,
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result_2,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp2 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "Now add 1 more",
+                        "previous_response_id": response_id,
+                    },
+                )
 
             assert resp2.status == 200
 
@@ -3314,55 +2553,36 @@ class TestResponsesEndpoint:
 
             assert call_kwargs["user_message"] == "Now add 1 more"
 
-
-
     @pytest.mark.asyncio
-
-    async def test_previous_response_id_stores_full_agent_transcript_once(self, adapter):
-
+    async def test_previous_response_id_stores_full_agent_transcript_once(
+        self, adapter
+    ):
         """Chained Responses storage must not append result["messages"] twice."""
 
         first_history = [
-
             {"role": "user", "content": "What is 1+1?"},
-
             {"role": "assistant", "content": "2"},
-
         ]
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {
-
                         "final_response": "2",
-
                         "messages": list(first_history),
-
                         "api_calls": 1,
-
                     },
-
                     {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-
                 )
 
                 resp1 = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "What is 1+1?"},
-
                 )
-
-
 
             assert resp1.status == 200
 
@@ -3372,51 +2592,31 @@ class TestResponsesEndpoint:
 
             assert stored_first["conversation_history"] == first_history
 
-
-
             second_history = first_history + [
-
                 {"role": "user", "content": "Now add 1 more"},
-
                 {"role": "assistant", "content": "3"},
-
             ]
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {
-
                         "final_response": "3",
-
                         "messages": list(second_history),
-
                         "api_calls": 1,
-
                     },
-
                     {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-
                 )
 
                 resp2 = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "Now add 1 more",
-
                         "previous_response_id": resp1_data["id"],
-
                     },
-
                 )
-
-
 
             assert resp2.status == 200
 
@@ -3430,161 +2630,94 @@ class TestResponsesEndpoint:
 
             assert stored_history.count(first_history[0]) == 1
 
-            assert stored_history.count({"role": "user", "content": "Now add 1 more"}) == 1
-
-
+            assert (
+                stored_history.count({"role": "user", "content": "Now add 1 more"}) == 1
+            )
 
     @pytest.mark.asyncio
-
     async def test_previous_response_id_outputs_only_current_turn_items(self, adapter):
-
         """Response output must not replay previous tool artifacts."""
 
         prior_history = [
-
             {"role": "user", "content": "Read old file"},
-
             {
-
                 "role": "assistant",
-
                 "tool_calls": [
-
                     {
-
                         "id": "call_old",
-
                         "function": {
-
                             "name": "read_file",
-
                             "arguments": '{"path":"old.txt"}',
-
                         },
-
                     }
-
                 ],
-
             },
-
             {
-
                 "role": "tool",
-
                 "tool_call_id": "call_old",
-
                 "content": '{"content":"old"}',
-
             },
-
             {"role": "assistant", "content": "old"},
-
         ]
 
         adapter._response_store.put(
-
             "resp_prev",
-
             {
-
                 "response": {"id": "resp_prev", "status": "completed"},
-
                 "conversation_history": list(prior_history),
-
                 "session_id": "api-test-session",
-
             },
-
         )
 
         full_agent_transcript = prior_history + [
-
             {"role": "user", "content": "Read new file"},
-
             {
-
                 "role": "assistant",
-
                 "tool_calls": [
-
                     {
-
                         "id": "call_new",
-
                         "function": {
-
                             "name": "read_file",
-
                             "arguments": '{"path":"new.txt"}',
-
                         },
-
                     }
-
                 ],
-
             },
-
             {
-
                 "role": "tool",
-
                 "tool_call_id": "call_new",
-
                 "content": '{"content":"new"}',
-
             },
-
             {"role": "assistant", "content": "new"},
-
         ]
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {
-
                         "final_response": "new",
-
                         "messages": list(full_agent_transcript),
-
                         "api_calls": 1,
-
                     },
-
                     {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-
                 )
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "Read new file",
-
                         "previous_response_id": "resp_prev",
-
                     },
-
                 )
 
                 assert resp.status == 200
 
                 data = await resp.json()
-
-
 
         output_json = json.dumps(data["output"])
 
@@ -3594,44 +2727,31 @@ class TestResponsesEndpoint:
 
         assert "old.txt" not in output_json
 
-
-
     @pytest.mark.asyncio
-
     async def test_previous_response_id_preserves_session(self, adapter):
-
         """Chained responses via previous_response_id reuse the same session_id."""
 
         mock_result = {
-
             "final_response": "ok",
-
             "messages": [{"role": "assistant", "content": "ok"}],
-
             "api_calls": 1,
-
         }
 
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             # First request — establishes a session
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (mock_result, usage)
 
                 resp1 = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "Hello"},
-
                 )
 
             assert resp1.status == 200
@@ -3642,105 +2762,72 @@ class TestResponsesEndpoint:
 
             response_id = data1["id"]
 
-
-
             # Second request — chains from the first
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (mock_result, usage)
 
                 resp2 = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "Follow up",
-
                         "previous_response_id": response_id,
-
                     },
-
                 )
 
             assert resp2.status == 200
 
             second_session_id = mock_run.call_args.kwargs["session_id"]
 
-
-
             # Session must be the same across the chain
 
             assert first_session_id == second_session_id
 
-
-
     @pytest.mark.asyncio
-
     async def test_invalid_previous_response_id_returns_404(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/responses",
-
                 json={
-
                     "model": "clawksis-agent",
-
                     "input": "follow up",
-
                     "previous_response_id": "resp_nonexistent",
-
                 },
-
             )
 
             assert resp.status == 404
 
-
-
     @pytest.mark.asyncio
-
     async def test_store_false_does_not_store(self, adapter):
-
         """When store=false, the response is NOT stored."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "Hello",
-
-                        "store": False,
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "Hello",
+                        "store": False,
+                    },
+                )
 
             assert resp.status == 200
 
@@ -3750,49 +2837,31 @@ class TestResponsesEndpoint:
 
             assert adapter._response_store.get(data["id"]) is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_store_string_false_does_not_store(self, adapter):
-
         """Quoted false must preserve ephemeral store=false semantics."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     mock_result,
-
                     {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-
                 )
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "Hello",
-
                         "store": "false",
-
                     },
-
                 )
-
-
 
             assert resp.status == 200
 
@@ -3800,75 +2869,56 @@ class TestResponsesEndpoint:
 
             assert adapter._response_store.get(data["id"]) is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_instructions_inherited_from_previous(self, adapter):
-
         """If no instructions provided, carry forward from previous response."""
 
         mock_result = {"final_response": "Ahoy!", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             # First request with instructions
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp1 = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "Hello",
-
-                        "instructions": "Be a pirate",
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp1 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "Hello",
+                        "instructions": "Be a pirate",
+                    },
+                )
 
             data1 = await resp1.json()
 
             resp_id = data1["id"]
 
-
-
             # Second request without instructions
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp2 = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "Tell me more",
-
-                        "previous_response_id": resp_id,
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp2 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "Tell me more",
+                        "previous_response_id": resp_id,
+                    },
+                )
 
             assert resp2.status == 200
 
@@ -3876,60 +2926,40 @@ class TestResponsesEndpoint:
 
             assert call_kwargs["ephemeral_system_prompt"] == "Be a pirate"
 
-
-
     @pytest.mark.asyncio
-
     async def test_agent_error_returns_500(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.side_effect = RuntimeError("Boom")
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "Hello"},
-
                 )
-
-
 
             assert resp.status == 500
 
-
-
     @pytest.mark.asyncio
-
     async def test_invalid_input_type_returns_400(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/responses",
-
                 json={"model": "clawksis-agent", "input": 42},
-
             )
 
             assert resp.status == 400
 
 
-
-
-
 class TestResponsesStreaming:
-
     @pytest.mark.asyncio
-
     async def test_stream_true_returns_responses_sse(self, adapter):
 
         app = _create_app(adapter)
@@ -3941,29 +2971,19 @@ class TestResponsesStreaming:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     cb("Hello")
 
                     cb(" world")
 
                 return (
-
                     {"final_response": "Hello world", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "hi", "stream": True},
-
                 )
 
                 assert resp.status == 200
@@ -3988,57 +3008,35 @@ class TestResponsesStreaming:
 
                 assert " world" in body
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_string_false_returns_json_response(self, adapter):
-
         """Quoted false must not route Responses API requests into SSE mode."""
 
         mock_result = {
-
             "final_response": "Paris is the capital of France.",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     mock_result,
-
                     {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-
                 )
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "What is the capital of France?",
-
                         "stream": "false",
-
                     },
-
                 )
-
-
 
             assert resp.status == 200
 
@@ -4048,14 +3046,12 @@ class TestResponsesStreaming:
 
             assert data["object"] == "response"
 
-            assert data["output"][0]["content"][0]["text"] == mock_result["final_response"]
-
-
+            assert (
+                data["output"][0]["content"][0]["text"] == mock_result["final_response"]
+            )
 
     @pytest.mark.asyncio
-
     async def test_stream_task_done_callback_enqueues_eos_for_responses(self, adapter):
-
         """Regression guard for #24451 on /v1/responses streaming path."""
 
         app = _create_app(adapter)
@@ -4063,22 +3059,15 @@ class TestResponsesStreaming:
         async with TestClient(TestServer(app)) as cli:
 
             class _FakeTask:
-
                 def __init__(self):
 
                     self.callbacks = []
-
-
 
                 def add_done_callback(self, cb):
 
                     self.callbacks.append(cb)
 
-
-
             fake_task = _FakeTask()
-
-
 
             def _fake_ensure_future(coro):
 
@@ -4088,49 +3077,33 @@ class TestResponsesStreaming:
 
                 return fake_task
 
-
-
             with (
-
                 patch.object(
-
                     adapter,
-
                     "_run_agent",
-
                     new=AsyncMock(
-
                         return_value=(
-
                             {"final_response": "ok", "messages": [], "api_calls": 1},
-
                             {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-
                         )
-
                     ),
-
                 ),
-
-                patch("gateway.platforms.api_server.asyncio.ensure_future", side_effect=_fake_ensure_future),
-
-                patch.object(adapter, "_write_sse_responses", new_callable=AsyncMock) as mock_write_sse,
-
+                patch(
+                    "gateway.platforms.api_server.asyncio.ensure_future",
+                    side_effect=_fake_ensure_future,
+                ),
+                patch.object(
+                    adapter, "_write_sse_responses", new_callable=AsyncMock
+                ) as mock_write_sse,
             ):
-
                 mock_write_sse.return_value = web.Response(status=200, text="ok")
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "hi", "stream": True},
-
                 )
 
                 assert resp.status == 200
-
-
 
             assert len(fake_task.callbacks) == 1
 
@@ -4142,10 +3115,7 @@ class TestResponsesStreaming:
 
             assert stream_q.get_nowait() is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_emits_function_call_and_output_items(self, adapter):
 
         app = _create_app(adapter)
@@ -4161,79 +3131,54 @@ class TestResponsesStreaming:
                 text_cb = kwargs.get("stream_delta_callback")
 
                 if start_cb:
-
                     start_cb("call_123", "read_file", {"path": "/tmp/test.txt"})
 
                 if complete_cb:
-
-                    complete_cb("call_123", "read_file", {"path": "/tmp/test.txt"}, '{"content":"hello"}')
+                    complete_cb(
+                        "call_123",
+                        "read_file",
+                        {"path": "/tmp/test.txt"},
+                        '{"content":"hello"}',
+                    )
 
                 if text_cb:
-
                     text_cb("Done.")
 
                 return (
-
                     {
-
                         "final_response": "Done.",
-
                         "messages": [
-
                             {
-
                                 "role": "assistant",
-
                                 "tool_calls": [
-
                                     {
-
                                         "id": "call_123",
-
                                         "function": {
-
                                             "name": "read_file",
-
                                             "arguments": '{"path":"/tmp/test.txt"}',
-
                                         },
-
                                     }
-
                                 ],
-
                             },
-
                             {
-
                                 "role": "tool",
-
                                 "tool_call_id": "call_123",
-
                                 "content": '{"content":"hello"}',
-
                             },
-
                         ],
-
                         "api_calls": 1,
-
                     },
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "read the file", "stream": True},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "read the file",
+                        "stream": True,
+                    },
                 )
 
                 assert resp.status == 200
@@ -4254,12 +3199,12 @@ class TestResponsesStreaming:
 
                 assert '"name": "read_file"' in body
 
-                assert '"output": [{"type": "input_text", "text": "{\\"content\\":\\"hello\\"}"}]' in body
-
-
+                assert (
+                    '"output": [{"type": "input_text", "text": "{\\"content\\":\\"hello\\"}"}]'
+                    in body
+                )
 
     @pytest.mark.asyncio
-
     async def test_streamed_response_is_stored_for_get(self, adapter):
 
         app = _create_app(adapter)
@@ -4271,27 +3216,25 @@ class TestResponsesStreaming:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     cb("Stored response")
 
                 return (
-
-                    {"final_response": "Stored response", "messages": [], "api_calls": 1},
-
+                    {
+                        "final_response": "Stored response",
+                        "messages": [],
+                        "api_calls": 1,
+                    },
                     {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "store this", "stream": True},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "store this",
+                        "stream": True,
+                    },
                 )
 
                 body = await resp.text()
@@ -4299,26 +3242,19 @@ class TestResponsesStreaming:
                 response_id = None
 
                 for line in body.splitlines():
-
                     if line.startswith("data: "):
-
                         try:
-
-                            payload = json.loads(line[len("data: "):])
+                            payload = json.loads(line[len("data: ") :])
 
                         except json.JSONDecodeError:
-
                             continue
 
                         if payload.get("type") == "response.completed":
-
                             response_id = payload["response"]["id"]
 
                             break
 
                 assert response_id
-
-
 
                 get_resp = await cli.get(f"/v1/responses/{response_id}")
 
@@ -4332,47 +3268,29 @@ class TestResponsesStreaming:
 
                 assert data["output"][-1]["content"][0]["text"] == "Stored response"
 
-
-
     @pytest.mark.asyncio
-
-    async def test_streamed_previous_response_id_stores_full_agent_transcript_once(self, adapter):
+    async def test_streamed_previous_response_id_stores_full_agent_transcript_once(
+        self, adapter
+    ):
 
         prior_history = [
-
             {"role": "user", "content": "What is 1+1?"},
-
             {"role": "assistant", "content": "2"},
-
         ]
 
         adapter._response_store.put(
-
             "resp_prev",
-
             {
-
                 "response": {"id": "resp_prev", "status": "completed"},
-
                 "conversation_history": list(prior_history),
-
                 "session_id": "api-test-session",
-
             },
-
         )
 
-
-
         expected_history = prior_history + [
-
             {"role": "user", "content": "Now add 1 more"},
-
             {"role": "assistant", "content": "3"},
-
         ]
-
-
 
         app = _create_app(adapter)
 
@@ -4383,78 +3301,52 @@ class TestResponsesStreaming:
                 cb = kwargs.get("stream_delta_callback")
 
                 if cb:
-
                     cb("3")
 
                 return (
-
                     {
-
                         "final_response": "3",
-
                         "messages": list(expected_history),
-
                         "api_calls": 1,
-
                     },
-
                     {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-
                 )
 
-
-
             with patch.object(adapter, "_run_agent", side_effect=_mock_run_agent):
-
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "input": "Now add 1 more",
-
                         "previous_response_id": "resp_prev",
-
                         "stream": True,
-
                     },
-
                 )
 
                 body = await resp.text()
-
-
 
         assert resp.status == 200
 
         response_id = None
 
         for line in body.splitlines():
-
             if line.startswith("data: "):
-
                 try:
-
-                    payload = json.loads(line[len("data: "):])
+                    payload = json.loads(line[len("data: ") :])
 
                 except json.JSONDecodeError:
-
                     continue
 
                 if payload.get("type") == "response.completed":
-
                     response_id = payload["response"]["id"]
 
                     break
 
-
-
         assert response_id
 
-        stored_history = adapter._response_store.get(response_id)["conversation_history"]
+        stored_history = adapter._response_store.get(response_id)[
+            "conversation_history"
+        ]
 
         assert stored_history == expected_history
 
@@ -4462,12 +3354,8 @@ class TestResponsesStreaming:
 
         assert stored_history.count({"role": "user", "content": "Now add 1 more"}) == 1
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_cancelled_persists_incomplete_snapshot(self, adapter):
-
         """Server-side asyncio.CancelledError (shutdown, request timeout) must
 
         still leave an ``incomplete`` snapshot in ResponseStore so
@@ -4494,25 +3382,16 @@ class TestResponsesStreaming:
 
         fake_request.headers = {}
 
-
-
         written_payloads: list = []
 
-
-
         class _FakeStreamResponse:
-
             async def prepare(self, req):
 
                 pass
 
-
-
             async def write(self, payload):
 
                 written_payloads.append(payload)
-
-
 
         # Patch web.StreamResponse for the duration of the writer call.
 
@@ -4520,11 +3399,7 @@ class TestResponsesStreaming:
 
         import queue as _q
 
-
-
         stream_q: _q.Queue = _q.Queue()
-
-
 
         async def _agent_coro():
 
@@ -4540,49 +3415,29 @@ class TestResponsesStreaming:
 
             raise asyncio.CancelledError()
 
-
-
         agent_task = asyncio.ensure_future(_agent_coro())
 
         response_id = f"resp_{uuid.uuid4().hex[:28]}"
 
-
-
-        with patch.object(api_mod.web, "StreamResponse", return_value=_FakeStreamResponse()):
-
+        with patch.object(
+            api_mod.web, "StreamResponse", return_value=_FakeStreamResponse()
+        ):
             with pytest.raises(asyncio.CancelledError):
-
                 await adapter._write_sse_responses(
-
                     request=fake_request,
-
                     response_id=response_id,
-
                     model="clawksis-agent",
-
                     created_at=int(time.time()),
-
                     stream_q=stream_q,
-
                     agent_task=agent_task,
-
                     agent_ref=[None],
-
                     conversation_history=[],
-
                     user_message="will be cancelled",
-
                     instructions=None,
-
                     conversation=None,
-
                     store=True,
-
                     session_id=None,
-
                 )
-
-
 
         # The in_progress snapshot was persisted on response.created,
 
@@ -4599,25 +3454,16 @@ class TestResponsesStreaming:
         # Partial text captured before cancel should be preserved.
 
         output_text = "".join(
-
             part.get("text", "")
-
             for item in stored["response"].get("output", [])
-
             if item.get("type") == "message"
-
             for part in item.get("content", [])
-
         )
 
         assert "partial output" in output_text
 
-
-
     @pytest.mark.asyncio
-
     async def test_stream_client_disconnect_persists_incomplete_snapshot(self, adapter):
-
         """Client disconnect (ConnectionResetError) during streaming must
 
         persist an ``incomplete`` snapshot in ResponseStore.  Regression
@@ -4628,19 +3474,12 @@ class TestResponsesStreaming:
 
         fake_request.headers = {}
 
-
-
         write_call_count = {"n": 0}
 
-
-
         class _DisconnectingStreamResponse:
-
             async def prepare(self, req):
 
                 pass
-
-
 
             async def write(self, payload):
 
@@ -4653,16 +3492,11 @@ class TestResponsesStreaming:
                 write_call_count["n"] += 1
 
                 if write_call_count["n"] >= 3:
-
                     raise ConnectionResetError("simulated client disconnect")
-
-
 
         import gateway.platforms.api_server as api_mod
 
         import queue as _q
-
-
 
         stream_q: _q.Queue = _q.Queue()
 
@@ -4670,66 +3504,43 @@ class TestResponsesStreaming:
 
         stream_q.put(None)  # EOS sentinel
 
-
-
         async def _agent_coro():
 
             await asyncio.sleep(0.01)
 
-            return ({"final_response": "", "messages": [], "api_calls": 0},
-
-                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-
+            return (
+                {"final_response": "", "messages": [], "api_calls": 0},
+                {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+            )
 
         agent_task = asyncio.ensure_future(_agent_coro())
 
         response_id = f"resp_{uuid.uuid4().hex[:28]}"
 
-
-
-        with patch.object(api_mod.web, "StreamResponse", return_value=_DisconnectingStreamResponse()):
-
+        with patch.object(
+            api_mod.web, "StreamResponse", return_value=_DisconnectingStreamResponse()
+        ):
             await adapter._write_sse_responses(
-
                 request=fake_request,
-
                 response_id=response_id,
-
                 model="clawksis-agent",
-
                 created_at=int(time.time()),
-
                 stream_q=stream_q,
-
                 agent_task=agent_task,
-
                 agent_ref=[None],
-
                 conversation_history=[],
-
                 user_message="will disconnect",
-
                 instructions=None,
-
                 conversation=None,
-
                 store=True,
-
                 session_id=None,
-
             )
-
-
 
         stored = adapter._response_store.get(response_id)
 
         assert stored is not None, "snapshot must survive client disconnect"
 
         assert stored["response"]["status"] == "incomplete"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -4739,79 +3550,52 @@ class TestResponsesStreaming:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestEndpointAuth:
-
     @pytest.mark.asyncio
-
     async def test_chat_completions_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/chat/completions",
-
                 json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
-
             )
 
             assert resp.status == 401
 
-
-
     @pytest.mark.asyncio
-
     async def test_responses_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/responses",
-
                 json={"model": "test", "input": "hi"},
-
             )
 
             assert resp.status == 401
 
-
-
     @pytest.mark.asyncio
-
     async def test_models_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/models")
 
             assert resp.status == 401
 
-
-
     @pytest.mark.asyncio
-
     async def test_health_does_not_require_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health")
 
             assert resp.status == 200
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -4821,16 +3605,10 @@ class TestEndpointAuth:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestConfigIntegration:
-
     def test_platform_enum_has_api_server(self):
 
         assert Platform.API_SERVER.value == "api_server"
-
-
 
     def test_env_override_enables_api_server(self, monkeypatch):
 
@@ -4844,8 +3622,6 @@ class TestConfigIntegration:
 
         assert config.platforms[Platform.API_SERVER].enabled is True
 
-
-
     def test_env_override_with_key(self, monkeypatch):
 
         monkeypatch.setenv("API_SERVER_KEY", "sk-mykey")
@@ -4857,8 +3633,6 @@ class TestConfigIntegration:
         assert Platform.API_SERVER in config.platforms
 
         assert config.platforms[Platform.API_SERVER].extra.get("key") == "sk-mykey"
-
-
 
     def test_env_override_port_and_host(self, monkeypatch):
 
@@ -4876,18 +3650,13 @@ class TestConfigIntegration:
 
         assert config.platforms[Platform.API_SERVER].extra.get("host") == "0.0.0.0"
 
-
-
     def test_env_override_cors_origins(self, monkeypatch):
 
         monkeypatch.setenv("API_SERVER_ENABLED", "true")
 
         monkeypatch.setenv(
-
             "API_SERVER_CORS_ORIGINS",
-
             "http://localhost:3000, http://127.0.0.1:3000",
-
         )
 
         from gateway.config import load_gateway_config
@@ -4895,14 +3664,9 @@ class TestConfigIntegration:
         config = load_gateway_config()
 
         assert config.platforms[Platform.API_SERVER].extra.get("cors_origins") == [
-
             "http://localhost:3000",
-
             "http://127.0.0.1:3000",
-
         ]
-
-
 
     def test_api_server_in_connected_platforms(self):
 
@@ -4913,8 +3677,6 @@ class TestConfigIntegration:
         connected = config.get_connected_platforms()
 
         assert Platform.API_SERVER in connected
-
-
 
     def test_api_server_not_in_connected_when_disabled(self):
 
@@ -4927,9 +3689,6 @@ class TestConfigIntegration:
         assert Platform.API_SERVER not in connected
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Multiple system messages
@@ -4937,50 +3696,34 @@ class TestConfigIntegration:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestMultipleSystemMessages:
-
     @pytest.mark.asyncio
-
     async def test_multiple_system_messages_concatenated(self, adapter):
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "messages": [
-
-                            {"role": "system", "content": "You are helpful."},
-
-                            {"role": "system", "content": "Be concise."},
-
-                            {"role": "user", "content": "Hello"},
-
-                        ],
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [
+                            {"role": "system", "content": "You are helpful."},
+                            {"role": "system", "content": "Be concise."},
+                            {"role": "user", "content": "Hello"},
+                        ],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -4993,9 +3736,6 @@ class TestMultipleSystemMessages:
             assert "Be concise." in prompt
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # send() method (not used but required by base)
@@ -5003,13 +3743,8 @@ class TestMultipleSystemMessages:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSendMethod:
-
     @pytest.mark.asyncio
-
     async def test_send_returns_not_supported(self):
 
         config = PlatformConfig(enabled=True)
@@ -5023,9 +3758,6 @@ class TestSendMethod:
         assert "HTTP request/response" in result.error
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # GET /v1/responses/{response_id}
@@ -5033,48 +3765,36 @@ class TestSendMethod:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestGetResponse:
-
     @pytest.mark.asyncio
-
     async def test_get_stored_response(self, adapter):
-
         """GET returns a previously stored response."""
 
         mock_result = {"final_response": "Hello!", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             # Create a response first
 
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "Hi"},
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "Hi"},
+                )
 
             assert resp.status == 200
 
             data = await resp.json()
 
             response_id = data["id"]
-
-
 
             # Now GET it
 
@@ -5090,36 +3810,25 @@ class TestGetResponse:
 
             assert data2["status"] == "completed"
 
-
-
     @pytest.mark.asyncio
-
     async def test_get_not_found(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/responses/resp_nonexistent")
 
             assert resp.status == 404
 
-
-
     @pytest.mark.asyncio
-
     async def test_get_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/responses/resp_any")
 
             assert resp.status == 401
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -5129,44 +3838,32 @@ class TestGetResponse:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDeleteResponse:
-
     @pytest.mark.asyncio
-
     async def test_delete_stored_response(self, adapter):
-
         """DELETE removes a stored response and returns confirmation."""
 
         mock_result = {"final_response": "Hello!", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "Hi"},
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "Hi"},
+                )
 
             data = await resp.json()
 
             response_id = data["id"]
-
-
 
             # Delete it
 
@@ -5182,44 +3879,31 @@ class TestDeleteResponse:
 
             assert data2["deleted"] is True
 
-
-
             # Verify it's gone
 
             resp3 = await cli.get(f"/v1/responses/{response_id}")
 
             assert resp3.status == 404
 
-
-
     @pytest.mark.asyncio
-
     async def test_delete_not_found(self, adapter):
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.delete("/v1/responses/resp_nonexistent")
 
             assert resp.status == 404
 
-
-
     @pytest.mark.asyncio
-
     async def test_delete_requires_auth(self, auth_adapter):
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.delete("/v1/responses/resp_any")
 
             assert resp.status == 401
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -5229,100 +3913,61 @@ class TestDeleteResponse:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestToolCallsInOutput:
-
     @pytest.mark.asyncio
-
     async def test_tool_calls_in_output(self, adapter):
-
         """When agent returns tool calls, they appear as function_call items."""
 
         mock_result = {
-
             "final_response": "The result is 42.",
-
             "messages": [
-
                 {
-
                     "role": "assistant",
-
                     "content": None,
-
                     "tool_calls": [
-
                         {
-
                             "id": "call_abc123",
-
                             "function": {
-
                                 "name": "calculator",
-
                                 "arguments": '{"expression": "6*7"}',
-
                             },
-
                         }
-
                     ],
-
                 },
-
                 {
-
                     "role": "tool",
-
                     "tool_call_id": "call_abc123",
-
                     "content": "42",
-
                 },
-
                 {
-
                     "role": "assistant",
-
                     "content": "The result is 42.",
-
                 },
-
             ],
-
             "api_calls": 2,
-
         }
-
-
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "What is 6*7?"},
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "What is 6*7?"},
+                )
 
             assert resp.status == 200
 
             data = await resp.json()
 
             output = data["output"]
-
-
 
             # Should have: function_call, function_call_output, message
 
@@ -5346,35 +3991,27 @@ class TestToolCallsInOutput:
 
             assert output[2]["content"][0]["text"] == "The result is 42."
 
-
-
     @pytest.mark.asyncio
-
     async def test_no_tool_calls_still_works(self, adapter):
-
         """Without tool calls, output is just a message."""
 
         mock_result = {"final_response": "Hello!", "messages": [], "api_calls": 1}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={"model": "clawksis-agent", "input": "Hello"},
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "Hello"},
+                )
 
             assert resp.status == 200
 
@@ -5385,9 +4022,6 @@ class TestToolCallsInOutput:
             assert data["output"][0]["type"] == "message"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Usage / token counting
@@ -5395,40 +4029,27 @@ class TestToolCallsInOutput:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestUsageCounting:
-
     @pytest.mark.asyncio
-
     async def test_responses_usage(self, adapter):
-
         """Responses API returns real token counts."""
 
         mock_result = {"final_response": "Done", "messages": [], "api_calls": 1}
 
         usage = {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (mock_result, usage)
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     json={"model": "clawksis-agent", "input": "Hi"},
-
                 )
-
-
 
             assert resp.status == 200
 
@@ -5440,43 +4061,29 @@ class TestUsageCounting:
 
             assert data["usage"]["total_tokens"] == 150
 
-
-
     @pytest.mark.asyncio
-
     async def test_chat_completions_usage(self, adapter):
-
         """Chat completions returns real token counts."""
 
         mock_result = {"final_response": "Done", "messages": [], "api_calls": 1}
 
         usage = {"input_tokens": 200, "output_tokens": 80, "total_tokens": 280}
 
-
-
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (mock_result, usage)
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     json={
-
                         "model": "clawksis-agent",
-
                         "messages": [{"role": "user", "content": "Hi"}],
-
                     },
-
                 )
-
-
 
             assert resp.status == 200
 
@@ -5489,9 +4096,6 @@ class TestUsageCounting:
             assert data["usage"]["total_tokens"] == 280
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Truncation
@@ -5499,64 +4103,46 @@ class TestUsageCounting:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestTruncation:
-
     @pytest.mark.asyncio
-
     async def test_truncation_auto_limits_history(self, adapter):
-
         """With truncation=auto, history over 100 messages is trimmed."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
-
-
 
         # Pre-seed a stored response with a long history
 
         long_history = [{"role": "user", "content": f"msg {i}"} for i in range(150)]
 
-        adapter._response_store.put("resp_prev", {
-
-            "response": {"id": "resp_prev", "object": "response"},
-
-            "conversation_history": long_history,
-
-            "instructions": None,
-
-        })
-
-
+        adapter._response_store.put(
+            "resp_prev",
+            {
+                "response": {"id": "resp_prev", "object": "response"},
+                "conversation_history": long_history,
+                "instructions": None,
+            },
+        )
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "follow up",
-
-                        "previous_response_id": "resp_prev",
-
-                        "truncation": "auto",
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "follow up",
+                        "previous_response_id": "resp_prev",
+                        "truncation": "auto",
+                    },
+                )
 
         assert resp.status == 200
 
@@ -5566,66 +4152,48 @@ class TestTruncation:
 
         assert len(call_kwargs["conversation_history"]) <= 100
 
-
-
     @pytest.mark.asyncio
-
     async def test_no_truncation_keeps_full_history(self, adapter):
-
         """Without truncation=auto, long history is passed as-is."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
 
-
-
         long_history = [{"role": "user", "content": f"msg {i}"} for i in range(150)]
 
-        adapter._response_store.put("resp_prev2", {
-
-            "response": {"id": "resp_prev2", "object": "response"},
-
-            "conversation_history": long_history,
-
-            "instructions": None,
-
-        })
-
-
+        adapter._response_store.put(
+            "resp_prev2",
+            {
+                "response": {"id": "resp_prev2", "object": "response"},
+                "conversation_history": long_history,
+                "instructions": None,
+            },
+        )
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-                resp = await cli.post(
-
-                    "/v1/responses",
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "input": "follow up",
-
-                        "previous_response_id": "resp_prev2",
-
-                    },
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "model": "clawksis-agent",
+                        "input": "follow up",
+                        "previous_response_id": "resp_prev2",
+                    },
+                )
 
         assert resp.status == 200
 
         call_kwargs = mock_run.call_args.kwargs
 
         assert len(call_kwargs["conversation_history"]) == 150
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -5635,11 +4203,7 @@ class TestTruncation:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestChatCompletionsAgentIncomplete:
-
     """When the agent run yields a partial / failed result, the API server
 
     must NOT pretend it succeeded. Either signal truncation via
@@ -5648,46 +4212,40 @@ class TestChatCompletionsAgentIncomplete:
 
     error envelope (no usable text). Issue #22496."""
 
-
-
     @pytest.mark.asyncio
-
-    async def test_truncation_with_partial_text_uses_length_finish_reason(self, adapter):
-
+    async def test_truncation_with_partial_text_uses_length_finish_reason(
+        self, adapter
+    ):
         """Partial text + truncation marker → finish_reason='length', 200 OK,
 
         plus clawk extras + headers."""
 
         mock_result = {
-
             "final_response": "Here is part one of the answer",
-
             "completed": False,
-
             "partial": True,
-
             "error": "Response truncated due to output length limit",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "tell me everything"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "tell me everything"}],
+                    },
                 )
 
             assert resp.status == 200
@@ -5696,7 +4254,10 @@ class TestChatCompletionsAgentIncomplete:
 
             assert data["choices"][0]["finish_reason"] == "length"
 
-            assert data["choices"][0]["message"]["content"] == "Here is part one of the answer"
+            assert (
+                data["choices"][0]["message"]["content"]
+                == "Here is part one of the answer"
+            )
 
             assert data["clawk"]["partial"] is True
 
@@ -5708,12 +4269,8 @@ class TestChatCompletionsAgentIncomplete:
 
             assert resp.headers.get("X-Clawksis-Partial") == "true"
 
-
-
     @pytest.mark.asyncio
-
     async def test_failure_with_no_text_returns_502_error_envelope(self, adapter):
-
         """No usable assistant text + failure → 502 with OpenAI error envelope.
 
 
@@ -5727,37 +4284,32 @@ class TestChatCompletionsAgentIncomplete:
         """
 
         mock_result = {
-
             "final_response": None,
-
             "completed": False,
-
             "partial": True,
-
             "failed": True,
-
             "error": "Response remained truncated after 3 continuation attempts",
-
             "messages": [],
-
             "api_calls": 1,
-
         }
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "x"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "x"}],
+                    },
                 )
 
             # Hard fail: SDK clients will raise on this status
@@ -5776,46 +4328,38 @@ class TestChatCompletionsAgentIncomplete:
 
             assert resp.headers.get("X-Clawksis-Completed") == "false"
 
-
-
     @pytest.mark.asyncio
-
     async def test_normal_completion_unchanged(self, adapter):
-
         """Sanity: a completed-True result still returns finish_reason='stop'
 
         and no clawk extras (preserves the existing happy-path contract)."""
 
         mock_result = {
-
             "final_response": "All good.",
-
             "completed": True,
-
             "partial": False,
-
             "failed": False,
-
             "messages": [],
-
             "api_calls": 1,
-
         }
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
                 )
 
             assert resp.status == 200
@@ -5831,9 +4375,6 @@ class TestChatCompletionsAgentIncomplete:
             assert "X-Clawksis-Completed" not in resp.headers
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # CORS
@@ -5841,22 +4382,14 @@ class TestChatCompletionsAgentIncomplete:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCORS:
-
     def test_origin_allowed_for_non_browser_client(self, adapter):
 
         assert adapter._origin_allowed("") is True
 
-
-
     def test_origin_rejected_by_default(self, adapter):
 
         assert adapter._origin_allowed("http://evil.example") is False
-
-
 
     def test_origin_allowed_for_allowlist_match(self):
 
@@ -5864,13 +4397,9 @@ class TestCORS:
 
         assert adapter._origin_allowed("http://localhost:3000") is True
 
-
-
     def test_cors_headers_for_origin_disabled_by_default(self, adapter):
 
         assert adapter._cors_headers_for_origin("http://localhost:3000") is None
-
-
 
     def test_cors_headers_for_origin_matches_allowlist(self):
 
@@ -5884,86 +4413,59 @@ class TestCORS:
 
         assert "POST" in headers["Access-Control-Allow-Methods"]
 
-
-
     def test_cors_headers_for_origin_rejects_unknown_origin(self):
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
 
         assert adapter._cors_headers_for_origin("http://evil.example") is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_cors_headers_not_present_by_default(self, adapter):
-
         """CORS is disabled unless explicitly configured."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health")
 
             assert resp.status == 200
 
             assert resp.headers.get("Access-Control-Allow-Origin") is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_browser_origin_rejected_by_default(self, adapter):
-
         """Browser-originated requests are rejected unless explicitly allowed."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health", headers={"Origin": "http://evil.example"})
 
             assert resp.status == 403
 
             assert resp.headers.get("Access-Control-Allow-Origin") is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_cors_options_preflight_rejected_by_default(self, adapter):
-
         """Browser preflight is rejected unless CORS is explicitly configured."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.options(
-
                 "/v1/chat/completions",
-
                 headers={
-
                     "Origin": "http://evil.example",
-
                     "Access-Control-Request-Method": "POST",
-
                 },
-
             )
 
             assert resp.status == 403
 
             assert resp.headers.get("Access-Control-Allow-Origin") is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_cors_headers_present_for_allowed_origin(self):
-
         """Allowed origins receive explicit CORS headers."""
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
@@ -5971,21 +4473,20 @@ class TestCORS:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health", headers={"Origin": "http://localhost:3000"})
 
             assert resp.status == 200
 
-            assert resp.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
+            assert (
+                resp.headers.get("Access-Control-Allow-Origin")
+                == "http://localhost:3000"
+            )
 
             assert "POST" in resp.headers.get("Access-Control-Allow-Methods", "")
 
             assert "DELETE" in resp.headers.get("Access-Control-Allow-Methods", "")
 
-
-
     @pytest.mark.asyncio
-
     async def test_cors_allows_idempotency_key_header(self):
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
@@ -5993,31 +4494,22 @@ class TestCORS:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.options(
-
                 "/v1/chat/completions",
-
                 headers={
-
                     "Origin": "http://localhost:3000",
-
                     "Access-Control-Request-Method": "POST",
-
                     "Access-Control-Request-Headers": "Idempotency-Key",
-
                 },
-
             )
 
             assert resp.status == 200
 
-            assert "Idempotency-Key" in resp.headers.get("Access-Control-Allow-Headers", "")
-
-
+            assert "Idempotency-Key" in resp.headers.get(
+                "Access-Control-Allow-Headers", ""
+            )
 
     @pytest.mark.asyncio
-
     async def test_cors_sets_vary_origin_header(self):
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
@@ -6025,19 +4517,14 @@ class TestCORS:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/health", headers={"Origin": "http://localhost:3000"})
 
             assert resp.status == 200
 
             assert resp.headers.get("Vary") == "Origin"
 
-
-
     @pytest.mark.asyncio
-
     async def test_cors_options_preflight_allowed_for_configured_origin(self):
-
         """Configured origins can complete browser preflight."""
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
@@ -6045,35 +4532,27 @@ class TestCORS:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.options(
-
                 "/v1/chat/completions",
-
                 headers={
-
                     "Origin": "http://localhost:3000",
-
                     "Access-Control-Request-Method": "POST",
-
                     "Access-Control-Request-Headers": "Authorization, Content-Type",
-
                 },
-
             )
 
             assert resp.status == 200
 
-            assert resp.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
+            assert (
+                resp.headers.get("Access-Control-Allow-Origin")
+                == "http://localhost:3000"
+            )
 
-            assert "Authorization" in resp.headers.get("Access-Control-Allow-Headers", "")
-
-
-
-
+            assert "Authorization" in resp.headers.get(
+                "Access-Control-Allow-Headers", ""
+            )
 
     @pytest.mark.asyncio
-
     async def test_cors_preflight_sets_max_age(self):
 
         adapter = _make_adapter(cors_origins=["http://localhost:3000"])
@@ -6081,26 +4560,19 @@ class TestCORS:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.options(
-
                 "/v1/chat/completions",
-
                 headers={
-
                     "Origin": "http://localhost:3000",
-
                     "Access-Control-Request-Method": "POST",
-
                     "Access-Control-Request-Headers": "Authorization, Content-Type",
-
                 },
-
             )
 
             assert resp.status == 200
 
             assert resp.headers.get("Access-Control-Max-Age") == "600"
+
 
 # ---------------------------------------------------------------------------
 
@@ -6109,38 +4581,29 @@ class TestCORS:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestConversationParameter:
-
     @pytest.mark.asyncio
-
     async def test_conversation_creates_new(self, adapter):
-
         """First request with a conversation name works (new conversation)."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {"final_response": "Hello!", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-                resp = await cli.post("/v1/responses", json={
-
-                    "input": "hi",
-
-                    "conversation": "my-chat",
-
-                })
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "hi",
+                        "conversation": "my-chat",
+                    },
+                )
 
                 assert resp.status == 200
 
@@ -6152,37 +4615,34 @@ class TestConversationParameter:
 
                 assert adapter._response_store.get_conversation("my-chat") is not None
 
-
-
     @pytest.mark.asyncio
-
     async def test_conversation_chains_automatically(self, adapter):
-
         """Second request with same conversation name chains to first."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
-                    {"final_response": "First response", "messages": [], "api_calls": 1},
-
+                    {
+                        "final_response": "First response",
+                        "messages": [],
+                        "api_calls": 1,
+                    },
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
                 # First request
 
-                resp1 = await cli.post("/v1/responses", json={
-
-                    "input": "hello",
-
-                    "conversation": "test-conv",
-
-                })
+                resp1 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "hello",
+                        "conversation": "test-conv",
+                    },
+                )
 
                 assert resp1.status == 200
 
@@ -6190,29 +4650,26 @@ class TestConversationParameter:
 
                 resp1_id = data1["id"]
 
-
-
                 # Second request — should chain
 
                 mock_run.return_value = (
-
-                    {"final_response": "Second response", "messages": [], "api_calls": 1},
-
+                    {
+                        "final_response": "Second response",
+                        "messages": [],
+                        "api_calls": 1,
+                    },
                     {"input_tokens": 20, "output_tokens": 10, "total_tokens": 30},
-
                 )
 
-                resp2 = await cli.post("/v1/responses", json={
-
-                    "input": "follow up",
-
-                    "conversation": "test-conv",
-
-                })
+                resp2 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "follow up",
+                        "conversation": "test-conv",
+                    },
+                )
 
                 assert resp2.status == 200
-
-
 
                 # The second call should have received conversation history from the first
 
@@ -6220,35 +4677,32 @@ class TestConversationParameter:
 
                 second_call_kwargs = mock_run.call_args_list[1]
 
-                history = second_call_kwargs.kwargs.get("conversation_history",
-
-                          second_call_kwargs[1].get("conversation_history", []) if len(second_call_kwargs) > 1 else [])
+                history = second_call_kwargs.kwargs.get(
+                    "conversation_history",
+                    second_call_kwargs[1].get("conversation_history", [])
+                    if len(second_call_kwargs) > 1
+                    else [],
+                )
 
                 # History should be non-empty (contains messages from first response)
 
                 assert len(history) > 0
 
-
-
     @pytest.mark.asyncio
-
     async def test_conversation_and_previous_response_id_conflict(self, adapter):
-
         """Cannot use both conversation and previous_response_id."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            resp = await cli.post("/v1/responses", json={
-
-                "input": "hi",
-
-                "conversation": "my-chat",
-
-                "previous_response_id": "resp_abc123",
-
-            })
+            resp = await cli.post(
+                "/v1/responses",
+                json={
+                    "input": "hi",
+                    "conversation": "my-chat",
+                    "previous_response_id": "resp_abc123",
+                },
+            )
 
             assert resp.status == 400
 
@@ -6256,94 +4710,80 @@ class TestConversationParameter:
 
             assert "Cannot use both" in data["error"]["message"]
 
-
-
     @pytest.mark.asyncio
-
     async def test_separate_conversations_are_isolated(self, adapter):
-
         """Different conversation names have independent histories."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {"final_response": "Response A", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
                 # Conversation A
 
-                await cli.post("/v1/responses", json={"input": "conv-a msg", "conversation": "conv-a"})
+                await cli.post(
+                    "/v1/responses",
+                    json={"input": "conv-a msg", "conversation": "conv-a"},
+                )
 
                 # Conversation B
 
                 mock_run.return_value = (
-
                     {"final_response": "Response B", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-                await cli.post("/v1/responses", json={"input": "conv-b msg", "conversation": "conv-b"})
-
-
+                await cli.post(
+                    "/v1/responses",
+                    json={"input": "conv-b msg", "conversation": "conv-b"},
+                )
 
                 # They should have different response IDs in the mapping
 
-                assert adapter._response_store.get_conversation("conv-a") != adapter._response_store.get_conversation("conv-b")
-
-
+                assert adapter._response_store.get_conversation(
+                    "conv-a"
+                ) != adapter._response_store.get_conversation("conv-b")
 
     @pytest.mark.asyncio
-
     async def test_conversation_store_false_no_mapping(self, adapter):
-
         """If store=false, conversation mapping is not updated."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {"final_response": "Ephemeral", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-                resp = await cli.post("/v1/responses", json={
-
-                    "input": "hi",
-
-                    "conversation": "ephemeral-chat",
-
-                    "store": False,
-
-                })
+                resp = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "hi",
+                        "conversation": "ephemeral-chat",
+                        "store": False,
+                    },
+                )
 
                 assert resp.status == 200
 
                 # Conversation mapping should NOT be set since store=false
 
-                assert adapter._response_store.get_conversation("ephemeral-chat") is None
-
-
+                assert (
+                    adapter._response_store.get_conversation("ephemeral-chat") is None
+                )
 
     @pytest.mark.asyncio
-
     async def test_conversation_reuse_after_eviction_no_404(self, adapter):
-
         """After eviction clears a conversation mapping, reusing that name starts fresh (no 404)."""
 
         adapter._response_store = ResponseStore(max_size=1)
@@ -6351,73 +4791,55 @@ class TestConversationParameter:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
                 mock_run.return_value = (
-
                     {"final_response": "First", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
                 # Create conversation -> resp stored
 
-                resp1 = await cli.post("/v1/responses", json={
-
-                    "input": "hello",
-
-                    "conversation": "my-chat",
-
-                })
+                resp1 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "hello",
+                        "conversation": "my-chat",
+                    },
+                )
 
                 assert resp1.status == 200
-
-
 
                 # Evict by adding another response
 
                 mock_run.return_value = (
-
                     {"final_response": "Other", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
                 await cli.post("/v1/responses", json={"input": "other"})
-
-
 
                 # Conversation mapping should have been cleaned by eviction
 
                 assert adapter._response_store.get_conversation("my-chat") is None
 
-
-
                 # Reuse conversation name — should start fresh, not 404
 
                 mock_run.return_value = (
-
                     {"final_response": "Restarted", "messages": [], "api_calls": 1},
-
                     {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-
                 )
 
-                resp3 = await cli.post("/v1/responses", json={
-
-                    "input": "hello again",
-
-                    "conversation": "my-chat",
-
-                })
+                resp3 = await cli.post(
+                    "/v1/responses",
+                    json={
+                        "input": "hello again",
+                        "conversation": "my-chat",
+                    },
+                )
 
                 assert resp3.status == 200
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -6427,15 +4849,9 @@ class TestConversationParameter:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSessionIdHeader:
-
     @pytest.mark.asyncio
-
     async def test_new_session_response_includes_session_id_header(self, adapter):
-
         """Without X-Clawksis-Session-Id, a new session is created and returned in the header."""
 
         mock_result = {"final_response": "Hello!", "messages": [], "api_calls": 1}
@@ -6443,29 +4859,28 @@ class TestSessionIdHeader:
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "Hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "Hi"}],
+                    },
                 )
 
             assert resp.status == 200
 
             assert resp.headers.get("X-Clawksis-Session-Id") is not None
 
-
-
     @pytest.mark.asyncio
-
     async def test_provided_session_id_is_used_and_echoed(self, auth_adapter):
-
         """When X-Clawksis-Session-Id is provided, it's passed to the agent and echoed in the response."""
 
         mock_result = {"final_response": "Continuing!", "messages": [], "api_calls": 1}
@@ -6473,11 +4888,8 @@ class TestSessionIdHeader:
         mock_db = MagicMock()
 
         mock_db.get_messages_as_conversation.return_value = [
-
             {"role": "user", "content": "previous message"},
-
             {"role": "assistant", "content": "previous reply"},
-
         ]
 
         auth_adapter._session_db = mock_db
@@ -6485,24 +4897,25 @@ class TestSessionIdHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    headers={"X-Clawksis-Session-Id": "my-session-123", "Authorization": "Bearer sk-secret"},
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "Continue"}]},
-
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "X-Clawksis-Session-Id": "my-session-123",
+                        "Authorization": "Bearer sk-secret",
+                    },
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "Continue"}],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -6512,22 +4925,15 @@ class TestSessionIdHeader:
 
             assert call_kwargs["session_id"] == "my-session-123"
 
-
-
     @pytest.mark.asyncio
-
     async def test_provided_session_id_loads_history_from_db(self, auth_adapter):
-
         """When X-Clawksis-Session-Id is provided, history comes from SessionDB not request body."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
 
         db_history = [
-
             {"role": "user", "content": "stored message 1"},
-
             {"role": "assistant", "content": "stored reply 1"},
-
         ]
 
         mock_db = MagicMock()
@@ -6539,40 +4945,30 @@ class TestSessionIdHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    headers={"X-Clawksis-Session-Id": "existing-session", "Authorization": "Bearer sk-secret"},
-
-                    # Request body has different history — should be ignored
-
-                    json={
-
-                        "model": "clawksis-agent",
-
-                        "messages": [
-
-                            {"role": "user", "content": "old msg from client"},
-
-                            {"role": "assistant", "content": "old reply from client"},
-
-                            {"role": "user", "content": "new question"},
-
-                        ],
-
-                    },
-
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "X-Clawksis-Session-Id": "existing-session",
+                        "Authorization": "Bearer sk-secret",
+                    },
+                    # Request body has different history — should be ignored
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [
+                            {"role": "user", "content": "old msg from client"},
+                            {"role": "assistant", "content": "old reply from client"},
+                            {"role": "user", "content": "new question"},
+                        ],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -6584,12 +4980,8 @@ class TestSessionIdHeader:
 
             assert call_kwargs["user_message"] == "new question"
 
-
-
     @pytest.mark.asyncio
-
     async def test_db_failure_falls_back_to_empty_history(self, auth_adapter):
-
         """If SessionDB raises, history falls back to empty and request still succeeds."""
 
         mock_result = {"final_response": "OK", "messages": [], "api_calls": 1}
@@ -6601,25 +4993,28 @@ class TestSessionIdHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run, \
-                 patch("clawk_state.SessionDB", side_effect=Exception("DB unavailable")):
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-
-
-
-                resp = await cli.post(
-
-                    "/v1/chat/completions",
-
-                    headers={"X-Clawksis-Session-Id": "some-session", "Authorization": "Bearer sk-secret"},
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "Hi"}]},
-
+            with (
+                patch.object(
+                    auth_adapter, "_run_agent", new_callable=AsyncMock
+                ) as mock_run,
+                patch("clawk_state.SessionDB", side_effect=Exception("DB unavailable")),
+            ):
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                 )
 
-
+                resp = await cli.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "X-Clawksis-Session-Id": "some-session",
+                        "Authorization": "Bearer sk-secret",
+                    },
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "Hi"}],
+                    },
+                )
 
             assert resp.status == 200
 
@@ -6630,9 +5025,6 @@ class TestSessionIdHeader:
             assert call_kwargs["session_id"] == "some-session"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # X-Clawksis-Session-Key header (long-term memory scoping)
@@ -6640,11 +5032,7 @@ class TestSessionIdHeader:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSessionKeyHeader:
-
     """The session key is a stable per-channel identifier that scopes
 
     long-term memory (e.g. Honcho) independently of the transcript-scoped
@@ -6657,12 +5045,8 @@ class TestSessionKeyHeader:
 
     """
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_passed_to_agent_and_echoed(self, auth_adapter):
-
         """X-Clawksis-Session-Key reaches _run_agent as gateway_session_key and is echoed back."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
@@ -6670,25 +5054,24 @@ class TestSessionKeyHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     headers={
-
                         "X-Clawksis-Session-Key": "webui:user-42",
-
                         "Authorization": "Bearer sk-secret",
-
                     },
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
                 )
 
             assert resp.status == 200
@@ -6699,12 +5082,8 @@ class TestSessionKeyHeader:
 
             assert call_kwargs["gateway_session_key"] == "webui:user-42"
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_independent_of_session_id(self, auth_adapter):
-
         """Both headers coexist: key scopes memory, id scopes transcript."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
@@ -6718,27 +5097,25 @@ class TestSessionKeyHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     headers={
-
                         "X-Clawksis-Session-Key": "channel-abc",
-
                         "X-Clawksis-Session-Id": "transcript-xyz",
-
                         "Authorization": "Bearer sk-secret",
-
                     },
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
                 )
 
             assert resp.status == 200
@@ -6753,12 +5130,8 @@ class TestSessionKeyHeader:
 
             assert call_kwargs["session_id"] == "transcript-xyz"
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_absent_yields_none(self, auth_adapter):
-
         """Omitting the header passes gateway_session_key=None and doesn't echo."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
@@ -6766,19 +5139,21 @@ class TestSessionKeyHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     headers={"Authorization": "Bearer sk-secret"},
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
                 )
 
             assert resp.status == 200
@@ -6789,36 +5164,26 @@ class TestSessionKeyHeader:
 
             assert call_kwargs["gateway_session_key"] is None
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_rejected_without_api_key(self, adapter):
-
         """Without API_SERVER_KEY, accepting a caller-supplied memory scope is unsafe — reject with 403."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/chat/completions",
-
                 headers={"X-Clawksis-Session-Key": "whatever"},
-
-                json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                json={
+                    "model": "clawksis-agent",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
             )
 
             assert resp.status == 403
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_rejects_control_chars(self, auth_adapter):
-
         """Header injection via \\r\\n must be rejected by the server-side validator.
 
 
@@ -6847,41 +5212,32 @@ class TestSessionKeyHeader:
 
         assert err.status == 400
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_rejects_oversized(self, auth_adapter):
-
         """Session keys longer than the cap are rejected."""
 
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.post(
-
                 "/v1/chat/completions",
-
-                headers={"X-Clawksis-Session-Key": "x" * 1000, "Authorization": "Bearer sk-secret"},
-
-                json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                headers={
+                    "X-Clawksis-Session-Key": "x" * 1000,
+                    "Authorization": "Bearer sk-secret",
+                },
+                json={
+                    "model": "clawksis-agent",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
             )
 
             assert resp.status == 400
 
-
-
     @pytest.mark.asyncio
-
     async def test_session_key_threads_into_create_agent(self, auth_adapter):
-
         """End-to-end: verify AIAgent(gateway_session_key=...) receives the key via _create_agent."""
 
         captured_kwargs = {}
-
-
 
         def _fake_create_agent(**kwargs):
 
@@ -6889,7 +5245,10 @@ class TestSessionKeyHeader:
 
             mock_agent = MagicMock()
 
-            mock_agent.run_conversation.return_value = {"final_response": "ok", "messages": []}
+            mock_agent.run_conversation.return_value = {
+                "final_response": "ok",
+                "messages": [],
+            }
 
             mock_agent.session_prompt_tokens = 0
 
@@ -6899,42 +5258,35 @@ class TestSessionKeyHeader:
 
             return mock_agent
 
-
-
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_create_agent", side_effect=_fake_create_agent):
-
+            with patch.object(
+                auth_adapter, "_create_agent", side_effect=_fake_create_agent
+            ):
                 resp = await cli.post(
-
                     "/v1/chat/completions",
-
                     headers={
-
                         "X-Clawksis-Session-Key": "agent:main:webui:dm:user-7",
-
                         "Authorization": "Bearer sk-secret",
-
                     },
-
-                    json={"model": "clawksis-agent", "messages": [{"role": "user", "content": "hi"}]},
-
+                    json={
+                        "model": "clawksis-agent",
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
                 )
 
             assert resp.status == 200
 
             # _create_agent must be called with gateway_session_key threaded through
 
-            assert captured_kwargs.get("gateway_session_key") == "agent:main:webui:dm:user-7"
-
-
+            assert (
+                captured_kwargs.get("gateway_session_key")
+                == "agent:main:webui:dm:user-7"
+            )
 
     @pytest.mark.asyncio
-
     async def test_responses_endpoint_accepts_session_key(self, auth_adapter):
-
         """Responses API honors the same X-Clawksis-Session-Key contract."""
 
         mock_result = {"final_response": "ok", "messages": [], "api_calls": 1}
@@ -6942,25 +5294,21 @@ class TestSessionKeyHeader:
         app = _create_app(auth_adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
-            with patch.object(auth_adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
-
-                mock_run.return_value = (mock_result, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+            with patch.object(
+                auth_adapter, "_run_agent", new_callable=AsyncMock
+            ) as mock_run:
+                mock_run.return_value = (
+                    mock_result,
+                    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                )
 
                 resp = await cli.post(
-
                     "/v1/responses",
-
                     headers={
-
                         "X-Clawksis-Session-Key": "webui:chan-1",
-
                         "Authorization": "Bearer sk-secret",
-
                     },
-
                     json={"model": "clawksis-agent", "input": "hello", "store": False},
-
                 )
 
             assert resp.status == 200
@@ -6971,18 +5319,13 @@ class TestSessionKeyHeader:
 
             assert call_kwargs["gateway_session_key"] == "webui:chan-1"
 
-
-
     @pytest.mark.asyncio
-
     async def test_capabilities_advertises_session_key_header(self, adapter):
-
         """GET /v1/capabilities should advertise the new header so clients can feature-detect."""
 
         app = _create_app(adapter)
 
         async with TestClient(TestServer(app)) as cli:
-
             resp = await cli.get("/v1/capabilities")
 
             assert resp.status == 200
@@ -6990,4 +5333,3 @@ class TestSessionKeyHeader:
             data = await resp.json()
 
             assert data["features"]["session_key_header"] == "X-Clawksis-Session-Key"
-

@@ -79,7 +79,8 @@ def register_provider(provider: TranscriptionProvider) -> None:
             "Transcription provider '%s' shadows a built-in name; registration "
             "ignored. Built-in STT providers (%s) always win — pick a different "
             "name.",
-            key, ", ".join(sorted(_BUILTIN_NAMES)),
+            key,
+            ", ".join(sorted(_BUILTIN_NAMES)),
         )
         return
     with _lock:
@@ -88,12 +89,14 @@ def register_provider(provider: TranscriptionProvider) -> None:
     if existing is not None:
         logger.debug(
             "Transcription provider '%s' re-registered (was %r)",
-            key, type(existing).__name__,
+            key,
+            type(existing).__name__,
         )
     else:
         logger.debug(
             "Registered transcription provider '%s' (%s)",
-            key, type(provider).__name__,
+            key,
+            type(provider).__name__,
         )
 
 

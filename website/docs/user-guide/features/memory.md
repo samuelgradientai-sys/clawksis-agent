@@ -60,11 +60,14 @@ There is no `read` action — memory content is automatically injected into the 
 
 The `replace` and `remove` actions use short unique substring matching — you don't need the full entry text. The `old_text` parameter just needs to be a unique substring that identifies exactly one entry:
 
-```python
-# If memory contains "User prefers dark mode in all editors"
-memory(action="replace", target="memory",
-       old_text="dark mode",
-       content="User prefers light mode in VS Code, dark mode in terminal")
+```python# If memory contains "User prefers dark mode in all editors"
+
+memory(
+    action="replace",
+    target="memory",
+    old_text="dark mode",
+    content="User prefers light mode in VS Code, dark mode in terminal",
+)
 ```
 
 If the substring matches multiple entries, an error is returned asking for a more specific match.

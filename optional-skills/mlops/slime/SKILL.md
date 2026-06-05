@@ -109,21 +109,21 @@ Use this workflow for training reasoning models with group-relative advantages.
 
 ### Step 1: Prepare Data
 
-```python
-# data.jsonl format
-{"prompt": "What is 2 + 2?", "label": "4"}
-{"prompt": "Solve: 3x = 12", "label": "x = 4"}
+```python# data.jsonl format
+
+{"prompt": "What is 2 + 2?", "label": "4"}
+
+{"prompt": "Solve: 3x = 12", "label": "x = 4"}
 ```
 
 Or with chat format:
-```python
-{
-    "prompt": [
-        {"role": "system", "content": "You are a math tutor."},
-        {"role": "user", "content": "What is 15 + 27?"}
-    ],
-    "label": "42"
-}
+```python{
+    "prompt": [
+        {"role": "system", "content": "You are a math tutor."},
+        {"role": "user", "content": "What is 15 + 27?"},
+    ],
+    "label": "42",
+}
 ```
 
 ### Step 2: Configure Model
@@ -210,30 +210,39 @@ Use this workflow for training agents with tool use or multi-step reasoning.
 
 ### Step 1: Define Custom Generate Function
 
-```python
-# custom_generate.py
-async def custom_generate(args, samples, evaluation=False):
-    """Multi-turn generation with tool calling."""
-    for sample in samples:
-        conversation = sample.prompt
-
-        for turn in range(args.max_turns):
-            # Generate response
-            response = await generate_single(conversation)
-
-            # Check for tool call
-            tool_call = extract_tool_call(response)
-            if tool_call:
-                tool_result = execute_tool(tool_call)
-                conversation.append({"role": "assistant", "content": response})
-                conversation.append({"role": "tool", "content": tool_result})
-            else:
-                break
-
-        sample.response = response
-        sample.reward = compute_reward(sample)
-
-    return samples
+```python# custom_generate.py
+
+
+async def custom_generate(args, samples, evaluation=False):
+    """Multi-turn generation with tool calling."""
+
+    for sample in samples:
+        conversation = sample.prompt
+
+        for turn in range(args.max_turns):
+            # Generate response
+
+            response = await generate_single(conversation)
+
+            # Check for tool call
+
+            tool_call = extract_tool_call(response)
+
+            if tool_call:
+                tool_result = execute_tool(tool_call)
+
+                conversation.append({"role": "assistant", "content": response})
+
+                conversation.append({"role": "tool", "content": tool_result})
+
+            else:
+                break
+
+        sample.response = response
+
+        sample.reward = compute_reward(sample)
+
+    return samples
 ```
 
 ### Step 2: Launch with Custom Function
@@ -312,31 +321,34 @@ slime's data buffer enables flexible data management:
 
 ### Basic Data Source
 
-```python
-class RolloutDataSource:
-    def get_samples(self, num_samples):
-        """Fetch prompts from dataset."""
-        return self.dataset.sample(num_samples)
-
-    def add_samples(self, samples):
-        """Called after generation (no-op by default)."""
-        pass
+```pythonclass RolloutDataSource:
+    def get_samples(self, num_samples):
+        """Fetch prompts from dataset."""
+
+        return self.dataset.sample(num_samples)
+
+    def add_samples(self, samples):
+        """Called after generation (no-op by default)."""
+
+        pass
 ```
 
 ### Buffered Data Source (Off-Policy)
 
-```python
-class RolloutDataSourceWithBuffer(RolloutDataSource):
-    def __init__(self):
-        self.buffer = []
-
-    def add_samples(self, samples):
-        """Store generated samples for reuse."""
-        self.buffer.extend(samples)
-
-    def buffer_filter(self, args, buffer, num_samples):
-        """Custom selection logic (prioritized, stratified, etc.)."""
-        return select_best(buffer, num_samples)
+```pythonclass RolloutDataSourceWithBuffer(RolloutDataSource):
+    def __init__(self):
+
+        self.buffer = []
+
+    def add_samples(self, samples):
+        """Store generated samples for reuse."""
+
+        self.buffer.extend(samples)
+
+    def buffer_filter(self, args, buffer, num_samples):
+        """Custom selection logic (prioritized, stratified, etc.)."""
+
+        return select_best(buffer, num_samples)
 ```
 
 ---
@@ -433,16 +445,21 @@ python train.py \
 
 ### Custom Reward Model
 
-```python
-# custom_rm.py
-class CustomRewardModel:
-    def __init__(self, model_path):
-        self.model = load_model(model_path)
-
-    def compute_reward(self, prompts, responses):
-        inputs = self.tokenize(prompts, responses)
-        scores = self.model(inputs)
-        return scores.tolist()
+```python# custom_rm.py
+
+
+class CustomRewardModel:
+    def __init__(self, model_path):
+
+        self.model = load_model(model_path)
+
+    def compute_reward(self, prompts, responses):
+
+        inputs = self.tokenize(prompts, responses)
+
+        scores = self.model(inputs)
+
+        return scores.tolist()
 ```
 
 ```bash

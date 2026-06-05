@@ -69,7 +69,7 @@ pipe.enable_vae_slicing()
 # Solution 5: Use lower precision
 pipe = DiffusionPipeline.from_pretrained(
     "model-id",
-    torch_dtype=torch.float16  # or torch.bfloat16
+    torch_dtype=torch.float16,  # or torch.bfloat16
 )
 
 # Solution 6: Reduce batch size
@@ -80,6 +80,7 @@ image = pipe(prompt, height=512, width=512).images[0]
 
 # Solution 8: Clear cache between generations
 import gc
+
 torch.cuda.empty_cache()
 gc.collect()
 ```
@@ -92,6 +93,7 @@ gc.collect()
 ```python
 import gc
 import torch
+
 
 def generate_with_cleanup(pipe, prompt, **kwargs):
     try:
@@ -112,9 +114,7 @@ def generate_with_cleanup(pipe, prompt, **kwargs):
 ```python
 # Use low CPU memory mode
 pipe = DiffusionPipeline.from_pretrained(
-    "large-model-id",
-    low_cpu_mem_usage=True,
-    torch_dtype=torch.float16
+    "large-model-id", low_cpu_mem_usage=True, torch_dtype=torch.float16
 )
 ```
 
@@ -169,20 +169,17 @@ image = pipe(prompt, num_inference_steps=50).images[0]
 
 # Solution 2: Use better VAE
 from diffusers import AutoencoderKL
+
 vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
 pipe.vae = vae
 
 # Solution 3: Use SDXL or refiner
-pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0"
-)
+pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0")
 
 # Solution 4: Upscale with img2img
 upscale_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(...)
 upscaled = upscale_pipe(
-    prompt=prompt,
-    image=image.resize((1024, 1024)),
-    strength=0.3
+    prompt=prompt, image=image.resize((1024, 1024)), strength=0.3
 ).images[0]
 ```
 
@@ -199,7 +196,7 @@ image = pipe(prompt, guidance_scale=10.0).images[0]
 image = pipe(
     prompt="A red car",
     negative_prompt="blue, green, yellow, wrong color",
-    guidance_scale=7.5
+    guidance_scale=7.5,
 ).images[0]
 
 # Solution 3: Use prompt weighting
@@ -235,9 +232,7 @@ poorly drawn face, mutation, deformed face
 # Solution 4: Inpaint problematic areas
 mask = create_face_mask(image)
 fixed = inpaint_pipe(
-    prompt="beautiful detailed face",
-    image=image,
-    mask_image=mask
+    prompt="beautiful detailed face", image=image, mask_image=mask
 ).images[0]
 ```
 
@@ -252,9 +247,7 @@ fixed = inpaint_pipe(
 from diffusers import EulerDiscreteScheduler
 
 # Create scheduler from config
-pipe.scheduler = EulerDiscreteScheduler.from_config(
-    pipe.scheduler.config
-)
+pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
 
 # Check compatible schedulers
 print(pipe.scheduler.compatibles)
@@ -285,10 +278,7 @@ print(len(pipe.scheduler.timesteps))
 # Should be .safetensors or .bin
 
 # Load with correct key prefix
-pipe.load_lora_weights(
-    "path/to/lora",
-    weight_name="lora.safetensors"
-)
+pipe.load_lora_weights("path/to/lora", weight_name="lora.safetensors")
 
 # Try loading into specific component
 pipe.unet.load_attn_procs("path/to/lora")
@@ -323,7 +313,7 @@ pipe.load_lora_weights("lora2", adapter_name="subject")
 # Balance weights
 pipe.set_adapters(
     ["style", "subject"],
-    adapter_weights=[0.5, 0.5]  # Lower weights
+    adapter_weights=[0.5, 0.5],  # Lower weights
 )
 
 # Or use LoRA merge before loading
@@ -347,7 +337,7 @@ image = pipe(
     prompt=prompt,
     image=control_image,
     controlnet_conditioning_scale=1.0,  # Try 0.5-1.5
-    num_inference_steps=30
+    num_inference_steps=30,
 ).images[0]
 
 # Verify ControlNet is loaded
@@ -434,15 +424,15 @@ pipe = DiffusionPipeline.from_pretrained(
 ```python
 # Solution 1: Use faster scheduler
 from diffusers import DPMSolverMultistepScheduler
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-    pipe.scheduler.config
-)
+
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 # Solution 2: Reduce steps
 image = pipe(prompt, num_inference_steps=20).images[0]
 
 # Solution 3: Use LCM
 from diffusers import LCMScheduler
+
 pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl")
 pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
 image = pipe(prompt, num_inference_steps=4, guidance_scale=1.0).images[0]
@@ -476,6 +466,7 @@ pipe.unet = torch.compile(pipe.unet)
 
 ```python
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 # Or for specific modules
@@ -497,7 +488,7 @@ print(pipe.scheduler.config)
 # Verify device placement
 print(pipe.device)
 for name, module in pipe.components.items():
-    if hasattr(module, 'device'):
+    if hasattr(module, "device"):
         print(f"{name}: {module.device}")
 ```
 
@@ -529,10 +520,11 @@ def save_latents_callback(pipe, step_index, timestep, callback_kwargs):
 
     return callback_kwargs
 
+
 image = pipe(
     prompt,
     callback_on_step_end=save_latents_callback,
-    callback_on_step_end_tensor_inputs=["latents"]
+    callback_on_step_end_tensor_inputs=["latents"],
 ).images[0]
 ```
 

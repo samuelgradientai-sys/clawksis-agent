@@ -24,53 +24,66 @@ Clawksis 在 `ClawksisCLI` 上暴露了受保护的扩展 hook（钩子），使
 
 ## 快速开始：包装 CLI
 
-```python
-#!/usr/bin/env python3
-"""my_cli.py — Example wrapper CLI that extends Clawksis."""
-
-from cli import ClawksisCLI
-from prompt_toolkit.layout import FormattedTextControl, Window
-from prompt_toolkit.filters import Condition
-
-
-class MyCLI(ClawksisCLI):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._panel_visible = False
-
-    def _get_extra_tui_widgets(self):
-        """Add a toggleable info panel above the status bar."""
-        cli_ref = self
-        return [
-            Window(
-                FormattedTextControl(lambda: "📊 My custom panel content"),
-                height=1,
-                filter=Condition(lambda: cli_ref._panel_visible),
-            ),
-        ]
-
-    def _register_extra_tui_keybindings(self, kb, *, input_area):
-        """F2 toggles the custom panel."""
-        cli_ref = self
-
-        @kb.add("f2")
-        def _toggle_panel(event):
-            cli_ref._panel_visible = not cli_ref._panel_visible
-
-    def process_command(self, cmd: str) -> bool:
-        """Add a /panel slash command."""
-        if cmd.strip().lower() == "/panel":
-            self._panel_visible = not self._panel_visible
-            state = "visible" if self._panel_visible else "hidden"
-            print(f"Panel is now {state}")
-            return True
-        return super().process_command(cmd)
-
-
-if __name__ == "__main__":
-    cli = MyCLI()
-    cli.run()
+```python#!/usr/bin/env python3
+
+"""my_cli.py — Example wrapper CLI that extends Clawksis."""
+
+from cli import ClawksisCLI
+
+from prompt_toolkit.layout import FormattedTextControl, Window
+
+from prompt_toolkit.filters import Condition
+
+
+class MyCLI(ClawksisCLI):
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        self._panel_visible = False
+
+    def _get_extra_tui_widgets(self):
+        """Add a toggleable info panel above the status bar."""
+
+        cli_ref = self
+
+        return [
+            Window(
+                FormattedTextControl(lambda: "📊 My custom panel content"),
+                height=1,
+                filter=Condition(lambda: cli_ref._panel_visible),
+            ),
+        ]
+
+    def _register_extra_tui_keybindings(self, kb, *, input_area):
+        """F2 toggles the custom panel."""
+
+        cli_ref = self
+
+        @kb.add("f2")
+        def _toggle_panel(event):
+
+            cli_ref._panel_visible = not cli_ref._panel_visible
+
+    def process_command(self, cmd: str) -> bool:
+        """Add a /panel slash command."""
+
+        if cmd.strip().lower() == "/panel":
+            self._panel_visible = not self._panel_visible
+
+            state = "visible" if self._panel_visible else "hidden"
+
+            print(f"Panel is now {state}")
+
+            return True
+
+        return super().process_command(cmd)
+
+
+if __name__ == "__main__":
+    cli = MyCLI()
+
+    cli.run()
 ```
 
 运行：
@@ -87,50 +100,54 @@ python my_cli.py
 
 返回要插入 TUI 布局的 prompt_toolkit widget 列表。Widget 出现在**间隔区与状态栏之间**——位于输入区上方、主输出区下方。
 
-```python
-def _get_extra_tui_widgets(self) -> list:
-    return []  # default: no extra widgets
+```pythondef _get_extra_tui_widgets(self) -> list:
+
+    return []  # default: no extra widgets
 ```
 
 每个 widget 应为 prompt_toolkit 容器（如 `Window`、`ConditionalContainer`、`HSplit`）。使用 `ConditionalContainer` 或 `filter=Condition(...)` 可使 widget 支持切换显示。
 
-```python
-from prompt_toolkit.layout import ConditionalContainer, Window, FormattedTextControl
-from prompt_toolkit.filters import Condition
-
-def _get_extra_tui_widgets(self):
-    return [
-        ConditionalContainer(
-            Window(FormattedTextControl("Status: connected"), height=1),
-            filter=Condition(lambda: self._show_status),
-        ),
-    ]
+```pythonfrom prompt_toolkit.layout import ConditionalContainer, Window, FormattedTextControl
+
+from prompt_toolkit.filters import Condition
+
+
+def _get_extra_tui_widgets(self):
+
+    return [
+        ConditionalContainer(
+            Window(FormattedTextControl("Status: connected"), height=1),
+            filter=Condition(lambda: self._show_status),
+        ),
+    ]
 ```
 
 ### `_register_extra_tui_keybindings(kb, *, input_area)`
 
 在 Clawksis 注册自身快捷键之后、布局构建之前调用。将你的快捷键添加到 `kb`。
 
-```python
-def _register_extra_tui_keybindings(self, kb, *, input_area):
-    pass  # default: no extra keybindings
+```pythondef _register_extra_tui_keybindings(self, kb, *, input_area):
+
+    pass  # default: no extra keybindings
 ```
 
 参数：
 - **`kb`** — prompt_toolkit 应用的 `KeyBindings` 实例
 - **`input_area`** — 主 `TextArea` widget，用于读取或操作用户输入
 
-```python
-def _register_extra_tui_keybindings(self, kb, *, input_area):
-    cli_ref = self
-
-    @kb.add("f3")
-    def _clear_input(event):
-        input_area.text = ""
-
-    @kb.add("f4")
-    def _insert_template(event):
-        input_area.text = "/search "
+```pythondef _register_extra_tui_keybindings(self, kb, *, input_area):
+
+    cli_ref = self
+
+    @kb.add("f3")
+    def _clear_input(event):
+
+        input_area.text = ""
+
+    @kb.add("f4")
+    def _insert_template(event):
+
+        input_area.text = "/search "
 ```
 
 **避免与内置快捷键冲突**：`Enter`（提交）、`Escape Enter`（换行）、`Ctrl-C`（中断）、`Ctrl-D`（退出）、`Tab`（接受自动建议）。F2 及以上的功能键和 Ctrl 组合键通常是安全的。
@@ -149,25 +166,24 @@ def _build_tui_layout_children(self, *, sudo_widget, secret_widget,
 
 默认实现返回（值为 `None` 的 widget 会被过滤掉）：
 
-```python
-[
-    Window(height=0),       # anchor
-    sudo_widget,            # sudo password prompt (conditional)
-    secret_widget,          # secret input prompt (conditional)
-    approval_widget,        # dangerous command approval (conditional)
-    clarify_widget,         # clarify question UI (conditional)
-    model_picker_widget,    # model picker overlay (conditional)
-    spinner_widget,         # thinking spinner (conditional)
-    spacer,                 # fills remaining vertical space
-    *self._get_extra_tui_widgets(),  # YOUR WIDGETS GO HERE
-    status_bar,             # model/token/context status line
-    input_rule_top,         # ─── border above input
-    image_bar,              # attached images indicator
-    input_area,             # user text input
-    input_rule_bot,         # ─── border below input
-    voice_status_bar,       # voice mode status (conditional)
-    completions_menu,       # autocomplete dropdown
-]
+```python[
+    Window(height=0),  # anchor
+    sudo_widget,  # sudo password prompt (conditional)
+    secret_widget,  # secret input prompt (conditional)
+    approval_widget,  # dangerous command approval (conditional)
+    clarify_widget,  # clarify question UI (conditional)
+    model_picker_widget,  # model picker overlay (conditional)
+    spinner_widget,  # thinking spinner (conditional)
+    spacer,  # fills remaining vertical space
+    *self._get_extra_tui_widgets(),  # YOUR WIDGETS GO HERE
+    status_bar,  # model/token/context status line
+    input_rule_top,  # ─── border above input
+    image_bar,  # attached images indicator
+    input_area,  # user text input
+    input_rule_bot,  # ─── border below input
+    voice_status_bar,  # voice mode status (conditional)
+    completions_menu,  # autocomplete dropdown
+]
 ```
 
 ## 布局示意图

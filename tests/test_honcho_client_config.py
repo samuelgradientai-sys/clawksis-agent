@@ -17,10 +17,12 @@ class TestHonchoClientConfigAutoEnable:
     def test_auto_enables_when_api_key_present_no_explicit_enabled(self, tmp_path):
         """When API key exists and enabled is not set, should auto-enable."""
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps({
-            "apiKey": "test-api-key-12345",
-            # Note: no "enabled" field
-        }))
+        config_path.write_text(
+            json.dumps({
+                "apiKey": "test-api-key-12345",
+                # Note: no "enabled" field
+            })
+        )
 
         cfg = HonchoClientConfig.from_global_config(config_path=config_path)
 
@@ -30,10 +32,12 @@ class TestHonchoClientConfigAutoEnable:
     def test_respects_explicit_enabled_false(self, tmp_path):
         """When enabled is explicitly False, should stay disabled even with API key."""
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps({
-            "apiKey": "test-api-key-12345",
-            "enabled": False,  # Explicitly disabled
-        }))
+        config_path.write_text(
+            json.dumps({
+                "apiKey": "test-api-key-12345",
+                "enabled": False,  # Explicitly disabled
+            })
+        )
 
         cfg = HonchoClientConfig.from_global_config(config_path=config_path)
 
@@ -43,10 +47,12 @@ class TestHonchoClientConfigAutoEnable:
     def test_respects_explicit_enabled_true(self, tmp_path):
         """When enabled is explicitly True, should be enabled."""
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps({
-            "apiKey": "test-api-key-12345",
-            "enabled": True,
-        }))
+        config_path.write_text(
+            json.dumps({
+                "apiKey": "test-api-key-12345",
+                "enabled": True,
+            })
+        )
 
         cfg = HonchoClientConfig.from_global_config(config_path=config_path)
 
@@ -56,10 +62,12 @@ class TestHonchoClientConfigAutoEnable:
     def test_disabled_when_no_api_key_and_no_explicit_enabled(self, tmp_path):
         """When no API key and enabled not set, should be disabled."""
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps({
-            "workspace": "test",
-            # No apiKey, no enabled
-        }))
+        config_path.write_text(
+            json.dumps({
+                "workspace": "test",
+                # No apiKey, no enabled
+            })
+        )
 
         # Clear env var if set
         env_key = os.environ.pop("HONCHO_API_KEY", None)
@@ -74,10 +82,12 @@ class TestHonchoClientConfigAutoEnable:
     def test_auto_enables_with_env_var_api_key(self, tmp_path, monkeypatch):
         """When API key is in env var (not config), should auto-enable."""
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps({
-            "workspace": "test",
-            # No apiKey in config
-        }))
+        config_path.write_text(
+            json.dumps({
+                "workspace": "test",
+                # No apiKey in config
+            })
+        )
 
         monkeypatch.setenv("HONCHO_API_KEY", "env-api-key-67890")
 
@@ -110,6 +120,7 @@ class TestHonchoClientConfigAutoEnable:
 def test_save_config_sets_owner_only_permissions(tmp_path, monkeypatch):
     """honcho.json is created atomically with 0o600, not chmod-after-write."""
     import utils
+
     calls = []
     real_atomic = utils.atomic_json_write
 

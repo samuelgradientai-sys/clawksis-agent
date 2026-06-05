@@ -26,18 +26,17 @@ Clawksis 工具是自注册函数，按 toolset（工具集）分组，并通过
 
 `tools/` 中的每个工具文件在模块级别调用 `registry.register()` 来声明自身。函数签名如下：
 
-```python
-registry.register(
-    name="terminal",               # 唯一工具名称（用于 API schema）
-    toolset="terminal",            # 该工具所属的 toolset
-    schema={...},                  # OpenAI function-calling schema（描述、参数）
-    handler=handle_terminal,       # 工具被调用时执行的函数
-    check_fn=check_terminal,       # 可选：返回 True/False 表示是否可用
-    requires_env=["SOME_VAR"],     # 可选：所需的环境变量（用于 UI 显示）
-    is_async=False,                # handler 是否为异步协程
-    description="Run commands",    # 人类可读的描述
-    emoji="💻",                    # 用于 spinner/进度显示的 emoji
-)
+```pythonregistry.register(
+    name="terminal",  # 唯一工具名称（用于 API schema）
+    toolset="terminal",  # 该工具所属的 toolset
+    schema={...},  # OpenAI function-calling schema（描述、参数）
+    handler=handle_terminal,  # 工具被调用时执行的函数
+    check_fn=check_terminal,  # 可选：返回 True/False 表示是否可用
+    requires_env=["SOME_VAR"],  # 可选：所需的环境变量（用于 UI 显示）
+    is_async=False,  # handler 是否为异步协程
+    description="Run commands",  # 人类可读的描述
+    emoji="💻",  # 用于 spinner/进度显示的 emoji
+)
 ```
 
 每次调用都会创建一个 `ToolEntry`，以工具名称为键存储在单例 `ToolRegistry._tools` 字典中。若不同 toolset 之间出现名称冲突，会记录警告，后注册的条目覆盖前者。
@@ -46,15 +45,19 @@ registry.register(
 
 当 `model_tools.py` 被导入时，会调用 `tools/registry.py` 中的 `discover_builtin_tools()`。该函数使用 AST 解析扫描所有 `tools/*.py` 文件，找出包含顶层 `registry.register()` 调用的模块，然后导入它们：
 
-```python
-# tools/registry.py（简化版）
-def discover_builtin_tools(tools_dir=None):
-    tools_path = Path(tools_dir) if tools_dir else Path(__file__).parent
-    for path in sorted(tools_path.glob("*.py")):
-        if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
-            continue
-        if _module_registers_tools(path):  # AST 检查顶层 registry.register()
-            importlib.import_module(f"tools.{path.stem}")
+```python# tools/registry.py（简化版）
+
+
+def discover_builtin_tools(tools_dir=None):
+
+    tools_path = Path(tools_dir) if tools_dir else Path(__file__).parent
+
+    for path in sorted(tools_path.glob("*.py")):
+        if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
+            continue
+
+        if _module_registers_tools(path):  # AST 检查顶层 registry.register()
+            importlib.import_module(f"tools.{path.stem}")
 ```
 
 这种自动发现机制意味着新工具文件会被自动识别——无需手动维护列表。AST 检查只匹配顶层的 `registry.register()` 调用（不匹配函数内部的调用），因此 `tools/` 中的辅助模块不会被导入。
@@ -76,15 +79,17 @@ def discover_builtin_tools(tools_dir=None):
 
 当 `registry.get_definitions()` 为模型构建 schema 列表时，会运行每个工具的 `check_fn()`：
 
-```python
-# 简化自 registry.py
-if entry.check_fn:
-    try:
-        available = bool(entry.check_fn())
-    except Exception:
-        available = False   # 异常 = 不可用
-    if not available:
-        continue            # 完全跳过该工具
+```python# 简化自 registry.py
+
+if entry.check_fn:
+    try:
+        available = bool(entry.check_fn())
+
+    except Exception:
+        available = False  # 异常 = 不可用
+
+    if not available:
+        continue  # 完全跳过该工具
 ```
 
 关键行为：

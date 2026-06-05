@@ -28,9 +28,9 @@ class Colors:
     YELLOW = "\033[33m"
     # --- Paleta de marca Clawksis (vinotinto) ---
     # Mismos codigos 256-color que el banner ASCII y clawksis-cli.mjs.
-    VINOTINTO = "\033[38;5;124m"         # burdeos principal (acento de marca)
+    VINOTINTO = "\033[38;5;124m"  # burdeos principal (acento de marca)
     VINOTINTO_BRIGHT = "\033[38;5;160m"  # rojo vino vivo
-    VINOTINTO_DARK = "\033[38;5;88m"     # vino oscuro
+    VINOTINTO_DARK = "\033[38;5;88m"  # vino oscuro
 
     # Los acentos "frios" del fork original se remapean a la marca:
     # cian/azul -> vinotinto y magenta -> rojo vino. Verde/amarillo/rojo

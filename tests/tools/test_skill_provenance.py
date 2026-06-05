@@ -3,15 +3,13 @@
 import contextvars
 
 
-
-
-
 def test_set_and_get_origin():
     from tools.skill_provenance import (
         set_current_write_origin,
         reset_current_write_origin,
         get_current_write_origin,
     )
+
     token = set_current_write_origin("background_review")
     try:
         assert get_current_write_origin() == "background_review"
@@ -25,6 +23,7 @@ def test_reset_restores_prior_origin():
         reset_current_write_origin,
         get_current_write_origin,
     )
+
     outer = set_current_write_origin("assistant_tool")
     try:
         inner = set_current_write_origin("background_review")
@@ -44,6 +43,7 @@ def test_is_background_review_truthy_only_for_review():
         is_background_review,
         BACKGROUND_REVIEW,
     )
+
     for origin, expected in (
         ("foreground", False),
         ("assistant_tool", False),
@@ -65,6 +65,7 @@ def test_empty_origin_falls_back_to_foreground():
         reset_current_write_origin,
         get_current_write_origin,
     )
+
     token = set_current_write_origin("")
     try:
         # Empty is coerced to "foreground" at the set() boundary.

@@ -3,7 +3,6 @@ import asyncio
 import pytest
 
 
-
 from pathlib import Path
 
 from types import SimpleNamespace
@@ -13,9 +12,6 @@ from clawk_cli import kanban_db as kb
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Fixtures
@@ -23,9 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # ---------------------------------------------------------------------------
 
 
-
 @pytest.fixture
-
 def kanban_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -51,13 +45,8 @@ def kanban_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_notifier_unsubs_after_completed_event(kanban_home):
-
     """
 
     Subscription should be remove after completed event
@@ -70,12 +59,9 @@ async def test_notifier_unsubs_after_completed_event(kanban_home):
 
     from gateway.config import Platform
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="test task", assignee="worker1")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat1")
@@ -83,10 +69,7 @@ async def test_notifier_unsubs_after_completed_event(kanban_home):
         kb.complete_task(conn, tid, result="completed by agent")
 
     finally:
-
         conn.close()
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -94,45 +77,27 @@ async def test_notifier_unsubs_after_completed_event(kanban_home):
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     fake_adapter = MagicMock()
-
-
 
     async def _send_and_stop(chat_id, msg, metadata=None):
 
         runner._running = False
 
-
-
     fake_adapter.send = AsyncMock(side_effect=_send_and_stop)
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
-
-
 
     async def _fast_sleep(_):
 
         await _orig_sleep(0)
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     fake_adapter.send.assert_called_once()
 
@@ -140,30 +105,20 @@ async def test_notifier_unsubs_after_completed_event(kanban_home):
 
     assert "completed" in call_msg
 
-
-
     conn = kb.connect()
 
     try:
-
         subs = kb.list_notify_subs(conn, tid)
 
     finally:
-
         conn.close()
 
     assert subs == [], "Subscription should be unsub after completed event"
 
 
-
-
-
 @pytest.mark.asyncio
-
-@pytest.mark.parametrize('kind', ["gave_up", "crashed", "timed_out"])
-
+@pytest.mark.parametrize("kind", ["gave_up", "crashed", "timed_out"])
 async def test_notifier_unsubs_after_abnormal_events(kind, kanban_home):
-
     """
 
     Event kinds gave_up / crashed / timed_out send a notification but DO
@@ -188,14 +143,9 @@ async def test_notifier_unsubs_after_abnormal_events(kind, kanban_home):
 
     from gateway.config import Platform
 
-
-
     conn = kb.connect()
 
-
-
     try:
-
         tid = kb.create_task(conn, title=f"test {kind} task", assignee="worker1")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat1")
@@ -203,10 +153,7 @@ async def test_notifier_unsubs_after_abnormal_events(kind, kanban_home):
         kb._append_event(conn, tid, kind=kind)
 
     finally:
-
         conn.close()
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -214,53 +161,33 @@ async def test_notifier_unsubs_after_abnormal_events(kind, kanban_home):
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     fake_adapter = MagicMock()
-
-
 
     async def _send_and_stop(chat_id, msg, metadata=None):
 
         runner._running = False
 
-
-
     fake_adapter.send = AsyncMock(side_effect=_send_and_stop)
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
-
-
 
     async def _fast_sleep(_):
 
         await _orig_sleep(0)
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     # The user is notified about the abnormal event...
 
     fake_adapter.send.assert_called_once()
 
-    assert kind.replace('_', ' ') in fake_adapter.send.call_args[0][1]
-
-
+    assert kind.replace("_", " ") in fake_adapter.send.call_args[0][1]
 
     # ...but the subscription survives so a respawn-then-same-event cycle
 
@@ -271,39 +198,25 @@ async def test_notifier_unsubs_after_abnormal_events(kind, kanban_home):
     conn = kb.connect()
 
     try:
-
         subs = kb.list_notify_subs(conn, tid)
 
     finally:
-
         conn.close()
 
     assert len(subs) == 1, (
-
         f"Subscription should survive {kind!r} so the next cycle of the "
-
         f"same event reaches the user; got {subs!r}"
-
     )
 
     assert int(subs[0]["last_event_id"]) >= 1, (
-
         "Cursor should have advanced past the delivered event "
-
         "(claim_unseen_events_for_sub advances atomically inside the "
-
         "same write txn as the read)."
-
     )
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_notifier_second_blocked_delivers(kanban_home):
-
     """
 
     After the first blocked, should receive second blocked notification.
@@ -316,25 +229,17 @@ async def test_notifier_second_blocked_delivers(kanban_home):
 
     from gateway.config import Platform
 
-
-
     runner = object.__new__(GatewayRunner)
 
     runner._running = True
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     delivered_msgs: list[str] = []
-
-
 
     async def _capture_send(chat_id, msg, metadata=None):
 
         delivered_msgs.append(msg)
-
-
 
     fake_adapter = MagicMock()
 
@@ -342,13 +247,9 @@ async def test_notifier_second_blocked_delivers(kanban_home):
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
 
     tick_count = 0
-
-
 
     async def _fast_sleep(_):
 
@@ -359,42 +260,27 @@ async def test_notifier_second_blocked_delivers(kanban_home):
         tick_count += 1
 
         if tick_count >= 6:
-
             runner._running = False
-
-
 
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="test task", assignee="worker1")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat1")
-
-
 
         # Cycle 1: blocked
 
         kb.block_task(conn, tid, reason="first block")
 
     finally:
-
         conn.close()
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     # Cycle 2: unblock → block run again
 
@@ -402,33 +288,21 @@ async def test_notifier_second_blocked_delivers(kanban_home):
 
     tick_count = 0
 
-
-
     conn = kb.connect()
 
     try:
-
         kb.unblock_task(conn, tid)
 
         kb.block_task(conn, tid, reason="second block")
 
     finally:
-
         conn.close()
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     blocked_deliveries = [m for m in delivered_msgs if "blocked" in m]
 
@@ -437,15 +311,9 @@ async def test_notifier_second_blocked_delivers(kanban_home):
     assert "second block" in blocked_deliveries[1]
 
     assert len(blocked_deliveries) == 2, (
-
         f"Should receive 2 blocked notification, but only get {len(blocked_deliveries)} count\n"
-
         f"Message {delivered_msgs}"
-
     )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -483,13 +351,8 @@ async def test_notifier_second_blocked_delivers(kanban_home):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_notifier_does_not_call_init_db(kanban_home):
-
     """Notifier watcher path must not invoke `_kb.init_db` (issue #21378)."""
 
     import clawk_cli.kanban_db as kb
@@ -498,15 +361,11 @@ async def test_notifier_does_not_call_init_db(kanban_home):
 
     from gateway.config import Platform
 
-
-
     runner = object.__new__(GatewayRunner)
 
     runner._running = True
 
     runner._kanban_sub_fail_counts = {}
-
-
 
     fake_adapter = MagicMock()
 
@@ -514,13 +373,9 @@ async def test_notifier_does_not_call_init_db(kanban_home):
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
 
     tick_count = 0
-
-
 
     async def _fast_sleep(_):
 
@@ -531,16 +386,11 @@ async def test_notifier_does_not_call_init_db(kanban_home):
         tick_count += 1
 
         if tick_count >= 3:
-
             runner._running = False
-
-
 
     init_db_calls: list[object] = []
 
     real_init_db = kb.init_db
-
-
 
     def _spy_init_db(*args, **kwargs):
 
@@ -548,39 +398,24 @@ async def test_notifier_does_not_call_init_db(kanban_home):
 
         return real_init_db(*args, **kwargs)
 
-
-
-    with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep), \
-         patch("clawk_cli.kanban_db.init_db", side_effect=_spy_init_db):
-
+    with (
+        patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep),
+        patch("clawk_cli.kanban_db.init_db", side_effect=_spy_init_db),
+    ):
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
 
-
-
     assert init_db_calls == [], (
-
         "_kanban_notifier_watcher must not call init_db on every tick — "
-
         "connect() handles first-run schema init. "
-
         "Reintroducing init_db revives issue #21378. "
-
         f"Got {len(init_db_calls)} call(s): {init_db_calls}"
-
     )
 
 
-
-
-
 def test_dispatcher_tick_does_not_call_init_db(kanban_home, monkeypatch):
-
     """`_tick_once_for_board` must not invoke `_kb.init_db` (issue #21378).
 
 
@@ -597,25 +432,17 @@ def test_dispatcher_tick_does_not_call_init_db(kanban_home, monkeypatch):
 
     from gateway.run import GatewayRunner
 
-
-
     runner = object.__new__(GatewayRunner)
-
-
 
     init_db_calls: list[object] = []
 
     real_init_db = kb.init_db
-
-
 
     def _spy_init_db(*args, **kwargs):
 
         init_db_calls.append((args, kwargs))
 
         return real_init_db(*args, **kwargs)
-
-
 
     # The dispatcher watcher's tick lives as a local closure inside
 
@@ -628,35 +455,21 @@ def test_dispatcher_tick_does_not_call_init_db(kanban_home, monkeypatch):
     src = inspect.getsource(GatewayRunner._kanban_dispatcher_watcher)
 
     assert "_kb.init_db(board=slug)" not in src, (
-
         "_kanban_dispatcher_watcher must not call _kb.init_db(board=slug) — "
-
         "see issue #21378. Use connect() alone; it runs migrations on first "
-
         "open per process."
-
     )
-
-
 
     notifier_src = inspect.getsource(GatewayRunner._kanban_notifier_watcher)
 
     assert "_kb.init_db(board=slug)" not in notifier_src, (
-
         "_kanban_notifier_watcher must not call _kb.init_db(board=slug) — "
-
         "see issue #21378."
-
     )
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_notifier_skips_subscription_owned_by_other_profile(kanban_home):
-
     """Each gateway keeps its watcher on, but only the subscribing profile claims."""
 
     import clawk_cli.kanban_db as kb
@@ -665,35 +478,23 @@ async def test_notifier_skips_subscription_owned_by_other_profile(kanban_home):
 
     from gateway.config import Platform
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="owned task", assignee="backend-engineer")
 
         kb.add_notify_sub(
-
             conn,
-
             task_id=tid,
-
             platform="telegram",
-
             chat_id="chat1",
-
             notifier_profile="default",
-
         )
 
         kb.complete_task(conn, tid, result="done")
 
     finally:
-
         conn.close()
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -703,21 +504,15 @@ async def test_notifier_skips_subscription_owned_by_other_profile(kanban_home):
 
     runner._kanban_notifier_profile = "business-partner"
 
-
-
     fake_adapter = MagicMock()
 
     fake_adapter.send = AsyncMock()
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
 
     tick_count = 0
-
-
 
     async def _fast_sleep(_):
 
@@ -728,33 +523,22 @@ async def test_notifier_skips_subscription_owned_by_other_profile(kanban_home):
         tick_count += 1
 
         if tick_count >= 3:
-
             runner._running = False
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     fake_adapter.send.assert_not_called()
 
     conn = kb.connect()
 
     try:
-
         subs = kb.list_notify_subs(conn, tid)
 
     finally:
-
         conn.close()
 
     assert len(subs) == 1
@@ -762,13 +546,8 @@ async def test_notifier_skips_subscription_owned_by_other_profile(kanban_home):
     assert int(subs[0]["last_event_id"]) == 0, "wrong profile must not claim the event"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_notifier_delivers_subscription_owned_by_current_profile(kanban_home):
-
     """The gateway for the profile that created/subscribed the task reports it."""
 
     import clawk_cli.kanban_db as kb
@@ -777,35 +556,23 @@ async def test_notifier_delivers_subscription_owned_by_current_profile(kanban_ho
 
     from gateway.config import Platform
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="owned task", assignee="backend-engineer")
 
         kb.add_notify_sub(
-
             conn,
-
             task_id=tid,
-
             platform="telegram",
-
             chat_id="chat1",
-
             notifier_profile="default",
-
         )
 
         kb.complete_task(conn, tid, result="done")
 
     finally:
-
         conn.close()
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -815,68 +582,43 @@ async def test_notifier_delivers_subscription_owned_by_current_profile(kanban_ho
 
     runner._kanban_notifier_profile = "default"
 
-
-
     fake_adapter = MagicMock()
-
-
 
     async def _send_and_stop(chat_id, msg, metadata=None):
 
         runner._running = False
 
-
-
     fake_adapter.send = AsyncMock(side_effect=_send_and_stop)
 
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
-
-
 
     async def _fast_sleep(_):
 
         await _orig_sleep(0)
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     fake_adapter.send.assert_called_once()
 
     conn = kb.connect()
 
     try:
-
         subs = kb.list_notify_subs(conn, tid)
 
     finally:
-
         conn.close()
 
     assert subs == []
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_gateway_create_autosubscribes_on_explicit_board(kanban_home):
-
     """`/kanban --board <slug> create ...` must subscribe on that board.
 
 
@@ -895,57 +637,35 @@ async def test_gateway_create_autosubscribes_on_explicit_board(kanban_home):
 
     from gateway.config import Platform
 
-
-
     kb.create_board("projx")
-
-
 
     runner = object.__new__(GatewayRunner)
 
     source = SimpleNamespace(
-
         platform=Platform.TELEGRAM,
-
         chat_id="chat1",
-
         thread_id="th1",
-
         user_id="u1",
-
     )
 
     event = SimpleNamespace(
-
         text='/kanban --board projx create "hello" --assignee alice',
-
         source=source,
-
     )
-
-
 
     out = await GatewayRunner._handle_kanban_command(runner, event)
 
-
-
     assert "subscribed" in out.lower()
-
-
 
     conn = kb.connect(board="projx")
 
     try:
-
         subs = kb.list_notify_subs(conn)
 
         tasks = kb.list_tasks(conn)
 
     finally:
-
         conn.close()
-
-
 
     assert [t.title for t in tasks] == ["hello"]
 
@@ -955,26 +675,19 @@ async def test_gateway_create_autosubscribes_on_explicit_board(kanban_home):
 
     assert subs[0]["thread_id"] == "th1"
 
-
-
     conn = kb.connect(board="default")
 
     try:
-
         assert kb.list_notify_subs(conn) == []
 
     finally:
-
         conn.close()
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, monkeypatch):
-
+async def test_notifier_uploads_artifacts_on_completion(
+    kanban_home, tmp_path, monkeypatch
+):
     """When a completed event carries ``artifacts`` in its payload, the
 
     notifier uploads each file to the subscribed chat as a native
@@ -995,8 +708,6 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     from tools import kanban_tools as kt
 
-
-
     # ``_deliver_kanban_artifacts`` routes candidates through
 
     # ``BasePlatformAdapter.filter_local_delivery_paths``, which only accepts
@@ -1009,8 +720,6 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     monkeypatch.setenv("CLAWK_MEDIA_ALLOW_DIRS", str(tmp_path))
 
-
-
     # Materialize real files so os.path.isfile passes inside the helper.
 
     chart_path = tmp_path / "q3-revenue.png"
@@ -1021,21 +730,15 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     report_path.write_bytes(b"%PDF-fake")
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="render q3 chart", assignee="worker1")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat1")
 
     finally:
-
         conn.close()
-
-
 
     # Use the production handler so we exercise the full path: tool args
 
@@ -1046,24 +749,17 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
     os.environ["CLAWK_KANBAN_TASK"] = tid
 
     try:
-
         out = kt._handle_complete({
-
             "summary": "rendered the chart",
-
             "artifacts": [str(chart_path), str(report_path)],
-
         })
 
     finally:
-
         os.environ.pop("CLAWK_KANBAN_TASK", None)
 
     import json as _json
 
     assert _json.loads(out)["ok"] is True
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -1071,13 +767,9 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     fake_adapter = MagicMock()
 
     fake_adapter.name = "telegram"
-
-
 
     sends: list = []
 
@@ -1085,27 +777,19 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     documents_uploaded: list = []
 
-
-
     async def _send(chat_id, msg, metadata=None):
 
         sends.append((chat_id, msg))
 
         runner._running = False
 
-
-
     async def _send_images(chat_id, images, metadata=None, **_kw):
 
         images_uploaded.extend(p for p, _ in images)
 
-
-
     async def _send_document(chat_id, file_path, metadata=None, **_kw):
 
         documents_uploaded.append(file_path)
-
-
 
     fake_adapter.send = AsyncMock(side_effect=_send)
 
@@ -1121,33 +805,19 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
 
     fake_adapter.extract_local_files = BasePlatformAdapter.extract_local_files
 
-
-
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
-
-
 
     async def _fast_sleep(_):
 
         await _orig_sleep(0)
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     # The text completion notification fired.
 
@@ -1162,13 +832,10 @@ async def test_notifier_uploads_artifacts_on_completion(kanban_home, tmp_path, m
     assert any("report.pdf" in p for p in documents_uploaded), documents_uploaded
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_notifier_artifact_delivery_skips_missing_files(kanban_home, tmp_path, monkeypatch):
-
+async def test_notifier_artifact_delivery_skips_missing_files(
+    kanban_home, tmp_path, monkeypatch
+):
     """Missing artifact paths are silently skipped — they may have been
 
     referenced by name only. The notifier must not crash and must still
@@ -1183,55 +850,38 @@ async def test_notifier_artifact_delivery_skips_missing_files(kanban_home, tmp_p
 
     from tools import kanban_tools as kt
 
-
-
     # Allow ``tmp_path`` through the media-delivery safety filter. See the
 
     # companion test for the full explanation.
 
     monkeypatch.setenv("CLAWK_MEDIA_ALLOW_DIRS", str(tmp_path))
 
-
-
     real_pdf = tmp_path / "real.pdf"
 
     real_pdf.write_bytes(b"%PDF-fake")
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="t", assignee="worker1")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat1")
 
     finally:
-
         conn.close()
-
-
 
     import os
 
     os.environ["CLAWK_KANBAN_TASK"] = tid
 
     try:
-
         kt._handle_complete({
-
             "summary": "one real, one ghost",
-
             "artifacts": [str(real_pdf), "/tmp/definitely-does-not-exist.pdf"],
-
         })
 
     finally:
-
         os.environ.pop("CLAWK_KANBAN_TASK", None)
-
-
 
     runner = object.__new__(GatewayRunner)
 
@@ -1239,29 +889,19 @@ async def test_notifier_artifact_delivery_skips_missing_files(kanban_home, tmp_p
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     fake_adapter = MagicMock()
 
     fake_adapter.name = "telegram"
 
-
-
     documents_uploaded: list = []
-
-
 
     async def _send(chat_id, msg, metadata=None):
 
         runner._running = False
 
-
-
     async def _send_document(chat_id, file_path, metadata=None, **_kw):
 
         documents_uploaded.append(file_path)
-
-
 
     fake_adapter.send = AsyncMock(side_effect=_send)
 
@@ -1273,37 +913,22 @@ async def test_notifier_artifact_delivery_skips_missing_files(kanban_home, tmp_p
 
     fake_adapter.extract_local_files = BasePlatformAdapter.extract_local_files
 
-
-
     runner.adapters = {Platform.TELEGRAM: fake_adapter}
 
-
-
     _orig_sleep = asyncio.sleep
-
-
 
     async def _fast_sleep(_):
 
         await _orig_sleep(0)
 
-
-
     with patch("gateway.run.asyncio.sleep", side_effect=_fast_sleep):
-
         await asyncio.wait_for(
-
             runner._kanban_notifier_watcher(interval=1),
-
             timeout=10.0,
-
         )
-
-
 
     # Only the real file was uploaded.
 
     assert len(documents_uploaded) == 1
 
     assert "real.pdf" in documents_uploaded[0]
-

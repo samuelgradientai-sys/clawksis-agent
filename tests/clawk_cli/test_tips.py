@@ -59,6 +59,7 @@ class TestTipIntegrationInCLI:
     def test_tip_import_works(self):
         """The import used in cli.py must succeed."""
         from clawk_cli.tips import get_random_tip
+
         assert callable(get_random_tip)
 
     def test_tip_display_format(self):

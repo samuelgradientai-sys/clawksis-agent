@@ -9,6 +9,7 @@ strips trailing ``_tool`` / ``-tool`` / ``tool`` suffixes (up to
 twice to handle double-tacked suffixes like ``TodoTool_tool``), and
 falls back to fuzzy match.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -38,6 +39,7 @@ def repair():
     bind the unbound function.
     """
     from run_agent import AIAgent
+
     stub = SimpleNamespace(valid_tool_names=VALID)
     return AIAgent._repair_tool_call.__get__(stub, AIAgent)
 

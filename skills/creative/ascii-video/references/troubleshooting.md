@@ -196,8 +196,9 @@ pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
 ```python
 stderr_fh = open(err_path, "w")
-pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                        stdout=subprocess.DEVNULL, stderr=stderr_fh)
+pipe = subprocess.Popen(
+    cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_fh
+)
 ```
 
 ### Frame Count Mismatch
@@ -300,7 +301,7 @@ The v2 scene protocol passes `S` (the state dict) as an explicit parameter. But 
 
 ```python
 def fx_scene(r, f, t, S):
-    S["counter"] = S.get("counter", 0) + 1   # via parameter (preferred)
+    S["counter"] = S.get("counter", 0) + 1  # via parameter (preferred)
     r.S["counter"] = r.S.get("counter", 0) + 1  # via renderer (also works)
 ```
 

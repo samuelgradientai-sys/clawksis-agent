@@ -193,18 +193,24 @@ Read and understand:
 
 Use Clawksis tools to understand the project:
 
-```python
-# Understand project structure
-search_files("*.py", target="files", path="src/")
-
-# Look at similar features
-search_files("similar_pattern", path="src/", file_glob="*.py")
-
-# Check existing tests
-search_files("*.py", target="files", path="tests/")
-
-# Read key files
-read_file("src/app.py")
+```python# Understand project structure
+
+search_files("*.py", target="files", path="src/")
+
+
+# Look at similar features
+
+search_files("similar_pattern", path="src/", file_glob="*.py")
+
+
+# Check existing tests
+
+search_files("*.py", target="files", path="tests/")
+
+
+# Read key files
+
+read_file("src/app.py")
 ```
 
 ### Step 3: Design Approach
@@ -255,20 +261,30 @@ Check:
 **Bad:** Add "flexibility" for future requirements
 **Good:** Implement only what's needed now
 
-```python
-# Bad — YAGNI violation
-class User:
-    def __init__(self, name, email):
-        self.name = name
-        self.email = email
-        self.preferences = {}  # Not needed yet!
-        self.metadata = {}     # Not needed yet!
-
-# Good — YAGNI
-class User:
-    def __init__(self, name, email):
-        self.name = name
-        self.email = email
+```python# Bad — YAGNI violation
+
+
+class User:
+    def __init__(self, name, email):
+
+        self.name = name
+
+        self.email = email
+
+        self.preferences = {}  # Not needed yet!
+
+        self.metadata = {}  # Not needed yet!
+
+
+# Good — YAGNI
+
+
+class User:
+    def __init__(self, name, email):
+
+        self.name = name
+
+        self.email = email
 ```
 
 ### TDD (Test-Driven Development)

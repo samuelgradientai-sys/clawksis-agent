@@ -60,17 +60,30 @@ from urllib.parse import urlencode, urlparse
 # Local import — _common.py sits next to this script.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
-    DEFAULT_LOCAL_HOST, ENV_API_KEY,
-    coerce_seed, emit_json, http_get, http_post, http_request,
-    is_cloud_host, is_link, log, looks_like_video_workflow,
-    media_type_from_filename, new_client_id, resolve_api_key, resolve_url,
-    safe_path_join, unwrap_workflow,
+    DEFAULT_LOCAL_HOST,
+    ENV_API_KEY,
+    coerce_seed,
+    emit_json,
+    http_get,
+    http_post,
+    http_request,
+    is_cloud_host,
+    is_link,
+    log,
+    looks_like_video_workflow,
+    media_type_from_filename,
+    new_client_id,
+    resolve_api_key,
+    resolve_url,
+    safe_path_join,
+    unwrap_workflow,
 )
 
 
 # =============================================================================
 # Runner
 # =============================================================================
+
 
 class WorkflowRunError(Exception):
     """Raised when a workflow run fails (validation, execution, timeout)."""
@@ -125,8 +138,15 @@ class ComfyRunner:
             return False, {"error": str(e)}
 
     # ---------- upload ----------
-    def upload_image(self, path: Path, *, image_type: str = "input", overwrite: bool = True,
-                     endpoint: str = "/upload/image", extra_form: dict | None = None) -> dict:
+    def upload_image(
+        self,
+        path: Path,
+        *,
+        image_type: str = "input",
+        overwrite: bool = True,
+        endpoint: str = "/upload/image",
+        extra_form: dict | None = None,
+    ) -> dict:
         """Upload an image file via multipart. Returns server-side ref dict."""
         if not path.exists():
             raise FileNotFoundError(f"input image not found: {path}")
@@ -139,9 +159,13 @@ class ComfyRunner:
             if extra_form:
                 form.update({k: str(v) for k, v in extra_form.items()})
             r = http_request(
-                "POST", self._url(endpoint),
-                headers=self.headers, files=files, form=form,
-                timeout=300, retries=2,
+                "POST",
+                self._url(endpoint),
+                headers=self.headers,
+                files=files,
+                form=form,
+                timeout=300,
+                retries=2,
             )
         if r.status != 200:
             raise WorkflowRunError(
@@ -175,7 +199,9 @@ class ComfyRunner:
         if self.partner_key:
             payload["extra_data"] = {"api_key_comfy_org": self.partner_key}
 
-        r = http_post(self._url("/prompt"), headers=self.headers, json_body=payload, timeout=120)
+        r = http_post(
+            self._url("/prompt"), headers=self.headers, json_body=payload, timeout=120
+        )
         try:
             body = r.json()
         except Exception:
@@ -185,8 +211,14 @@ class ComfyRunner:
         return body
 
     # ---------- HTTP polling ----------
-    def poll_status(self, prompt_id: str, *, timeout: float = 300.0,
-                    initial_interval: float = 1.5, max_interval: float = 8.0) -> dict:
+    def poll_status(
+        self,
+        prompt_id: str,
+        *,
+        timeout: float = 300.0,
+        initial_interval: float = 1.5,
+        max_interval: float = 8.0,
+    ) -> dict:
         start = time.time()
         interval = initial_interval
 
@@ -194,7 +226,9 @@ class ComfyRunner:
             if self.is_cloud:
                 r = http_get(
                     self._url(f"/job/{prompt_id}/status"),
-                    headers=self.headers, retries=2, timeout=30,
+                    headers=self.headers,
+                    retries=2,
+                    timeout=30,
                 )
                 if r.status == 200:
                     try:
@@ -204,7 +238,9 @@ class ComfyRunner:
                     s = data.get("status")
                     if s == "completed":
                         return {"status": "success", "data": data}
-                    if s in {"failed",}:
+                    if s in {
+                        "failed",
+                    }:
                         return {"status": "error", "data": data}
                     if s == "cancelled":
                         return {"status": "cancelled", "data": data}
@@ -219,7 +255,9 @@ class ComfyRunner:
                 # Local: /history/{id} grows once execution completes
                 r = http_get(
                     self._url(f"/history/{prompt_id}"),
-                    headers=self.headers, retries=2, timeout=30,
+                    headers=self.headers,
+                    retries=2,
+                    timeout=30,
                 )
                 if r.status == 200:
                     try:
@@ -234,7 +272,10 @@ class ComfyRunner:
                         if status_str == "error":
                             return {"status": "error", "data": entry}
                         if st.get("completed", False):
-                            return {"status": "success", "outputs": entry.get("outputs", {})}
+                            return {
+                                "status": "success",
+                                "outputs": entry.get("outputs", {}),
+                            }
                 # not in history yet → continue polling
 
             time.sleep(interval)
@@ -243,8 +284,9 @@ class ComfyRunner:
         return {"status": "timeout", "elapsed": time.time() - start}
 
     # ---------- WebSocket monitoring ----------
-    def monitor_ws(self, prompt_id: str, *, timeout: float = 300.0,
-                   on_progress: Any = None) -> dict:
+    def monitor_ws(
+        self, prompt_id: str, *, timeout: float = 300.0, on_progress: Any = None
+    ) -> dict:
         """Connect to /ws and listen until execution_success / execution_error.
 
         Falls back to HTTP polling if `websocket-client` is not installed.
@@ -302,7 +344,10 @@ class ComfyRunner:
                         })
                 elif mtype == "progress_state":
                     if callable(on_progress):
-                        on_progress({"type": "progress_state", "nodes": mdata.get("nodes", {})})
+                        on_progress({
+                            "type": "progress_state",
+                            "nodes": mdata.get("nodes", {}),
+                        })
                 elif mtype == "executing":
                     node = mdata.get("node")
                     if callable(on_progress):
@@ -319,7 +364,10 @@ class ComfyRunner:
                         outputs[nid] = out
                 elif mtype == "notification":
                     if callable(on_progress):
-                        on_progress({"type": "notification", "message": mdata.get("value", "")})
+                        on_progress({
+                            "type": "notification",
+                            "message": mdata.get("value", ""),
+                        })
                 elif mtype == "execution_success":
                     success = True
                     break
@@ -345,14 +393,18 @@ class ComfyRunner:
     def get_outputs(self, prompt_id: str) -> dict:
         if self.is_cloud:
             # Try /jobs/{id} first (returns full job with outputs); fall back to /history_v2
-            r = http_get(self._url(f"/jobs/{prompt_id}"), headers=self.headers, retries=2)
+            r = http_get(
+                self._url(f"/jobs/{prompt_id}"), headers=self.headers, retries=2
+            )
             if r.status == 200:
                 try:
                     return (r.json() or {}).get("outputs", {}) or {}
                 except Exception:
                     pass
             # Fallback
-            r = http_get(self._url(f"/history/{prompt_id}"), headers=self.headers, retries=2)
+            r = http_get(
+                self._url(f"/history/{prompt_id}"), headers=self.headers, retries=2
+            )
             if r.status == 200:
                 try:
                     body = r.json() or {}
@@ -364,7 +416,9 @@ class ComfyRunner:
                     return body["outputs"] or {}
             return {}
         # Local
-        r = http_get(self._url(f"/history/{prompt_id}"), headers=self.headers, retries=2)
+        r = http_get(
+            self._url(f"/history/{prompt_id}"), headers=self.headers, retries=2
+        )
         if r.status != 200:
             return {}
         try:
@@ -375,8 +429,14 @@ class ComfyRunner:
         return entry.get("outputs", {}) or {}
 
     def download_output(
-        self, *, filename: str, subfolder: str, file_type: str,
-        output_dir: Path, preserve_subfolder: bool = True, overwrite: bool = False,
+        self,
+        *,
+        filename: str,
+        subfolder: str,
+        file_type: str,
+        output_dir: Path,
+        preserve_subfolder: bool = True,
+        overwrite: bool = False,
     ) -> Path:
         """Stream a single output to disk. Path-traversal-safe."""
         params = {"filename": filename, "subfolder": subfolder, "type": file_type}
@@ -386,7 +446,9 @@ class ComfyRunner:
         # local path; otherwise put the file in output_dir flat.
         target_parts: list[str] = []
         if preserve_subfolder and subfolder:
-            target_parts.extend(p for p in subfolder.split("/") if p and p not in {".", ".."})
+            target_parts.extend(
+                p for p in subfolder.split("/") if p and p not in {".", ".."}
+            )
         target_parts.append(filename)
         out_path = safe_path_join(output_dir, *target_parts)
 
@@ -408,9 +470,14 @@ class ComfyRunner:
         # via _strip_api_key_on_redirect, so a single follow_redirects=True call
         # is safe AND simpler.
         r = http_request(
-            "GET", url, headers=self.headers,
-            timeout=600, retries=3, follow_redirects=True,
-            stream=True, sink=out_path,
+            "GET",
+            url,
+            headers=self.headers,
+            timeout=600,
+            retries=3,
+            follow_redirects=True,
+            stream=True,
+            sink=out_path,
         )
         if r.status != 200:
             try:
@@ -429,8 +496,10 @@ class ComfyRunner:
     def cancel(self, prompt_id: str | None = None) -> bool:
         if prompt_id:
             r = http_post(
-                self._url("/queue"), headers=self.headers,
-                json_body={"delete": [prompt_id]}, retries=1,
+                self._url("/queue"),
+                headers=self.headers,
+                json_body={"delete": [prompt_id]},
+                retries=1,
             )
             return r.status == 200
         # Interrupt currently running
@@ -442,9 +511,11 @@ class ComfyRunner:
 # Schema / parameter injection
 # =============================================================================
 
+
 def _inline_schema(workflow: dict) -> dict:
     """Generate schema using the sibling extract_schema module."""
     from extract_schema import extract_schema  # noqa: WPS433
+
     return extract_schema(workflow)
 
 
@@ -456,8 +527,11 @@ def load_schema(schema_path: str | None, workflow: dict) -> dict:
 
 
 def inject_params(
-    workflow: dict, schema: dict, args: dict,
-    *, randomize_seed_if_unset: bool = False,
+    workflow: dict,
+    schema: dict,
+    args: dict,
+    *,
+    randomize_seed_if_unset: bool = False,
 ) -> tuple[dict, list[str]]:
     """Inject user args into the workflow. Returns (new_workflow, warnings)."""
     wf = copy.deepcopy(workflow)
@@ -503,16 +577,30 @@ def inject_params(
 # Output download helper
 # =============================================================================
 
+
 def download_outputs(
-    runner: ComfyRunner, outputs: dict, output_dir: Path,
-    *, preserve_subfolder: bool = True, overwrite: bool = False,
+    runner: ComfyRunner,
+    outputs: dict,
+    output_dir: Path,
+    *,
+    preserve_subfolder: bool = True,
+    overwrite: bool = False,
 ) -> list[dict]:
     """Walk the outputs dict and download every file. Cloud uses `video` (singular);
     local uses `videos` (plural). We accept both."""
     output_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[dict] = []
 
-    OUTPUT_KEYS = ("images", "gifs", "videos", "video", "audio", "files", "models", "3d")
+    OUTPUT_KEYS = (
+        "images",
+        "gifs",
+        "videos",
+        "video",
+        "audio",
+        "files",
+        "models",
+        "3d",
+    )
 
     for node_id, node_output in (outputs or {}).items():
         if not isinstance(node_output, dict):
@@ -533,8 +621,11 @@ def download_outputs(
                 file_type = fi.get("type") or "output"
                 try:
                     out_path = runner.download_output(
-                        filename=filename, subfolder=subfolder, file_type=file_type,
-                        output_dir=output_dir, preserve_subfolder=preserve_subfolder,
+                        filename=filename,
+                        subfolder=subfolder,
+                        file_type=file_type,
+                        output_dir=output_dir,
+                        preserve_subfolder=preserve_subfolder,
                         overwrite=overwrite,
                     )
                     downloaded.append({
@@ -554,6 +645,7 @@ def download_outputs(
 # CLI
 # =============================================================================
 
+
 def parse_input_image_arg(spec: str) -> tuple[str, Path]:
     """Parse `name=path` (or `path` alone, defaulting to name='image')."""
     if "=" in spec:
@@ -568,35 +660,71 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--workflow", required=True, help="Path to workflow API JSON file")
-    p.add_argument("--args", default="{}",
-                   help="JSON parameters to inject (or `@/path/to/args.json`)")
+    p.add_argument(
+        "--args",
+        default="{}",
+        help="JSON parameters to inject (or `@/path/to/args.json`)",
+    )
     p.add_argument("--schema", help="Path to schema JSON (auto-generated if omitted)")
     p.add_argument("--host", default=DEFAULT_LOCAL_HOST, help="ComfyUI server URL")
-    p.add_argument("--api-key",
-                   help=f"API key for cloud (or set ${ENV_API_KEY} env var)")
-    p.add_argument("--partner-key",
-                   help="Partner-node API key (extra_data.api_key_comfy_org). "
-                        "Required for Flux Pro / Ideogram / etc. Defaults to --api-key if not set.")
-    p.add_argument("--output-dir", default="./outputs", help="Directory to save outputs")
-    p.add_argument("--timeout", type=int, default=0,
-                   help="Max seconds to wait (0=auto: 300 / 900 for video workflows)")
-    p.add_argument("--input-image", action="append", default=[],
-                   help="Upload local image before running. Format: `name=path` or `path`. "
-                        "The `name` becomes the value injected into the matching schema parameter.")
-    p.add_argument("--randomize-seed", action="store_true",
-                   help="If schema has a 'seed' parameter and --args didn't set one, randomize it")
-    p.add_argument("--ws", action="store_true",
-                   help="Use WebSocket for real-time progress (requires `websocket-client`)")
-    p.add_argument("--no-download", action="store_true", help="Skip downloading outputs")
-    p.add_argument("--flat-output", action="store_true",
-                   help="Don't preserve server-side subfolder structure when saving outputs")
-    p.add_argument("--overwrite", action="store_true",
-                   help="Overwrite existing files instead of appending _1, _2, ...")
-    p.add_argument("--submit-only", action="store_true",
-                   help="Submit and return prompt_id without waiting")
+    p.add_argument(
+        "--api-key", help=f"API key for cloud (or set ${ENV_API_KEY} env var)"
+    )
+    p.add_argument(
+        "--partner-key",
+        help="Partner-node API key (extra_data.api_key_comfy_org). "
+        "Required for Flux Pro / Ideogram / etc. Defaults to --api-key if not set.",
+    )
+    p.add_argument(
+        "--output-dir", default="./outputs", help="Directory to save outputs"
+    )
+    p.add_argument(
+        "--timeout",
+        type=int,
+        default=0,
+        help="Max seconds to wait (0=auto: 300 / 900 for video workflows)",
+    )
+    p.add_argument(
+        "--input-image",
+        action="append",
+        default=[],
+        help="Upload local image before running. Format: `name=path` or `path`. "
+        "The `name` becomes the value injected into the matching schema parameter.",
+    )
+    p.add_argument(
+        "--randomize-seed",
+        action="store_true",
+        help="If schema has a 'seed' parameter and --args didn't set one, randomize it",
+    )
+    p.add_argument(
+        "--ws",
+        action="store_true",
+        help="Use WebSocket for real-time progress (requires `websocket-client`)",
+    )
+    p.add_argument(
+        "--no-download", action="store_true", help="Skip downloading outputs"
+    )
+    p.add_argument(
+        "--flat-output",
+        action="store_true",
+        help="Don't preserve server-side subfolder structure when saving outputs",
+    )
+    p.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing files instead of appending _1, _2, ...",
+    )
+    p.add_argument(
+        "--submit-only",
+        action="store_true",
+        help="Submit and return prompt_id without waiting",
+    )
     p.add_argument("--client-id", help="Override generated client_id (UUID)")
-    p.add_argument("--use-partner-key-as-auth", action="store_true",
-                   help="(Compat) Use --partner-key value as cloud X-API-Key. Don't use unless you know why.")
+    p.add_argument(
+        "--use-partner-key-as-auth",
+        action="store_true",
+        help="(Compat) Use --partner-key value as cloud X-API-Key. Don't use unless you know why.",
+    )
 
     args = p.parse_args(argv)
 
@@ -641,7 +769,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- Connect ----
     runner = ComfyRunner(
-        host=args.host, api_key=api_key, partner_key=partner_key,
+        host=args.host,
+        api_key=api_key,
+        partner_key=partner_key,
         client_id=args.client_id,
     )
 
@@ -679,7 +809,10 @@ def main(argv: list[str] | None = None) -> int:
     # ---- Inject params ----
     schema = load_schema(args.schema, workflow)
     workflow, inj_warnings = inject_params(
-        workflow, schema, user_args, randomize_seed_if_unset=args.randomize_seed,
+        workflow,
+        schema,
+        user_args,
+        randomize_seed_if_unset=args.randomize_seed,
     )
     warnings = upload_warnings + inj_warnings
     for w in warnings:
@@ -735,7 +868,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.ws:
-            wait_result = runner.monitor_ws(prompt_id, timeout=timeout, on_progress=_on_progress)
+            wait_result = runner.monitor_ws(
+                prompt_id, timeout=timeout, on_progress=_on_progress
+            )
         else:
             wait_result = runner.poll_status(prompt_id, timeout=timeout)
     except KeyboardInterrupt:
@@ -760,7 +895,11 @@ def main(argv: list[str] | None = None) -> int:
         })
         return 1
     if wait_result["status"] == "error":
-        emit_json({"status": "error", "prompt_id": prompt_id, "details": wait_result.get("data")})
+        emit_json({
+            "status": "error",
+            "prompt_id": prompt_id,
+            "details": wait_result.get("data"),
+        })
         return 1
     if wait_result["status"] == "cancelled":
         emit_json({"status": "cancelled", "prompt_id": prompt_id})
@@ -773,14 +912,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.no_download:
         emit_json({
-            "status": "success", "prompt_id": prompt_id,
-            "outputs": outputs, "warnings": warnings,
+            "status": "success",
+            "prompt_id": prompt_id,
+            "outputs": outputs,
+            "warnings": warnings,
         })
         return 0
 
     downloaded = download_outputs(
-        runner, outputs, Path(args.output_dir).expanduser(),
-        preserve_subfolder=not args.flat_output, overwrite=args.overwrite,
+        runner,
+        outputs,
+        Path(args.output_dir).expanduser(),
+        preserve_subfolder=not args.flat_output,
+        overwrite=args.overwrite,
     )
 
     emit_json({

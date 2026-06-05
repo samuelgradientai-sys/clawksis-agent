@@ -61,7 +61,6 @@ These tests pin each layer of the new defence:
 from __future__ import annotations
 
 
-
 import json
 
 import sys
@@ -71,21 +70,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 import pytest
-
 
 
 from clawk_cli import web_server
 
 
-
-
-
 @pytest.fixture(autouse=True)
-
 def _reset_plugin_cache(monkeypatch):
-
     """The plugin scanner caches its result per-process.  Bust the
 
     cache before *and* after each test so leakage between tests can't
@@ -101,11 +93,7 @@ def _reset_plugin_cache(monkeypatch):
     web_server._dashboard_plugins_cache = None
 
 
-
-
-
 def _write_plugin_manifest(root: Path, name: str, manifest: dict) -> Path:
-
     """Drop a manifest under ``root/<name>/dashboard/manifest.json`` and
 
     return the dashboard dir path."""
@@ -119,9 +107,6 @@ def _write_plugin_manifest(root: Path, name: str, manifest: dict) -> Path:
     return dashboard_dir
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Layer 1 — CLAWK_ENABLE_PROJECT_PLUGINS env gate uses truthy semantics.
@@ -129,23 +114,15 @@ def _write_plugin_manifest(root: Path, name: str, manifest: dict) -> Path:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestProjectPluginsEnvGate:
-
     """Project plugins must only be discovered when the env var is set
 
     to a documented truthy value.  Pre-#29156 any non-empty string —
 
     including ``0`` / ``false`` / ``no`` — silently enabled the source."""
 
-
-
     @pytest.fixture
-
     def project_plugin(self, tmp_path, monkeypatch):
-
         """Plant a project-source plugin under CWD's ``.clawksis/plugins``
 
         and isolate the user-plugins dir to an empty tmp tree."""
@@ -161,65 +138,40 @@ class TestProjectPluginsEnvGate:
         monkeypatch.chdir(cwd)
 
         _write_plugin_manifest(
-
             cwd / ".clawksis" / "plugins",
-
             "evil",
-
             {
-
                 "name": "evil",
-
                 "label": "Evil",
-
                 "entry": "dist/index.js",
-
             },
-
         )
 
         return cwd
 
-
-
     @pytest.mark.parametrize("value", ["", "0", "false", "FALSE", "no", "off", "False"])
-
     def test_falsy_values_keep_project_plugins_disabled(
-
         self, project_plugin, monkeypatch, value
-
     ):
 
         if value == "":
-
             monkeypatch.delenv("CLAWK_ENABLE_PROJECT_PLUGINS", raising=False)
 
         else:
-
             monkeypatch.setenv("CLAWK_ENABLE_PROJECT_PLUGINS", value)
-
-
 
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
 
         names = {p["name"] for p in plugins}
 
         assert "evil" not in names, (
-
             f"CLAWK_ENABLE_PROJECT_PLUGINS={value!r} must NOT enable the "
-
             "project source — that's the GHSA-5qr3-c538-wm9j env bypass."
-
         )
 
-
-
     @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on", "YES"])
-
     def test_truthy_values_enable_project_plugins(
-
         self, project_plugin, monkeypatch, value
-
     ):
 
         monkeypatch.setenv("CLAWK_ENABLE_PROJECT_PLUGINS", value)
@@ -233,9 +185,6 @@ class TestProjectPluginsEnvGate:
         assert evil["source"] == "project"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Layer 2 — _safe_plugin_api_relpath rejects path-traversal payloads.
@@ -243,18 +192,12 @@ class TestProjectPluginsEnvGate:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestApiPathSanitizer:
-
     """Unit-level coverage for the new ``_safe_plugin_api_relpath``
 
     helper.  Anything that escapes the plugin's dashboard directory
 
     must come back as ``None``."""
-
-
 
     def _dashboard_dir(self, tmp_path):
 
@@ -264,17 +207,15 @@ class TestApiPathSanitizer:
 
         return d
 
-
-
     def test_simple_relative_path_accepted(self, tmp_path):
 
         d = self._dashboard_dir(tmp_path)
 
         (d / "api.py").write_text("router = None\n")
 
-        assert web_server._safe_plugin_api_relpath("api.py", dashboard_dir=d) == "api.py"
-
-
+        assert (
+            web_server._safe_plugin_api_relpath("api.py", dashboard_dir=d) == "api.py"
+        )
 
     def test_nested_relative_path_accepted(self, tmp_path):
 
@@ -284,66 +225,46 @@ class TestApiPathSanitizer:
 
         (d / "backend" / "routes.py").write_text("router = None\n")
 
-        out = web_server._safe_plugin_api_relpath(
-
-            "backend/routes.py", dashboard_dir=d
-
-        )
+        out = web_server._safe_plugin_api_relpath("backend/routes.py", dashboard_dir=d)
 
         assert out == "backend/routes.py"
 
-
-
-    @pytest.mark.parametrize("payload", [
-
-        "/etc/passwd",
-
-        "/tmp/payload.py",
-
-        "/usr/bin/python",
-
-        # NT-style absolute on POSIX is a relative path — covered by traversal below.
-
-    ])
-
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "/etc/passwd",
+            "/tmp/payload.py",
+            "/usr/bin/python",
+            # NT-style absolute on POSIX is a relative path — covered by traversal below.
+        ],
+    )
     def test_absolute_path_rejected(self, tmp_path, payload):
 
         d = self._dashboard_dir(tmp_path)
 
         assert web_server._safe_plugin_api_relpath(payload, dashboard_dir=d) is None
 
-
-
-    @pytest.mark.parametrize("payload", [
-
-        "../../../etc/passwd",
-
-        "../neighbour/api.py",
-
-        "../../../../tmp/evil.py",
-
-        "subdir/../../../../etc/passwd",
-
-    ])
-
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "../../../etc/passwd",
+            "../neighbour/api.py",
+            "../../../../tmp/evil.py",
+            "subdir/../../../../etc/passwd",
+        ],
+    )
     def test_traversal_rejected(self, tmp_path, payload):
 
         d = self._dashboard_dir(tmp_path)
 
         assert web_server._safe_plugin_api_relpath(payload, dashboard_dir=d) is None
 
-
-
     @pytest.mark.parametrize("payload", [None, "", "   ", 42, [], {}])
-
     def test_non_string_or_empty_rejected(self, tmp_path, payload):
 
         d = self._dashboard_dir(tmp_path)
 
         assert web_server._safe_plugin_api_relpath(payload, dashboard_dir=d) is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -353,52 +274,37 @@ class TestApiPathSanitizer:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDiscoveryScrubsApiField:
-
     """The cached plugin entry must NEVER carry an unsanitised api path.
 
     A regression here would re-arm the RCE for any caller that uses
 
     ``plugin['_api_file']`` directly."""
 
-
-
     @pytest.fixture
-
     def user_plugin_factory(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         monkeypatch.delenv("CLAWK_ENABLE_PROJECT_PLUGINS", raising=False)
 
-
-
         def _make(name: str, manifest: dict) -> None:
 
             _write_plugin_manifest(tmp_path / "plugins", name, manifest)
 
-
-
         return _make
-
-
 
     def test_absolute_api_path_in_manifest_is_scrubbed(self, user_plugin_factory):
 
-        user_plugin_factory("evil", {
-
-            "name": "evil",
-
-            "label": "Evil",
-
-            "api": "/tmp/payload.py",
-
-            "entry": "dist/index.js",
-
-        })
+        user_plugin_factory(
+            "evil",
+            {
+                "name": "evil",
+                "label": "Evil",
+                "api": "/tmp/payload.py",
+                "entry": "dist/index.js",
+            },
+        )
 
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
 
@@ -408,21 +314,17 @@ class TestDiscoveryScrubsApiField:
 
         assert evil["has_api"] is False
 
-
-
     def test_traversal_api_path_in_manifest_is_scrubbed(self, user_plugin_factory):
 
-        user_plugin_factory("traverse", {
-
-            "name": "traverse",
-
-            "label": "Traverse",
-
-            "api": "../../../../tmp/evil.py",
-
-            "entry": "dist/index.js",
-
-        })
+        user_plugin_factory(
+            "traverse",
+            {
+                "name": "traverse",
+                "label": "Traverse",
+                "api": "../../../../tmp/evil.py",
+                "entry": "dist/index.js",
+            },
+        )
 
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
 
@@ -432,30 +334,24 @@ class TestDiscoveryScrubsApiField:
 
         assert entry["has_api"] is False
 
-
-
     def test_safe_api_path_survives(self, user_plugin_factory, tmp_path):
 
-        user_plugin_factory("safe", {
-
-            "name": "safe",
-
-            "label": "Safe",
-
-            "api": "api.py",
-
-            "entry": "dist/index.js",
-
-        })
+        user_plugin_factory(
+            "safe",
+            {
+                "name": "safe",
+                "label": "Safe",
+                "api": "api.py",
+                "entry": "dist/index.js",
+            },
+        )
 
         # Make the api file actually exist so a downstream mount could
 
         # in principle proceed — we're only testing the discovery scrub.
 
         (tmp_path / "plugins" / "safe" / "dashboard" / "api.py").write_text(
-
             "router = None\n"
-
         )
 
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
@@ -467,9 +363,6 @@ class TestDiscoveryScrubsApiField:
         assert entry["has_api"] is True
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Layer 4 — _mount_plugin_api_routes refuses project-source + traversal.
@@ -477,18 +370,12 @@ class TestDiscoveryScrubsApiField:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestMountApiRoutesRefusesUntrusted:
-
     """The mount routine is the actual ``importlib`` call site — these
 
     tests poke synthetic plugin entries directly into the cache and
 
     assert the importer is *not* invoked."""
-
-
 
     def _payload_plugin(self, tmp_path, *, source: str, api_file: str = "api.py"):
 
@@ -503,36 +390,21 @@ class TestMountApiRoutesRefusesUntrusted:
         # short-circuit before the importer runs.
 
         (dash / "api.py").write_text(
-
             "from fastapi import APIRouter\nrouter = APIRouter()\n"
-
         )
 
         return {
-
             "name": "synthetic",
-
             "label": "Synthetic",
-
             "tab": {"path": "/synthetic", "position": "end"},
-
             "slots": [],
-
             "entry": "dist/index.js",
-
             "css": None,
-
             "has_api": True,
-
             "source": source,
-
             "_dir": str(dash),
-
             "_api_file": api_file,
-
         }
-
-
 
     def test_project_source_api_is_not_imported(self, tmp_path):
 
@@ -541,18 +413,12 @@ class TestMountApiRoutesRefusesUntrusted:
         web_server._dashboard_plugins_cache = [plugin]
 
         with patch("importlib.util.spec_from_file_location") as spec:
-
             web_server._mount_plugin_api_routes()
 
         assert spec.call_count == 0, (
-
             "project-source plugin's api file was imported — "
-
             "GHSA-5qr3-c538-wm9j defence-in-depth regression"
-
         )
-
-
 
     def test_bundled_source_api_imports_normally(self, tmp_path):
 
@@ -561,7 +427,6 @@ class TestMountApiRoutesRefusesUntrusted:
         web_server._dashboard_plugins_cache = [plugin]
 
         with patch("importlib.util.spec_from_file_location") as spec:
-
             spec.return_value = None  # loader is None -> early continue, safe
 
             web_server._mount_plugin_api_routes()
@@ -576,30 +441,23 @@ class TestMountApiRoutesRefusesUntrusted:
 
         assert called_path.is_absolute()
 
-
-
     def test_traversal_api_caught_at_mount_time(self, tmp_path):
-
         """Defence-in-depth: if discovery is bypassed (e.g. cache
 
         tampering), mount-time validation still refuses to import a
 
         file outside the dashboard dir."""
 
-        plugin = self._payload_plugin(tmp_path, source="user",
-
-                                       api_file="../../../tmp/evil.py")
+        plugin = self._payload_plugin(
+            tmp_path, source="user", api_file="../../../tmp/evil.py"
+        )
 
         web_server._dashboard_plugins_cache = [plugin]
 
         with patch("importlib.util.spec_from_file_location") as spec:
-
             web_server._mount_plugin_api_routes()
 
         assert spec.call_count == 0
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -609,11 +467,7 @@ class TestMountApiRoutesRefusesUntrusted:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestEndToEndPocBlocked:
-
     """Reproduces the original advisory PoC shape: untrusted CWD with a
 
     manifest pointing ``api`` at an attacker-chosen Python file, with
@@ -627,8 +481,6 @@ class TestEndToEndPocBlocked:
     framed (``=0`` truthy-string bypass, absolute path bypass,
 
     project-source bypass)."""
-
-
 
     def test_full_chain_blocked(self, tmp_path, monkeypatch):
 
@@ -655,34 +507,20 @@ class TestEndToEndPocBlocked:
         payload_py.write_text("OWNED = True\n")
 
         _write_plugin_manifest(
-
             cwd / ".clawksis" / "plugins",
-
             "evil",
-
             {
-
                 "name": "evil",
-
                 "label": "Evil",
-
                 "api": str(payload_py),
-
                 "entry": "dist/index.js",
-
             },
-
         )
 
-
-
         with patch("importlib.util.spec_from_file_location") as spec:
-
             plugins = web_server._get_dashboard_plugins(force_rescan=True)
 
             web_server._mount_plugin_api_routes()
-
-
 
         # The project source must stay disabled because ``0`` is no
 
@@ -705,7 +543,6 @@ class TestEndToEndPocBlocked:
         # path / *evil* module are never targeted.
 
         for call in spec.call_args_list:
-
             module_name = call.args[0]
 
             target = Path(call.args[1])
@@ -717,4 +554,3 @@ class TestEndToEndPocBlocked:
             assert "evil-repo" not in target.parts
 
         assert "clawk_dashboard_plugin_evil" not in sys.modules
-

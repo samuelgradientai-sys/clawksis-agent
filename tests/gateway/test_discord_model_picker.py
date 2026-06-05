@@ -23,14 +23,12 @@ async def test_model_picker_clears_controls_before_running_switch_callback():
         return "Model switched"
 
     async def edit_message(**kwargs):
-        events.append(
-            (
-                "initial-edit",
-                kwargs["embed"].title,
-                kwargs["embed"].description,
-                kwargs["view"],
-            )
-        )
+        events.append((
+            "initial-edit",
+            kwargs["embed"].title,
+            kwargs["embed"].description,
+            kwargs["view"],
+        ))
 
     async def edit_original_response(**kwargs):
         events.append((

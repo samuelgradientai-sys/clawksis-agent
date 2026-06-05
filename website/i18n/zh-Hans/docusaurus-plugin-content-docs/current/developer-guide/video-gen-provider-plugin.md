@@ -43,112 +43,130 @@ plugins/video_gen/my-backend/
 
 继承 `agent.video_gen_provider.VideoGenProvider`。必须实现：`name` 属性和 `generate()` 方法。
 
-```python
-# plugins/video_gen/my-backend/__init__.py
-from typing import Any, Dict, List, Optional
-import os
-
-from agent.video_gen_provider import (
-    VideoGenProvider,
-    error_response,
-    success_response,
-)
-
-
-class MyVideoGenProvider(VideoGenProvider):
-    @property
-    def name(self) -> str:
-        return "my-backend"
-
-    @property
-    def display_name(self) -> str:
-        return "My Backend"
-
-    def is_available(self) -> bool:
-        return bool(os.environ.get("MY_API_KEY"))
-
-    def list_models(self) -> List[Dict[str, Any]]:
-        # Each entry is a model FAMILY — a name the user picks once.
-        # Your provider's generate() routes within the family based on
-        # whether image_url was passed.
-        return [
-            {
-                "id": "fast",
-                "display": "Fast",
-                "speed": "~30s",
-                "strengths": "Cheapest tier",
-                "price": "$0.05/s",
-                "modalities": ["text", "image"],  # advisory
-            },
-        ]
-
-    def default_model(self) -> Optional[str]:
-        return "fast"
-
-    def capabilities(self) -> Dict[str, Any]:
-        return {
-            "modalities": ["text", "image"],
-            "aspect_ratios": ["16:9", "9:16"],
-            "resolutions": ["720p", "1080p"],
-            "min_duration": 1,
-            "max_duration": 10,
-            "supports_audio": False,
-            "supports_negative_prompt": True,
-            "max_reference_images": 0,
-        }
-
-    def get_setup_schema(self) -> Dict[str, Any]:
-        return {
-            "name": "My Backend",
-            "badge": "paid",
-            "tag": "Short description shown in `clawk tools`",
-            "env_vars": [
-                {
-                    "key": "MY_API_KEY",
-                    "prompt": "My Backend API key",
-                    "url": "https://mybackend.example.com/keys",
-                },
-            ],
-        }
-
-    def generate(
-        self,
-        prompt: str,
-        *,
-        model: Optional[str] = None,
-        image_url: Optional[str] = None,
-        reference_image_urls: Optional[List[str]] = None,
-        duration: Optional[int] = None,
-        aspect_ratio: str = "16:9",
-        resolution: str = "720p",
-        negative_prompt: Optional[str] = None,
-        audio: Optional[bool] = None,
-        seed: Optional[int] = None,
-        **kwargs: Any,  # always ignore unknown kwargs for forward-compat
-    ) -> Dict[str, Any]:
-        # ROUTE: image_url presence picks the endpoint.
-        if image_url:
-            endpoint = "my-backend/image-to-video"
-            modality_used = "image"
-        else:
-            endpoint = "my-backend/text-to-video"
-            modality_used = "text"
-
-        # ... call your API ...
-
-        return success_response(
-            video="https://your-cdn/output.mp4",
-            model=model or "fast",
-            prompt=prompt,
-            modality=modality_used,
-            aspect_ratio=aspect_ratio,
-            duration=duration or 5,
-            provider=self.name,
-        )
-
-
-def register(ctx) -> None:
-    ctx.register_video_gen_provider(MyVideoGenProvider())
+```python# plugins/video_gen/my-backend/__init__.py
+
+from typing import Any, Dict, List, Optional
+
+import os
+
+
+from agent.video_gen_provider import (
+    VideoGenProvider,
+    error_response,
+    success_response,
+)
+
+
+class MyVideoGenProvider(VideoGenProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-backend"
+
+    @property
+    def display_name(self) -> str:
+
+        return "My Backend"
+
+    def is_available(self) -> bool:
+
+        return bool(os.environ.get("MY_API_KEY"))
+
+    def list_models(self) -> List[Dict[str, Any]]:
+
+        # Each entry is a model FAMILY — a name the user picks once.
+
+        # Your provider's generate() routes within the family based on
+
+        # whether image_url was passed.
+
+        return [
+            {
+                "id": "fast",
+                "display": "Fast",
+                "speed": "~30s",
+                "strengths": "Cheapest tier",
+                "price": "$0.05/s",
+                "modalities": ["text", "image"],  # advisory
+            },
+        ]
+
+    def default_model(self) -> Optional[str]:
+
+        return "fast"
+
+    def capabilities(self) -> Dict[str, Any]:
+
+        return {
+            "modalities": ["text", "image"],
+            "aspect_ratios": ["16:9", "9:16"],
+            "resolutions": ["720p", "1080p"],
+            "min_duration": 1,
+            "max_duration": 10,
+            "supports_audio": False,
+            "supports_negative_prompt": True,
+            "max_reference_images": 0,
+        }
+
+    def get_setup_schema(self) -> Dict[str, Any]:
+
+        return {
+            "name": "My Backend",
+            "badge": "paid",
+            "tag": "Short description shown in `clawk tools`",
+            "env_vars": [
+                {
+                    "key": "MY_API_KEY",
+                    "prompt": "My Backend API key",
+                    "url": "https://mybackend.example.com/keys",
+                },
+            ],
+        }
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        model: Optional[str] = None,
+        image_url: Optional[str] = None,
+        reference_image_urls: Optional[List[str]] = None,
+        duration: Optional[int] = None,
+        aspect_ratio: str = "16:9",
+        resolution: str = "720p",
+        negative_prompt: Optional[str] = None,
+        audio: Optional[bool] = None,
+        seed: Optional[int] = None,
+        **kwargs: Any,  # always ignore unknown kwargs for forward-compat
+    ) -> Dict[str, Any]:
+
+        # ROUTE: image_url presence picks the endpoint.
+
+        if image_url:
+            endpoint = "my-backend/image-to-video"
+
+            modality_used = "image"
+
+        else:
+            endpoint = "my-backend/text-to-video"
+
+            modality_used = "text"
+
+        # ... call your API ...
+
+        return success_response(
+            video="https://your-cdn/output.mp4",
+            model=model or "fast",
+            prompt=prompt,
+            modality=modality_used,
+            aspect_ratio=aspect_ratio,
+            duration=duration or 5,
+            provider=self.name,
+        )
+
+
+def register(ctx) -> None:
+
+    ctx.register_video_gen_provider(MyVideoGenProvider())
 ```
 
 ## 插件清单
@@ -187,19 +205,22 @@ Provider 的 `capabilities()` 声明上述哪些参数会被实际处理。Agent
 
 当你的后端每个"模型"对应多个端点时——例如 FAL，其中每个系列（Veo 3.1、Pixverse v6、Kling O3）都有 `/text-to-video` 和 `/image-to-video` 两个 URL——将每个**系列**表示为一个目录条目。你的 `generate()` 根据是否传入 `image_url` 来选择正确的端点：
 
-```python
-FAMILIES = {
-    "veo3.1": {
-        "text_endpoint": "fal-ai/veo3.1",
-        "image_endpoint": "fal-ai/veo3.1/image-to-video",
-        # ... family-specific capability flags ...
-    },
-}
-
-def generate(self, prompt, *, image_url=None, model=None, **kwargs):
-    family_id, family = _resolve_family(model)
-    endpoint = family["image_endpoint"] if image_url else family["text_endpoint"]
-    # ... build payload from family's declared capability flags, call endpoint ...
+```pythonFAMILIES = {
+    "veo3.1": {
+        "text_endpoint": "fal-ai/veo3.1",
+        "image_endpoint": "fal-ai/veo3.1/image-to-video",
+        # ... family-specific capability flags ...
+    },
+}
+
+
+def generate(self, prompt, *, image_url=None, model=None, **kwargs):
+
+    family_id, family = _resolve_family(model)
+
+    endpoint = family["image_endpoint"] if image_url else family["text_endpoint"]
+
+    # ... build payload from family's declared capability flags, call endpoint ...
 ```
 
 用户在 `clawk tools` 中只需选择一次 `veo3.1`。Agent 无需关心端点——它只负责传入（或不传入）`image_url`。

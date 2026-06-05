@@ -59,6 +59,7 @@ def _is_new_session(entry) -> bool:
 # reset_session stamps is_fresh_reset=True
 # ---------------------------------------------------------------------------
 
+
 class TestResetSessionStampsFreshReset:
     def test_reset_session_sets_is_fresh_reset_true(self, tmp_path):
         store = _make_store(tmp_path)
@@ -85,6 +86,7 @@ class TestResetSessionStampsFreshReset:
 # ---------------------------------------------------------------------------
 # Core regression: _is_new_session stays True after updated_at bump
 # ---------------------------------------------------------------------------
+
 
 class TestIsNewSessionSurvivesUpdatedAtBump:
     def test_is_new_session_true_after_reset_then_next_message(self, tmp_path):
@@ -129,6 +131,7 @@ class TestIsNewSessionSurvivesUpdatedAtBump:
 # Vanilla-session behavior is unchanged
 # ---------------------------------------------------------------------------
 
+
 class TestVanillaBehaviorUnaffected:
     def test_ongoing_session_not_flagged_as_new(self, tmp_path):
         store = _make_store(tmp_path)
@@ -170,6 +173,7 @@ class TestVanillaBehaviorUnaffected:
 # ---------------------------------------------------------------------------
 # Persistence through sessions.json round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestPersistence:
     def test_is_fresh_reset_survives_to_dict_from_dict(self, tmp_path):

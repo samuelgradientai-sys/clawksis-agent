@@ -9,6 +9,7 @@ must not be cached for the lifetime of the process. Cache only when:
 All other ``None`` outcomes (no credentials yet, config read error, explicit
 provider instantiation failure) leave the cache unset so the next call retries.
 """
+
 import logging
 from unittest.mock import Mock
 
@@ -72,9 +73,7 @@ class TestCloudProviderCachePolicy:
         bu_unconfigured.is_configured.return_value = False
         bb_unconfigured = Mock()
         bb_unconfigured.is_configured.return_value = False
-        monkeypatch.setattr(
-            browser_tool, "BrowserUseProvider", lambda: bu_unconfigured
-        )
+        monkeypatch.setattr(browser_tool, "BrowserUseProvider", lambda: bu_unconfigured)
         monkeypatch.setattr(
             browser_tool, "BrowserbaseProvider", lambda: bb_unconfigured
         )
@@ -92,6 +91,7 @@ class TestCloudProviderCachePolicy:
 
     def test_config_read_failure_does_not_cache_none(self, monkeypatch):
         """A raised config read must not pin the resolver to local mode."""
+
         def boom():
             raise OSError("config file locked")
 
@@ -104,6 +104,7 @@ class TestCloudProviderCachePolicy:
         self, monkeypatch, caplog
     ):
         """If `_PROVIDER_REGISTRY[key]()` raises, log warning and don't cache."""
+
         def exploding_factory():
             raise RuntimeError("missing dependency")
 

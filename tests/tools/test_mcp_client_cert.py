@@ -49,10 +49,13 @@ class TestResolveClientCert:
         cert.write_text("cert")
         key.write_text("key")
 
-        result = _resolve_client_cert("srv", {
-            "client_cert": str(cert),
-            "client_key": str(key),
-        })
+        result = _resolve_client_cert(
+            "srv",
+            {
+                "client_cert": str(cert),
+                "client_key": str(key),
+            },
+        )
         assert result == (str(cert), str(key))
 
     def test_list_form_two_elements(self, tmp_path):
@@ -63,9 +66,12 @@ class TestResolveClientCert:
         cert.write_text("cert")
         key.write_text("key")
 
-        result = _resolve_client_cert("srv", {
-            "client_cert": [str(cert), str(key)],
-        })
+        result = _resolve_client_cert(
+            "srv",
+            {
+                "client_cert": [str(cert), str(key)],
+            },
+        )
         assert result == (str(cert), str(key))
 
     def test_list_form_with_passphrase(self, tmp_path):
@@ -76,9 +82,12 @@ class TestResolveClientCert:
         cert.write_text("cert")
         key.write_text("key")
 
-        result = _resolve_client_cert("srv", {
-            "client_cert": [str(cert), str(key), "passphrase"],
-        })
+        result = _resolve_client_cert(
+            "srv",
+            {
+                "client_cert": [str(cert), str(key), "passphrase"],
+            },
+        )
         assert result == (str(cert), str(key), "passphrase")
 
     def test_tilde_expansion(self, tmp_path, monkeypatch):
@@ -95,9 +104,12 @@ class TestResolveClientCert:
         from tools.mcp_tool import _resolve_client_cert
 
         with pytest.raises(FileNotFoundError, match=r"srv.*client_cert.*not found"):
-            _resolve_client_cert("srv", {
-                "client_cert": str(tmp_path / "nope.pem"),
-            })
+            _resolve_client_cert(
+                "srv",
+                {
+                    "client_cert": str(tmp_path / "nope.pem"),
+                },
+            )
 
     def test_missing_key_file_raises(self, tmp_path):
         from tools.mcp_tool import _resolve_client_cert
@@ -106,10 +118,13 @@ class TestResolveClientCert:
         cert.write_text("cert")
 
         with pytest.raises(FileNotFoundError, match=r"srv.*client_key.*not found"):
-            _resolve_client_cert("srv", {
-                "client_cert": str(cert),
-                "client_key": str(tmp_path / "missing.key"),
-            })
+            _resolve_client_cert(
+                "srv",
+                {
+                    "client_cert": str(cert),
+                    "client_key": str(tmp_path / "missing.key"),
+                },
+            )
 
     def test_list_with_bad_length_raises(self, tmp_path):
         from tools.mcp_tool import _resolve_client_cert
@@ -126,10 +141,13 @@ class TestResolveClientCert:
         key.write_text("key")
 
         with pytest.raises(ValueError, match=r"either client_cert as a list"):
-            _resolve_client_cert("srv", {
-                "client_cert": [str(cert), str(key)],
-                "client_key": str(key),
-            })
+            _resolve_client_cert(
+                "srv",
+                {
+                    "client_cert": [str(cert), str(key)],
+                    "client_key": str(key),
+                },
+            )
 
     def test_non_string_path_rejected(self):
         from tools.mcp_tool import _resolve_client_cert
@@ -146,9 +164,12 @@ class TestResolveClientCert:
         key.write_text("key")
 
         with pytest.raises(ValueError, match=r"key passphrase.*must be a string"):
-            _resolve_client_cert("srv", {
-                "client_cert": [str(cert), str(key), 42],
-            })
+            _resolve_client_cert(
+                "srv",
+                {
+                    "client_cert": [str(cert), str(key), 42],
+                },
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -202,13 +223,17 @@ class TestHTTPClientCert:
             self._shutdown_event.set()
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-                 patch("httpx.AsyncClient", DummyAsyncClient), \
-                 patch("tools.mcp_tool.streamable_http_client",
-                       return_value=DummyTransportCtx()), \
-                 patch("tools.mcp_tool.ClientSession", DummySession), \
-                 patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+                patch("httpx.AsyncClient", DummyAsyncClient),
+                patch(
+                    "tools.mcp_tool.streamable_http_client",
+                    return_value=DummyTransportCtx(),
+                ),
+                patch("tools.mcp_tool.ClientSession", DummySession),
+                patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+            ):
                 await server._run_http({
                     "url": "https://example.com/mcp",
                     "client_cert": str(cert),
@@ -263,13 +288,17 @@ class TestHTTPClientCert:
             self._shutdown_event.set()
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-                 patch("httpx.AsyncClient", DummyAsyncClient), \
-                 patch("tools.mcp_tool.streamable_http_client",
-                       return_value=DummyTransportCtx()), \
-                 patch("tools.mcp_tool.ClientSession", DummySession), \
-                 patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+                patch("httpx.AsyncClient", DummyAsyncClient),
+                patch(
+                    "tools.mcp_tool.streamable_http_client",
+                    return_value=DummyTransportCtx(),
+                ),
+                patch("tools.mcp_tool.ClientSession", DummySession),
+                patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+            ):
                 await server._run_http({
                     "url": "https://example.com/mcp",
                     "client_cert": [str(cert), str(key)],
@@ -320,13 +349,17 @@ class TestHTTPClientCert:
             self._shutdown_event.set()
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-                 patch("httpx.AsyncClient", DummyAsyncClient), \
-                 patch("tools.mcp_tool.streamable_http_client",
-                       return_value=DummyTransportCtx()), \
-                 patch("tools.mcp_tool.ClientSession", DummySession), \
-                 patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+                patch("httpx.AsyncClient", DummyAsyncClient),
+                patch(
+                    "tools.mcp_tool.streamable_http_client",
+                    return_value=DummyTransportCtx(),
+                ),
+                patch("tools.mcp_tool.ClientSession", DummySession),
+                patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+            ):
                 await server._run_http({"url": "https://example.com/mcp"})
 
         asyncio.run(_drive())
@@ -339,8 +372,10 @@ class TestHTTPClientCert:
         server = MCPServerTask("remote")
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True):
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            ):
                 await server._run_http({
                     "url": "https://example.com/mcp",
                     "client_cert": str(tmp_path / "nope.pem"),
@@ -392,8 +427,10 @@ def patch_sse_client():
         async def __aexit__(self, *a):
             return False
 
-    with patch("tools.mcp_tool.sse_client", new=fake_sse_client), \
-         patch("tools.mcp_tool.ClientSession", new=_FakeSession):
+    with (
+        patch("tools.mcp_tool.sse_client", new=fake_sse_client),
+        patch("tools.mcp_tool.ClientSession", new=_FakeSession),
+    ):
         yield captured_kwargs
 
 
@@ -408,9 +445,14 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -438,9 +480,14 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -467,6 +514,7 @@ class TestSSEClientCert:
                 captured_client_kwargs.update(kwargs)
 
         import httpx
+
         with patch.object(httpx, "AsyncClient", DummyAsyncClient):
             factory(headers={"x": "y"}, timeout=httpx.Timeout(30.0), auth=None)
 
@@ -487,9 +535,14 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -514,6 +567,7 @@ class TestSSEClientCert:
                 captured_client_kwargs.update(kwargs)
 
         import httpx
+
         with patch.object(httpx, "AsyncClient", DummyAsyncClient):
             factory(headers=None, timeout=None, auth=None)
 

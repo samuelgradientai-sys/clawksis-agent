@@ -49,7 +49,9 @@ from nemo_curator.filters import LanguageIdentificationFilter
 dataset = dataset.filter(LanguageIdentificationFilter(target_languages=["en"]))
 
 # Multiple languages
-dataset = dataset.filter(LanguageIdentificationFilter(target_languages=["en", "es", "fr"]))
+dataset = dataset.filter(
+    LanguageIdentificationFilter(target_languages=["en", "es", "fr"])
+)
 ```
 
 ## Classifier-based filtering
@@ -60,9 +62,7 @@ dataset = dataset.filter(LanguageIdentificationFilter(target_languages=["en", "e
 from nemo_curator.classifiers import QualityClassifier
 
 quality_clf = QualityClassifier(
-    model_path="nvidia/quality-classifier-deberta",
-    batch_size=256,
-    device="cuda"
+    model_path="nvidia/quality-classifier-deberta", batch_size=256, device="cuda"
 )
 
 # Filter low-quality (threshold > 0.5 = high quality)

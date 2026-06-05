@@ -121,7 +121,9 @@ def test_subscriptions_lists_graph_subscriptions(monkeypatch, capsys):
                 }
             ]
 
-    monkeypatch.setattr("plugins.teams_pipeline.cli.build_graph_client", lambda: FakeClient())
+    monkeypatch.setattr(
+        "plugins.teams_pipeline.cli.build_graph_client", lambda: FakeClient()
+    )
     teams_pipeline_command(_make_args(teams_pipeline_action="subscriptions"))
     out = capsys.readouterr().out
     assert "sub-1" in out
@@ -143,7 +145,9 @@ def test_subscribe_defaults_to_created_for_transcript_resources(monkeypatch, cap
                 "expirationDateTime": json_body["expirationDateTime"],
             }
 
-    monkeypatch.setattr("plugins.teams_pipeline.cli.build_graph_client", lambda: FakeClient())
+    monkeypatch.setattr(
+        "plugins.teams_pipeline.cli.build_graph_client", lambda: FakeClient()
+    )
     teams_pipeline_command(
         _make_args(
             teams_pipeline_action="subscribe",
@@ -171,14 +175,18 @@ def test_token_health_force_refresh(monkeypatch, capsys):
         "plugins.teams_pipeline.cli.MicrosoftGraphTokenProvider",
         SimpleNamespace(from_env=lambda: FakeProvider()),
     )
-    teams_pipeline_command(_make_args(teams_pipeline_action="token-health", force_refresh=True))
+    teams_pipeline_command(
+        _make_args(teams_pipeline_action="token-health", force_refresh=True)
+    )
     payload = json.loads(capsys.readouterr().out)
     assert payload["configured"] is True
     assert payload["last_refresh_succeeded"] is True
     assert payload["access_token_length"] == len("token-123")
 
 
-def test_validate_accepts_msgraph_credentials_for_graph_delivery(monkeypatch, capsys, tmp_path):
+def test_validate_accepts_msgraph_credentials_for_graph_delivery(
+    monkeypatch, capsys, tmp_path
+):
     from gateway.config import Platform, PlatformConfig
 
     monkeypatch.setenv("MSGRAPH_TENANT_ID", "tenant")

@@ -99,7 +99,7 @@ tokenizer.pre_tokenizer = Whitespace()
 trainer = BpeTrainer(
     vocab_size=1000,
     min_frequency=2,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
 )
 
 # Train
@@ -264,7 +264,7 @@ trainer = WordPieceTrainer(
     vocab_size=30522,  # BERT vocab size
     min_frequency=2,
     special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
-    continuing_subword_prefix="##"  # BERT uses ##
+    continuing_subword_prefix="##",  # BERT uses ##
 )
 
 # Train
@@ -360,7 +360,7 @@ def tokenize_viterbi(word, vocab, probs):
     dp[0] = (0.0, [])  # log probability
 
     for i in range(1, n + 1):
-        best_prob = float('-inf')
+        best_prob = float("-inf")
         best_tokens = []
 
         # Try all possible last tokens
@@ -394,9 +394,9 @@ trainer = UnigramTrainer(
     vocab_size=8000,
     special_tokens=["<unk>", "<s>", "</s>"],
     unk_token="<unk>",
-    max_piece_length=16,      # Max token length
-    n_sub_iterations=2,       # EM iterations
-    shrinking_factor=0.75     # Remove 25% each iteration
+    max_piece_length=16,  # Max token length
+    n_sub_iterations=2,  # EM iterations
+    shrinking_factor=0.75,  # Remove 25% each iteration
 )
 
 # Train
@@ -571,7 +571,7 @@ tokenizer.normalizer = None
 **Cased tokens (RoBERTa)**:
 ```python
 # Learns separate tokens for different cases
-Vocabulary: ['Hello', 'hello', 'HELLO', 'world', 'WORLD']
+Vocabulary: ["Hello", "hello", "HELLO", "world", "WORLD"]
 ```
 
 ### Handling emojis and special characters

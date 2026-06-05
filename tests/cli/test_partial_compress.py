@@ -154,10 +154,14 @@ def _no_consecutive_dupes(msgs):
 
 def test_rejoin_valid_seam_assistant_then_user():
     # Normal case: head ends on assistant, tail starts on user → valid.
-    head = [{"role": "user", "content": "[summary]"},
-            {"role": "assistant", "content": "ack"}]
-    tail = [{"role": "user", "content": "next"},
-            {"role": "assistant", "content": "reply"}]
+    head = [
+        {"role": "user", "content": "[summary]"},
+        {"role": "assistant", "content": "ack"},
+    ]
+    tail = [
+        {"role": "user", "content": "next"},
+        {"role": "assistant", "content": "reply"},
+    ]
     out = rejoin_compressed_head_and_tail(head, tail)
     assert out == head + tail
     assert _no_consecutive_dupes(out)
@@ -166,8 +170,10 @@ def test_rejoin_valid_seam_assistant_then_user():
 def test_rejoin_user_user_seam_merges():
     # Degenerate head ending on a user summary; tail starts on user.
     head = [{"role": "user", "content": "[summary of head]"}]
-    tail = [{"role": "user", "content": "latest question"},
-            {"role": "assistant", "content": "answer"}]
+    tail = [
+        {"role": "user", "content": "latest question"},
+        {"role": "assistant", "content": "answer"},
+    ]
     out = rejoin_compressed_head_and_tail(head, tail)
     assert _no_consecutive_dupes(out), out
     # The two user messages were merged into one.
@@ -176,10 +182,14 @@ def test_rejoin_user_user_seam_merges():
 
 
 def test_rejoin_assistant_assistant_seam_merges():
-    head = [{"role": "user", "content": "q"},
-            {"role": "assistant", "content": "head end"}]
-    tail = [{"role": "assistant", "content": "tail start"},
-            {"role": "user", "content": "u"}]
+    head = [
+        {"role": "user", "content": "q"},
+        {"role": "assistant", "content": "head end"},
+    ]
+    tail = [
+        {"role": "assistant", "content": "tail start"},
+        {"role": "user", "content": "u"},
+    ]
     out = rejoin_compressed_head_and_tail(head, tail)
     assert _no_consecutive_dupes(out), out
     assert out[-2]["content"] == "head end\n\ntail start"

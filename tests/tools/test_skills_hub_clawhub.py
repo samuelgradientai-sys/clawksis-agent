@@ -21,7 +21,9 @@ class TestClawHubSource(unittest.TestCase):
     def setUp(self):
         self.src = ClawHubSource()
         self._safe_patcher = patch("tools.skills_hub.is_safe_url", return_value=True)
-        self._policy_patcher = patch("tools.skills_hub.check_website_access", return_value=None)
+        self._policy_patcher = patch(
+            "tools.skills_hub.check_website_access", return_value=None
+        )
         self._safe_patcher.start()
         self._policy_patcher.start()
 
@@ -148,7 +150,9 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].identifier, "self-improving-agent")
         mock_get.assert_called_once()
-        self.assertTrue(mock_get.call_args.args[0].endswith("/skills/self-improving-agent"))
+        self.assertTrue(
+            mock_get.call_args.args[0].endswith("/skills/self-improving-agent")
+        )
 
     @patch.object(
         ClawHubSource,
@@ -228,7 +232,10 @@ class TestClawHubSource(unittest.TestCase):
                     status_code=200,
                     json_data={
                         "files": [
-                            {"path": "SKILL.md", "rawUrl": "https://files.example/skill-md"},
+                            {
+                                "path": "SKILL.md",
+                                "rawUrl": "https://files.example/skill-md",
+                            },
                             {"path": "README.md", "content": "hello"},
                         ]
                     },
@@ -251,11 +258,15 @@ class TestClawHubSource(unittest.TestCase):
     def test_fetch_falls_back_to_versions_list(self, mock_get):
         def side_effect(url, *args, **kwargs):
             if url.endswith("/skills/caldav-calendar"):
-                return _MockResponse(status_code=200, json_data={"slug": "caldav-calendar"})
+                return _MockResponse(
+                    status_code=200, json_data={"slug": "caldav-calendar"}
+                )
             if url.endswith("/skills/caldav-calendar/versions"):
                 return _MockResponse(status_code=200, json_data=[{"version": "2.0.0"}])
             if url.endswith("/skills/caldav-calendar/versions/2.0.0"):
-                return _MockResponse(status_code=200, json_data={"files": {"SKILL.md": "# Skill"}})
+                return _MockResponse(
+                    status_code=200, json_data={"files": {"SKILL.md": "# Skill"}}
+                )
             return _MockResponse(status_code=404, json_data={})
 
         mock_get.side_effect = side_effect
@@ -284,7 +295,10 @@ class TestClawHubSource(unittest.TestCase):
                     status_code=200,
                     json_data={
                         "files": [
-                            {"path": "SKILL.md", "rawUrl": "http://127.0.0.1/private-skill"},
+                            {
+                                "path": "SKILL.md",
+                                "rawUrl": "http://127.0.0.1/private-skill",
+                            },
                         ]
                     },
                 )
@@ -316,15 +330,23 @@ class TestClawHubSource(unittest.TestCase):
         page_calls = {"n": 0}
         pages = [
             {
-                "items": [{"slug": f"a-skill-{i}", "displayName": f"A {i}"} for i in range(200)],
+                "items": [
+                    {"slug": f"a-skill-{i}", "displayName": f"A {i}"}
+                    for i in range(200)
+                ],
                 "nextCursor": "cursor-page-2",
             },
             {
-                "items": [{"slug": f"b-skill-{i}", "displayName": f"B {i}"} for i in range(200)],
+                "items": [
+                    {"slug": f"b-skill-{i}", "displayName": f"B {i}"}
+                    for i in range(200)
+                ],
                 "nextCursor": "cursor-page-3",
             },
             {
-                "items": [{"slug": f"c-skill-{i}", "displayName": f"C {i}"} for i in range(50)],
+                "items": [
+                    {"slug": f"c-skill-{i}", "displayName": f"C {i}"} for i in range(50)
+                ],
                 "nextCursor": None,
             },
         ]
@@ -344,7 +366,9 @@ class TestClawHubSource(unittest.TestCase):
 
         # 200 + 200 + 50 = 450 unique skills, all retrieved via cursor pagination.
         self.assertEqual(len(results), 450)
-        self.assertEqual(page_calls["n"], 3, "expected exactly 3 cursor-paginated pages")
+        self.assertEqual(
+            page_calls["n"], 3, "expected exactly 3 cursor-paginated pages"
+        )
         identifiers = {meta.identifier for meta in results}
         self.assertIn("a-skill-0", identifiers)
         self.assertIn("b-skill-199", identifiers)

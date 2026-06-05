@@ -76,19 +76,17 @@ In all cases, do not put sensitive data through ntfy unless the underlying topic
 
 Once `NTFY_HOME_CHANNEL` is set, cron jobs can deliver to ntfy:
 
-```python
-cronjob(
-    action="create",
-    schedule="every 1h",
-    deliver="ntfy",          # uses NTFY_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 1h",
+    deliver="ntfy",  # uses NTFY_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
+)
 ```
 
 Or target a specific topic explicitly:
 
-```python
-send_message(target="ntfy:alerts-channel", message="Done!")
+```pythonsend_message(target="ntfy:alerts-channel", message="Done!")
 ```
 
 This works even when the cron runs out-of-process from the gateway — the plugin registers a `standalone_sender_fn` that opens its own HTTP connection.

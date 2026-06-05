@@ -94,14 +94,14 @@ client = QdrantClient(host="qdrant", port=6333)
 client = QdrantClient(
     host="localhost",
     port=6333,
-    timeout=60  # seconds
+    timeout=60,  # seconds
 )
 
 # For large operations
 client.upsert(
     collection_name="documents",
     points=large_batch,
-    wait=False  # Don't wait for indexing
+    wait=False,  # Don't wait for indexing
 )
 ```
 
@@ -112,17 +112,14 @@ client.upsert(
 **Fix**:
 ```python
 # Qdrant Cloud
-client = QdrantClient(
-    url="https://cluster.cloud.qdrant.io",
-    api_key="your-api-key"
-)
+client = QdrantClient(url="https://cluster.cloud.qdrant.io", api_key="your-api-key")
 
 # Self-signed certificate
 client = QdrantClient(
     host="localhost",
     port=6333,
     https=True,
-    verify=False  # Disable verification (not recommended for production)
+    verify=False,  # Disable verification (not recommended for production)
 )
 ```
 
@@ -144,7 +141,7 @@ if "documents" not in names:
 # Or recreate
 client.recreate_collection(
     collection_name="documents",
-    vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
 )
 ```
 
@@ -178,7 +175,9 @@ print(f"Expected dimension: {info.config.params.vectors.size}")
 # Recreate with correct dimension
 client.recreate_collection(
     collection_name="documents",
-    vectors_config=VectorParams(size=768, distance=Distance.COSINE)  # Match your embeddings
+    vectors_config=VectorParams(
+        size=768, distance=Distance.COSINE
+    ),  # Match your embeddings
 )
 ```
 
@@ -196,11 +195,7 @@ info = client.get_collection("documents")
 print(f"Points: {info.points_count}")
 
 # Scroll to check data
-points, _ = client.scroll(
-    collection_name="documents",
-    limit=10,
-    with_payload=True
-)
+points, _ = client.scroll(collection_name="documents", limit=10, with_payload=True)
 print(points)
 ```
 
@@ -219,7 +214,7 @@ print(f"Query dimension: {len(query_vector)}")
 results = client.search(
     collection_name="documents",
     query_vector=query,
-    limit=10
+    limit=10,
     # No filter
 )
 
@@ -236,9 +231,7 @@ results = client.search(
 ```python
 # Index fields used in filters
 client.create_payload_index(
-    collection_name="documents",
-    field_name="category",
-    field_schema="keyword"
+    collection_name="documents", field_name="category", field_schema="keyword"
 )
 ```
 
@@ -248,7 +241,7 @@ client.update_collection(
     collection_name="documents",
     quantization_config=ScalarQuantization(
         scalar=ScalarQuantizationConfig(type=ScalarType.INT8)
-    )
+    ),
 )
 ```
 
@@ -256,8 +249,7 @@ client.update_collection(
 ```python
 # Faster search (less accurate)
 client.update_collection(
-    collection_name="documents",
-    hnsw_config=HnswConfigDiff(ef_construct=64, m=8)
+    collection_name="documents", hnsw_config=HnswConfigDiff(ef_construct=64, m=8)
 )
 
 # Use ef search parameter
@@ -265,18 +257,13 @@ results = client.search(
     collection_name="documents",
     query_vector=query,
     search_params={"hnsw_ef": 64},  # Lower = faster
-    limit=10
+    limit=10,
 )
 ```
 
 4. **Use gRPC**:
 ```python
-client = QdrantClient(
-    host="localhost",
-    port=6333,
-    grpc_port=6334,
-    prefer_grpc=True
-)
+client = QdrantClient(host="localhost", port=6333, grpc_port=6334, prefer_grpc=True)
 ```
 
 ### Inconsistent Results
@@ -290,7 +277,7 @@ client = QdrantClient(
 client.upsert(
     collection_name="documents",
     points=points,
-    wait=True  # Wait for index update
+    wait=True,  # Wait for index update
 )
 ```
 
@@ -300,7 +287,7 @@ client.upsert(
 results = client.search(
     collection_name="documents",
     query_vector=query,
-    consistency="all"  # Read from all replicas
+    consistency="all",  # Read from all replicas
 )
 ```
 
@@ -315,12 +302,9 @@ results = client.search(
 # Split into smaller batches
 def batch_upsert(client, collection, points, batch_size=100):
     for i in range(0, len(points), batch_size):
-        batch = points[i:i + batch_size]
-        client.upsert(
-            collection_name=collection,
-            points=batch,
-            wait=True
-        )
+        batch = points[i : i + batch_size]
+        client.upsert(collection_name=collection, points=batch, wait=True)
+
 
 batch_upsert(client, "documents", large_points_list)
 ```
@@ -357,7 +341,7 @@ payload = {
     "title": "Document",
     "count": 42,
     "tags": ["a", "b"],
-    "nested": {"key": "value"}
+    "nested": {"key": "value"},
 }
 
 # Validate before upsert
@@ -367,7 +351,7 @@ json.dumps(payload)  # Should not raise
 # NOT valid: datetime, numpy arrays, custom objects
 payload = {
     "timestamp": datetime.now().isoformat(),  # Convert to string
-    "vector": embedding.tolist()  # Convert numpy to list
+    "vector": embedding.tolist(),  # Convert numpy to list
 }
 ```
 
@@ -385,7 +369,7 @@ client.create_collection(
     collection_name="large_collection",
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     on_disk_payload=True,  # Store payloads on disk
-    hnsw_config=HnswConfigDiff(on_disk=True)  # Store HNSW on disk
+    hnsw_config=HnswConfigDiff(on_disk=True),  # Store HNSW on disk
 )
 ```
 
@@ -397,9 +381,9 @@ client.update_collection(
     quantization_config=ScalarQuantization(
         scalar=ScalarQuantizationConfig(
             type=ScalarType.INT8,
-            always_ram=False  # Keep on disk
+            always_ram=False,  # Keep on disk
         )
-    )
+    ),
 )
 ```
 
@@ -427,7 +411,7 @@ client.update_collection(
     collection_name="documents",
     optimizer_config={
         "indexing_threshold": 50000  # Delay indexing
-    }
+    },
 )
 
 # Bulk insert
@@ -438,7 +422,7 @@ client.update_collection(
     collection_name="documents",
     optimizer_config={
         "indexing_threshold": 10000  # Resume normal indexing
-    }
+    },
 )
 ```
 
@@ -484,11 +468,7 @@ info = client.get_collection("documents")
 print(f"Status: {info.status}")
 
 # Use strong consistency for critical writes
-client.upsert(
-    collection_name="documents",
-    points=points,
-    ordering=WriteOrdering.STRONG
-)
+client.upsert(collection_name="documents", points=points, ordering=WriteOrdering.STRONG)
 ```
 
 ## Performance Tuning
@@ -498,6 +478,7 @@ client.upsert(
 ```python
 import time
 import numpy as np
+
 
 def benchmark_search(client, collection, n_queries=100, dimension=384):
     # Generate random queries
@@ -516,6 +497,7 @@ def benchmark_search(client, collection, n_queries=100, dimension=384):
     print(f"QPS: {n_queries / elapsed:.2f}")
     print(f"Latency: {elapsed / n_queries * 1000:.2f}ms")
 
+
 benchmark_search(client, "documents")
 ```
 
@@ -527,9 +509,9 @@ client.create_collection(
     collection_name="high_recall",
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     hnsw_config=HnswConfigDiff(
-        m=32,              # More connections
-        ef_construct=200   # Higher build quality
-    )
+        m=32,  # More connections
+        ef_construct=200,  # Higher build quality
+    ),
 )
 
 # High speed (lower recall)
@@ -537,9 +519,9 @@ client.create_collection(
     collection_name="high_speed",
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     hnsw_config=HnswConfigDiff(
-        m=8,               # Fewer connections
-        ef_construct=64    # Lower build quality
-    )
+        m=8,  # Fewer connections
+        ef_construct=64,  # Lower build quality
+    ),
 )
 
 # Balanced
@@ -547,9 +529,9 @@ client.create_collection(
     collection_name="balanced",
     vectors_config=VectorParams(size=384, distance=Distance.COSINE),
     hnsw_config=HnswConfigDiff(
-        m=16,              # Default
-        ef_construct=100   # Default
-    )
+        m=16,  # Default
+        ef_construct=100,  # Default
+    ),
 )
 ```
 
@@ -589,10 +571,7 @@ print(f"Config: {info.config}")
 
 # Sample points
 points, _ = client.scroll(
-    collection_name="documents",
-    limit=5,
-    with_payload=True,
-    with_vectors=True
+    collection_name="documents", limit=5, with_payload=True, with_vectors=True
 )
 for p in points:
     print(f"ID: {p.id}, Payload: {p.payload}")
@@ -610,6 +589,7 @@ def test_connection(host="localhost", port=6333):
     except Exception as e:
         print(f"Connection failed: {e}")
         return False
+
 
 test_connection()
 ```

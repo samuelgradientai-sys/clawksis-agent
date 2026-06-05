@@ -3,6 +3,7 @@
 make_tool_result_message() sets tool_name on every tool-result dict at construction
 time. This test verifies that the value survives the flush path into the session DB.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent
@@ -38,7 +39,8 @@ def test_tool_name_persisted_to_session_db():
     agent._flush_messages_to_session_db(messages)
 
     tool_appends = [
-        c for c in session_db.append_message.call_args_list
+        c
+        for c in session_db.append_message.call_args_list
         if c.kwargs.get("role") == "tool"
     ]
     assert len(tool_appends) == 1

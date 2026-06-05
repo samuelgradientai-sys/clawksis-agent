@@ -133,12 +133,14 @@ THEN investigate that specific component.
 
 **Action:** Use `search_files` to trace references:
 
-```python
-# Find where the function is called
-search_files("function_name(", path="src/", file_glob="*.py")
-
-# Find where the variable is set
-search_files("variable_name\\s*=", path="src/", file_glob="*.py")
+```python# Find where the function is called
+
+search_files("function_name(", path="src/", file_glob="*.py")
+
+
+# Find where the variable is set
+
+search_files("variable_name\\s*=", path="src/", file_glob="*.py")
 ```
 
 ### Phase 1 Completion Checklist
@@ -165,8 +167,7 @@ search_files("variable_name\\s*=", path="src/", file_glob="*.py")
 
 **Action:** Use `search_files` to find comparable patterns:
 
-```python
-search_files("similar_pattern", path="src/", file_glob="*.py")
+```pythonsearch_files("similar_pattern", path="src/", file_glob="*.py")
 ```
 
 ### 2. Compare Against References
@@ -330,22 +331,31 @@ Use these Clawksis tools during Phase 1:
 
 For complex multi-component debugging, dispatch investigation subagents:
 
-```python
-delegate_task(
-    goal="Investigate why [specific test/behavior] fails",
-    context="""
-    Follow systematic-debugging skill:
-    1. Read the error message carefully
-    2. Reproduce the issue
-    3. Trace the data flow to find root cause
-    4. Report findings — do NOT fix yet
-
-    Error: [paste full error]
-    File: [path to failing code]
-    Test command: [exact command]
-    """,
-    toolsets=['terminal', 'file']
-)
+```pythondelegate_task(
+    goal="Investigate why [specific test/behavior] fails",
+    context="""
+
+    Follow systematic-debugging skill:
+
+    1. Read the error message carefully
+
+    2. Reproduce the issue
+
+    3. Trace the data flow to find root cause
+
+    4. Report findings — do NOT fix yet
+
+
+
+    Error: [paste full error]
+
+    File: [path to failing code]
+
+    Test command: [exact command]
+
+    """,
+    toolsets=["terminal", "file"],
+)
 ```
 
 ### With test-driven-development

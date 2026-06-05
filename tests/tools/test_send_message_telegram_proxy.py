@@ -83,7 +83,9 @@ class TestSendTelegramStandaloneProxy:
         bot = _make_bot()
         bot_factory = MagicMock(return_value=bot)
         httpx_request_factory = MagicMock(side_effect=lambda **kw: MagicMock(_kw=kw))
-        _install_telegram_mock_with_request(monkeypatch, bot_factory, httpx_request_factory)
+        _install_telegram_mock_with_request(
+            monkeypatch, bot_factory, httpx_request_factory
+        )
 
         result: dict[str, Any] = asyncio.run(
             _send_telegram("tok", "123", "hello world")
@@ -109,9 +111,7 @@ class TestSendTelegramStandaloneProxy:
         # And the bot was actually used to send.
         bot.send_message.assert_awaited_once()
 
-    def test_no_proxy_env_uses_plain_bot(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_proxy_env_uses_plain_bot(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without TELEGRAM_PROXY (and no inherited HTTPS_PROXY/etc), Bot()
         is constructed plainly — no ``request``/``get_updates_request``
         kwargs, and HTTPXRequest is not invoked at all.
@@ -139,7 +139,9 @@ class TestSendTelegramStandaloneProxy:
         bot = _make_bot()
         bot_factory = MagicMock(return_value=bot)
         httpx_request_factory = MagicMock(side_effect=lambda **kw: MagicMock(_kw=kw))
-        _install_telegram_mock_with_request(monkeypatch, bot_factory, httpx_request_factory)
+        _install_telegram_mock_with_request(
+            monkeypatch, bot_factory, httpx_request_factory
+        )
 
         result: dict[str, Any] = asyncio.run(
             _send_telegram("tok", "123", "hello world")

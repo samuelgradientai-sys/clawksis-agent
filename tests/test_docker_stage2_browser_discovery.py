@@ -15,5 +15,5 @@ def test_stage2_discovery_stays_filename_matched() -> None:
     script = Path("docker/stage2-hook.sh").read_text()
 
     discovery_block = script.split("browser_bin=$(", 1)[1].split(")\n    if", 1)[0]
-    assert "find \"$PLAYWRIGHT_BROWSERS_PATH\" -type f -executable" in discovery_block
+    assert 'find "$PLAYWRIGHT_BROWSERS_PATH" -type f -executable' in discovery_block
     assert "grep" not in discovery_block

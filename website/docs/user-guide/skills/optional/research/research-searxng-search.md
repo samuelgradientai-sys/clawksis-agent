@@ -115,30 +115,40 @@ Returns per result: `title`, `url`, `content` (snippet), `engine`, `parsed_url`,
 
 Use the SearXNG REST API directly from Python with the `requests` library:
 
-```python
-import os, requests, urllib.parse
-
-base_url = os.environ.get("SEARXNG_URL", "")
-if not base_url:
-    raise RuntimeError("SEARXNG_URL is not set")
-
-query = "fastapi deployment guide"
-params = {
-    "q": query,
-    "format": "json",
-    "limit": 5,
-    "engines": "google,bing",
-}
-
-resp = requests.get(f"{base_url}/search", params=params, timeout=10)
-resp.raise_for_status()
-data = resp.json()
-
-for r in data.get("results", []):
-    print(r["title"])
-    print(r["url"])
-    print(r.get("content", "")[:200])
-    print()
+```pythonimport os, requests, urllib.parse
+
+
+base_url = os.environ.get("SEARXNG_URL", "")
+
+if not base_url:
+    raise RuntimeError("SEARXNG_URL is not set")
+
+
+query = "fastapi deployment guide"
+
+params = {
+    "q": query,
+    "format": "json",
+    "limit": 5,
+    "engines": "google,bing",
+}
+
+
+resp = requests.get(f"{base_url}/search", params=params, timeout=10)
+
+resp.raise_for_status()
+
+data = resp.json()
+
+
+for r in data.get("results", []):
+    print(r["title"])
+
+    print(r["url"])
+
+    print(r.get("content", "")[:200])
+
+    print()
 ```
 
 ## Method 3: searxng-data Python Package
@@ -149,11 +159,12 @@ For more structured access, install the `searxng-data` package:
 pip install searxng-data
 ```
 
-```python
-from searxng_data import engines
-
-# List available engines
-print(engines.list_engines())
+```pythonfrom searxng_data import engines
+
+
+# List available engines
+
+print(engines.list_engines())
 ```
 
 Note: This package only provides engine metadata, not the search API itself.

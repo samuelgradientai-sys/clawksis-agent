@@ -155,83 +155,91 @@ pip install lambda-cloud-client
 
 ### 认证
 
-```python
-import os
-import lambda_cloud_client
-
-# 使用 API 密钥配置
-configuration = lambda_cloud_client.Configuration(
-    host="https://cloud.lambdalabs.com/api/v1",
-    access_token=os.environ["LAMBDA_API_KEY"]
-)
+```pythonimport os
+
+import lambda_cloud_client
+
+
+# 使用 API 密钥配置
+
+configuration = lambda_cloud_client.Configuration(
+    host="https://cloud.lambdalabs.com/api/v1",
+    access_token=os.environ["LAMBDA_API_KEY"],
+)
 ```
 
 ### 列出可用实例
 
-```python
-with lambda_cloud_client.ApiClient(configuration) as api_client:
-    api = lambda_cloud_client.DefaultApi(api_client)
-
-    # 获取可用实例类型
-    types = api.instance_types()
-    for name, info in types.data.items():
-        print(f"{name}: {info.instance_type.description}")
+```pythonwith lambda_cloud_client.ApiClient(configuration) as api_client:
+    api = lambda_cloud_client.DefaultApi(api_client)
+
+    # 获取可用实例类型
+
+    types = api.instance_types()
+
+    for name, info in types.data.items():
+        print(f"{name}: {info.instance_type.description}")
 ```
 
 ### 启动实例
 
-```python
-from lambda_cloud_client.models import LaunchInstanceRequest
-
-request = LaunchInstanceRequest(
-    region_name="us-west-1",
-    instance_type_name="gpu_1x_h100_sxm5",
-    ssh_key_names=["my-ssh-key"],
-    file_system_names=["my-filesystem"],  # 可选
-    name="training-job"
-)
-
-response = api.launch_instance(request)
-instance_id = response.data.instance_ids[0]
-print(f"Launched: {instance_id}")
+```pythonfrom lambda_cloud_client.models import LaunchInstanceRequest
+
+
+request = LaunchInstanceRequest(
+    region_name="us-west-1",
+    instance_type_name="gpu_1x_h100_sxm5",
+    ssh_key_names=["my-ssh-key"],
+    file_system_names=["my-filesystem"],  # 可选
+    name="training-job",
+)
+
+
+response = api.launch_instance(request)
+
+instance_id = response.data.instance_ids[0]
+
+print(f"Launched: {instance_id}")
 ```
 
 ### 列出运行中的实例
 
-```python
-instances = api.list_instances()
-for instance in instances.data:
-    print(f"{instance.name}: {instance.ip} ({instance.status})")
+```pythoninstances = api.list_instances()
+
+for instance in instances.data:
+    print(f"{instance.name}: {instance.ip} ({instance.status})")
 ```
 
 ### 终止实例
 
-```python
-from lambda_cloud_client.models import TerminateInstanceRequest
-
-request = TerminateInstanceRequest(
-    instance_ids=[instance_id]
-)
-api.terminate_instance(request)
+```pythonfrom lambda_cloud_client.models import TerminateInstanceRequest
+
+
+request = TerminateInstanceRequest(instance_ids=[instance_id])
+
+api.terminate_instance(request)
 ```
 
 ### SSH 密钥管理
 
-```python
-from lambda_cloud_client.models import AddSshKeyRequest
-
-# 添加 SSH 密钥
-request = AddSshKeyRequest(
-    name="my-key",
-    public_key="ssh-rsa AAAA..."
-)
-api.add_ssh_key(request)
-
-# 列出密钥
-keys = api.list_ssh_keys()
-
-# 删除密钥
-api.delete_ssh_key(key_id)
+```pythonfrom lambda_cloud_client.models import AddSshKeyRequest
+
+
+# 添加 SSH 密钥
+
+request = AddSshKeyRequest(name="my-key", public_key="ssh-rsa AAAA...")
+
+api.add_ssh_key(request)
+
+
+# 列出密钥
+
+keys = api.list_ssh_keys()
+
+
+# 删除密钥
+
+api.delete_ssh_key(key_id)
 ```
 
 ## 使用 curl 的 CLI
@@ -388,24 +396,32 @@ python train.py --epochs 100 --checkpoint-dir /lambda/nfs/storage/checkpoints
 
 ### 多 GPU 训练（单节点）
 
-```python
-# train_ddp.py
-import torch
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-
-def main():
-    dist.init_process_group("nccl")
-    rank = dist.get_rank()
-    device = rank % torch.cuda.device_count()
-
-    model = MyModel().to(device)
-    model = DDP(model, device_ids=[device])
-
-    # 训练循环...
-
-if __name__ == "__main__":
-    main()
+```python# train_ddp.py
+
+import torch
+
+import torch.distributed as dist
+
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+
+def main():
+
+    dist.init_process_group("nccl")
+
+    rank = dist.get_rank()
+
+    device = rank % torch.cuda.device_count()
+
+    model = MyModel().to(device)
+
+    model = DDP(model, device_ids=[device])
+
+    # 训练循环...
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ```bash
@@ -415,19 +431,25 @@ torchrun --nproc_per_node=8 train_ddp.py
 
 ### 检查点保存到文件系统
 
-```python
-import os
-
-checkpoint_dir = "/lambda/nfs/my-storage/checkpoints"
-os.makedirs(checkpoint_dir, exist_ok=True)
-
-# 保存检查点
-torch.save({
-    'epoch': epoch,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': loss,
-}, f"{checkpoint_dir}/checkpoint_{epoch}.pt")
+```pythonimport os
+
+
+checkpoint_dir = "/lambda/nfs/my-storage/checkpoints"
+
+os.makedirs(checkpoint_dir, exist_ok=True)
+
+
+# 保存检查点
+
+torch.save(
+    {
+        "epoch": epoch,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "loss": loss,
+    },
+    f"{checkpoint_dir}/checkpoint_{epoch}.pt",
+)
 ```
 
 ## 1-Click Clusters

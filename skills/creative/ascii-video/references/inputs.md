@@ -8,8 +8,23 @@
 
 ```python
 tmp = tempfile.mktemp(suffix=".wav")
-subprocess.run(["ffmpeg", "-y", "-i", input_path, "-ac", "1", "-ar", "22050",
-                "-sample_fmt", "s16", tmp], capture_output=True, check=True)
+subprocess.run(
+    [
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-ac",
+        "1",
+        "-ar",
+        "22050",
+        "-sample_fmt",
+        "s16",
+        tmp,
+    ],
+    capture_output=True,
+    check=True,
+)
 with wave.open(tmp) as wf:
     sr = wf.getframerate()
     raw = wf.readframes(wf.getnframes())
@@ -19,18 +34,18 @@ samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 ### Per-Frame FFT
 
 ```python
-hop = sr // fps          # samples per frame
-win = hop * 2            # analysis window (2x hop for overlap)
+hop = sr // fps  # samples per frame
+win = hop * 2  # analysis window (2x hop for overlap)
 window = np.hanning(win)
 freqs = rfftfreq(win, 1.0 / sr)
 
 bands = {
-    "sub":   (freqs >= 20)  & (freqs < 80),
-    "bass":  (freqs >= 80)  & (freqs < 250),
+    "sub": (freqs >= 20) & (freqs < 80),
+    "bass": (freqs >= 80) & (freqs < 250),
     "lomid": (freqs >= 250) & (freqs < 500),
-    "mid":   (freqs >= 500) & (freqs < 2000),
-    "himid": (freqs >= 2000)& (freqs < 6000),
-    "hi":    (freqs >= 6000),
+    "mid": (freqs >= 500) & (freqs < 2000),
+    "himid": (freqs >= 2000) & (freqs < 6000),
+    "hi": (freqs >= 6000),
 }
 ```
 
@@ -58,10 +73,12 @@ EMA prevents visual jitter:
 
 ```python
 def ema(arr, alpha):
-    out = np.empty_like(arr); out[0] = arr[0]
+    out = np.empty_like(arr)
+    out[0] = arr[0]
     for i in range(1, len(arr)):
-        out[i] = alpha * arr[i] + (1 - alpha) * out[i-1]
+        out[i] = alpha * arr[i] + (1 - alpha) * out[i - 1]
     return out
+
 
 # Slow-moving features (alpha=0.12): centroid, flatness, band ratios, cent_d
 # Fast-moving features (alpha=0.3): rms, flux, raw bands
@@ -70,8 +87,10 @@ def ema(arr, alpha):
 ### Beat Detection
 
 ```python
-flux_smooth = np.convolve(flux, np.ones(5)/5, mode="same")
-peaks, _ = signal.find_peaks(flux_smooth, height=0.15, distance=fps//5, prominence=0.05)
+flux_smooth = np.convolve(flux, np.ones(5) / 5, mode="same")
+peaks, _ = signal.find_peaks(
+    flux_smooth, height=0.15, distance=fps // 5, prominence=0.05
+)
 
 beat = np.zeros(n_frames)
 bdecay = np.zeros(n_frames, dtype=np.float32)
@@ -101,13 +120,26 @@ for k in features:
 
 ```python
 # Method 1: ffmpeg pipe (memory efficient)
-cmd = ["ffmpeg", "-i", input_video, "-f", "rawvideo", "-pix_fmt", "rgb24",
-       "-s", f"{target_w}x{target_h}", "-r", str(fps), "-"]
+cmd = [
+    "ffmpeg",
+    "-i",
+    input_video,
+    "-f",
+    "rawvideo",
+    "-pix_fmt",
+    "rgb24",
+    "-s",
+    f"{target_w}x{target_h}",
+    "-r",
+    str(fps),
+    "-",
+]
 pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 frame_size = target_w * target_h * 3
 for fi in range(n_frames):
     raw = pipe.stdout.read(frame_size)
-    if len(raw) < frame_size: break
+    if len(raw) < frame_size:
+        break
     frame = np.frombuffer(raw, dtype=np.uint8).reshape(target_h, target_w, 3)
     # process frame...
 
@@ -126,11 +158,15 @@ def frame_to_ascii(frame_rgb, grid, pal=PAL_DEFAULT):
     # Resize frame to grid dimensions
     small = np.array(Image.fromarray(frame_rgb).resize((cols, rows), Image.LANCZOS))
     # Luminance
-    lum = (0.299 * small[:,:,0] + 0.587 * small[:,:,1] + 0.114 * small[:,:,2]) / 255.0
+    lum = (
+        0.299 * small[:, :, 0] + 0.587 * small[:, :, 1] + 0.114 * small[:, :, 2]
+    ) / 255.0
     # Map to chars
     chars = val2char(lum, lum > 0.02, pal)
     # Colors: use source pixel colors, scaled by luminance for visibility
-    colors = np.clip(small * np.clip(lum[:,:,None] * 1.5 + 0.3, 0.3, 1), 0, 255).astype(np.uint8)
+    colors = np.clip(
+        small * np.clip(lum[:, :, None] * 1.5 + 0.3, 0.3, 1), 0, 255
+    ).astype(np.uint8)
     return chars, colors
 ```
 
@@ -148,7 +184,8 @@ def frame_to_ascii_edges(frame_rgb, grid, pal=PAL_DEFAULT, edge_pal=PAL_BOX):
     gx = np.abs(small_gray[:, 2:] - small_gray[:, :-2])
     gy = np.abs(small_gray[2:, :] - small_gray[:-2, :])
     edge = np.zeros_like(small_gray)
-    edge[:, 1:-1] += gx; edge[1:-1, :] += gy
+    edge[:, 1:-1] += gx
+    edge[1:-1, :] += gy
     edge = np.clip(edge / edge.max(), 0, 1)
 
     # Edge regions get box drawing chars, flat regions get brightness chars
@@ -166,6 +203,8 @@ Detect pixel changes between frames for motion-reactive effects:
 
 ```python
 prev_frame = None
+
+
 def compute_motion(frame):
     global prev_frame
     if prev_frame is None:
@@ -203,6 +242,7 @@ Same as single video frame conversion. For animated sequences:
 
 ```python
 import glob
+
 frames = sorted(glob.glob("frames/*.png"))
 for fi, path in enumerate(frames):
     img = np.array(Image.open(path).resize((VW, VH)))
@@ -226,6 +266,8 @@ def load_texture(path, grid):
 
 ```python
 import re
+
+
 def parse_srt(path):
     """Returns [(start_sec, end_sec, text), ...]"""
     entries = []
@@ -239,8 +281,8 @@ def parse_srt(path):
             m = re.match(r"(\d+):(\d+):(\d+),(\d+) --> (\d+):(\d+):(\d+),(\d+)", times)
             if m:
                 g = [int(x) for x in m.groups()]
-                start = g[0]*3600 + g[1]*60 + g[2] + g[3]/1000
-                end = g[4]*3600 + g[5]*60 + g[6] + g[7]/1000
+                start = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000
+                end = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000
                 text = " ".join(lines[2:])
                 entries.append((start, end, text))
     return entries
@@ -283,8 +325,12 @@ def synthetic_features(t, bpm=120):
         "beat": 1.0 if beat_phase < 0.05 else 0.0,
         "bdecay": max(0, 1.0 - beat_phase * 4),
         # ratios
-        "sub_r": 0.2, "bass_r": 0.25, "lomid_r": 0.15,
-        "mid_r": 0.2, "himid_r": 0.12, "hi_r": 0.08,
+        "sub_r": 0.2,
+        "bass_r": 0.25,
+        "lomid_r": 0.15,
+        "mid_r": 0.2,
+        "himid_r": 0.12,
+        "hi_r": 0.08,
         "cent_d": 0.1,
     }
 ```
@@ -297,6 +343,7 @@ For narrated videos (testimonials, quotes, storytelling), generate speech audio 
 
 ```python
 import requests, time, os
+
 
 def generate_tts(text, voice_id, api_key, output_path, model="eleven_multilingual_v2"):
     """Generate TTS audio via ElevenLabs API. Streams response to disk."""
@@ -367,6 +414,7 @@ Shuffle deterministically so re-runs produce the same voice mapping:
 ```python
 import random as _rng
 
+
 def assign_voices(n_quotes, voice_pool, seed=42):
     """Assign a different voice to each quote, cycling if needed."""
     r = _rng.Random(seed)
@@ -388,7 +436,10 @@ Common fixes:
 ```python
 # Display text: line breaks control visual layout
 QUOTES = [
-    ("It can do far more than the Claws,\nand you don't need to buy a Mac Mini.\nNous Research has a winner here.", "Brian Roemmele"),
+    (
+        "It can do far more than the Claws,\nand you don't need to buy a Mac Mini.\nNous Research has a winner here.",
+        "Brian Roemmele",
+    ),
 ]
 
 # TTS text: flat, phonetically corrected for speech
@@ -420,13 +471,36 @@ def build_tts_track(tts_clips, target_duration, intro_pad=5.0, outro_pad=4.0):
     for clip in tts_clips:
         wav = clip.replace(".mp3", ".wav")
         subprocess.run(
-            ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", str(sr),
-             "-sample_fmt", "s16", wav],
-            capture_output=True, check=True)
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                clip,
+                "-ac",
+                "1",
+                "-ar",
+                str(sr),
+                "-sample_fmt",
+                "s16",
+                wav,
+            ],
+            capture_output=True,
+            check=True,
+        )
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", wav],
-            capture_output=True, text=True)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                wav,
+            ],
+            capture_output=True,
+            text=True,
+        )
         durations.append(float(result.stdout.strip()))
 
     # Calculate gap to fill target duration
@@ -495,11 +569,17 @@ def mix_audio(tts_path, bgm_path, output_path, bgm_volume=0.15):
         "aformat=sample_fmts=s16:sample_rates=44100:channel_layouts=stereo[out]"
     )
     cmd = [
-        "ffmpeg", "-y",
-        "-i", tts_path,
-        "-i", bgm_path,
-        "-filter_complex", filter_complex,
-        "-map", "[out]", output_path,
+        "ffmpeg",
+        "-y",
+        "-i",
+        tts_path,
+        "-i",
+        bgm_path,
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[out]",
+        output_path,
     ]
     subprocess.run(cmd, capture_output=True, check=True)
 ```
@@ -510,14 +590,34 @@ Cycle through visual presets per quote for variety. Each preset defines a backgr
 
 ```python
 QUOTE_STYLES = [
-    {"hue": 0.08, "accent": 0.7, "bg": "spiral",       "text_rgb": (255, 220, 140)},  # warm gold
-    {"hue": 0.55, "accent": 0.6, "bg": "rings",         "text_rgb": (180, 220, 255)},  # cool blue
-    {"hue": 0.75, "accent": 0.7, "bg": "wave",          "text_rgb": (220, 180, 255)},  # purple
-    {"hue": 0.35, "accent": 0.6, "bg": "matrix",        "text_rgb": (140, 255, 180)},  # green
-    {"hue": 0.95, "accent": 0.8, "bg": "fire",          "text_rgb": (255, 180, 160)},  # red/coral
-    {"hue": 0.12, "accent": 0.5, "bg": "interference",  "text_rgb": (255, 240, 200)},  # amber
-    {"hue": 0.60, "accent": 0.7, "bg": "tunnel",        "text_rgb": (160, 210, 255)},  # cyan
-    {"hue": 0.45, "accent": 0.6, "bg": "aurora",        "text_rgb": (180, 255, 220)},  # teal
+    {
+        "hue": 0.08,
+        "accent": 0.7,
+        "bg": "spiral",
+        "text_rgb": (255, 220, 140),
+    },  # warm gold
+    {
+        "hue": 0.55,
+        "accent": 0.6,
+        "bg": "rings",
+        "text_rgb": (180, 220, 255),
+    },  # cool blue
+    {"hue": 0.75, "accent": 0.7, "bg": "wave", "text_rgb": (220, 180, 255)},  # purple
+    {"hue": 0.35, "accent": 0.6, "bg": "matrix", "text_rgb": (140, 255, 180)},  # green
+    {
+        "hue": 0.95,
+        "accent": 0.8,
+        "bg": "fire",
+        "text_rgb": (255, 180, 160),
+    },  # red/coral
+    {
+        "hue": 0.12,
+        "accent": 0.5,
+        "bg": "interference",
+        "text_rgb": (255, 240, 200),
+    },  # amber
+    {"hue": 0.60, "accent": 0.7, "bg": "tunnel", "text_rgb": (160, 210, 255)},  # cyan
+    {"hue": 0.45, "accent": 0.6, "bg": "aurora", "text_rgb": (180, 255, 220)},  # teal
 ]
 
 style = QUOTE_STYLES[quote_index % len(QUOTE_STYLES)]
@@ -530,10 +630,14 @@ This guarantees no two adjacent quotes share the same look, even without randomn
 Display quote text character-by-character synced to speech progress. Recently revealed characters are brighter, creating a "just typed" glow:
 
 ```python
-def render_typewriter(ch, co, lines, block_start, cols, progress, total_chars, text_rgb, t):
+def render_typewriter(
+    ch, co, lines, block_start, cols, progress, total_chars, text_rgb, t
+):
     """Overlay typewriter text onto character/color grids.
     progress: 0.0 (nothing visible) to 1.0 (all text visible)."""
-    chars_visible = int(total_chars * min(1.0, progress * 1.2))  # slight overshoot for snappy feel
+    chars_visible = int(
+        total_chars * min(1.0, progress * 1.2)
+    )  # slight overshoot for snappy feel
     tr, tg, tb = text_rgb
     char_count = 0
     for li, line in enumerate(lines):
@@ -544,10 +648,18 @@ def render_typewriter(ch, co, lines, block_start, cols, progress, total_chars, t
                 age = chars_visible - char_count
                 bri_factor = min(1.0, 0.5 + 0.5 / (1 + age * 0.015))  # newer = brighter
                 hue_shift = math.sin(char_count * 0.3 + t * 2) * 0.05
-                stamp(ch, co, c, row, col + ci,
-                      (int(min(255, tr * bri_factor * (1.0 + hue_shift))),
-                       int(min(255, tg * bri_factor)),
-                       int(min(255, tb * bri_factor * (1.0 - hue_shift)))))
+                stamp(
+                    ch,
+                    co,
+                    c,
+                    row,
+                    col + ci,
+                    (
+                        int(min(255, tr * bri_factor * (1.0 + hue_shift))),
+                        int(min(255, tg * bri_factor)),
+                        int(min(255, tb * bri_factor * (1.0 - hue_shift))),
+                    ),
+                )
             char_count += 1
 
     # Blinking cursor at insertion point
@@ -557,8 +669,14 @@ def render_typewriter(ch, co, lines, block_start, cols, progress, total_chars, t
         for li, line in enumerate(lines):
             for ci, c in enumerate(line):
                 if cc == chars_visible:
-                    stamp(ch, co, "\u258c", block_start + li,
-                          (cols - len(line)) // 2 + ci, (255, 220, 100))
+                    stamp(
+                        ch,
+                        co,
+                        "\u258c",
+                        block_start + li,
+                        (cols - len(line)) // 2 + ci,
+                        (255, 220, 100),
+                    )
                     return
                 cc += 1
 ```
@@ -592,10 +710,12 @@ def extract_beat_timestamps(features, fps, threshold=0.5):
             timestamps.append(fi / fps)
     return timestamps
 
+
 def extract_visual_beat_timestamps(video_path, fps, brightness_jump=30):
     """Detect visual beats by brightness jumps between consecutive frames.
     Returns timestamps where mean brightness increases by more than threshold."""
     import subprocess
+
     cmd = ["ffmpeg", "-i", video_path, "-f", "rawvideo", "-pix_fmt", "gray", "-"]
     proc = subprocess.run(cmd, capture_output=True)
     frames = np.frombuffer(proc.stdout, dtype=np.uint8)
@@ -604,19 +724,30 @@ def extract_visual_beat_timestamps(video_path, fps, brightness_jump=30):
     # For 1080p: 1920*1080 pixels per frame
     # Auto-detect from video metadata is more robust:
     probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height",
-         "-of", "csv=p=0", video_path],
-        capture_output=True, text=True)
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            video_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
     w, h = map(int, probe.stdout.strip().split(","))
     ppf = w * h  # pixels per frame
     n_frames = n_pixels // ppf
-    frames = frames[:n_frames * ppf].reshape(n_frames, ppf)
+    frames = frames[: n_frames * ppf].reshape(n_frames, ppf)
     means = frames.mean(axis=1)
-    
+
     timestamps = []
     for i in range(1, len(means)):
-        if means[i] - means[i-1] > brightness_jump:
+        if means[i] - means[i - 1] > brightness_jump:
             timestamps.append(i / fps)
     return timestamps
 ```
@@ -626,12 +757,12 @@ def extract_visual_beat_timestamps(video_path, fps, brightness_jump=30):
 ```python
 def sync_report(audio_beats, visual_beats, tolerance_ms=50):
     """Compare audio beat timestamps to visual beat timestamps.
-    
+
     Args:
         audio_beats: list of timestamps (seconds) from audio analysis
         visual_beats: list of timestamps (seconds) from video brightness analysis
         tolerance_ms: max acceptable drift in milliseconds
-    
+
     Returns:
         dict with matched/unmatched/drift statistics
     """
@@ -639,7 +770,7 @@ def sync_report(audio_beats, visual_beats, tolerance_ms=50):
     matched = []
     unmatched_audio = []
     unmatched_visual = list(visual_beats)
-    
+
     for at in audio_beats:
         best_match = None
         best_delta = float("inf")
@@ -649,11 +780,15 @@ def sync_report(audio_beats, visual_beats, tolerance_ms=50):
                 best_delta = delta
                 best_match = vt
         if best_match is not None and best_delta < tolerance:
-            matched.append({"audio": at, "visual": best_match, "drift_ms": best_delta * 1000})
+            matched.append({
+                "audio": at,
+                "visual": best_match,
+                "drift_ms": best_delta * 1000,
+            })
             unmatched_visual.remove(best_match)
         else:
             unmatched_audio.append(at)
-    
+
     drifts = [m["drift_ms"] for m in matched]
     return {
         "matched": len(matched),
@@ -666,12 +801,15 @@ def sync_report(audio_beats, visual_beats, tolerance_ms=50):
         "p95_drift_ms": np.percentile(drifts, 95) if len(drifts) > 1 else 0,
     }
 
+
 # Usage:
 audio_beats = extract_beat_timestamps(features, fps=24)
 visual_beats = extract_visual_beat_timestamps("output.mp4", fps=24)
 report = sync_report(audio_beats, visual_beats)
 print(f"Matched: {report['matched']}/{report['total_audio_beats']} beats")
-print(f"Mean drift: {report['mean_drift_ms']:.1f}ms, Max: {report['max_drift_ms']:.1f}ms")
+print(
+    f"Mean drift: {report['mean_drift_ms']:.1f}ms, Max: {report['max_drift_ms']:.1f}ms"
+)
 # Target: mean drift < 20ms, max drift < 42ms (1 frame at 24fps)
 ```
 

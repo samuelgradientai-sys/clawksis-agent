@@ -120,14 +120,13 @@ Authentication can be via `OPENAI_API_KEY` or the Codex CLI OAuth state (often `
 
 Use `codex exec` for bounded one-shot edits where Codex should exit on its own:
 
-```python
-terminal(
-    command="codex exec --full-auto '$(cat /tmp/codex_prompt.md)'",
-    workdir=WORKTREE,
-    background=True,
-    pty=True,
-    notify_on_complete=True,
-)
+```pythonterminal(
+    command="codex exec --full-auto '$(cat /tmp/codex_prompt.md)'",
+    workdir=WORKTREE,
+    background=True,
+    pty=True,
+    notify_on_complete=True,
+)
 ```
 
 Use Codex `/goal` only for broader multi-step work that benefits from durable objective tracking. Launch interactively in a PTY/tmux session or with `codex --enable goals` if the feature is disabled by default. Keep the goal objective self-contained: repo path, task id, safety constraints, allowed scope, acceptance criteria, tests, and commit expectations.
@@ -173,23 +172,24 @@ PMB safety constraints:
 
 Start long Codex lanes in the background with PTY and completion notification:
 
-```python
-result = terminal(
-    command="codex exec --full-auto '$(cat /tmp/codex_prompt.md)'",
-    workdir=WORKTREE,
-    background=True,
-    pty=True,
-    notify_on_complete=True,
-)
-session_id = result["session_id"]
+```pythonresult = terminal(
+    command="codex exec --full-auto '$(cat /tmp/codex_prompt.md)'",
+    workdir=WORKTREE,
+    background=True,
+    pty=True,
+    notify_on_complete=True,
+)
+
+session_id = result["session_id"]
 ```
 
 Monitor without interfering:
 
-```python
-process(action="poll", session_id=session_id)
-process(action="log", session_id=session_id, limit=200)
-process(action="wait", session_id=session_id, timeout=300)
+```pythonprocess(action="poll", session_id=session_id)
+
+process(action="log", session_id=session_id, limit=200)
+
+process(action="wait", session_id=session_id, timeout=300)
 ```
 
 Send a Kanban heartbeat every few minutes for lanes longer than two minutes, e.g. `kanban_heartbeat(note="Codex lane running in <WORKTREE>; waiting for tests/diff")`.
@@ -204,8 +204,7 @@ Kill conditions:
 
 Kill command:
 
-```python
-process(action="kill", session_id=session_id)
+```pythonprocess(action="kill", session_id=session_id)
 ```
 
 After kill, inspect `git status --short`, preserve useful patches only if safe, and record `codex_lane.result: timed_out` or `rejected` with a concrete `rejected_reason`.

@@ -151,12 +151,12 @@ from manim import *
 from manim_voiceover import VoiceoverScene
 from manim_voiceover.services.elevenlabs import ElevenLabsService
 
+
 class NarratedScene(VoiceoverScene):
     def construct(self):
-        self.set_speech_service(ElevenLabsService(
-            voice_name="Alice",
-            model_id="eleven_multilingual_v2"
-        ))
+        self.set_speech_service(
+            ElevenLabsService(voice_name="Alice", model_id="eleven_multilingual_v2")
+        )
 
         # Voiceover auto-controls scene duration
         with self.voiceover(text="Here is a circle being drawn.") as tracker:

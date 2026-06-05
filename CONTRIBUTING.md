@@ -261,48 +261,55 @@ Before writing a tool, ask: [should this be a skill instead?](#should-it-be-a-sk
 
 Tools self-register with the central registry. Each tool file co-locates its schema, handler, and registration:
 
-```python
-"""my_tool — Brief description of what this tool does."""
-
-import json
-from tools.registry import registry
-
-
-def my_tool(param1: str, param2: int = 10, **kwargs) -> str:
-    """Handler. Returns a string result (often JSON)."""
-    result = do_work(param1, param2)
-    return json.dumps(result)
-
-
-MY_TOOL_SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "my_tool",
-        "description": "What this tool does and when the agent should use it.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "param1": {"type": "string", "description": "What param1 is"},
-                "param2": {"type": "integer", "description": "What param2 is", "default": 10},
-            },
-            "required": ["param1"],
-        },
-    },
-}
-
-
-def _check_requirements() -> bool:
-    """Return True if this tool's dependencies are available."""
-    return True
-
-
-registry.register(
-    name="my_tool",
-    toolset="my_toolset",
-    schema=MY_TOOL_SCHEMA,
-    handler=lambda args, **kw: my_tool(**args, **kw),
-    check_fn=_check_requirements,
-)
+```python"""my_tool — Brief description of what this tool does."""
+
+import json
+
+from tools.registry import registry
+
+
+def my_tool(param1: str, param2: int = 10, **kwargs) -> str:
+    """Handler. Returns a string result (often JSON)."""
+
+    result = do_work(param1, param2)
+
+    return json.dumps(result)
+
+
+MY_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "my_tool",
+        "description": "What this tool does and when the agent should use it.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "param1": {"type": "string", "description": "What param1 is"},
+                "param2": {
+                    "type": "integer",
+                    "description": "What param2 is",
+                    "default": 10,
+                },
+            },
+            "required": ["param1"],
+        },
+    },
+}
+
+
+def _check_requirements() -> bool:
+    """Return True if this tool's dependencies are available."""
+
+    return True
+
+
+registry.register(
+    name="my_tool",
+    toolset="my_toolset",
+    schema=MY_TOOL_SCHEMA,
+    handler=lambda args, **kw: my_tool(**args, **kw),
+    check_fn=_check_requirements,
+)
 ```
 
 **Wire into a toolset (required):** Built-in tools are auto-discovered: any
@@ -480,12 +487,15 @@ See `skills/gifs/gif-search/` and `skills/email/himalaya/` for examples.
 Every new or modernized skill — bundled, optional, or contributed — must meet these standards before merge. Reviewers reject PRs that violate them.
 
 1. **`description` ≤ 60 characters, one sentence, ends with a period.** Long descriptions bloat the skill listing UI and dilute the model's attention when many skills are loaded. State the capability, not the implementation. No marketing words ("powerful", "comprehensive", "seamless", "advanced"). Don't repeat the skill name. Verify with:
-   ```python
-   import re, pathlib
-   m = re.search(r'^description: (.*)$',
-                 pathlib.Path('skills/<cat>/<name>/SKILL.md').read_text(),
-                 re.MULTILINE)
-   assert len(m.group(1)) <= 60, len(m.group(1))
+   ```python   import re, pathlib
+
+   m = re.search(
+       r"^description: (.*)$",
+       pathlib.Path("skills/<cat>/<name>/SKILL.md").read_text(),
+       re.MULTILINE,
+   )
+
+   assert len(m.group(1)) <= 60, len(m.group(1))
    ```
 
    Good: `Search arXiv papers by keyword, author, category, or ID.`
@@ -609,11 +619,12 @@ that touches the OS, assume *any* platform can hit your code path.
 
    **Preferred:** use `psutil` (a core dependency — always available):
 
-   ```python
-   import psutil
-   if psutil.pid_exists(pid):
-       # process is alive — safe on every platform
-       ...
+   ```python   import psutil
+
+   if psutil.pid_exists(pid):
+       # process is alive — safe on every platform
+
+       ...
    ```
 
    If you specifically need the clawk wrapper (it has a stdlib fallback
@@ -639,25 +650,29 @@ that touches the OS, assume *any* platform can hit your code path.
 
 3. **`termios` and `fcntl` are Unix-only.** Always catch both `ImportError`
    and `NotImplementedError`:
-   ```python
-   try:
-       from simple_term_menu import TerminalMenu
-       menu = TerminalMenu(options)
-       idx = menu.show()
-   except (ImportError, NotImplementedError):
-       # Fallback: numbered menu for Windows
-       for i, opt in enumerate(options):
-           print(f"  {i+1}. {opt}")
-       idx = int(input("Choice: ")) - 1
+   ```python   try:
+       from simple_term_menu import TerminalMenu
+
+       menu = TerminalMenu(options)
+
+       idx = menu.show()
+
+   except (ImportError, NotImplementedError):
+       # Fallback: numbered menu for Windows
+
+       for i, opt in enumerate(options):
+           print(f"  {i + 1}. {opt}")
+
+       idx = int(input("Choice: ")) - 1
    ```
 
 4. **File encoding.** Windows may save `.env` files in `cp1252`. Always
    handle encoding errors:
-   ```python
-   try:
-       load_dotenv(env_path)
-   except UnicodeDecodeError:
-       load_dotenv(env_path, encoding="latin-1")
+   ```python   try:
+       load_dotenv(env_path)
+
+   except UnicodeDecodeError:
+       load_dotenv(env_path, encoding="latin-1")
    ```
    Config files (`config.yaml`) may be saved with a UTF-8 BOM by Notepad and
    similar editors — use `encoding="utf-8-sig"` when reading files that
@@ -666,25 +681,29 @@ that touches the OS, assume *any* platform can hit your code path.
 5. **Process management.** `os.setsid()`, `os.killpg()`, `os.fork()`,
    `os.getuid()`, and POSIX signal handling differ on Windows. Guard with
    `platform.system()`, `sys.platform`, or `hasattr(os, "setsid")`:
-   ```python
-   if platform.system() != "Windows":
-       kwargs["preexec_fn"] = os.setsid
-   else:
-       kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+   ```python   if platform.system() != "Windows":
+       kwargs["preexec_fn"] = os.setsid
+
+   else:
+       kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
    ```
 
    **Preferred:** for killing a process AND its children (what `os.killpg`
    does on POSIX), use `psutil` — it works on every platform:
-   ```python
-   import psutil
-   try:
-       parent = psutil.Process(pid)
-       # Kill children first (leaf-up), then the parent.
-       for child in parent.children(recursive=True):
-           child.kill()
-       parent.kill()
-   except psutil.NoSuchProcess:
-       pass
+   ```python   import psutil
+
+   try:
+       parent = psutil.Process(pid)
+
+       # Kill children first (leaf-up), then the parent.
+
+       for child in parent.children(recursive=True):
+           child.kill()
+
+       parent.kill()
+
+   except psutil.NoSuchProcess:
+       pass
    ```
 
 6. **Signals that don't exist on Windows: `SIGALRM`, `SIGCHLD`, `SIGHUP`,

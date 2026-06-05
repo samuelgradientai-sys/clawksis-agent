@@ -4,6 +4,7 @@ The field exists so the agent can read syntax errors (``lint``) and
 semantic errors (``lsp_diagnostics``) as separate signals rather than
 having LSP output prepended to the lint string.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -86,7 +87,7 @@ def test_write_file_populates_lsp_diagnostics_when_layer_returns_block(tmp_path)
     fops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)))
     target = tmp_path / "x.py"
 
-    block = "<diagnostics file=\"x.py\">\nERROR [1:1] problem\n</diagnostics>"
+    block = '<diagnostics file="x.py">\nERROR [1:1] problem\n</diagnostics>'
 
     with patch.object(fops, "_maybe_lsp_diagnostics", return_value=block):
         res = fops.write_file(str(target), "x = 1\n")

@@ -23,10 +23,23 @@ class TestGetDistribution:
 
     def test_all_named_distributions_exist(self):
         expected = [
-            "default", "image_gen", "research", "science", "development",
-            "safe", "balanced", "minimal", "terminal_only", "terminal_web",
-            "creative", "reasoning", "browser_use", "browser_only",
-            "browser_tasks", "terminal_tasks", "mixed_tasks",
+            "default",
+            "image_gen",
+            "research",
+            "science",
+            "development",
+            "safe",
+            "balanced",
+            "minimal",
+            "terminal_only",
+            "terminal_web",
+            "creative",
+            "reasoning",
+            "browser_use",
+            "browser_only",
+            "browser_tasks",
+            "terminal_tasks",
+            "mixed_tasks",
         ]
         for name in expected:
             assert get_distribution(name) is not None, f"{name} missing"
@@ -95,7 +108,9 @@ class TestDistributionStructure:
     def test_probabilities_are_valid_range(self):
         for name, dist in DISTRIBUTIONS.items():
             for ts_name, prob in dist["toolsets"].items():
-                assert 0 < prob <= 100, f"{name}.{ts_name} has invalid probability {prob}"
+                assert 0 < prob <= 100, (
+                    f"{name}.{ts_name} has invalid probability {prob}"
+                )
 
     def test_descriptions_non_empty(self):
         for name, dist in DISTRIBUTIONS.items():

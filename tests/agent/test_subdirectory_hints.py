@@ -16,7 +16,9 @@ def project(tmp_path):
     # backend/ — has its own AGENTS.md
     backend = tmp_path / "backend"
     backend.mkdir()
-    (backend / "AGENTS.md").write_text("Backend-specific instructions:\n- Use FastAPI\n- Always add type hints")
+    (backend / "AGENTS.md").write_text(
+        "Backend-specific instructions:\n- Use FastAPI\n- Always add type hints"
+    )
 
     # backend/src/ — no hints
     (backend / "src").mkdir()
@@ -25,7 +27,9 @@ def project(tmp_path):
     # frontend/ — has CLAUDE.md
     frontend = tmp_path / "frontend"
     frontend.mkdir()
-    (frontend / "CLAUDE.md").write_text("Frontend rules:\n- Use TypeScript\n- No any types")
+    (frontend / "CLAUDE.md").write_text(
+        "Frontend rules:\n- Use TypeScript\n- No any types"
+    )
 
     # docs/ — no hints
     (tmp_path / "docs").mkdir()
@@ -46,7 +50,9 @@ class TestSubdirectoryHintTracker:
         """Working dir is pre-marked as loaded (startup handles it)."""
         tracker = SubdirectoryHintTracker(working_dir=str(project))
         # Reading a file in the root should NOT trigger hints
-        result = tracker.check_tool_call("read_file", {"path": str(project / "AGENTS.md")})
+        result = tracker.check_tool_call(
+            "read_file", {"path": str(project / "AGENTS.md")}
+        )
         assert result is None
 
     def test_discovers_agents_md_via_ancestor_walk(self, project):
@@ -115,9 +121,7 @@ class TestSubdirectoryHintTracker:
     def test_relative_path(self, project):
         """Relative paths resolved against working_dir."""
         tracker = SubdirectoryHintTracker(working_dir=str(project))
-        result = tracker.check_tool_call(
-            "read_file", {"path": "frontend/index.ts"}
-        )
+        result = tracker.check_tool_call("read_file", {"path": "frontend/index.ts"})
         assert result is not None
         assert "Frontend rules" in result
 
@@ -226,9 +230,7 @@ class TestSubdirectoryHintTracker:
         (sub / "AGENTS.md").write_text("x" * 20_000)
 
         tracker = SubdirectoryHintTracker(working_dir=str(tmp_path))
-        result = tracker.check_tool_call(
-            "read_file", {"path": str(sub / "file.py")}
-        )
+        result = tracker.check_tool_call("read_file", {"path": str(sub / "file.py")})
         assert result is not None
         assert "truncated" in result.lower()
         # Should be capped
@@ -257,7 +259,9 @@ class TestPermissionErrorHandling:
         tracker = SubdirectoryHintTracker(working_dir=str(tmp_path))
         restricted = tmp_path / "restricted"
         restricted.mkdir()
-        with patch.object(Path, "is_dir", side_effect=PermissionError("Permission denied")):
+        with patch.object(
+            Path, "is_dir", side_effect=PermissionError("Permission denied")
+        ):
             assert tracker._is_valid_subdir(restricted) is False
 
     def test_load_hints_permission_error_on_is_file(self, tmp_path):
@@ -266,10 +270,12 @@ class TestPermissionErrorHandling:
         restricted = tmp_path / "restricted"
         restricted.mkdir()
         original_is_file = Path.is_file
+
         def patched_is_file(self):
             if "restricted" in str(self):
                 raise PermissionError("Permission denied")
             return original_is_file(self)
+
         with patch.object(Path, "is_file", patched_is_file):
             result = tracker._load_hints_for_directory(restricted)
         assert result is None
@@ -278,10 +284,12 @@ class TestPermissionErrorHandling:
         """Full check_tool_call should not crash when a path is inaccessible."""
         tracker = SubdirectoryHintTracker(working_dir=str(project))
         original_is_dir = Path.is_dir
+
         def patched_is_dir(self):
             if "backend" in str(self) and "src" not in str(self):
                 raise PermissionError("Permission denied")
             return original_is_dir(self)
+
         with patch.object(Path, "is_dir", patched_is_dir):
             # Should not raise — gracefully skip the inaccessible directory
             result = tracker.check_tool_call(

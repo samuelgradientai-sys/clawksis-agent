@@ -6,7 +6,13 @@ from unittest import mock
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "skills" / "media" / "youtube-content" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "skills"
+    / "media"
+    / "youtube-content"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import fetch_transcript
@@ -14,22 +20,45 @@ import fetch_transcript
 
 class TestExtractVideoId:
     def test_standard_watch_url(self):
-        assert fetch_transcript.extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+        assert (
+            fetch_transcript.extract_video_id(
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            )
+            == "dQw4w9WgXcQ"
+        )
 
     def test_short_url(self):
-        assert fetch_transcript.extract_video_id("https://youtu.be/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+        assert (
+            fetch_transcript.extract_video_id("https://youtu.be/dQw4w9WgXcQ")
+            == "dQw4w9WgXcQ"
+        )
 
     def test_bare_video_id(self):
         assert fetch_transcript.extract_video_id("dQw4w9WgXcQ") == "dQw4w9WgXcQ"
 
     def test_shorts_url(self):
-        assert fetch_transcript.extract_video_id("https://www.youtube.com/shorts/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+        assert (
+            fetch_transcript.extract_video_id(
+                "https://www.youtube.com/shorts/dQw4w9WgXcQ"
+            )
+            == "dQw4w9WgXcQ"
+        )
 
     def test_embed_url(self):
-        assert fetch_transcript.extract_video_id("https://www.youtube.com/embed/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+        assert (
+            fetch_transcript.extract_video_id(
+                "https://www.youtube.com/embed/dQw4w9WgXcQ"
+            )
+            == "dQw4w9WgXcQ"
+        )
 
     def test_with_extra_params(self):
-        assert fetch_transcript.extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42") == "dQw4w9WgXcQ"
+        assert (
+            fetch_transcript.extract_video_id(
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42"
+            )
+            == "dQw4w9WgXcQ"
+        )
 
 
 class TestFormatTimestamp:
@@ -50,6 +79,7 @@ class TestFetchTranscriptImportError:
     def test_missing_dep_exits_with_message(self, capsys):
         """fetch_transcript exits with code 1 and prints install hint when package missing (issue #22243)."""
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -69,6 +99,7 @@ class TestPyprojectDeclaresYoutubeExtra:
     def test_youtube_extra_declared_in_pyproject(self):
         """youtube-transcript-api must be listed in pyproject.toml [youtube] extra (issue #22243)."""
         import tomllib
+
         pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
         with pyproject_path.open("rb") as f:
             data = tomllib.load(f)
@@ -80,8 +111,11 @@ class TestPyprojectDeclaresYoutubeExtra:
     def test_youtube_extra_included_in_all(self):
         """[all] extra must include clawksis-agent[youtube] (issue #22243)."""
         import tomllib
+
         pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
         with pyproject_path.open("rb") as f:
             data = tomllib.load(f)
         all_deps = " ".join(data["project"]["optional-dependencies"].get("all", []))
-        assert "youtube" in all_deps, "[all] extra does not include clawksis-agent[youtube]"
+        assert "youtube" in all_deps, (
+            "[all] extra does not include clawksis-agent[youtube]"
+        )

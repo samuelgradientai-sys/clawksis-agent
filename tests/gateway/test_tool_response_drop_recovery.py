@@ -57,7 +57,9 @@ class _DummyAdapter(BasePlatformAdapter):
         return {"id": chat_id}
 
 
-def _make_event(platform: Platform, chat_id: str = "111", message_id: str = "m1") -> MessageEvent:
+def _make_event(
+    platform: Platform, chat_id: str = "111", message_id: str = "m1"
+) -> MessageEvent:
     return MessageEvent(
         text="hello",
         source=SessionSource(platform=platform, chat_id=chat_id, chat_type="dm"),
@@ -121,8 +123,7 @@ class TestExtractStripRecoveryAllPlatforms:
         assert adapter.sent[0]["content"] == tool_response.strip()
         # And the recovery is observable via the stable event key.
         assert any(
-            "response_delivery_recovered" in r.getMessage()
-            for r in caplog.records
+            "response_delivery_recovered" in r.getMessage() for r in caplog.records
         ), [r.getMessage() for r in caplog.records]
 
     @pytest.mark.asyncio
@@ -142,7 +143,9 @@ class TestExtractStripRecoveryAllPlatforms:
         _strip_everything(adapter, monkeypatch)
 
         event = _make_event(platform)
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
         assert len(adapter.sent) == 1
         delivered = adapter.sent[0]["content"]
@@ -167,8 +170,11 @@ class TestExtractStripRecoveryAllPlatforms:
             type(adapter), "extract_media", staticmethod(lambda content: ([], content))
         )
         monkeypatch.setattr(
-            type(adapter), "extract_images",
-            staticmethod(lambda content: ([("https://example.com/chart.png", "chart")], "")),
+            type(adapter),
+            "extract_images",
+            staticmethod(
+                lambda content: ([("https://example.com/chart.png", "chart")], "")
+            ),
         )
         monkeypatch.setattr(
             type(adapter), "extract_local_files", staticmethod(lambda content: ([], ""))
@@ -176,7 +182,9 @@ class TestExtractStripRecoveryAllPlatforms:
         adapter.send_multiple_images = lambda *a, **kw: asyncio.sleep(0, result=None)
 
         event = _make_event(platform)
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
         assert adapter.sent == [], f"expected no text echo, got {adapter.sent}"
 
@@ -217,14 +225,18 @@ class TestRecoveryDoesNotLeakMediaFragments:
 
         # No fragment of the media path may reach the user.
         leaked = [
-            s for s in adapter.sent
-            if "vacation" in s["content"] or "photo" in s["content"] or "MEDIA" in s["content"]
+            s
+            for s in adapter.sent
+            if "vacation" in s["content"]
+            or "photo" in s["content"]
+            or "MEDIA" in s["content"]
         ]
         assert leaked == [], f"media-path fragment leaked to user: {leaked}"
         # The genuinely-undeliverable response is logged loudly, not silent.
         assert any(
             "response_delivery_dropped" in r.getMessage()
-            for r in caplog.records if r.levelno == logging.ERROR
+            for r in caplog.records
+            if r.levelno == logging.ERROR
         ), [r.getMessage() for r in caplog.records]
 
 
@@ -254,5 +266,6 @@ class TestUnrecoverableDropIsLoud:
         assert adapter.sent == []
         assert any(
             "response_delivery_dropped" in r.getMessage()
-            for r in caplog.records if r.levelno == logging.ERROR
+            for r in caplog.records
+            if r.levelno == logging.ERROR
         ), [r.getMessage() for r in caplog.records]

@@ -23,12 +23,12 @@ d = 128  # Dimension
 index = faiss.IndexFlatL2(d)
 
 # Add vectors
-vectors = np.random.random((1000, d)).astype('float32')
+vectors = np.random.random((1000, d)).astype("float32")
 index.add(vectors)
 
 # Search
 k = 5
-query = np.random.random((1, d)).astype('float32')
+query = np.random.random((1, d)).astype("float32")
 distances, indices = index.search(query, k)
 ```
 
@@ -143,7 +143,7 @@ distances, indices = index.search(query, k)
 
 ```python
 # PQ reduces memory by 16-32×
-m = 8   # Number of subquantizers (divides d)
+m = 8  # Number of subquantizers (divides d)
 nbits = 8  # Bits per subquantizer
 
 index = faiss.IndexPQ(d, m, nbits)

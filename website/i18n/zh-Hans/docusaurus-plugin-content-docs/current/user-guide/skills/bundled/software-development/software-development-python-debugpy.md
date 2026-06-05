@@ -87,11 +87,13 @@ description: "调试 Python：pdb REPL + debugpy 远程（DAP）"
 
 最简单。编辑文件：
 
-```python
-def compute(x, y):
-    result = some_helper(x)
-    breakpoint()           # <-- 在此处进入 pdb
-    return result + y
+```pythondef compute(x, y):
+
+    result = some_helper(x)
+
+    breakpoint()  # <-- 在此处进入 pdb
+
+    return result + y
 ```
 
 正常运行代码。你将在 `breakpoint()` 所在行停下，可完整访问局部变量。
@@ -138,12 +140,13 @@ python -m pytest tests/foo_test.py::test_bar --pdb
 
 ## 方案 4：对任意异常进行事后分析
 
-```python
-import pdb, sys
-try:
-    run_the_thing()
-except Exception:
-    pdb.post_mortem(sys.exc_info()[2])
+```pythonimport pdb, sys
+
+try:
+    run_the_thing()
+
+except Exception:
+    pdb.post_mortem(sys.exc_info()[2])
 ```
 
 或对整个脚本进行包装：
@@ -155,11 +158,17 @@ python -m pdb -c continue script.py
 
 或在 repl/jupyter 中设置全局 hook：
 
-```python
-import sys
-def excepthook(etype, value, tb):
-    import pdb; pdb.post_mortem(tb)
-sys.excepthook = excepthook
+```pythonimport sys
+
+
+def excepthook(etype, value, tb):
+
+    import pdb
+
+    pdb.post_mortem(tb)
+
+
+sys.excepthook = excepthook
 ```
 
 ## 方案 5：使用 debugpy 进行远程调试（附加到运行中的进程）
@@ -177,12 +186,15 @@ pip install debugpy
 
 在入口点顶部附近（或要调试的函数内部）添加：
 
-```python
-import debugpy
-debugpy.listen(("127.0.0.1", 5678))
-print("debugpy listening on 5678, waiting for client...", flush=True)
-debugpy.wait_for_client()
-debugpy.breakpoint()       # 可选：附加后立即暂停
+```pythonimport debugpy
+
+debugpy.listen(("127.0.0.1", 5678))
+
+print("debugpy listening on 5678, waiting for client...", flush=True)
+
+debugpy.wait_for_client()
+
+debugpy.breakpoint()  # 可选：附加后立即暂停
 ```
 
 启动进程；它将阻塞在 `wait_for_client()`。
@@ -219,39 +231,66 @@ echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
 
 **选项 1：`debugpy` 自带 CLI REPL** — 并非官方功能，而是一个小型 DAP 客户端脚本：
 
-```python
-# /tmp/dap_client.py
-import socket, json, itertools, time, sys
-
-HOST, PORT = "127.0.0.1", 5678
-s = socket.create_connection((HOST, PORT))
-seq = itertools.count(1)
-
-def send(msg):
-    msg["seq"] = next(seq)
-    body = json.dumps(msg).encode()
-    s.sendall(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
-
-def recv():
-    header = b""
-    while b"\r\n\r\n" not in header:
-        header += s.recv(1)
-    length = int(header.decode().split("Content-Length:")[1].split("\r\n")[0].strip())
-    body = b""
-    while len(body) < length:
-        body += s.recv(length - len(body))
-    return json.loads(body)
-
-send({"type": "request", "command": "initialize", "arguments": {"adapterID": "python"}})
-print(recv())
-send({"type": "request", "command": "attach", "arguments": {}})
-print(recv())
-send({"type": "request", "command": "setBreakpoints",
-      "arguments": {"source": {"path": sys.argv[1]},
-                    "breakpoints": [{"line": int(sys.argv[2])}]}})
-print(recv())
-send({"type": "request", "command": "configurationDone"})
-# ... 循环读取事件并发送 continue/stepIn 等命令
+```python# /tmp/dap_client.py
+
+import socket, json, itertools, time, sys
+
+
+HOST, PORT = "127.0.0.1", 5678
+
+s = socket.create_connection((HOST, PORT))
+
+seq = itertools.count(1)
+
+
+def send(msg):
+
+    msg["seq"] = next(seq)
+
+    body = json.dumps(msg).encode()
+
+    s.sendall(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
+
+
+def recv():
+
+    header = b""
+
+    while b"\r\n\r\n" not in header:
+        header += s.recv(1)
+
+    length = int(header.decode().split("Content-Length:")[1].split("\r\n")[0].strip())
+
+    body = b""
+
+    while len(body) < length:
+        body += s.recv(length - len(body))
+
+    return json.loads(body)
+
+
+send({"type": "request", "command": "initialize", "arguments": {"adapterID": "python"}})
+
+print(recv())
+
+send({"type": "request", "command": "attach", "arguments": {}})
+
+print(recv())
+
+send({
+    "type": "request",
+    "command": "setBreakpoints",
+    "arguments": {
+        "source": {"path": sys.argv[1]},
+        "breakpoints": [{"line": int(sys.argv[2])}],
+    },
+})
+
+print(recv())
+
+send({"type": "request", "command": "configurationDone"})
+
+# ... 循环读取事件并发送 continue/stepIn 等命令
 ```
 
 用于一次性自动化尚可，但作为交互式 UX 体验较差。
@@ -278,9 +317,9 @@ pip install remote-pdb
 ```
 
 在代码中：
-```python
-from remote_pdb import set_trace
-set_trace(host="127.0.0.1", port=4444)   # 阻塞直到连接
+```pythonfrom remote_pdb import set_trace
+
+set_trace(host="127.0.0.1", port=4444)  # 阻塞直到连接
 ```
 
 然后在终端中：
@@ -303,18 +342,20 @@ nc 127.0.0.1 4444
 gateway 作为 Node TUI 的子进程运行。可选方案：
 
 **A. 修改 gateway 源码：**
-```python
-# tui_gateway/server.py，在 serve() 顶部附近
-import debugpy
-debugpy.listen(("127.0.0.1", 5678))
-debugpy.wait_for_client()
+```python# tui_gateway/server.py，在 serve() 顶部附近
+
+import debugpy
+
+debugpy.listen(("127.0.0.1", 5678))
+
+debugpy.wait_for_client()
 ```
 启动 `clawk --tui`。TUI 将显示为冻结状态（其后端正在等待）。附加客户端后，执行在你 `continue` 时恢复。
 
 **B. 在特定处理器中使用 `remote-pdb`：**
-```python
-from remote_pdb import set_trace
-set_trace(host="127.0.0.1", port=4444)   # 在你想捕获的 RPC 处理器中
+```pythonfrom remote_pdb import set_trace
+
+set_trace(host="127.0.0.1", port=4444)  # 在你想捕获的 RPC 处理器中
 ```
 从 TUI 触发对应的 slash 命令，然后在另一个终端中执行 `nc 127.0.0.1 4444`。
 
@@ -380,9 +421,11 @@ python -m pytest tests/ -x --pdb -p no:xdist
 ```
 
 **"我的异步处理器发生死锁。"**
-```python
-# 在处理器入口处添加
-import remote_pdb; remote_pdb.set_trace(host="127.0.0.1", port=4444)
+```python# 在处理器入口处添加
+
+import remote_pdb
+
+remote_pdb.set_trace(host="127.0.0.1", port=4444)
 ```
 触发处理器。执行 `nc 127.0.0.1 4444`，然后用 `w` 查看挂起的帧，用 `!import asyncio; asyncio.all_tasks()` 查看其他待处理任务。
 

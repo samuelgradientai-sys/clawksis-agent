@@ -11,6 +11,7 @@ tripped for the lifetime of the process. These tests lock in the
 half-open / cooldown / reconnect-resets-breaker behavior that fixes
 that.
 """
+
 import json
 from unittest.mock import MagicMock
 
@@ -209,6 +210,7 @@ def test_circuit_breaker_cleared_on_reconnect(monkeypatch, tmp_path):
     mcp_tool._server_error_counts["srv"] = mcp_tool._CIRCUIT_BREAKER_THRESHOLD + 2
     if hasattr(mcp_tool, "_server_breaker_opened_at"):
         import time as _time
+
         mcp_tool._server_breaker_opened_at["srv"] = _time.monotonic()
 
     # Force handle_401 to claim recovery succeeded.

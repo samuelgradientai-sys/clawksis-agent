@@ -61,16 +61,21 @@ curved_arrow = CurvedArrow(LEFT * 2, RIGHT * 2, color=ORANGE)
 
 ```python
 # Sector (pie slice)
-sector = Sector(outer_radius=2, start_angle=0, angle=PI / 3, fill_opacity=0.7, color=BLUE)
+sector = Sector(
+    outer_radius=2, start_angle=0, angle=PI / 3, fill_opacity=0.7, color=BLUE
+)
 
 # Annulus (ring)
 ring = Annulus(inner_radius=1, outer_radius=2, fill_opacity=0.5, color=GREEN)
 
 # Annular sector (partial ring)
 partial_ring = AnnularSector(
-    inner_radius=1, outer_radius=2,
-    angle=PI / 2, start_angle=0,
-    fill_opacity=0.7, color=TEAL
+    inner_radius=1,
+    outer_radius=2,
+    angle=PI / 2,
+    start_angle=0,
+    fill_opacity=0.7,
+    color=TEAL,
 )
 
 # Cutout (punch holes in a shape)
@@ -84,11 +89,11 @@ Use cases: pie charts, ring progress indicators, Venn diagrams with arcs, geomet
 ## Positioning
 
 ```python
-mob.move_to(ORIGIN)                        # center
-mob.move_to(UP * 2 + RIGHT)               # relative
-label.next_to(circle, DOWN, buff=0.3)     # next to another
-title.to_edge(UP, buff=0.5)               # screen edge (buff >= 0.5!)
-mob.to_corner(UL, buff=0.5)               # corner
+mob.move_to(ORIGIN)  # center
+mob.move_to(UP * 2 + RIGHT)  # relative
+label.next_to(circle, DOWN, buff=0.3)  # next to another
+title.to_edge(UP, buff=0.5)  # screen edge (buff >= 0.5!)
+mob.to_corner(UL, buff=0.5)  # corner
 ```
 
 ## VGroup vs Group
@@ -121,7 +126,7 @@ mob.set_color(BLUE)
 mob.set_fill(RED, opacity=0.5)
 mob.set_stroke(WHITE, width=2)
 mob.set_opacity(0.4)
-mob.set_z_index(1)                         # layering
+mob.set_z_index(1)  # layering
 ```
 
 ## Specialized Mobjects
@@ -154,12 +159,14 @@ Display matrices as grids of numbers or mobjects:
 m = IntegerMatrix([[1, 2], [3, 4]])
 
 # Decimal matrix (control decimal places)
-m = DecimalMatrix([[1.5, 2.7], [3.1, 4.9]], element_to_mobject_config={"num_decimal_places": 2})
+m = DecimalMatrix(
+    [[1.5, 2.7], [3.1, 4.9]], element_to_mobject_config={"num_decimal_places": 2}
+)
 
 # Mobject matrix (any mobject in each cell)
 m = MobjectMatrix([
     [MathTex(r"\pi"), MathTex(r"e")],
-    [MathTex(r"\phi"), MathTex(r"\tau")]
+    [MathTex(r"\phi"), MathTex(r"\tau")],
 ])
 
 # Bracket types: "(" "[" "|" or "\\{"
@@ -214,10 +221,7 @@ Cleaner than manual `DecimalNumber` + `add_updater` for simple labeled-value dis
 
 ```python
 bullets = BulletedList(
-    "First key point",
-    "Second important fact",
-    "Third conclusion",
-    font_size=28
+    "First key point", "Second important fact", "Third conclusion", font_size=28
 )
 bullets.to_edge(LEFT, buff=1.0)
 self.play(Write(bullets))
@@ -277,13 +281,12 @@ Auto-handles label positioning — cleaner than manual `Arrow` + `Text().next_to
 # Color specific words (t2c = text-to-color)
 text = Text(
     "Gradient descent minimizes the loss function",
-    t2c={"Gradient descent": BLUE, "loss function": RED}
+    t2c={"Gradient descent": BLUE, "loss function": RED},
 )
 
 # Different fonts per word (t2f = text-to-font)
 text = Text(
-    "Use Menlo for code and Inter for prose",
-    t2f={"Menlo": "Menlo", "Inter": "Inter"}
+    "Use Menlo for code and Inter for prose", t2f={"Menlo": "Menlo", "Inter": "Inter"}
 )
 
 # Italic/slant per word (t2s = text-to-slant)
@@ -325,9 +328,12 @@ self.play(
 )
 
 # Also works with R3->R3 functions:
-self.play(grid.animate.apply_function(
-    lambda p: [p[0] + 0.5 * math.sin(p[1]), p[1] + 0.5 * math.sin(p[0]), p[2]]
-), run_time=5)
+self.play(
+    grid.animate.apply_function(
+        lambda p: [p[0] + 0.5 * math.sin(p[1]), p[1] + 0.5 * math.sin(p[0]), p[2]]
+    ),
+    run_time=5,
+)
 ```
 
 **Critical:** Call `prepare_for_nonlinear_transform()` before applying nonlinear functions — without it, the grid has too few sample points and the deformation looks jagged.

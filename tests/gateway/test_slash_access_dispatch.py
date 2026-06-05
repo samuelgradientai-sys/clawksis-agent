@@ -16,6 +16,7 @@ Coverage targets:
     even with empty user_allowed_commands.
   - DM vs group scope isolation.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -49,8 +50,9 @@ def _make_event(text: str, source: SessionSource) -> MessageEvent:
     return MessageEvent(text=text, source=source, message_id="m1")
 
 
-def _make_runner(*, platform_extra: dict | None = None,
-                 platform: Platform = Platform.DISCORD):
+def _make_runner(
+    *, platform_extra: dict | None = None, platform: Platform = Platform.DISCORD
+):
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
@@ -120,7 +122,9 @@ def _make_runner(*, platform_extra: dict | None = None,
 @pytest.mark.asyncio
 async def test_whoami_unrestricted_when_no_admin_list():
     runner = _make_runner(platform_extra={})  # no admin list
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "Tier: unrestricted" in result
     assert "no admin list configured" in result
 
@@ -128,7 +132,9 @@ async def test_whoami_unrestricted_when_no_admin_list():
 @pytest.mark.asyncio
 async def test_whoami_admin_user():
     runner = _make_runner(platform_extra={"allow_admin_from": ["111"]})
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="111")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="111"))
+    )
     assert "**admin**" in result
 
 
@@ -140,10 +146,12 @@ async def test_whoami_non_admin_lists_runnable_commands():
             "user_allowed_commands": ["status", "model"],
         }
     )
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "Tier: user" in result
-    assert "/help" in result      # always-allowed floor
-    assert "/whoami" in result    # always-allowed floor
+    assert "/help" in result  # always-allowed floor
+    assert "/whoami" in result  # always-allowed floor
     assert "/status" in result
     assert "/model" in result
 
@@ -162,7 +170,9 @@ async def test_non_admin_denied_for_unlisted_command():
         }
     )
     # /stop is NOT in user_allowed_commands and not in the always-allowed floor.
-    result = await runner._handle_message(_make_event("/stop", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/stop", _make_source(user_id="999"))
+    )
     assert result is not None
     assert "⛔" in result
     assert "/stop is admin-only here" in result
@@ -178,11 +188,15 @@ async def test_non_admin_with_empty_user_commands_gets_floor_only():
         }
     )
     # /stop denied
-    result = await runner._handle_message(_make_event("/stop", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/stop", _make_source(user_id="999"))
+    )
     assert "⛔" in result
     assert "No slash commands are enabled" in result
     # /whoami still works (always-allowed floor)
-    whoami_result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    whoami_result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "Tier: user" in whoami_result
 
 
@@ -202,7 +216,9 @@ async def test_admin_runs_unlisted_command():
     # Admin runs /whoami (proxy for "any command works"); the gate must NOT
     # return the ⛔ denial. The /whoami handler is deterministic and doesn't
     # need a real agent, so we can assert against its content.
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="111")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="111"))
+    )
     assert "⛔" not in result
     assert "**admin**" in result
 
@@ -215,7 +231,9 @@ async def test_user_runs_listed_command():
             "user_allowed_commands": ["whoami"],  # explicit
         }
     )
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "⛔" not in result
     assert "Tier: user" in result
 
@@ -230,7 +248,9 @@ async def test_backward_compat_no_admin_list_means_no_gate():
     runner = _make_runner(platform_extra={})  # nothing configured
     # Random non-listed user runs /whoami; should return unrestricted profile,
     # never a denial.
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="anyone")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="anyone"))
+    )
     assert "⛔" not in result
     assert "Tier: unrestricted" in result
 
@@ -265,7 +285,9 @@ async def test_group_only_gating_leaves_dm_unrestricted():
             "group_allow_admin_from": ["222"],
         }
     )
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="anyone", chat_type="dm")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="anyone", chat_type="dm"))
+    )
     assert "Tier: unrestricted" in result
 
 
@@ -410,12 +432,15 @@ async def test_gate_uses_canonical_name_not_alias():
     )
     # Find a real alias in the registry to use.
     from clawk_cli.commands import COMMAND_REGISTRY
+
     history_def = next(c for c in COMMAND_REGISTRY if c.name == "history")
     # If /history has aliases, use one. Otherwise just use /history.
     alias = history_def.aliases[0] if history_def.aliases else "history"
     # Mock the history handler so we don't need real session state.
     runner._handle_history_command = AsyncMock(return_value="history-handled")
-    result = await runner._handle_message(_make_event(f"/{alias}", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event(f"/{alias}", _make_source(user_id="999"))
+    )
     assert "⛔" not in (result or "")
 
 
@@ -443,7 +468,9 @@ async def test_gate_does_not_intercept_unknown_command():
     # vary (returns None, agent processes it, etc.). What matters: no denial.
     runner._handle_unknown_command = AsyncMock(return_value=None)
     # Stub out the rest of the cold path to short-circuit
-    runner.session_store.get_or_create_session.side_effect = RuntimeError("would have proceeded past gate")
+    runner.session_store.get_or_create_session.side_effect = RuntimeError(
+        "would have proceeded past gate"
+    )
     try:
         await runner._handle_message(_make_event("/xyzzy", _make_source(user_id="999")))
     except RuntimeError as e:
@@ -462,8 +489,8 @@ async def test_gate_does_not_intercept_unknown_command():
 async def test_dm_admin_blocked_in_group_with_separate_admin_list():
     runner = _make_runner(
         platform_extra={
-            "allow_admin_from": ["111"],          # DM admin
-            "group_allow_admin_from": ["222"],    # group admin
+            "allow_admin_from": ["111"],  # DM admin
+            "group_allow_admin_from": ["222"],  # group admin
             "group_user_allowed_commands": ["status"],
         }
     )
@@ -498,9 +525,7 @@ async def test_gating_isolated_per_platform():
                     "user_allowed_commands": [],
                 },
             ),
-            Platform.TELEGRAM: PlatformConfig(
-                enabled=True, token="***", extra={}
-            ),
+            Platform.TELEGRAM: PlatformConfig(enabled=True, token="***", extra={}),
         }
     )
     runner.adapters = {

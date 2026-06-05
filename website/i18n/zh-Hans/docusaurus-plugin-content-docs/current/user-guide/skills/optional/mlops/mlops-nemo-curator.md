@@ -69,124 +69,154 @@ uv pip install "nemo-curator[cpu]"
 
 ### 基础文本整理流水线
 
-```python
-from nemo_curator import ScoreFilter, Modify
-from nemo_curator.datasets import DocumentDataset
-import pandas as pd
-
-# 加载数据
-df = pd.DataFrame({"text": ["Good document", "Bad doc", "Excellent text"]})
-dataset = DocumentDataset(df)
-
-# 质量过滤
-def quality_score(doc):
-    return len(doc["text"].split()) > 5  # Filter short docs
-
-filtered = ScoreFilter(quality_score)(dataset)
-
-# 去重
-from nemo_curator.modules import ExactDuplicates
-deduped = ExactDuplicates()(filtered)
-
-# 保存
-deduped.to_parquet("curated_data/")
+```pythonfrom nemo_curator import ScoreFilter, Modify
+
+from nemo_curator.datasets import DocumentDataset
+
+import pandas as pd
+
+
+# 加载数据
+
+df = pd.DataFrame({"text": ["Good document", "Bad doc", "Excellent text"]})
+
+dataset = DocumentDataset(df)
+
+
+# 质量过滤
+
+
+def quality_score(doc):
+
+    return len(doc["text"].split()) > 5  # Filter short docs
+
+
+filtered = ScoreFilter(quality_score)(dataset)
+
+
+# 去重
+
+from nemo_curator.modules import ExactDuplicates
+
+deduped = ExactDuplicates()(filtered)
+
+
+# 保存
+
+deduped.to_parquet("curated_data/")
 ```
 
 ## 数据整理流水线
 
 ### 阶段 1：质量过滤
 
-```python
-from nemo_curator.filters import (
-    WordCountFilter,
-    RepeatedLinesFilter,
-    UrlRatioFilter,
-    NonAlphaNumericFilter
-)
-
-# 应用 30+ 启发式过滤器
-from nemo_curator import ScoreFilter
-
-# 词数过滤
-dataset = dataset.filter(WordCountFilter(min_words=50, max_words=100000))
-
-# 去除重复内容
-dataset = dataset.filter(RepeatedLinesFilter(max_repeated_line_fraction=0.3))
-
-# URL 比例过滤
-dataset = dataset.filter(UrlRatioFilter(max_url_ratio=0.2))
+```pythonfrom nemo_curator.filters import (
+    WordCountFilter,
+    RepeatedLinesFilter,
+    UrlRatioFilter,
+    NonAlphaNumericFilter,
+)
+
+
+# 应用 30+ 启发式过滤器
+
+from nemo_curator import ScoreFilter
+
+
+# 词数过滤
+
+dataset = dataset.filter(WordCountFilter(min_words=50, max_words=100000))
+
+
+# 去除重复内容
+
+dataset = dataset.filter(RepeatedLinesFilter(max_repeated_line_fraction=0.3))
+
+
+# URL 比例过滤
+
+dataset = dataset.filter(UrlRatioFilter(max_url_ratio=0.2))
 ```
 
 ### 阶段 2：去重
 
 **精确去重**：
-```python
-from nemo_curator.modules import ExactDuplicates
-
-# 删除完全重复项
-deduped = ExactDuplicates(id_field="id", text_field="text")(dataset)
+```pythonfrom nemo_curator.modules import ExactDuplicates
+
+
+# 删除完全重复项
+
+deduped = ExactDuplicates(id_field="id", text_field="text")(dataset)
 ```
 
 **模糊去重**（GPU 上速度提升 16×）：
-```python
-from nemo_curator.modules import FuzzyDuplicates
-
-# MinHash + LSH 去重
-fuzzy_dedup = FuzzyDuplicates(
-    id_field="id",
-    text_field="text",
-    num_hashes=260,      # MinHash parameters
-    num_buckets=20,
-    hash_method="md5"
-)
-
-deduped = fuzzy_dedup(dataset)
+```pythonfrom nemo_curator.modules import FuzzyDuplicates
+
+
+# MinHash + LSH 去重
+
+fuzzy_dedup = FuzzyDuplicates(
+    id_field="id",
+    text_field="text",
+    num_hashes=260,  # MinHash parameters
+    num_buckets=20,
+    hash_method="md5",
+)
+
+
+deduped = fuzzy_dedup(dataset)
 ```
 
 **语义去重**：
-```python
-from nemo_curator.modules import SemanticDuplicates
-
-# 基于 embedding（向量嵌入）的去重
-semantic_dedup = SemanticDuplicates(
-    id_field="id",
-    text_field="text",
-    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-    threshold=0.8  # Cosine similarity threshold
-)
-
-deduped = semantic_dedup(dataset)
+```pythonfrom nemo_curator.modules import SemanticDuplicates
+
+
+# 基于 embedding（向量嵌入）的去重
+
+semantic_dedup = SemanticDuplicates(
+    id_field="id",
+    text_field="text",
+    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
+    threshold=0.8,  # Cosine similarity threshold
+)
+
+
+deduped = semantic_dedup(dataset)
 ```
 
 ### 阶段 3：PII 脱敏
 
-```python
-from nemo_curator.modules import Modify
-from nemo_curator.modifiers import PIIRedactor
-
-# 脱敏个人身份信息（PII）
-pii_redactor = PIIRedactor(
-    supported_entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "PERSON", "LOCATION"],
-    anonymize_action="replace"  # or "redact"
-)
-
-redacted = Modify(pii_redactor)(dataset)
+```pythonfrom nemo_curator.modules import Modify
+
+from nemo_curator.modifiers import PIIRedactor
+
+
+# 脱敏个人身份信息（PII）
+
+pii_redactor = PIIRedactor(
+    supported_entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "PERSON", "LOCATION"],
+    anonymize_action="replace",  # or "redact"
+)
+
+
+redacted = Modify(pii_redactor)(dataset)
 ```
 
 ### 阶段 4：分类器过滤
 
-```python
-from nemo_curator.classifiers import QualityClassifier
-
-# 质量分类
-quality_clf = QualityClassifier(
-    model_path="nvidia/quality-classifier-deberta",
-    batch_size=256,
-    device="cuda"
-)
-
-# 过滤低质量文档
-high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
+```pythonfrom nemo_curator.classifiers import QualityClassifier
+
+
+# 质量分类
+
+quality_clf = QualityClassifier(
+    model_path="nvidia/quality-classifier-deberta", batch_size=256, device="cuda"
+)
+
+
+# 过滤低质量文档
+
+high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
 ```
 
 ## GPU 加速
@@ -201,145 +231,176 @@ high_quality = dataset.filter(lambda doc: quality_clf(doc["text"]) > 0.5)
 
 ### 多 GPU 扩展
 
-```python
-from nemo_curator import get_client
-import dask_cuda
-
-# 初始化 GPU 集群
-client = get_client(cluster_type="gpu", n_workers=8)
-
-# 使用 8 块 GPU 处理
-deduped = FuzzyDuplicates(...)(dataset)
+```pythonfrom nemo_curator import get_client
+
+import dask_cuda
+
+
+# 初始化 GPU 集群
+
+client = get_client(cluster_type="gpu", n_workers=8)
+
+
+# 使用 8 块 GPU 处理
+
+deduped = FuzzyDuplicates(...)(dataset)
 ```
 
 ## 多模态数据整理
 
 ### 图像整理
 
-```python
-from nemo_curator.image import (
-    AestheticFilter,
-    NSFWFilter,
-    CLIPEmbedder
-)
-
-# 美学评分
-aesthetic_filter = AestheticFilter(threshold=5.0)
-filtered_images = aesthetic_filter(image_dataset)
-
-# NSFW 检测
-nsfw_filter = NSFWFilter(threshold=0.9)
-safe_images = nsfw_filter(filtered_images)
-
-# 生成 CLIP embedding
-clip_embedder = CLIPEmbedder(model="openai/clip-vit-base-patch32")
-image_embeddings = clip_embedder(safe_images)
+```pythonfrom nemo_curator.image import AestheticFilter, NSFWFilter, CLIPEmbedder
+
+
+# 美学评分
+
+aesthetic_filter = AestheticFilter(threshold=5.0)
+
+filtered_images = aesthetic_filter(image_dataset)
+
+
+# NSFW 检测
+
+nsfw_filter = NSFWFilter(threshold=0.9)
+
+safe_images = nsfw_filter(filtered_images)
+
+
+# 生成 CLIP embedding
+
+clip_embedder = CLIPEmbedder(model="openai/clip-vit-base-patch32")
+
+image_embeddings = clip_embedder(safe_images)
 ```
 
 ### 视频整理
 
-```python
-from nemo_curator.video import (
-    SceneDetector,
-    ClipExtractor,
-    InternVideo2Embedder
-)
-
-# 场景检测
-scene_detector = SceneDetector(threshold=27.0)
-scenes = scene_detector(video_dataset)
-
-# 提取片段
-clip_extractor = ClipExtractor(min_duration=2.0, max_duration=10.0)
-clips = clip_extractor(scenes)
-
-# 生成 embedding
-video_embedder = InternVideo2Embedder()
-video_embeddings = video_embedder(clips)
+```pythonfrom nemo_curator.video import SceneDetector, ClipExtractor, InternVideo2Embedder
+
+
+# 场景检测
+
+scene_detector = SceneDetector(threshold=27.0)
+
+scenes = scene_detector(video_dataset)
+
+
+# 提取片段
+
+clip_extractor = ClipExtractor(min_duration=2.0, max_duration=10.0)
+
+clips = clip_extractor(scenes)
+
+
+# 生成 embedding
+
+video_embedder = InternVideo2Embedder()
+
+video_embeddings = video_embedder(clips)
 ```
 
 ### 音频整理
 
-```python
-from nemo_curator.audio import (
-    ASRInference,
-    WERFilter,
-    DurationFilter
-)
-
-# ASR 转录
-asr = ASRInference(model="nvidia/stt_en_fastconformer_hybrid_large_pc")
-transcribed = asr(audio_dataset)
-
-# 按 WER（词错误率）过滤
-wer_filter = WERFilter(max_wer=0.3)
-high_quality_audio = wer_filter(transcribed)
-
-# 时长过滤
-duration_filter = DurationFilter(min_duration=1.0, max_duration=30.0)
-filtered_audio = duration_filter(high_quality_audio)
+```pythonfrom nemo_curator.audio import ASRInference, WERFilter, DurationFilter
+
+
+# ASR 转录
+
+asr = ASRInference(model="nvidia/stt_en_fastconformer_hybrid_large_pc")
+
+transcribed = asr(audio_dataset)
+
+
+# 按 WER（词错误率）过滤
+
+wer_filter = WERFilter(max_wer=0.3)
+
+high_quality_audio = wer_filter(transcribed)
+
+
+# 时长过滤
+
+duration_filter = DurationFilter(min_duration=1.0, max_duration=30.0)
+
+filtered_audio = duration_filter(high_quality_audio)
 ```
 
 ## 常见模式
 
 ### 网络抓取数据整理（Common Crawl）
 
-```python
-from nemo_curator import ScoreFilter, Modify
-from nemo_curator.filters import *
-from nemo_curator.modules import *
-from nemo_curator.datasets import DocumentDataset
-
-# 加载 Common Crawl 数据
-dataset = DocumentDataset.read_parquet("common_crawl/*.parquet")
-
-# 流水线
-pipeline = [
-    # 1. 质量过滤
-    WordCountFilter(min_words=100, max_words=50000),
-    RepeatedLinesFilter(max_repeated_line_fraction=0.2),
-    SymbolToWordRatioFilter(max_symbol_to_word_ratio=0.3),
-    UrlRatioFilter(max_url_ratio=0.3),
-
-    # 2. 语言过滤
-    LanguageIdentificationFilter(target_languages=["en"]),
-
-    # 3. 去重
-    ExactDuplicates(id_field="id", text_field="text"),
-    FuzzyDuplicates(id_field="id", text_field="text", num_hashes=260),
-
-    # 4. PII 脱敏
-    PIIRedactor(),
-
-    # 5. NSFW 过滤
-    NSFWClassifier(threshold=0.8)
-]
-
-# 执行
-for stage in pipeline:
-    dataset = stage(dataset)
-
-# 保存
-dataset.to_parquet("curated_common_crawl/")
+```pythonfrom nemo_curator import ScoreFilter, Modify
+
+from nemo_curator.filters import *
+
+from nemo_curator.modules import *
+
+from nemo_curator.datasets import DocumentDataset
+
+
+# 加载 Common Crawl 数据
+
+dataset = DocumentDataset.read_parquet("common_crawl/*.parquet")
+
+
+# 流水线
+
+pipeline = [
+    # 1. 质量过滤
+    WordCountFilter(min_words=100, max_words=50000),
+    RepeatedLinesFilter(max_repeated_line_fraction=0.2),
+    SymbolToWordRatioFilter(max_symbol_to_word_ratio=0.3),
+    UrlRatioFilter(max_url_ratio=0.3),
+    # 2. 语言过滤
+    LanguageIdentificationFilter(target_languages=["en"]),
+    # 3. 去重
+    ExactDuplicates(id_field="id", text_field="text"),
+    FuzzyDuplicates(id_field="id", text_field="text", num_hashes=260),
+    # 4. PII 脱敏
+    PIIRedactor(),
+    # 5. NSFW 过滤
+    NSFWClassifier(threshold=0.8),
+]
+
+
+# 执行
+
+for stage in pipeline:
+    dataset = stage(dataset)
+
+
+# 保存
+
+dataset.to_parquet("curated_common_crawl/")
 ```
 
 ### 分布式处理
 
-```python
-from nemo_curator import get_client
-from dask_cuda import LocalCUDACluster
-
-# 多 GPU 集群
-cluster = LocalCUDACluster(n_workers=8)
-client = get_client(cluster=cluster)
-
-# 处理大型数据集
-dataset = DocumentDataset.read_parquet("s3://large_dataset/*.parquet")
-deduped = FuzzyDuplicates(...)(dataset)
-
-# 清理
-client.close()
-cluster.close()
+```pythonfrom nemo_curator import get_client
+
+from dask_cuda import LocalCUDACluster
+
+
+# 多 GPU 集群
+
+cluster = LocalCUDACluster(n_workers=8)
+
+client = get_client(cluster=cluster)
+
+
+# 处理大型数据集
+
+dataset = DocumentDataset.read_parquet("s3://large_dataset/*.parquet")
+
+deduped = FuzzyDuplicates(...)(dataset)
+
+
+# 清理
+
+client.close()
+
+cluster.close()
 ```
 
 ## 性能基准

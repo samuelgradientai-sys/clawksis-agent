@@ -17,7 +17,6 @@ import json
 from unittest.mock import MagicMock
 
 
-
 # ---------------------------------------------------------------------------
 # Provider surface
 # ---------------------------------------------------------------------------
@@ -113,8 +112,9 @@ class TestFalImageGenProviderGenerate:
             return json.dumps({"success": True, "image": "https://fake/image.png"})
 
         monkeypatch.setattr(image_tool, "image_generate_tool", fake_image_generate_tool)
-        monkeypatch.setattr(image_tool, "_resolve_fal_model",
-                            lambda: ("fal-ai/flux-2/klein/9b", {}))
+        monkeypatch.setattr(
+            image_tool, "_resolve_fal_model", lambda: ("fal-ai/flux-2/klein/9b", {})
+        )
 
         result = FalImageGenProvider().generate(
             "a serene mountain landscape",
@@ -144,8 +144,9 @@ class TestFalImageGenProviderGenerate:
             return json.dumps({"success": True, "image": "x"})
 
         monkeypatch.setattr(image_tool, "image_generate_tool", fake)
-        monkeypatch.setattr(image_tool, "_resolve_fal_model",
-                            lambda: ("fal-ai/flux-2/klein/9b", {}))
+        monkeypatch.setattr(
+            image_tool, "_resolve_fal_model", lambda: ("fal-ai/flux-2/klein/9b", {})
+        )
 
         FalImageGenProvider().generate("p", aspect_ratio="not-a-real-ratio")
         # ``resolve_aspect_ratio`` clamps to landscape.
@@ -162,8 +163,9 @@ class TestFalImageGenProviderGenerate:
             return json.dumps({"success": True, "image": "x"})
 
         monkeypatch.setattr(image_tool, "image_generate_tool", fake)
-        monkeypatch.setattr(image_tool, "_resolve_fal_model",
-                            lambda: ("fal-ai/flux-2/klein/9b", {}))
+        monkeypatch.setattr(
+            image_tool, "_resolve_fal_model", lambda: ("fal-ai/flux-2/klein/9b", {})
+        )
 
         FalImageGenProvider().generate(
             "p",
@@ -199,8 +201,9 @@ class TestFalImageGenProviderGenerate:
         from plugins.image_gen.fal import FalImageGenProvider
 
         monkeypatch.setattr(image_tool, "image_generate_tool", lambda **kw: "not-json")
-        monkeypatch.setattr(image_tool, "_resolve_fal_model",
-                            lambda: ("fal-ai/flux-2/klein/9b", {}))
+        monkeypatch.setattr(
+            image_tool, "_resolve_fal_model", lambda: ("fal-ai/flux-2/klein/9b", {})
+        )
 
         result = FalImageGenProvider().generate("p")
         assert result["success"] is False

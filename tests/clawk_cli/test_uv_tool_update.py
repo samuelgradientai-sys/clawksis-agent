@@ -27,7 +27,6 @@ that also has ``uv tool install clawksis-agent`` does not get misclassified.
 from __future__ import annotations
 
 
-
 import subprocess
 
 from types import SimpleNamespace
@@ -35,11 +34,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
-
 import pytest
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -60,15 +55,12 @@ import pytest
 
 # per-test changes.
 
+
 @pytest.fixture(autouse=True)
-
 def _patch_managed_uv(request):
-
     """Make managed_uv helpers follow shutil.which mocking in tests."""
 
     import shutil
-
-
 
     # resolve_uv delegates to shutil.which("uv") so that test patches
 
@@ -78,37 +70,30 @@ def _patch_managed_uv(request):
 
         return shutil.which("uv")
 
-
-
     def _fake_ensure_uv():
 
         path = shutil.which("uv")
 
         return (path, False)  # never freshly bootstrapped in tests
 
-
-
     def _fake_update_managed_uv():
 
         return None  # never actually self-update in tests
-
-
 
     def _fake_rebuild_venv(*args, **kwargs):
 
         return True  # no-op in tests
 
-
-
-    with patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv), \
-         patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv), \
-         patch("clawk_cli.managed_uv.update_managed_uv", side_effect=_fake_update_managed_uv), \
-         patch("clawk_cli.managed_uv.rebuild_venv", side_effect=_fake_rebuild_venv):
-
+    with (
+        patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv),
+        patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv),
+        patch(
+            "clawk_cli.managed_uv.update_managed_uv",
+            side_effect=_fake_update_managed_uv,
+        ),
+        patch("clawk_cli.managed_uv.rebuild_venv", side_effect=_fake_rebuild_venv),
+    ):
         yield
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -118,61 +103,42 @@ def _patch_managed_uv(request):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestIsUvToolInstall:
-
     def test_returns_true_when_sys_prefix_matches_uv_tool_layout(self):
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/home/user/.local/share/uv/tools/clawksis-agent"):
-
+        with patch.object(
+            config.sys, "prefix", "/home/user/.local/share/uv/tools/clawksis-agent"
+        ):
             assert config.is_uv_tool_install() is True
 
-
-
     def test_returns_true_when_sys_executable_matches_uv_tool_layout(self):
-
         """Some uv-tool layouts surface the marker on ``sys.executable`` (bin/python)."""
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/some/unrelated/venv"), \
-             patch.object(
-
-                 config.sys,
-
-                 "executable",
-
-                 "/home/user/.local/share/uv/tools/clawksis-agent/bin/python",
-
-             ):
-
+        with (
+            patch.object(config.sys, "prefix", "/some/unrelated/venv"),
+            patch.object(
+                config.sys,
+                "executable",
+                "/home/user/.local/share/uv/tools/clawksis-agent/bin/python",
+            ),
+        ):
             assert config.is_uv_tool_install() is True
-
-
 
     def test_returns_false_when_neither_prefix_nor_executable_matches(self):
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/some/unrelated/venv"), \
-             patch.object(config.sys, "executable", "/usr/bin/python3"):
-
+        with (
+            patch.object(config.sys, "prefix", "/some/unrelated/venv"),
+            patch.object(config.sys, "executable", "/usr/bin/python3"),
+        ):
             assert config.is_uv_tool_install() is False
 
-
-
     def test_does_not_consult_uv_tool_list(self):
-
         """Detection must NOT shell out: ``uv tool list`` would false-positive
 
         when the active install is pip/venv but the machine also has
@@ -185,20 +151,16 @@ class TestIsUvToolInstall:
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/some/unrelated/venv"), \
-             patch.object(config.sys, "executable", "/usr/bin/python3"), \
-             patch("subprocess.run") as mock_run:
-
+        with (
+            patch.object(config.sys, "prefix", "/some/unrelated/venv"),
+            patch.object(config.sys, "executable", "/usr/bin/python3"),
+            patch("subprocess.run") as mock_run,
+        ):
             assert config.is_uv_tool_install() is False
 
             mock_run.assert_not_called()
 
-
-
     def test_case_insensitive_match(self):
-
         """Match must be case-insensitive — Windows paths preserve case
 
         (e.g. ``...AppData\\Local\\UV\\Tools\\clawksis-agent``) and a case-sensitive
@@ -209,31 +171,20 @@ class TestIsUvToolInstall:
 
         from clawk_cli import config
 
-
-
         with patch.object(
-
             config.sys, "prefix", "/HOME/USER/.local/share/UV/Tools/clawksis-agent"
-
         ):
-
             assert config.is_uv_tool_install() is True
-
-
 
     def test_handles_empty_executable(self):
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/some/unrelated/venv"), \
-             patch.object(config.sys, "executable", ""):
-
+        with (
+            patch.object(config.sys, "prefix", "/some/unrelated/venv"),
+            patch.object(config.sys, "executable", ""),
+        ):
             assert config.is_uv_tool_install() is False
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -243,79 +194,60 @@ class TestIsUvToolInstall:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestRecommendedUpdateCommandForUvTool:
-
     def test_uv_tool_install_recommends_uv_tool_upgrade(self):
 
         from clawk_cli import config
 
-
-
-        with patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch.object(config, "is_uv_tool_install", return_value=True):
-
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch.object(config, "is_uv_tool_install", return_value=True),
+        ):
             cmd = config.recommended_update_command_for_method("pip")
 
             assert cmd == "uv tool upgrade clawksis-agent"
 
-
-
     def test_uv_tool_install_recommends_uv_tool_upgrade_even_without_uv_on_path(self):
-
         """Recommendation reflects the *install method*, not whether ``uv`` is
 
         currently on PATH — the user needs to know the right command to run."""
 
         from clawk_cli import config
 
-
-
-        with patch("shutil.which", return_value=None), \
-             patch.object(config, "is_uv_tool_install", return_value=True):
-
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(config, "is_uv_tool_install", return_value=True),
+        ):
             cmd = config.recommended_update_command_for_method("pip")
 
             assert cmd == "uv tool upgrade clawksis-agent"
 
-
-
     def test_uv_pip_install_keeps_legacy_recommendation(self):
-
         """Existing behavior: uv is on PATH but Clawksis is a regular pip install."""
 
         from clawk_cli import config
 
-
-
-        with patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch.object(config, "is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch.object(config, "is_uv_tool_install", return_value=False),
+        ):
             cmd = config.recommended_update_command_for_method("pip")
 
             assert cmd == "uv pip install --upgrade clawksis-agent"
-
-
 
     def test_no_uv_falls_back_to_plain_pip(self):
 
         from clawk_cli import config
 
-
-
-        with patch("shutil.which", return_value=None), \
-             patch.object(config, "is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(config, "is_uv_tool_install", return_value=False),
+        ):
             cmd = config.recommended_update_command_for_method("pip")
 
             assert cmd == "pip install --upgrade clawksis-agent"
 
-
-
     def test_recommendation_does_not_spawn_subprocess(self):
-
         """Computing the recommendation string must be cheap — no ``uv tool list``
 
         spawn. Copilot review on PR #29703 flagged the prior subprocess hop
@@ -326,21 +258,17 @@ class TestRecommendedUpdateCommandForUvTool:
 
         from clawk_cli import config
 
-
-
-        with patch.object(config.sys, "prefix", "/some/unrelated/venv"), \
-             patch.object(config.sys, "executable", "/usr/bin/python3"), \
-             patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch("subprocess.run") as mock_run:
-
+        with (
+            patch.object(config.sys, "prefix", "/some/unrelated/venv"),
+            patch.object(config.sys, "executable", "/usr/bin/python3"),
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch("subprocess.run") as mock_run,
+        ):
             cmd = config.recommended_update_command_for_method("pip")
 
             mock_run.assert_not_called()
 
             assert cmd == "uv pip install --upgrade clawksis-agent"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -350,117 +278,93 @@ class TestRecommendedUpdateCommandForUvTool:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCmdUpdatePipUsesUvTool:
-
     @patch("subprocess.run")
-
     def test_runs_uv_tool_upgrade_when_uv_tool_install(self, mock_run):
-
         """The actual subprocess invocation must switch to ``uv tool upgrade``."""
 
         from clawk_cli.main import _cmd_update_pip
 
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["uv"], 0, stdout="", stderr=""
+        )
 
-
-        mock_run.return_value = subprocess.CompletedProcess(["uv"], 0, stdout="", stderr="")
-
-        with patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=True):
-
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=True),
+        ):
             _cmd_update_pip(SimpleNamespace())
 
-
-
-        assert mock_run.call_args[0][0] == ["/usr/local/bin/uv", "tool", "upgrade", "clawksis-agent"]
-
-
+        assert mock_run.call_args[0][0] == [
+            "/usr/local/bin/uv",
+            "tool",
+            "upgrade",
+            "clawksis-agent",
+        ]
 
     @patch("subprocess.run")
-
     def test_runs_uv_pip_install_when_not_uv_tool(self, mock_run):
-
         """Existing behavior preserved when uv is present but Clawksis isn't a tool install."""
 
         from clawk_cli.main import _cmd_update_pip
 
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["uv"], 0, stdout="", stderr=""
+        )
 
-
-        mock_run.return_value = subprocess.CompletedProcess(["uv"], 0, stdout="", stderr="")
-
-        with patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             _cmd_update_pip(SimpleNamespace())
 
-
-
         assert mock_run.call_args[0][0] == [
-
             "/usr/local/bin/uv",
-
             "pip",
-
             "install",
-
             "--upgrade",
-
             "clawksis-agent",
-
         ]
 
-
-
     @patch("subprocess.run")
-
     def test_falls_back_to_pip_when_no_uv(self, mock_run):
 
         from clawk_cli.main import _cmd_update_pip
 
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["pip"], 0, stdout="", stderr=""
+        )
 
-
-        mock_run.return_value = subprocess.CompletedProcess(["pip"], 0, stdout="", stderr="")
-
-        with patch("shutil.which", return_value=None), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value=None),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             _cmd_update_pip(SimpleNamespace())
-
-
 
         cmd = mock_run.call_args[0][0]
 
         assert cmd[1:] == ["-m", "pip", "install", "--upgrade", "clawksis-agent"]
 
-
-
     @patch("subprocess.run")
-
     def test_exits_nonzero_on_subprocess_failure(self, mock_run):
 
         from clawk_cli.main import _cmd_update_pip
 
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["uv"], 1, stdout="", stderr=""
+        )
 
-
-        mock_run.return_value = subprocess.CompletedProcess(["uv"], 1, stdout="", stderr="")
-
-        with patch("shutil.which", return_value="/usr/local/bin/uv"), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=True):
-
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/uv"),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=True),
+        ):
             with pytest.raises(SystemExit) as exc_info:
-
                 _cmd_update_pip(SimpleNamespace())
 
         assert exc_info.value.code == 1
 
-
-
     @patch("subprocess.run")
-
     def test_uv_tool_install_without_uv_on_path_exits_with_hint(self, mock_run):
-
         """If the running interpreter looks like a uv-tool install but ``uv`` is
 
         somehow missing from PATH, surface a clear hint instead of silently
@@ -471,21 +375,16 @@ class TestCmdUpdatePipUsesUvTool:
 
         from clawk_cli.main import _cmd_update_pip
 
-
-
-        with patch("shutil.which", return_value=None), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=True):
-
+        with (
+            patch("shutil.which", return_value=None),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=True),
+        ):
             with pytest.raises(SystemExit) as exc_info:
-
                 _cmd_update_pip(SimpleNamespace())
 
         assert exc_info.value.code == 1
 
         mock_run.assert_not_called()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -497,11 +396,7 @@ class TestCmdUpdatePipUsesUvTool:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCmdUpdatePipInstallLayouts:
-
     """The uv pip path must adapt to where the running interpreter lives:
 
 
@@ -514,64 +409,53 @@ class TestCmdUpdatePipInstallLayouts:
 
     """
 
-
-
     @patch("subprocess.run")
-
     def test_pipx_managed_uses_pipx_upgrade(self, mock_run, monkeypatch):
 
         from clawk_cli import main as hm
 
-
-
         mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
 
-        monkeypatch.setattr(hm.sys, "prefix", "/home/u/.local/pipx/venvs/clawksis-agent")
+        monkeypatch.setattr(
+            hm.sys, "prefix", "/home/u/.local/pipx/venvs/clawksis-agent"
+        )
 
         monkeypatch.setattr(hm.sys, "base_prefix", "/usr")
-
-
 
         def _which(name):
 
             return {"uv": "/usr/bin/uv", "pipx": "/usr/bin/pipx"}.get(name)
 
-
-
-        with patch("shutil.which", side_effect=_which), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", side_effect=_which),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             hm._cmd_update_pip(SimpleNamespace())
 
-
-
-        assert mock_run.call_args[0][0] == ["/usr/bin/pipx", "upgrade", "clawksis-agent"]
+        assert mock_run.call_args[0][0] == [
+            "/usr/bin/pipx",
+            "upgrade",
+            "clawksis-agent",
+        ]
 
         # pipx upgrade ignores VIRTUAL_ENV; we must not set it.
 
         assert "env" not in mock_run.call_args.kwargs
 
-
-
     @patch("subprocess.run")
-
     def test_pipx_layout_without_pipx_binary_treated_as_venv(
-
         self, mock_run, monkeypatch
-
     ):
 
         from clawk_cli import main as hm
 
-
-
         mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
 
-        monkeypatch.setattr(hm.sys, "prefix", "/home/u/.local/pipx/venvs/clawksis-agent")
+        monkeypatch.setattr(
+            hm.sys, "prefix", "/home/u/.local/pipx/venvs/clawksis-agent"
+        )
 
         monkeypatch.setattr(hm.sys, "base_prefix", "/usr")
-
-
 
         # pipx layout detected via prefix, but pipx binary missing on PATH.
 
@@ -579,34 +463,30 @@ class TestCmdUpdatePipInstallLayouts:
 
             return "/usr/bin/uv" if name == "uv" else None
 
-
-
-        with patch("shutil.which", side_effect=_which), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", side_effect=_which),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             hm._cmd_update_pip(SimpleNamespace())
-
-
 
         # prefix != base_prefix, so this is treated as a venv -> overlay, no --system.
 
         assert mock_run.call_args[0][0] == [
-
-            "/usr/bin/uv", "pip", "install", "--upgrade", "clawksis-agent",
-
+            "/usr/bin/uv",
+            "pip",
+            "install",
+            "--upgrade",
+            "clawksis-agent",
         ]
 
-        assert mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"].endswith("clawksis-agent")
-
-
+        assert mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"].endswith(
+            "clawksis-agent"
+        )
 
     @patch("subprocess.run")
-
     def test_bare_pip_outside_venv_adds_system(self, mock_run, monkeypatch):
 
         from clawk_cli import main as hm
-
-
 
         mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
 
@@ -616,32 +496,27 @@ class TestCmdUpdatePipInstallLayouts:
 
         monkeypatch.setattr(hm.sys, "base_prefix", "/usr")
 
-
-
-        with patch("shutil.which", return_value="/usr/bin/uv"), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value="/usr/bin/uv"),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             hm._cmd_update_pip(SimpleNamespace())
 
-
-
         assert mock_run.call_args[0][0] == [
-
-            "/usr/bin/uv", "pip", "install", "--system", "--upgrade", "clawksis-agent",
-
+            "/usr/bin/uv",
+            "pip",
+            "install",
+            "--system",
+            "--upgrade",
+            "clawksis-agent",
         ]
 
         assert "env" not in mock_run.call_args.kwargs
 
-
-
     @patch("subprocess.run")
-
     def test_venv_exports_virtualenv_and_omits_system(self, mock_run, monkeypatch):
 
         from clawk_cli import main as hm
-
-
 
         mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
 
@@ -651,14 +526,11 @@ class TestCmdUpdatePipInstallLayouts:
 
         monkeypatch.setattr(hm.sys, "base_prefix", "/usr")
 
-
-
-        with patch("shutil.which", return_value="/usr/bin/uv"), \
-             patch("clawk_cli.config.is_uv_tool_install", return_value=False):
-
+        with (
+            patch("shutil.which", return_value="/usr/bin/uv"),
+            patch("clawk_cli.config.is_uv_tool_install", return_value=False),
+        ):
             hm._cmd_update_pip(SimpleNamespace())
-
-
 
         cmd = mock_run.call_args[0][0]
 
@@ -666,5 +538,7 @@ class TestCmdUpdatePipInstallLayouts:
 
         assert cmd == ["/usr/bin/uv", "pip", "install", "--upgrade", "clawksis-agent"]
 
-        assert mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"] == "/home/u/.clawksis/clawksis-agent/venv"
-
+        assert (
+            mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"]
+            == "/home/u/.clawksis/clawksis-agent/venv"
+        )

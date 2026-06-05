@@ -213,15 +213,14 @@ If aliases are missing here, the provider may authenticate correctly but still f
 
 Add a branch that returns a dict with at least:
 
-```python
-{
-    "provider": "your-provider",
-    "api_mode": "chat_completions",  # or your native mode
-    "base_url": "https://...",
-    "api_key": "...",
-    "source": "env|portal|auth-store|explicit",
-    "requested_provider": requested_provider,
-}
+```python{
+    "provider": "your-provider",
+    "api_mode": "chat_completions",  # or your native mode
+    "base_url": "https://...",
+    "api_key": "...",
+    "source": "env|portal|auth-store|explicit",
+    "requested_provider": requested_provider,
+}
 ```
 
 If the provider is OpenAI-compatible, `api_mode` should usually stay `chat_completions`.

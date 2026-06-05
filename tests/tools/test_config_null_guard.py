@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 # ── TTS tool ──────────────────────────────────────────────────────────────
 
+
 class TestTTSProviderNullGuard:
     """tools/tts_tool.py — _get_provider()"""
 
@@ -36,6 +37,7 @@ class TestTTSProviderNullGuard:
 
 # ── Web tools ─────────────────────────────────────────────────────────────
 
+
 class TestWebBackendNullGuard:
     """tools/web_tools.py — _get_backend()"""
 
@@ -57,6 +59,7 @@ class TestWebBackendNullGuard:
 
 
 # ── MCP tool ──────────────────────────────────────────────────────────────
+
 
 class TestMCPAuthNullGuard:
     """tools/mcp_tool.py — MCPServerTask.__init__() auth config line"""
@@ -80,6 +83,7 @@ class TestMCPAuthNullGuard:
 
 
 # ── Trajectory compressor ─────────────────────────────────────────────────
+
 
 class TestTrajectoryCompressorNullGuard:
     """trajectory_compressor.py — _detect_provider() and config loading"""

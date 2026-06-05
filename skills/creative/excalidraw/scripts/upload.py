@@ -69,8 +69,8 @@ def upload(excalidraw_json: str) -> str:
     compressed = zlib.compress(inner_payload)
 
     # 3. AES-GCM 128-bit encrypt
-    raw_key = os.urandom(16)   # 128-bit key
-    iv = os.urandom(12)        # 12-byte nonce
+    raw_key = os.urandom(16)  # 128-bit key
+    iv = os.urandom(12)  # 12-byte nonce
     aesgcm = AESGCM(raw_key)
     encrypted = aesgcm.encrypt(iv, compressed, None)
 

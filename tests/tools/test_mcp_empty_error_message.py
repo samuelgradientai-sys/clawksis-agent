@@ -7,8 +7,6 @@ nothing after the colon, making debugging impossible.
 Fix: ``_exc_str()`` falls back to ``repr(exc)`` when ``str(exc)`` is empty.
 """
 
-
-
 from tools.mcp_tool import _exc_str, _sanitize_error
 
 

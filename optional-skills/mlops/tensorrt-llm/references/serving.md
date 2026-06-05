@@ -39,27 +39,25 @@ trtllm-serve meta-llama/Meta-Llama-3-70B \
 ```python
 from tensorrt_llm import LLM
 
+
 class LLMService:
     def __init__(self):
-        self.llm = LLM(
-            model="meta-llama/Meta-Llama-3-8B",
-            dtype="fp8"
-        )
+        self.llm = LLM(model="meta-llama/Meta-Llama-3-8B", dtype="fp8")
 
     def generate(self, prompt, max_tokens=100):
         from tensorrt_llm import SamplingParams
 
-        params = SamplingParams(
-            max_tokens=max_tokens,
-            temperature=0.7
-        )
+        params = SamplingParams(max_tokens=max_tokens, temperature=0.7)
         outputs = self.llm.generate([prompt], params)
         return outputs[0].text
 
+
 # Use in FastAPI, Flask, etc
 from fastapi import FastAPI
+
 app = FastAPI()
 service = LLMService()
+
 
 @app.post("/generate")
 def generate(prompt: str):

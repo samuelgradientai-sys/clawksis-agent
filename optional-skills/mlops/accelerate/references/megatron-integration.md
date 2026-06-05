@@ -196,10 +196,10 @@ from accelerate.utils import MegatronLMPlugin
 
 # Configure Megatron
 megatron_plugin = MegatronLMPlugin(
-    tp_degree=2,              # Tensor parallelism degree
-    pp_degree=2,              # Pipeline parallelism degree
-    num_micro_batches=4,      # Micro-batches for pipeline
-    gradient_clipping=1.0,    # Gradient clipping value
+    tp_degree=2,  # Tensor parallelism degree
+    pp_degree=2,  # Pipeline parallelism degree
+    num_micro_batches=4,  # Micro-batches for pipeline
+    gradient_clipping=1.0,  # Gradient clipping value
     sequence_parallelism=False,  # Enable sequence parallelism
     recompute_activations=True,  # Activation checkpointing
     use_distributed_optimizer=True,  # Distributed optimizer
@@ -207,10 +207,7 @@ megatron_plugin = MegatronLMPlugin(
 )
 
 # Initialize accelerator
-accelerator = Accelerator(
-    mixed_precision='bf16',
-    megatron_lm_plugin=megatron_plugin
-)
+accelerator = Accelerator(mixed_precision="bf16", megatron_lm_plugin=megatron_plugin)
 
 # Prepare model and optimizer
 model, optimizer, train_dataloader = accelerator.prepare(
@@ -234,6 +231,7 @@ from accelerate import Accelerator
 from accelerate.utils import MegatronLMPlugin
 from transformers import GPT2Config, GPT2LMHeadModel
 
+
 def main():
     # Megatron configuration
     megatron_plugin = MegatronLMPlugin(
@@ -244,9 +242,9 @@ def main():
     )
 
     accelerator = Accelerator(
-        mixed_precision='bf16',
+        mixed_precision="bf16",
         gradient_accumulation_steps=8,
-        megatron_lm_plugin=megatron_plugin
+        megatron_lm_plugin=megatron_plugin,
     )
 
     # Model
@@ -261,9 +259,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=6e-4)
 
     # Prepare
-    model, optimizer, train_loader = accelerator.prepare(
-        model, optimizer, train_loader
-    )
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
 
     # Training loop
     for epoch in range(num_epochs):
@@ -277,9 +273,10 @@ def main():
 
         # Save checkpoint
         accelerator.wait_for_everyone()
-        accelerator.save_state(f'checkpoint-epoch-{epoch}')
+        accelerator.save_state(f"checkpoint-epoch-{epoch}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
 ```
 
@@ -311,10 +308,10 @@ accelerate launch --multi_gpu --num_processes 16 \
 
 ```python
 megatron_plugin = MegatronLMPlugin(
-    recompute_activations=True,      # Enable checkpointing
-    checkpoint_num_layers=1,         # Checkpoint every N layers
+    recompute_activations=True,  # Enable checkpointing
+    checkpoint_num_layers=1,  # Checkpoint every N layers
     distribute_checkpointed_activations=True,  # Distribute across TP
-    partition_activations=True,      # Partition in PP
+    partition_activations=True,  # Partition in PP
     check_for_nan_in_loss_and_grad=True,  # Stability check
 )
 ```
@@ -415,7 +412,7 @@ nvidia-smi topo -m
 
 ```python
 # Save full model state
-accelerator.save_state('checkpoint-1000')
+accelerator.save_state("checkpoint-1000")
 
 # Megatron saves separate files per rank
 # checkpoint-1000/
@@ -431,7 +428,7 @@ accelerator.save_state('checkpoint-1000')
 
 ```python
 # Resume training
-accelerator.load_state('checkpoint-1000')
+accelerator.load_state("checkpoint-1000")
 
 # Automatically loads correct shard per rank
 ```
@@ -462,13 +459,13 @@ megatron_plugin = MegatronLMPlugin(
 **Check 1**: Pipeline bubbles (PP too high)
 ```python
 # Reduce PP, increase TP
-tp_degree=4  # Increase
-pp_degree=2  # Decrease
+tp_degree = 4  # Increase
+pp_degree = 2  # Decrease
 ```
 
 **Check 2**: Micro-batch size too small
 ```python
-num_micro_batches=8  # Increase
+num_micro_batches = 8  # Increase
 ```
 
 ### Issue: NVLink Not Detected

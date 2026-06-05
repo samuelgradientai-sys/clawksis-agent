@@ -15,6 +15,7 @@ from gateway.config import Platform, HomeChannel
 # Low-level helpers
 # ---------------------------------------------------------------------------
 
+
 class TestHashHelpers:
     def test_hash_id_deterministic(self):
         assert _hash_id("12345") == _hash_id("12345")
@@ -42,6 +43,7 @@ class TestHashHelpers:
 # ---------------------------------------------------------------------------
 # Integration: build_session_context_prompt
 # ---------------------------------------------------------------------------
+
 
 def _make_context(
     user_id="user-123",

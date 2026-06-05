@@ -38,49 +38,65 @@ plugins/context_engine/lcm/
 
 Your engine must implement these **required** methods:
 
-```python
-from agent.context_engine import ContextEngine
-
-class LCMEngine(ContextEngine):
-
-    @property
-    def name(self) -> str:
-        """Short identifier, e.g. 'lcm'. Must match config.yaml value."""
-        return "lcm"
-
-    def update_from_response(self, usage: dict) -> None:
-        """Called after every LLM call with the usage dict.
-
-        Update self.last_prompt_tokens, self.last_completion_tokens,
-        self.last_total_tokens from the response.
-        """
-
-    def should_compress(self, prompt_tokens: int = None) -> bool:
-        """Return True if compaction should fire this turn."""
-
-    def compress(self, messages: list, current_tokens: int = None,
-                 focus_topic: str = None) -> list:
-        """Compact the message list and return a new (possibly shorter) list.
-
-        The returned list must be a valid OpenAI-format message sequence.
-
-        ``focus_topic`` is an optional topic string from manual
-        ``/compress <focus>``; engines that support guided compression should
-        prioritise preserving information related to it, others may ignore it.
-        """
+```pythonfrom agent.context_engine import ContextEngine
+
+
+class LCMEngine(ContextEngine):
+    @property
+    def name(self) -> str:
+        """Short identifier, e.g. 'lcm'. Must match config.yaml value."""
+
+        return "lcm"
+
+    def update_from_response(self, usage: dict) -> None:
+        """Called after every LLM call with the usage dict.
+
+
+
+        Update self.last_prompt_tokens, self.last_completion_tokens,
+
+        self.last_total_tokens from the response.
+
+        """
+
+    def should_compress(self, prompt_tokens: int = None) -> bool:
+        """Return True if compaction should fire this turn."""
+
+    def compress(
+        self, messages: list, current_tokens: int = None, focus_topic: str = None
+    ) -> list:
+        """Compact the message list and return a new (possibly shorter) list.
+
+
+
+        The returned list must be a valid OpenAI-format message sequence.
+
+
+
+        ``focus_topic`` is an optional topic string from manual
+
+        ``/compress <focus>``; engines that support guided compression should
+
+        prioritise preserving information related to it, others may ignore it.
+
+        """
 ```
 
 ### Class attributes your engine must maintain
 
 The agent reads these directly for display and logging:
 
-```python
-last_prompt_tokens: int = 0
-last_completion_tokens: int = 0
-last_total_tokens: int = 0
-threshold_tokens: int = 0        # when compression triggers
-context_length: int = 0          # model's full context window
-compression_count: int = 0       # how many times compress() has run
+```pythonlast_prompt_tokens: int = 0
+
+last_completion_tokens: int = 0
+
+last_total_tokens: int = 0
+
+threshold_tokens: int = 0  # when compression triggers
+
+context_length: int = 0  # model's full context window
+
+compression_count: int = 0  # how many times compress() has run
 ```
 
 ### Optional methods
@@ -102,25 +118,31 @@ These have sensible defaults in the ABC. Override as needed:
 
 Context engines can expose tools the agent calls directly. Return schemas from `get_tool_schemas()` and handle calls in `handle_tool_call()`:
 
-```python
-def get_tool_schemas(self):
-    return [{
-        "name": "lcm_grep",
-        "description": "Search the context knowledge graph",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"}
-            },
-            "required": ["query"],
-        },
-    }]
-
-def handle_tool_call(self, name, args, **kwargs):
-    if name == "lcm_grep":
-        results = self._search_dag(args["query"])
-        return json.dumps({"results": results})
-    return json.dumps({"error": f"Unknown tool: {name}"})
+```pythondef get_tool_schemas(self):
+
+    return [
+        {
+            "name": "lcm_grep",
+            "description": "Search the context knowledge graph",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"],
+            },
+        }
+    ]
+
+
+def handle_tool_call(self, name, args, **kwargs):
+
+    if name == "lcm_grep":
+        results = self._search_dag(args["query"])
+
+        return json.dumps({"results": results})
+
+    return json.dumps({"error": f"Unknown tool: {name}"})
 ```
 
 Engine tools are injected into the agent's tool list at startup and dispatched automatically — no registry registration needed.
@@ -135,10 +157,11 @@ Place your engine in `plugins/context_engine/<name>/`. The `__init__.py` must ex
 
 A general plugin can also register a context engine:
 
-```python
-def register(ctx):
-    engine = LCMEngine(context_length=200000)
-    ctx.register_context_engine(engine)
+```pythondef register(ctx):
+
+    engine = LCMEngine(context_length=200000)
+
+    ctx.register_context_engine(engine)
 ```
 
 Only one engine can be registered. A second plugin attempting to register is rejected with a warning.
@@ -169,20 +192,29 @@ The `compression` config block (`compression.threshold`, `compression.protect_la
 
 ## Testing
 
-```python
-from agent.context_engine import ContextEngine
-
-def test_engine_satisfies_abc():
-    engine = YourEngine(context_length=200000)
-    assert isinstance(engine, ContextEngine)
-    assert engine.name == "your-name"
-
-def test_compress_returns_valid_messages():
-    engine = YourEngine(context_length=200000)
-    msgs = [{"role": "user", "content": "hello"}]
-    result = engine.compress(msgs)
-    assert isinstance(result, list)
-    assert all("role" in m for m in result)
+```pythonfrom agent.context_engine import ContextEngine
+
+
+def test_engine_satisfies_abc():
+
+    engine = YourEngine(context_length=200000)
+
+    assert isinstance(engine, ContextEngine)
+
+    assert engine.name == "your-name"
+
+
+def test_compress_returns_valid_messages():
+
+    engine = YourEngine(context_length=200000)
+
+    msgs = [{"role": "user", "content": "hello"}]
+
+    result = engine.compress(msgs)
+
+    assert isinstance(result, list)
+
+    assert all("role" in m for m in result)
 ```
 
 See `tests/agent/test_context_engine.py` for the full ABC contract test suite.

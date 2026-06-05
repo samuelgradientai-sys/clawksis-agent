@@ -17,7 +17,9 @@ def _channel_is_allowed(channel_id: str, allowed_channels_raw: str) -> bool:
     """Replicate the channel-allow-list check from discord.py on_message."""
     if not allowed_channels_raw:
         return True
-    allowed_channels = {ch.strip() for ch in allowed_channels_raw.split(",") if ch.strip()}
+    allowed_channels = {
+        ch.strip() for ch in allowed_channels_raw.split(",") if ch.strip()
+    }
     if "*" in allowed_channels:
         return True
     return bool({channel_id} & allowed_channels)
@@ -33,9 +35,7 @@ def _channel_is_ignored(channel_id: str, ignored_channels_raw: str) -> bool:
 
 def _channel_is_free_response(channel_id: str, free_channels_raw: str) -> bool:
     """Replicate the free-response-channel check from discord.py on_message."""
-    free_channels = {
-        ch.strip() for ch in free_channels_raw.split(",") if ch.strip()
-    }
+    free_channels = {ch.strip() for ch in free_channels_raw.split(",") if ch.strip()}
     return "*" in free_channels or bool({channel_id} & free_channels)
 
 

@@ -762,38 +762,43 @@ The custom autograd functions and Triton kernels are designed to work together. 
 **Examples:**
 
 Example 1 (python):
-```python
-ORIGINAL_QKV_CODE = """
-    query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-    key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-    value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-""".lstrip(
-    "\n"
-)
-
-ORIGINAL_O_CODE = """
-    attn_output = self.o_proj(attn_output)
-""".lstrip(
-    "\n"
-)
+```pythonORIGINAL_QKV_CODE = """
+
+    query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+    key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+    value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+""".lstrip("\n")
+
+
+ORIGINAL_O_CODE = """
+
+    attn_output = self.o_proj(attn_output)
+
+""".lstrip("\n")
 ```
 
 Example 2 (python):
-```python
-PATCHED_QKV_CODE = """
-    query_states, key_states, value_states = self.apply_qkv(hidden_states)
-    query_states = query_states.view(hidden_shape).transpose(1, 2)
-    key_states = key_states.view(hidden_shape).transpose(1, 2)
-    value_states = value_states.view(hidden_shape).transpose(1, 2)
-""".lstrip(
-    "\n"
-)
-
-PATCHED_O_CODE = """
-    attn_output = self.apply_o(attn_output)
-""".lstrip(
-    "\n"
-)
+```pythonPATCHED_QKV_CODE = """
+
+    query_states, key_states, value_states = self.apply_qkv(hidden_states)
+
+    query_states = query_states.view(hidden_shape).transpose(1, 2)
+
+    key_states = key_states.view(hidden_shape).transpose(1, 2)
+
+    value_states = value_states.view(hidden_shape).transpose(1, 2)
+
+""".lstrip("\n")
+
+
+PATCHED_O_CODE = """
+
+    attn_output = self.apply_o(attn_output)
+
+""".lstrip("\n")
 ```
 
 Example 3 (yaml):
@@ -1123,10 +1128,10 @@ datasets:
 ```
 
 Example 3 (python):
-```python
-from datasets import load_dataset
-
-dataset = load_dataset("json", data_files="data.json")
+```pythonfrom datasets import load_dataset
+
+
+dataset = load_dataset("json", data_files="data.json")
 ```
 
 Example 4 (yaml):

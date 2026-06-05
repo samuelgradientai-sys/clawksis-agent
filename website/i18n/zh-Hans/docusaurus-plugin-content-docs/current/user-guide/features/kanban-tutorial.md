@@ -63,25 +63,33 @@ clawk kanban create "Write auth integration tests" \
 
 在下一次 dispatcher tick 时（默认 60 秒，或点击 **Nudge dispatcher** 立即触发），`backend-dev` profile 会以 `CLAWK_KANBAN_TASK=$SCHEMA` 作为环境变量生成一个 worker。以下是该 worker 在 agent 内部的工具调用循环：
 
-```python
-# worker tool calls — NOT commands you run
-kanban_show()
-# → 返回 title、body、worker_context、parents、prior attempts、comments
-
-# （worker 读取 worker_context，使用终端/文件工具设计 schema，
-#   编写迁移脚本，运行自身检查，提交——真正的工作在这里发生）
-
-kanban_heartbeat(note="schema drafted, writing migrations now")
-
-kanban_complete(
-    summary="users(id, email, pw_hash), sessions(id, user_id, jti, expires_at); "
-            "refresh tokens stored as sessions with type='refresh'",
-    metadata={
-        "changed_files": ["migrations/001_users.sql", "migrations/002_sessions.sql"],
-        "decisions": ["bcrypt for hashing", "JWT for session tokens",
-                      "7-day refresh, 15-min access"],
-    },
-)
+```python# worker tool calls — NOT commands you run
+
+kanban_show()
+
+# → 返回 title、body、worker_context、parents、prior attempts、comments
+
+
+# （worker 读取 worker_context，使用终端/文件工具设计 schema，
+
+#   编写迁移脚本，运行自身检查，提交——真正的工作在这里发生）
+
+
+kanban_heartbeat(note="schema drafted, writing migrations now")
+
+
+kanban_complete(
+    summary="users(id, email, pw_hash), sessions(id, user_id, jti, expires_at); "
+    "refresh tokens stored as sessions with type='refresh'",
+    metadata={
+        "changed_files": ["migrations/001_users.sql", "migrations/002_sessions.sql"],
+        "decisions": [
+            "bcrypt for hashing",
+            "JWT for session tokens",
+            "7-day refresh, 15-min access",
+        ],
+    },
+)
 ```
 
 `kanban_show` 默认将 `task_id` 设为 `$CLAWK_KANBAN_TASK`，因此 worker 无需知道自己的 id。`kanban_complete` 将 summary 和 metadata 写入当前 `task_runs` 行，关闭该 run，并将任务转换为 `done`——全部通过 `kanban_db` 以原子方式完成。
@@ -152,31 +160,43 @@ dashboard 视图，按 `auth-project` 筛选：
 
 最有趣的是实现任务，因为它经历了阻塞和重试。以下是完整的三 agent 协作流程，以每个 worker 模型发出的工具调用形式展示：
 
-```python
-# --- PM worker 在 $SPEC 上生成并编写验收标准 ---
-# worker tool calls
-kanban_show()
-kanban_complete(
-    summary="spec approved; POST /forgot-password sends email, "
-            "GET /reset/:token renders form, POST /reset applies new password",
-    metadata={"acceptance": [
-        "expired token returns 410",
-        "reused last-3 password returns 400 with message",
-        "successful reset invalidates all active sessions",
-    ]},
-)
-# → $SPEC 完成；$IMPL 自动从 todo 提升为 ready
-
-# --- 工程师 worker 在 $IMPL 上生成（第一次尝试）---
-# worker tool calls
-kanban_show()   # 在 worker_context 中读取 $SPEC 的 summary 和 acceptance metadata
-# （工程师编写代码，运行测试，开启 PR）
-# 审查者反馈到来——工程师认为问题有效并阻塞任务
-kanban_block(
-    reason="Review: password strength check missing, reset link isn't "
-           "single-use (can be replayed within 30min)",
-)
-# → $IMPL 转换为 blocked；run 1 以 outcome='blocked' 关闭
+```python# --- PM worker 在 $SPEC 上生成并编写验收标准 ---
+
+# worker tool calls
+
+kanban_show()
+
+kanban_complete(
+    summary="spec approved; POST /forgot-password sends email, "
+    "GET /reset/:token renders form, POST /reset applies new password",
+    metadata={
+        "acceptance": [
+            "expired token returns 410",
+            "reused last-3 password returns 400 with message",
+            "successful reset invalidates all active sessions",
+        ]
+    },
+)
+
+# → $SPEC 完成；$IMPL 自动从 todo 提升为 ready
+
+
+# --- 工程师 worker 在 $IMPL 上生成（第一次尝试）---
+
+# worker tool calls
+
+kanban_show()  # 在 worker_context 中读取 $SPEC 的 summary 和 acceptance metadata
+
+# （工程师编写代码，运行测试，开启 PR）
+
+# 审查者反馈到来——工程师认为问题有效并阻塞任务
+
+kanban_block(
+    reason="Review: password strength check missing, reset link isn't "
+    "single-use (can be replayed within 30min)",
+)
+
+# → $IMPL 转换为 blocked；run 1 以 outcome='blocked' 关闭
 ```
 
 现在你（人类，或单独的 reviewer profile）读取阻塞原因，判断修复方向明确，从 dashboard 的"Unblock"按钮解除阻塞——或通过 CLI/斜杠命令：
@@ -188,26 +208,31 @@ clawk kanban unblock $IMPL
 
 dispatcher 将 `$IMPL` 提升回 `ready`，并在下一次 tick 时重新生成 `backend-dev` worker。这第二次生成是同一任务上的**新 run**：
 
-```python
-# --- 工程师 worker 在 $IMPL 上生成（第二次尝试）---
-# worker tool calls
-kanban_show()
-# → worker_context 现在包含 run 1 的阻塞原因，因此该 worker 知道
-#   需要修复哪两个问题，而无需重新阅读整个规格说明
-# （工程师添加 zxcvbn 检查，使重置令牌变为一次性，重新运行测试）
-kanban_complete(
-    summary="added zxcvbn strength check, reset tokens are now single-use "
-            "(stored + deleted on success)",
-    metadata={
-        "changed_files": [
-            "auth/reset.py",
-            "auth/tests/test_reset.py",
-            "migrations/003_single_use_reset_tokens.sql",
-        ],
-        "tests_run": 11,
-        "review_iteration": 2,
-    },
-)
+```python# --- 工程师 worker 在 $IMPL 上生成（第二次尝试）---
+
+# worker tool calls
+
+kanban_show()
+
+# → worker_context 现在包含 run 1 的阻塞原因，因此该 worker 知道
+
+#   需要修复哪两个问题，而无需重新阅读整个规格说明
+
+# （工程师添加 zxcvbn 检查，使重置令牌变为一次性，重新运行测试）
+
+kanban_complete(
+    summary="added zxcvbn strength check, reset tokens are now single-use "
+    "(stored + deleted on success)",
+    metadata={
+        "changed_files": [
+            "auth/reset.py",
+            "auth/tests/test_reset.py",
+            "migrations/003_single_use_reset_tokens.sql",
+        ],
+        "tests_run": 11,
+        "review_iteration": 2,
+    },
+)
 ```
 
 点击实现任务，抽屉显示**两次尝试**：

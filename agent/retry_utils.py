@@ -47,7 +47,7 @@ def jittered_backoff(
     if exponent >= 63 or base_delay <= 0:
         delay = max_delay
     else:
-        delay = min(base_delay * (2 ** exponent), max_delay)
+        delay = min(base_delay * (2**exponent), max_delay)
 
     # Seed from time + counter for decorrelation even with coarse clocks.
     seed = (time.time_ns() ^ (tick * 0x9E3779B9)) & 0xFFFFFFFF

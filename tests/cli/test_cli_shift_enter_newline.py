@@ -16,8 +16,8 @@ from clawk_cli.pt_input_extras import install_shift_enter_alias
 
 
 SHIFT_ENTER_SEQUENCES = (
-    "\x1b[13;2u",      # Kitty / CSI-u, modifier=2 (Shift)
-    "\x1b[27;2;13~",   # xterm modifyOtherKeys=2
+    "\x1b[13;2u",  # Kitty / CSI-u, modifier=2 (Shift)
+    "\x1b[27;2;13~",  # xterm modifyOtherKeys=2
     "\x1b[27;2;13u",
 )
 

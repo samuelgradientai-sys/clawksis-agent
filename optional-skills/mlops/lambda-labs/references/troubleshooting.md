@@ -161,6 +161,7 @@ lsmod | grep nvidia
 ```python
 # Check GPU memory
 import torch
+
 print(torch.cuda.get_device_properties(0).total_memory / 1e9, "GB")
 
 # Clear cache
@@ -174,6 +175,7 @@ model.gradient_checkpointing_enable()
 
 # Use mixed precision
 from torch.cuda.amp import autocast
+
 with autocast():
     outputs = model(**inputs)
 
@@ -208,10 +210,12 @@ pip install torch==2.1.0+cu121 -f https://download.pytorch.org/whl/torch_stable.
 ```python
 # Check all GPUs visible
 import torch
+
 print(f"GPUs available: {torch.cuda.device_count()}")
 
 # Verify CUDA_VISIBLE_DEVICES not set restrictively
 import os
+
 print(os.environ.get("CUDA_VISIBLE_DEVICES", "not set"))
 
 # Use DataParallel or DistributedDataParallel

@@ -55,7 +55,9 @@ ACCENT = "#FFFF00"
 TITLE_SIZE = 48
 BODY_SIZE = 30
 LABEL_SIZE = 24
-FAST = 0.8; NORMAL = 1.5; SLOW = 2.5
+FAST = 0.8
+NORMAL = 1.5
+SLOW = 2.5
 ```
 
 ## Scene Checklist

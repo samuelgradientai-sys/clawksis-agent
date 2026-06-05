@@ -22,10 +22,7 @@ the Ink client drops the message into the composer for editing.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import importlib
@@ -37,19 +34,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
-
 
 
 from clawk_state import SessionDB
 
 
-
-
-
 @pytest.fixture()
-
 def clawk_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -63,27 +54,16 @@ def clawk_home(tmp_path, monkeypatch):
     yield home
 
 
-
-
-
 @pytest.fixture()
-
 def server(clawk_home):
 
     with patch.dict(
-
         "sys.modules",
-
         {
-
             "clawk_cli.env_loader": MagicMock(),
-
             "clawk_cli.banner": MagicMock(),
-
         },
-
     ):
-
         mod = importlib.import_module("tui_gateway.server")
 
         yield mod
@@ -99,23 +79,14 @@ def server(clawk_home):
         importlib.reload(mod)
 
 
-
-
-
 @pytest.fixture()
-
 def db(clawk_home):
 
     return SessionDB(db_path=clawk_home / "state.db")
 
 
-
-
-
 @pytest.fixture()
-
 def session_with_history(server, db):
-
     """Build a session with 3 user turns + assistant replies persisted in DB."""
 
     sid = "sid-undo"
@@ -125,7 +96,6 @@ def session_with_history(server, db):
     db.create_session(session_key, source="tui")
 
     for i in range(1, 4):
-
         db.append_message(session_key, "user", f"question {i}")
 
         db.append_message(session_key, "assistant", f"answer {i}")
@@ -139,23 +109,14 @@ def session_with_history(server, db):
     agent._last_flushed_db_idx = len(history)
 
     s = {
-
         "session_key": session_key,
-
         "history": list(history),
-
         "history_lock": threading.Lock(),
-
         "history_version": 0,
-
         "running": False,
-
         "agent": agent,
-
         "attached_images": [],
-
         "cols": 120,
-
     }
 
     server._sessions[sid] = s
@@ -167,15 +128,9 @@ def session_with_history(server, db):
     return sid, session_key, s, agent
 
 
-
-
-
 def _call(server, method, **params):
 
     return server._methods[method](1, params)
-
-
-
 
 
 def test_undo_returns_prefill_with_target_text(server, session_with_history):
@@ -193,9 +148,6 @@ def test_undo_returns_prefill_with_target_text(server, session_with_history):
     assert result["message"] == "question 3"
 
     assert "Undid" in result["notice"]
-
-
-
 
 
 def test_undo_truncates_in_memory_history(server, session_with_history, db):
@@ -219,11 +171,7 @@ def test_undo_truncates_in_memory_history(server, session_with_history, db):
     assert s["history_version"] == 1
 
 
-
-
-
 def test_undo_n_backs_up_multiple_turns(server, session_with_history, db):
-
     """/undo 2 backs up two user turns to "question 2"."""
 
     sid, session_key, s, agent = session_with_history
@@ -245,11 +193,7 @@ def test_undo_n_backs_up_multiple_turns(server, session_with_history, db):
     assert [m["role"] for m in s["history"]] == ["user", "assistant"]
 
 
-
-
-
 def test_undo_n_clamps_to_oldest_turn(server, session_with_history, db):
-
     """/undo with N larger than the number of user turns backs up to the oldest."""
 
     sid, session_key, s, agent = session_with_history
@@ -263,9 +207,6 @@ def test_undo_n_clamps_to_oldest_turn(server, session_with_history, db):
     assert len(s["history"]) == 0
 
 
-
-
-
 def test_undo_rejects_invalid_count(server, session_with_history):
 
     sid, _, _, _ = session_with_history
@@ -275,9 +216,6 @@ def test_undo_rejects_invalid_count(server, session_with_history):
     assert "error" in resp
 
     assert "invalid count" in resp["error"]["message"].lower()
-
-
-
 
 
 def test_undo_soft_deletes_rows_in_db(server, session_with_history, db):
@@ -305,9 +243,6 @@ def test_undo_soft_deletes_rows_in_db(server, session_with_history, db):
     assert sess["rewind_count"] == 1
 
 
-
-
-
 def test_undo_notifies_memory_provider(server, session_with_history):
 
     sid, session_key, _, agent = session_with_history
@@ -325,9 +260,6 @@ def test_undo_notifies_memory_provider(server, session_with_history):
     assert kwargs["reset"] is False
 
 
-
-
-
 def test_undo_refuses_when_session_busy(server, session_with_history):
 
     sid, _, s, _ = session_with_history
@@ -341,26 +273,20 @@ def test_undo_refuses_when_session_busy(server, session_with_history):
     assert "busy" in resp["error"]["message"].lower()
 
 
-
-
-
 def test_undo_errors_when_no_active_session(server):
 
-    resp = _call(server, "command.dispatch", session_id="no-such-sid", name="undo", arg="")
+    resp = _call(
+        server, "command.dispatch", session_id="no-such-sid", name="undo", arg=""
+    )
 
     assert "error" in resp
 
     assert "no active session" in resp["error"]["message"].lower()
 
 
-
-
-
 def test_undo_in_pending_input_commands(server):
-
     """Registry sanity: /undo must be in _PENDING_INPUT_COMMANDS so
 
     slash.exec rejects it and the TUI falls through to command.dispatch."""
 
     assert "undo" in server._PENDING_INPUT_COMMANDS
-

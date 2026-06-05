@@ -62,14 +62,19 @@ class TestIsNetworkAccessible:
         loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result):
+        with patch(
+            "gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result
+        ):
             assert is_network_accessible("localhost") is False
 
     def test_hostname_resolving_to_non_loopback(self):
         non_loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=non_loopback_result):
+        with patch(
+            "gateway.platforms.base._socket.getaddrinfo",
+            return_value=non_loopback_result,
+        ):
             assert is_network_accessible("my-server.local") is True
 
     def test_hostname_mixed_resolution(self):
@@ -79,7 +84,9 @@ class TestIsNetworkAccessible:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result):
+        with patch(
+            "gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result
+        ):
             assert is_network_accessible("dual-host.local") is True
 
     def test_dns_failure_fails_closed(self):
@@ -101,7 +108,9 @@ class TestConnectBindGuard:
 
     @pytest.mark.asyncio
     async def test_refuses_ipv4_wildcard_without_key(self):
-        adapter = APIServerAdapter(PlatformConfig(enabled=True, extra={"host": "0.0.0.0"}))
+        adapter = APIServerAdapter(
+            PlatformConfig(enabled=True, extra={"host": "0.0.0.0"})
+        )
         result = await adapter.connect()
         assert result is False
 
@@ -114,7 +123,9 @@ class TestConnectBindGuard:
     @pytest.mark.asyncio
     async def test_refuses_loopback_without_key(self):
         """Loopback binds are still an auth boundary and require API_SERVER_KEY."""
-        adapter = APIServerAdapter(PlatformConfig(enabled=True, extra={"host": "127.0.0.1"}))
+        adapter = APIServerAdapter(
+            PlatformConfig(enabled=True, extra={"host": "127.0.0.1"})
+        )
         assert adapter._api_key == ""
         assert is_network_accessible(adapter._host) is False
         result = await adapter.connect()

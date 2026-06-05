@@ -12,13 +12,13 @@ messages.  The fix adds ``history_offset`` (the filtered history length)
 to ``_run_agent``'s return dict and uses it for the slice.
 """
 
-
 from gateway.run import _preserve_queued_followup_history_offset
 
 
 # ---------------------------------------------------------------------------
 # Helpers - replicate the filtering logic from _run_agent
 # ---------------------------------------------------------------------------
+
 
 def _filter_history(history: list) -> list:
     """Replicate the agent_history filtering from GatewayRunner._run_agent.
@@ -30,7 +30,9 @@ def _filter_history(history: list) -> list:
         role = msg.get("role")
         if not role:
             continue
-        if role in {"session_meta",}:
+        if role in {
+            "session_meta",
+        }:
             continue
         if role == "system":
             continue
@@ -53,6 +55,7 @@ def _filter_history(history: list) -> list:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestTranscriptHistoryOffset:
     """Verify the transcript extraction uses the filtered history length."""
 
@@ -66,8 +69,13 @@ class TestTranscriptHistoryOffset:
         - FIX: agent_messages[2:] = 2 messages (correct)
         """
         history = [
-            {"role": "session_meta", "tools": [], "model": "gpt-4",
-             "platform": "telegram", "timestamp": "t0"},
+            {
+                "role": "session_meta",
+                "tools": [],
+                "model": "gpt-4",
+                "platform": "telegram",
+                "timestamp": "t0",
+            },
             {"role": "user", "content": "Hello", "timestamp": "t1"},
             {"role": "assistant", "content": "Hi there!", "timestamp": "t1"},
         ]
@@ -85,16 +93,20 @@ class TestTranscriptHistoryOffset:
 
         # OLD behavior: len(history) = 3, skips too many
         old_offset = len(history)
-        old_new = (agent_messages[old_offset:]
-                   if len(agent_messages) > old_offset
-                   else agent_messages)
+        old_new = (
+            agent_messages[old_offset:]
+            if len(agent_messages) > old_offset
+            else agent_messages
+        )
         assert len(old_new) == 1  # BUG: lost the user message
 
         # FIXED behavior: history_offset = 2
         history_offset = len(agent_history)
-        fixed_new = (agent_messages[history_offset:]
-                     if len(agent_messages) > history_offset
-                     else [])
+        fixed_new = (
+            agent_messages[history_offset:]
+            if len(agent_messages) > history_offset
+            else []
+        )
         assert len(fixed_new) == 2
         assert fixed_new[0]["content"] == "What is Python?"
         assert fixed_new[1]["content"] == "A programming language."
@@ -110,12 +122,16 @@ class TestTranscriptHistoryOffset:
             {"role": "assistant", "content": "Hi!"},
         ]
 
-        old_new = (agent_messages[len(history):]
-                   if len(agent_messages) > len(history)
-                   else agent_messages)
-        fixed_new = (agent_messages[len(agent_history):]
-                     if len(agent_messages) > len(agent_history)
-                     else [])
+        old_new = (
+            agent_messages[len(history) :]
+            if len(agent_messages) > len(history)
+            else agent_messages
+        )
+        fixed_new = (
+            agent_messages[len(agent_history) :]
+            if len(agent_messages) > len(agent_history)
+            else []
+        )
 
         assert old_new == fixed_new
         assert len(fixed_new) == 2
@@ -151,16 +167,20 @@ class TestTranscriptHistoryOffset:
 
         # OLD: len(history) == len(agent_messages) == 6 -> else branch
         old_offset = len(history)
-        old_new = (agent_messages[old_offset:]
-                   if len(agent_messages) > old_offset
-                   else agent_messages)
+        old_new = (
+            agent_messages[old_offset:]
+            if len(agent_messages) > old_offset
+            else agent_messages
+        )
         # BUG: treats ALL messages as new (duplicates entire history)
         assert old_new == agent_messages
 
         # FIXED: history_offset = 4
-        fixed_new = (agent_messages[len(agent_history):]
-                     if len(agent_messages) > len(agent_history)
-                     else [])
+        fixed_new = (
+            agent_messages[len(agent_history) :]
+            if len(agent_messages) > len(agent_history)
+            else []
+        )
         assert len(fixed_new) == 2
         assert fixed_new[0]["content"] == "msg3"
         assert fixed_new[1]["content"] == "reply3"
@@ -186,15 +206,19 @@ class TestTranscriptHistoryOffset:
 
         # OLD: len(history) = 4, skips everything
         old_offset = len(history)
-        old_new = (agent_messages[old_offset:]
-                   if len(agent_messages) > old_offset
-                   else agent_messages)
+        old_new = (
+            agent_messages[old_offset:]
+            if len(agent_messages) > old_offset
+            else agent_messages
+        )
         assert old_new == agent_messages  # BUG: all treated as new
 
         # FIXED
-        fixed_new = (agent_messages[len(agent_history):]
-                     if len(agent_messages) > len(agent_history)
-                     else [])
+        fixed_new = (
+            agent_messages[len(agent_history) :]
+            if len(agent_messages) > len(agent_history)
+            else []
+        )
         assert len(fixed_new) == 2
         assert fixed_new[0]["content"] == "New question"
 
@@ -219,9 +243,11 @@ class TestTranscriptHistoryOffset:
         ]
 
         history_offset = len(_filter_history(history))  # 2
-        new_messages = (agent_messages[history_offset:]
-                        if len(agent_messages) > history_offset
-                        else [])
+        new_messages = (
+            agent_messages[history_offset:]
+            if len(agent_messages) > history_offset
+            else []
+        )
         # 2 == 2, so no new messages - falls to fallback
         assert new_messages == []
 
@@ -230,12 +256,19 @@ class TestTranscriptHistoryOffset:
         history = [
             {"role": "session_meta", "tools": [], "timestamp": "t0"},
             {"role": "user", "content": "Search for cats", "timestamp": "t1"},
-            {"role": "assistant", "content": None, "timestamp": "t1",
-             "tool_calls": [{"id": "tc1", "function": {"name": "web_search"}}]},
-            {"role": "tool", "tool_call_id": "tc1",
-             "content": "Results about cats", "timestamp": "t1"},
-            {"role": "assistant", "content": "Here are results.",
-             "timestamp": "t1"},
+            {
+                "role": "assistant",
+                "content": None,
+                "timestamp": "t1",
+                "tool_calls": [{"id": "tc1", "function": {"name": "web_search"}}],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "tc1",
+                "content": "Results about cats",
+                "timestamp": "t1",
+            },
+            {"role": "assistant", "content": "Here are results.", "timestamp": "t1"},
         ]
 
         agent_history = _filter_history(history)
@@ -245,8 +278,11 @@ class TestTranscriptHistoryOffset:
 
         agent_messages = [
             {"role": "user", "content": "Search for cats"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "tc1", "function": {"name": "web_search"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "tc1", "function": {"name": "web_search"}}],
+            },
             {"role": "tool", "tool_call_id": "tc1", "content": "Results about cats"},
             {"role": "assistant", "content": "Here are results."},
             {"role": "user", "content": "Now search for dogs"},
@@ -254,15 +290,19 @@ class TestTranscriptHistoryOffset:
         ]
 
         # OLD: len(history) = 5, agent_messages[5:] = 1 message (lost user msg)
-        old_new = (agent_messages[len(history):]
-                   if len(agent_messages) > len(history)
-                   else agent_messages)
+        old_new = (
+            agent_messages[len(history) :]
+            if len(agent_messages) > len(history)
+            else agent_messages
+        )
         assert len(old_new) == 1  # BUG
 
         # FIXED
-        fixed_new = (agent_messages[len(agent_history):]
-                     if len(agent_messages) > len(agent_history)
-                     else [])
+        fixed_new = (
+            agent_messages[len(agent_history) :]
+            if len(agent_messages) > len(agent_history)
+            else []
+        )
         assert len(fixed_new) == 2
         assert fixed_new[0]["content"] == "Now search for dogs"
         assert fixed_new[1]["content"] == "Dog results here."
@@ -297,9 +337,7 @@ class TestTranscriptHistoryOffset:
         followup_result = {
             "history_offset": len(history_before_chain + first_followup_turn),
             "messages": (
-                history_before_chain
-                + first_followup_turn
-                + second_followup_turn
+                history_before_chain + first_followup_turn + second_followup_turn
             ),
         }
 
@@ -309,7 +347,7 @@ class TestTranscriptHistoryOffset:
         )
         assert merged["history_offset"] == len(history_before_chain)
 
-        persisted = merged["messages"][merged["history_offset"]:]
+        persisted = merged["messages"][merged["history_offset"] :]
         assert persisted == first_followup_turn + second_followup_turn
 
     def test_recursive_queued_followup_preserves_smaller_existing_offset(self):

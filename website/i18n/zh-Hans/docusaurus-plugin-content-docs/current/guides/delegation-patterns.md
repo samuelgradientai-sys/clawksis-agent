@@ -44,24 +44,25 @@ Clawksis 可以生成隔离的子代理来并行处理任务。每个子代理�
 
 在后台，Clawksis 使用：
 
-```python
-delegate_task(tasks=[
-    {
-        "goal": "Research WebAssembly outside the browser in 2025",
-        "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research RISC-V server chip adoption",
-        "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research practical quantum computing applications",
-        "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
-        "toolsets": ["web"]
-    }
-])
+```pythondelegate_task(
+    tasks=[
+        {
+            "goal": "Research WebAssembly outside the browser in 2025",
+            "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research RISC-V server chip adoption",
+            "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research practical quantum computing applications",
+            "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
+            "toolsets": ["web"],
+        },
+    ]
+)
 ```
 
 三个任务并发运行。每个子代理独立搜索网络并返回摘要。父代理随后将它们综合成一份连贯的简报。
@@ -80,16 +81,19 @@ delegate_task(tasks=[
 
 关键在于 `context` 字段——它必须包含子代理所需的一切信息：
 
-```python
-delegate_task(
-    goal="Review src/auth/ for security issues and fix any found",
-    context="""Project at /home/user/webapp. Python 3.11, Flask, PyJWT, bcrypt.
-    Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
-    Test command: pytest tests/auth/ -v
-    Focus on: SQL injection, JWT validation, password hashing, session management.
-    Fix issues found and verify tests pass.""",
-    toolsets=["terminal", "file"]
-)
+```pythondelegate_task(
+    goal="Review src/auth/ for security issues and fix any found",
+    context="""Project at /home/user/webapp. Python 3.11, Flask, PyJWT, bcrypt.
+
+    Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
+
+    Test command: pytest tests/auth/ -v
+
+    Focus on: SQL injection, JWT validation, password hashing, session management.
+
+    Fix issues found and verify tests pass.""",
+    toolsets=["terminal", "file"],
+)
 ```
 
 :::warning 上下文问题
@@ -120,36 +124,49 @@ delegate_task(
 
 将大型重构任务拆分给并行子代理，每个子代理负责代码库的不同部分：
 
-```python
-delegate_task(tasks=[
-    {
-        "goal": "Refactor all API endpoint handlers to use the new response format",
-        "context": """Project at /home/user/api-server.
-        Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
-        Old format: return {"data": result, "status": "ok"}
-        New format: return APIResponse(data=result, status=200).to_dict()
-        Import: from src.responses import APIResponse
-        Run tests after: pytest tests/handlers/ -v""",
-        "toolsets": ["terminal", "file"]
-    },
-    {
-        "goal": "Update all client SDK methods to handle the new response format",
-        "context": """Project at /home/user/api-server.
-        Files: sdk/python/client.py, sdk/python/models.py
-        Old parsing: result = response.json()["data"]
-        New parsing: result = response.json()["data"] (same key, but add status code checking)
-        Also update sdk/python/tests/test_client.py""",
-        "toolsets": ["terminal", "file"]
-    },
-    {
-        "goal": "Update API documentation to reflect the new response format",
-        "context": """Project at /home/user/api-server.
-        Docs at: docs/api/. Format: Markdown with code examples.
-        Update all response examples from old format to new format.
-        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
-        "toolsets": ["terminal", "file"]
-    }
-])
+```pythondelegate_task(
+    tasks=[
+        {
+            "goal": "Refactor all API endpoint handlers to use the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
+
+        Old format: return {"data": result, "status": "ok"}
+
+        New format: return APIResponse(data=result, status=200).to_dict()
+
+        Import: from src.responses import APIResponse
+
+        Run tests after: pytest tests/handlers/ -v""",
+            "toolsets": ["terminal", "file"],
+        },
+        {
+            "goal": "Update all client SDK methods to handle the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Files: sdk/python/client.py, sdk/python/models.py
+
+        Old parsing: result = response.json()["data"]
+
+        New parsing: result = response.json()["data"] (same key, but add status code checking)
+
+        Also update sdk/python/tests/test_client.py""",
+            "toolsets": ["terminal", "file"],
+        },
+        {
+            "goal": "Update API documentation to reflect the new response format",
+            "context": """Project at /home/user/api-server.
+
+        Docs at: docs/api/. Format: Markdown with code examples.
+
+        Update all response examples from old format to new format.
+
+        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
+            "toolsets": ["terminal", "file"],
+        },
+    ]
+)
 ```
 
 :::tip
@@ -162,37 +179,60 @@ delegate_task(tasks=[
 
 使用 `execute_code` 进行机械性数据收集，然后委托推理密集型分析：
 
-```python
-# 第一步：机械性收集（此处 execute_code 更合适——无需推理）
-execute_code("""
-from clawk_tools import web_search, web_extract
-
-results = []
-for query in ["AI funding Q1 2026", "AI startup acquisitions 2026", "AI IPOs 2026"]:
-    r = web_search(query, limit=5)
-    for item in r["data"]["web"]:
-        results.append({"title": item["title"], "url": item["url"], "desc": item["description"]})
-
-# Extract full content from top 5 most relevant
-urls = [r["url"] for r in results[:5]]
-content = web_extract(urls)
-
-# Save for the analysis step
-import json
-with open("/tmp/ai-funding-data.json", "w") as f:
-    json.dump({"search_results": results, "extracted": content["results"]}, f)
-print(f"Collected {len(results)} results, extracted {len(content['results'])} pages")
-""")
-
-# 第二步：推理密集型分析（此处委托更合适）
-delegate_task(
-    goal="Analyze AI funding data and write a market report",
-    context="""Raw data at /tmp/ai-funding-data.json contains search results and
-    extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
-    Write a structured market report: key deals, trends, notable players,
-    and outlook. Focus on deals over $100M.""",
-    toolsets=["terminal", "file"]
-)
+```python# 第一步：机械性收集（此处 execute_code 更合适——无需推理）
+
+execute_code("""
+
+from clawk_tools import web_search, web_extract
+
+
+
+results = []
+
+for query in ["AI funding Q1 2026", "AI startup acquisitions 2026", "AI IPOs 2026"]:
+
+    r = web_search(query, limit=5)
+
+    for item in r["data"]["web"]:
+
+        results.append({"title": item["title"], "url": item["url"], "desc": item["description"]})
+
+
+
+# Extract full content from top 5 most relevant
+
+urls = [r["url"] for r in results[:5]]
+
+content = web_extract(urls)
+
+
+
+# Save for the analysis step
+
+import json
+
+with open("/tmp/ai-funding-data.json", "w") as f:
+
+    json.dump({"search_results": results, "extracted": content["results"]}, f)
+
+print(f"Collected {len(results)} results, extracted {len(content['results'])} pages")
+
+""")
+
+
+# 第二步：推理密集型分析（此处委托更合适）
+
+delegate_task(
+    goal="Analyze AI funding data and write a market report",
+    context="""Raw data at /tmp/ai-funding-data.json contains search results and
+
+    extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
+
+    Write a structured market report: key deals, trends, notable players,
+
+    and outlook. Focus on deals over $100M.""",
+    toolsets=["terminal", "file"],
+)
 ```
 
 这通常是最高效的模式：`execute_code` 以低成本处理 10 余次顺序工具调用，然后子代理在干净的上下文中完成单次高成本推理任务。

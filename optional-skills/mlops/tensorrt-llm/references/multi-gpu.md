@@ -20,7 +20,7 @@ from tensorrt_llm import LLM
 llm = LLM(
     model="meta-llama/Meta-Llama-3-70B",
     tensor_parallel_size=4,  # Split across 4 GPUs
-    dtype="fp16"
+    dtype="fp16",
 )
 
 # Model automatically sharded across GPUs
@@ -45,9 +45,9 @@ llm = LLM(
 ```python
 llm = LLM(
     model="meta-llama/Meta-Llama-3-405B",
-    tensor_parallel_size=4,   # TP=4 within nodes
-    pipeline_parallel_size=2, # PP=2 across nodes
-    dtype="fp8"
+    tensor_parallel_size=4,  # TP=4 within nodes
+    pipeline_parallel_size=2,  # PP=2 across nodes
+    dtype="fp8",
 )
 
 # Total: 8 GPUs (4×2)
@@ -72,7 +72,7 @@ llm = LLM(
     model="mistralai/Mixtral-8x22B",
     tensor_parallel_size=4,
     expert_parallel_size=2,  # Distribute 8 experts across 2 groups
-    dtype="fp8"
+    dtype="fp8",
 )
 ```
 
@@ -84,7 +84,7 @@ llm = LLM(
 # Llama 3-8B on 1× A100 80GB
 llm = LLM(
     model="meta-llama/Meta-Llama-3-8B",
-    dtype="fp16"  # or fp8 for H100
+    dtype="fp16",  # or fp8 for H100
 )
 ```
 
@@ -100,7 +100,7 @@ llm = LLM(
 llm = LLM(
     model="meta-llama/Meta-Llama-3-70B",
     tensor_parallel_size=4,
-    dtype="fp8"  # 70GB → 35GB per GPU
+    dtype="fp8",  # 70GB → 35GB per GPU
 )
 ```
 
@@ -116,9 +116,9 @@ llm = LLM(
 # Llama 3-405B on 2 nodes × 8 H100 = 16 GPUs
 llm = LLM(
     model="meta-llama/Meta-Llama-3-405B",
-    tensor_parallel_size=8,    # TP within each node
+    tensor_parallel_size=8,  # TP within each node
     pipeline_parallel_size=2,  # PP across 2 nodes
-    dtype="fp8"
+    dtype="fp8",
 )
 ```
 

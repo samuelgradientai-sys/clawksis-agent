@@ -57,28 +57,36 @@ The real win of no-agent mode is that the agent itself can set up the watchdog f
 
 Under the hood, the agent makes two tool calls:
 
-```python
-# 1. Write the check script
-write_file(
-    path="~/.clawksis/scripts/memory-watchdog.sh",
-    content='''#!/usr/bin/env bash
-ram_pct=$(free | awk '/^Mem:/ {printf "%d", $3 * 100 / $2}')
-if [ "$ram_pct" -ge 85 ]; then
-  echo "RAM ${ram_pct}% on $(hostname)"
-fi
-# Empty stdout = silent tick; no message sent.
-''',
-)
-
-# 2. Schedule it — no_agent=True skips the LLM on every tick
-cronjob(
-    action="create",
-    schedule="every 5m",
-    script="memory-watchdog.sh",
-    no_agent=True,
-    deliver="telegram",
-    name="memory-watchdog",
-)
+```python# 1. Write the check script
+
+write_file(
+    path="~/.clawksis/scripts/memory-watchdog.sh",
+    content="""#!/usr/bin/env bash
+
+ram_pct=$(free | awk '/^Mem:/ {printf "%d", $3 * 100 / $2}')
+
+if [ "$ram_pct" -ge 85 ]; then
+
+  echo "RAM ${ram_pct}% on $(hostname)"
+
+fi
+
+# Empty stdout = silent tick; no message sent.
+
+""",
+)
+
+
+# 2. Schedule it — no_agent=True skips the LLM on every tick
+
+cronjob(
+    action="create",
+    schedule="every 5m",
+    script="memory-watchdog.sh",
+    no_agent=True,
+    deliver="telegram",
+    name="memory-watchdog",
+)
 ```
 
 From that point on every tick is free: the scheduler runs the script, pipes its stdout to Telegram if non-empty, and never touches a model.

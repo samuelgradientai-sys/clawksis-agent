@@ -1,10 +1,12 @@
 """Tests for Slack channel_skill_bindings auto-skill resolution."""
+
 from unittest.mock import MagicMock
 
 
 def _make_adapter(extra=None):
     """Create a minimal SlackAdapter stub with the given ``config.extra``."""
     from gateway.platforms.slack import SlackAdapter
+
     adapter = object.__new__(SlackAdapter)
     adapter.config = MagicMock()
     adapter.config.extra = extra or {}
@@ -13,6 +15,7 @@ def _make_adapter(extra=None):
 
 def _resolve(adapter, channel_id, parent_id=None):
     from gateway.platforms.base import resolve_channel_skills
+
     return resolve_channel_skills(adapter.config.extra, channel_id, parent_id)
 
 
@@ -37,7 +40,9 @@ class TestSlackResolveChannelSkills:
                 {"id": "C0PARENT", "skills": ["parent-skill"]},
             ]
         })
-        assert _resolve(adapter, "thread-ts-123", parent_id="C0PARENT") == ["parent-skill"]
+        assert _resolve(adapter, "thread-ts-123", parent_id="C0PARENT") == [
+            "parent-skill"
+        ]
 
     def test_no_match_returns_none(self):
         adapter = _make_adapter({
@@ -105,7 +110,13 @@ class TestSlackMessageEventAutoSkill:
 
     def test_message_event_carries_auto_skill(self):
         """Simulate the handler wiring: resolve + attach to MessageEvent."""
-        from gateway.platforms.base import MessageEvent, MessageType, Platform, SessionSource, resolve_channel_skills
+        from gateway.platforms.base import (
+            MessageEvent,
+            MessageType,
+            Platform,
+            SessionSource,
+            resolve_channel_skills,
+        )
 
         config_extra = {
             "channel_skill_bindings": [

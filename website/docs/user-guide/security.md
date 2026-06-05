@@ -318,18 +318,26 @@ When using the `docker` terminal backend, Clawksis applies strict security harde
 
 Every container runs with these flags (defined in `tools/environments/docker.py`):
 
-```python
-_SECURITY_ARGS = [
-    "--cap-drop", "ALL",                          # Drop ALL Linux capabilities
-    "--cap-add", "DAC_OVERRIDE",                  # Root can write to bind-mounted dirs
-    "--cap-add", "CHOWN",                         # Package managers need file ownership
-    "--cap-add", "FOWNER",                        # Package managers need file ownership
-    "--security-opt", "no-new-privileges",         # Block privilege escalation
-    "--pids-limit", "256",                         # Limit process count
-    "--tmpfs", "/tmp:rw,nosuid,size=512m",         # Size-limited /tmp
-    "--tmpfs", "/var/tmp:rw,noexec,nosuid,size=256m",  # No-exec /var/tmp
-    "--tmpfs", "/run:rw,noexec,nosuid,size=64m",   # No-exec /run
-]
+```python_SECURITY_ARGS = [
+    "--cap-drop",
+    "ALL",  # Drop ALL Linux capabilities
+    "--cap-add",
+    "DAC_OVERRIDE",  # Root can write to bind-mounted dirs
+    "--cap-add",
+    "CHOWN",  # Package managers need file ownership
+    "--cap-add",
+    "FOWNER",  # Package managers need file ownership
+    "--security-opt",
+    "no-new-privileges",  # Block privilege escalation
+    "--pids-limit",
+    "256",  # Limit process count
+    "--tmpfs",
+    "/tmp:rw,nosuid,size=512m",  # Size-limited /tmp
+    "--tmpfs",
+    "/var/tmp:rw,noexec,nosuid,size=256m",  # No-exec /var/tmp
+    "--tmpfs",
+    "/run:rw,noexec,nosuid,size=64m",  # No-exec /run
+]
 ```
 
 ### Resource Limits

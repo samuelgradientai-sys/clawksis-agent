@@ -707,19 +707,24 @@ Bundle 仍需调用带占位符组件的 `register()`（以防有人直接访问
 
 插件可通过在 manifest 中设置 `api` 来注册 FastAPI 路由。创建文件并导出 `router`：
 
-```python
-# ~/.clawksis/plugins/my-plugin/dashboard/plugin_api.py
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/data")
-async def get_data():
-    return {"items": ["one", "two", "three"]}
-
-@router.post("/action")
-async def do_action(body: dict):
-    return {"ok": True, "received": body}
+```python# ~/.clawksis/plugins/my-plugin/dashboard/plugin_api.py
+
+from fastapi import APIRouter
+
+
+router = APIRouter()
+
+
+@router.get("/data")
+async def get_data():
+
+    return {"items": ["one", "two", "three"]}
+
+
+@router.post("/action")
+async def do_action(body: dict):
+
+    return {"ok": True, "received": body}
 ```
 
 路由挂载在 `/api/plugins/<name>/` 下，因此上述路由变为：
@@ -733,26 +738,36 @@ async def do_action(body: dict):
 
 后端路由在 dashboard 进程内运行，因此可以直接从 clawksis-agent 代码库导入：
 
-```python
-from fastapi import APIRouter
-from clawk_state import SessionDB
-from clawk_cli.config import load_config
-
-router = APIRouter()
-
-@router.get("/session-count")
-async def session_count():
-    db = SessionDB()
-    try:
-        count = len(db.list_sessions(limit=9999))
-        return {"count": count}
-    finally:
-        db.close()
-
-@router.get("/config-snapshot")
-async def config_snapshot():
-    cfg = load_config()
-    return {"model": cfg.get("model", {})}
+```pythonfrom fastapi import APIRouter
+
+from clawk_state import SessionDB
+
+from clawk_cli.config import load_config
+
+
+router = APIRouter()
+
+
+@router.get("/session-count")
+async def session_count():
+
+    db = SessionDB()
+
+    try:
+        count = len(db.list_sessions(limit=9999))
+
+        return {"count": count}
+
+    finally:
+        db.close()
+
+
+@router.get("/config-snapshot")
+async def config_snapshot():
+
+    cfg = load_config()
+
+    return {"model": cfg.get("model", {})}
 ```
 
 ### 插件自定义 CSS

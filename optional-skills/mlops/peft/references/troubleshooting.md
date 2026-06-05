@@ -60,6 +60,7 @@ python -c "import peft; print(peft.__version__)"
 1. **Enable gradient checkpointing**:
 ```python
 from peft import prepare_model_for_kbit_training
+
 model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 ```
 
@@ -67,7 +68,7 @@ model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 ```python
 TrainingArguments(
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=16  # Maintain effective batch size
+    gradient_accumulation_steps=16,  # Maintain effective batch size
 )
 ```
 
@@ -76,9 +77,7 @@ TrainingArguments(
 from transformers import BitsAndBytesConfig
 
 bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_use_double_quant=True
+    load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True
 )
 model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config)
 ```
@@ -90,7 +89,7 @@ LoraConfig(r=8)  # Instead of r=16 or higher
 
 5. **Target fewer modules**:
 ```python
-target_modules=["q_proj", "v_proj"]  # Instead of all-linear
+target_modules = ["q_proj", "v_proj"]  # Instead of all-linear
 ```
 
 ### Loss Not Decreasing
@@ -161,6 +160,7 @@ for name, module in model.named_modules():
 
 # Check target_modules match model architecture
 from peft.utils import TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING
+
 print(TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING.get(model.config.model_type))
 
 # Ensure model in training mode
@@ -182,6 +182,7 @@ for name, param in model.named_parameters():
 ```python
 # Check adapter files exist
 import os
+
 print(os.listdir("./adapter-path"))
 # Should contain: adapter_config.json, adapter_model.safetensors
 
@@ -220,11 +221,7 @@ base_model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path
 **Fix**:
 ```python
 # Force local loading
-model = PeftModel.from_pretrained(
-    base_model,
-    "./adapter-path",
-    local_files_only=True
-)
+model = PeftModel.from_pretrained(base_model, "./adapter-path", local_files_only=True)
 
 # Or specify format
 model.save_pretrained("./adapter", safe_serialization=True)  # safetensors
@@ -248,14 +245,14 @@ merged_model = model.merge_and_unload()
 2. **Use optimized inference engine**:
 ```python
 from vllm import LLM
+
 llm = LLM(model="./merged-model", dtype="half")
 ```
 
 3. **Enable Flash Attention**:
 ```python
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    attn_implementation="flash_attention_2"
+    model_name, attn_implementation="flash_attention_2"
 )
 ```
 
@@ -312,14 +309,12 @@ print(model.peft_config.keys())
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_compute_dtype=torch.bfloat16,  # Match model dtype
-    bnb_4bit_quant_type="nf4"
+    bnb_4bit_quant_type="nf4",
 )
 
 # Load with correct dtype
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    quantization_config=bnb_config,
-    torch_dtype=torch.bfloat16
+    model_name, quantization_config=bnb_config, torch_dtype=torch.bfloat16
 )
 ```
 
@@ -332,7 +327,7 @@ model = AutoModelForCausalLM.from_pretrained(
 # Enable double quantization
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
-    bnb_4bit_use_double_quant=True  # Further memory reduction
+    bnb_4bit_use_double_quant=True,  # Further memory reduction
 )
 
 # Use offloading
@@ -340,7 +335,7 @@ model = AutoModelForCausalLM.from_pretrained(
     model_name,
     quantization_config=bnb_config,
     device_map="auto",
-    max_memory={0: "20GB", "cpu": "100GB"}
+    max_memory={0: "20GB", "cpu": "100GB"},
 )
 ```
 
@@ -357,7 +352,7 @@ from peft import PeftModel
 base_model = AutoModelForCausalLM.from_pretrained(
     base_model_name,
     torch_dtype=torch.float16,  # Not quantized
-    device_map="auto"
+    device_map="auto",
 )
 
 # Load adapter
@@ -394,11 +389,7 @@ model = PeftModel.from_pretrained(base_model, "./adapter")
 model = model.to(torch.bfloat16)
 
 # Or load with specific dtype
-model = PeftModel.from_pretrained(
-    base_model,
-    "./adapter",
-    torch_dtype=torch.bfloat16
-)
+model = PeftModel.from_pretrained(base_model, "./adapter", torch_dtype=torch.bfloat16)
 ```
 
 ## Performance Optimization
@@ -408,11 +399,13 @@ model = PeftModel.from_pretrained(
 ```python
 import torch
 
+
 def print_memory():
     if torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated() / 1e9
         reserved = torch.cuda.memory_reserved() / 1e9
         print(f"Allocated: {allocated:.2f}GB, Reserved: {reserved:.2f}GB")
+
 
 # Profile during training
 print_memory()  # Before
@@ -427,6 +420,7 @@ print_memory()  # After
 ```python
 import time
 import torch
+
 
 def benchmark_generation(model, tokenizer, prompt, n_runs=5):
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -445,7 +439,8 @@ def benchmark_generation(model, tokenizer, prompt, n_runs=5):
 
     tokens = outputs.shape[1] - inputs.input_ids.shape[1]
     avg_time = sum(times) / len(times)
-    print(f"Speed: {tokens/avg_time:.2f} tokens/sec")
+    print(f"Speed: {tokens / avg_time:.2f} tokens/sec")
+
 
 # Compare adapter vs merged
 benchmark_generation(adapter_model, tokenizer, "Hello")

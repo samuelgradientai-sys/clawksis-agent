@@ -45,17 +45,27 @@ Best for: architecture diagrams, annotated figures.
 
 ### Classic 3B1B
 ```python
-BG="#1C1C1C"; PRIMARY=BLUE; SECONDARY=GREEN; ACCENT=YELLOW; HIGHLIGHT=RED
+BG = "#1C1C1C"
+PRIMARY = BLUE
+SECONDARY = GREEN
+ACCENT = YELLOW
+HIGHLIGHT = RED
 ```
 
 ### Warm Academic
 ```python
-BG="#2D2B55"; PRIMARY="#FF6B6B"; SECONDARY="#FFD93D"; ACCENT="#6BCB77"
+BG = "#2D2B55"
+PRIMARY = "#FF6B6B"
+SECONDARY = "#FFD93D"
+ACCENT = "#6BCB77"
 ```
 
 ### Neon Tech
 ```python
-BG="#0A0A0A"; PRIMARY="#00F5FF"; SECONDARY="#FF00FF"; ACCENT="#39FF14"
+BG = "#0A0A0A"
+PRIMARY = "#00F5FF"
+SECONDARY = "#FF00FF"
+ACCENT = "#39FF14"
 ```
 
 ## Font Selection
@@ -104,7 +114,7 @@ Large title text (font_size >= 48) with short strings (1-3 words) can use propor
 MarkupText('<span letter_spacing="6000">HERMES</span>', font_size=18, font="Menlo")
 
 # Bold specific words
-MarkupText('This is <b>important</b>', font_size=24, font="Menlo")
+MarkupText("This is <b>important</b>", font_size=24, font="Menlo")
 
 # Color specific words
 MarkupText('Red <span foreground="#FF6B6B">warning</span>', font_size=24, font="Menlo")

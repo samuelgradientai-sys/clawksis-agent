@@ -120,16 +120,23 @@ renderable inside a terminal.
 
 `SOUL.md` lives at `~/.clawksis/SOUL.md` and serves as the agent's identity — the very first section of the system prompt. The loading logic in `prompt_builder.py` works as follows:
 
-```python
-# From agent/prompt_builder.py (simplified)
-def load_soul_md() -> Optional[str]:
-    soul_path = get_clawk_home() / "SOUL.md"
-    if not soul_path.exists():
-        return None
-    content = soul_path.read_text(encoding="utf-8").strip()
-    content = _scan_context_content(content, "SOUL.md")  # Security scan
-    content = _truncate_content(content, "SOUL.md")       # Cap at 20k chars
-    return content
+```python# From agent/prompt_builder.py (simplified)
+
+
+def load_soul_md() -> Optional[str]:
+
+    soul_path = get_clawk_home() / "SOUL.md"
+
+    if not soul_path.exists():
+        return None
+
+    content = soul_path.read_text(encoding="utf-8").strip()
+
+    content = _scan_context_content(content, "SOUL.md")  # Security scan
+
+    content = _truncate_content(content, "SOUL.md")  # Cap at 20k chars
+
+    return content
 ```
 
 When `load_soul_md()` returns content, it replaces the hardcoded `DEFAULT_AGENT_IDENTITY`. The `build_context_files_prompt()` function is then called with `skip_soul=True` to prevent SOUL.md from appearing twice (once as identity, once as a context file).
@@ -150,38 +157,43 @@ Be targeted and efficient in your exploration and investigations.
 
 `build_context_files_prompt()` uses a **priority system** — only one project context type is loaded (first match wins):
 
-```python
-# From agent/prompt_builder.py (simplified)
-def build_context_files_prompt(cwd=None, skip_soul=False):
-    cwd_path = Path(cwd).resolve()
-
-    # Priority: first match wins — only ONE project context loaded
-    project_context = (
-        _load_clawk_md(cwd_path)       # 1. .clawk.md / HERMES.md (walks to git root)
-        or _load_agents_md(cwd_path)    # 2. AGENTS.md (cwd only)
-        or _load_claude_md(cwd_path)    # 3. CLAUDE.md (cwd only)
-        or _load_cursorrules(cwd_path)  # 4. .cursorrules / .cursor/rules/*.mdc
-    )
-
-    sections = []
-    if project_context:
-        sections.append(project_context)
-
-    # SOUL.md from CLAWK_HOME (independent of project context)
-    if not skip_soul:
-        soul_content = load_soul_md()
-        if soul_content:
-            sections.append(soul_content)
-
-    if not sections:
-        return ""
-
-    return (
-        "# Project Context\n\n"
-        "The following project context files have been loaded "
-        "and should be followed:\n\n"
-        + "\n".join(sections)
-    )
+```python# From agent/prompt_builder.py (simplified)
+
+
+def build_context_files_prompt(cwd=None, skip_soul=False):
+
+    cwd_path = Path(cwd).resolve()
+
+    # Priority: first match wins — only ONE project context loaded
+
+    project_context = (
+        _load_clawk_md(cwd_path)  # 1. .clawk.md / HERMES.md (walks to git root)
+        or _load_agents_md(cwd_path)  # 2. AGENTS.md (cwd only)
+        or _load_claude_md(cwd_path)  # 3. CLAUDE.md (cwd only)
+        or _load_cursorrules(cwd_path)  # 4. .cursorrules / .cursor/rules/*.mdc
+    )
+
+    sections = []
+
+    if project_context:
+        sections.append(project_context)
+
+    # SOUL.md from CLAWK_HOME (independent of project context)
+
+    if not skip_soul:
+        soul_content = load_soul_md()
+
+        if soul_content:
+            sections.append(soul_content)
+
+    if not sections:
+        return ""
+
+    return (
+        "# Project Context\n\n"
+        "The following project context files have been loaded "
+        "and should be followed:\n\n" + "\n".join(sections)
+    )
 ```
 
 ### Context file discovery details

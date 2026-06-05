@@ -87,7 +87,9 @@ def test_save_config_allows_intentional_secret_value_change(monkeypatch, tmp_pat
     assert "${TU_ZI_API_KEY}" not in saved
 
 
-def test_save_config_preserves_template_when_env_rotates_after_load(monkeypatch, tmp_path):
+def test_save_config_preserves_template_when_env_rotates_after_load(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("TU_ZI_API_KEY", "sk-old-secret")
     _write_config(
@@ -113,7 +115,9 @@ def test_save_config_preserves_template_when_env_rotates_after_load(monkeypatch,
     assert "sk-rotated-secret" not in saved
 
 
-def test_save_config_keeps_edited_partial_template_strings_literal(monkeypatch, tmp_path):
+def test_save_config_keeps_edited_partial_template_strings_literal(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("ALT_SECRET", "alt-secret")
     _write_config(
@@ -138,7 +142,9 @@ def test_save_config_keeps_edited_partial_template_strings_literal(monkeypatch, 
     assert "Authorization: Bearer ${ALT_SECRET}" not in saved
 
 
-def test_save_config_falls_back_to_positional_matching_for_duplicate_names(monkeypatch, tmp_path):
+def test_save_config_falls_back_to_positional_matching_for_duplicate_names(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("FIRST_SECRET", "first-secret")
     monkeypatch.setenv("SECOND_SECRET", "second-secret")

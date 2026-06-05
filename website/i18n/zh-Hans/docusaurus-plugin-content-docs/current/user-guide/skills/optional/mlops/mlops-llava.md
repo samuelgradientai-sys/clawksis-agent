@@ -70,47 +70,76 @@ pip install -e .
 
 ### 基本用法
 
-```python
-from llava.model.builder import load_pretrained_model
-from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
-from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
-from llava.conversation import conv_templates
-from PIL import Image
-import torch
-
-# Load model
-model_path = "liuhaotian/llava-v1.5-7b"
-tokenizer, model, image_processor, context_len = load_pretrained_model(
-    model_path=model_path,
-    model_base=None,
-    model_name=get_model_name_from_path(model_path)
-)
-
-# Load image
-image = Image.open("image.jpg")
-image_tensor = process_images([image], image_processor, model.config)
-image_tensor = image_tensor.to(model.device, dtype=torch.float16)
-
-# Create conversation
-conv = conv_templates["llava_v1"].copy()
-conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
-conv.append_message(conv.roles[1], None)
-prompt = conv.get_prompt()
-
-# Generate response
-input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(model.device)
-
-with torch.inference_mode():
-    output_ids = model.generate(
-        input_ids,
-        images=image_tensor,
-        do_sample=True,
-        temperature=0.2,
-        max_new_tokens=512
-    )
-
-response = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
-print(response)
+```pythonfrom llava.model.builder import load_pretrained_model
+
+from llava.mm_utils import (
+    get_model_name_from_path,
+    process_images,
+    tokenizer_image_token,
+)
+
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
+
+from llava.conversation import conv_templates
+
+from PIL import Image
+
+import torch
+
+
+# Load model
+
+model_path = "liuhaotian/llava-v1.5-7b"
+
+tokenizer, model, image_processor, context_len = load_pretrained_model(
+    model_path=model_path,
+    model_base=None,
+    model_name=get_model_name_from_path(model_path),
+)
+
+
+# Load image
+
+image = Image.open("image.jpg")
+
+image_tensor = process_images([image], image_processor, model.config)
+
+image_tensor = image_tensor.to(model.device, dtype=torch.float16)
+
+
+# Create conversation
+
+conv = conv_templates["llava_v1"].copy()
+
+conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
+
+conv.append_message(conv.roles[1], None)
+
+prompt = conv.get_prompt()
+
+
+# Generate response
+
+input_ids = (
+    tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
+    .unsqueeze(0)
+    .to(model.device)
+)
+
+
+with torch.inference_mode():
+    output_ids = model.generate(
+        input_ids,
+        images=image_tensor,
+        do_sample=True,
+        temperature=0.2,
+        max_new_tokens=512,
+    )
+
+
+response = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
+
+print(response)
 ```
 
 ## 可用模型
@@ -121,14 +150,18 @@ print(response)
 | LLaVA-v1.5-13B | 13B | ~28 GB | 较好 |
 | LLaVA-v1.6-34B | 34B | ~70 GB | 最佳 |
 
-```python
-# Load different models
-model_7b = "liuhaotian/llava-v1.5-7b"
-model_13b = "liuhaotian/llava-v1.5-13b"
-model_34b = "liuhaotian/llava-v1.6-34b"
-
-# 4-bit quantization for lower VRAM
-load_4bit = True  # Reduces VRAM by ~4×
+```python# Load different models
+
+model_7b = "liuhaotian/llava-v1.5-7b"
+
+model_13b = "liuhaotian/llava-v1.5-13b"
+
+model_34b = "liuhaotian/llava-v1.6-34b"
+
+
+# 4-bit quantization for lower VRAM
+
+load_4bit = True  # Reduces VRAM by ~4×
 ```
 
 ## CLI 用法
@@ -160,63 +193,77 @@ python -m llava.serve.gradio_web_server \
 
 ## 多轮对话
 
-```python
-# Initialize conversation
-conv = conv_templates["llava_v1"].copy()
-
-# Turn 1
-conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
-conv.append_message(conv.roles[1], None)
-response1 = generate(conv, model, image)  # "A dog playing in a park"
-
-# Turn 2
-conv.messages[-1][1] = response1  # Add previous response
-conv.append_message(conv.roles[0], "What breed is the dog?")
-conv.append_message(conv.roles[1], None)
-response2 = generate(conv, model, image)  # "Golden Retriever"
-
-# Turn 3
-conv.messages[-1][1] = response2
-conv.append_message(conv.roles[0], "What time of day is it?")
-conv.append_message(conv.roles[1], None)
-response3 = generate(conv, model, image)
+```python# Initialize conversation
+
+conv = conv_templates["llava_v1"].copy()
+
+
+# Turn 1
+
+conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
+
+conv.append_message(conv.roles[1], None)
+
+response1 = generate(conv, model, image)  # "A dog playing in a park"
+
+
+# Turn 2
+
+conv.messages[-1][1] = response1  # Add previous response
+
+conv.append_message(conv.roles[0], "What breed is the dog?")
+
+conv.append_message(conv.roles[1], None)
+
+response2 = generate(conv, model, image)  # "Golden Retriever"
+
+
+# Turn 3
+
+conv.messages[-1][1] = response2
+
+conv.append_message(conv.roles[0], "What time of day is it?")
+
+conv.append_message(conv.roles[1], None)
+
+response3 = generate(conv, model, image)
 ```
 
 ## 常见任务
 
 ### 图像字幕生成
 
-```python
-question = "Describe this image in detail."
-response = ask(model, image, question)
+```pythonquestion = "Describe this image in detail."
+
+response = ask(model, image, question)
 ```
 
 ### 视觉问答
 
-```python
-question = "How many people are in the image?"
-response = ask(model, image, question)
+```pythonquestion = "How many people are in the image?"
+
+response = ask(model, image, question)
 ```
 
 ### 目标检测（文本形式）
 
-```python
-question = "List all the objects you can see in this image."
-response = ask(model, image, question)
+```pythonquestion = "List all the objects you can see in this image."
+
+response = ask(model, image, question)
 ```
 
 ### 场景理解
 
-```python
-question = "What is happening in this scene?"
-response = ask(model, image, question)
+```pythonquestion = "What is happening in this scene?"
+
+response = ask(model, image, question)
 ```
 
 ### 文档理解
 
-```python
-question = "What is the main topic of this document?"
-response = ask(model, document_image, question)
+```pythonquestion = "What is the main topic of this document?"
+
+response = ask(model, document_image, question)
 ```
 
 ## 训练自定义模型
@@ -231,17 +278,19 @@ bash scripts/v1_5/finetune.sh
 
 ## 量化（降低显存占用）
 
-```python
-# 4-bit quantization
-tokenizer, model, image_processor, context_len = load_pretrained_model(
-    model_path="liuhaotian/llava-v1.5-13b",
-    model_base=None,
-    model_name=get_model_name_from_path("liuhaotian/llava-v1.5-13b"),
-    load_4bit=True  # Reduces VRAM ~4×
-)
-
-# 8-bit quantization
-load_8bit=True  # Reduces VRAM ~2×
+```python# 4-bit quantization
+
+tokenizer, model, image_processor, context_len = load_pretrained_model(
+    model_path="liuhaotian/llava-v1.5-13b",
+    model_base=None,
+    model_name=get_model_name_from_path("liuhaotian/llava-v1.5-13b"),
+    load_4bit=True,  # Reduces VRAM ~4×
+)
+
+
+# 8-bit quantization
+
+load_8bit = True  # Reduces VRAM ~2×
 ```
 
 ## 最佳实践
@@ -286,32 +335,37 @@ LLaVA 在以下基准上取得了有竞争力的分数：
 
 ### LangChain
 
-```python
-from langchain.llms.base import LLM
-
-class LLaVALLM(LLM):
-    def _call(self, prompt, stop=None):
-        # Custom LLaVA inference
-        return response
-
-llm = LLaVALLM()
+```pythonfrom langchain.llms.base import LLM
+
+
+class LLaVALLM(LLM):
+    def _call(self, prompt, stop=None):
+
+        # Custom LLaVA inference
+
+        return response
+
+
+llm = LLaVALLM()
 ```
 
 ### Gradio 应用
 
-```python
-import gradio as gr
-
-def chat(image, text, history):
-    response = ask_llava(model, image, text)
-    return response
-
-demo = gr.ChatInterface(
-    chat,
-    additional_inputs=[gr.Image(type="pil")],
-    title="LLaVA Chat"
-)
-demo.launch()
+```pythonimport gradio as gr
+
+
+def chat(image, text, history):
+
+    response = ask_llava(model, image, text)
+
+    return response
+
+
+demo = gr.ChatInterface(
+    chat, additional_inputs=[gr.Image(type="pil")], title="LLaVA Chat"
+)
+
+demo.launch()
 ```
 
 ## 资源

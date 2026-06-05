@@ -25,7 +25,14 @@ class TestLoadSaveCache:
 
     def test_save_and_load_roundtrip(self, tmp_path):
         cache_file = tmp_path / "cache.json"
-        data = {"abc123": {"description": "A cat", "emoji": "", "set_name": "", "cached_at": 1.0}}
+        data = {
+            "abc123": {
+                "description": "A cat",
+                "emoji": "",
+                "set_name": "",
+                "cached_at": 1.0,
+            }
+        }
         with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
             _save_cache(data)
             loaded = _load_cache()
@@ -42,7 +49,9 @@ class TestCacheSticker:
     def test_cache_and_retrieve(self, tmp_path):
         cache_file = tmp_path / "cache.json"
         with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
-            cache_sticker_description("uid_1", "A happy dog", emoji="🐕", set_name="Dogs")
+            cache_sticker_description(
+                "uid_1", "A happy dog", emoji="🐕", set_name="Dogs"
+            )
             result = get_cached_description("uid_1")
 
         assert result is not None
@@ -89,7 +98,10 @@ class TestBuildStickerInjection:
 
     def test_exact_format_emoji_and_set_name(self):
         result = build_sticker_injection("A cat", emoji="😀", set_name="MyPack")
-        assert result == '[The user sent a sticker 😀 from "MyPack"~ It shows: "A cat" (=^.w.^=)]'
+        assert (
+            result
+            == '[The user sent a sticker 😀 from "MyPack"~ It shows: "A cat" (=^.w.^=)]'
+        )
 
     def test_set_name_without_emoji_ignored(self):
         """set_name alone (no emoji) produces no context — only emoji+set_name triggers 'from' clause."""
@@ -117,7 +129,10 @@ class TestBuildAnimatedStickerInjection:
 
     def test_exact_format_without_emoji(self):
         result = build_animated_sticker_injection()
-        assert result == "[The user sent an animated sticker~ I can't see animated ones yet]"
+        assert (
+            result
+            == "[The user sent an animated sticker~ I can't see animated ones yet]"
+        )
 
     def test_empty_emoji_same_as_no_emoji(self):
         result = build_animated_sticker_injection(emoji="")

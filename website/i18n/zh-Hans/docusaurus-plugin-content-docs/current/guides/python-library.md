@@ -40,15 +40,17 @@ clawksis-agent @ git+https://github.com/samuelgradientai-sys/clawksis-agent.git
 
 使用 Clawksis 最简单的方式是 `chat()` 方法——传入一条消息，返回一个字符串：
 
-```python
-from run_agent import AIAgent
-
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    quiet_mode=True,
-)
-response = agent.chat("What is the capital of France?")
-print(response)
+```pythonfrom run_agent import AIAgent
+
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    quiet_mode=True,
+)
+
+response = agent.chat("What is the capital of France?")
+
+print(response)
 ```
 
 `chat()` 在内部处理完整的对话循环——工具调用、重试等一切事务——并仅返回最终的文本响应。
@@ -63,19 +65,21 @@ print(response)
 
 如需对对话进行更精细的控制，可直接使用 `run_conversation()`。它返回一个包含完整响应、消息历史和元数据的字典：
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    quiet_mode=True,
-)
-
-result = agent.run_conversation(
-    user_message="Search for recent Python 3.13 features",
-    task_id="my-task-1",
-)
-
-print(result["final_response"])
-print(f"Messages exchanged: {len(result['messages'])}")
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    quiet_mode=True,
+)
+
+
+result = agent.run_conversation(
+    user_message="Search for recent Python 3.13 features",
+    task_id="my-task-1",
+)
+
+
+print(result["final_response"])
+
+print(f"Messages exchanged: {len(result['messages'])}")
 ```
 
 返回的字典包含：
@@ -86,11 +90,10 @@ print(f"Messages exchanged: {len(result['messages'])}")
 
 你也可以传入自定义系统消息，覆盖该次调用的临时系统 prompt（提示词）：
 
-```python
-result = agent.run_conversation(
-    user_message="Explain quicksort",
-    system_message="You are a computer science tutor. Use simple analogies.",
-)
+```pythonresult = agent.run_conversation(
+    user_message="Explain quicksort",
+    system_message="You are a computer science tutor. Use simple analogies.",
+)
 ```
 
 ---
@@ -99,20 +102,22 @@ result = agent.run_conversation(
 
 使用 `enabled_toolsets` 或 `disabled_toolsets` 控制 agent 可访问的工具集：
 
-```python
-# 仅启用 Web 工具（浏览、搜索）
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    enabled_toolsets=["web"],
-    quiet_mode=True,
-)
-
-# 启用除终端访问外的所有功能
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    disabled_toolsets=["terminal"],
-    quiet_mode=True,
-)
+```python# 仅启用 Web 工具（浏览、搜索）
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    enabled_toolsets=["web"],
+    quiet_mode=True,
+)
+
+
+# 启用除终端访问外的所有功能
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    disabled_toolsets=["terminal"],
+    quiet_mode=True,
+)
 ```
 
 :::tip
@@ -125,22 +130,27 @@ agent = AIAgent(
 
 通过将消息历史传回来维护多轮对话的状态：
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    quiet_mode=True,
-)
-
-# 第一轮
-result1 = agent.run_conversation("My name is Alice")
-history = result1["messages"]
-
-# 第二轮——agent 记住了上下文
-result2 = agent.run_conversation(
-    "What's my name?",
-    conversation_history=history,
-)
-print(result2["final_response"])  # "Your name is Alice."
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    quiet_mode=True,
+)
+
+
+# 第一轮
+
+result1 = agent.run_conversation("My name is Alice")
+
+history = result1["messages"]
+
+
+# 第二轮——agent 记住了上下文
+
+result2 = agent.run_conversation(
+    "What's my name?",
+    conversation_history=history,
+)
+
+print(result2["final_response"])  # "Your name is Alice."
 ```
 
 `conversation_history` 参数接受上一次结果的 `messages` 列表。agent 会在内部复制该列表，因此你的原始列表不会被修改。
@@ -151,15 +161,16 @@ print(result2["final_response"])  # "Your name is Alice."
 
 启用轨迹保存，以 ShareGPT 格式捕获对话——适用于生成训练数据或调试：
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    save_trajectories=True,
-    quiet_mode=True,
-)
-
-agent.chat("Write a Python function to sort a list")
-# 以 ShareGPT 格式保存到 trajectory_samples.jsonl
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    save_trajectories=True,
+    quiet_mode=True,
+)
+
+
+agent.chat("Write a Python function to sort a list")
+
+# 以 ShareGPT 格式保存到 trajectory_samples.jsonl
 ```
 
 每次对话以单行 JSONL 的形式追加写入，便于从自动化运行中收集数据集。
@@ -170,15 +181,16 @@ agent.chat("Write a Python function to sort a list")
 
 使用 `ephemeral_system_prompt` 设置自定义系统 prompt，用于引导 agent 的行为，但**不会**保存到轨迹文件中（保持训练数据的整洁）：
 
-```python
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    ephemeral_system_prompt="You are a SQL expert. Only answer database questions.",
-    quiet_mode=True,
-)
-
-response = agent.chat("How do I write a JOIN query?")
-print(response)
+```pythonagent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    ephemeral_system_prompt="You are a SQL expert. Only answer database questions.",
+    quiet_mode=True,
+)
+
+
+response = agent.chat("How do I write a JOIN query?")
+
+print(response)
 ```
 
 这非常适合构建专用 agent——代码审查员、文档撰写员、SQL 助手——全部使用相同的底层工具。
@@ -195,30 +207,37 @@ python batch_runner.py --input prompts.jsonl --output results.jsonl
 
 每个 prompt 都有自己的 `task_id` 和隔离环境。如果需要自定义批处理逻辑，可以直接使用 `AIAgent` 构建：
 
-```python
-import concurrent.futures
-from run_agent import AIAgent
-
-prompts = [
-    "Explain recursion",
-    "What is a hash table?",
-    "How does garbage collection work?",
-]
-
-def process_prompt(prompt):
-    # 每个任务创建一个新的 agent 实例以保证线程安全
-    agent = AIAgent(
-        model="anthropic/claude-sonnet-4",
-        quiet_mode=True,
-        skip_memory=True,
-    )
-    return agent.chat(prompt)
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-    results = list(executor.map(process_prompt, prompts))
-
-for prompt, result in zip(prompts, results):
-    print(f"Q: {prompt}\nA: {result}\n")
+```pythonimport concurrent.futures
+
+from run_agent import AIAgent
+
+
+prompts = [
+    "Explain recursion",
+    "What is a hash table?",
+    "How does garbage collection work?",
+]
+
+
+def process_prompt(prompt):
+
+    # 每个任务创建一个新的 agent 实例以保证线程安全
+
+    agent = AIAgent(
+        model="anthropic/claude-sonnet-4",
+        quiet_mode=True,
+        skip_memory=True,
+    )
+
+    return agent.chat(prompt)
+
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    results = list(executor.map(process_prompt, prompts))
+
+
+for prompt, result in zip(prompts, results):
+    print(f"Q: {prompt}\nA: {result}\n")
 ```
 
 :::warning
@@ -231,78 +250,100 @@ for prompt, result in zip(prompts, results):
 
 ### FastAPI 端点
 
-```python
-from fastapi import FastAPI
-from pydantic import BaseModel
-from run_agent import AIAgent
-
-app = FastAPI()
-
-class ChatRequest(BaseModel):
-    message: str
-    model: str = "anthropic/claude-sonnet-4"
-
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    agent = AIAgent(
-        model=request.model,
-        quiet_mode=True,
-        skip_context_files=True,
-        skip_memory=True,
-    )
-    response = agent.chat(request.message)
-    return {"response": response}
+```pythonfrom fastapi import FastAPI
+
+from pydantic import BaseModel
+
+from run_agent import AIAgent
+
+
+app = FastAPI()
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+    model: str = "anthropic/claude-sonnet-4"
+
+
+@app.post("/chat")
+async def chat(request: ChatRequest):
+
+    agent = AIAgent(
+        model=request.model,
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+
+    response = agent.chat(request.message)
+
+    return {"response": response}
 ```
 
 ### Discord 机器人
 
-```python
-import discord
-from run_agent import AIAgent
-
-client = discord.Client(intents=discord.Intents.default())
-
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    if message.content.startswith("!clawk "):
-        query = message.content[8:]
-        agent = AIAgent(
-            model="anthropic/claude-sonnet-4",
-            quiet_mode=True,
-            skip_context_files=True,
-            skip_memory=True,
-            platform="discord",
-        )
-        response = agent.chat(query)
-        await message.channel.send(response[:2000])
-
-client.run("YOUR_DISCORD_TOKEN")
+```pythonimport discord
+
+from run_agent import AIAgent
+
+
+client = discord.Client(intents=discord.Intents.default())
+
+
+@client.event
+async def on_message(message):
+
+    if message.author == client.user:
+        return
+
+    if message.content.startswith("!clawk "):
+        query = message.content[8:]
+
+        agent = AIAgent(
+            model="anthropic/claude-sonnet-4",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="discord",
+        )
+
+        response = agent.chat(query)
+
+        await message.channel.send(response[:2000])
+
+
+client.run("YOUR_DISCORD_TOKEN")
 ```
 
 ### CI/CD 流水线步骤
 
-```python
-#!/usr/bin/env python3
-"""CI step: auto-review a PR diff."""
-import subprocess
-from run_agent import AIAgent
-
-diff = subprocess.check_output(["git", "diff", "main...HEAD"]).decode()
-
-agent = AIAgent(
-    model="anthropic/claude-sonnet-4",
-    quiet_mode=True,
-    skip_context_files=True,
-    skip_memory=True,
-    disabled_toolsets=["terminal", "browser"],
-)
-
-review = agent.chat(
-    f"Review this PR diff for bugs, security issues, and style problems:\n\n{diff}"
-)
-print(review)
+```python#!/usr/bin/env python3
+
+"""CI step: auto-review a PR diff."""
+
+import subprocess
+
+from run_agent import AIAgent
+
+
+diff = subprocess.check_output(["git", "diff", "main...HEAD"]).decode()
+
+
+agent = AIAgent(
+    model="anthropic/claude-sonnet-4",
+    quiet_mode=True,
+    skip_context_files=True,
+    skip_memory=True,
+    disabled_toolsets=["terminal", "browser"],
+)
+
+
+review = agent.chat(
+    f"Review this PR diff for bugs, security issues, and style problems:\n\n{diff}"
+)
+
+print(review)
 ```
 
 ---

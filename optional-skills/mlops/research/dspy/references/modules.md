@@ -15,6 +15,7 @@ DSPy modules are composable building blocks inspired by PyTorch's NN modules:
 ```python
 import dspy
 
+
 class CustomModule(dspy.Module):
     def __init__(self):
         super().__init__()
@@ -38,11 +39,14 @@ class CustomModule(dspy.Module):
 qa = dspy.Predict("question -> answer")
 result = qa(question="What is 2+2?")
 
+
 # Class signature
 class QA(dspy.Signature):
     """Answer questions concisely."""
+
     question = dspy.InputField()
     answer = dspy.OutputField(desc="short, factual answer")
+
 
 qa = dspy.Predict(QA)
 result = qa(question="What is the capital of France?")
@@ -68,14 +72,14 @@ print(result.answer)  # "Paris"
 cot = dspy.ChainOfThought("question -> answer")
 result = cot(question="If I have 5 apples and give away 2, how many remain?")
 print(result.rationale)  # "Let's think step by step..."
-print(result.answer)     # "3"
+print(result.answer)  # "3"
 
 # Custom rationale field
 cot = dspy.ChainOfThought(
     signature="problem -> solution",
     rationale_field=dspy.OutputField(
         prefix="Reasoning: Let's break this down step by step to"
-    )
+    ),
 )
 ```
 
@@ -124,21 +128,26 @@ print(result.answer)  # 150.0
 ```python
 from dspy.predict import ReAct
 
+
 # Define tools
 def search_wikipedia(query: str) -> str:
     """Search Wikipedia for information."""
     # Your search implementation
     return search_results
 
+
 def calculate(expression: str) -> float:
     """Evaluate a mathematical expression."""
     return eval(expression)
 
+
 # Create ReAct agent
 class ResearchQA(dspy.Signature):
     """Answer questions using available tools."""
+
     question = dspy.InputField()
     answer = dspy.OutputField()
+
 
 react = ReAct(ResearchQA, tools=[search_wikipedia, calculate])
 
@@ -220,22 +229,26 @@ print(answer)  # "4"
 ```python
 from pydantic import BaseModel, Field
 
+
 class PersonInfo(BaseModel):
     name: str = Field(description="Full name")
     age: int = Field(description="Age in years")
     occupation: str = Field(description="Current job")
 
+
 class ExtractPerson(dspy.Signature):
     """Extract person information from text."""
+
     text = dspy.InputField()
     person: PersonInfo = dspy.OutputField()
+
 
 extractor = dspy.TypedPredictor(ExtractPerson)
 result = extractor(text="John Doe is a 35-year-old software engineer.")
 
-print(result.person.name)       # "John Doe"
-print(result.person.age)        # 35
-print(result.person.occupation) # "software engineer"
+print(result.person.name)  # "John Doe"
+print(result.person.age)  # 35
+print(result.person.occupation)  # "software engineer"
 ```
 
 **Benefits:**
@@ -251,6 +264,7 @@ print(result.person.occupation) # "software engineer"
 ```python
 from dspy.primitives import Retry
 
+
 def validate_number(example, pred, trace=None):
     """Validate output is a number."""
     try:
@@ -259,11 +273,10 @@ def validate_number(example, pred, trace=None):
     except ValueError:
         return False
 
+
 # Retry up to 3 times if validation fails
 qa = Retry(
-    dspy.ChainOfThought("question -> answer"),
-    validate=validate_number,
-    max_retries=3
+    dspy.ChainOfThought("question -> answer"), validate=validate_number, max_retries=3
 )
 
 result = qa(question="What is 15% of 80?")
@@ -278,6 +291,7 @@ result = qa(question="What is 15% of 80?")
 import dspy
 from dspy.primitives.assertions import assert_transform_module, backtrack_handler
 
+
 class ValidatedQA(dspy.Module):
     def __init__(self):
         super().__init__()
@@ -290,7 +304,7 @@ class ValidatedQA(dspy.Module):
         dspy.Assert(
             isinstance(float(answer), float),
             "Answer must be a number",
-            backtrack=backtrack_handler
+            backtrack=backtrack_handler,
         )
 
         return dspy.Prediction(answer=answer)
@@ -365,11 +379,7 @@ All modules support batch processing for efficiency:
 ```python
 cot = dspy.ChainOfThought("question -> answer")
 
-questions = [
-    "What is 2+2?",
-    "What is 3+3?",
-    "What is 4+4?"
-]
+questions = ["What is 2+2?", "What is 3+3?", "What is 4+4?"]
 
 # Process all at once
 results = cot.batch([{"question": q} for q in questions])

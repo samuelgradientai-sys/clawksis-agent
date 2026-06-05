@@ -35,29 +35,32 @@ plugins/model-providers/my-provider/
 
 ## 最简示例——一个简单的 API key 提供商
 
-```python
-# plugins/model-providers/acme-inference/__init__.py
-from providers import register_provider
-from providers.base import ProviderProfile
-
-acme = ProviderProfile(
-    name="acme-inference",
-    aliases=("acme",),
-    display_name="Acme Inference",
-    description="Acme — OpenAI-compatible direct API",
-    signup_url="https://acme.example.com/keys",
-    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
-    base_url="https://api.acme.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="acme-small-fast",
-    fallback_models=(
-        "acme-large-v3",
-        "acme-medium-v3",
-        "acme-small-fast",
-    ),
-)
-
-register_provider(acme)
+```python# plugins/model-providers/acme-inference/__init__.py
+
+from providers import register_provider
+
+from providers.base import ProviderProfile
+
+
+acme = ProviderProfile(
+    name="acme-inference",
+    aliases=("acme",),
+    display_name="Acme Inference",
+    description="Acme — OpenAI-compatible direct API",
+    signup_url="https://acme.example.com/keys",
+    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
+    base_url="https://api.acme.example.com/v1",
+    auth_type="api_key",
+    default_aux_model="acme-small-fast",
+    fallback_models=(
+        "acme-large-v3",
+        "acme-medium-v3",
+        "acme-small-fast",
+    ),
+)
+
+
+register_provider(acme)
 ```
 
 ```yaml
@@ -109,37 +112,53 @@ author: Your Name
 
 对于非常规的特殊需求，可子类化 `ProviderProfile`：
 
-```python
-from typing import Any
-from providers.base import ProviderProfile
-
-class AcmeProfile(ProviderProfile):
-    def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """提供商特定的消息预处理。在 codex 清理之后、developer-role 替换之前运行。
-        默认：直接透传。"""
-        # 示例：Qwen 将纯文本内容规范化为 list-of-parts 数组并注入 cache_control；
-        # Kimi 重写 tool-call JSON
-        return messages
-
-    def build_extra_body(self, *, session_id=None, **context) -> dict:
-        """提供商特定的 extra_body 字段，合并到 API 调用中。
-        context 包含：session_id、provider_preferences、model、base_url、
-        reasoning_config。默认：空 dict。"""
-        # 示例：OpenRouter 的 provider-preferences 块，
-        # Gemini 的 thinking_config 转换。
-        return {}
-
-    def build_api_kwargs_extras(self, *, reasoning_config=None, **context):
-        """返回 (extra_body_additions, top_level_kwargs)。当某些字段需要放在顶层
-        （Kimi 的 reasoning_effort）而另一些放在 extra_body（OpenRouter 的 reasoning dict）
-        时需要此方法。默认：({}, {})。"""
-        return {}, {}
-
-    def fetch_models(self, *, api_key=None, timeout=8.0) -> list[str] | None:
-        """实时目录获取。默认使用 Bearer 认证访问 {models_url or base_url}/models。
-        以下情况需覆盖：自定义认证（Anthropic）、无 REST 端点（Bedrock → None），
-        或公开/无认证目录（OpenRouter）。"""
-        return super().fetch_models(api_key=api_key, timeout=timeout)
+```pythonfrom typing import Any
+
+from providers.base import ProviderProfile
+
+
+class AcmeProfile(ProviderProfile):
+    def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """提供商特定的消息预处理。在 codex 清理之后、developer-role 替换之前运行。
+
+        默认：直接透传。"""
+
+        # 示例：Qwen 将纯文本内容规范化为 list-of-parts 数组并注入 cache_control；
+
+        # Kimi 重写 tool-call JSON
+
+        return messages
+
+    def build_extra_body(self, *, session_id=None, **context) -> dict:
+        """提供商特定的 extra_body 字段，合并到 API 调用中。
+
+        context 包含：session_id、provider_preferences、model、base_url、
+
+        reasoning_config。默认：空 dict。"""
+
+        # 示例：OpenRouter 的 provider-preferences 块，
+
+        # Gemini 的 thinking_config 转换。
+
+        return {}
+
+    def build_api_kwargs_extras(self, *, reasoning_config=None, **context):
+        """返回 (extra_body_additions, top_level_kwargs)。当某些字段需要放在顶层
+
+        （Kimi 的 reasoning_effort）而另一些放在 extra_body（OpenRouter 的 reasoning dict）
+
+        时需要此方法。默认：({}, {})。"""
+
+        return {}, {}
+
+    def fetch_models(self, *, api_key=None, timeout=8.0) -> list[str] | None:
+        """实时目录获取。默认使用 Bearer 认证访问 {models_url or base_url}/models。
+
+        以下情况需覆盖：自定义认证（Anthropic）、无 REST 端点（Bedrock → None），
+
+        或公开/无认证目录（OpenRouter）。"""
+
+        return super().fetch_models(api_key=api_key, timeout=timeout)
 ```
 
 ## Hook 参考示例
@@ -160,18 +179,21 @@ class AcmeProfile(ProviderProfile):
 
 假设你想将 `gmi` 指向私有测试端点进行测试。创建 `~/.clawksis/plugins/model-providers/gmi/__init__.py`：
 
-```python
-from providers import register_provider
-from providers.base import ProviderProfile
-
-register_provider(ProviderProfile(
-    name="gmi",
-    aliases=("gmi-cloud", "gmicloud"),
-    env_vars=("GMI_API_KEY",),
-    base_url="https://gmi-staging.internal.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="google/gemini-3.1-flash-lite-preview",
-))
+```pythonfrom providers import register_provider
+
+from providers.base import ProviderProfile
+
+
+register_provider(
+    ProviderProfile(
+        name="gmi",
+        aliases=("gmi-cloud", "gmicloud"),
+        env_vars=("GMI_API_KEY",),
+        base_url="https://gmi-staging.internal.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="google/gemini-3.1-flash-lite-preview",
+    )
+)
 ```
 
 下次会话时，`get_provider_profile("gmi").base_url` 将返回测试 URL。无需打补丁，无需重新构建。由于用户插件在内置插件之后被发现，用户的 `register_provider()` 调用会胜出。
@@ -213,10 +235,10 @@ clawk doctor
 
 编程方式检查：
 
-```python
-from providers import list_providers
-for p in list_providers():
-    print(p.name, p.base_url, p.api_mode)
+```pythonfrom providers import list_providers
+
+for p in list_providers():
+    print(p.name, p.base_url, p.api_mode)
 ```
 
 ## 测试你的插件

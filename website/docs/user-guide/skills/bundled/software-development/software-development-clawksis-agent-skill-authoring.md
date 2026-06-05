@@ -130,15 +130,21 @@ Pick the closest existing category. Don't invent new top-level categories casual
 2. **Check validator constraints** in `tools/skill_manager_tool.py` if unsure.
 3. **Draft** with `write_file` to `skills/<category>/<name>/SKILL.md`.
 4. **Validate locally**:
-   ```python
-   import yaml, re, pathlib
-   content = pathlib.Path("skills/<category>/<name>/SKILL.md").read_text()
-   assert content.startswith("---")
-   m = re.search(r'\n---\s*\n', content[3:])
-   fm = yaml.safe_load(content[3:m.start()+3])
-   assert "name" in fm and "description" in fm
-   assert len(fm["description"]) <= 1024
-   assert len(content) <= 100_000
+   ```python   import yaml, re, pathlib
+
+   content = pathlib.Path("skills/<category>/<name>/SKILL.md").read_text()
+
+   assert content.startswith("---")
+
+   m = re.search(r"\n---\s*\n", content[3:])
+
+   fm = yaml.safe_load(content[3 : m.start() + 3])
+
+   assert "name" in fm and "description" in fm
+
+   assert len(fm["description"]) <= 1024
+
+   assert len(content) <= 100_000
    ```
 5. **Git add + commit** on the active branch.
 6. **Note:** the CURRENT session's skill loader is cached — `skill_view` / `skills_list` will not see the new skill until a new session. This is expected, not a bug.

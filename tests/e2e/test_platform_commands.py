@@ -54,7 +54,11 @@ class TestSlashCommands:
         send.assert_called_once()
         response_text = send.call_args[1].get("content") or send.call_args[0][1]
         response_lower = response_text.lower()
-        assert "no" in response_lower or "stop" in response_lower or "not running" in response_lower
+        assert (
+            "no" in response_lower
+            or "stop" in response_lower
+            or "not running" in response_lower
+        )
 
     @pytest.mark.asyncio
     async def test_commands_shows_listing(self, adapter, platform):
@@ -84,9 +88,13 @@ class TestSlashCommands:
         assert "verbose" in response_text.lower() or "tool_progress" in response_text
 
     @pytest.mark.asyncio
-    async def test_plaintext_restart_gateway_routes_to_safe_restart_command(self, adapter, runner, platform, monkeypatch):
+    async def test_plaintext_restart_gateway_routes_to_safe_restart_command(
+        self, adapter, runner, platform, monkeypatch
+    ):
         if platform != Platform.TELEGRAM:
-            pytest.skip("Plaintext restart shortcut is intentionally DM/Telegram-focused")
+            pytest.skip(
+                "Plaintext restart shortcut is intentionally DM/Telegram-focused"
+            )
 
         monkeypatch.setenv("INVOCATION_ID", "e2e-systemd")
         runner.request_restart = MagicMock(return_value=True)
@@ -99,7 +107,9 @@ class TestSlashCommands:
         runner.request_restart.assert_called_once_with(detached=False, via_service=True)
 
     @pytest.mark.asyncio
-    async def test_plaintext_restart_gateway_in_group_stays_plain_text(self, adapter, runner, platform, monkeypatch):
+    async def test_plaintext_restart_gateway_in_group_stays_plain_text(
+        self, adapter, runner, platform, monkeypatch
+    ):
         if platform != Platform.TELEGRAM:
             pytest.skip("Shortcut scope is only verified for Telegram here")
 
@@ -107,7 +117,14 @@ class TestSlashCommands:
         runner.request_restart = MagicMock(return_value=True)
         runner._handle_message_with_agent = AsyncMock(return_value="agent-handled")
 
-        send = await send_and_capture(adapter, "restart gateway", platform, chat_id="group-chat-1", user_id="u1", chat_type="group")
+        send = await send_and_capture(
+            adapter,
+            "restart gateway",
+            platform,
+            chat_id="group-chat-1",
+            user_id="u1",
+            chat_type="group",
+        )
 
         send.assert_called_once()
         response_text = send.call_args[1].get("content") or send.call_args[0][1]
@@ -120,7 +137,9 @@ class TestSlashCommands:
 
         send.assert_called_once()
         response_text = send.call_args[1].get("content") or send.call_args[0][1]
-        assert "personalit" in response_text.lower()  # matches "personality" or "personalities"
+        assert (
+            "personalit" in response_text.lower()
+        )  # matches "personality" or "personalities"
 
     @pytest.mark.asyncio
     async def test_yolo_toggles_mode(self, adapter, platform):
@@ -146,6 +165,7 @@ class TestSlashCommands:
         runner.config.quick_commands = {
             "s": {"type": "alias", "target": "/status extra-arg"}
         }
+
         async def _handle_status(event):
             assert event.get_command_args() == "extra-arg"
             return "status via alias"
@@ -161,12 +181,13 @@ class TestSlashCommands:
         runner._handle_message_with_agent.assert_not_awaited()
 
 
-
 class TestSessionLifecycle:
     """Verify session state changes across command sequences."""
 
     @pytest.mark.asyncio
-    async def test_new_then_status_reflects_reset(self, adapter, runner, session_entry, platform):
+    async def test_new_then_status_reflects_reset(
+        self, adapter, runner, session_entry, platform
+    ):
         """After /new, /status should report the fresh session."""
         await send_and_capture(adapter, "/new", platform)
         runner.session_store.reset_session.assert_called_once()
@@ -189,7 +210,9 @@ class TestAuthorization:
     """Verify the pipeline handles unauthorized users."""
 
     @pytest.mark.asyncio
-    async def test_unauthorized_user_gets_pairing_response(self, adapter, runner, platform):
+    async def test_unauthorized_user_gets_pairing_response(
+        self, adapter, runner, platform
+    ):
         """Unauthorized DM should trigger pairing code, not a command response."""
         runner._is_user_authorized = lambda _source: False
 
@@ -201,8 +224,14 @@ class TestAuthorization:
         # The adapter.send is called directly by the authorization path
         # (not via _send_with_retry), so check it was called with a pairing message
         adapter.send.assert_called()
-        response_text = adapter.send.call_args[0][1] if len(adapter.send.call_args[0]) > 1 else ""
-        assert "recognize" in response_text.lower() or "pair" in response_text.lower() or "ABC123" in response_text
+        response_text = (
+            adapter.send.call_args[0][1] if len(adapter.send.call_args[0]) > 1 else ""
+        )
+        assert (
+            "recognize" in response_text.lower()
+            or "pair" in response_text.lower()
+            or "ABC123" in response_text
+        )
 
     @pytest.mark.asyncio
     async def test_unauthorized_user_does_not_get_help(self, adapter, runner, platform):
@@ -216,7 +245,11 @@ class TestAuthorization:
 
         # If send was called, it should NOT contain the help text
         if adapter.send.called:
-            response_text = adapter.send.call_args[0][1] if len(adapter.send.call_args[0]) > 1 else ""
+            response_text = (
+                adapter.send.call_args[0][1]
+                if len(adapter.send.call_args[0]) > 1
+                else ""
+            )
             assert "/new" not in response_text
 
 
@@ -226,8 +259,12 @@ class TestSendFailureResilience:
     @pytest.mark.asyncio
     async def test_send_failure_does_not_crash_pipeline(self, adapter, platform):
         """If send() returns failure, the pipeline should not raise."""
-        adapter.send = AsyncMock(return_value=SendResult(success=False, error="network timeout"))
-        adapter.set_message_handler(adapter._message_handler) # re-wire with same handler
+        adapter.send = AsyncMock(
+            return_value=SendResult(success=False, error="network timeout")
+        )
+        adapter.set_message_handler(
+            adapter._message_handler
+        )  # re-wire with same handler
 
         event = make_event(platform, "/help")
         # Should not raise — pipeline handles send failures internally

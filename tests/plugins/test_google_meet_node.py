@@ -12,10 +12,7 @@ are fully mocked.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import argparse
@@ -27,15 +24,10 @@ import json
 from pathlib import Path
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture(autouse=True)
-
 def _isolate_home(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / ".clawksis"
@@ -47,9 +39,6 @@ def _isolate_home(tmp_path, monkeypatch):
     yield clawk_home
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # protocol.py
@@ -57,12 +46,9 @@ def _isolate_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def test_protocol_encode_decode_roundtrip():
 
     from plugins.google_meet.node import protocol
-
-
 
     msg = protocol.make_request("ping", "tok", {"x": 1}, req_id="abc")
 
@@ -81,14 +67,9 @@ def test_protocol_encode_decode_roundtrip():
     assert out["payload"] == {"x": 1}
 
 
-
-
-
 def test_protocol_make_request_autogenerates_id():
 
     from plugins.google_meet.node import protocol
-
-
 
     a = protocol.make_request("ping", "tok", {})
 
@@ -99,62 +80,40 @@ def test_protocol_make_request_autogenerates_id():
     assert len(a["id"]) >= 16  # uuid4 hex
 
 
-
-
-
 def test_protocol_make_request_rejects_bad_input():
 
     from plugins.google_meet.node import protocol
 
-
-
     with pytest.raises(ValueError):
-
         protocol.make_request("", "tok", {})
 
     with pytest.raises(ValueError):
-
         protocol.make_request("unknown_type", "tok", {})
 
     with pytest.raises(ValueError):
-
         protocol.make_request("ping", "tok", "not a dict")  # type: ignore[arg-type]
-
-
-
 
 
 def test_protocol_decode_raises_on_malformed():
 
     from plugins.google_meet.node import protocol
 
-
-
     with pytest.raises(ValueError):
-
         protocol.decode("not json at all")
 
     with pytest.raises(ValueError):
-
         protocol.decode("[]")  # list, not object
 
     with pytest.raises(ValueError):
-
         protocol.decode(json.dumps({"id": "x"}))  # missing type
 
     with pytest.raises(ValueError):
-
         protocol.decode(json.dumps({"type": "ping"}))  # missing id
-
-
-
 
 
 def test_protocol_validate_request_happy_path():
 
     from plugins.google_meet.node import protocol
-
-
 
     msg = protocol.make_request("status", "secret", {})
 
@@ -165,14 +124,9 @@ def test_protocol_validate_request_happy_path():
     assert reason == ""
 
 
-
-
-
 def test_protocol_validate_request_rejects_bad_token():
 
     from plugins.google_meet.node import protocol
-
-
 
     msg = protocol.make_request("status", "wrong", {})
 
@@ -183,14 +137,9 @@ def test_protocol_validate_request_rejects_bad_token():
     assert "token" in reason.lower()
 
 
-
-
-
 def test_protocol_validate_request_rejects_unknown_type():
 
     from plugins.google_meet.node import protocol
-
-
 
     raw = {"type": "nope", "id": "1", "token": "t", "payload": {}}
 
@@ -201,14 +150,9 @@ def test_protocol_validate_request_rejects_unknown_type():
     assert "unknown" in reason.lower()
 
 
-
-
-
 def test_protocol_validate_request_rejects_missing_id():
 
     from plugins.google_meet.node import protocol
-
-
 
     raw = {"type": "ping", "token": "t", "payload": {}}
 
@@ -219,14 +163,9 @@ def test_protocol_validate_request_rejects_missing_id():
     assert "id" in reason.lower()
 
 
-
-
-
 def test_protocol_validate_request_rejects_non_dict_payload():
 
     from plugins.google_meet.node import protocol
-
-
 
     raw = {"type": "ping", "id": "1", "token": "t", "payload": "oops"}
 
@@ -235,21 +174,13 @@ def test_protocol_validate_request_rejects_non_dict_payload():
     assert ok is False
 
 
-
-
-
 def test_protocol_error_envelope_shape():
 
     from plugins.google_meet.node import protocol
 
-
-
     err = protocol.make_error("abc", "nope")
 
     assert err == {"type": "error", "id": "abc", "error": "nope"}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -259,20 +190,15 @@ def test_protocol_error_envelope_shape():
 # ---------------------------------------------------------------------------
 
 
-
 def test_registry_add_get_roundtrip_persists(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     p = tmp_path / "nodes.json"
 
     r = NodeRegistry(path=p)
 
     r.add("mac", "ws://mac.local:18789", "deadbeef")
-
-
 
     # Second instance sees it.
 
@@ -291,28 +217,18 @@ def test_registry_add_get_roundtrip_persists(tmp_path):
     assert "added_at" in entry
 
 
-
-
-
 def test_registry_get_returns_none_when_missing(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
     assert r.get("ghost") is None
 
 
-
-
-
 def test_registry_remove(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
@@ -325,14 +241,9 @@ def test_registry_remove(tmp_path):
     assert r.remove("a") is False  # idempotent
 
 
-
-
-
 def test_registry_list_all_sorted(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
@@ -345,14 +256,9 @@ def test_registry_list_all_sorted(tmp_path):
     assert names == ["alpha", "zeta"]
 
 
-
-
-
 def test_registry_resolve_auto_picks_single(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
@@ -365,14 +271,9 @@ def test_registry_resolve_auto_picks_single(tmp_path):
     assert picked["name"] == "mac"
 
 
-
-
-
 def test_registry_resolve_ambiguous_returns_none(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
@@ -383,28 +284,18 @@ def test_registry_resolve_ambiguous_returns_none(tmp_path):
     assert r.resolve(None) is None
 
 
-
-
-
 def test_registry_resolve_empty_returns_none(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
     assert r.resolve(None) is None
 
 
-
-
-
 def test_registry_resolve_by_name(tmp_path):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     r = NodeRegistry(path=tmp_path / "n.json")
 
@@ -421,14 +312,9 @@ def test_registry_resolve_by_name(tmp_path):
     assert r.resolve("ghost") is None
 
 
-
-
-
 def test_registry_defaults_to_clawk_home(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.registry import NodeRegistry
-
-
 
     # _isolate_home already set CLAWK_HOME to tmp_path/.clawksis; the
 
@@ -443,9 +329,6 @@ def test_registry_defaults_to_clawk_home(tmp_path, monkeypatch):
     assert expected.is_file()
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # server.py — token + dispatch
@@ -453,12 +336,9 @@ def test_registry_defaults_to_clawk_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def test_server_ensure_token_generates_and_persists(tmp_path):
 
     from plugins.google_meet.node.server import NodeServer
-
-
 
     p = tmp_path / "tok.json"
 
@@ -468,8 +348,6 @@ def test_server_ensure_token_generates_and_persists(tmp_path):
 
     assert isinstance(t1, str) and len(t1) == 32
 
-
-
     # Reuse on a fresh instance.
 
     s2 = NodeServer(token_path=p)
@@ -478,8 +356,6 @@ def test_server_ensure_token_generates_and_persists(tmp_path):
 
     assert t1 == t2
 
-
-
     data = json.loads(p.read_text(encoding="utf-8"))
 
     assert data["token"] == t1
@@ -487,29 +363,22 @@ def test_server_ensure_token_generates_and_persists(tmp_path):
     assert "generated_at" in data
 
 
-
-
-
 def test_server_get_token_is_idempotent(tmp_path):
 
     from plugins.google_meet.node.server import NodeServer
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
     assert s.get_token() == s.get_token()
 
 
-
-
-
 def _run(coro):
 
-    return asyncio.new_event_loop().run_until_complete(coro) if False else asyncio.run(coro)
-
-
-
+    return (
+        asyncio.new_event_loop().run_until_complete(coro)
+        if False
+        else asyncio.run(coro)
+    )
 
 
 def test_server_handle_request_rejects_bad_token(tmp_path):
@@ -517,8 +386,6 @@ def test_server_handle_request_rejects_bad_token(tmp_path):
     from plugins.google_meet.node.server import NodeServer
 
     from plugins.google_meet.node import protocol
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -533,16 +400,11 @@ def test_server_handle_request_rejects_bad_token(tmp_path):
     assert "token" in resp["error"].lower()
 
 
-
-
-
 def test_server_handle_request_ping(tmp_path):
 
     from plugins.google_meet.node.server import NodeServer
 
     from plugins.google_meet.node import protocol
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json", display_name="node-x")
 
@@ -559,9 +421,6 @@ def test_server_handle_request_ping(tmp_path):
     assert resp["payload"]["display_name"] == "node-x"
 
 
-
-
-
 def test_server_handle_request_status_dispatches_to_pm(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -570,13 +429,9 @@ def test_server_handle_request_status_dispatches_to_pm(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
-    monkeypatch.setattr(pm, "status",
-
-                        lambda: {"ok": True, "alive": True, "meetingId": "abc"})
-
-
+    monkeypatch.setattr(
+        pm, "status", lambda: {"ok": True, "alive": True, "meetingId": "abc"}
+    )
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -593,9 +448,6 @@ def test_server_handle_request_status_dispatches_to_pm(tmp_path, monkeypatch):
     assert resp["payload"] == {"ok": True, "alive": True, "meetingId": "abc"}
 
 
-
-
-
 def test_server_handle_request_start_bot_dispatches(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -604,11 +456,7 @@ def test_server_handle_request_start_bot_dispatches(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
     captured = {}
-
-
 
     def fake_start(**kwargs):
 
@@ -616,25 +464,21 @@ def test_server_handle_request_start_bot_dispatches(tmp_path, monkeypatch):
 
         return {"ok": True, "pid": 42, "meeting_id": "abc-defg-hij"}
 
-
-
     monkeypatch.setattr(pm, "start", fake_start)
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
     tok = s.ensure_token()
 
-    req = protocol.make_request("start_bot", tok, {
-
-        "url": "https://meet.google.com/abc-defg-hij",
-
-        "guest_name": "Bot",
-
-        "duration": "30m",
-
-    })
+    req = protocol.make_request(
+        "start_bot",
+        tok,
+        {
+            "url": "https://meet.google.com/abc-defg-hij",
+            "guest_name": "Bot",
+            "duration": "30m",
+        },
+    )
 
     resp = asyncio.run(s._handle_request(req))
 
@@ -649,16 +493,11 @@ def test_server_handle_request_start_bot_dispatches(tmp_path, monkeypatch):
     assert captured["duration"] == "30m"
 
 
-
-
-
 def test_server_handle_request_start_bot_missing_url(tmp_path):
 
     from plugins.google_meet.node.server import NodeServer
 
     from plugins.google_meet.node import protocol
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -673,9 +512,6 @@ def test_server_handle_request_start_bot_missing_url(tmp_path):
     assert "url" in resp["error"]
 
 
-
-
-
 def test_server_handle_request_stop_dispatches(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -684,11 +520,7 @@ def test_server_handle_request_stop_dispatches(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
     got = {}
-
-
 
     def fake_stop(*, reason="requested"):
 
@@ -696,11 +528,7 @@ def test_server_handle_request_stop_dispatches(tmp_path, monkeypatch):
 
         return {"ok": True, "reason": reason}
 
-
-
     monkeypatch.setattr(pm, "stop", fake_stop)
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -715,9 +543,6 @@ def test_server_handle_request_stop_dispatches(tmp_path, monkeypatch):
     assert got["reason"] == "user-cancel"
 
 
-
-
-
 def test_server_handle_request_transcript(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -726,11 +551,7 @@ def test_server_handle_request_transcript(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
     got = {}
-
-
 
     def fake_transcript(last=None):
 
@@ -738,11 +559,7 @@ def test_server_handle_request_transcript(tmp_path, monkeypatch):
 
         return {"ok": True, "lines": ["a", "b"], "total": 2}
 
-
-
     monkeypatch.setattr(pm, "transcript", fake_transcript)
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -759,9 +576,6 @@ def test_server_handle_request_transcript(tmp_path, monkeypatch):
     assert got["last"] == 5
 
 
-
-
-
 def test_server_handle_request_say_enqueues_when_active(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -770,17 +584,13 @@ def test_server_handle_request_say_enqueues_when_active(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
     out = tmp_path / "meet-out"
 
     out.mkdir()
 
-    monkeypatch.setattr(pm, "_read_active",
-
-                        lambda: {"pid": 1, "meeting_id": "m", "out_dir": str(out)})
-
-
+    monkeypatch.setattr(
+        pm, "_read_active", lambda: {"pid": 1, "meeting_id": "m", "out_dir": str(out)}
+    )
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -803,9 +613,6 @@ def test_server_handle_request_say_enqueues_when_active(tmp_path, monkeypatch):
     assert json.loads(q[0])["text"] == "hello"
 
 
-
-
-
 def test_server_handle_request_say_without_active_still_ok(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -814,11 +621,7 @@ def test_server_handle_request_say_without_active_still_ok(tmp_path, monkeypatch
 
     from plugins.google_meet import process_manager as pm
 
-
-
     monkeypatch.setattr(pm, "_read_active", lambda: None)
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -835,9 +638,6 @@ def test_server_handle_request_say_without_active_still_ok(tmp_path, monkeypatch
     assert resp["payload"]["enqueued"] is False
 
 
-
-
-
 def test_server_handle_request_wraps_pm_exceptions(tmp_path, monkeypatch):
 
     from plugins.google_meet.node.server import NodeServer
@@ -846,17 +646,11 @@ def test_server_handle_request_wraps_pm_exceptions(tmp_path, monkeypatch):
 
     from plugins.google_meet import process_manager as pm
 
-
-
     def boom():
 
         raise ValueError("kaboom")
 
-
-
     monkeypatch.setattr(pm, "status", boom)
-
-
 
     s = NodeServer(token_path=tmp_path / "t.json")
 
@@ -871,9 +665,6 @@ def test_server_handle_request_wraps_pm_exceptions(tmp_path, monkeypatch):
     assert "kaboom" in resp["error"]
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # client.py
@@ -881,12 +672,8 @@ def test_server_handle_request_wraps_pm_exceptions(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 class _FakeWS:
-
     """Minimal context-manager stand-in for websockets.sync.client.connect."""
-
-
 
     def __init__(self, reply_builder):
 
@@ -894,39 +681,26 @@ class _FakeWS:
 
         self.sent = []
 
-
-
     def __enter__(self):
 
         return self
-
-
 
     def __exit__(self, exc_type, exc, tb):
 
         return False
 
-
-
     def send(self, raw):
 
         self.sent.append(raw)
-
-
 
     def recv(self, timeout=None):
 
         return self._reply_builder(self.sent[-1])
 
 
-
-
-
 def _install_fake_ws(monkeypatch, reply_builder):
 
     fake_ws_holder = {}
-
-
 
     def _connect(url, **kwargs):
 
@@ -940,8 +714,6 @@ def _install_fake_ws(monkeypatch, reply_builder):
 
         return ws
 
-
-
     # Patch the concrete import site inside client._rpc
 
     import websockets.sync.client as wsc  # type: ignore
@@ -951,36 +723,27 @@ def _install_fake_ws(monkeypatch, reply_builder):
     return fake_ws_holder
 
 
-
-
-
 def test_client_rpc_sends_correct_envelope_and_parses_response(monkeypatch):
 
     from plugins.google_meet.node.client import NodeClient
 
     from plugins.google_meet.node import protocol
 
-
-
     def reply(raw_out):
 
         req = protocol.decode(raw_out)
 
-        return protocol.encode(protocol.make_response(req["id"], {"ok": True, "echo": req["type"]}))
-
-
+        return protocol.encode(
+            protocol.make_response(req["id"], {"ok": True, "echo": req["type"]})
+        )
 
     holder = _install_fake_ws(monkeypatch, reply)
-
-
 
     c = NodeClient("ws://remote:1", "tok123")
 
     out = c._rpc("ping", {"hello": 1})
 
     assert out == {"ok": True, "echo": "ping"}
-
-
 
     sent = json.loads(holder["ws"].sent[0])
 
@@ -995,16 +758,11 @@ def test_client_rpc_sends_correct_envelope_and_parses_response(monkeypatch):
     assert holder["url"] == "ws://remote:1"
 
 
-
-
-
 def test_client_rpc_raises_on_error_envelope(monkeypatch):
 
     from plugins.google_meet.node.client import NodeClient
 
     from plugins.google_meet.node import protocol
-
-
 
     def reply(raw_out):
 
@@ -1012,20 +770,12 @@ def test_client_rpc_raises_on_error_envelope(monkeypatch):
 
         return protocol.encode(protocol.make_error(req["id"], "nope"))
 
-
-
     _install_fake_ws(monkeypatch, reply)
-
-
 
     c = NodeClient("ws://x", "t")
 
     with pytest.raises(RuntimeError, match="nope"):
-
         c._rpc("ping", {})
-
-
-
 
 
 def test_client_rpc_raises_on_id_mismatch(monkeypatch):
@@ -1034,26 +784,16 @@ def test_client_rpc_raises_on_id_mismatch(monkeypatch):
 
     from plugins.google_meet.node import protocol
 
-
-
     def reply(raw_out):
 
         return protocol.encode(protocol.make_response("different-id", {"ok": True}))
 
-
-
     _install_fake_ws(monkeypatch, reply)
-
-
 
     c = NodeClient("ws://x", "t")
 
     with pytest.raises(RuntimeError, match="mismatch"):
-
         c._rpc("ping", {})
-
-
-
 
 
 def test_client_convenience_methods_hit_correct_types(monkeypatch):
@@ -1062,11 +802,7 @@ def test_client_convenience_methods_hit_correct_types(monkeypatch):
 
     from plugins.google_meet.node import protocol
 
-
-
     seen = []
-
-
 
     def reply(raw_out):
 
@@ -1076,11 +812,7 @@ def test_client_convenience_methods_hit_correct_types(monkeypatch):
 
         return protocol.encode(protocol.make_response(req["id"], {"ok": True}))
 
-
-
     _install_fake_ws(monkeypatch, reply)
-
-
 
     c = NodeClient("ws://x", "t")
 
@@ -1095,8 +827,6 @@ def test_client_convenience_methods_hit_correct_types(monkeypatch):
     c.say("hi")
 
     c.ping()
-
-
 
     types = [t for t, _ in seen]
 
@@ -1115,25 +845,15 @@ def test_client_convenience_methods_hit_correct_types(monkeypatch):
     assert seen[4][1]["text"] == "hi"
 
 
-
-
-
 def test_client_init_rejects_bad_args():
 
     from plugins.google_meet.node.client import NodeClient
 
-
-
     with pytest.raises(ValueError):
-
         NodeClient("", "t")
 
     with pytest.raises(ValueError):
-
         NodeClient("ws://x", "")
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1143,12 +863,9 @@ def test_client_init_rejects_bad_args():
 # ---------------------------------------------------------------------------
 
 
-
 def _build_parser():
 
     from plugins.google_meet.node.cli import register_cli
-
-
 
     parser = argparse.ArgumentParser(prog="meet-node-test")
 
@@ -1157,18 +874,11 @@ def _build_parser():
     return parser
 
 
-
-
-
 def test_cli_approve_list_remove(capsys):
 
     from plugins.google_meet.node.registry import NodeRegistry
 
-
-
     p = _build_parser()
-
-
 
     args = p.parse_args(["approve", "mac", "ws://mac:1", "tok"])
 
@@ -1177,8 +887,6 @@ def test_cli_approve_list_remove(capsys):
     assert rc == 0
 
     assert NodeRegistry().get("mac") is not None
-
-
 
     args = p.parse_args(["list"])
 
@@ -1192,8 +900,6 @@ def test_cli_approve_list_remove(capsys):
 
     assert "ws://mac:1" in out
 
-
-
     args = p.parse_args(["remove", "mac"])
 
     rc = args.func(args)
@@ -1201,9 +907,6 @@ def test_cli_approve_list_remove(capsys):
     assert rc == 0
 
     assert NodeRegistry().get("mac") is None
-
-
-
 
 
 def test_cli_list_empty(capsys):
@@ -1219,9 +922,6 @@ def test_cli_list_empty(capsys):
     assert "no nodes" in capsys.readouterr().out
 
 
-
-
-
 def test_cli_remove_missing_returns_nonzero():
 
     p = _build_parser()
@@ -1233,40 +933,26 @@ def test_cli_remove_missing_returns_nonzero():
     assert rc == 1
 
 
-
-
-
 def test_cli_status_pings_via_node_client(capsys, monkeypatch):
 
     from plugins.google_meet.node.registry import NodeRegistry
 
     from plugins.google_meet.node import cli as node_cli
 
-
-
     NodeRegistry().add("mac", "ws://mac:1", "tok")
 
-
-
     class _FakeClient:
-
         def __init__(self, url, token):
 
             assert url == "ws://mac:1"
 
             assert token == "tok"
 
-
-
         def ping(self):
 
             return {"type": "pong", "display_name": "clawk-meet-node"}
 
-
-
     monkeypatch.setattr(node_cli, "NodeClient", _FakeClient)
-
-
 
     p = _build_parser()
 
@@ -1285,9 +971,6 @@ def test_cli_status_pings_via_node_client(capsys, monkeypatch):
     assert data["node"] == "mac"
 
 
-
-
-
 def test_cli_status_unknown_node_fails(capsys):
 
     p = _build_parser()
@@ -1299,38 +982,24 @@ def test_cli_status_unknown_node_fails(capsys):
     assert rc == 1
 
 
-
-
-
 def test_cli_status_reports_client_error(capsys, monkeypatch):
 
     from plugins.google_meet.node.registry import NodeRegistry
 
     from plugins.google_meet.node import cli as node_cli
 
-
-
     NodeRegistry().add("mac", "ws://mac:1", "tok")
 
-
-
     class _FakeClient:
-
         def __init__(self, url, token):
 
             pass
-
-
 
         def ping(self):
 
             raise RuntimeError("connection refused")
 
-
-
     monkeypatch.setattr(node_cli, "NodeClient", _FakeClient)
-
-
 
     p = _build_parser()
 
@@ -1345,4 +1014,3 @@ def test_cli_status_reports_client_error(capsys, monkeypatch):
     assert data["ok"] is False
 
     assert "connection refused" in data["error"]
-

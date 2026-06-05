@@ -27,28 +27,36 @@ plugins/memory/my-provider/
 
 Your plugin implements the `MemoryProvider` abstract base class from `agent/memory_provider.py`:
 
-```python
-from agent.memory_provider import MemoryProvider
-
-class MyMemoryProvider(MemoryProvider):
-    @property
-    def name(self) -> str:
-        return "my-provider"
-
-    def is_available(self) -> bool:
-        """Check if this provider can activate. NO network calls."""
-        return bool(os.environ.get("MY_API_KEY"))
-
-    def initialize(self, session_id: str, **kwargs) -> None:
-        """Called once at agent startup.
-
-        kwargs always includes:
-          clawk_home (str): Active CLAWK_HOME path. Use for storage.
-        """
-        self._api_key = os.environ.get("MY_API_KEY", "")
-        self._session_id = session_id
-
-    # ... implement remaining methods
+```pythonfrom agent.memory_provider import MemoryProvider
+
+
+class MyMemoryProvider(MemoryProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-provider"
+
+    def is_available(self) -> bool:
+        """Check if this provider can activate. NO network calls."""
+
+        return bool(os.environ.get("MY_API_KEY"))
+
+    def initialize(self, session_id: str, **kwargs) -> None:
+        """Called once at agent startup.
+
+
+
+        kwargs always includes:
+
+          clawk_home (str): Active CLAWK_HOME path. Use for storage.
+
+        """
+
+        self._api_key = os.environ.get("MY_API_KEY", "")
+
+        self._session_id = session_id
+
+    # ... implement remaining methods
 ```
 
 ## Required Methods
@@ -87,29 +95,29 @@ class MyMemoryProvider(MemoryProvider):
 
 `get_config_schema()` returns a list of field descriptors used by `clawk memory setup`:
 
-```python
-def get_config_schema(self):
-    return [
-        {
-            "key": "api_key",
-            "description": "My Provider API key",
-            "secret": True,           # → written to .env
-            "required": True,
-            "env_var": "MY_API_KEY",   # explicit env var name
-            "url": "https://my-provider.com/keys",  # where to get it
-        },
-        {
-            "key": "region",
-            "description": "Server region",
-            "default": "us-east",
-            "choices": ["us-east", "eu-west", "ap-south"],
-        },
-        {
-            "key": "project",
-            "description": "Project identifier",
-            "default": "clawk",
-        },
-    ]
+```pythondef get_config_schema(self):
+
+    return [
+        {
+            "key": "api_key",
+            "description": "My Provider API key",
+            "secret": True,  # → written to .env
+            "required": True,
+            "env_var": "MY_API_KEY",  # explicit env var name
+            "url": "https://my-provider.com/keys",  # where to get it
+        },
+        {
+            "key": "region",
+            "description": "Server region",
+            "default": "us-east",
+            "choices": ["us-east", "eu-west", "ap-south"],
+        },
+        {
+            "key": "project",
+            "description": "Project identifier",
+            "default": "clawk",
+        },
+    ]
 ```
 
 Fields with `secret: True` and `env_var` go to `.env`. Non-secret fields are passed to `save_config()`.
@@ -120,23 +128,26 @@ Every field in `get_config_schema()` is prompted during `clawk memory setup`. Pr
 
 ## Save Config
 
-```python
-def save_config(self, values: dict, clawk_home: str) -> None:
-    """Write non-secret config to your native location."""
-    import json
-    from pathlib import Path
-    config_path = Path(clawk_home) / "my-provider.json"
-    config_path.write_text(json.dumps(values, indent=2))
+```pythondef save_config(self, values: dict, clawk_home: str) -> None:
+    """Write non-secret config to your native location."""
+
+    import json
+
+    from pathlib import Path
+
+    config_path = Path(clawk_home) / "my-provider.json"
+
+    config_path.write_text(json.dumps(values, indent=2))
 ```
 
 For env-var-only providers, leave the default no-op.
 
 ## Plugin Entry Point
 
-```python
-def register(ctx) -> None:
-    """Called by the memory plugin discovery system."""
-    ctx.register_memory_provider(MyMemoryProvider())
+```pythondef register(ctx) -> None:
+    """Called by the memory plugin discovery system."""
+
+    ctx.register_memory_provider(MyMemoryProvider())
 ```
 
 ## plugin.yaml
@@ -153,18 +164,27 @@ hooks:
 
 **`sync_turn()` MUST be non-blocking.** If your backend has latency (API calls, LLM processing), run the work in a daemon thread:
 
-```python
-def sync_turn(self, user_content, assistant_content, *, session_id="", messages=None):
-    def _sync():
-        try:
-            self._api.ingest(user_content, assistant_content, session_id=session_id, messages=messages)
-        except Exception as e:
-            logger.warning("Sync failed: %s", e)
-
-    if self._sync_thread and self._sync_thread.is_alive():
-        self._sync_thread.join(timeout=5.0)
-    self._sync_thread = threading.Thread(target=_sync, daemon=True)
-    self._sync_thread.start()
+```pythondef sync_turn(self, user_content, assistant_content, *, session_id="", messages=None):
+
+    def _sync():
+
+        try:
+            self._api.ingest(
+                user_content,
+                assistant_content,
+                session_id=session_id,
+                messages=messages,
+            )
+
+        except Exception as e:
+            logger.warning("Sync failed: %s", e)
+
+    if self._sync_thread and self._sync_thread.is_alive():
+        self._sync_thread.join(timeout=5.0)
+
+    self._sync_thread = threading.Thread(target=_sync, daemon=True)
+
+    self._sync_thread.start()
 ```
 
 `messages` is optional OpenAI-style conversation context as of the completed
@@ -181,33 +201,44 @@ workspace data.
 
 All storage paths **must** use the `clawk_home` kwarg from `initialize()`, not hardcoded `~/.clawksis`:
 
-```python
-# CORRECT — profile-scoped
-from clawk_constants import get_clawk_home
-data_dir = get_clawk_home() / "my-provider"
-
-# WRONG — shared across all profiles
-data_dir = Path("~/.clawksis/my-provider").expanduser()
+```python# CORRECT — profile-scoped
+
+from clawk_constants import get_clawk_home
+
+data_dir = get_clawk_home() / "my-provider"
+
+
+# WRONG — shared across all profiles
+
+data_dir = Path("~/.clawksis/my-provider").expanduser()
 ```
 
 ## Testing
 
 See `tests/agent/test_memory_provider.py` and adjacent memory tests (`tests/agent/test_memory_session_switch.py`, `tests/agent/test_memory_user_id.py`, `tests/run_agent/test_memory_provider_init.py`) for end-to-end patterns.
 
-```python
-from agent.memory_manager import MemoryManager
-
-mgr = MemoryManager()
-mgr.add_provider(my_provider)
-mgr.initialize_all(session_id="test-1", platform="cli")
-
-# Test tool routing
-result = mgr.handle_tool_call("my_tool", {"action": "add", "content": "test"})
-
-# Test lifecycle
-mgr.sync_all("user msg", "assistant msg")
-mgr.on_session_end([])
-mgr.shutdown_all()
+```pythonfrom agent.memory_manager import MemoryManager
+
+
+mgr = MemoryManager()
+
+mgr.add_provider(my_provider)
+
+mgr.initialize_all(session_id="test-1", platform="cli")
+
+
+# Test tool routing
+
+result = mgr.handle_tool_call("my_tool", {"action": "add", "content": "test"})
+
+
+# Test lifecycle
+
+mgr.sync_all("user msg", "assistant msg")
+
+mgr.on_session_end([])
+
+mgr.shutdown_all()
 ```
 
 ## Adding CLI Commands
@@ -225,28 +256,40 @@ Memory provider plugins can register their own CLI subcommand tree (e.g. `clawk 
 
 ### Example
 
-```python
-# plugins/memory/my-provider/cli.py
-
-def my_command(args):
-    """Handler dispatched by argparse."""
-    sub = getattr(args, "my_command", None)
-    if sub == "status":
-        print("Provider is active and connected.")
-    elif sub == "config":
-        print("Showing config...")
-    else:
-        print("Usage: clawk my-provider <status|config>")
-
-def register_cli(subparser) -> None:
-    """Build the clawk my-provider argparse tree.
-
-    Called by discover_plugin_cli_commands() at argparse setup time.
-    """
-    subs = subparser.add_subparsers(dest="my_command")
-    subs.add_parser("status", help="Show provider status")
-    subs.add_parser("config", help="Show provider config")
-    subparser.set_defaults(func=my_command)
+```python# plugins/memory/my-provider/cli.py
+
+
+def my_command(args):
+    """Handler dispatched by argparse."""
+
+    sub = getattr(args, "my_command", None)
+
+    if sub == "status":
+        print("Provider is active and connected.")
+
+    elif sub == "config":
+        print("Showing config...")
+
+    else:
+        print("Usage: clawk my-provider <status|config>")
+
+
+def register_cli(subparser) -> None:
+    """Build the clawk my-provider argparse tree.
+
+
+
+    Called by discover_plugin_cli_commands() at argparse setup time.
+
+    """
+
+    subs = subparser.add_subparsers(dest="my_command")
+
+    subs.add_parser("status", help="Show provider status")
+
+    subs.add_parser("config", help="Show provider config")
+
+    subparser.set_defaults(func=my_command)
 ```
 
 ### Reference implementation

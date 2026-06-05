@@ -61,16 +61,15 @@ user asked for — don't just dump all 14.
 
 Default menu when the user's intent is unclear:
 
-```python
-clarify(
-    question="Which pixel-art style do you want?",
-    choices=[
-        "arcade — bold, chunky 80s cabinet feel (16 colors, 8px)",
-        "nes — Nintendo 8-bit hardware palette (54 colors, 8px)",
-        "gameboy — 4-shade green Game Boy DMG",
-        "snes — cleaner 16-bit look (32 colors, 4px)",
-    ],
-)
+```pythonclarify(
+    question="Which pixel-art style do you want?",
+    choices=[
+        "arcade — bold, chunky 80s cabinet feel (16 colors, 8px)",
+        "nes — Nintendo 8-bit hardware palette (54 colors, 8px)",
+        "gameboy — 4-shade green Game Boy DMG",
+        "snes — cleaner 16-bit look (32 colors, 4px)",
+    ],
+)
 ```
 
 When the user already named an era (e.g. "80s arcade", "Gameboy"), skip
@@ -81,16 +80,15 @@ When the user already named an era (e.g. "80s arcade", "Gameboy"), skip
 If the user asked for a video/GIF, or the output might benefit from motion,
 ask which scene:
 
-```python
-clarify(
-    question="Want to animate it? Pick a scene or skip.",
-    choices=[
-        "night — stars + fireflies + leaves",
-        "urban — rain + neon pulse",
-        "snow — falling snowflakes",
-        "skip — just the image",
-    ],
-)
+```pythonclarify(
+    question="Want to animate it? Pick a scene or skip.",
+    choices=[
+        "night — stars + fireflies + leaves",
+        "urban — rain + neon pulse",
+        "snow — falling snowflakes",
+        "skip — just the image",
+    ],
+)
 ```
 
 Do NOT call `clarify` more than twice in a row. One for style, one for scene if
@@ -124,8 +122,7 @@ Run `pixel_art()` first; if animation was requested, chain into
 Named palettes live in `scripts/palettes.py` (see `references/palettes.md` for
 the complete list — 28 named palettes total). Any preset can be overridden:
 
-```python
-pixel_art("in.png", "out.png", preset="snes", palette="PICO_8", block=6)
+```pythonpixel_art("in.png", "out.png", preset="snes", palette="PICO_8", block=6)
 ```
 
 ## Scene Catalog (for video)
@@ -149,25 +146,31 @@ pixel_art("in.png", "out.png", preset="snes", palette="PICO_8", block=6)
 
 ### Python (import)
 
-```python
-import sys
-sys.path.insert(0, "/home/teknium/.clawksis/skills/creative/pixel-art/scripts")
-from pixel_art import pixel_art
-from pixel_art_video import pixel_art_video
-
-# 1. Convert to pixel art
-pixel_art("/path/to/photo.jpg", "/tmp/pixel.png", preset="nes")
-
-# 2. Animate (optional)
-pixel_art_video(
-    "/tmp/pixel.png",
-    "/tmp/pixel.mp4",
-    scene="night",
-    duration=6,
-    fps=15,
-    seed=42,
-    export_gif=True,
-)
+```pythonimport sys
+
+sys.path.insert(0, "/home/teknium/.clawksis/skills/creative/pixel-art/scripts")
+
+from pixel_art import pixel_art
+
+from pixel_art_video import pixel_art_video
+
+
+# 1. Convert to pixel art
+
+pixel_art("/path/to/photo.jpg", "/tmp/pixel.png", preset="nes")
+
+
+# 2. Animate (optional)
+
+pixel_art_video(
+    "/tmp/pixel.png",
+    "/tmp/pixel.mp4",
+    scene="night",
+    duration=6,
+    fps=15,
+    seed=42,
+    export_gif=True,
+)
 ```
 
 ### CLI

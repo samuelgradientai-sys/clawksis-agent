@@ -159,6 +159,7 @@ export NCCL_TIMEOUT=1800
 ```python
 # Pre-process data offline
 from transformers import AutoTokenizer
+
 tokenizer = AutoTokenizer.from_pretrained("model_path")
 # Save tokenized data
 ```
@@ -172,6 +173,7 @@ tokenizer = AutoTokenizer.from_pretrained("model_path")
 1. **Verify data format**:
 ```python
 import json
+
 with open("data.jsonl") as f:
     for line in f:
         data = json.loads(line)
@@ -235,6 +237,7 @@ for sample in dataset:
 ```python
 # Test reward function independently
 from custom_rm import reward_func
+
 sample = Sample(prompt="test", response="test response")
 reward = reward_func(args, sample)
 print(f"Reward: {reward}")  # Should be reasonable
@@ -361,10 +364,12 @@ tensorboard --logdir outputs/
 import asyncio
 from custom_rm import reward_func
 
+
 async def test():
     sample = Sample(prompt="test", response="test", label="expected")
     reward = await reward_func(args, sample)
     print(f"Reward: {reward}")
+
 
 asyncio.run(test())
 ```

@@ -134,11 +134,13 @@ cron 任务可通过 `skills` 字段附加一个或多个技能。执行时：
 
 任务还可通过 `script` 字段附加 Python 脚本。该脚本在每次 agent 轮次*之前*运行，其 stdout 作为上下文注入到 prompt 中。这支持数据采集和变更检测模式：
 
-```python
-# ~/.clawksis/scripts/check_competitors.py
-import requests, json
-# 获取竞争对手发布说明，与上次运行结果进行差异比对
-# 将摘要打印到 stdout——agent 进行分析并报告
+```python# ~/.clawksis/scripts/check_competitors.py
+
+import requests, json
+
+# 获取竞争对手发布说明，与上次运行结果进行差异比对
+
+# 将摘要打印到 stdout——agent 进行分析并报告
 ```
 
 脚本超时默认为 120 秒。`_get_script_timeout()` 通过三层链路解析限制：

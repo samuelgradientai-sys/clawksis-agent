@@ -45,14 +45,17 @@ pip install vllm
 ```
 
 **Basic offline inference**:
-```python
-from vllm import LLM, SamplingParams
-
-llm = LLM(model="meta-llama/Llama-3-8B-Instruct")
-sampling = SamplingParams(temperature=0.7, max_tokens=256)
-
-outputs = llm.generate(["Explain quantum computing"], sampling)
-print(outputs[0].outputs[0].text)
+```pythonfrom vllm import LLM, SamplingParams
+
+
+llm = LLM(model="meta-llama/Llama-3-8B-Instruct")
+
+sampling = SamplingParams(temperature=0.7, max_tokens=256)
+
+
+outputs = llm.generate(["Explain quantum computing"], sampling)
+
+print(outputs[0].outputs[0].text)
 ```
 
 **OpenAI-compatible server**:
@@ -177,68 +180,77 @@ Batch Processing:
 
 **Step 1: Prepare input data**
 
-```python
-# Load prompts from file
-prompts = []
-with open("prompts.txt") as f:
-    prompts = [line.strip() for line in f]
-
-print(f"Loaded {len(prompts)} prompts")
+```python# Load prompts from file
+
+prompts = []
+
+with open("prompts.txt") as f:
+    prompts = [line.strip() for line in f]
+
+
+print(f"Loaded {len(prompts)} prompts")
 ```
 
 **Step 2: Configure LLM engine**
 
-```python
-from vllm import LLM, SamplingParams
-
-llm = LLM(
-    model="meta-llama/Llama-3-8B-Instruct",
-    tensor_parallel_size=2,  # Use 2 GPUs
-    gpu_memory_utilization=0.9,
-    max_model_len=4096
-)
-
-sampling = SamplingParams(
-    temperature=0.7,
-    top_p=0.95,
-    max_tokens=512,
-    stop=["</s>", "\n\n"]
-)
+```pythonfrom vllm import LLM, SamplingParams
+
+
+llm = LLM(
+    model="meta-llama/Llama-3-8B-Instruct",
+    tensor_parallel_size=2,  # Use 2 GPUs
+    gpu_memory_utilization=0.9,
+    max_model_len=4096,
+)
+
+
+sampling = SamplingParams(
+    temperature=0.7, top_p=0.95, max_tokens=512, stop=["</s>", "\n\n"]
+)
 ```
 
 **Step 3: Run batch inference**
 
 vLLM automatically batches requests for efficiency:
 
-```python
-# Process all prompts in one call
-outputs = llm.generate(prompts, sampling)
-
-# vLLM handles batching internally
-# No need to manually chunk prompts
+```python# Process all prompts in one call
+
+outputs = llm.generate(prompts, sampling)
+
+
+# vLLM handles batching internally
+
+# No need to manually chunk prompts
 ```
 
 **Step 4: Process results**
 
-```python
-# Extract generated text
-results = []
-for output in outputs:
-    prompt = output.prompt
-    generated = output.outputs[0].text
-    results.append({
-        "prompt": prompt,
-        "generated": generated,
-        "tokens": len(output.outputs[0].token_ids)
-    })
-
-# Save to file
-import json
-with open("results.jsonl", "w") as f:
-    for result in results:
-        f.write(json.dumps(result) + "\n")
-
-print(f"Processed {len(results)} prompts")
+```python# Extract generated text
+
+results = []
+
+for output in outputs:
+    prompt = output.prompt
+
+    generated = output.outputs[0].text
+
+    results.append({
+        "prompt": prompt,
+        "generated": generated,
+        "tokens": len(output.outputs[0].token_ids),
+    })
+
+
+# Save to file
+
+import json
+
+with open("results.jsonl", "w") as f:
+    for result in results:
+        f.write(json.dumps(result) + "\n")
+
+
+print(f"Processed {len(results)} prompts")
 ```
 
 ### Workflow 3: Quantized model serving
@@ -284,9 +296,10 @@ vllm serve TheBloke/Llama-2-70B-AWQ \
 
 Test outputs match expected quality:
 
-```python
-# Compare quantized vs non-quantized responses
-# Verify task-specific performance unchanged
+```python# Compare quantized vs non-quantized responses
+
+# Verify task-specific performance unchanged
+
 ```
 
 ## When to use vs alternatives

@@ -65,22 +65,24 @@ Revenue: $1,250M  (Source: model.xlsx, Inputs!C3)
 ### 存在公司模板时使用公司模板
 如果 `./templates/firm-template.pptx` 存在，则加载它，使演示文稿继承品牌颜色、字体和母版布局。
 
-```python
-from pptx import Presentation
-from pathlib import Path
-
-template = Path("./templates/firm-template.pptx")
-prs = Presentation(str(template)) if template.exists() else Presentation()
+```pythonfrom pptx import Presentation
+
+from pathlib import Path
+
+
+template = Path("./templates/firm-template.pptx")
+
+prs = Presentation(str(template)) if template.exists() else Presentation()
 ```
 
 ### 图表：从模型导出 PNG 优于原生 pptx 图表
 当保真度要求较高时（模型的图表样式必须与演示文稿完全匹配），从源工作簿将图表渲染为 PNG 并嵌入图片。原生 `pptx.chart` 图表较脆弱，且通常不符合公司规范。
 
-```python
-from pptx.util import Inches
-slide.shapes.add_picture("./out/charts/football_field.png",
-                         Inches(1), Inches(2),
-                         width=Inches(8))
+```pythonfrom pptx.util import Inches
+
+slide.shapes.add_picture(
+    "./out/charts/football_field.png", Inches(1), Inches(2), width=Inches(8)
+)
 ```
 
 ### 不对外发送
@@ -88,76 +90,109 @@ slide.shapes.add_picture("./out/charts/football_field.png",
 
 ## 骨架代码
 
-```python
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pathlib import Path
-
-template = Path("./templates/firm-template.pptx")
-prs = Presentation(str(template)) if template.exists() else Presentation()
-
-# Title slide
-slide = prs.slides.add_slide(prs.slide_layouts[0])
-slide.shapes.title.text = "Project Aurora — Strategic Alternatives"
-slide.placeholders[1].text = "Preliminary Discussion Materials"
-
-# Valuation summary slide (title-only layout)
-slide = prs.slides.add_slide(prs.slide_layouts[5])
-slide.shapes.title.text = "Valuation implies $38–$52 per share across methodologies"
-
-# Add a table bound to model outputs
-rows, cols = 5, 4
-tbl_shape = slide.shapes.add_table(rows, cols,
-                                   Inches(0.5), Inches(1.5),
-                                   Inches(9), Inches(3))
-tbl = tbl_shape.table
-headers = ["Methodology", "Low ($)", "Mid ($)", "High ($)"]
-for c, h in enumerate(headers):
-    tbl.cell(0, c).text = h
-
-# In a real deck, read these from the model workbook with openpyxl
-data = [
-    ("Trading comps",     "35", "41", "48"),
-    ("Precedent M&A",     "39", "45", "52"),
-    ("DCF (base)",        "36", "43", "51"),
-    ("LBO (10% IRR)",     "33", "38", "44"),
-]
-for r, row in enumerate(data, start=1):
-    for c, val in enumerate(row):
-        tbl.cell(r, c).text = val
-
-# Embed a chart rendered from the model
-slide = prs.slides.add_slide(prs.slide_layouts[5])
-slide.shapes.title.text = "Football field — current price $42"
-slide.shapes.add_picture("./out/charts/football_field.png",
-                         Inches(1), Inches(1.8), width=Inches(8))
-
-Path("./out").mkdir(exist_ok=True)
-prs.save("./out/pitch-aurora.pptx")
+```pythonfrom pptx import Presentation
+
+from pptx.util import Inches, Pt
+
+from pptx.dml.color import RGBColor
+
+from pathlib import Path
+
+
+template = Path("./templates/firm-template.pptx")
+
+prs = Presentation(str(template)) if template.exists() else Presentation()
+
+
+# Title slide
+
+slide = prs.slides.add_slide(prs.slide_layouts[0])
+
+slide.shapes.title.text = "Project Aurora — Strategic Alternatives"
+
+slide.placeholders[1].text = "Preliminary Discussion Materials"
+
+
+# Valuation summary slide (title-only layout)
+
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+
+slide.shapes.title.text = "Valuation implies $38–$52 per share across methodologies"
+
+
+# Add a table bound to model outputs
+
+rows, cols = 5, 4
+
+tbl_shape = slide.shapes.add_table(
+    rows, cols, Inches(0.5), Inches(1.5), Inches(9), Inches(3)
+)
+
+tbl = tbl_shape.table
+
+headers = ["Methodology", "Low ($)", "Mid ($)", "High ($)"]
+
+for c, h in enumerate(headers):
+    tbl.cell(0, c).text = h
+
+
+# In a real deck, read these from the model workbook with openpyxl
+
+data = [
+    ("Trading comps", "35", "41", "48"),
+    ("Precedent M&A", "39", "45", "52"),
+    ("DCF (base)", "36", "43", "51"),
+    ("LBO (10% IRR)", "33", "38", "44"),
+]
+
+for r, row in enumerate(data, start=1):
+    for c, val in enumerate(row):
+        tbl.cell(r, c).text = val
+
+
+# Embed a chart rendered from the model
+
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+
+slide.shapes.title.text = "Football field — current price $42"
+
+slide.shapes.add_picture(
+    "./out/charts/football_field.png", Inches(1), Inches(1.8), width=Inches(8)
+)
+
+
+Path("./out").mkdir(exist_ok=True)
+
+prs.save("./out/pitch-aurora.pptx")
 ```
 
 ## 将演示文稿数字绑定到源工作簿
 
 从 Excel 模型中读取命名区域或特定单元格，确保演示文稿中的数字不会偏离。
 
-```python
-from openpyxl import load_workbook
-
-wb = load_workbook("./out/model.xlsx", data_only=True)
-def nr(name):
-    """Resolve a named range to its current computed value."""
-    rng = wb.defined_names[name]
-    sheet, coord = next(rng.destinations)
-    return wb[sheet][coord].value
-
-revenue_fy24 = nr("RevenueFY24")
-implied_mid  = nr("ImpliedSharePriceBase")
+```pythonfrom openpyxl import load_workbook
+
+
+wb = load_workbook("./out/model.xlsx", data_only=True)
+
+
+def nr(name):
+    """Resolve a named range to its current computed value."""
+
+    rng = wb.defined_names[name]
+
+    sheet, coord = next(rng.destinations)
+
+    return wb[sheet][coord].value
+
+
+revenue_fy24 = nr("RevenueFY24")
+
+implied_mid = nr("ImpliedSharePriceBase")
 ```
 
 然后使用这些值构建演示文稿内容：
-```python
-slide.shapes.title.text = f"Implied share price of ${implied_mid:.2f} (base case)"
+```pythonslide.shapes.title.text = f"Implied share price of ${implied_mid:.2f} (base case)"
 ```
 
 请记住在读取工作簿之前重新计算 — openpyxl 只有在工作表已经被计算过的情况下才能看到计算值。请先运行 `excel-author` skill 中的重算辅助函数，或通过真实的 Excel 会话打开并保存。

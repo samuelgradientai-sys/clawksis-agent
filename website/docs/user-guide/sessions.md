@@ -378,8 +378,7 @@ The tool infers what you want from which arguments you set. There's no `mode` pa
 
 **1. Discovery — pass `query`:**
 
-```python
-session_search(query="auth refactor", limit=3)
+```pythonsession_search(query="auth refactor", limit=3)
 ```
 
 Runs FTS5, dedupes hits by session lineage, returns the top N sessions. Each result carries:
@@ -395,8 +394,7 @@ Bookends + window together reconstruct goal → match → resolution without pay
 
 **2. Scroll — pass `session_id` + `around_message_id`:**
 
-```python
-session_search(session_id="20260510_174648_805cc2", around_message_id=590803, window=10)
+```pythonsession_search(session_id="20260510_174648_805cc2", around_message_id=590803, window=10)
 ```
 
 Returns a window of ±`window` messages centered on the anchor. No FTS5, no bookends — just the slice. Use after a discovery call when you need more context than the ±5 default window.
@@ -410,8 +408,7 @@ Typical wall time: 1–2ms per scroll call.
 
 **3. Browse — no args:**
 
-```python
-session_search()
+```pythonsession_search()
 ```
 
 Returns recent sessions chronologically (titles, previews, timestamps). Useful when the user asks "what was I working on" without naming a topic.

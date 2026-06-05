@@ -68,19 +68,17 @@ SIMPLEX_HOME_CHANNEL=<contact-id>
 
 ## 在 cron 任务中使用 SimpleX
 
-```python
-cronjob(
-    action="create",
-    schedule="every 1h",
-    deliver="simplex",          # uses SIMPLEX_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 1h",
+    deliver="simplex",  # uses SIMPLEX_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
+)
 ```
 
 或指定特定联系人：
 
-```python
-send_message(target="simplex:<contact-id>", message="Done!")
+```pythonsend_message(target="simplex:<contact-id>", message="Done!")
 ```
 
 ## 隐私说明

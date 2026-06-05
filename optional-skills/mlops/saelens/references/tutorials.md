@@ -15,9 +15,7 @@ import torch
 # 1. Load model and SAE
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 sae, cfg_dict, sparsity = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 print(f"SAE input dim: {sae.cfg.d_in}")
@@ -70,32 +68,26 @@ cfg = LanguageModelSAERunnerConfig(
     hook_name="blocks.6.hook_resid_pre",
     hook_layer=6,
     d_in=768,
-
     # SAE architecture
     architecture="standard",
     d_sae=768 * 8,  # 8x expansion
     activation_fn="relu",
-
     # Training
     lr=4e-4,
     l1_coefficient=8e-5,
     l1_warm_up_steps=1000,
     train_batch_size_tokens=4096,
     training_tokens=10_000_000,  # Small run for demo
-
     # Data
     dataset_path="monology/pile-uncopyrighted",
     streaming=True,
     context_size=128,
-
     # Dead feature prevention
     use_ghost_grads=True,
     dead_feature_window=5000,
-
     # Logging
     log_to_wandb=True,
     wandb_project="sae-training-demo",
-
     # Hardware
     device="cuda",
     dtype="float32",
@@ -134,9 +126,7 @@ import torch
 
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 sae, _, _ = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 # 1. Feature attribution for a specific prediction
@@ -152,7 +142,7 @@ target_token = model.to_single_token(" Paris")
 # Compute feature contributions to target logit
 # contribution = feature_activation * decoder_weight * unembedding
 W_dec = sae.W_dec  # [d_sae, d_model]
-W_U = model.W_U    # [d_model, d_vocab]
+W_U = model.W_U  # [d_model, d_vocab]
 
 # Feature direction projected to vocabulary
 feature_to_logit = W_dec @ W_U  # [d_sae, d_vocab]
@@ -167,6 +157,7 @@ print("Top features contributing to 'Paris':")
 for idx, val in zip(top_features.indices, top_features.values):
     print(f"  Feature {idx.item()}: {val.item():.3f}")
 
+
 # 2. Feature steering
 def steer_with_feature(feature_idx, strength=5.0):
     """Add a feature direction to the residual stream."""
@@ -177,11 +168,10 @@ def steer_with_feature(feature_idx, strength=5.0):
         return activation
 
     output = model.generate(
-        tokens,
-        max_new_tokens=10,
-        fwd_hooks=[("blocks.8.hook_resid_pre", hook)]
+        tokens, max_new_tokens=10, fwd_hooks=[("blocks.8.hook_resid_pre", hook)]
     )
     return model.to_string(output[0])
+
 
 # Try steering with top feature
 top_feature_idx = top_features.indices[0].item()
@@ -205,9 +195,7 @@ import torch
 
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 sae, _, _ = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 prompt = "The capital of France is"
@@ -227,6 +215,7 @@ top_features = features[0, -1].topk(10).indices
 
 # Ablate top features one by one
 for feat_idx in top_features:
+
     def ablation_hook(activation, hook, feat_idx=feat_idx):
         # Encode → zero feature → decode
         feats = sae.encode(activation)
@@ -234,12 +223,13 @@ for feat_idx in top_features:
         return sae.decode(feats)
 
     ablated_logits = model.run_with_hooks(
-        tokens,
-        fwd_hooks=[("blocks.8.hook_resid_pre", ablation_hook)]
+        tokens, fwd_hooks=[("blocks.8.hook_resid_pre", ablation_hook)]
     )
     ablated_prob = torch.softmax(ablated_logits[0, -1], dim=-1)[target_token].item()
     change = (ablated_prob - baseline_prob) / baseline_prob * 100
-    print(f"Ablate feature {feat_idx.item()}: P(Paris)={ablated_prob:.4f} ({change:+.1f}%)")
+    print(
+        f"Ablate feature {feat_idx.item()}: P(Paris)={ablated_prob:.4f} ({change:+.1f}%)"
+    )
 ```
 
 ---
@@ -258,9 +248,7 @@ import torch
 
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 sae, _, _ = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 # Test prompts about the same concept
@@ -293,7 +281,9 @@ consistent_features = (min_activation > 0.5).nonzero().squeeze(-1)
 print(f"Features active in all prompts: {len(consistent_features)}")
 
 # Top consistent features
-top_consistent = mean_activation[consistent_features].topk(min(10, len(consistent_features)))
+top_consistent = mean_activation[consistent_features].topk(
+    min(10, len(consistent_features))
+)
 print("\nTop consistent features (possibly 'France/Paris' related):")
 for idx, val in zip(top_consistent.indices, top_consistent.values):
     feat_idx = consistent_features[idx].item()

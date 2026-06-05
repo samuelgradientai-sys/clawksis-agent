@@ -3,6 +3,7 @@
 Tests the pure policy resolver (no gateway plumbing). Integration tests that
 exercise the dispatch site live in test_slash_access_dispatch.py.
 """
+
 from __future__ import annotations
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
@@ -115,7 +116,7 @@ class TestPolicyFromExtra:
 
     def test_group_scope_uses_group_keys(self):
         extra = {
-            "allow_admin_from": ["111"],          # DM admins
+            "allow_admin_from": ["111"],  # DM admins
             "user_allowed_commands": ["status"],  # DM commands
             "group_allow_admin_from": ["222"],
             "group_user_allowed_commands": ["help"],
@@ -243,8 +244,12 @@ class TestPolicyForSource:
                 platform=Platform.DISCORD, chat_id="X", chat_type=ct, user_id="222"
             )
             p = policy_for_source(cfg, src)
-            assert p.is_admin("222") is True, f"chat_type={ct} should map to group scope"
-            assert p.is_admin("111") is False, f"chat_type={ct} should not see DM admins"
+            assert p.is_admin("222") is True, (
+                f"chat_type={ct} should map to group scope"
+            )
+            assert p.is_admin("111") is False, (
+                f"chat_type={ct} should not see DM admins"
+            )
 
     def test_no_admin_list_for_dm_means_unrestricted_in_dm(self):
         # Group has admin list, DM does not → DM gating disabled, group active.

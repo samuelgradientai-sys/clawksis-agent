@@ -37,32 +37,38 @@ from agent.auxiliary_client import (
 class TestIsUnsupportedTemperatureError:
     """The detector must match the phrasings providers actually return."""
 
-    @pytest.mark.parametrize("message", [
-        # OpenAI / Codex Responses
-        "HTTP 400: Unsupported parameter: temperature",
-        "Error code: 400 - {'error': {'message': \"Unsupported parameter: 'temperature'\"}}",
-        # Copilot / OpenAI error-code form
-        "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}",
-        # OpenRouter-style
-        "Provider returned error: temperature is not supported for this model",
-        "this model does not support temperature",
-        # Anthropic-style via OAI-compat
-        "temperature: unknown parameter",
-        # Some gateways
-        "unrecognized request argument supplied: temperature",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            # OpenAI / Codex Responses
+            "HTTP 400: Unsupported parameter: temperature",
+            "Error code: 400 - {'error': {'message': \"Unsupported parameter: 'temperature'\"}}",
+            # Copilot / OpenAI error-code form
+            "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}",
+            # OpenRouter-style
+            "Provider returned error: temperature is not supported for this model",
+            "this model does not support temperature",
+            # Anthropic-style via OAI-compat
+            "temperature: unknown parameter",
+            # Some gateways
+            "unrecognized request argument supplied: temperature",
+        ],
+    )
     def test_matches_real_provider_messages(self, message):
         assert _is_unsupported_temperature_error(RuntimeError(message)) is True
 
-    @pytest.mark.parametrize("message", [
-        # Unrelated 400s must NOT trigger a silent-retry
-        "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'...",
-        "max_tokens is too large for this model",
-        "Rate limit exceeded",
-        "Connection reset by peer",
-        # Temperature value error is a different class of problem
-        "temperature must be between 0 and 2",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            # Unrelated 400s must NOT trigger a silent-retry
+            "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'...",
+            "max_tokens is too large for this model",
+            "Rate limit exceeded",
+            "Connection reset by peer",
+            # Temperature value error is a different class of problem
+            "temperature must be between 0 and 2",
+        ],
+    )
     def test_does_not_match_unrelated_errors(self, message):
         assert _is_unsupported_temperature_error(RuntimeError(message)) is False
 
@@ -83,21 +89,30 @@ class TestCallLlmUnsupportedTemperatureRetry:
         client.chat.completions.create.side_effect = [first_exc, _dummy_response()]
         return client
 
-    @pytest.mark.parametrize("error_message", [
-        "HTTP 400: Unsupported parameter: temperature",
-        "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}",
-        "Provider error: this model does not support temperature",
-    ])
+    @pytest.mark.parametrize(
+        "error_message",
+        [
+            "HTTP 400: Unsupported parameter: temperature",
+            "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}",
+            "Provider error: this model does not support temperature",
+        ],
+    )
     def test_retries_once_without_temperature(self, error_message):
         client = self._setup(RuntimeError(error_message))
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task: resp,
+            ),
         ):
             result = call_llm(
                 task="compression",
@@ -130,14 +145,19 @@ class TestCallLlmUnsupportedTemperatureRetry:
         client.chat.completions.create.side_effect = non_temp_err
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError, match="Invalid value"):
                 call_llm(
@@ -160,14 +180,19 @@ class TestCallLlmUnsupportedTemperatureRetry:
         client.chat.completions.create.side_effect = err
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError):
                 call_llm(
@@ -186,18 +211,26 @@ class TestAsyncCallLlmUnsupportedTemperatureRetry:
     async def test_async_retries_once_without_temperature(self):
         client = MagicMock()
         client.base_url = "https://api.openai.com/v1"
-        client.chat.completions.create = AsyncMock(side_effect=[
-            RuntimeError("HTTP 400: Unsupported parameter: temperature"),
-            _dummy_response(),
-        ])
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                RuntimeError("HTTP 400: Unsupported parameter: temperature"),
+                _dummy_response(),
+            ]
+        )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task: resp,
+            ),
         ):
             result = await async_call_llm(
                 task="session_search",
@@ -227,14 +260,19 @@ class TestAsyncCallLlmUnsupportedTemperatureRetry:
         )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError, match="Invalid value"):
                 await async_call_llm(

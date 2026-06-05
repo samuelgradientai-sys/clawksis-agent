@@ -104,6 +104,7 @@ class TestPrefixConfusionRegression:
 def _can_symlink():
     """Check if we can create symlinks (needs admin/dev-mode on Windows)."""
     import tempfile
+
     try:
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "src"

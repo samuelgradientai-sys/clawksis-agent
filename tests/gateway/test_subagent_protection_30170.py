@@ -142,8 +142,7 @@ class TestAgentHasActiveSubagents:
 
     def test_returns_false_for_pending_sentinel(self) -> None:
         assert (
-            GatewayRunner._agent_has_active_subagents(_AGENT_PENDING_SENTINEL)
-            is False
+            GatewayRunner._agent_has_active_subagents(_AGENT_PENDING_SENTINEL) is False
         )
 
     def test_returns_false_when_attribute_missing(self) -> None:

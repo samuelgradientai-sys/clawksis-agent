@@ -17,7 +17,9 @@ def _display_names(completions):
 
 def _display_metas(completions):
     """Extract plain-text display_meta from a list of Completion objects."""
-    return [to_plain_text(c.display_meta) if c.display_meta else "" for c in completions]
+    return [
+        to_plain_text(c.display_meta) if c.display_meta else "" for c in completions
+    ]
 
 
 @pytest.fixture
@@ -27,19 +29,30 @@ def completer():
 
 class TestExtractPathWord:
     def test_relative_path(self):
-        assert SlashCommandCompleter._extract_path_word("look at ./src/main.py") == "./src/main.py"
+        assert (
+            SlashCommandCompleter._extract_path_word("look at ./src/main.py")
+            == "./src/main.py"
+        )
 
     def test_home_path(self):
         assert SlashCommandCompleter._extract_path_word("edit ~/docs/") == "~/docs/"
 
     def test_absolute_path(self):
-        assert SlashCommandCompleter._extract_path_word("read /etc/hosts") == "/etc/hosts"
+        assert (
+            SlashCommandCompleter._extract_path_word("read /etc/hosts") == "/etc/hosts"
+        )
 
     def test_parent_path(self):
-        assert SlashCommandCompleter._extract_path_word("check ../config.yaml") == "../config.yaml"
+        assert (
+            SlashCommandCompleter._extract_path_word("check ../config.yaml")
+            == "../config.yaml"
+        )
 
     def test_path_with_slash_in_middle(self):
-        assert SlashCommandCompleter._extract_path_word("open src/utils/helpers.py") == "src/utils/helpers.py"
+        assert (
+            SlashCommandCompleter._extract_path_word("open src/utils/helpers.py")
+            == "src/utils/helpers.py"
+        )
 
     def test_plain_word_not_path(self):
         assert SlashCommandCompleter._extract_path_word("hello world") is None
@@ -51,7 +64,10 @@ class TestExtractPathWord:
         assert SlashCommandCompleter._extract_path_word("README.md") is None
 
     def test_word_after_space(self):
-        assert SlashCommandCompleter._extract_path_word("fix the bug in ./tools/") == "./tools/"
+        assert (
+            SlashCommandCompleter._extract_path_word("fix the bug in ./tools/")
+            == "./tools/"
+        )
 
     def test_just_dot_slash(self):
         assert SlashCommandCompleter._extract_path_word("./") == "./"
@@ -108,14 +124,18 @@ class TestPathCompletions:
         assert "testfile.md" in names
 
     def test_nonexistent_dir_returns_empty(self):
-        completions = list(SlashCommandCompleter._path_completions("/nonexistent_dir_xyz/"))
+        completions = list(
+            SlashCommandCompleter._path_completions("/nonexistent_dir_xyz/")
+        )
         assert completions == []
 
     def test_respects_limit(self, tmp_path):
         for i in range(50):
             (tmp_path / f"file_{i:03d}.txt").touch()
 
-        completions = list(SlashCommandCompleter._path_completions(f"{tmp_path}/", limit=10))
+        completions = list(
+            SlashCommandCompleter._path_completions(f"{tmp_path}/", limit=10)
+        )
         assert len(completions) == 10
 
     def test_case_insensitive_prefix(self, tmp_path):

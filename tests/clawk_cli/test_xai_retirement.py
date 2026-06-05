@@ -1,4 +1,5 @@
 """Unit tests for clawk_cli.xai_retirement (May 15, 2026 model retirement)."""
+
 from __future__ import annotations
 
 
@@ -18,6 +19,7 @@ from clawk_cli.xai_retirement import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _paths(issues):
     return [i.config_path for i in issues]
 
@@ -25,6 +27,7 @@ def _paths(issues):
 # ---------------------------------------------------------------------------
 # _normalize / _looks_like_xai
 # ---------------------------------------------------------------------------
+
 
 class TestNormalize:
     def test_strips_x_ai_prefix(self):
@@ -66,6 +69,7 @@ class TestLooksLikeXai:
 # ---------------------------------------------------------------------------
 # find_retired_xai_refs — config scanning
 # ---------------------------------------------------------------------------
+
 
 class TestFindRetiredEdgeCases:
     def test_empty_config_no_issues(self):
@@ -117,10 +121,10 @@ class TestFindRetiredPerSlot:
     def test_auxiliary_multiple_slots(self):
         cfg = {
             "auxiliary": {
-                "vision":      {"model": "grok-4-fast-reasoning"},
+                "vision": {"model": "grok-4-fast-reasoning"},
                 "compression": {"model": "grok-code-fast-1"},
-                "curator":     {"model": "grok-4.3"},  # not retired
-                "approval":    {"model": "gpt-4o-mini"},  # not xAI
+                "curator": {"model": "grok-4.3"},  # not retired
+                "approval": {"model": "gpt-4o-mini"},  # not xAI
             }
         }
         issues = find_retired_xai_refs(cfg)
@@ -147,23 +151,19 @@ class TestFindRetiredPerSlot:
         assert issues[0].replacement == "grok-imagine-image-quality"
 
     def test_image_gen_plugin_retired(self):
-        cfg = {
-            "plugins": {
-                "image_gen": {
-                    "xai": {"model": "grok-imagine-image-pro"}
-                }
-            }
-        }
+        cfg = {"plugins": {"image_gen": {"xai": {"model": "grok-imagine-image-pro"}}}}
         issues = find_retired_xai_refs(cfg)
         assert _paths(issues) == ["plugins.image_gen.xai.model"]
         assert issues[0].replacement == "grok-imagine-image-quality"
 
     def test_full_trap_config(self):
         cfg = {
-            "principal":  {"model": "grok-4-1-fast-non-reasoning"},
-            "auxiliary":  {"vision": {"model": "grok-4-fast-reasoning"}},
+            "principal": {"model": "grok-4-1-fast-non-reasoning"},
+            "auxiliary": {"vision": {"model": "grok-4-fast-reasoning"}},
             "delegation": {"model": "grok-code-fast-1"},
-            "tts":        {"xai": {"model": "grok-3"}},  # text model in TTS slot, but valid path
+            "tts": {
+                "xai": {"model": "grok-3"}
+            },  # text model in TTS slot, but valid path
             "plugins": {"image_gen": {"xai": {"model": "grok-imagine-image-pro"}}},
         }
         issues = find_retired_xai_refs(cfg)
@@ -173,6 +173,7 @@ class TestFindRetiredPerSlot:
 # ---------------------------------------------------------------------------
 # Migration semantics
 # ---------------------------------------------------------------------------
+
 
 class TestMigrationSemantics:
     def test_non_reasoning_variant_recommends_reasoning_effort_none(self):
@@ -203,6 +204,7 @@ class TestMigrationSemantics:
 # ---------------------------------------------------------------------------
 # format_issue
 # ---------------------------------------------------------------------------
+
 
 class TestFormatIssue:
     def test_basic_format(self):
@@ -250,6 +252,7 @@ class TestFormatIssue:
 # ---------------------------------------------------------------------------
 # Module-level constants sanity
 # ---------------------------------------------------------------------------
+
 
 class TestModuleConstants:
     def test_retirement_date_is_may_15(self):

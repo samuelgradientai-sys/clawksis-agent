@@ -7,6 +7,7 @@ import pytest
 def reset_skin_state():
     """Reset skin engine state between tests."""
     from clawk_cli import skin_engine
+
     skin_engine._active_skin = None
     skin_engine._active_skin_name = "default"
     yield
@@ -17,6 +18,7 @@ def reset_skin_state():
 class TestSkinConfig:
     def test_default_skin_has_required_fields(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("default")
         assert skin.name == "default"
         assert skin.tool_prefix == "┊"
@@ -26,18 +28,21 @@ class TestSkinConfig:
 
     def test_get_color_with_fallback(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("default")
         assert skin.get_color("banner_title") == "#FFD700"
         assert skin.get_color("nonexistent", "#000") == "#000"
 
     def test_get_branding_with_fallback(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("default")
         assert skin.get_branding("agent_name") == "Clawksis"
         assert skin.get_branding("nonexistent", "fallback") == "fallback"
 
     def test_get_spinner_wings_empty_for_default(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("default")
         assert skin.get_spinner_wings() == []
 
@@ -45,6 +50,7 @@ class TestSkinConfig:
 class TestBuiltinSkins:
     def test_ares_skin_loads(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("ares")
         assert skin.name == "ares"
         assert skin.tool_prefix == "╎"
@@ -56,6 +62,7 @@ class TestBuiltinSkins:
 
     def test_ares_has_spinner_customization(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("ares")
         wings = skin.get_spinner_wings()
         assert len(wings) > 0
@@ -64,12 +71,14 @@ class TestBuiltinSkins:
 
     def test_mono_skin_loads(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("mono")
         assert skin.name == "mono"
         assert skin.get_color("banner_title") == "#e6edf3"
 
     def test_slate_skin_loads(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("slate")
         assert skin.name == "slate"
         assert skin.get_color("banner_title") == "#7eb8f6"
@@ -110,13 +119,21 @@ class TestBuiltinSkins:
 
     def test_unknown_skin_falls_back_to_default(self):
         from clawk_cli.skin_engine import load_skin
+
         skin = load_skin("nonexistent_skin_xyz")
         assert skin.name == "default"
 
     def test_all_builtin_skins_have_complete_colors(self):
         from clawk_cli.skin_engine import _BUILTIN_SKINS, _build_skin_config
-        required_keys = ["banner_border", "banner_title", "banner_accent",
-                         "banner_dim", "banner_text", "ui_accent"]
+
+        required_keys = [
+            "banner_border",
+            "banner_title",
+            "banner_accent",
+            "banner_dim",
+            "banner_text",
+            "ui_accent",
+        ]
         for name, data in _BUILTIN_SKINS.items():
             skin = _build_skin_config(data)
             for key in required_keys:
@@ -125,7 +142,12 @@ class TestBuiltinSkins:
 
 class TestSkinManagement:
     def test_set_active_skin(self):
-        from clawk_cli.skin_engine import set_active_skin, get_active_skin, get_active_skin_name
+        from clawk_cli.skin_engine import (
+            set_active_skin,
+            get_active_skin,
+            get_active_skin_name,
+        )
+
         skin = set_active_skin("ares")
         assert skin.name == "ares"
         assert get_active_skin_name() == "ares"
@@ -133,11 +155,13 @@ class TestSkinManagement:
 
     def test_get_active_skin_defaults(self):
         from clawk_cli.skin_engine import get_active_skin
+
         skin = get_active_skin()
         assert skin.name == "default"
 
     def test_list_skins_includes_builtins(self):
         from clawk_cli.skin_engine import list_skins
+
         skins = list_skins()
         names = [s["name"] for s in skins]
         assert "default" in names
@@ -152,23 +176,27 @@ class TestSkinManagement:
 
     def test_init_skin_from_config(self):
         from clawk_cli.skin_engine import init_skin_from_config, get_active_skin_name
+
         init_skin_from_config({"display": {"skin": "ares"}})
         assert get_active_skin_name() == "ares"
 
     def test_init_skin_from_empty_config(self):
         from clawk_cli.skin_engine import init_skin_from_config, get_active_skin_name
+
         init_skin_from_config({})
         assert get_active_skin_name() == "default"
 
     def test_init_skin_from_null_display(self):
         """display: null should fall back to default, not crash."""
         from clawk_cli.skin_engine import init_skin_from_config, get_active_skin_name
+
         init_skin_from_config({"display": None})
         assert get_active_skin_name() == "default"
 
     def test_init_skin_from_non_dict_display(self):
         """display: <non-dict> should fall back to default."""
         from clawk_cli.skin_engine import init_skin_from_config, get_active_skin_name
+
         init_skin_from_config({"display": "invalid"})
         assert get_active_skin_name() == "default"
 
@@ -182,6 +210,7 @@ class TestSkinManagement:
 class TestUserSkins:
     def test_load_user_skin_from_yaml(self, tmp_path, monkeypatch):
         from clawk_cli.skin_engine import load_skin
+
         # Create a user skin YAML
         skins_dir = tmp_path / "skins"
         skins_dir.mkdir()
@@ -194,6 +223,7 @@ class TestUserSkins:
             "tool_prefix": "▸",
         }
         import yaml
+
         skin_file.write_text(yaml.dump(skin_data))
 
         # Patch skins dir
@@ -207,7 +237,9 @@ class TestUserSkins:
         # Should inherit defaults for unspecified colors
         assert skin.get_color("banner_border") == "#CD7F32"  # from default
 
-    def test_load_user_skin_invalid_section_types_fall_back_to_defaults(self, tmp_path, monkeypatch):
+    def test_load_user_skin_invalid_section_types_fall_back_to_defaults(
+        self, tmp_path, monkeypatch
+    ):
         from clawk_cli.skin_engine import load_skin
 
         skins_dir = tmp_path / "skins"
@@ -215,16 +247,14 @@ class TestUserSkins:
         import yaml
 
         (skins_dir / "broken.yaml").write_text(
-            yaml.dump(
-                {
-                    "name": "broken",
-                    "colors": ["not", "a", "mapping"],
-                    "spinner": "invalid",
-                    "branding": ["also", "invalid"],
-                    "tool_emojis": ["invalid"],
-                    "tool_prefix": "!",
-                }
-            ),
+            yaml.dump({
+                "name": "broken",
+                "colors": ["not", "a", "mapping"],
+                "spinner": "invalid",
+                "branding": ["also", "invalid"],
+                "tool_emojis": ["invalid"],
+                "tool_prefix": "!",
+            }),
             encoding="utf-8",
         )
         monkeypatch.setattr("clawk_cli.skin_engine._skins_dir", lambda: skins_dir)
@@ -240,13 +270,17 @@ class TestUserSkins:
 
     def test_list_skins_includes_user_skins(self, tmp_path, monkeypatch):
         from clawk_cli.skin_engine import list_skins
+
         skins_dir = tmp_path / "skins"
         skins_dir.mkdir()
         import yaml
-        (skins_dir / "pirate.yaml").write_text(yaml.dump({
-            "name": "pirate",
-            "description": "Arr matey",
-        }))
+
+        (skins_dir / "pirate.yaml").write_text(
+            yaml.dump({
+                "name": "pirate",
+                "description": "Arr matey",
+            })
+        )
         monkeypatch.setattr("clawk_cli.skin_engine._skins_dir", lambda: skins_dir)
 
         skins = list_skins()
@@ -259,17 +293,20 @@ class TestUserSkins:
 class TestDisplayIntegration:
     def test_get_skin_tool_prefix_default(self):
         from agent.display import get_skin_tool_prefix
+
         assert get_skin_tool_prefix() == "┊"
 
     def test_get_skin_tool_prefix_custom(self):
         from clawk_cli.skin_engine import set_active_skin
         from agent.display import get_skin_tool_prefix
+
         set_active_skin("ares")
         assert get_skin_tool_prefix() == "╎"
 
     def test_tool_message_uses_skin_prefix(self):
         from clawk_cli.skin_engine import set_active_skin
         from agent.display import get_cute_tool_message
+
         set_active_skin("ares")
         msg = get_cute_tool_message("terminal", {"command": "ls"}, 0.5)
         assert msg.startswith("╎")
@@ -277,6 +314,7 @@ class TestDisplayIntegration:
 
     def test_tool_message_default_prefix(self):
         from agent.display import get_cute_tool_message
+
         msg = get_cute_tool_message("terminal", {"command": "ls"}, 0.5)
         assert msg.startswith("┊")
 
@@ -306,7 +344,11 @@ class TestCliBrandingHelpers:
         assert get_active_goodbye() == "Farewell, warrior! ⚔"
 
     def test_prompt_toolkit_style_overrides_cover_tui_classes(self):
-        from clawk_cli.skin_engine import set_active_skin, get_prompt_toolkit_style_overrides
+        from clawk_cli.skin_engine import (
+            set_active_skin,
+            get_prompt_toolkit_style_overrides,
+        )
+
         set_active_skin("ares")
         overrides = get_prompt_toolkit_style_overrides()
         required = {
@@ -386,5 +428,11 @@ class TestCliBrandingHelpers:
         set_active_skin("daylight")
         skin = get_active_skin()
         overrides = get_prompt_toolkit_style_overrides()
-        assert overrides["status-bar"] == f"bg:{skin.get_color('status_bar_bg')} {skin.get_color('banner_text')}"
-        assert overrides["voice-status"] == f"bg:{skin.get_color('voice_status_bg')} {skin.get_color('ui_label')}"
+        assert (
+            overrides["status-bar"]
+            == f"bg:{skin.get_color('status_bar_bg')} {skin.get_color('banner_text')}"
+        )
+        assert (
+            overrides["voice-status"]
+            == f"bg:{skin.get_color('voice_status_bg')} {skin.get_color('ui_label')}"
+        )

@@ -42,21 +42,23 @@ Memory-efficient online RL.
 from trl import GRPOTrainer, GRPOConfig
 from datasets import load_dataset
 
+
 # Define reward function
 def reward_func(completions, **kwargs):
     return [len(set(c.split())) for c in completions]
 
+
 config = GRPOConfig(
     output_dir="model-grpo",
     num_generations=4,  # Completions per prompt
-    max_new_tokens=128
+    max_new_tokens=128,
 )
 
 trainer = GRPOTrainer(
     model="Qwen/Qwen2-0.5B-Instruct",
     reward_funcs=reward_func,
     args=config,
-    train_dataset=load_dataset("trl-lib/tldr", split="train")
+    train_dataset=load_dataset("trl-lib/tldr", split="train"),
 )
 trainer.train()
 ```

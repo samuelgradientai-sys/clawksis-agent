@@ -14,6 +14,7 @@ hits for OpenAI Codex Responses API users — OpenAI's docs require the
 
 These tests pin the expanded whitelist so it doesn't regress.
 """
+
 from __future__ import annotations
 
 

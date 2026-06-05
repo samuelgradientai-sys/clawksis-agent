@@ -35,76 +35,90 @@ description: "如何向 Clawksis 添加新工具——schema、handler、注册�
 
 每个工具文件遵循相同的结构：
 
-```python
-# tools/weather_tool.py
-"""Weather Tool -- look up current weather for a location."""
-
-import json
-import os
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-# --- Availability check ---
-
-def check_weather_requirements() -> bool:
-    """Return True if the tool's dependencies are available."""
-    return bool(os.getenv("WEATHER_API_KEY"))
-
-
-# --- Handler ---
-
-def weather_tool(location: str, units: str = "metric") -> str:
-    """Fetch weather for a location. Returns JSON string."""
-    api_key = os.getenv("WEATHER_API_KEY")
-    if not api_key:
-        return json.dumps({"error": "WEATHER_API_KEY not configured"})
-    try:
-        # ... call weather API ...
-        return json.dumps({"location": location, "temp": 22, "units": units})
-    except Exception as e:
-        return json.dumps({"error": str(e)})
-
-
-# --- Schema ---
-
-WEATHER_SCHEMA = {
-    "name": "weather",
-    "description": "Get current weather for a location.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "City name or coordinates (e.g. 'London' or '51.5,-0.1')"
-            },
-            "units": {
-                "type": "string",
-                "enum": ["metric", "imperial"],
-                "description": "Temperature units (default: metric)",
-                "default": "metric"
-            }
-        },
-        "required": ["location"]
-    }
-}
-
-
-# --- Registration ---
-
-from tools.registry import registry
-
-registry.register(
-    name="weather",
-    toolset="weather",
-    schema=WEATHER_SCHEMA,
-    handler=lambda args, **kw: weather_tool(
-        location=args.get("location", ""),
-        units=args.get("units", "metric")),
-    check_fn=check_weather_requirements,
-    requires_env=["WEATHER_API_KEY"],
-)
+```python# tools/weather_tool.py
+
+"""Weather Tool -- look up current weather for a location."""
+
+import json
+
+import os
+
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+# --- Availability check ---
+
+
+def check_weather_requirements() -> bool:
+    """Return True if the tool's dependencies are available."""
+
+    return bool(os.getenv("WEATHER_API_KEY"))
+
+
+# --- Handler ---
+
+
+def weather_tool(location: str, units: str = "metric") -> str:
+    """Fetch weather for a location. Returns JSON string."""
+
+    api_key = os.getenv("WEATHER_API_KEY")
+
+    if not api_key:
+        return json.dumps({"error": "WEATHER_API_KEY not configured"})
+
+    try:
+        # ... call weather API ...
+
+        return json.dumps({"location": location, "temp": 22, "units": units})
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+# --- Schema ---
+
+
+WEATHER_SCHEMA = {
+    "name": "weather",
+    "description": "Get current weather for a location.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "City name or coordinates (e.g. 'London' or '51.5,-0.1')",
+            },
+            "units": {
+                "type": "string",
+                "enum": ["metric", "imperial"],
+                "description": "Temperature units (default: metric)",
+                "default": "metric",
+            },
+        },
+        "required": ["location"],
+    },
+}
+
+
+# --- Registration ---
+
+
+from tools.registry import registry
+
+
+registry.register(
+    name="weather",
+    toolset="weather",
+    schema=WEATHER_SCHEMA,
+    handler=lambda args, **kw: weather_tool(
+        location=args.get("location", ""), units=args.get("units", "metric")
+    ),
+    check_fn=check_weather_requirements,
+    requires_env=["WEATHER_API_KEY"],
+)
 ```
 
 ### 关键规则
@@ -143,20 +157,22 @@ _CLAWK_CORE_TOOLS = [
 
 如果你的 handler 需要异步代码，使用 `is_async=True` 标记：
 
-```python
-async def weather_tool_async(location: str) -> str:
-    async with aiohttp.ClientSession() as session:
-        ...
-    return json.dumps(result)
-
-registry.register(
-    name="weather",
-    toolset="weather",
-    schema=WEATHER_SCHEMA,
-    handler=lambda args, **kw: weather_tool_async(args.get("location", "")),
-    check_fn=check_weather_requirements,
-    is_async=True,  # registry calls _run_async() automatically
-)
+```pythonasync def weather_tool_async(location: str) -> str:
+
+    async with aiohttp.ClientSession() as session:
+        ...
+
+    return json.dumps(result)
+
+
+registry.register(
+    name="weather",
+    toolset="weather",
+    schema=WEATHER_SCHEMA,
+    handler=lambda args, **kw: weather_tool_async(args.get("location", "")),
+    check_fn=check_weather_requirements,
+    is_async=True,  # registry calls _run_async() automatically
+)
 ```
 
 registry 会透明地处理异步桥接——你无需自己调用 `asyncio.run()`。

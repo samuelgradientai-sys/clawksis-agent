@@ -130,15 +130,21 @@ skills/<category>/<skill-name>/SKILL.md
 2. **如有疑问，检查 `tools/skill_manager_tool.py` 中的验证器约束。**
 3. **起草**，使用 `write_file` 写入 `skills/<category>/<name>/SKILL.md`。
 4. **本地验证**：
-   ```python
-   import yaml, re, pathlib
-   content = pathlib.Path("skills/<category>/<name>/SKILL.md").read_text()
-   assert content.startswith("---")
-   m = re.search(r'\n---\s*\n', content[3:])
-   fm = yaml.safe_load(content[3:m.start()+3])
-   assert "name" in fm and "description" in fm
-   assert len(fm["description"]) <= 1024
-   assert len(content) <= 100_000
+   ```python   import yaml, re, pathlib
+
+   content = pathlib.Path("skills/<category>/<name>/SKILL.md").read_text()
+
+   assert content.startswith("---")
+
+   m = re.search(r"\n---\s*\n", content[3:])
+
+   fm = yaml.safe_load(content[3 : m.start() + 3])
+
+   assert "name" in fm and "description" in fm
+
+   assert len(fm["description"]) <= 1024
+
+   assert len(content) <= 100_000
    ```
 5. **Git add + commit**，在当前活跃分支上。
 6. **注意：** 当前会话的 skill 加载器已缓存——`skill_view` / `skills_list` 在新会话开始前不会看到新 skill。这是预期行为，不是 bug。

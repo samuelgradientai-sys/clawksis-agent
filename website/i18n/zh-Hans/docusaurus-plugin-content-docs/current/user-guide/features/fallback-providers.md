@@ -380,14 +380,13 @@ delegation:
 
 Cron 任务使用执行时配置的提供商运行，不支持备用模型。若要为 Cron 任务使用不同的提供商，请在 Cron 任务本身上配置 `provider` 和 `model` 覆盖：
 
-```python
-cronjob(
-    action="create",
-    schedule="every 2h",
-    prompt="Check server status",
-    provider="openrouter",
-    model="google/gemini-3-flash-preview"
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 2h",
+    prompt="Check server status",
+    provider="openrouter",
+    model="google/gemini-3-flash-preview",
+)
 ```
 
 完整配置详情参见[定时任务（Cron）](/user-guide/features/cron)。

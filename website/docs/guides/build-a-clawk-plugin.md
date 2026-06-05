@@ -79,55 +79,55 @@ requires_env:          # gate loading on env vars; prompted during install
 
 Create `schemas.py` — this is what the LLM reads to decide when to call your tools:
 
-```python
-"""Tool schemas — what the LLM sees."""
-
-CALCULATE = {
-    "name": "calculate",
-    "description": (
-        "Evaluate a mathematical expression and return the result. "
-        "Supports arithmetic (+, -, *, /, **), functions (sqrt, sin, cos, "
-        "log, abs, round, floor, ceil), and constants (pi, e). "
-        "Use this for any math the user asks about."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "expression": {
-                "type": "string",
-                "description": "Math expression to evaluate (e.g., '2**10', 'sqrt(144)')",
-            },
-        },
-        "required": ["expression"],
-    },
-}
-
-UNIT_CONVERT = {
-    "name": "unit_convert",
-    "description": (
-        "Convert a value between units. Supports length (m, km, mi, ft, in), "
-        "weight (kg, lb, oz, g), temperature (C, F, K), data (B, KB, MB, GB, TB), "
-        "and time (s, min, hr, day)."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "value": {
-                "type": "number",
-                "description": "The numeric value to convert",
-            },
-            "from_unit": {
-                "type": "string",
-                "description": "Source unit (e.g., 'km', 'lb', 'F', 'GB')",
-            },
-            "to_unit": {
-                "type": "string",
-                "description": "Target unit (e.g., 'mi', 'kg', 'C', 'MB')",
-            },
-        },
-        "required": ["value", "from_unit", "to_unit"],
-    },
-}
+```python"""Tool schemas — what the LLM sees."""
+
+CALCULATE = {
+    "name": "calculate",
+    "description": (
+        "Evaluate a mathematical expression and return the result. "
+        "Supports arithmetic (+, -, *, /, **), functions (sqrt, sin, cos, "
+        "log, abs, round, floor, ceil), and constants (pi, e). "
+        "Use this for any math the user asks about."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "expression": {
+                "type": "string",
+                "description": "Math expression to evaluate (e.g., '2**10', 'sqrt(144)')",
+            },
+        },
+        "required": ["expression"],
+    },
+}
+
+
+UNIT_CONVERT = {
+    "name": "unit_convert",
+    "description": (
+        "Convert a value between units. Supports length (m, km, mi, ft, in), "
+        "weight (kg, lb, oz, g), temperature (C, F, K), data (B, KB, MB, GB, TB), "
+        "and time (s, min, hr, day)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "value": {
+                "type": "number",
+                "description": "The numeric value to convert",
+            },
+            "from_unit": {
+                "type": "string",
+                "description": "Source unit (e.g., 'km', 'lb', 'F', 'GB')",
+            },
+            "to_unit": {
+                "type": "string",
+                "description": "Target unit (e.g., 'mi', 'kg', 'C', 'MB')",
+            },
+        },
+        "required": ["value", "from_unit", "to_unit"],
+    },
+}
 ```
 
 **Why schemas matter:** The `description` field is how the LLM decides when to use your tool. Be specific about what it does and when to use it. The `parameters` define what arguments the LLM passes.
@@ -136,87 +136,134 @@ UNIT_CONVERT = {
 
 Create `tools.py` — this is the code that actually executes when the LLM calls your tools:
 
-```python
-"""Tool handlers — the code that runs when the LLM calls each tool."""
-
-import json
-import math
-
-# Safe globals for expression evaluation — no file/network access
-_SAFE_MATH = {
-    "abs": abs, "round": round, "min": min, "max": max,
-    "pow": pow, "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-    "tan": math.tan, "log": math.log, "log2": math.log2, "log10": math.log10,
-    "floor": math.floor, "ceil": math.ceil,
-    "pi": math.pi, "e": math.e,
-    "factorial": math.factorial,
-}
-
-
-def calculate(args: dict, **kwargs) -> str:
-    """Evaluate a math expression safely.
-
-    Rules for handlers:
-    1. Receive args (dict) — the parameters the LLM passed
-    2. Do the work
-    3. Return a JSON string — ALWAYS, even on error
-    4. Accept **kwargs for forward compatibility
-    """
-    expression = args.get("expression", "").strip()
-    if not expression:
-        return json.dumps({"error": "No expression provided"})
-
-    try:
-        result = eval(expression, {"__builtins__": {}}, _SAFE_MATH)
-        return json.dumps({"expression": expression, "result": result})
-    except ZeroDivisionError:
-        return json.dumps({"expression": expression, "error": "Division by zero"})
-    except Exception as e:
-        return json.dumps({"expression": expression, "error": f"Invalid: {e}"})
-
-
-# Conversion tables — values are in base units
-_LENGTH = {"m": 1, "km": 1000, "mi": 1609.34, "ft": 0.3048, "in": 0.0254, "cm": 0.01}
-_WEIGHT = {"kg": 1, "g": 0.001, "lb": 0.453592, "oz": 0.0283495}
-_DATA = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
-_TIME = {"s": 1, "ms": 0.001, "min": 60, "hr": 3600, "day": 86400}
-
-
-def _convert_temp(value, from_u, to_u):
-    # Normalize to Celsius
-    c = {"F": (value - 32) * 5/9, "K": value - 273.15}.get(from_u, value)
-    # Convert to target
-    return {"F": c * 9/5 + 32, "K": c + 273.15}.get(to_u, c)
-
-
-def unit_convert(args: dict, **kwargs) -> str:
-    """Convert between units."""
-    value = args.get("value")
-    from_unit = args.get("from_unit", "").strip()
-    to_unit = args.get("to_unit", "").strip()
-
-    if value is None or not from_unit or not to_unit:
-        return json.dumps({"error": "Need value, from_unit, and to_unit"})
-
-    try:
-        # Temperature
-        if from_unit.upper() in {"C","F","K"} and to_unit.upper() in {"C","F","K"}:
-            result = _convert_temp(float(value), from_unit.upper(), to_unit.upper())
-            return json.dumps({"input": f"{value} {from_unit}", "result": round(result, 4),
-                             "output": f"{round(result, 4)} {to_unit}"})
-
-        # Ratio-based conversions
-        for table in (_LENGTH, _WEIGHT, _DATA, _TIME):
-            lc = {k.lower(): v for k, v in table.items()}
-            if from_unit.lower() in lc and to_unit.lower() in lc:
-                result = float(value) * lc[from_unit.lower()] / lc[to_unit.lower()]
-                return json.dumps({"input": f"{value} {from_unit}",
-                                 "result": round(result, 6),
-                                 "output": f"{round(result, 6)} {to_unit}"})
-
-        return json.dumps({"error": f"Cannot convert {from_unit} → {to_unit}"})
-    except Exception as e:
-        return json.dumps({"error": f"Conversion failed: {e}"})
+```python"""Tool handlers — the code that runs when the LLM calls each tool."""
+
+import json
+
+import math
+
+
+# Safe globals for expression evaluation — no file/network access
+
+_SAFE_MATH = {
+    "abs": abs,
+    "round": round,
+    "min": min,
+    "max": max,
+    "pow": pow,
+    "sqrt": math.sqrt,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "log2": math.log2,
+    "log10": math.log10,
+    "floor": math.floor,
+    "ceil": math.ceil,
+    "pi": math.pi,
+    "e": math.e,
+    "factorial": math.factorial,
+}
+
+
+def calculate(args: dict, **kwargs) -> str:
+    """Evaluate a math expression safely.
+
+
+
+    Rules for handlers:
+
+    1. Receive args (dict) — the parameters the LLM passed
+
+    2. Do the work
+
+    3. Return a JSON string — ALWAYS, even on error
+
+    4. Accept **kwargs for forward compatibility
+
+    """
+
+    expression = args.get("expression", "").strip()
+
+    if not expression:
+        return json.dumps({"error": "No expression provided"})
+
+    try:
+        result = eval(expression, {"__builtins__": {}}, _SAFE_MATH)
+
+        return json.dumps({"expression": expression, "result": result})
+
+    except ZeroDivisionError:
+        return json.dumps({"expression": expression, "error": "Division by zero"})
+
+    except Exception as e:
+        return json.dumps({"expression": expression, "error": f"Invalid: {e}"})
+
+
+# Conversion tables — values are in base units
+
+_LENGTH = {"m": 1, "km": 1000, "mi": 1609.34, "ft": 0.3048, "in": 0.0254, "cm": 0.01}
+
+_WEIGHT = {"kg": 1, "g": 0.001, "lb": 0.453592, "oz": 0.0283495}
+
+_DATA = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
+
+_TIME = {"s": 1, "ms": 0.001, "min": 60, "hr": 3600, "day": 86400}
+
+
+def _convert_temp(value, from_u, to_u):
+
+    # Normalize to Celsius
+
+    c = {"F": (value - 32) * 5 / 9, "K": value - 273.15}.get(from_u, value)
+
+    # Convert to target
+
+    return {"F": c * 9 / 5 + 32, "K": c + 273.15}.get(to_u, c)
+
+
+def unit_convert(args: dict, **kwargs) -> str:
+    """Convert between units."""
+
+    value = args.get("value")
+
+    from_unit = args.get("from_unit", "").strip()
+
+    to_unit = args.get("to_unit", "").strip()
+
+    if value is None or not from_unit or not to_unit:
+        return json.dumps({"error": "Need value, from_unit, and to_unit"})
+
+    try:
+        # Temperature
+
+        if from_unit.upper() in {"C", "F", "K"} and to_unit.upper() in {"C", "F", "K"}:
+            result = _convert_temp(float(value), from_unit.upper(), to_unit.upper())
+
+            return json.dumps({
+                "input": f"{value} {from_unit}",
+                "result": round(result, 4),
+                "output": f"{round(result, 4)} {to_unit}",
+            })
+
+        # Ratio-based conversions
+
+        for table in (_LENGTH, _WEIGHT, _DATA, _TIME):
+            lc = {k.lower(): v for k, v in table.items()}
+
+            if from_unit.lower() in lc and to_unit.lower() in lc:
+                result = float(value) * lc[from_unit.lower()] / lc[to_unit.lower()]
+
+                return json.dumps({
+                    "input": f"{value} {from_unit}",
+                    "result": round(result, 6),
+                    "output": f"{round(result, 6)} {to_unit}",
+                })
+
+        return json.dumps({"error": f"Cannot convert {from_unit} → {to_unit}"})
+
+    except Exception as e:
+        return json.dumps({"error": f"Conversion failed: {e}"})
 ```
 
 **Key rules for handlers:**
@@ -229,35 +276,53 @@ def unit_convert(args: dict, **kwargs) -> str:
 
 Create `__init__.py` — this wires schemas to handlers:
 
-```python
-"""Calculator plugin — registration."""
-
-import logging
-
-from . import schemas, tools
-
-logger = logging.getLogger(__name__)
-
-# Track tool usage via hooks
-_call_log = []
-
-def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
-    """Hook: runs after every tool call (not just ours)."""
-    _call_log.append({"tool": tool_name, "session": task_id})
-    if len(_call_log) > 100:
-        _call_log.pop(0)
-    logger.debug("Tool called: %s (session %s)", tool_name, task_id)
-
-
-def register(ctx):
-    """Wire schemas to handlers and register hooks."""
-    ctx.register_tool(name="calculate",    toolset="calculator",
-                      schema=schemas.CALCULATE,    handler=tools.calculate)
-    ctx.register_tool(name="unit_convert", toolset="calculator",
-                      schema=schemas.UNIT_CONVERT, handler=tools.unit_convert)
-
-    # This hook fires for ALL tool calls, not just ours
-    ctx.register_hook("post_tool_call", _on_post_tool_call)
+```python"""Calculator plugin — registration."""
+
+import logging
+
+
+from . import schemas, tools
+
+
+logger = logging.getLogger(__name__)
+
+
+# Track tool usage via hooks
+
+_call_log = []
+
+
+def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
+    """Hook: runs after every tool call (not just ours)."""
+
+    _call_log.append({"tool": tool_name, "session": task_id})
+
+    if len(_call_log) > 100:
+        _call_log.pop(0)
+
+    logger.debug("Tool called: %s (session %s)", tool_name, task_id)
+
+
+def register(ctx):
+    """Wire schemas to handlers and register hooks."""
+
+    ctx.register_tool(
+        name="calculate",
+        toolset="calculator",
+        schema=schemas.CALCULATE,
+        handler=tools.calculate,
+    )
+
+    ctx.register_tool(
+        name="unit_convert",
+        toolset="calculator",
+        schema=schemas.UNIT_CONVERT,
+        handler=tools.unit_convert,
+    )
+
+    # This hook fires for ALL tool calls, not just ours
+
+    ctx.register_hook("post_tool_call", _on_post_tool_call)
 ```
 
 **What `register()` does:**
@@ -271,14 +336,17 @@ def register(ctx):
 
 **`dispatch_tool` example — a slash command that runs a tool:**
 
-```python
-def handle_scan(ctx, argstr):
-    """Implement /scan by invoking the terminal tool through the registry."""
-    result = ctx.dispatch_tool("terminal", {"command": f"find . -name '{argstr}'"})
-    return result  # returned to the caller's chat UI
-
-def register(ctx):
-    ctx.register_command("scan", handle_scan, help="Find files matching a glob")
+```pythondef handle_scan(ctx, argstr):
+    """Implement /scan by invoking the terminal tool through the registry."""
+
+    result = ctx.dispatch_tool("terminal", {"command": f"find . -name '{argstr}'"})
+
+    return result  # returned to the caller's chat UI
+
+
+def register(ctx):
+
+    ctx.register_command("scan", handle_scan, help="Find files matching a glob")
 ```
 
 The dispatched tool goes through the normal approval, redaction, and budget pipelines — it's a real tool invocation, not a shortcut around them.
@@ -364,15 +432,18 @@ Four files, clear separation:
 
 Put any files in your plugin directory and read them at import time:
 
-```python
-# In tools.py or __init__.py
-from pathlib import Path
-
-_PLUGIN_DIR = Path(__file__).parent
-_DATA_FILE = _PLUGIN_DIR / "data" / "languages.yaml"
-
-with open(_DATA_FILE) as f:
-    _DATA = yaml.safe_load(f)
+```python# In tools.py or __init__.py
+
+from pathlib import Path
+
+
+_PLUGIN_DIR = Path(__file__).parent
+
+_DATA_FILE = _PLUGIN_DIR / "data" / "languages.yaml"
+
+
+with open(_DATA_FILE) as f:
+    _DATA = yaml.safe_load(f)
 ```
 
 ### Bundle skills
@@ -390,22 +461,25 @@ Plugins can ship skill files that the agent loads via `skill_view("plugin:skill"
         └── SKILL.md
 ```
 
-```python
-from pathlib import Path
-
-def register(ctx):
-    skills_dir = Path(__file__).parent / "skills"
-    for child in sorted(skills_dir.iterdir()):
-        skill_md = child / "SKILL.md"
-        if child.is_dir() and skill_md.exists():
-            ctx.register_skill(child.name, skill_md)
+```pythonfrom pathlib import Path
+
+
+def register(ctx):
+
+    skills_dir = Path(__file__).parent / "skills"
+
+    for child in sorted(skills_dir.iterdir()):
+        skill_md = child / "SKILL.md"
+
+        if child.is_dir() and skill_md.exists():
+            ctx.register_skill(child.name, skill_md)
 ```
 
 The agent can now load your skills with their namespaced name:
 
-```python
-skill_view("my-plugin:my-workflow")   # → plugin's version
-skill_view("my-workflow")              # → built-in version (unchanged)
+```pythonskill_view("my-plugin:my-workflow")  # → plugin's version
+
+skill_view("my-workflow")  # → built-in version (unchanged)
 ```
 
 **Key properties:**
@@ -456,18 +530,22 @@ Both formats can be mixed in the same list. Already-set variables are skipped si
 
 If your plugin wraps an SDK that not every user will have installed (a vendor SDK, a heavy ML lib, a platform-specific package), don't `import` it at the top of the module. Use the `tools.lazy_deps.ensure(...)` helper inside the tool handler — Clawksis will install the package on first use, gated by the user's `security.allow_lazy_installs` config.
 
-```python
-# tools.py
-from tools.lazy_deps import ensure, FeatureUnavailable
-
-def my_tool_handler(args, **kwargs):
-    try:
-        ensure("my-plugin.my-backend")   # key must be in LAZY_DEPS
-    except FeatureUnavailable as exc:
-        return {"error": str(exc)}
-
-    import my_backend_sdk   # safe now
-    ...
+```python# tools.py
+
+from tools.lazy_deps import ensure, FeatureUnavailable
+
+
+def my_tool_handler(args, **kwargs):
+
+    try:
+        ensure("my-plugin.my-backend")  # key must be in LAZY_DEPS
+
+    except FeatureUnavailable as exc:
+        return {"error": str(exc)}
+
+    import my_backend_sdk  # safe now
+
+    ...
 ```
 
 Two rules from the security model in `tools/lazy_deps.py`:
@@ -487,13 +565,12 @@ When `security.allow_lazy_installs: false` is set globally, `ensure()` raises `F
 
 For tools that depend on optional libraries:
 
-```python
-ctx.register_tool(
-    name="my_tool",
-    schema={...},
-    handler=my_handler,
-    check_fn=lambda: _has_optional_lib(),  # False = tool hidden from model
-)
+```pythonctx.register_tool(
+    name="my_tool",
+    schema={...},
+    handler=my_handler,
+    check_fn=lambda: _has_optional_lib(),  # False = tool hidden from model
+)
 ```
 
 ### Overriding a built-in tool
@@ -502,15 +579,15 @@ To replace a built-in tool with your own implementation (e.g. swap the
 default browser tool for a headed-Chrome CDP backend, or replace
 `web_search` with a custom corporate index), pass `override=True`:
 
-```python
-def register(ctx):
-    ctx.register_tool(
-        name="browser_navigate",             # same name as the built-in
-        toolset="plugin_my_browser",         # your own toolset namespace
-        schema={...},
-        handler=my_custom_navigate,
-        override=True,                       # explicit opt-in
-    )
+```pythondef register(ctx):
+
+    ctx.register_tool(
+        name="browser_navigate",  # same name as the built-in
+        toolset="plugin_my_browser",  # your own toolset namespace
+        schema={...},
+        handler=my_custom_navigate,
+        override=True,  # explicit opt-in
+    )
 ```
 
 Without `override=True`, the registry rejects any registration that would
@@ -522,13 +599,17 @@ built-in one.
 
 ### Register multiple hooks
 
-```python
-def register(ctx):
-    ctx.register_hook("pre_tool_call", before_any_tool)
-    ctx.register_hook("post_tool_call", after_any_tool)
-    ctx.register_hook("pre_llm_call", inject_memory)
-    ctx.register_hook("on_session_start", on_new_session)
-    ctx.register_hook("on_session_end", on_session_end)
+```pythondef register(ctx):
+
+    ctx.register_hook("pre_tool_call", before_any_tool)
+
+    ctx.register_hook("post_tool_call", after_any_tool)
+
+    ctx.register_hook("pre_llm_call", inject_memory)
+
+    ctx.register_hook("on_session_start", on_new_session)
+
+    ctx.register_hook("on_session_end", on_session_end)
 ```
 
 ### Hook reference
@@ -556,15 +637,21 @@ This is the only hook whose return value matters. When a `pre_llm_call` callback
 
 #### Return format
 
-```python
-# Dict with context key
-return {"context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"}
-
-# Plain string (equivalent to the dict form above)
-return "Recalled memories:\n- User prefers dark mode"
-
-# Return None or don't return → no injection (observer-only)
-return None
+```python# Dict with context key
+
+return {
+    "context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"
+}
+
+
+# Plain string (equivalent to the dict form above)
+
+return "Recalled memories:\n- User prefers dark mode"
+
+
+# Return None or don't return → no injection (observer-only)
+
+return None
 ```
 
 Any non-None, non-empty return with a `"context"` key (or a plain non-empty string) is collected and appended to the user message for the current turn.
@@ -579,68 +666,97 @@ Injected context is appended to the **user message**, not the system prompt. Thi
 
 #### Example: Memory recall plugin
 
-```python
-"""Memory plugin — recalls relevant context from a vector store."""
-
-import httpx
-
-MEMORY_API = "https://your-memory-api.example.com"
-
-def recall_context(session_id, user_message, is_first_turn, **kwargs):
-    """Called before each LLM turn. Returns recalled memories."""
-    try:
-        resp = httpx.post(f"{MEMORY_API}/recall", json={
-            "session_id": session_id,
-            "query": user_message,
-        }, timeout=3)
-        memories = resp.json().get("results", [])
-        if not memories:
-            return None  # nothing to inject
-
-        text = "Recalled context from previous sessions:\n"
-        text += "\n".join(f"- {m['text']}" for m in memories)
-        return {"context": text}
-    except Exception:
-        return None  # fail silently, don't break the agent
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", recall_context)
+```python"""Memory plugin — recalls relevant context from a vector store."""
+
+import httpx
+
+
+MEMORY_API = "https://your-memory-api.example.com"
+
+
+def recall_context(session_id, user_message, is_first_turn, **kwargs):
+    """Called before each LLM turn. Returns recalled memories."""
+
+    try:
+        resp = httpx.post(
+            f"{MEMORY_API}/recall",
+            json={
+                "session_id": session_id,
+                "query": user_message,
+            },
+            timeout=3,
+        )
+
+        memories = resp.json().get("results", [])
+
+        if not memories:
+            return None  # nothing to inject
+
+        text = "Recalled context from previous sessions:\n"
+
+        text += "\n".join(f"- {m['text']}" for m in memories)
+
+        return {"context": text}
+
+    except Exception:
+        return None  # fail silently, don't break the agent
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", recall_context)
 ```
 
 #### Example: Guardrails plugin
 
-```python
-"""Guardrails plugin — enforces content policies."""
-
-POLICY = """You MUST follow these content policies for this session:
-- Never generate code that accesses the filesystem outside the working directory
-- Always warn before executing destructive operations
-- Refuse requests involving personal data extraction"""
-
-def inject_guardrails(**kwargs):
-    """Injects policy text into every turn."""
-    return {"context": POLICY}
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", inject_guardrails)
+```python"""Guardrails plugin — enforces content policies."""
+
+POLICY = """You MUST follow these content policies for this session:
+
+- Never generate code that accesses the filesystem outside the working directory
+
+- Always warn before executing destructive operations
+
+- Refuse requests involving personal data extraction"""
+
+
+def inject_guardrails(**kwargs):
+    """Injects policy text into every turn."""
+
+    return {"context": POLICY}
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", inject_guardrails)
 ```
 
 #### Example: Observer-only hook (no injection)
 
-```python
-"""Analytics plugin — tracks turn metadata without injecting context."""
-
-import logging
-logger = logging.getLogger(__name__)
-
-def log_turn(session_id, user_message, model, is_first_turn, **kwargs):
-    """Fires before each LLM call. Returns None — no context injected."""
-    logger.info("Turn: session=%s model=%s first=%s msg_len=%d",
-                session_id, model, is_first_turn, len(user_message or ""))
-    # No return → no injection
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", log_turn)
+```python"""Analytics plugin — tracks turn metadata without injecting context."""
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def log_turn(session_id, user_message, model, is_first_turn, **kwargs):
+    """Fires before each LLM call. Returns None — no context injected."""
+
+    logger.info(
+        "Turn: session=%s model=%s first=%s msg_len=%d",
+        session_id,
+        model,
+        is_first_turn,
+        len(user_message or ""),
+    )
+
+    # No return → no injection
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", log_turn)
 ```
 
 #### Multiple plugins returning context
@@ -651,32 +767,43 @@ When multiple plugins return context from `pre_llm_call`, their outputs are join
 
 Plugins can add their own `clawk <plugin>` subcommand tree:
 
-```python
-def _my_command(args):
-    """Handler for clawk my-plugin <subcommand>."""
-    sub = getattr(args, "my_command", None)
-    if sub == "status":
-        print("All good!")
-    elif sub == "config":
-        print("Current config: ...")
-    else:
-        print("Usage: clawk my-plugin <status|config>")
-
-def _setup_argparse(subparser):
-    """Build the argparse tree for clawk my-plugin."""
-    subs = subparser.add_subparsers(dest="my_command")
-    subs.add_parser("status", help="Show plugin status")
-    subs.add_parser("config", help="Show plugin config")
-    subparser.set_defaults(func=_my_command)
-
-def register(ctx):
-    ctx.register_tool(...)
-    ctx.register_cli_command(
-        name="my-plugin",
-        help="Manage my plugin",
-        setup_fn=_setup_argparse,
-        handler_fn=_my_command,
-    )
+```pythondef _my_command(args):
+    """Handler for clawk my-plugin <subcommand>."""
+
+    sub = getattr(args, "my_command", None)
+
+    if sub == "status":
+        print("All good!")
+
+    elif sub == "config":
+        print("Current config: ...")
+
+    else:
+        print("Usage: clawk my-plugin <status|config>")
+
+
+def _setup_argparse(subparser):
+    """Build the argparse tree for clawk my-plugin."""
+
+    subs = subparser.add_subparsers(dest="my_command")
+
+    subs.add_parser("status", help="Show plugin status")
+
+    subs.add_parser("config", help="Show plugin config")
+
+    subparser.set_defaults(func=_my_command)
+
+
+def register(ctx):
+
+    ctx.register_tool(...)
+
+    ctx.register_cli_command(
+        name="my-plugin",
+        help="Manage my plugin",
+        setup_fn=_setup_argparse,
+        handler_fn=_my_command,
+    )
 ```
 
 After registration, users can run `clawk my-plugin status`, `clawk my-plugin config`, etc.
@@ -689,19 +816,22 @@ After registration, users can run `clawk my-plugin status`, `clawk my-plugin con
 
 Plugins can register in-session slash commands — commands users type during a conversation (like `/lcm status` or `/ping`). These work in both CLI and gateway (Telegram, Discord, etc.).
 
-```python
-def _handle_status(raw_args: str) -> str:
-    """Handler for /mystatus — called with everything after the command name."""
-    if raw_args.strip() == "help":
-        return "Usage: /mystatus [help|check]"
-    return "Plugin status: all systems nominal"
-
-def register(ctx):
-    ctx.register_command(
-        "mystatus",
-        handler=_handle_status,
-        description="Show plugin status",
-    )
+```pythondef _handle_status(raw_args: str) -> str:
+    """Handler for /mystatus — called with everything after the command name."""
+
+    if raw_args.strip() == "help":
+        return "Usage: /mystatus [help|check]"
+
+    return "Plugin status: all systems nominal"
+
+
+def register(ctx):
+
+    ctx.register_command(
+        "mystatus",
+        handler=_handle_status,
+        description="Show plugin status",
+    )
 ```
 
 After registration, users can type `/mystatus` in any session. The command appears in autocomplete, `/help` output, and the Telegram bot menu.
@@ -727,36 +857,41 @@ After registration, users can type `/mystatus` in any session. The command appea
 
 **Async handlers:** The gateway dispatch automatically detects and awaits async handlers, so you can use either sync or async functions:
 
-```python
-async def _handle_check(raw_args: str) -> str:
-    result = await some_async_operation()
-    return f"Check result: {result}"
-
-def register(ctx):
-    ctx.register_command("check", handler=_handle_check, description="Run async check")
+```pythonasync def _handle_check(raw_args: str) -> str:
+
+    result = await some_async_operation()
+
+    return f"Check result: {result}"
+
+
+def register(ctx):
+
+    ctx.register_command("check", handler=_handle_check, description="Run async check")
 ```
 
 ### Dispatch tools from slash commands
 
 Slash command handlers that need to orchestrate tools (spawn a subagent via `delegate_task`, call `file_edit`, etc.) should use `ctx.dispatch_tool()` instead of reaching into framework internals. The parent-agent context (workspace hints, spinner, model inheritance) is wired up automatically.
 
-```python
-def register(ctx):
-    def _handle_deliver(raw_args: str):
-        result = ctx.dispatch_tool(
-            "delegate_task",
-            {
-                "goal": raw_args,
-                "toolsets": ["terminal", "file", "web"],
-            },
-        )
-        return result
-
-    ctx.register_command(
-        "deliver",
-        handler=_handle_deliver,
-        description="Delegate a goal to a subagent",
-    )
+```pythondef register(ctx):
+
+    def _handle_deliver(raw_args: str):
+
+        result = ctx.dispatch_tool(
+            "delegate_task",
+            {
+                "goal": raw_args,
+                "toolsets": ["terminal", "file", "web"],
+            },
+        )
+
+        return result
+
+    ctx.register_command(
+        "deliver",
+        handler=_handle_deliver,
+        description="Delegate a goal to a subagent",
+    )
 ```
 
 **Signature:** `ctx.dispatch_tool(name: str, args: dict, *, parent_agent=None) -> str`
@@ -787,21 +922,25 @@ Clawksis has five specialized plugin types beyond the general surface. Each ship
 
 Drop a profile into `plugins/model-providers/<name>/`:
 
-```python
-# plugins/model-providers/acme/__init__.py
-from providers import register_provider
-from providers.base import ProviderProfile
-
-register_provider(ProviderProfile(
-    name="acme",
-    aliases=("acme-inference",),
-    display_name="Acme Inference",
-    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
-    base_url="https://api.acme.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="acme-small-fast",
-    fallback_models=("acme-large-v3", "acme-medium-v3"),
-))
+```python# plugins/model-providers/acme/__init__.py
+
+from providers import register_provider
+
+from providers.base import ProviderProfile
+
+
+register_provider(
+    ProviderProfile(
+        name="acme",
+        aliases=("acme-inference",),
+        display_name="Acme Inference",
+        env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
+        base_url="https://api.acme.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="acme-small-fast",
+        fallback_models=("acme-large-v3", "acme-medium-v3"),
+    )
+)
 ```
 
 ```yaml
@@ -820,41 +959,54 @@ Lazy-discovered the first time anything calls `get_provider_profile()` or `list_
 
 Drop an adapter into `plugins/platforms/<name>/`:
 
-```python
-# plugins/platforms/myplatform/adapter.py
-from gateway.platforms.base import BasePlatformAdapter
-
-class MyPlatformAdapter(BasePlatformAdapter):
-    async def connect(self): ...
-    async def send(self, chat_id, text): ...
-    async def disconnect(self): ...
-
-def check_requirements():
-    import os
-    return bool(os.environ.get("MYPLATFORM_TOKEN"))
-
-def _env_enablement():
-    import os
-    tok = os.getenv("MYPLATFORM_TOKEN", "").strip()
-    if not tok:
-        return None
-    return {"token": tok}
-
-def register(ctx):
-    ctx.register_platform(
-        name="myplatform",
-        label="MyPlatform",
-        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
-        check_fn=check_requirements,
-        required_env=["MYPLATFORM_TOKEN"],
-        # Auto-populate PlatformConfig.extra from env so env-only setups
-        # show up in `clawk gateway status` without SDK instantiation.
-        env_enablement_fn=_env_enablement,
-        # Opt in to cron delivery: `deliver=myplatform` routes to this var.
-        cron_deliver_env_var="MYPLATFORM_HOME_CHANNEL",
-        emoji="💬",
-        platform_hint="You are chatting via MyPlatform. Keep responses concise.",
-    )
+```python# plugins/platforms/myplatform/adapter.py
+
+from gateway.platforms.base import BasePlatformAdapter
+
+
+class MyPlatformAdapter(BasePlatformAdapter):
+    async def connect(self): ...
+
+    async def send(self, chat_id, text): ...
+
+    async def disconnect(self): ...
+
+
+def check_requirements():
+
+    import os
+
+    return bool(os.environ.get("MYPLATFORM_TOKEN"))
+
+
+def _env_enablement():
+
+    import os
+
+    tok = os.getenv("MYPLATFORM_TOKEN", "").strip()
+
+    if not tok:
+        return None
+
+    return {"token": tok}
+
+
+def register(ctx):
+
+    ctx.register_platform(
+        name="myplatform",
+        label="MyPlatform",
+        adapter_factory=lambda cfg: MyPlatformAdapter(cfg),
+        check_fn=check_requirements,
+        required_env=["MYPLATFORM_TOKEN"],
+        # Auto-populate PlatformConfig.extra from env so env-only setups
+        # show up in `clawk gateway status` without SDK instantiation.
+        env_enablement_fn=_env_enablement,
+        # Opt in to cron delivery: `deliver=myplatform` routes to this var.
+        cron_deliver_env_var="MYPLATFORM_HOME_CHANNEL",
+        emoji="💬",
+        platform_hint="You are chatting via MyPlatform. Keep responses concise.",
+    )
 ```
 
 ```yaml
@@ -880,30 +1032,35 @@ optional_env:
 
 Drop an implementation of `MemoryProvider` into `plugins/memory/<name>/`:
 
-```python
-# plugins/memory/my-memory/__init__.py
-from agent.memory_provider import MemoryProvider
-
-class MyMemoryProvider(MemoryProvider):
-    @property
-    def name(self) -> str:
-        return "my-memory"
-
-    def is_available(self) -> bool:
-        import os
-        return bool(os.environ.get("MY_MEMORY_API_KEY"))
-
-    def initialize(self, session_id: str, **kwargs) -> None:
-        self._session_id = session_id
-
-    def sync_turn(self, user_message, assistant_response, **kwargs) -> None:
-        ...
-
-    def prefetch(self, query: str, **kwargs) -> str | None:
-        ...
-
-def register(ctx):
-    ctx.register_memory_provider(MyMemoryProvider())
+```python# plugins/memory/my-memory/__init__.py
+
+from agent.memory_provider import MemoryProvider
+
+
+class MyMemoryProvider(MemoryProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-memory"
+
+    def is_available(self) -> bool:
+
+        import os
+
+        return bool(os.environ.get("MY_MEMORY_API_KEY"))
+
+    def initialize(self, session_id: str, **kwargs) -> None:
+
+        self._session_id = session_id
+
+    def sync_turn(self, user_message, assistant_response, **kwargs) -> None: ...
+
+    def prefetch(self, query: str, **kwargs) -> str | None: ...
+
+
+def register(ctx):
+
+    ctx.register_memory_provider(MyMemoryProvider())
 ```
 
 Memory providers are single-select — only one is active at a time, chosen via `memory.provider` in `config.yaml`.
@@ -912,20 +1069,25 @@ Memory providers are single-select — only one is active at a time, chosen via 
 
 ### Context engine plugins — replace the context compressor
 
-```python
-# plugins/context_engine/my-engine/__init__.py
-from agent.context_engine import ContextEngine
-
-class MyContextEngine(ContextEngine):
-    @property
-    def name(self) -> str:
-        return "my-engine"
-
-    def should_compress(self, messages, model) -> bool: ...
-    def compress(self, messages, model) -> list[dict]: ...
-
-def register(ctx):
-    ctx.register_context_engine(MyContextEngine())
+```python# plugins/context_engine/my-engine/__init__.py
+
+from agent.context_engine import ContextEngine
+
+
+class MyContextEngine(ContextEngine):
+    @property
+    def name(self) -> str:
+
+        return "my-engine"
+
+    def should_compress(self, messages, model) -> bool: ...
+
+    def compress(self, messages, model) -> list[dict]: ...
+
+
+def register(ctx):
+
+    ctx.register_context_engine(MyContextEngine())
 ```
 
 Context engines are single-select — chosen via `context.engine` in `config.yaml`.
@@ -936,20 +1098,25 @@ Context engines are single-select — chosen via `context.engine` in `config.yam
 
 Drop a provider into `plugins/image_gen/<name>/`:
 
-```python
-# plugins/image_gen/my-imggen/__init__.py
-from agent.image_gen_provider import ImageGenProvider
-
-class MyImageGenProvider(ImageGenProvider):
-    @property
-    def name(self) -> str:
-        return "my-imggen"
-
-    def is_available(self) -> bool: ...
-    def generate(self, prompt: str, **kwargs) -> str: ...   # returns image path
-
-def register(ctx):
-    ctx.register_image_gen_provider(MyImageGenProvider())
+```python# plugins/image_gen/my-imggen/__init__.py
+
+from agent.image_gen_provider import ImageGenProvider
+
+
+class MyImageGenProvider(ImageGenProvider):
+    @property
+    def name(self) -> str:
+
+        return "my-imggen"
+
+    def is_available(self) -> bool: ...
+
+    def generate(self, prompt: str, **kwargs) -> str: ...  # returns image path
+
+
+def register(ctx):
+
+    ctx.register_image_gen_provider(MyImageGenProvider())
 ```
 
 ```yaml
@@ -999,12 +1166,15 @@ events:
   - agent:end
 ```
 
-```python
-# ~/.clawksis/hooks/long-task-alert/handler.py
-async def handle(event_type: str, context: dict) -> None:
-    if context.get("duration_seconds", 0) > 120:
-        # send notification …
-        pass
+```python# ~/.clawksis/hooks/long-task-alert/handler.py
+
+
+async def handle(event_type: str, context: dict) -> None:
+
+    if context.get("duration_seconds", 0) > 120:
+        # send notification …
+
+        pass
 ```
 
 Events include `gateway:startup`, `session:start`, `session:end`, `session:reset`, `agent:start`, `agent:step`, `agent:end`, and wildcard `command:*`. Errors in hooks are caught and logged — they never block the main pipeline.
@@ -1115,41 +1285,58 @@ See the [Nix Setup guide](/getting-started/nix-setup#plugins) for complete docum
 ## Common mistakes
 
 **Handler doesn't return JSON string:**
-```python
-# Wrong — returns a dict
-def handler(args, **kwargs):
-    return {"result": 42}
-
-# Right — returns a JSON string
-def handler(args, **kwargs):
-    return json.dumps({"result": 42})
+```python# Wrong — returns a dict
+
+
+def handler(args, **kwargs):
+
+    return {"result": 42}
+
+
+# Right — returns a JSON string
+
+
+def handler(args, **kwargs):
+
+    return json.dumps({"result": 42})
 ```
 
 **Missing `**kwargs` in handler signature:**
-```python
-# Wrong — will break if Clawksis passes extra context
-def handler(args):
-    ...
-
-# Right
-def handler(args, **kwargs):
-    ...
+```python# Wrong — will break if Clawksis passes extra context
+
+
+def handler(args): ...
+
+
+# Right
+
+
+def handler(args, **kwargs): ...
 ```
 
 **Handler raises exceptions:**
-```python
-# Wrong — exception propagates, tool call fails
-def handler(args, **kwargs):
-    result = 1 / int(args["value"])  # ZeroDivisionError!
-    return json.dumps({"result": result})
-
-# Right — catch and return error JSON
-def handler(args, **kwargs):
-    try:
-        result = 1 / int(args.get("value", 0))
-        return json.dumps({"result": result})
-    except Exception as e:
-        return json.dumps({"error": str(e)})
+```python# Wrong — exception propagates, tool call fails
+
+
+def handler(args, **kwargs):
+
+    result = 1 / int(args["value"])  # ZeroDivisionError!
+
+    return json.dumps({"result": result})
+
+
+# Right — catch and return error JSON
+
+
+def handler(args, **kwargs):
+
+    try:
+        result = 1 / int(args.get("value", 0))
+
+        return json.dumps({"result": result})
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 ```
 
 **Schema description too vague:**

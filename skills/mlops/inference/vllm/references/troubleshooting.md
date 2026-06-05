@@ -233,7 +233,7 @@ from openai import OpenAI
 client = OpenAI(
     base_url="http://localhost:8000/v1",
     api_key="EMPTY",
-    timeout=300.0  # 5 minute timeout
+    timeout=300.0,  # 5 minute timeout
 )
 ```
 
@@ -250,7 +250,7 @@ from urllib3.util.retry import Retry
 
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=1)
-session.mount('http://', HTTPAdapter(max_retries=retries))
+session.mount("http://", HTTPAdapter(max_retries=retries))
 ```
 
 ## Quantization problems

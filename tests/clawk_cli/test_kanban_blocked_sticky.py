@@ -54,10 +54,7 @@ landed via #28754 / #28781 ahead of this fix.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import time
@@ -65,21 +62,14 @@ import time
 from pathlib import Path
 
 
-
 import pytest
-
 
 
 from clawk_cli import kanban_db as kb
 
 
-
-
-
 @pytest.fixture
-
 def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-
     """Isolated CLAWK_HOME with an empty kanban DB."""
 
     home = tmp_path / ".clawksis"
@@ -95,9 +85,6 @@ def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Worker-initiated kanban_block must be sticky
@@ -105,11 +92,9 @@ def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # ---------------------------------------------------------------------------
 
 
-
-
-
-def test_worker_block_is_not_auto_promoted_by_recompute_ready(kanban_home: Path) -> None:
-
+def test_worker_block_is_not_auto_promoted_by_recompute_ready(
+    kanban_home: Path,
+) -> None:
     """A standalone task that a worker explicitly blocks for review
 
     must stay blocked across an arbitrary number of dispatcher ticks.
@@ -119,31 +104,24 @@ def test_worker_block_is_not_auto_promoted_by_recompute_ready(kanban_home: Path)
     back to ``ready`` on the very next tick."""
 
     with kb.connect() as conn:
-
         tid = kb.create_task(conn, title="needs human review")
 
         kb.claim_task(conn, tid)
 
         assert kb.block_task(
-
-            conn, tid,
-
+            conn,
+            tid,
             reason="review-required: please verify ACL change",
-
             expected_run_id=kb.get_task(conn, tid).current_run_id,
-
         )
 
         assert kb.get_task(conn, tid).status == "blocked"
-
-
 
         # Hammer the promotion code — exactly the dispatcher loop's
 
         # behaviour, just compressed in time.
 
         for _ in range(5):
-
             promoted = kb.recompute_ready(conn)
 
             assert promoted == 0, "worker-blocked task must not auto-promote"
@@ -151,11 +129,9 @@ def test_worker_block_is_not_auto_promoted_by_recompute_ready(kanban_home: Path)
             assert kb.get_task(conn, tid).status == "blocked"
 
 
-
-
-
-def test_worker_block_on_child_with_done_parents_is_still_sticky(kanban_home: Path) -> None:
-
+def test_worker_block_on_child_with_done_parents_is_still_sticky(
+    kanban_home: Path,
+) -> None:
     """The parent-completion path is the one ``recompute_ready`` was
 
     designed for, so it's the most dangerous false-positive: even when
@@ -165,39 +141,28 @@ def test_worker_block_on_child_with_done_parents_is_still_sticky(kanban_home: Pa
     stay blocked."""
 
     with kb.connect() as conn:
-
         parent = kb.create_task(conn, title="parent")
 
         child = kb.create_task(conn, title="child", parents=[parent])
 
         kb.complete_task(conn, parent, result="parent ok")
 
-
-
         kb.claim_task(conn, child)
 
         kb.block_task(
-
-            conn, child,
-
+            conn,
+            child,
             reason="review-required: child needs sign-off",
-
             expected_run_id=kb.get_task(conn, child).current_run_id,
-
         )
 
         assert kb.get_task(conn, child).status == "blocked"
-
-
 
         promoted = kb.recompute_ready(conn)
 
         assert promoted == 0
 
         assert kb.get_task(conn, child).status == "blocked"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -207,11 +172,7 @@ def test_worker_block_on_child_with_done_parents_is_still_sticky(kanban_home: Pa
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_circuit_breaker_block_still_auto_promotes(kanban_home: Path) -> None:
-
     """A child that was put into ``blocked`` *without* a worker-issued
 
     ``kanban_block`` (e.g. a transient crash, manual DB triage) and whose
@@ -239,14 +200,11 @@ def test_circuit_breaker_block_still_auto_promotes(kanban_home: Path) -> None:
     """
 
     with kb.connect() as conn:
-
         parent = kb.create_task(conn, title="parent")
 
         child = kb.create_task(conn, title="child", parents=[parent])
 
         kb.complete_task(conn, parent, result="ok")
-
-
 
         # Simulate a transient circuit-breaker / direct triage that flips
 
@@ -257,18 +215,12 @@ def test_circuit_breaker_block_still_auto_promotes(kanban_home: Path) -> None:
         # under the default limit (2), so recovery is still correct.
 
         conn.execute(
-
             "UPDATE tasks SET status='blocked', consecutive_failures=1, "
-
             "last_failure_error='transient error' WHERE id=?",
-
             (child,),
-
         )
 
         conn.commit()
-
-
 
         promoted = kb.recompute_ready(conn)
 
@@ -285,11 +237,7 @@ def test_circuit_breaker_block_still_auto_promotes(kanban_home: Path) -> None:
         assert task.consecutive_failures == 1
 
 
-
-
-
 def test_gave_up_event_alone_does_not_make_block_sticky(kanban_home: Path) -> None:
-
     """The circuit-breaker emits ``gave_up`` (not ``blocked``).  Make
 
     sure ``_has_sticky_block`` doesn't accidentally treat ``gave_up``
@@ -299,47 +247,34 @@ def test_gave_up_event_alone_does_not_make_block_sticky(kanban_home: Path) -> No
     transient crashes."""
 
     with kb.connect() as conn:
-
         parent = kb.create_task(conn, title="parent")
 
         child = kb.create_task(conn, title="child", parents=[parent])
 
         kb.complete_task(conn, parent, result="ok")
 
-
-
         # Status + event match what _record_task_failure writes when
 
         # the breaker trips.
 
         conn.execute(
-
-            "UPDATE tasks SET status='blocked' WHERE id=?", (child,),
-
+            "UPDATE tasks SET status='blocked' WHERE id=?",
+            (child,),
         )
 
         conn.execute(
-
             "INSERT INTO task_events (task_id, kind, payload, created_at) "
-
             "VALUES (?, 'gave_up', NULL, ?)",
-
             (child, int(time.time())),
-
         )
 
         conn.commit()
-
-
 
         promoted = kb.recompute_ready(conn)
 
         assert promoted == 1
 
         assert kb.get_task(conn, child).status == "ready"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -349,11 +284,7 @@ def test_gave_up_event_alone_does_not_make_block_sticky(kanban_home: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_unblock_clears_sticky_state_and_lets_block_recover(kanban_home: Path) -> None:
-
     """``clawk kanban unblock`` (or the ``kanban_unblock`` tool) is
 
     the only legitimate way out of a worker-initiated block.  After
@@ -363,19 +294,15 @@ def test_unblock_clears_sticky_state_and_lets_block_recover(kanban_home: Path) -
     must again be eligible for auto-recovery."""
 
     with kb.connect() as conn:
-
         tid = kb.create_task(conn, title="t")
 
         kb.claim_task(conn, tid)
 
         kb.block_task(
-
-            conn, tid,
-
+            conn,
+            tid,
             reason="review-required: ...",
-
             expected_run_id=kb.get_task(conn, tid).current_run_id,
-
         )
 
         assert kb.unblock_task(conn, tid)
@@ -383,8 +310,6 @@ def test_unblock_clears_sticky_state_and_lets_block_recover(kanban_home: Path) -
         # After unblock the task is no longer blocked at all.
 
         assert kb.get_task(conn, tid).status == "ready"
-
-
 
         # Now simulate a *later* circuit-breaker block (no new
 
@@ -395,23 +320,17 @@ def test_unblock_clears_sticky_state_and_lets_block_recover(kanban_home: Path) -
         # → recompute can recover.
 
         conn.execute(
-
-            "UPDATE tasks SET status='blocked' WHERE id=?", (tid,),
-
+            "UPDATE tasks SET status='blocked' WHERE id=?",
+            (tid,),
         )
 
         conn.commit()
-
-
 
         promoted = kb.recompute_ready(conn)
 
         assert promoted == 1
 
         assert kb.get_task(conn, tid).status == "ready"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -421,11 +340,7 @@ def test_unblock_clears_sticky_state_and_lets_block_recover(kanban_home: Path) -
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_protocol_violation_loop_is_broken(kanban_home: Path) -> None:
-
     """Reproduces the exact #28712 loop and asserts the dispatcher
 
     leaves the task blocked instead of cycling.
@@ -465,32 +380,24 @@ def test_protocol_violation_loop_is_broken(kanban_home: Path) -> None:
     """
 
     with kb.connect() as conn:
-
         tid = kb.create_task(conn, title="loop reproducer")
 
         kb.claim_task(conn, tid)
 
         kb.block_task(
-
-            conn, tid,
-
+            conn,
+            tid,
             reason="review-required: human eyes please",
-
             expected_run_id=kb.get_task(conn, tid).current_run_id,
-
         )
 
         assert kb.get_task(conn, tid).status == "blocked"
-
-
 
         # First dispatcher tick — must NOT promote.
 
         assert kb.recompute_ready(conn) == 0
 
         assert kb.get_task(conn, tid).status == "blocked"
-
-
 
         # Simulate the (hypothetical) protocol_violation + gave_up
 
@@ -507,41 +414,27 @@ def test_protocol_violation_loop_is_broken(kanban_home: Path) -> None:
         now = int(time.time())
 
         conn.execute(
-
             "INSERT INTO task_events (task_id, kind, payload, created_at) "
-
             "VALUES (?, 'protocol_violation', NULL, ?)",
-
             (tid, now),
-
         )
 
         conn.execute(
-
             "INSERT INTO task_events (task_id, kind, payload, created_at) "
-
             "VALUES (?, 'gave_up', NULL, ?)",
-
             (tid, now + 1),
-
         )
 
         conn.commit()
 
-
-
         # Subsequent ticks must still leave it blocked.
 
         for _ in range(3):
-
             promoted = kb.recompute_ready(conn)
 
             assert promoted == 0
 
             assert kb.get_task(conn, tid).status == "blocked"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -555,4 +448,3 @@ def test_protocol_violation_loop_is_broken(kanban_home: Path) -> None:
 # here; dropped during salvage to avoid two assertions of the same contract.
 
 # ---------------------------------------------------------------------------
-

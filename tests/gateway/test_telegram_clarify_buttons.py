@@ -61,6 +61,7 @@ def _make_adapter(extra=None):
 
 def _clear_clarify_state():
     from tools import clarify_gateway as cm
+
     with cm._lock:
         cm._entries.clear()
         cm._session_index.clear()
@@ -70,6 +71,7 @@ def _clear_clarify_state():
 # ===========================================================================
 # send_clarify — render
 # ===========================================================================
+
 
 class TestTelegramSendClarify:
     """Verify the rendered prompt has buttons or none, and stores state."""
@@ -193,6 +195,7 @@ class TestTelegramSendClarify:
 # ===========================================================================
 # Callback dispatch — _handle_callback_query routing for cl:* prefixes
 # ===========================================================================
+
 
 class TestTelegramClarifyCallback:
     """Verify clicking a button resolves the clarify primitive."""
@@ -318,6 +321,7 @@ class TestTelegramClarifyCallback:
         class _DenyRunner:
             async def _handle_message(self, event):
                 return None
+
             def _is_user_authorized(self, source):
                 return False
 
@@ -388,6 +392,7 @@ class TestTelegramClarifyCallback:
 # Base adapter fallback render — text numbered list
 # ===========================================================================
 
+
 class TestBaseAdapterClarifyFallback:
     """Adapters without button overrides should render numbered text."""
 
@@ -403,14 +408,24 @@ class TestBaseAdapterClarifyFallback:
                 # Skip base __init__ — we're not exercising it
                 self.sent: list = []
 
-            async def connect(self): pass
-            async def disconnect(self): pass
+            async def connect(self):
+                pass
+
+            async def disconnect(self):
+                pass
+
             async def send(self, chat_id, content, **kw):
                 self.sent.append({"chat_id": chat_id, "content": content})
                 return SendResult(success=True, message_id="1")
-            async def edit(self, *a, **k): return SendResult(success=False)
-            async def get_history(self, *a, **k): return []
-            async def get_chat_info(self, *a, **k): return {}
+
+            async def edit(self, *a, **k):
+                return SendResult(success=False)
+
+            async def get_history(self, *a, **k):
+                return []
+
+            async def get_chat_info(self, *a, **k):
+                return {}
 
         adapter = _Stub()
 
@@ -434,16 +449,28 @@ class TestBaseAdapterClarifyFallback:
 
         class _Stub(BasePlatformAdapter):
             name = "stub"
+
             def __init__(self):
                 self.sent: list = []
-            async def connect(self): pass
-            async def disconnect(self): pass
+
+            async def connect(self):
+                pass
+
+            async def disconnect(self):
+                pass
+
             async def send(self, chat_id, content, **kw):
                 self.sent.append(content)
                 return SendResult(success=True, message_id="1")
-            async def edit(self, *a, **k): return SendResult(success=False)
-            async def get_history(self, *a, **k): return []
-            async def get_chat_info(self, *a, **k): return {}
+
+            async def edit(self, *a, **k):
+                return SendResult(success=False)
+
+            async def get_history(self, *a, **k):
+                return []
+
+            async def get_chat_info(self, *a, **k):
+                return {}
 
         adapter = _Stub()
         await adapter.send_clarify(

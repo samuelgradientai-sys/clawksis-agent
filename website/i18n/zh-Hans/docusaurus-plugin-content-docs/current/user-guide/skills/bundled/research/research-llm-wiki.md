@@ -311,14 +311,19 @@ When new information conflicts with existing content:
 当用户要求 lint、健康检查或审计 wiki 时：
 
 ① **孤立页面：** 查找没有其他页面通过 `[[wikilinks]]` 指向的页面。
-```python
-# Use execute_code for this — programmatic scan across all wiki pages
-import os, re
-from collections import defaultdict
-wiki = "<WIKI_PATH>"
-# Scan all .md files in entities/, concepts/, comparisons/, queries/
-# Extract all [[wikilinks]] — build inbound link map
-# Pages with zero inbound links are orphans
+```python# Use execute_code for this — programmatic scan across all wiki pages
+
+import os, re
+
+from collections import defaultdict
+
+wiki = "<WIKI_PATH>"
+
+# Scan all .md files in entities/, concepts/, comparisons/, queries/
+
+# Extract all [[wikilinks]] — build inbound link map
+
+# Pages with zero inbound links are orphans
 ```
 
 ② **断开的 wikilink：** 查找指向不存在页面的 `[[links]]`。

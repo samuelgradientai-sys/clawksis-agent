@@ -128,7 +128,9 @@ async def test_compress_works_with_plugin_context_engine():
     agent_instance._compress_context.return_value = (compressed, "")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
         patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100),
@@ -162,7 +164,9 @@ async def test_compress_respects_plugin_has_content_to_compress_false():
     agent_instance.session_id = "sess-1"
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
         patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100),

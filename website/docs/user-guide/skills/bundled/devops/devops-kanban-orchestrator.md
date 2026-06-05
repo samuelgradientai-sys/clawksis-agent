@@ -103,33 +103,35 @@ Show the graph to the user before creating cards. Let them correct it — includ
 
 Use the profile names from Step 0. The example below uses placeholders `<profile-A>`, `<profile-B>`, `<profile-C>` — replace them with what the user actually has.
 
-```python
-t1 = kanban_create(
-    title="research: Postgres cost vs current",
-    assignee="<profile-A>",  # whichever profile handles research on this setup
-    body="Compare estimated infrastructure costs, migration costs, and ongoing ops costs over a 3-year window. Sources: AWS/GCP pricing, team time estimates, current Postgres bills from peers.",
-    tenant=os.environ.get("CLAWK_TENANT"),
-)["task_id"]
-
-t2 = kanban_create(
-    title="research: Postgres performance vs current",
-    assignee="<profile-A>",  # same profile, run in parallel
-    body="Compare query latency, throughput, and scaling characteristics at our expected data volume (~500GB, 10k QPS peak). Sources: benchmark papers, public case studies, pgbench results if easy.",
-)["task_id"]
-
-t3 = kanban_create(
-    title="synthesize migration recommendation",
-    assignee="<profile-B>",  # whichever profile does synthesis/analysis
-    body="Read the findings from T1 (cost) and T2 (performance). Produce a 1-page recommendation with explicit trade-offs and a go/no-go call.",
-    parents=[t1, t2],
-)["task_id"]
-
-t4 = kanban_create(
-    title="draft decision memo",
-    assignee="<profile-C>",  # whichever profile drafts user-facing prose
-    body="Turn the analyst's recommendation into a 2-page memo for the CTO. Match the tone of previous decision memos in the team's knowledge base.",
-    parents=[t3],
-)["task_id"]
+```pythont1 = kanban_create(
+    title="research: Postgres cost vs current",
+    assignee="<profile-A>",  # whichever profile handles research on this setup
+    body="Compare estimated infrastructure costs, migration costs, and ongoing ops costs over a 3-year window. Sources: AWS/GCP pricing, team time estimates, current Postgres bills from peers.",
+    tenant=os.environ.get("CLAWK_TENANT"),
+)["task_id"]
+
+
+t2 = kanban_create(
+    title="research: Postgres performance vs current",
+    assignee="<profile-A>",  # same profile, run in parallel
+    body="Compare query latency, throughput, and scaling characteristics at our expected data volume (~500GB, 10k QPS peak). Sources: benchmark papers, public case studies, pgbench results if easy.",
+)["task_id"]
+
+
+t3 = kanban_create(
+    title="synthesize migration recommendation",
+    assignee="<profile-B>",  # whichever profile does synthesis/analysis
+    body="Read the findings from T1 (cost) and T2 (performance). Produce a 1-page recommendation with explicit trade-offs and a go/no-go call.",
+    parents=[t1, t2],
+)["task_id"]
+
+
+t4 = kanban_create(
+    title="draft decision memo",
+    assignee="<profile-C>",  # whichever profile drafts user-facing prose
+    body="Turn the analyst's recommendation into a 2-page memo for the CTO. Match the tone of previous decision memos in the team's knowledge base.",
+    parents=[t3],
+)["task_id"]
 ```
 
 `parents=[...]` gates promotion — children stay in `todo` until every parent reaches `done`, then auto-promote to `ready`. No manual coordination needed; the dispatcher and dependency engine handle it.
@@ -140,18 +142,17 @@ If the task graph has dependencies, create the parent cards first, capture their
 
 If you were spawned as a task yourself (e.g. a planner profile was assigned `T0: "investigate Postgres migration"`), mark it done with a summary of what you created:
 
-```python
-kanban_complete(
-    summary="decomposed into T1-T4: 2 research lanes in parallel, 1 synthesis on their outputs, 1 prose draft on the recommendation",
-    metadata={
-        "task_graph": {
-            "T1": {"assignee": "<profile-A>", "parents": []},
-            "T2": {"assignee": "<profile-A>", "parents": []},
-            "T3": {"assignee": "<profile-B>", "parents": ["T1", "T2"]},
-            "T4": {"assignee": "<profile-C>", "parents": ["T3"]},
-        },
-    },
-)
+```pythonkanban_complete(
+    summary="decomposed into T1-T4: 2 research lanes in parallel, 1 synthesis on their outputs, 1 prose draft on the recommendation",
+    metadata={
+        "task_graph": {
+            "T1": {"assignee": "<profile-A>", "parents": []},
+            "T2": {"assignee": "<profile-A>", "parents": []},
+            "T3": {"assignee": "<profile-B>", "parents": ["T1", "T2"]},
+            "T4": {"assignee": "<profile-C>", "parents": ["T3"]},
+        },
+    },
+)
 ```
 
 ### Step 5 — Report back to the user
@@ -200,14 +201,13 @@ Tell them what you created in plain prose, naming the actual profiles you used:
 
 By default a dispatched worker gets **one shot** at its card: it does its work, calls `kanban_complete`/`kanban_block`, and exits. For open-ended cards where one turn rarely finishes the job, pass `goal_mode=True` to wrap that worker in a Ralph-style goal loop — the same engine behind the `/goal` slash command:
 
-```python
-kanban_create(
-    title="Translate the full docs site to French",
-    body="Acceptance: every page translated, no English left, links intact.",
-    assignee="<translator-profile>",
-    goal_mode=True,        # judge re-checks the card after each turn
-    goal_max_turns=15,     # optional budget (default 20)
-)["task_id"]
+```pythonkanban_create(
+    title="Translate the full docs site to French",
+    body="Acceptance: every page translated, no English left, links intact.",
+    assignee="<translator-profile>",
+    goal_mode=True,  # judge re-checks the card after each turn
+    goal_max_turns=15,  # optional budget (default 20)
+)["task_id"]
 ```
 
 How it behaves:

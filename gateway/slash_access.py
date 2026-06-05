@@ -62,7 +62,7 @@ class SlashAccessPolicy:
     SessionSource.chat_type → scope happens in ``policy_for_source``.
     """
 
-    enabled: bool                      # gating active for this scope?
+    enabled: bool  # gating active for this scope?
     admin_user_ids: FrozenSet[str]
     user_allowed_commands: FrozenSet[str]
 

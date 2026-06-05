@@ -53,66 +53,77 @@ Clawksis Kanban worker 的陷阱、示例与边界情况。生命周期本身会
 `kanban_complete(summary=..., metadata=...)` 的交接方式是下游 worker 读取你工作成果的途径。以下是有效的模式：
 
 **编码任务：**
-```python
-kanban_complete(
-    summary="shipped rate limiter — token bucket, keys on user_id with IP fallback, 14 tests pass",
-    metadata={
-        "changed_files": ["rate_limiter.py", "tests/test_rate_limiter.py"],
-        "tests_run": 14,
-        "tests_passed": 14,
-        "decisions": ["user_id primary, IP fallback for unauthenticated requests"],
-    },
-)
+```pythonkanban_complete(
+    summary="shipped rate limiter — token bucket, keys on user_id with IP fallback, 14 tests pass",
+    metadata={
+        "changed_files": ["rate_limiter.py", "tests/test_rate_limiter.py"],
+        "tests_run": 14,
+        "tests_passed": 14,
+        "decisions": ["user_id primary, IP fallback for unauthenticated requests"],
+    },
+)
 ```
 
 **需要人工审查的编码任务（review-required）：**
 
 对于大多数涉及代码变更的任务，在人工审查者过目之前，工作并未真正*完成*。应使用 block 而非 complete，并在 `reason` 前加 `review-required: ` 前缀，以便仪表板将该行标记为待审查。先将结构化元数据（变更文件、测试计数、diff/PR url）写入 comment，因为 `kanban_block` 只携带人类可读的原因——comment 是持久化注释的渠道。审查者可执行 `clawk kanban unblock <id>` 批准（这会携带 comment 线程重新派生你以处理后续事项），或通过另一条 comment 要求修改。
 
-```python
-import json
-
-kanban_comment(
-    body="review-required handoff:\n" + json.dumps({
-        "changed_files": ["rate_limiter.py", "tests/test_rate_limiter.py"],
-        "tests_run": 14,
-        "tests_passed": 14,
-        "diff_path": "/path/to/worktree",  # or PR url if pushed
-        "decisions": ["user_id primary, IP fallback for unauthenticated requests"],
-    }, indent=2),
-)
-kanban_block(
-    reason="review-required: rate limiter shipped, 14/14 tests pass — needs eyes on the user_id/IP fallback choice before merging",
-)
+```pythonimport json
+
+
+kanban_comment(
+    body="review-required handoff:\n"
+    + json.dumps(
+        {
+            "changed_files": ["rate_limiter.py", "tests/test_rate_limiter.py"],
+            "tests_run": 14,
+            "tests_passed": 14,
+            "diff_path": "/path/to/worktree",  # or PR url if pushed
+            "decisions": ["user_id primary, IP fallback for unauthenticated requests"],
+        },
+        indent=2,
+    ),
+)
+
+kanban_block(
+    reason="review-required: rate limiter shipped, 14/14 tests pass — needs eyes on the user_id/IP fallback choice before merging",
+)
 ```
 
 仅在任务真正终结时使用 `kanban_complete`——例如单行拼写修复、无功能影响的文档变更，或产出物本身即为成果的研究任务。
 
 **研究任务：**
-```python
-kanban_complete(
-    summary="3 competing libraries reviewed; vLLM wins on throughput, SGLang on latency, Tensorrt-LLM on memory efficiency",
-    metadata={
-        "sources_read": 12,
-        "recommendation": "vLLM",
-        "benchmarks": {"vllm": 1.0, "sglang": 0.87, "trtllm": 0.72},
-    },
-)
+```pythonkanban_complete(
+    summary="3 competing libraries reviewed; vLLM wins on throughput, SGLang on latency, Tensorrt-LLM on memory efficiency",
+    metadata={
+        "sources_read": 12,
+        "recommendation": "vLLM",
+        "benchmarks": {"vllm": 1.0, "sglang": 0.87, "trtllm": 0.72},
+    },
+)
 ```
 
 **审查任务：**
-```python
-kanban_complete(
-    summary="reviewed PR #123; 2 blocking issues found (SQL injection in /search, missing CSRF on /settings)",
-    metadata={
-        "pr_number": 123,
-        "findings": [
-            {"severity": "critical", "file": "api/search.py", "line": 42, "issue": "raw SQL concat"},
-            {"severity": "high", "file": "api/settings.py", "issue": "missing CSRF middleware"},
-        ],
-        "approved": False,
-    },
-)
+```pythonkanban_complete(
+    summary="reviewed PR #123; 2 blocking issues found (SQL injection in /search, missing CSRF on /settings)",
+    metadata={
+        "pr_number": 123,
+        "findings": [
+            {
+                "severity": "critical",
+                "file": "api/search.py",
+                "line": 42,
+                "issue": "raw SQL concat",
+            },
+            {
+                "severity": "high",
+                "file": "api/settings.py",
+                "issue": "missing CSRF middleware",
+            },
+        ],
+        "approved": False,
+    },
+)
 ```
 
 请将 `metadata` 的结构设计为下游解析器（审查者、聚合器、调度器）无需重新阅读你的文字描述即可直接使用。
@@ -121,24 +132,26 @@ kanban_complete(
 
 若你的运行产生了新的 kanban 任务（通过 `kanban_create`），请在 `kanban_complete` 的 `created_cards` 中传入这些 id。内核会验证每个 id 是否存在且由你的 profile 创建；任何幻构的 id 都会导致完成操作被阻断，并附带错误列表说明问题所在，且被拒绝的尝试会永久记录在任务的事件日志中。**只列出你从成功的 `kanban_create` 返回值中捕获的 id——绝不凭空捏造 id，绝不粘贴来自早期运行的 id，绝不认领其他 worker 创建的卡片。**
 
-```python
-# 正确 — 捕获返回值，然后认领。
-c1 = kanban_create(title="remediate SQL injection", assignee="security-worker")
-c2 = kanban_create(title="fix CSRF middleware", assignee="web-worker")
-
-kanban_complete(
-    summary="Review done; spawned remediations for both findings.",
-    metadata={"pr_number": 123, "approved": False},
-    created_cards=[c1["task_id"], c2["task_id"]],
-)
+```python# 正确 — 捕获返回值，然后认领。
+
+c1 = kanban_create(title="remediate SQL injection", assignee="security-worker")
+
+c2 = kanban_create(title="fix CSRF middleware", assignee="web-worker")
+
+
+kanban_complete(
+    summary="Review done; spawned remediations for both findings.",
+    metadata={"pr_number": 123, "approved": False},
+    created_cards=[c1["task_id"], c2["task_id"]],
+)
 ```
 
-```python
-# 错误 — 认领没有捕获返回值的 id。
-kanban_complete(
-    summary="Created remediation cards t_a1b2c3d4, t_deadbeef",  # 幻构
-    created_cards=["t_a1b2c3d4", "t_deadbeef"],                   # → 门控拒绝
-)
+```python# 错误 — 认领没有捕获返回值的 id。
+
+kanban_complete(
+    summary="Created remediation cards t_a1b2c3d4, t_deadbeef",  # 幻构
+    created_cards=["t_a1b2c3d4", "t_deadbeef"],  # → 门控拒绝
+)
 ```
 
 若 `kanban_create` 调用失败（异常、tool_error），则卡片未被创建——不要为其包含幻构 id。重试创建，或省略该 id 并在 summary 中说明失败情况。散文扫描阶段也会捕获你自由格式 summary 中无法解析的 `t_<hex>` 引用；这些不会阻断完成操作，但会在仪表板的任务上显示为建议性警告。
@@ -149,12 +162,14 @@ kanban_complete(
 
 好：一句话说明你需要的具体决策。将更长的上下文作为 comment 留下。
 
-```python
-kanban_comment(
-    task_id=os.environ["CLAWK_KANBAN_TASK"],
-    body="Full context: I have user IPs from Cloudflare headers but some users are behind NATs with thousands of peers. Keying on IP alone causes false positives.",
-)
-kanban_block(reason="Rate limit key choice: IP (simple, NAT-unsafe) or user_id (requires auth, skips anonymous endpoints)?")
+```pythonkanban_comment(
+    task_id=os.environ["CLAWK_KANBAN_TASK"],
+    body="Full context: I have user IPs from Cloudflare headers but some users are behind NATs with thousands of peers. Keying on IP alone causes false positives.",
+)
+
+kanban_block(
+    reason="Rate limit key choice: IP (simple, NAT-unsafe) or user_id (requires auth, skips anonymous endpoints)?"
+)
 ```
 
 block 消息是仪表板/gateway 通知器中显示的内容。comment 是人类打开任务时阅读的深层上下文。

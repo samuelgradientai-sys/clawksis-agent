@@ -6,6 +6,7 @@ turn's reasoning — never leaks from a prior turn — and is picked up
 correctly when reasoning is attached to a tool-calling assistant step
 rather than the final-answer assistant step.
 """
+
 from __future__ import annotations
 
 
@@ -52,8 +53,13 @@ def test_tool_call_turn_reasoning_on_tool_call_step():
             "role": "assistant",
             "content": "",
             "reasoning": "I should use search_files",
-            "tool_calls": [{"id": "c1", "type": "function",
-                            "function": {"name": "search_files", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "search_files", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "tool_call_id": "c1", "content": "3 matches"},
         {"role": "assistant", "content": "Found 3 matches", "reasoning": None},
@@ -69,8 +75,11 @@ def test_no_stale_reasoning_across_turns():
     messages = [
         # prior turn
         {"role": "user", "content": "explain quantum tunneling"},
-        {"role": "assistant", "content": "It's when...",
-         "reasoning": "tunneling happens when particles..."},
+        {
+            "role": "assistant",
+            "content": "It's when...",
+            "reasoning": "tunneling happens when particles...",
+        },
         # current turn
         {"role": "user", "content": "thanks"},
         {"role": "assistant", "content": "You're welcome!", "reasoning": None},
@@ -89,12 +98,20 @@ def test_tool_call_turn_picks_latest_reasoning_within_turn():
             "role": "assistant",
             "content": "",
             "reasoning": "initial plan",
-            "tool_calls": [{"id": "c1", "type": "function",
-                            "function": {"name": "search_files", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "search_files", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "tool_call_id": "c1", "content": "results"},
-        {"role": "assistant", "content": "Here's the summary",
-         "reasoning": "synthesized view of results"},
+        {
+            "role": "assistant",
+            "content": "Here's the summary",
+            "reasoning": "synthesized view of results",
+        },
     ]
     assert _extract_last_reasoning(messages) == "synthesized view of results"
 

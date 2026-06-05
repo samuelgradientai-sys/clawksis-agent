@@ -46,22 +46,27 @@ events:
 
 #### handler.py
 
-```python
-import json
-from datetime import datetime
-from pathlib import Path
-
-LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
-
-async def handle(event_type: str, context: dict):
-    """Called for each subscribed event. Must be named 'handle'."""
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "event": event_type,
-        **context,
-    }
-    with open(LOG_FILE, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```pythonimport json
+
+from datetime import datetime
+
+from pathlib import Path
+
+
+LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
+
+
+async def handle(event_type: str, context: dict):
+    """Called for each subscribed event. Must be named 'handle'."""
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "event": event_type,
+        **context,
+    }
+
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 **处理器规则：**
@@ -101,25 +106,34 @@ events:
   - agent:step
 ```
 
-```python
-# ~/.clawksis/hooks/long-task-alert/handler.py
-import os
-import httpx
-
-THRESHOLD = 10
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_HOME_CHANNEL")
-
-async def handle(event_type: str, context: dict):
-    iteration = context.get("iteration", 0)
-    if iteration == THRESHOLD and BOT_TOKEN and CHAT_ID:
-        tools = ", ".join(context.get("tool_names", []))
-        text = f"⚠️ Agent has been running for {iteration} steps. Last tools: {tools}"
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": text},
-            )
+```python# ~/.clawksis/hooks/long-task-alert/handler.py
+
+import os
+
+import httpx
+
+
+THRESHOLD = 10
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+CHAT_ID = os.getenv("TELEGRAM_HOME_CHANNEL")
+
+
+async def handle(event_type: str, context: dict):
+
+    iteration = context.get("iteration", 0)
+
+    if iteration == THRESHOLD and BOT_TOKEN and CHAT_ID:
+        tools = ", ".join(context.get("tool_names", []))
+
+        text = f"⚠️ Agent has been running for {iteration} steps. Last tools: {tools}"
+
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": text},
+            )
 ```
 
 #### 命令使用日志记录器
@@ -134,25 +148,32 @@ events:
   - command:*
 ```
 
-```python
-# ~/.clawksis/hooks/command-logger/handler.py
-import json
-from datetime import datetime
-from pathlib import Path
-
-LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
-
-def handle(event_type: str, context: dict):
-    LOG.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "ts": datetime.now().isoformat(),
-        "command": context.get("command"),
-        "args": context.get("args"),
-        "platform": context.get("platform"),
-        "user": context.get("user_id"),
-    }
-    with open(LOG, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```python# ~/.clawksis/hooks/command-logger/handler.py
+
+import json
+
+from datetime import datetime
+
+from pathlib import Path
+
+
+LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
+
+
+def handle(event_type: str, context: dict):
+
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "ts": datetime.now().isoformat(),
+        "command": context.get("command"),
+        "args": context.get("args"),
+        "platform": context.get("platform"),
+        "user": context.get("user_id"),
+    }
+
+    with open(LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 #### 会话开始 Webhook
@@ -168,18 +189,25 @@ events:
   - session:reset
 ```
 
-```python
-# ~/.clawksis/hooks/session-webhook/handler.py
-import httpx
-
-WEBHOOK_URL = "https://your-service.example.com/clawk-events"
-
-async def handle(event_type: str, context: dict):
-    async with httpx.AsyncClient() as client:
-        await client.post(WEBHOOK_URL, json={
-            "event": event_type,
-            **context,
-        }, timeout=5)
+```python# ~/.clawksis/hooks/session-webhook/handler.py
+
+import httpx
+
+
+WEBHOOK_URL = "https://your-service.example.com/clawk-events"
+
+
+async def handle(event_type: str, context: dict):
+
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            WEBHOOK_URL,
+            json={
+                "event": event_type,
+                **context,
+            },
+            timeout=5,
+        )
 ```
 
 ### 教程：BOOT.md——每次 Gateway 启动时运行启动检查清单
@@ -228,78 +256,98 @@ events:
 
 **`~/.clawksis/hooks/boot-md/handler.py`**
 
-```python
-"""Run ~/.clawksis/BOOT.md on every gateway startup."""
-
-import logging
-import threading
-from pathlib import Path
-
-logger = logging.getLogger("hooks.boot-md")
-
-BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
-
-
-def _build_prompt(content: str) -> str:
-    return (
-        "You are running a startup boot checklist. Follow the instructions "
-        "below exactly.\n\n"
-        "---\n"
-        f"{content}\n"
-        "---\n\n"
-        "Execute each instruction. Use the send_message tool to deliver any "
-        "messages to platforms like Discord or Slack.\n"
-        "If nothing needs attention and there is nothing to report, reply "
-        "with ONLY: [SILENT]"
-    )
-
-
-def _run_boot_agent(content: str) -> None:
-    """Spawn a one-shot agent and execute the checklist.
-
-    Uses the gateway's resolved model and runtime credentials so this works
-    against custom endpoints, aggregators, and OAuth-based providers alike.
-    """
-    try:
-        from gateway.run import _resolve_gateway_model, _resolve_runtime_agent_kwargs
-        from run_agent import AIAgent
-
-        agent = AIAgent(
-            model=_resolve_gateway_model(),
-            **_resolve_runtime_agent_kwargs(),
-            platform="gateway",
-            quiet_mode=True,
-            skip_context_files=True,
-            skip_memory=True,
-            max_iterations=20,
-        )
-        result = agent.run_conversation(_build_prompt(content))
-        response = result.get("final_response", "")
-        if response and "[SILENT]" not in response:
-            logger.info("boot-md completed: %s", response[:200])
-        else:
-            logger.info("boot-md completed (nothing to report)")
-    except Exception as e:
-        logger.error("boot-md agent failed: %s", e)
-
-
-async def handle(event_type: str, context: dict) -> None:
-    if not BOOT_FILE.exists():
-        return
-    content = BOOT_FILE.read_text(encoding="utf-8").strip()
-    if not content:
-        return
-
-    logger.info("Running BOOT.md (%d chars)", len(content))
-
-    # Background thread so gateway startup isn't blocked on a full agent turn.
-    thread = threading.Thread(
-        target=_run_boot_agent,
-        args=(content,),
-        name="boot-md",
-        daemon=True,
-    )
-    thread.start()
+```python"""Run ~/.clawksis/BOOT.md on every gateway startup."""
+
+import logging
+
+import threading
+
+from pathlib import Path
+
+
+logger = logging.getLogger("hooks.boot-md")
+
+
+BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
+
+
+def _build_prompt(content: str) -> str:
+
+    return (
+        "You are running a startup boot checklist. Follow the instructions "
+        "below exactly.\n\n"
+        "---\n"
+        f"{content}\n"
+        "---\n\n"
+        "Execute each instruction. Use the send_message tool to deliver any "
+        "messages to platforms like Discord or Slack.\n"
+        "If nothing needs attention and there is nothing to report, reply "
+        "with ONLY: [SILENT]"
+    )
+
+
+def _run_boot_agent(content: str) -> None:
+    """Spawn a one-shot agent and execute the checklist.
+
+
+
+    Uses the gateway's resolved model and runtime credentials so this works
+
+    against custom endpoints, aggregators, and OAuth-based providers alike.
+
+    """
+
+    try:
+        from gateway.run import _resolve_gateway_model, _resolve_runtime_agent_kwargs
+
+        from run_agent import AIAgent
+
+        agent = AIAgent(
+            model=_resolve_gateway_model(),
+            **_resolve_runtime_agent_kwargs(),
+            platform="gateway",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            max_iterations=20,
+        )
+
+        result = agent.run_conversation(_build_prompt(content))
+
+        response = result.get("final_response", "")
+
+        if response and "[SILENT]" not in response:
+            logger.info("boot-md completed: %s", response[:200])
+
+        else:
+            logger.info("boot-md completed (nothing to report)")
+
+    except Exception as e:
+        logger.error("boot-md agent failed: %s", e)
+
+
+async def handle(event_type: str, context: dict) -> None:
+
+    if not BOOT_FILE.exists():
+        return
+
+    content = BOOT_FILE.read_text(encoding="utf-8").strip()
+
+    if not content:
+        return
+
+    logger.info("Running BOOT.md (%d chars)", len(content))
+
+    # Background thread so gateway startup isn't blocked on a full agent turn.
+
+    thread = threading.Thread(
+        target=_run_boot_agent,
+        args=(content,),
+        name="boot-md",
+        daemon=True,
+    )
+
+    thread.start()
 ```
 
 两个关键行：
@@ -353,14 +401,19 @@ Gateway hooks 仅在 **gateway**（Telegram、Discord、Slack、WhatsApp、Teams
 
 [插件](/user-guide/features/plugins)可以注册在 **CLI 和 gateway** 会话中均会触发的 hook。这些 hook 通过插件 `register()` 函数中的 `ctx.register_hook()` 以编程方式注册。
 
-```python
-def register(ctx):
-    ctx.register_hook("pre_tool_call", my_tool_observer)
-    ctx.register_hook("post_tool_call", my_tool_logger)
-    ctx.register_hook("pre_llm_call", my_memory_callback)
-    ctx.register_hook("post_llm_call", my_sync_callback)
-    ctx.register_hook("on_session_start", my_init_callback)
-    ctx.register_hook("on_session_end", my_cleanup_callback)
+```pythondef register(ctx):
+
+    ctx.register_hook("pre_tool_call", my_tool_observer)
+
+    ctx.register_hook("post_tool_call", my_tool_logger)
+
+    ctx.register_hook("pre_llm_call", my_memory_callback)
+
+    ctx.register_hook("post_llm_call", my_sync_callback)
+
+    ctx.register_hook("on_session_start", my_init_callback)
+
+    ctx.register_hook("on_session_end", my_cleanup_callback)
 ```
 
 **所有 hook 的通用规则：**
@@ -411,8 +464,7 @@ def my_callback(tool_name: str, args: dict, task_id: str, **kwargs):
 
 **返回值——否决调用：**
 
-```python
-return {"action": "block", "message": "Reason the tool call was blocked"}
+```pythonreturn {"action": "block", "message": "Reason the tool call was blocked"}
 ```
 
 Agent 以 `message` 作为返回给模型的错误短路该工具调用。第一个匹配的 block 指令生效（Python 插件优先，然后是 shell hooks）。任何其他返回值均被忽略，因此仅作观察用途的现有回调无需修改。
@@ -421,31 +473,43 @@ Agent 以 `message` 作为返回给模型的错误短路该工具调用。第一
 
 **示例——工具调用审计日志：**
 
-```python
-import json, logging
-from datetime import datetime
-
-logger = logging.getLogger(__name__)
-
-def audit_tool_call(tool_name, args, task_id, **kwargs):
-    logger.info("TOOL_CALL session=%s tool=%s args=%s",
-                task_id, tool_name, json.dumps(args)[:200])
-
-def register(ctx):
-    ctx.register_hook("pre_tool_call", audit_tool_call)
+```pythonimport json, logging
+
+from datetime import datetime
+
+
+logger = logging.getLogger(__name__)
+
+
+def audit_tool_call(tool_name, args, task_id, **kwargs):
+
+    logger.info(
+        "TOOL_CALL session=%s tool=%s args=%s",
+        task_id,
+        tool_name,
+        json.dumps(args)[:200],
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_tool_call", audit_tool_call)
 ```
 
 **示例——对危险工具发出警告：**
 
-```python
-DANGEROUS = {"terminal", "write_file", "patch"}
-
-def warn_dangerous(tool_name, **kwargs):
-    if tool_name in DANGEROUS:
-        print(f"⚠ Executing potentially dangerous tool: {tool_name}")
-
-def register(ctx):
-    ctx.register_hook("pre_tool_call", warn_dangerous)
+```pythonDANGEROUS = {"terminal", "write_file", "patch"}
+
+
+def warn_dangerous(tool_name, **kwargs):
+
+    if tool_name in DANGEROUS:
+        print(f"⚠ Executing potentially dangerous tool: {tool_name}")
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_tool_call", warn_dangerous)
 ```
 
 ---
@@ -477,26 +541,37 @@ def my_callback(tool_name: str, args: dict, result: str, task_id: str,
 
 **示例——追踪工具使用指标：**
 
-```python
-from collections import Counter, defaultdict
-import json
-
-_tool_counts = Counter()
-_error_counts = Counter()
-_latency_ms = defaultdict(list)
-
-def track_metrics(tool_name, result, duration_ms=0, **kwargs):
-    _tool_counts[tool_name] += 1
-    _latency_ms[tool_name].append(duration_ms)
-    try:
-        parsed = json.loads(result)
-        if "error" in parsed:
-            _error_counts[tool_name] += 1
-    except (json.JSONDecodeError, TypeError):
-        pass
-
-def register(ctx):
-    ctx.register_hook("post_tool_call", track_metrics)
+```pythonfrom collections import Counter, defaultdict
+
+import json
+
+
+_tool_counts = Counter()
+
+_error_counts = Counter()
+
+_latency_ms = defaultdict(list)
+
+
+def track_metrics(tool_name, result, duration_ms=0, **kwargs):
+
+    _tool_counts[tool_name] += 1
+
+    _latency_ms[tool_name].append(duration_ms)
+
+    try:
+        parsed = json.loads(result)
+
+        if "error" in parsed:
+            _error_counts[tool_name] += 1
+
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+
+def register(ctx):
+
+    ctx.register_hook("post_tool_call", track_metrics)
 ```
 
 ---
@@ -525,15 +600,21 @@ def my_callback(session_id: str, user_message: str, conversation_history: list,
 
 **返回值：** 若回调返回包含 `"context"` 键的字典，或非空的普通字符串，该文本会追加到当前轮次的用户消息。返回 `None` 表示不注入。
 
-```python
-# 注入上下文
-return {"context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"}
-
-# 普通字符串（等效）
-return "Recalled memories:\n- User likes Python"
-
-# 不注入
-return None
+```python# 注入上下文
+
+return {
+    "context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"
+}
+
+
+# 普通字符串（等效）
+
+return "Recalled memories:\n- User likes Python"
+
+
+# 不注入
+
+return None
 ```
 
 **上下文注入位置：** 始终注入到**用户消息**，而非系统 prompt。这保留了 prompt 缓存——系统 prompt 在各轮次间保持不变，已缓存的 token 得以复用。系统 prompt 是 Clawksis 的领域（模型指导、工具执行、个性、技能）。插件在用户输入旁边贡献上下文。
@@ -546,39 +627,55 @@ return None
 
 **示例——记忆召回：**
 
-```python
-import httpx
-
-MEMORY_API = "https://your-memory-api.example.com"
-
-def recall(session_id, user_message, is_first_turn, **kwargs):
-    try:
-        resp = httpx.post(f"{MEMORY_API}/recall", json={
-            "session_id": session_id,
-            "query": user_message,
-        }, timeout=3)
-        memories = resp.json().get("results", [])
-        if not memories:
-            return None
-        text = "Recalled context:\n" + "\n".join(f"- {m['text']}" for m in memories)
-        return {"context": text}
-    except Exception:
-        return None
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", recall)
+```pythonimport httpx
+
+
+MEMORY_API = "https://your-memory-api.example.com"
+
+
+def recall(session_id, user_message, is_first_turn, **kwargs):
+
+    try:
+        resp = httpx.post(
+            f"{MEMORY_API}/recall",
+            json={
+                "session_id": session_id,
+                "query": user_message,
+            },
+            timeout=3,
+        )
+
+        memories = resp.json().get("results", [])
+
+        if not memories:
+            return None
+
+        text = "Recalled context:\n" + "\n".join(f"- {m['text']}" for m in memories)
+
+        return {"context": text}
+
+    except Exception:
+        return None
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", recall)
 ```
 
 **示例——护栏：**
 
-```python
-POLICY = "Never execute commands that delete files without explicit user confirmation."
-
-def guardrails(**kwargs):
-    return {"context": POLICY}
-
-def register(ctx):
-    ctx.register_hook("pre_llm_call", guardrails)
+```pythonPOLICY = "Never execute commands that delete files without explicit user confirmation."
+
+
+def guardrails(**kwargs):
+
+    return {"context": POLICY}
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_llm_call", guardrails)
 ```
 
 ---
@@ -611,37 +708,54 @@ def my_callback(session_id: str, user_message: str, assistant_response: str,
 
 **示例——同步到外部记忆：**
 
-```python
-import httpx
-
-MEMORY_API = "https://your-memory-api.example.com"
-
-def sync_memory(session_id, user_message, assistant_response, **kwargs):
-    try:
-        httpx.post(f"{MEMORY_API}/store", json={
-            "session_id": session_id,
-            "user": user_message,
-            "assistant": assistant_response,
-        }, timeout=5)
-    except Exception:
-        pass  # best-effort
-
-def register(ctx):
-    ctx.register_hook("post_llm_call", sync_memory)
+```pythonimport httpx
+
+
+MEMORY_API = "https://your-memory-api.example.com"
+
+
+def sync_memory(session_id, user_message, assistant_response, **kwargs):
+
+    try:
+        httpx.post(
+            f"{MEMORY_API}/store",
+            json={
+                "session_id": session_id,
+                "user": user_message,
+                "assistant": assistant_response,
+            },
+            timeout=5,
+        )
+
+    except Exception:
+        pass  # best-effort
+
+
+def register(ctx):
+
+    ctx.register_hook("post_llm_call", sync_memory)
 ```
 
 **示例——追踪响应长度：**
 
-```python
-import logging
-logger = logging.getLogger(__name__)
-
-def log_response_length(session_id, assistant_response, model, **kwargs):
-    logger.info("RESPONSE session=%s model=%s chars=%d",
-                session_id, model, len(assistant_response or ""))
-
-def register(ctx):
-    ctx.register_hook("post_llm_call", log_response_length)
+```pythonimport logging
+
+logger = logging.getLogger(__name__)
+
+
+def log_response_length(session_id, assistant_response, model, **kwargs):
+
+    logger.info(
+        "RESPONSE session=%s model=%s chars=%d",
+        session_id,
+        model,
+        len(assistant_response or ""),
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("post_llm_call", log_response_length)
 ```
 
 ---
@@ -670,19 +784,22 @@ def my_callback(session_id: str, model: str, platform: str, **kwargs):
 
 **示例——初始化会话缓存：**
 
-```python
-_session_caches = {}
-
-def init_session(session_id, model, platform, **kwargs):
-    _session_caches[session_id] = {
-        "model": model,
-        "platform": platform,
-        "tool_calls": 0,
-        "started": __import__("datetime").datetime.now().isoformat(),
-    }
-
-def register(ctx):
-    ctx.register_hook("on_session_start", init_session)
+```python_session_caches = {}
+
+
+def init_session(session_id, model, platform, **kwargs):
+
+    _session_caches[session_id] = {
+        "model": model,
+        "platform": platform,
+        "tool_calls": 0,
+        "started": __import__("datetime").datetime.now().isoformat(),
+    }
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_start", init_session)
 ```
 
 ---
@@ -716,41 +833,64 @@ def my_callback(session_id: str, completed: bool, interrupted: bool,
 
 **示例——刷新并清理：**
 
-```python
-_session_caches = {}
-
-def cleanup_session(session_id, completed, interrupted, **kwargs):
-    cache = _session_caches.pop(session_id, None)
-    if cache:
-        # Flush accumulated data to disk or external service
-        status = "completed" if completed else ("interrupted" if interrupted else "failed")
-        print(f"Session {session_id} ended: {status}, {cache['tool_calls']} tool calls")
-
-def register(ctx):
-    ctx.register_hook("on_session_end", cleanup_session)
+```python_session_caches = {}
+
+
+def cleanup_session(session_id, completed, interrupted, **kwargs):
+
+    cache = _session_caches.pop(session_id, None)
+
+    if cache:
+        # Flush accumulated data to disk or external service
+
+        status = (
+            "completed" if completed else ("interrupted" if interrupted else "failed")
+        )
+
+        print(f"Session {session_id} ended: {status}, {cache['tool_calls']} tool calls")
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_end", cleanup_session)
 ```
 
 **示例——会话时长追踪：**
 
-```python
-import time, logging
-logger = logging.getLogger(__name__)
-
-_start_times = {}
-
-def on_start(session_id, **kwargs):
-    _start_times[session_id] = time.time()
-
-def on_end(session_id, completed, interrupted, **kwargs):
-    start = _start_times.pop(session_id, None)
-    if start:
-        duration = time.time() - start
-        logger.info("SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
-                     session_id, duration, completed, interrupted)
-
-def register(ctx):
-    ctx.register_hook("on_session_start", on_start)
-    ctx.register_hook("on_session_end", on_end)
+```pythonimport time, logging
+
+logger = logging.getLogger(__name__)
+
+
+_start_times = {}
+
+
+def on_start(session_id, **kwargs):
+
+    _start_times[session_id] = time.time()
+
+
+def on_end(session_id, completed, interrupted, **kwargs):
+
+    start = _start_times.pop(session_id, None)
+
+    if start:
+        duration = time.time() - start
+
+        logger.info(
+            "SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
+            session_id,
+            duration,
+            completed,
+            interrupted,
+        )
+
+
+def register(ctx):
+
+    ctx.register_hook("on_session_start", on_start)
+
+    ctx.register_hook("on_session_end", on_end)
 ```
 
 ---
@@ -833,18 +973,25 @@ def my_callback(parent_session_id: str, child_role: str | None,
 
 **示例——记录编排器活动：**
 
-```python
-import logging
-logger = logging.getLogger(__name__)
-
-def log_subagent(parent_session_id, child_role, child_status, duration_ms, **kwargs):
-    logger.info(
-        "SUBAGENT parent=%s role=%s status=%s duration_ms=%d",
-        parent_session_id, child_role, child_status, duration_ms,
-    )
-
-def register(ctx):
-    ctx.register_hook("subagent_stop", log_subagent)
+```pythonimport logging
+
+logger = logging.getLogger(__name__)
+
+
+def log_subagent(parent_session_id, child_role, child_status, duration_ms, **kwargs):
+
+    logger.info(
+        "SUBAGENT parent=%s role=%s status=%s duration_ms=%d",
+        parent_session_id,
+        child_role,
+        child_status,
+        duration_ms,
+    )
+
+
+def register(ctx):
+
+    ctx.register_hook("subagent_stop", log_subagent)
 ```
 
 :::info
@@ -883,34 +1030,47 @@ def my_callback(event, gateway, session_store, **kwargs):
 
 **示例——静默丢弃未授权的私信，不触发配对代码：**
 
-```python
-def deny_unauthorized_dms(event, **kwargs):
-    src = event.source
-    if src.chat_type == "dm" and not _is_approved_user(src.user_id):
-        return {"action": "skip", "reason": "unauthorized-dm"}
-    return None
-
-def register(ctx):
-    ctx.register_hook("pre_gateway_dispatch", deny_unauthorized_dms)
+```pythondef deny_unauthorized_dms(event, **kwargs):
+
+    src = event.source
+
+    if src.chat_type == "dm" and not _is_approved_user(src.user_id):
+        return {"action": "skip", "reason": "unauthorized-dm"}
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_gateway_dispatch", deny_unauthorized_dms)
 ```
 
 **示例——在被提及时将环境消息缓冲重写为单个 prompt：**
 
-```python
-_buffers = {}
-
-def buffer_or_rewrite(event, **kwargs):
-    key = (event.source.platform, event.source.chat_id)
-    buf = _buffers.setdefault(key, [])
-    if _bot_mentioned(event.text):
-        combined = "\n".join(buf + [event.text])
-        buf.clear()
-        return {"action": "rewrite", "text": combined}
-    buf.append(event.text)
-    return {"action": "skip", "reason": "ambient-buffered"}
-
-def register(ctx):
-    ctx.register_hook("pre_gateway_dispatch", buffer_or_rewrite)
+```python_buffers = {}
+
+
+def buffer_or_rewrite(event, **kwargs):
+
+    key = (event.source.platform, event.source.chat_id)
+
+    buf = _buffers.setdefault(key, [])
+
+    if _bot_mentioned(event.text):
+        combined = "\n".join(buf + [event.text])
+
+        buf.clear()
+
+        return {"action": "rewrite", "text": combined}
+
+    buf.append(event.text)
+
+    return {"action": "skip", "reason": "ambient-buffered"}
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_gateway_dispatch", buffer_or_rewrite)
 ```
 
 ---
@@ -950,19 +1110,25 @@ def my_callback(
 
 **示例——macOS 桌面通知：**
 
-```python
-import subprocess
-
-def notify_approval(command, description, session_key, **kwargs):
-    title = "Clawksis needs approval"
-    body = f"{description}: {command[:80]}"
-    subprocess.Popen([
-        "osascript", "-e",
-        f'display notification "{body}" with title "{title}"',
-    ])
-
-def register(ctx):
-    ctx.register_hook("pre_approval_request", notify_approval)
+```pythonimport subprocess
+
+
+def notify_approval(command, description, session_key, **kwargs):
+
+    title = "Clawksis needs approval"
+
+    body = f"{description}: {command[:80]}"
+
+    subprocess.Popen([
+        "osascript",
+        "-e",
+        f'display notification "{body}" with title "{title}"',
+    ])
+
+
+def register(ctx):
+
+    ctx.register_hook("pre_approval_request", notify_approval)
 ```
 
 ---
@@ -996,12 +1162,14 @@ def my_callback(
 
 **使用场景：** 关闭对应的桌面通知、在审计日志中记录最终决定、更新指标、推进速率限制器。
 
-```python
-def log_decision(command, choice, session_key, **kwargs):
-    logger.info("approval %s: %s for session %s", choice, command[:60], session_key)
-
-def register(ctx):
-    ctx.register_hook("post_approval_response", log_decision)
+```pythondef log_decision(command, choice, session_key, **kwargs):
+
+    logger.info("approval %s: %s for session %s", choice, command[:60], session_key)
+
+
+def register(ctx):
+
+    ctx.register_hook("post_approval_response", log_decision)
 ```
 
 ---
@@ -1033,17 +1201,22 @@ def my_callback(
 
 **使用场景：** 从 `web_extract` 输出中脱敏组织特定的 PII、为长 JSON 工具响应添加摘要头、向 `read_file` 结果注入检索增强提示、将 `delegate_task` 子 agent 报告重写为项目特定 schema。
 
-```python
-import re
-SECRET = re.compile(r"sk-[A-Za-z0-9]{32,}")
-
-def redact_secrets(tool_name, result, **kwargs):
-    if SECRET.search(result):
-        return SECRET.sub("[REDACTED]", result)
-    return None
-
-def register(ctx):
-    ctx.register_hook("transform_tool_result", redact_secrets)
+```pythonimport re
+
+SECRET = re.compile(r"sk-[A-Za-z0-9]{32,}")
+
+
+def redact_secrets(tool_name, result, **kwargs):
+
+    if SECRET.search(result):
+        return SECRET.sub("[REDACTED]", result)
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_tool_result", redact_secrets)
 ```
 
 适用于所有工具。仅针对终端输出的重写请参见下方的 `transform_terminal_output`——它范围更窄，在管道中运行更早（截断前、脱敏前）。
@@ -1078,16 +1251,21 @@ def my_callback(
 
 **使用场景：** 为产生大量输出的命令注入摘要（`du -ah`、`find`、`tree`）、用项目特定标记标注输出以便下游 hook 处理、剥离在运行间抖动并破坏 prompt 缓存的计时噪声。
 
-```python
-def summarize_find(command, output, **kwargs):
-    if command.startswith("find ") and len(output) > 50_000:
-        lines = output.count("\n")
-        head = "\n".join(output.splitlines()[:40])
-        return f"{head}\n\n[summary: {lines} paths total, showing first 40]"
-    return None
-
-def register(ctx):
-    ctx.register_hook("transform_terminal_output", summarize_find)
+```pythondef summarize_find(command, output, **kwargs):
+
+    if command.startswith("find ") and len(output) > 50_000:
+        lines = output.count("\n")
+
+        head = "\n".join(output.splitlines()[:40])
+
+        return f"{head}\n\n[summary: {lines} paths total, showing first 40]"
+
+    return None
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_terminal_output", summarize_find)
 ```
 
 与 `transform_tool_result`（覆盖所有其他工具）配合使用效果更佳。
@@ -1121,16 +1299,20 @@ def my_callback(
 
 **使用场景：** 应用个性/词汇转换（海盗腔、海绵宝宝体）、从最终文本中脱敏用户特定标识符、追加项目特定签名页脚、在不消耗 SOUL 指令 token 的情况下执行内部风格指南。
 
-```python
-import os, re
-
-def spongebob(response_text, **kwargs):
-    if os.environ.get("SPONGEBOB_MODE") != "on":
-        return None  # pass through unchanged
-    return re.sub(r"!", "!! Tartar sauce!", response_text)
-
-def register(ctx):
-    ctx.register_hook("transform_llm_output", spongebob)
+```pythonimport os, re
+
+
+def spongebob(response_text, **kwargs):
+
+    if os.environ.get("SPONGEBOB_MODE") != "on":
+        return None  # pass through unchanged
+
+    return re.sub(r"!", "!! Tartar sauce!", response_text)
+
+
+def register(ctx):
+
+    ctx.register_hook("transform_llm_output", spongebob)
 ```
 
 此 hook 受非空、非中断响应保护——不会在停止按钮中断或空轮次时触发。异常会被记录为警告，不会中断 agent 执行。

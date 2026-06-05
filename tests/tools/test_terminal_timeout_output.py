@@ -1,4 +1,5 @@
 """Verify that terminal command timeouts preserve partial output."""
+
 from tools.environments.local import LocalEnvironment
 
 

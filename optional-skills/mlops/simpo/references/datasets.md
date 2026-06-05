@@ -153,10 +153,11 @@ dataset_mixer:
 **Filter by length difference**:
 ```python
 def filter_by_length(example):
-    chosen_len = len(example['chosen'].split())
-    rejected_len = len(example['rejected'].split())
+    chosen_len = len(example["chosen"].split())
+    rejected_len = len(example["rejected"].split())
     # Reject if chosen is much shorter (potential low-effort)
     return chosen_len >= rejected_len * 0.5
+
 
 dataset = dataset.filter(filter_by_length)
 ```
@@ -165,12 +166,14 @@ dataset = dataset.filter(filter_by_length)
 ```python
 seen_prompts = set()
 
+
 def filter_duplicates(example):
-    prompt = example['prompt']
+    prompt = example["prompt"]
     if prompt in seen_prompts:
         return False
     seen_prompts.add(prompt)
     return True
+
 
 dataset = dataset.filter(filter_duplicates)
 ```
@@ -201,7 +204,7 @@ from datasets import Dataset
 data = {
     "prompt": ["What is Python?", "Explain AI."],
     "chosen": ["Python is...", "AI refers to..."],
-    "rejected": ["It's a snake.", "It's computers..."]
+    "rejected": ["It's a snake.", "It's computers..."],
 }
 
 dataset = Dataset.from_dict(data)
@@ -256,15 +259,19 @@ Format as JSON with "chosen" and "rejected" fields.
 ```python
 import openai
 
+
 def generate_pair(prompt):
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{
-            "role": "user",
-            "content": f"Given: {prompt}\n\nGenerate chosen/rejected pair in JSON."
-        }]
+        messages=[
+            {
+                "role": "user",
+                "content": f"Given: {prompt}\n\nGenerate chosen/rejected pair in JSON.",
+            }
+        ],
     )
     return json.loads(response.choices[0].message.content)
+
 
 # Generate dataset
 prompts = load_prompts()
@@ -279,15 +286,12 @@ from vllm import LLM
 
 llm = LLM(model="meta-llama/Meta-Llama-3-70B-Instruct")
 
+
 def generate_variations(prompt):
     # Generate multiple completions
     outputs = llm.generate(
         [prompt] * 4,
-        sampling_params={
-            "temperature": 0.8,
-            "top_p": 0.9,
-            "max_tokens": 512
-        }
+        sampling_params={"temperature": 0.8, "top_p": 0.9, "max_tokens": 512},
     )
 
     # Select best/worst
@@ -297,7 +301,7 @@ def generate_variations(prompt):
     return {
         "prompt": prompt,
         "chosen": chosen.outputs[0].text,
-        "rejected": rejected.outputs[0].text
+        "rejected": rejected.outputs[0].text,
     }
 ```
 
@@ -316,23 +320,16 @@ max_length: 1024  # Total
 ```python
 def truncate_example(example):
     tokenizer.truncation_side = "left"  # For prompts
-    prompt_tokens = tokenizer(
-        example['prompt'],
-        max_length=512,
-        truncation=True
-    )
+    prompt_tokens = tokenizer(example["prompt"], max_length=512, truncation=True)
 
     tokenizer.truncation_side = "right"  # For completions
-    chosen_tokens = tokenizer(
-        example['chosen'],
-        max_length=512,
-        truncation=True
-    )
+    chosen_tokens = tokenizer(example["chosen"], max_length=512, truncation=True)
 
     return {
-        "prompt": tokenizer.decode(prompt_tokens['input_ids']),
-        "chosen": tokenizer.decode(chosen_tokens['input_ids'])
+        "prompt": tokenizer.decode(prompt_tokens["input_ids"]),
+        "chosen": tokenizer.decode(chosen_tokens["input_ids"]),
     }
+
 
 dataset = dataset.map(truncate_example)
 ```
@@ -341,12 +338,13 @@ dataset = dataset.map(truncate_example)
 
 **Remove exact duplicates**:
 ```python
-dataset = dataset.unique('prompt')
+dataset = dataset.unique("prompt")
 ```
 
 **Remove near-duplicates** (MinHash):
 ```python
 from datasketch import MinHash, MinHashLSH
+
 
 def deduplicate_lsh(dataset, threshold=0.8):
     lsh = MinHashLSH(threshold=threshold, num_perm=128)
@@ -354,14 +352,15 @@ def deduplicate_lsh(dataset, threshold=0.8):
 
     for i, example in enumerate(dataset):
         m = MinHash(num_perm=128)
-        for word in example['prompt'].split():
-            m.update(word.encode('utf8'))
+        for word in example["prompt"].split():
+            m.update(word.encode("utf8"))
 
         if not lsh.query(m):
             lsh.insert(i, m)
             seen.append(example)
 
     return Dataset.from_list(seen)
+
 
 dataset = deduplicate_lsh(dataset)
 ```
@@ -373,16 +372,17 @@ dataset = deduplicate_lsh(dataset)
 ```python
 def paraphrase_prompt(example):
     # Use paraphrasing model
-    paraphrased = paraphrase_model(example['prompt'])
+    paraphrased = paraphrase_model(example["prompt"])
 
     return [
         example,  # Original
         {
             "prompt": paraphrased,
-            "chosen": example['chosen'],
-            "rejected": example['rejected']
-        }
+            "chosen": example["chosen"],
+            "rejected": example["rejected"],
+        },
     ]
+
 
 dataset = dataset.map(paraphrase_prompt, batched=False, remove_columns=[])
 ```
@@ -392,7 +392,7 @@ dataset = dataset.map(paraphrase_prompt, batched=False, remove_columns=[])
 **Mix easy/medium/hard**:
 ```python
 def categorize_difficulty(example):
-    prompt_len = len(example['prompt'].split())
+    prompt_len = len(example["prompt"].split())
     if prompt_len < 20:
         return "easy"
     elif prompt_len < 50:
@@ -400,12 +400,15 @@ def categorize_difficulty(example):
     else:
         return "hard"
 
+
 dataset = dataset.map(lambda x: {"difficulty": categorize_difficulty(x)})
 
 # Sample balanced dataset
-easy = dataset.filter(lambda x: x['difficulty'] == 'easy').shuffle().select(range(1000))
-medium = dataset.filter(lambda x: x['difficulty'] == 'medium').shuffle().select(range(1000))
-hard = dataset.filter(lambda x: x['difficulty'] == 'hard').shuffle().select(range(1000))
+easy = dataset.filter(lambda x: x["difficulty"] == "easy").shuffle().select(range(1000))
+medium = (
+    dataset.filter(lambda x: x["difficulty"] == "medium").shuffle().select(range(1000))
+)
+hard = dataset.filter(lambda x: x["difficulty"] == "hard").shuffle().select(range(1000))
 
 balanced = concatenate_datasets([easy, medium, hard]).shuffle()
 ```
@@ -416,15 +419,18 @@ balanced = concatenate_datasets([easy, medium, hard]).shuffle()
 
 ```python
 def compute_stats(dataset):
-    prompt_lens = [len(x['prompt'].split()) for x in dataset]
-    chosen_lens = [len(x['chosen'].split()) for x in dataset]
-    rejected_lens = [len(x['rejected'].split()) for x in dataset]
+    prompt_lens = [len(x["prompt"].split()) for x in dataset]
+    chosen_lens = [len(x["chosen"].split()) for x in dataset]
+    rejected_lens = [len(x["rejected"].split()) for x in dataset]
 
     print(f"Dataset size: {len(dataset)}")
     print(f"Avg prompt length: {np.mean(prompt_lens):.1f} words")
     print(f"Avg chosen length: {np.mean(chosen_lens):.1f} words")
     print(f"Avg rejected length: {np.mean(rejected_lens):.1f} words")
-    print(f"Chosen > Rejected: {sum(c > r for c, r in zip(chosen_lens, rejected_lens)) / len(dataset):.1%}")
+    print(
+        f"Chosen > Rejected: {sum(c > r for c, r in zip(chosen_lens, rejected_lens)) / len(dataset):.1%}"
+    )
+
 
 compute_stats(dataset)
 ```
@@ -467,7 +473,9 @@ for ex in samples:
     print(f"Prompt: {ex['prompt']}")
     print(f"Chosen: {ex['chosen'][:100]}...")
     print(f"Rejected: {ex['rejected'][:100]}...")
-    print(f"Preference clear: {'✓' if len(ex['chosen']) > len(ex['rejected']) else '?'}")
+    print(
+        f"Preference clear: {'✓' if len(ex['chosen']) > len(ex['rejected']) else '?'}"
+    )
     print()
 ```
 

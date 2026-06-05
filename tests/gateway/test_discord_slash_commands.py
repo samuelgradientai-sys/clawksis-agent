@@ -1,7 +1,5 @@
 """Tests for native Discord slash command fast-paths (thread creation & auto-thread)."""
 
-
-
 from types import SimpleNamespace
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,29 +7,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 
 
-
 import pytest
-
 
 
 from gateway.config import PlatformConfig
 
 
-
-
-
 def _ensure_discord_mock():
 
     if "discord" in sys.modules and hasattr(sys.modules["discord"], "__file__"):
-
         # Real discord is installed — nothing to do.
 
         return
 
-
-
     if sys.modules.get("discord") is None:
-
         discord_mod = MagicMock()
 
         discord_mod.Intents.default.return_value = MagicMock()
@@ -44,14 +33,11 @@ def _ensure_discord_mock():
 
         discord_mod.Interaction = object
 
-
-
         # Lightweight mock for app_commands.Group and Command used by
 
         # _register_skill_group.
 
         class _FakeGroup:
-
             def __init__(self, *, name, description, parent=None):
 
                 self.name = name
@@ -63,19 +49,13 @@ def _ensure_discord_mock():
                 self._children: dict[str, object] = {}
 
                 if parent is not None:
-
                     parent.add_command(self)
-
-
 
             def add_command(self, cmd):
 
                 self._children[cmd.name] = cmd
 
-
-
         class _FakeCommand:
-
             def __init__(self, *, name, description, callback, parent=None):
 
                 self.name = name
@@ -86,25 +66,14 @@ def _ensure_discord_mock():
 
                 self.parent = parent
 
-
-
         discord_mod.app_commands = SimpleNamespace(
-
-            describe=lambda **kwargs: (lambda fn: fn),
-
-            choices=lambda **kwargs: (lambda fn: fn),
-
-            autocomplete=lambda **kwargs: (lambda fn: fn),
-
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
+            autocomplete=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
-
             Group=_FakeGroup,
-
             Command=_FakeCommand,
-
         )
-
-
 
         ext_mod = MagicMock()
 
@@ -114,15 +83,11 @@ def _ensure_discord_mock():
 
         ext_mod.commands = commands_mod
 
-
-
         sys.modules["discord"] = discord_mod
 
         sys.modules.setdefault("discord.ext", ext_mod)
 
         sys.modules.setdefault("discord.ext.commands", commands_mod)
-
-
 
     # Whether we just installed the mock OR another test module installed
 
@@ -135,36 +100,23 @@ def _ensure_discord_mock():
     _app = getattr(sys.modules["discord"], "app_commands", None)
 
     if _app is not None and not hasattr(_app, "autocomplete"):
-
         try:
-
-            _app.autocomplete = lambda **kwargs: (lambda fn: fn)
+            _app.autocomplete = lambda **kwargs: lambda fn: fn
 
         except Exception:
-
             pass
-
-
-
 
 
 _ensure_discord_mock()
 
 
-
 from plugins.platforms.discord.adapter import DiscordAdapter  # noqa: E402
 
 
-
-
-
 class FakeTree:
-
     def __init__(self):
 
         self.commands = {}
-
-
 
     def command(self, *, name, description):
 
@@ -174,28 +126,18 @@ class FakeTree:
 
             return fn
 
-
-
         return decorator
-
-
 
     def add_command(self, cmd):
 
         self.commands[cmd.name] = cmd
-
-
 
     def get_commands(self):
 
         return [SimpleNamespace(name=n) for n in self.commands]
 
 
-
-
-
 @pytest.fixture
-
 def adapter():
 
     config = PlatformConfig(enabled=True, token="***")
@@ -203,15 +145,10 @@ def adapter():
     adapter = DiscordAdapter(config)
 
     adapter._client = SimpleNamespace(
-
         tree=FakeTree(),
-
         get_channel=lambda _id: None,
-
         fetch_channel=AsyncMock(),
-
         user=SimpleNamespace(id=99999, name="ClawksisBot"),
-
     )
 
     adapter._text_batch_delay_seconds = 0  # disable batching for tests
@@ -227,9 +164,6 @@ def adapter():
     return adapter
 
 
-
-
-
 # ------------------------------------------------------------------
 
 # /thread slash command registration
@@ -237,11 +171,7 @@ def adapter():
 # ------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_registers_native_thread_slash_command(adapter):
 
     # The /thread slash closure now delegates ALL the work — including
@@ -256,21 +186,13 @@ async def test_registers_native_thread_slash_command(adapter):
 
     adapter._register_slash_commands()
 
-
-
     command = adapter._client.tree.commands["thread"]
 
     interaction = SimpleNamespace(
-
         response=SimpleNamespace(defer=AsyncMock()),
-
     )
 
-
-
     await command(interaction, name="Planning", message="", auto_archive_duration=1440)
-
-
 
     # defer is now performed inside _handle_thread_create_slash, AFTER the
 
@@ -278,44 +200,29 @@ async def test_registers_native_thread_slash_command(adapter):
 
     interaction.response.defer.assert_not_awaited()
 
-    adapter._handle_thread_create_slash.assert_awaited_once_with(interaction, "Planning", "", 1440)
-
-
-
+    adapter._handle_thread_create_slash.assert_awaited_once_with(
+        interaction, "Planning", "", 1440
+    )
 
 
 @pytest.mark.asyncio
-
 async def test_registers_native_restart_slash_command(adapter):
 
     adapter._run_simple_slash = AsyncMock()
 
     adapter._register_slash_commands()
 
-
-
     assert "restart" in adapter._client.tree.commands
-
-
 
     interaction = SimpleNamespace()
 
     await adapter._client.tree.commands["restart"](interaction)
 
-
-
     adapter._run_simple_slash.assert_awaited_once_with(
-
         interaction,
-
         "/restart",
-
         "Restart requested~",
-
     )
-
-
-
 
 
 # ------------------------------------------------------------------
@@ -325,13 +232,8 @@ async def test_registers_native_restart_slash_command(adapter):
 # ------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_registers_missing_gateway_commands(adapter):
-
     """Commands in COMMAND_REGISTRY that aren't explicitly registered should
 
     be auto-registered by the dynamic catch-all block."""
@@ -340,11 +242,7 @@ async def test_auto_registers_missing_gateway_commands(adapter):
 
     adapter._register_slash_commands()
 
-
-
     tree_names = set(adapter._client.tree.commands.keys())
-
-
 
     # These commands are gateway-available but were not in the original
 
@@ -353,24 +251,16 @@ async def test_auto_registers_missing_gateway_commands(adapter):
     expected_auto = {"debug", "yolo", "profile"}
 
     for name in expected_auto:
-
         assert name in tree_names, f"/{name} should be auto-registered on Discord"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_registered_command_dispatches_correctly(adapter):
-
     """Auto-registered commands should dispatch via _run_simple_slash."""
 
     adapter._run_simple_slash = AsyncMock()
 
     adapter._register_slash_commands()
-
-
 
     # /debug has no args — test parameterless dispatch
 
@@ -385,20 +275,13 @@ async def test_auto_registered_command_dispatches_correctly(adapter):
     adapter._run_simple_slash.assert_awaited_once_with(interaction, "/debug")
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_registered_command_with_args(adapter):
-
     """Auto-registered commands with args_hint should accept an optional args param."""
 
     adapter._run_simple_slash = AsyncMock()
 
     adapter._register_slash_commands()
-
-
 
     # /branch has args_hint="[name]" — test dispatch with args
 
@@ -410,57 +293,31 @@ async def test_auto_registered_command_with_args(adapter):
 
     await branch_cmd.callback(interaction, args="my-branch")
 
-    adapter._run_simple_slash.assert_awaited_once_with(
-
-        interaction, "/branch my-branch"
-
-    )
-
-
-
+    adapter._run_simple_slash.assert_awaited_once_with(interaction, "/branch my-branch")
 
 
 @pytest.mark.asyncio
-
 async def test_auto_registers_plugin_commands_for_discord(adapter):
-
     """Plugin slash commands should appear as native Discord app commands."""
 
     adapter._run_simple_slash = AsyncMock()
 
-
-
     with patch(
-
         "clawk_cli.plugins.get_plugin_commands",
-
         return_value={
-
             "metricas": {
-
                 "handler": lambda _a: "ok",
-
                 "description": "Metrics dashboard",
-
                 "args_hint": "dias:7 formato:json",
-
                 "plugin": "metrics-plugin",
-
             }
-
         },
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     tree_names = set(adapter._client.tree.commands.keys())
 
     assert "metricas" in tree_names
-
-
 
     metricas_cmd = adapter._client.tree.commands["metricas"]
 
@@ -469,50 +326,28 @@ async def test_auto_registers_plugin_commands_for_discord(adapter):
     await metricas_cmd.callback(interaction, args="dias:7 formato:json")
 
     adapter._run_simple_slash.assert_awaited_once_with(
-
         interaction, "/metricas dias:7 formato:json"
-
     )
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_registered_plugin_command_without_args_hint(adapter):
-
     """Plugin commands without args_hint should register as parameterless."""
 
     adapter._run_simple_slash = AsyncMock()
 
-
-
     with patch(
-
         "clawk_cli.plugins.get_plugin_commands",
-
         return_value={
-
             "ping": {
-
                 "handler": lambda _a: "pong",
-
                 "description": "Ping the plugin",
-
                 "args_hint": "",
-
                 "plugin": "ping-plugin",
-
             }
-
         },
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     assert "ping" in adapter._client.tree.commands
 
@@ -525,44 +360,24 @@ async def test_auto_registered_plugin_command_without_args_hint(adapter):
     adapter._run_simple_slash.assert_awaited_once_with(interaction, "/ping")
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_plugin_command_name_conflict_skipped(adapter):
-
     """A plugin command that collides with a built-in must not override it."""
 
     adapter._run_simple_slash = AsyncMock()
 
-
-
     with patch(
-
         "clawk_cli.plugins.get_plugin_commands",
-
         return_value={
-
             "status": {
-
                 "handler": lambda _a: "plugin-status",
-
                 "description": "Plugin status",
-
                 "args_hint": "",
-
                 "plugin": "shadow-plugin",
-
             }
-
         },
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     # Built-ins are registered via @tree.command as plain functions. A
 
@@ -575,15 +390,9 @@ async def test_plugin_command_name_conflict_skipped(adapter):
     status_entry = adapter._client.tree.commands["status"]
 
     assert callable(status_entry) and not hasattr(status_entry, "callback"), (
-
         "plugin registration overrode the built-in /status command — "
-
         "the already_registered skip must prevent this"
-
     )
-
-
-
 
 
 # ------------------------------------------------------------------
@@ -593,49 +402,32 @@ async def test_plugin_command_name_conflict_skipped(adapter):
 # ------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_handle_thread_create_slash_reports_success(adapter):
 
     created_thread = SimpleNamespace(id=555, name="Planning", send=AsyncMock())
 
-    parent_channel = SimpleNamespace(create_thread=AsyncMock(return_value=created_thread), send=AsyncMock())
+    parent_channel = SimpleNamespace(
+        create_thread=AsyncMock(return_value=created_thread), send=AsyncMock()
+    )
 
     interaction_channel = SimpleNamespace(parent=parent_channel)
 
     interaction = SimpleNamespace(
-
         channel=interaction_channel,
-
         channel_id=123,
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
         guild=SimpleNamespace(name="TestGuild"),
-
         followup=SimpleNamespace(send=AsyncMock()),
-
         response=SimpleNamespace(defer=AsyncMock()),
-
     )
-
-
 
     await adapter._handle_thread_create_slash(interaction, "Planning", "Kickoff", 1440)
 
-
-
     parent_channel.create_thread.assert_awaited_once_with(
-
         name="Planning",
-
         auto_archive_duration=1440,
-
         reason="Requested by Jezza via /thread",
-
     )
 
     created_thread.send.assert_awaited_once_with("Kickoff")
@@ -651,184 +443,120 @@ async def test_handle_thread_create_slash_reports_success(adapter):
     assert kwargs["ephemeral"] is True
 
 
-
-
-
 @pytest.mark.asyncio
-
-async def test_handle_thread_create_slash_dispatches_session_when_message_provided(adapter):
-
+async def test_handle_thread_create_slash_dispatches_session_when_message_provided(
+    adapter,
+):
     """When a message is given, _dispatch_thread_session should be called."""
 
     created_thread = SimpleNamespace(id=555, name="Planning", send=AsyncMock())
 
-    parent_channel = SimpleNamespace(create_thread=AsyncMock(return_value=created_thread))
-
-    interaction = SimpleNamespace(
-
-        channel=SimpleNamespace(parent=parent_channel),
-
-        channel_id=123,
-
-        user=SimpleNamespace(display_name="Jezza", id=42),
-
-        guild=SimpleNamespace(name="TestGuild"),
-
-        followup=SimpleNamespace(send=AsyncMock()),
-
-        response=SimpleNamespace(defer=AsyncMock()),
-
+    parent_channel = SimpleNamespace(
+        create_thread=AsyncMock(return_value=created_thread)
     )
 
-
+    interaction = SimpleNamespace(
+        channel=SimpleNamespace(parent=parent_channel),
+        channel_id=123,
+        user=SimpleNamespace(display_name="Jezza", id=42),
+        guild=SimpleNamespace(name="TestGuild"),
+        followup=SimpleNamespace(send=AsyncMock()),
+        response=SimpleNamespace(defer=AsyncMock()),
+    )
 
     adapter._dispatch_thread_session = AsyncMock()
 
-
-
-    await adapter._handle_thread_create_slash(interaction, "Planning", "Hello Clawksis", 1440)
-
-
+    await adapter._handle_thread_create_slash(
+        interaction, "Planning", "Hello Clawksis", 1440
+    )
 
     adapter._dispatch_thread_session.assert_awaited_once_with(
-
-        interaction, "555", "Planning", "Hello Clawksis",
-
+        interaction,
+        "555",
+        "Planning",
+        "Hello Clawksis",
     )
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_handle_thread_create_slash_no_dispatch_without_message(adapter):
-
     """Without a message, no session dispatch should occur."""
 
     created_thread = SimpleNamespace(id=555, name="Planning", send=AsyncMock())
 
-    parent_channel = SimpleNamespace(create_thread=AsyncMock(return_value=created_thread))
-
-    interaction = SimpleNamespace(
-
-        channel=SimpleNamespace(parent=parent_channel),
-
-        channel_id=123,
-
-        user=SimpleNamespace(display_name="Jezza", id=42),
-
-        guild=SimpleNamespace(name="TestGuild"),
-
-        followup=SimpleNamespace(send=AsyncMock()),
-
-        response=SimpleNamespace(defer=AsyncMock()),
-
+    parent_channel = SimpleNamespace(
+        create_thread=AsyncMock(return_value=created_thread)
     )
 
-
+    interaction = SimpleNamespace(
+        channel=SimpleNamespace(parent=parent_channel),
+        channel_id=123,
+        user=SimpleNamespace(display_name="Jezza", id=42),
+        guild=SimpleNamespace(name="TestGuild"),
+        followup=SimpleNamespace(send=AsyncMock()),
+        response=SimpleNamespace(defer=AsyncMock()),
+    )
 
     adapter._dispatch_thread_session = AsyncMock()
 
-
-
     await adapter._handle_thread_create_slash(interaction, "Planning", "", 1440)
-
-
 
     adapter._dispatch_thread_session.assert_not_awaited()
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_handle_thread_create_slash_falls_back_to_seed_message(adapter):
 
     created_thread = SimpleNamespace(id=555, name="Planning")
 
-    seed_message = SimpleNamespace(id=777, create_thread=AsyncMock(return_value=created_thread))
+    seed_message = SimpleNamespace(
+        id=777, create_thread=AsyncMock(return_value=created_thread)
+    )
 
     channel = SimpleNamespace(
-
         create_thread=AsyncMock(side_effect=RuntimeError("direct failed")),
-
         send=AsyncMock(return_value=seed_message),
-
     )
 
     interaction = SimpleNamespace(
-
         channel=channel,
-
         channel_id=123,
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
         guild=SimpleNamespace(name="TestGuild"),
-
         followup=SimpleNamespace(send=AsyncMock()),
-
         response=SimpleNamespace(defer=AsyncMock()),
-
     )
 
-
-
     await adapter._handle_thread_create_slash(interaction, "Planning", "Kickoff", 1440)
-
-
 
     channel.send.assert_awaited_once_with("Kickoff")
 
     seed_message.create_thread.assert_awaited_once_with(
-
         name="Planning",
-
         auto_archive_duration=1440,
-
         reason="Requested by Jezza via /thread",
-
     )
 
     interaction.followup.send.assert_awaited()
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_handle_thread_create_slash_reports_failure(adapter):
 
     channel = SimpleNamespace(
-
         create_thread=AsyncMock(side_effect=RuntimeError("direct failed")),
-
         send=AsyncMock(side_effect=RuntimeError("nope")),
-
     )
 
     interaction = SimpleNamespace(
-
         channel=channel,
-
         channel_id=123,
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
         followup=SimpleNamespace(send=AsyncMock()),
-
         response=SimpleNamespace(defer=AsyncMock()),
-
     )
 
-
-
     await adapter._handle_thread_create_slash(interaction, "Planning", "", 1440)
-
-
 
     interaction.followup.send.assert_awaited_once()
 
@@ -841,9 +569,6 @@ async def test_handle_thread_create_slash_reports_failure(adapter):
     assert kwargs["ephemeral"] is True
 
 
-
-
-
 # ------------------------------------------------------------------
 
 # _dispatch_thread_session — builds correct event and routes it
@@ -851,42 +576,24 @@ async def test_handle_thread_create_slash_reports_failure(adapter):
 # ------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_dispatch_thread_session_builds_thread_event(adapter):
-
     """Dispatched event should have chat_type=thread and chat_id=thread_id."""
 
     interaction = SimpleNamespace(
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
         guild=SimpleNamespace(name="TestGuild"),
-
     )
 
-
-
     captured_events = []
-
-
 
     async def capture_handle(event):
 
         captured_events.append(event)
 
-
-
     adapter.handle_message = capture_handle
 
-
-
     await adapter._dispatch_thread_session(interaction, "555", "Planning", "Hello!")
-
-
 
     assert len(captured_events) == 1
 
@@ -903,9 +610,6 @@ async def test_dispatch_thread_session_builds_thread_event(adapter):
     assert "TestGuild" in event.source.chat_name
 
 
-
-
-
 # ------------------------------------------------------------------
 
 # _build_slash_event — preserve thread context for native slash commands
@@ -913,26 +617,15 @@ async def test_dispatch_thread_session_builds_thread_event(adapter):
 # ------------------------------------------------------------------
 
 
-
-
-
 def test_build_slash_event_preserves_thread_context(adapter):
 
     interaction = SimpleNamespace(
-
         channel=_FakeThreadChannel(channel_id=555, name="Planning"),
-
         channel_id=555,
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
     )
 
-
-
     event = adapter._build_slash_event(interaction, "/status")
-
-
 
     assert event.text == "/status"
 
@@ -945,26 +638,15 @@ def test_build_slash_event_preserves_thread_context(adapter):
     assert "TestGuild" in event.source.chat_name
 
 
-
-
-
 def test_build_slash_event_uses_group_context_for_channels(adapter):
 
     interaction = SimpleNamespace(
-
         channel=_FakeTextChannel(channel_id=123, name="general"),
-
         channel_id=123,
-
         user=SimpleNamespace(display_name="Jezza", id=42),
-
     )
 
-
-
     event = adapter._build_slash_event(interaction, "/status")
-
-
 
     assert event.source.chat_id == "123"
 
@@ -975,9 +657,6 @@ def test_build_slash_event_uses_group_context_for_channels(adapter):
     assert "TestGuild / #general" == event.source.chat_name
 
 
-
-
-
 # ------------------------------------------------------------------
 
 # Auto-thread: _auto_create_thread
@@ -985,32 +664,19 @@ def test_build_slash_event_uses_group_context_for_channels(adapter):
 # ------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_uses_message_content_as_name(adapter):
 
     thread = SimpleNamespace(id=999, name="Hello world")
 
     message = SimpleNamespace(
-
         content="Hello world, how are you?",
-
         create_thread=AsyncMock(return_value=thread),
-
         channel=SimpleNamespace(send=AsyncMock()),
-
         author=SimpleNamespace(display_name="Jezza"),
-
     )
 
-
-
     result = await adapter._auto_create_thread(message)
-
-
 
     assert result is thread
 
@@ -1023,13 +689,8 @@ async def test_auto_create_thread_uses_message_content_as_name(adapter):
     assert call_kwargs["auto_archive_duration"] == 1440
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_strips_mention_syntax_from_name(adapter):
-
     """Thread names must not contain raw <@id>, <@&id>, or <#id> markers.
 
 
@@ -1045,22 +706,13 @@ async def test_auto_create_thread_strips_mention_syntax_from_name(adapter):
     thread = SimpleNamespace(id=999, name="help")
 
     message = SimpleNamespace(
-
         content="<@&1490963422786093149> <@555> please help <#123>",
-
         create_thread=AsyncMock(return_value=thread),
-
         channel=SimpleNamespace(send=AsyncMock()),
-
         author=SimpleNamespace(display_name="Jezza"),
-
     )
 
-
-
     await adapter._auto_create_thread(message)
-
-
 
     name = message.create_thread.await_args[1]["name"]
 
@@ -1071,13 +723,8 @@ async def test_auto_create_thread_strips_mention_syntax_from_name(adapter):
     assert name == "please help"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_falls_back_to_clawk_when_only_mentions(adapter):
-
     """If a message contains only mention syntax, the stripped content is
 
     empty — fall back to the 'Clawksis' default rather than ''."""
@@ -1085,33 +732,20 @@ async def test_auto_create_thread_falls_back_to_clawk_when_only_mentions(adapter
     thread = SimpleNamespace(id=999, name="Clawksis")
 
     message = SimpleNamespace(
-
         content="<@&1490963422786093149>",
-
         create_thread=AsyncMock(return_value=thread),
-
         channel=SimpleNamespace(send=AsyncMock()),
-
         author=SimpleNamespace(display_name="Jezza"),
-
     )
 
-
-
     await adapter._auto_create_thread(message)
-
-
 
     name = message.create_thread.await_args[1]["name"]
 
     assert name == "Clawksis"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_truncates_long_names(adapter):
 
     long_text = "a" * 200
@@ -1119,22 +753,13 @@ async def test_auto_create_thread_truncates_long_names(adapter):
     thread = SimpleNamespace(id=999, name="truncated")
 
     message = SimpleNamespace(
-
         content=long_text,
-
         create_thread=AsyncMock(return_value=thread),
-
         channel=SimpleNamespace(send=AsyncMock()),
-
         author=SimpleNamespace(display_name="Jezza"),
-
     )
 
-
-
     result = await adapter._auto_create_thread(message)
-
-
 
     assert result is thread
 
@@ -1145,11 +770,7 @@ async def test_auto_create_thread_truncates_long_names(adapter):
     assert call_kwargs["name"].endswith("...")
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_falls_back_to_seed_message(adapter):
 
     thread = SimpleNamespace(id=555, name="Hello")
@@ -1157,63 +778,42 @@ async def test_auto_create_thread_falls_back_to_seed_message(adapter):
     seed_message = SimpleNamespace(create_thread=AsyncMock(return_value=thread))
 
     message = SimpleNamespace(
-
         content="Hello",
-
         create_thread=AsyncMock(side_effect=RuntimeError("no perms")),
-
         channel=SimpleNamespace(send=AsyncMock(return_value=seed_message)),
-
         author=SimpleNamespace(display_name="Jezza"),
-
     )
-
-
 
     result = await adapter._auto_create_thread(message)
 
     assert result is thread
 
-    message.channel.send.assert_awaited_once_with("🧵 Thread created by Clawksis: **Hello**")
-
-    seed_message.create_thread.assert_awaited_once_with(
-
-        name="Hello",
-
-        auto_archive_duration=1440,
-
-        reason="Auto-threaded from mention by Jezza",
-
+    message.channel.send.assert_awaited_once_with(
+        "🧵 Thread created by Clawksis: **Hello**"
     )
 
-
-
+    seed_message.create_thread.assert_awaited_once_with(
+        name="Hello",
+        auto_archive_duration=1440,
+        reason="Auto-threaded from mention by Jezza",
+    )
 
 
 @pytest.mark.asyncio
-
 async def test_auto_create_thread_returns_none_when_direct_and_fallback_fail(adapter):
 
     message = SimpleNamespace(
-
         content="Hello",
-
         create_thread=AsyncMock(side_effect=RuntimeError("no perms")),
-
-        channel=SimpleNamespace(send=AsyncMock(side_effect=RuntimeError("send failed"))),
-
+        channel=SimpleNamespace(
+            send=AsyncMock(side_effect=RuntimeError("send failed"))
+        ),
         author=SimpleNamespace(display_name="Jezza"),
-
     )
-
-
 
     result = await adapter._auto_create_thread(message)
 
     assert result is None
-
-
-
 
 
 # ------------------------------------------------------------------
@@ -1223,20 +823,11 @@ async def test_auto_create_thread_returns_none_when_direct_and_fallback_fail(ada
 # ------------------------------------------------------------------
 
 
-
-
-
 import discord as _discord_mod  # noqa: E402 — mock or real, used below
 
 
-
-
-
 class _FakeTextChannel:
-
     """A channel that is NOT a discord.Thread or discord.DMChannel."""
-
-
 
     def __init__(self, channel_id=100, name="general", guild_name="TestGuild"):
 
@@ -1248,8 +839,6 @@ class _FakeTextChannel:
 
         self.topic = None
 
-
-
     def history(self, *args, **kwargs):
 
         async def _empty():
@@ -1258,21 +847,19 @@ class _FakeTextChannel:
 
             yield  # pragma: no cover — make this an async generator
 
-
-
         return _empty()
 
 
-
-
-
 class _FakeThreadChannel(_discord_mod.Thread):
-
     """isinstance(ch, discord.Thread) → True."""
 
-
-
-    def __init__(self, channel_id=200, name="existing-thread", guild_name="TestGuild", parent_id=100):
+    def __init__(
+        self,
+        channel_id=200,
+        name="existing-thread",
+        guild_name="TestGuild",
+        parent_id=100,
+    ):
 
         # Don't call super().__init__ — mock Thread is just an empty type
 
@@ -1284,9 +871,9 @@ class _FakeThreadChannel(_discord_mod.Thread):
 
         self.topic = None
 
-        self.parent = SimpleNamespace(id=parent_id, name="general", guild=SimpleNamespace(name=guild_name, id=1))
-
-
+        self.parent = SimpleNamespace(
+            id=parent_id, name="general", guild=SimpleNamespace(name=guild_name, id=1)
+        )
 
     def history(self, *args, **kwargs):
 
@@ -1296,79 +883,46 @@ class _FakeThreadChannel(_discord_mod.Thread):
 
             yield  # pragma: no cover — make this an async generator
 
-
-
         return _empty()
-
-
-
 
 
 def _fake_message(channel, *, content="Hello", author_id=42, display_name="Jezza"):
 
     return SimpleNamespace(
-
         author=SimpleNamespace(id=author_id, display_name=display_name, bot=False),
-
         content=content,
-
         channel=channel,
-
         attachments=[],
-
         mentions=[],
-
         reference=None,
-
         created_at=None,
-
         id=12345,
-
     )
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_thread_creates_thread_and_redirects(adapter, monkeypatch):
-
     """When DISCORD_AUTO_THREAD=true, a new thread is created and the event routes there."""
 
     monkeypatch.setenv("DISCORD_AUTO_THREAD", "true")
 
     monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
 
-
-
     thread = SimpleNamespace(id=999, name="Hello")
 
     adapter._auto_create_thread = AsyncMock(return_value=thread)
 
-
-
     captured_events = []
-
-
 
     async def capture_handle(event):
 
         captured_events.append(event)
 
-
-
     adapter.handle_message = capture_handle
-
-
 
     msg = _fake_message(_FakeTextChannel(), content="Hello world")
 
-
-
     await adapter._handle_message(msg)
-
-
 
     adapter._auto_create_thread.assert_awaited_once_with(msg)
 
@@ -1383,48 +937,29 @@ async def test_auto_thread_creates_thread_and_redirects(adapter, monkeypatch):
     assert event.source.thread_id == "999"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_thread_enabled_by_default_slash_commands(adapter, monkeypatch):
-
     """Without DISCORD_AUTO_THREAD env var, auto-threading is enabled (default: true)."""
 
     monkeypatch.delenv("DISCORD_AUTO_THREAD", raising=False)
 
     monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
 
-
-
     fake_thread = _FakeThreadChannel(channel_id=999, name="auto-thread")
 
     adapter._auto_create_thread = AsyncMock(return_value=fake_thread)
 
-
-
     captured_events = []
-
-
 
     async def capture_handle(event):
 
         captured_events.append(event)
 
-
-
     adapter.handle_message = capture_handle
-
-
 
     msg = _fake_message(_FakeTextChannel())
 
-
-
     await adapter._handle_message(msg)
-
-
 
     adapter._auto_create_thread.assert_awaited_once()
 
@@ -1435,46 +970,27 @@ async def test_auto_thread_enabled_by_default_slash_commands(adapter, monkeypatc
     assert captured_events[0].source.chat_type == "thread"
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_thread_can_be_disabled(adapter, monkeypatch):
-
     """Setting DISCORD_AUTO_THREAD=false keeps messages in the channel."""
 
     monkeypatch.setenv("DISCORD_AUTO_THREAD", "false")
 
     monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
 
-
-
     adapter._auto_create_thread = AsyncMock()
 
-
-
     captured_events = []
-
-
 
     async def capture_handle(event):
 
         captured_events.append(event)
 
-
-
     adapter.handle_message = capture_handle
-
-
 
     msg = _fake_message(_FakeTextChannel())
 
-
-
     await adapter._handle_message(msg)
-
-
 
     adapter._auto_create_thread.assert_not_awaited()
 
@@ -1483,51 +999,29 @@ async def test_auto_thread_can_be_disabled(adapter, monkeypatch):
     assert captured_events[0].source.chat_id == "100"  # stays in channel
 
 
-
-
-
 @pytest.mark.asyncio
-
 async def test_auto_thread_skips_threads_and_dms(adapter, monkeypatch):
-
     """Auto-thread should not create threads inside existing threads."""
 
     monkeypatch.setenv("DISCORD_AUTO_THREAD", "true")
 
     monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
 
-
-
     adapter._auto_create_thread = AsyncMock()
 
-
-
     captured_events = []
-
-
 
     async def capture_handle(event):
 
         captured_events.append(event)
 
-
-
     adapter.handle_message = capture_handle
-
-
 
     msg = _fake_message(_FakeThreadChannel())
 
-
-
     await adapter._handle_message(msg)
 
-
-
     adapter._auto_create_thread.assert_not_awaited()  # should NOT auto-thread
-
-
-
 
 
 # ------------------------------------------------------------------
@@ -1537,18 +1031,12 @@ async def test_auto_thread_skips_threads_and_dms(adapter, monkeypatch):
 # ------------------------------------------------------------------
 
 
-
-
-
 def test_discord_auto_thread_config_bridge(monkeypatch, tmp_path):
-
     """discord.auto_thread in config.yaml should be bridged to DISCORD_AUTO_THREAD env var."""
 
     import yaml
 
     from pathlib import Path
-
-
 
     # Write a config.yaml the loader will find
 
@@ -1558,13 +1046,11 @@ def test_discord_auto_thread_config_bridge(monkeypatch, tmp_path):
 
     config_path = clawk_dir / "config.yaml"
 
-    config_path.write_text(yaml.dump({
-
-        "discord": {"auto_thread": True},
-
-    }))
-
-
+    config_path.write_text(
+        yaml.dump({
+            "discord": {"auto_thread": True},
+        })
+    )
 
     monkeypatch.delenv("DISCORD_AUTO_THREAD", raising=False)
 
@@ -1572,20 +1058,13 @@ def test_discord_auto_thread_config_bridge(monkeypatch, tmp_path):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-
-
     from gateway.config import load_gateway_config
 
     load_gateway_config()
 
-
-
     import os
 
     assert os.getenv("DISCORD_AUTO_THREAD") == "true"
-
-
-
 
 
 # ------------------------------------------------------------------
@@ -1595,11 +1074,7 @@ def test_discord_auto_thread_config_bridge(monkeypatch, tmp_path):
 # ------------------------------------------------------------------
 
 
-
-
-
 def test_register_skill_command_is_flat_not_nested(adapter):
-
     """_register_skill_group should register a single flat ``/skill`` command.
 
 
@@ -1617,42 +1092,24 @@ def test_register_skill_command_is_flat_not_nested(adapter):
     """
 
     mock_categories = {
-
         "creative": [
-
             ("ascii-art", "Generate ASCII art", "/ascii-art"),
-
             ("excalidraw", "Hand-drawn diagrams", "/excalidraw"),
-
         ],
-
         "media": [
-
             ("gif-search", "Search for GIFs", "/gif-search"),
-
         ],
-
     }
 
     mock_uncategorized = [
-
         ("dogfood", "Exploratory QA testing", "/dogfood"),
-
     ]
 
-
-
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=(mock_categories, mock_uncategorized, 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     tree = adapter._client.tree
 
@@ -1664,42 +1121,26 @@ def test_register_skill_command_is_flat_not_nested(adapter):
 
     # Flat command — NOT a Group — so it has no _children of category subgroups
 
-    assert not hasattr(skill_cmd, "_children") or not getattr(skill_cmd, "_children", {}), (
-
-        "Flat /skill command should not have subcommand children"
-
-    )
-
-
-
+    assert not hasattr(skill_cmd, "_children") or not getattr(
+        skill_cmd, "_children", {}
+    ), "Flat /skill command should not have subcommand children"
 
 
 def test_register_skill_command_empty_skills_no_command(adapter):
-
     """No /skill command should be registered when there are zero skills."""
 
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=({}, [], 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     tree = adapter._client.tree
 
     assert "skill" not in tree.commands
 
 
-
-
-
 def test_register_skill_command_callback_dispatches_by_name(adapter):
-
     """The /skill callback should look up the skill by ``name`` and
 
     dispatch via ``_run_simple_slash`` with the real command key.
@@ -1707,60 +1148,36 @@ def test_register_skill_command_callback_dispatches_by_name(adapter):
     """
 
     mock_categories = {
-
         "media": [
-
             ("gif-search", "Search for GIFs", "/gif-search"),
-
         ],
-
     }
 
     mock_uncategorized = [
-
         ("dogfood", "QA testing", "/dogfood"),
-
     ]
 
-
-
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=(mock_categories, mock_uncategorized, 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     skill_cmd = adapter._client.tree.commands["skill"]
 
     assert skill_cmd.callback is not None
 
-
-
     # Stub out _run_simple_slash so we can verify the dispatched text.
 
     dispatched: list[str] = []
-
-
 
     async def fake_run(_interaction, text):
 
         dispatched.append(text)
 
-
-
     adapter._run_simple_slash = fake_run
 
-
-
     import asyncio
-
-
 
     fake_interaction = SimpleNamespace()
 
@@ -1772,16 +1189,10 @@ def test_register_skill_command_callback_dispatches_by_name(adapter):
 
     asyncio.run(skill_cmd.callback(fake_interaction, name="dogfood", args="my test"))
 
-
-
     assert dispatched == ["/gif-search", "/dogfood my test"]
 
 
-
-
-
 def test_register_skill_command_handles_unknown_skill_gracefully(adapter):
-
     """Passing a name that isn't a registered skill should respond with
 
     an ephemeral error message, NOT crash the callback.
@@ -1789,44 +1200,26 @@ def test_register_skill_command_handles_unknown_skill_gracefully(adapter):
     """
 
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=({"media": [("gif-search", "GIFs", "/gif-search")]}, [], 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     skill_cmd = adapter._client.tree.commands["skill"]
 
-
-
     sent: list[dict] = []
-
-
 
     async def fake_send(text, ephemeral=False):
 
         sent.append({"text": text, "ephemeral": ephemeral})
 
-
-
     interaction = SimpleNamespace(
-
         response=SimpleNamespace(send_message=fake_send),
-
     )
-
-
 
     import asyncio
 
     asyncio.run(skill_cmd.callback(interaction, name="does-not-exist"))
-
-
 
     assert len(sent) == 1
 
@@ -1837,11 +1230,7 @@ def test_register_skill_command_handles_unknown_skill_gracefully(adapter):
     assert sent[0]["ephemeral"] is True
 
 
-
-
-
 def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
-
     """The /skill command registration payload must stay under Discord's
 
     ~8000-byte per-command limit even with a large skill catalog.
@@ -1860,8 +1249,6 @@ def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
 
     import json
 
-
-
     # Simulate the largest catalog the collector will ever produce:
 
     # 20 categories × 25 skills each, with verbose 100-char descriptions.
@@ -1871,30 +1258,18 @@ def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
     long_desc = "A verbose description padded to approximately 100 chars " + "." * 42
 
     for i in range(20):
-
         cat = f"cat{i:02d}"
 
         large_categories[cat] = [
-
             (f"skill-{i:02d}-{j:02d}", long_desc, f"/skill-{i:02d}-{j:02d}")
-
             for j in range(25)
-
         ]
 
-
-
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=(large_categories, [], 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     skill_cmd = adapter._client.tree.commands["skill"]
 
@@ -1903,35 +1278,31 @@ def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
     # Autocomplete options are NOT registered — they're fetched dynamically.
 
     payload = json.dumps({
-
         "name": skill_cmd.name,
-
         "description": skill_cmd.description,
-
         "options": [
-
-            {"name": "name", "description": "Which skill to run", "type": 3, "required": True},
-
-            {"name": "args", "description": "Optional arguments for the skill", "type": 3, "required": False},
-
+            {
+                "name": "name",
+                "description": "Which skill to run",
+                "type": 3,
+                "required": True,
+            },
+            {
+                "name": "args",
+                "description": "Optional arguments for the skill",
+                "type": 3,
+                "required": False,
+            },
         ],
-
     })
 
     assert len(payload) < 500, (
-
         f"Flat /skill command payload is ~{len(payload)} bytes — the whole "
-
         f"point of this design is that it stays small regardless of skill count"
-
     )
 
 
-
-
-
 def test_register_skill_command_autocomplete_filters_by_name_and_description(adapter):
-
     """The autocomplete callback should match on both skill name and
 
     description so the user can search by either.
@@ -1939,34 +1310,23 @@ def test_register_skill_command_autocomplete_filters_by_name_and_description(ada
     """
 
     mock_categories = {
-
         "ocr": [
-
-            ("ocr-and-documents", "Extract text from PDFs and scanned documents", "/ocr-and-documents"),
-
+            (
+                "ocr-and-documents",
+                "Extract text from PDFs and scanned documents",
+                "/ocr-and-documents",
+            ),
         ],
-
         "media": [
-
             ("gif-search", "Search and download GIFs from Tenor", "/gif-search"),
-
         ],
-
     }
 
-
-
     with patch(
-
         "clawk_cli.commands.discord_skill_commands_by_category",
-
         return_value=(mock_categories, [], 0),
-
     ):
-
         adapter._register_slash_commands()
-
-
 
     skill_cmd = adapter._client.tree.commands["skill"]
 
@@ -1989,6 +1349,3 @@ def test_register_skill_command_autocomplete_filters_by_name_and_description(ada
     # via direct function call in the real-discord integration path.
 
     assert skill_cmd.callback is not None
-
-
-

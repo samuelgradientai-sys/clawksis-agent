@@ -6,34 +6,44 @@ Reusable setup for wireframe geometry on black background:
 
 ```python
 # 1. Material
-mat = root.create(wireframeMAT, 'wire_mat')
-mat.par.colorr = 1.0; mat.par.colorg = 0.0; mat.par.colorb = 0.0
+mat = root.create(wireframeMAT, "wire_mat")
+mat.par.colorr = 1.0
+mat.par.colorg = 0.0
+mat.par.colorb = 0.0
 mat.par.linewidth = 3
 
 # 2. Geometry COMP
-geo = root.create(geometryCOMP, 'my_geo')
-geo.par.rx.expr = 'absTime.seconds * 30'
-geo.par.ry.expr = 'absTime.seconds * 45'
+geo = root.create(geometryCOMP, "my_geo")
+geo.par.rx.expr = "absTime.seconds * 30"
+geo.par.ry.expr = "absTime.seconds * 45"
 geo.par.material = mat.path  # NOTE: 'material' not 'mat'
 
 # 3. Shape inside the geo
-box = geo.create(boxSOP, 'cube')
-box.par.sizex = 1.5; box.par.sizey = 1.5; box.par.sizez = 1.5
+box = geo.create(boxSOP, "cube")
+box.par.sizex = 1.5
+box.par.sizey = 1.5
+box.par.sizez = 1.5
 
 # 4. Camera
-cam = root.create(cameraCOMP, 'cam1')
-cam.par.tx = 0; cam.par.ty = 0; cam.par.tz = 4; cam.par.fov = 45
+cam = root.create(cameraCOMP, "cam1")
+cam.par.tx = 0
+cam.par.ty = 0
+cam.par.tz = 4
+cam.par.fov = 45
 
 # 5. Render TOP
-render = root.create(renderTOP, 'render1')
-render.par.outputresolution = 'custom'
-render.par.resolutionw = 1280; render.par.resolutionh = 720
-render.par.bgcolorr = 0; render.par.bgcolorg = 0; render.par.bgcolorb = 0
+render = root.create(renderTOP, "render1")
+render.par.outputresolution = "custom"
+render.par.resolutionw = 1280
+render.par.resolutionh = 720
+render.par.bgcolorr = 0
+render.par.bgcolorg = 0
+render.par.bgcolorb = 0
 render.par.camera = cam.path
 render.par.geometry = geo.path
 
 # 6. Output null
-out = root.create(nullTOP, 'out1')
+out = root.create(nullTOP, "out1")
 out.inputConnectors[0].connect(render.outputConnectors[0])
 ```
 
@@ -60,17 +70,19 @@ input (initial state) ──┐
 
 ```python
 # 1. Processing chain
-glsl = root.create(glslTOP, 'sim')
-null_out = root.create(nullTOP, 'null_out')
+glsl = root.create(glslTOP, "sim")
+null_out = root.create(nullTOP, "null_out")
 glsl.outputConnectors[0].connect(null_out.inputConnectors[0])
 
 # 2. Feedback referencing null_out
-feedback = root.create(feedbackTOP, 'feedback')
-feedback.par.top = 'null_out'
+feedback = root.create(feedbackTOP, "feedback")
+feedback.par.top = "null_out"
 
 # 3. Black initial state
-const_init = root.create(constantTOP, 'const_init')
-const_init.par.colorr = 0; const_init.par.colorg = 0; const_init.par.colorb = 0
+const_init = root.create(constantTOP, "const_init")
+const_init.par.colorr = 0
+const_init.par.colorg = 0
+const_init.par.colorb = 0
 
 # 4. Wire: initial → feedback, feedback → processing
 feedback.inputConnectors[0].connect(const_init)

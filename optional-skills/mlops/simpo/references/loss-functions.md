@@ -115,7 +115,7 @@ SimPO:  [Policy]               → Loss
 per_token_logps = log_softmax(logits).gather(dim=-1, index=labels)
 
 # Create mask to ignore padding
-loss_mask = (labels != label_pad_token_id)
+loss_mask = labels != label_pad_token_id
 ```
 
 **Average log probability** (if `average_log_prob=True`):

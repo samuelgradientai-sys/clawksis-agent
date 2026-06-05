@@ -128,21 +128,21 @@ python train.py \
 
 ### 第一步：准备数据
 
-```python
-# data.jsonl 格式
-{"prompt": "What is 2 + 2?", "label": "4"}
-{"prompt": "Solve: 3x = 12", "label": "x = 4"}
+```python# data.jsonl 格式
+
+{"prompt": "What is 2 + 2?", "label": "4"}
+
+{"prompt": "Solve: 3x = 12", "label": "x = 4"}
 ```
 
 或使用对话格式：
-```python
-{
-    "prompt": [
-        {"role": "system", "content": "You are a math tutor."},
-        {"role": "user", "content": "What is 15 + 27?"}
-    ],
-    "label": "42"
-}
+```python{
+    "prompt": [
+        {"role": "system", "content": "You are a math tutor."},
+        {"role": "user", "content": "What is 15 + 27?"},
+    ],
+    "label": "42",
+}
 ```
 
 ### 第二步：配置模型
@@ -229,30 +229,39 @@ python train_async.py \
 
 ### 第一步：定义自定义 Generate 函数
 
-```python
-# custom_generate.py
-async def custom_generate(args, samples, evaluation=False):
-    """带工具调用的多轮生成。"""
-    for sample in samples:
-        conversation = sample.prompt
-
-        for turn in range(args.max_turns):
-            # 生成响应
-            response = await generate_single(conversation)
-
-            # 检查工具调用
-            tool_call = extract_tool_call(response)
-            if tool_call:
-                tool_result = execute_tool(tool_call)
-                conversation.append({"role": "assistant", "content": response})
-                conversation.append({"role": "tool", "content": tool_result})
-            else:
-                break
-
-        sample.response = response
-        sample.reward = compute_reward(sample)
-
-    return samples
+```python# custom_generate.py
+
+
+async def custom_generate(args, samples, evaluation=False):
+    """带工具调用的多轮生成。"""
+
+    for sample in samples:
+        conversation = sample.prompt
+
+        for turn in range(args.max_turns):
+            # 生成响应
+
+            response = await generate_single(conversation)
+
+            # 检查工具调用
+
+            tool_call = extract_tool_call(response)
+
+            if tool_call:
+                tool_result = execute_tool(tool_call)
+
+                conversation.append({"role": "assistant", "content": response})
+
+                conversation.append({"role": "tool", "content": tool_result})
+
+            else:
+                break
+
+        sample.response = response
+
+        sample.reward = compute_reward(sample)
+
+    return samples
 ```
 
 ### 第二步：使用自定义函数启动
@@ -331,31 +340,34 @@ slime 的数据缓冲区支持灵活的数据管理：
 
 ### 基础数据源
 
-```python
-class RolloutDataSource:
-    def get_samples(self, num_samples):
-        """从数据集中获取 prompt。"""
-        return self.dataset.sample(num_samples)
-
-    def add_samples(self, samples):
-        """生成后调用（默认为空操作）。"""
-        pass
+```pythonclass RolloutDataSource:
+    def get_samples(self, num_samples):
+        """从数据集中获取 prompt。"""
+
+        return self.dataset.sample(num_samples)
+
+    def add_samples(self, samples):
+        """生成后调用（默认为空操作）。"""
+
+        pass
 ```
 
 ### 带缓冲区的数据源（离线策略）
 
-```python
-class RolloutDataSourceWithBuffer(RolloutDataSource):
-    def __init__(self):
-        self.buffer = []
-
-    def add_samples(self, samples):
-        """存储已生成的样本以供复用。"""
-        self.buffer.extend(samples)
-
-    def buffer_filter(self, args, buffer, num_samples):
-        """自定义选择逻辑（优先级、分层等）。"""
-        return select_best(buffer, num_samples)
+```pythonclass RolloutDataSourceWithBuffer(RolloutDataSource):
+    def __init__(self):
+
+        self.buffer = []
+
+    def add_samples(self, samples):
+        """存储已生成的样本以供复用。"""
+
+        self.buffer.extend(samples)
+
+    def buffer_filter(self, args, buffer, num_samples):
+        """自定义选择逻辑（优先级、分层等）。"""
+
+        return select_best(buffer, num_samples)
 ```
 
 ---
@@ -452,16 +464,21 @@ python train.py \
 
 ### 自定义奖励模型
 
-```python
-# custom_rm.py
-class CustomRewardModel:
-    def __init__(self, model_path):
-        self.model = load_model(model_path)
-
-    def compute_reward(self, prompts, responses):
-        inputs = self.tokenize(prompts, responses)
-        scores = self.model(inputs)
-        return scores.tolist()
+```python# custom_rm.py
+
+
+class CustomRewardModel:
+    def __init__(self, model_path):
+
+        self.model = load_model(model_path)
+
+    def compute_reward(self, prompts, responses):
+
+        inputs = self.tokenize(prompts, responses)
+
+        scores = self.model(inputs)
+
+        return scores.tolist()
 ```
 
 ```bash

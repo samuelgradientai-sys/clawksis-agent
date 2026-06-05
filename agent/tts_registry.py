@@ -90,7 +90,8 @@ def register_provider(provider: TTSProvider) -> None:
         logger.warning(
             "TTS provider '%s' shadows a built-in name; registration ignored. "
             "Built-in TTS providers (%s) always win — pick a different name.",
-            key, ", ".join(sorted(_BUILTIN_NAMES)),
+            key,
+            ", ".join(sorted(_BUILTIN_NAMES)),
         )
         return
     with _lock:
@@ -99,12 +100,14 @@ def register_provider(provider: TTSProvider) -> None:
     if existing is not None:
         logger.debug(
             "TTS provider '%s' re-registered (was %r)",
-            key, type(existing).__name__,
+            key,
+            type(existing).__name__,
         )
     else:
         logger.debug(
             "Registered TTS provider '%s' (%s)",
-            key, type(provider).__name__,
+            key,
+            type(provider).__name__,
         )
 
 

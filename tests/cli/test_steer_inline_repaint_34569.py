@@ -106,8 +106,7 @@ def test_inline_command_reset_branches_invalidate():
     assert not offenders, (
         "handle_enter has reset-then-return branch(es) that never call "
         "event.app.invalidate() — the input area can keep showing the "
-        "submitted text (issue #34569). Offending reset stmts:\n"
-        + "\n".join(offenders)
+        "submitted text (issue #34569). Offending reset stmts:\n" + "\n".join(offenders)
     )
 
 

@@ -44,6 +44,7 @@ class BudgetConfig:
         if tool_name in self.tool_overrides:
             return self.tool_overrides[tool_name]
         from tools.registry import registry
+
         return registry.get_max_result_size(tool_name, default=self.default_result_size)
 
 

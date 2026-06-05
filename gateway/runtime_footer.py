@@ -40,7 +40,7 @@ def _home_relative_cwd(cwd: str) -> str:
         home = os.path.expanduser("~")
         p = os.path.abspath(cwd)
         if home and (p == home or p.startswith(home + os.sep)):
-            return "~" + p[len(home):]
+            return "~" + p[len(home) :]
         return p
     except Exception:
         return cwd
@@ -82,7 +82,10 @@ def resolve_footer_config(
             if isinstance(plat_footer, dict):
                 if "enabled" in plat_footer:
                     resolved["enabled"] = bool(plat_footer.get("enabled"))
-                if isinstance(plat_footer.get("fields"), list) and plat_footer["fields"]:
+                if (
+                    isinstance(plat_footer.get("fields"), list)
+                    and plat_footer["fields"]
+                ):
                     resolved["fields"] = [str(f) for f in plat_footer["fields"]]
 
     return resolved

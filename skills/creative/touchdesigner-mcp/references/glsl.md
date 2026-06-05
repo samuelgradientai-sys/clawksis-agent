@@ -12,9 +12,9 @@ vec0valuex = 1.0    →  uTime value
 ### Pass Time
 
 ```python
-glsl_op.par.vec0name = 'uTime'
+glsl_op.par.vec0name = "uTime"
 glsl_op.par.vec0valuex.mode = ParMode.EXPRESSION
-glsl_op.par.vec0valuex.expr = 'absTime.seconds'
+glsl_op.par.vec0valuex.expr = "absTime.seconds"
 ```
 
 ```glsl
@@ -100,10 +100,10 @@ void main() {
 ### Update Shader
 
 ```python
-op('/project1/glsl1_pixel').text = shader_code
-op('/project1/glsl1').cook(force=True)
+op("/project1/glsl1_pixel").text = shader_code
+op("/project1/glsl1").cook(force=True)
 # Check errors:
-print(op('/project1/glsl1_info').text)
+print(op("/project1/glsl1_info").text)
 ```
 
 ## glslMAT

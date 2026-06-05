@@ -121,10 +121,9 @@ All slash commands in the gateway flow through the same resolution pipeline:
 
 Commands that must NOT execute while the agent is processing are rejected early:
 
-```python
-if _quick_key in self._running_agents:
-    if canonical == "model":
-        return "⏳ Agent is running — wait for it to finish or /stop first."
+```pythonif _quick_key in self._running_agents:
+    if canonical == "model":
+        return "⏳ Agent is running — wait for it to finish or /stop first."
 ```
 
 Bypass commands (`/stop`, `/new`, `/approve`, `/deny`, `/queue`, `/status`) have special handling.

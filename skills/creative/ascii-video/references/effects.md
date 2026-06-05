@@ -23,18 +23,37 @@ Every effect should start with a background. Never leave flat black.
 
 ### Animated Sine Field (General Purpose)
 ```python
-def bg_sinefield(g, f, t, hue=0.6, bri=0.5, pal=PAL_DEFAULT,
-                 freq=(0.13, 0.17, 0.07, 0.09), speed=(0.5, -0.4, -0.3, 0.2)):
+def bg_sinefield(
+    g,
+    f,
+    t,
+    hue=0.6,
+    bri=0.5,
+    pal=PAL_DEFAULT,
+    freq=(0.13, 0.17, 0.07, 0.09),
+    speed=(0.5, -0.4, -0.3, 0.2),
+):
     """Layered sine field. Adjust freq/speed tuples for different textures."""
-    v1 = np.sin(g.cc*freq[0] + t*speed[0]) * np.sin(g.rr*freq[1] - t*speed[1]) * 0.5 + 0.5
-    v2 = np.sin(g.cc*freq[2] - t*speed[2] + g.rr*freq[3]) * 0.4 + 0.5
-    v3 = np.sin(g.dist_n*5 + t*0.2) * 0.3 + 0.4
-    v4 = np.cos(g.angle*3 - t*0.6) * 0.15 + 0.5
-    val = np.clip((v1*0.3 + v2*0.25 + v3*0.25 + v4*0.2) * bri * (0.6 + f["rms"]*0.6), 0.06, 1)
+    v1 = (
+        np.sin(g.cc * freq[0] + t * speed[0])
+        * np.sin(g.rr * freq[1] - t * speed[1])
+        * 0.5
+        + 0.5
+    )
+    v2 = np.sin(g.cc * freq[2] - t * speed[2] + g.rr * freq[3]) * 0.4 + 0.5
+    v3 = np.sin(g.dist_n * 5 + t * 0.2) * 0.3 + 0.4
+    v4 = np.cos(g.angle * 3 - t * 0.6) * 0.15 + 0.5
+    val = np.clip(
+        (v1 * 0.3 + v2 * 0.25 + v3 * 0.25 + v4 * 0.2) * bri * (0.6 + f["rms"] * 0.6),
+        0.06,
+        1,
+    )
     mask = val > 0.03
     ch = val2char(val, mask, pal)
-    h = np.full_like(val, hue) + f.get("cent", 0.5)*0.1 + val*0.08
-    R, G, B = hsv2rgb(h, np.clip(0.35+f.get("flat",0.4)*0.4, 0, 1) * np.ones_like(val), val)
+    h = np.full_like(val, hue) + f.get("cent", 0.5) * 0.1 + val * 0.08
+    R, G, B = hsv2rgb(
+        h, np.clip(0.35 + f.get("flat", 0.4) * 0.4, 0, 1) * np.ones_like(val), val
+    )
     return ch, mkc(R, G, B, g.rows, g.cols)
 ```
 
@@ -45,17 +64,24 @@ def bg_video(g, frame_rgb, pal=PAL_DEFAULT, brightness=0.5):
     lum = np.mean(small, axis=2) / 255.0 * brightness
     mask = lum > 0.02
     ch = val2char(lum, mask, pal)
-    co = np.clip(small * np.clip(lum[:,:,None]*1.5+0.3, 0.3, 1), 0, 255).astype(np.uint8)
+    co = np.clip(small * np.clip(lum[:, :, None] * 1.5 + 0.3, 0.3, 1), 0, 255).astype(
+        np.uint8
+    )
     return ch, co
 ```
 
 ### Noise / Static Field
 ```python
 def bg_noise(g, f, t, pal=PAL_BLOCKS, density=0.3, hue_drift=0.02):
-    val = np.random.random((g.rows, g.cols)).astype(np.float32) * density * (0.5 + f["rms"]*0.5)
-    val = np.clip(val, 0, 1); mask = val > 0.02
+    val = (
+        np.random.random((g.rows, g.cols)).astype(np.float32)
+        * density
+        * (0.5 + f["rms"] * 0.5)
+    )
+    val = np.clip(val, 0, 1)
+    mask = val > 0.02
     ch = val2char(val, mask, pal)
-    R, G, B = hsv2rgb(np.full_like(val, t*hue_drift % 1), np.full_like(val, 0.3), val)
+    R, G, B = hsv2rgb(np.full_like(val, t * hue_drift % 1), np.full_like(val, 0.3), val)
     return ch, mkc(R, G, B, g.rows, g.cols)
 ```
 
@@ -65,10 +91,12 @@ def bg_smooth_noise(g, f, t, hue=0.5, bri=0.5, pal=PAL_DOTS, octaves=3):
     """Layered sine approximation of Perlin noise. Cheap, smooth, organic."""
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for i in range(octaves):
-        freq = 0.05 * (2 ** i)
+        freq = 0.05 * (2**i)
         amp = 0.5 / (i + 1)
         phase = t * (0.3 + i * 0.2)
-        val += np.sin(g.cc * freq + phase) * np.cos(g.rr * freq * 0.7 - phase * 0.5) * amp
+        val += (
+            np.sin(g.cc * freq + phase) * np.cos(g.rr * freq * 0.7 - phase * 0.5) * amp
+        )
     val = np.clip(val * 0.5 + 0.5, 0, 1) * bri
     mask = val > 0.03
     ch = val2char(val, mask, pal)
@@ -90,14 +118,16 @@ def bg_cellular(g, f, t, n_centers=12, hue=0.5, bri=0.6, pal=PAL_BLOCKS):
     # Min distance to any center
     min_d = np.full((g.rows, g.cols), 999.0, dtype=np.float32)
     for i in range(n_centers):
-        d = np.sqrt((g.cc - cx_t[i])**2 + (g.rr - cy_t[i])**2)
+        d = np.sqrt((g.cc - cx_t[i]) ** 2 + (g.rr - cy_t[i]) ** 2)
         min_d = np.minimum(min_d, d)
     val = np.clip(1.0 - min_d / (g.cols * 0.3), 0, 1) * bri
     # Cell edges (where distance is near-equal between two centers)
     # ... second-nearest trick for edge highlighting
     mask = val > 0.03
     ch = val2char(val, mask, pal)
-    R, G, B = hsv2rgb(np.full_like(val, hue) + min_d * 0.005, np.full_like(val, 0.5), val)
+    R, G, B = hsv2rgb(
+        np.full_like(val, hue) + min_d * 0.005, np.full_like(val, 0.5), val
+    )
     return ch, mkc(R, G, B, g.rows, g.cols)
 ```
 
@@ -114,7 +144,12 @@ All particle systems use persistent state via the `S` dict parameter:
 ```python
 # S is the persistent state dict (same as r.S, passed explicitly)
 if "px" not in S:
-    S["px"]=[]; S["py"]=[]; S["vx"]=[]; S["vy"]=[]; S["life"]=[]; S["char"]=[]
+    S["px"] = []
+    S["py"] = []
+    S["vx"] = []
+    S["vy"] = []
+    S["life"] = []
+    S["char"] = []
 
 # Emit new particles (on beat, continuously, or on trigger)
 # Update: position += velocity, apply forces, decay life
@@ -128,38 +163,44 @@ Don't hardcode particle chars. Choose per project/mood:
 
 ```python
 # Energy / explosive
-PART_ENERGY  = list("*+#@\u26a1\u2726\u2605\u2588\u2593")
-PART_SPARK   = list("\u00b7\u2022\u25cf\u2605\u2736*+")
+PART_ENERGY = list("*+#@\u26a1\u2726\u2605\u2588\u2593")
+PART_SPARK = list("\u00b7\u2022\u25cf\u2605\u2736*+")
 # Organic / natural
-PART_LEAF    = list("\u2740\u2741\u2742\u2743\u273f\u2618\u2022")
-PART_SNOW    = list("\u2744\u2745\u2746\u00b7\u2022*\u25cb")
-PART_RAIN    = list("|\u2502\u2503\u2551/\\")
-PART_BUBBLE  = list("\u25cb\u25ce\u25c9\u25cf\u2218\u2219\u00b0")
+PART_LEAF = list("\u2740\u2741\u2742\u2743\u273f\u2618\u2022")
+PART_SNOW = list("\u2744\u2745\u2746\u00b7\u2022*\u25cb")
+PART_RAIN = list("|\u2502\u2503\u2551/\\")
+PART_BUBBLE = list("\u25cb\u25ce\u25c9\u25cf\u2218\u2219\u00b0")
 # Data / tech
-PART_DATA    = list("01{}[]<>|/\\")
-PART_HEX     = list("0123456789ABCDEF")
-PART_BINARY  = list("01")
+PART_DATA = list("01{}[]<>|/\\")
+PART_HEX = list("0123456789ABCDEF")
+PART_BINARY = list("01")
 # Mystical
-PART_RUNE    = list("\u16a0\u16a2\u16a6\u16b1\u16b7\u16c1\u16c7\u16d2\u16d6\u16da\u16de\u16df\u2726\u2605")
-PART_ZODIAC  = list("\u2648\u2649\u264a\u264b\u264c\u264d\u264e\u264f\u2650\u2651\u2652\u2653")
+PART_RUNE = list(
+    "\u16a0\u16a2\u16a6\u16b1\u16b7\u16c1\u16c7\u16d2\u16d6\u16da\u16de\u16df\u2726\u2605"
+)
+PART_ZODIAC = list(
+    "\u2648\u2649\u264a\u264b\u264c\u264d\u264e\u264f\u2650\u2651\u2652\u2653"
+)
 # Minimal
-PART_DOT     = list("\u00b7\u2022\u25cf")
-PART_DASH    = list("-=~\u2500\u2550")
+PART_DOT = list("\u00b7\u2022\u25cf")
+PART_DASH = list("-=~\u2500\u2550")
 ```
 
 ### Explosion (Beat-Triggered)
 ```python
 def emit_explosion(S, f, center_r, center_c, char_set=PART_ENERGY, count_base=80):
     if f.get("beat", 0) > 0:
-        for _ in range(int(count_base + f["rms"]*150)):
-            ang = random.uniform(0, 2*math.pi)
-            sp = random.uniform(1, 9) * (0.5 + f.get("sub_r", 0.3)*2)
+        for _ in range(int(count_base + f["rms"] * 150)):
+            ang = random.uniform(0, 2 * math.pi)
+            sp = random.uniform(1, 9) * (0.5 + f.get("sub_r", 0.3) * 2)
             S["px"].append(float(center_c))
             S["py"].append(float(center_r))
-            S["vx"].append(math.cos(ang)*sp*2.5)
-            S["vy"].append(math.sin(ang)*sp)
+            S["vx"].append(math.cos(ang) * sp * 2.5)
+            S["vy"].append(math.sin(ang) * sp)
             S["life"].append(1.0)
             S["char"].append(random.choice(char_set))
+
+
 # Update: gravity on vy += 0.03, life -= 0.015
 # Color: life * 255 for brightness, hue fade controlled by caller
 ```
@@ -193,11 +234,14 @@ def emit_orbit(S, n=20, radius=15, speed=1.0, char_set=PART_DOT):
     """Particles orbiting a center point."""
     for i in range(n):
         angle = i * 2 * math.pi / n
-        S["px"].append(0.0); S["py"].append(0.0)  # will be computed from angle
+        S["px"].append(0.0)
+        S["py"].append(0.0)  # will be computed from angle
         S["vx"].append(angle)  # store angle as "vx" for orbit
         S["vy"].append(radius + random.uniform(-2, 2))  # store radius
         S["life"].append(1.0)
         S["char"].append(random.choice(char_set))
+
+
 # Update: angle += speed * dt, px = cx + radius * cos(angle), py = cy + radius * sin(angle)
 ```
 
@@ -213,9 +257,18 @@ def emit_orbit(S, n=20, radius=15, speed=1.0, char_set=PART_DOT):
 Emergent swarm behavior from three simple rules: separation, alignment, cohesion.
 
 ```python
-def update_boids(S, g, f, n_boids=200, perception=8.0, max_speed=2.0,
-                 sep_weight=1.5, ali_weight=1.0, coh_weight=1.0,
-                 char_set=None):
+def update_boids(
+    S,
+    g,
+    f,
+    n_boids=200,
+    perception=8.0,
+    max_speed=2.0,
+    sep_weight=1.5,
+    ali_weight=1.0,
+    coh_weight=1.0,
+    char_set=None,
+):
     """Boids flocking simulation. Particles self-organize into organic groups.
 
     perception: how far each boid can see (grid cells)
@@ -233,8 +286,10 @@ def update_boids(S, g, f, n_boids=200, perception=8.0, max_speed=2.0,
         S["boid_vy"] = (rng.random(n_boids).astype(np.float32) - 0.5) * max_speed
         S["boid_ch"] = [random.choice(char_set) for _ in range(n_boids)]
 
-    bx = S["boid_x"]; by = S["boid_y"]
-    bvx = S["boid_vx"]; bvy = S["boid_vy"]
+    bx = S["boid_x"]
+    by = S["boid_y"]
+    bvx = S["boid_vx"]
+    bvy = S["boid_vy"]
     n = len(bx)
 
     # For each boid, compute steering forces
@@ -294,25 +349,31 @@ def update_boids(S, g, f, n_boids=200, perception=8.0, max_speed=2.0,
     # Audio reactivity: bass pushes boids outward from center
     if f.get("bass", 0) > 0.5:
         cx_g, cy_g = g.cols / 2, g.rows / 2
-        dx = bx - cx_g; dy = by - cy_g
+        dx = bx - cx_g
+        dy = by - cy_g
         dist = np.sqrt(dx**2 + dy**2) + 1
         ax += (dx / dist) * f["bass"] * 2
         ay += (dy / dist) * f["bass"] * 2
 
     # Update velocity and position
-    bvx += ax; bvy += ay
+    bvx += ax
+    bvy += ay
     # Clamp speed
     speed = np.sqrt(bvx**2 + bvy**2) + 1e-10
     over = speed > max_speed
     bvx[over] *= max_speed / speed[over]
     bvy[over] *= max_speed / speed[over]
-    bx += bvx; by += bvy
+    bx += bvx
+    by += bvy
 
     # Wrap at edges
-    bx %= g.cols; by %= g.rows
+    bx %= g.cols
+    by %= g.rows
 
-    S["boid_x"] = bx; S["boid_y"] = by
-    S["boid_vx"] = bvx; S["boid_vy"] = bvy
+    S["boid_x"] = bx
+    S["boid_y"] = by
+    S["boid_vx"] = bvx
+    S["boid_vy"] = bvy
 
     # Draw
     ch = np.full((g.rows, g.cols), " ", dtype="U1")
@@ -331,9 +392,9 @@ def update_boids(S, g, f, n_boids=200, perception=8.0, max_speed=2.0,
 Particles that follow the gradient of a value field. Any `vf_*` function becomes a "river" that carries particles:
 
 ```python
-def update_flow_particles(S, g, f, flow_field, n=500, speed=1.0,
-                          life_drain=0.005, emit_rate=10,
-                          char_set=None):
+def update_flow_particles(
+    S, g, f, flow_field, n=500, speed=1.0, life_drain=0.005, emit_rate=10, char_set=None
+):
     """Particles steered by a value field gradient.
 
     flow_field: float32 (rows, cols) — the field particles follow.
@@ -343,15 +404,20 @@ def update_flow_particles(S, g, f, flow_field, n=500, speed=1.0,
     if char_set is None:
         char_set = list("·•∘◦°⋅")
     if "fp_x" not in S:
-        S["fp_x"] = []; S["fp_y"] = []; S["fp_vx"] = []; S["fp_vy"] = []
-        S["fp_life"] = []; S["fp_ch"] = []
+        S["fp_x"] = []
+        S["fp_y"] = []
+        S["fp_vx"] = []
+        S["fp_vy"] = []
+        S["fp_life"] = []
+        S["fp_ch"] = []
 
     # Emit new particles at random positions
     for _ in range(emit_rate):
         if len(S["fp_x"]) < n:
             S["fp_x"].append(random.uniform(0, g.cols - 1))
             S["fp_y"].append(random.uniform(0, g.rows - 1))
-            S["fp_vx"].append(0.0); S["fp_vy"].append(0.0)
+            S["fp_vx"].append(0.0)
+            S["fp_vy"].append(0.0)
             S["fp_life"].append(1.0)
             S["fp_ch"].append(random.choice(char_set))
 
@@ -365,8 +431,10 @@ def update_flow_particles(S, g, f, flow_field, n=500, speed=1.0,
     while i < len(S["fp_x"]):
         px, py = S["fp_x"][i], S["fp_y"][i]
         # Sample gradient at particle position
-        gc = int(px) % g.cols; gr = int(py) % g.rows
-        gx = grad_x[gr, gc]; gy = grad_y[gr, gc]
+        gc = int(px) % g.cols
+        gr = int(py) % g.rows
+        gx = grad_x[gr, gc]
+        gy = grad_y[gr, gc]
         # Steer velocity toward gradient direction
         S["fp_vx"][i] = S["fp_vx"][i] * 0.9 + gx * speed * 10
         S["fp_vy"][i] = S["fp_vy"][i] * 0.9 + gy * speed * 10
@@ -409,10 +477,9 @@ def draw_particle_trails(S, g, trail_key="trails", max_trail=8, fade=0.7):
         S[trail_key] = []
 
     # Store current positions
-    current = list(zip(
-        [int(y) for y in S.get("py", [])],
-        [int(x) for x in S.get("px", [])]
-    ))
+    current = list(
+        zip([int(y) for y in S.get("py", [])], [int(x) for x in S.get("px", [])])
+    )
     S[trail_key].append(current)
     if len(S[trail_key]) > max_trail:
         S[trail_key] = S[trail_key][-max_trail:]
@@ -423,7 +490,7 @@ def draw_particle_trails(S, g, trail_key="trails", max_trail=8, fade=0.7):
     trail_chars = list("·∘◦°⋅.,'`")
 
     for age, positions in enumerate(reversed(S[trail_key])):
-        bri = fade ** age
+        bri = fade**age
         if bri < 0.05:
             break
         ci = min(age, len(trail_chars) - 1)
@@ -441,8 +508,9 @@ def draw_particle_trails(S, g, trail_key="trails", max_trail=8, fade=0.7):
 
 ### Column Rain (Vectorized)
 ```python
-def eff_matrix_rain(g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA,
-                    speed_base=0.5, speed_beat=3.0):
+def eff_matrix_rain(
+    g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA, speed_base=0.5, speed_beat=3.0
+):
     """Vectorized matrix rain. S dict persists column positions."""
     if "ry" not in S or len(S["ry"]) != g.cols:
         S["ry"] = np.random.uniform(-g.rows, g.rows, g.cols).astype(np.float32)
@@ -450,8 +518,9 @@ def eff_matrix_rain(g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA,
         S["rln"] = np.random.randint(8, 40, g.cols)
         S["rch"] = np.random.randint(0, len(pal), (g.rows, g.cols))  # pre-assign chars
 
-    speed_mult = speed_base + f.get("bass", 0.3)*speed_beat + f.get("sub_r", 0.3)*3
-    if f.get("beat", 0) > 0: speed_mult *= 2.5
+    speed_mult = speed_base + f.get("bass", 0.3) * speed_beat + f.get("sub_r", 0.3) * 3
+    if f.get("beat", 0) > 0:
+        speed_mult *= 2.5
     S["ry"] += S["rsp"] * speed_mult
 
     # Reset columns that fall past bottom
@@ -473,7 +542,7 @@ def eff_matrix_rain(g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA,
                 ch[row, c] = pal[ci]
                 v = fade * bri * 255
                 if i == 0:  # head is bright white-ish
-                    co[row, c] = (int(v*0.9), int(min(255, v*1.1)), int(v*0.9))
+                    co[row, c] = (int(v * 0.9), int(min(255, v * 1.1)), int(v * 0.9))
                 else:
                     R, G, B = hsv2rgb_single(hue, 0.7, fade * bri)
                     co[row, c] = (R, G, B)
@@ -487,11 +556,14 @@ def eff_matrix_rain(g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA,
 ### Horizontal Band Displacement
 ```python
 def eff_glitch_displace(ch, co, f, intensity=1.0):
-    n_bands = int(8 + f.get("flux", 0.3)*25 + f.get("bdecay", 0)*15) * intensity
+    n_bands = int(8 + f.get("flux", 0.3) * 25 + f.get("bdecay", 0) * 15) * intensity
     for _ in range(int(n_bands)):
-        y = random.randint(0, ch.shape[0]-1)
-        h = random.randint(1, int(3 + f.get("sub", 0.3)*8))
-        shift = int((random.random()-0.5) * f.get("rms", 0.3)*40 + f.get("bdecay", 0)*20*(random.random()-0.5))
+        y = random.randint(0, ch.shape[0] - 1)
+        h = random.randint(1, int(3 + f.get("sub", 0.3) * 8))
+        shift = int(
+            (random.random() - 0.5) * f.get("rms", 0.3) * 40
+            + f.get("bdecay", 0) * 20 * (random.random() - 0.5)
+        )
         if shift != 0:
             for row in range(h):
                 rr = y + row
@@ -506,26 +578,30 @@ def eff_glitch_displace(ch, co, f, intensity=1.0):
 def eff_block_corrupt(ch, co, f, char_pool=None, count_base=20):
     if char_pool is None:
         char_pool = list(PAL_BLOCKS[4:] + PAL_KATA[2:8])
-    for _ in range(int(count_base + f.get("flux", 0.3)*60 + f.get("bdecay", 0)*40)):
-        bx = random.randint(0, max(1, ch.shape[1]-6))
-        by = random.randint(0, max(1, ch.shape[0]-4))
-        bw, bh = random.randint(2,6), random.randint(1,4)
+    for _ in range(int(count_base + f.get("flux", 0.3) * 60 + f.get("bdecay", 0) * 40)):
+        bx = random.randint(0, max(1, ch.shape[1] - 6))
+        by = random.randint(0, max(1, ch.shape[0] - 4))
+        bw, bh = random.randint(2, 6), random.randint(1, 4)
         block_char = random.choice(char_pool)
         # Fill rectangle with single char and random color
         for r in range(bh):
             for c in range(bw):
-                rr, cc = by+r, bx+c
+                rr, cc = by + r, bx + c
                 if 0 <= rr < ch.shape[0] and 0 <= cc < ch.shape[1]:
                     ch[rr, cc] = block_char
-                    co[rr, cc] = (random.randint(100,255), random.randint(0,100), random.randint(0,80))
+                    co[rr, cc] = (
+                        random.randint(100, 255),
+                        random.randint(0, 100),
+                        random.randint(0, 80),
+                    )
     return ch, co
 ```
 
 ### Scan Bars (Vertical)
 ```python
 def eff_scanbars(ch, co, f, t, n_base=4, chars="|\u2551|!1l"):
-    for bi in range(int(n_base + f.get("himid_r", 0.3)*12)):
-        sx = int((t*50*(1+bi*0.3) + bi*37) % ch.shape[1])
+    for bi in range(int(n_base + f.get("himid_r", 0.3) * 12)):
+        sx = int((t * 50 * (1 + bi * 0.3) + bi * 37) % ch.shape[1])
         for rr in range(ch.shape[0]):
             if random.random() < 0.7:
                 ch[rr, sx] = random.choice(chars)
@@ -535,17 +611,43 @@ def eff_scanbars(ch, co, f, t, n_base=4, chars="|\u2551|!1l"):
 ### Error Messages
 ```python
 # Parameterize the error vocabulary per project:
-ERRORS_TECH = ["SEGFAULT","0xDEADBEEF","BUFFER_OVERRUN","PANIC!","NULL_PTR",
-               "CORRUPT","SIGSEGV","ERR_OVERFLOW","STACK_SMASH","BAD_ALLOC"]
-ERRORS_COSMIC = ["VOID_BREACH","ENTROPY_MAX","SINGULARITY","DIMENSION_FAULT",
-                 "REALITY_ERR","TIME_PARADOX","DARK_MATTER_LEAK","QUANTUM_DECOHERE"]
-ERRORS_ORGANIC = ["CELL_DIVISION_ERR","DNA_MISMATCH","MUTATION_OVERFLOW",
-                  "NEURAL_DEADLOCK","SYNAPSE_TIMEOUT","MEMBRANE_BREACH"]
+ERRORS_TECH = [
+    "SEGFAULT",
+    "0xDEADBEEF",
+    "BUFFER_OVERRUN",
+    "PANIC!",
+    "NULL_PTR",
+    "CORRUPT",
+    "SIGSEGV",
+    "ERR_OVERFLOW",
+    "STACK_SMASH",
+    "BAD_ALLOC",
+]
+ERRORS_COSMIC = [
+    "VOID_BREACH",
+    "ENTROPY_MAX",
+    "SINGULARITY",
+    "DIMENSION_FAULT",
+    "REALITY_ERR",
+    "TIME_PARADOX",
+    "DARK_MATTER_LEAK",
+    "QUANTUM_DECOHERE",
+]
+ERRORS_ORGANIC = [
+    "CELL_DIVISION_ERR",
+    "DNA_MISMATCH",
+    "MUTATION_OVERFLOW",
+    "NEURAL_DEADLOCK",
+    "SYNAPSE_TIMEOUT",
+    "MEMBRANE_BREACH",
+]
 ```
 
 ### Hex Data Stream
 ```python
-hex_str = "".join(random.choice("0123456789ABCDEF") for _ in range(random.randint(8,20)))
+hex_str = "".join(
+    random.choice("0123456789ABCDEF") for _ in range(random.randint(8, 20))
+)
 stamp(ch, co, hex_str, rand_row, rand_col, (0, 160, 80))
 ```
 
@@ -556,27 +658,47 @@ stamp(ch, co, hex_str, rand_row, rand_col, (0, 160, 80))
 ### Mirrored Spectrum Bars
 ```python
 def eff_spectrum(g, f, t, n_bars=64, pal=PAL_BLOCKS, mirror=True):
-    bar_w = max(1, g.cols // n_bars); mid = g.rows // 2
-    band_vals = np.array([f.get("sub",0.3), f.get("bass",0.3), f.get("lomid",0.3),
-                          f.get("mid",0.3), f.get("himid",0.3), f.get("hi",0.3)])
+    bar_w = max(1, g.cols // n_bars)
+    mid = g.rows // 2
+    band_vals = np.array([
+        f.get("sub", 0.3),
+        f.get("bass", 0.3),
+        f.get("lomid", 0.3),
+        f.get("mid", 0.3),
+        f.get("himid", 0.3),
+        f.get("hi", 0.3),
+    ])
     ch = np.full((g.rows, g.cols), " ", dtype="U1")
     co = np.zeros((g.rows, g.cols, 3), dtype=np.uint8)
     for b in range(n_bars):
         frac = b / n_bars
-        fi = frac * 5; lo_i = int(fi); hi_i = min(lo_i+1, 5)
-        bval = min(1, (band_vals[lo_i]*(1-fi%1) + band_vals[hi_i]*(fi%1)) * 1.8)
-        height = int(bval * (g.rows//2 - 2))
+        fi = frac * 5
+        lo_i = int(fi)
+        hi_i = min(lo_i + 1, 5)
+        bval = min(
+            1, (band_vals[lo_i] * (1 - fi % 1) + band_vals[hi_i] * (fi % 1)) * 1.8
+        )
+        height = int(bval * (g.rows // 2 - 2))
         for dy in range(height):
-            hue = (f.get("cent",0.5)*0.3 + frac*0.3 + dy/max(height,1)*0.15) % 1.0
-            ci = pal[min(int(dy/max(height,1)*len(pal)*0.7+len(pal)*0.2), len(pal)-1)]
+            hue = (
+                f.get("cent", 0.5) * 0.3 + frac * 0.3 + dy / max(height, 1) * 0.15
+            ) % 1.0
+            ci = pal[
+                min(
+                    int(dy / max(height, 1) * len(pal) * 0.7 + len(pal) * 0.2),
+                    len(pal) - 1,
+                )
+            ]
             for dc in range(bar_w - (1 if bar_w > 2 else 0)):
-                cc = b*bar_w + dc
+                cc = b * bar_w + dc
                 if 0 <= cc < g.cols:
                     rows_to_draw = [mid - dy, mid + dy] if mirror else [g.rows - 1 - dy]
                     for row in rows_to_draw:
                         if 0 <= row < g.rows:
                             ch[row, cc] = ci
-                            co[row, cc] = hsv_to_rgb_single(hue, 0.85, 0.5+dy/max(height,1)*0.5)
+                            co[row, cc] = hsv_to_rgb_single(
+                                hue, 0.85, 0.5 + dy / max(height, 1) * 0.5
+                            )
     return ch, co
 ```
 
@@ -586,14 +708,16 @@ def eff_waveform(g, f, t, row_offset=-5, hue=0.1):
     ch = np.full((g.rows, g.cols), " ", dtype="U1")
     co = np.zeros((g.rows, g.cols, 3), dtype=np.uint8)
     for c in range(g.cols):
-        wv = (math.sin(c*0.15+t*5)*f.get("bass",0.3)*0.5
-            + math.sin(c*0.3+t*8)*f.get("mid",0.3)*0.3
-            + math.sin(c*0.6+t*12)*f.get("hi",0.3)*0.15)
+        wv = (
+            math.sin(c * 0.15 + t * 5) * f.get("bass", 0.3) * 0.5
+            + math.sin(c * 0.3 + t * 8) * f.get("mid", 0.3) * 0.3
+            + math.sin(c * 0.6 + t * 12) * f.get("hi", 0.3) * 0.15
+        )
         wr = g.rows + row_offset + int(wv * 4)
         if 0 <= wr < g.rows:
             ch[wr, c] = "~"
-            v = int(120 + f.get("rms",0.3)*135)
-            co[wr, c] = [v, int(v*0.7), int(v*0.4)]
+            v = int(120 + f.get("rms", 0.3) * 135)
+            co[wr, c] = [v, int(v * 0.7), int(v * 0.4)]
     return ch, co
 ```
 
@@ -604,18 +728,32 @@ def eff_waveform(g, f, t, row_offset=-5, hue=0.1):
 ### Fire Columns
 ```python
 def eff_fire(g, f, t, n_base=20, hue_base=0.02, hue_range=0.12, pal=PAL_BLOCKS):
-    n_cols = int(n_base + f.get("bass",0.3)*30 + f.get("sub_r",0.3)*20)
+    n_cols = int(n_base + f.get("bass", 0.3) * 30 + f.get("sub_r", 0.3) * 20)
     ch = np.full((g.rows, g.cols), " ", dtype="U1")
     co = np.zeros((g.rows, g.cols, 3), dtype=np.uint8)
     for fi in range(n_cols):
-        fx_c = int((fi*g.cols/n_cols + np.sin(t*2+fi*0.7)*3) % g.cols)
-        height = int((f.get("bass",0.3)*0.4 + f.get("sub_r",0.3)*0.3 + f.get("rms",0.3)*0.3) * g.rows * 0.7)
+        fx_c = int((fi * g.cols / n_cols + np.sin(t * 2 + fi * 0.7) * 3) % g.cols)
+        height = int(
+            (
+                f.get("bass", 0.3) * 0.4
+                + f.get("sub_r", 0.3) * 0.3
+                + f.get("rms", 0.3) * 0.3
+            )
+            * g.rows
+            * 0.7
+        )
         for dy in range(min(height, g.rows)):
             fr = g.rows - 1 - dy
             frac = dy / max(height, 1)
-            bri = max(0.1, (1 - frac*0.6) * (0.5 + f.get("rms",0.3)*0.5))
+            bri = max(0.1, (1 - frac * 0.6) * (0.5 + f.get("rms", 0.3) * 0.5))
             hue = hue_base + frac * hue_range
-            ci = "\u2588" if frac<0.2 else ("\u2593" if frac<0.4 else ("\u2592" if frac<0.6 else "\u2591"))
+            ci = (
+                "\u2588"
+                if frac < 0.2
+                else (
+                    "\u2593" if frac < 0.4 else ("\u2592" if frac < 0.6 else "\u2591")
+                )
+            )
             ch[fr, fx_c] = ci
             R, G, B = hsv2rgb_single(hue, 0.9, bri)
             co[fr, fx_c] = (R, G, B)
@@ -637,21 +775,23 @@ def eff_fire(g, f, t, n_base=20, hue_base=0.02, hue_range=0.12, pal=PAL_BLOCKS):
 def eff_ticker(ch, co, t, text, row, speed=15, color=(80, 100, 140)):
     off = int(t * speed) % max(len(text), 1)
     doubled = text + "   " + text
-    stamp(ch, co, doubled[off:off+ch.shape[1]], row, 0, color)
+    stamp(ch, co, doubled[off : off + ch.shape[1]], row, 0, color)
 ```
 
 ### Beat-Triggered Words
 ```python
-def eff_beat_words(ch, co, f, words, row_center=None, color=(255,240,220)):
+def eff_beat_words(ch, co, f, words, row_center=None, color=(255, 240, 220)):
     if f.get("beat", 0) > 0:
         w = random.choice(words)
-        r = (row_center or ch.shape[0]//2) + random.randint(-5,5)
-        stamp(ch, co, w, r, (ch.shape[1]-len(w))//2, color)
+        r = (row_center or ch.shape[0] // 2) + random.randint(-5, 5)
+        stamp(ch, co, w, r, (ch.shape[1] - len(w)) // 2, color)
 ```
 
 ### Fading Message Sequence
 ```python
-def eff_fading_messages(ch, co, t, elapsed, messages, period=4.0, color_base=(220,220,220)):
+def eff_fading_messages(
+    ch, co, t, elapsed, messages, period=4.0, color_base=(220, 220, 220)
+):
     msg_idx = int(elapsed / period) % len(messages)
     phase = elapsed % period
     fade = max(0, min(1.0, phase) * min(1.0, period - phase))
@@ -659,7 +799,9 @@ def eff_fading_messages(ch, co, t, elapsed, messages, period=4.0, color_base=(22
         v = fade
         msg = messages[msg_idx]
         cr, cg, cb = [int(c * v) for c in color_base]
-        stamp(ch, co, msg, ch.shape[0]//2, (ch.shape[1]-len(msg))//2, (cr, cg, cb))
+        stamp(
+            ch, co, msg, ch.shape[0] // 2, (ch.shape[1] - len(msg)) // 2, (cr, cg, cb)
+        )
 ```
 
 ---
@@ -668,8 +810,11 @@ def eff_fading_messages(ch, co, t, elapsed, messages, period=4.0, color_base=(22
 Shift entire char/color arrays on beat:
 ```python
 def eff_shake(ch, co, f, x_amp=6, y_amp=3):
-    shake_x = int(f.get("sub",0.3)*x_amp*(random.random()-0.5)*2 + f.get("bdecay",0)*4*(random.random()-0.5)*2)
-    shake_y = int(f.get("bass",0.3)*y_amp*(random.random()-0.5)*2)
+    shake_x = int(
+        f.get("sub", 0.3) * x_amp * (random.random() - 0.5) * 2
+        + f.get("bdecay", 0) * 4 * (random.random() - 0.5) * 2
+    )
+    shake_y = int(f.get("bass", 0.3) * y_amp * (random.random() - 0.5) * 2)
     if abs(shake_x) > 0:
         ch = np.roll(ch, shake_x, axis=1)
         co = np.roll(co, shake_x, axis=1)
@@ -692,15 +837,17 @@ Stack multiple effects as `(chars, colors)` layers:
 ```python
 class LayerStack(EffectNode):
     """Render effects bottom-to-top with character-level compositing."""
+
     def add(self, effect, alpha=1.0):
         """alpha < 1.0 = probabilistic override (sparse overlay)."""
         self.layers.append((effect, alpha))
 
+
 # Usage:
 stack = LayerStack()
-stack.add(bg_effect)           # base — fills screen
-stack.add(main_effect)         # overlay on top (space chars = transparent)
-stack.add(particle_effect)     # sparse overlay on top of that
+stack.add(bg_effect)  # base — fills screen
+stack.add(main_effect)  # overlay on top (space chars = transparent)
+stack.add(particle_effect)  # sparse overlay on top of that
 ch, co = stack.render(g, f, t, S)
 ```
 
@@ -763,60 +910,82 @@ These produce float32 arrays `(rows, cols)` in range [0,1]. They are the raw vis
 #### Trigonometric Fields (sine/cosine-based)
 
 ```python
-def vf_sinefield(g, f, t, S, bri=0.5,
-                 freq=(0.13, 0.17, 0.07, 0.09), speed=(0.5, -0.4, -0.3, 0.2)):
+def vf_sinefield(
+    g, f, t, S, bri=0.5, freq=(0.13, 0.17, 0.07, 0.09), speed=(0.5, -0.4, -0.3, 0.2)
+):
     """Layered sine field. General purpose background/texture."""
-    v1 = np.sin(g.cc*freq[0] + t*speed[0]) * np.sin(g.rr*freq[1] - t*speed[1]) * 0.5 + 0.5
-    v2 = np.sin(g.cc*freq[2] - t*speed[2] + g.rr*freq[3]) * 0.4 + 0.5
-    v3 = np.sin(g.dist_n*5 + t*0.2) * 0.3 + 0.4
-    return np.clip((v1*0.35 + v2*0.35 + v3*0.3) * bri * (0.6 + f.get("rms",0.3)*0.6), 0, 1)
+    v1 = (
+        np.sin(g.cc * freq[0] + t * speed[0])
+        * np.sin(g.rr * freq[1] - t * speed[1])
+        * 0.5
+        + 0.5
+    )
+    v2 = np.sin(g.cc * freq[2] - t * speed[2] + g.rr * freq[3]) * 0.4 + 0.5
+    v3 = np.sin(g.dist_n * 5 + t * 0.2) * 0.3 + 0.4
+    return np.clip(
+        (v1 * 0.35 + v2 * 0.35 + v3 * 0.3) * bri * (0.6 + f.get("rms", 0.3) * 0.6), 0, 1
+    )
+
 
 def vf_smooth_noise(g, f, t, S, octaves=3, bri=0.5):
     """Multi-octave sine approximation of Perlin noise."""
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for i in range(octaves):
-        freq = 0.05 * (2 ** i); amp = 0.5 / (i + 1)
+        freq = 0.05 * (2**i)
+        amp = 0.5 / (i + 1)
         phase = t * (0.3 + i * 0.2)
-        val = val + np.sin(g.cc*freq + phase) * np.cos(g.rr*freq*0.7 - phase*0.5) * amp
+        val = (
+            val
+            + np.sin(g.cc * freq + phase)
+            * np.cos(g.rr * freq * 0.7 - phase * 0.5)
+            * amp
+        )
     return np.clip(val * 0.5 + 0.5, 0, 1) * bri
+
 
 def vf_rings(g, f, t, S, n_base=6, spacing_base=4):
     """Concentric rings, bass-driven count and wobble."""
-    n = int(n_base + f.get("sub_r",0.3)*25 + f.get("bass",0.3)*10)
-    sp = spacing_base + f.get("bass_r",0.3)*7 + f.get("rms",0.3)*3
+    n = int(n_base + f.get("sub_r", 0.3) * 25 + f.get("bass", 0.3) * 10)
+    sp = spacing_base + f.get("bass_r", 0.3) * 7 + f.get("rms", 0.3) * 3
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for ri in range(n):
-        rad = (ri+1)*sp + f.get("bdecay",0)*15
-        wobble = f.get("mid_r",0.3)*5*np.sin(g.angle*3+t*4)
+        rad = (ri + 1) * sp + f.get("bdecay", 0) * 15
+        wobble = f.get("mid_r", 0.3) * 5 * np.sin(g.angle * 3 + t * 4)
         rd = np.abs(g.dist - rad - wobble)
-        th = 1 + f.get("sub",0.3)*3
-        val = np.maximum(val, np.clip((1 - rd/th) * (0.4 + f.get("bass",0.3)*0.8), 0, 1))
+        th = 1 + f.get("sub", 0.3) * 3
+        val = np.maximum(
+            val, np.clip((1 - rd / th) * (0.4 + f.get("bass", 0.3) * 0.8), 0, 1)
+        )
     return val
+
 
 def vf_spiral(g, f, t, S, n_arms=3, tightness=2.5):
     """Logarithmic spiral arms."""
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for ai in range(n_arms):
-        offset = ai * 2*np.pi / n_arms
+        offset = ai * 2 * np.pi / n_arms
         log_r = np.log(g.dist + 1) * tightness
         arm_phase = g.angle + offset - log_r + t * 0.8
         arm_val = np.clip(np.cos(arm_phase * n_arms) * 0.6 + 0.2, 0, 1)
-        arm_val *= (0.4 + f.get("rms",0.3)*0.6) * np.clip(1 - g.dist_n*0.5, 0.2, 1)
+        arm_val *= (0.4 + f.get("rms", 0.3) * 0.6) * np.clip(1 - g.dist_n * 0.5, 0.2, 1)
         val = np.maximum(val, arm_val)
     return val
+
 
 def vf_tunnel(g, f, t, S, speed=3.0, complexity=6):
     """Tunnel depth effect — infinite zoom feeling."""
     tunnel_d = 1.0 / (g.dist_n + 0.1)
-    v1 = np.sin(tunnel_d*2 - t*speed) * 0.45 + 0.55
-    v2 = np.sin(g.angle*complexity + tunnel_d*1.5 - t*2) * 0.35 + 0.55
-    return np.clip(v1*0.5 + v2*0.5, 0, 1)
+    v1 = np.sin(tunnel_d * 2 - t * speed) * 0.45 + 0.55
+    v2 = np.sin(g.angle * complexity + tunnel_d * 1.5 - t * 2) * 0.35 + 0.55
+    return np.clip(v1 * 0.5 + v2 * 0.5, 0, 1)
+
 
 def vf_vortex(g, f, t, S, twist=3.0):
     """Twisting radial pattern — distance modulates angle."""
     twisted = g.angle + g.dist_n * twist * np.sin(t * 0.5)
     val = np.sin(twisted * 4 - t * 2) * 0.5 + 0.5
-    return np.clip(val * (0.5 + f.get("bass",0.3)*0.8), 0, 1)
+    return np.clip(val * (0.5 + f.get("bass", 0.3) * 0.8), 0, 1)
+
 
 def vf_interference(g, f, t, S, n_waves=6):
     """Overlapping sine waves creating moire patterns."""
@@ -824,29 +993,39 @@ def vf_interference(g, f, t, S, n_waves=6):
     vals = np.zeros((g.rows, g.cols), dtype=np.float32)
     for i in range(min(n_waves, len(drivers))):
         angle = i * np.pi / n_waves
-        freq = 0.06 + i * 0.03; sp = 0.5 + i * 0.3
+        freq = 0.06 + i * 0.03
+        sp = 0.5 + i * 0.3
         proj = g.cc * np.cos(angle) + g.rr * np.sin(angle)
-        vals = vals + np.sin(proj*freq + t*sp) * f.get(drivers[i], 0.3) * 2.5
+        vals = vals + np.sin(proj * freq + t * sp) * f.get(drivers[i], 0.3) * 2.5
     return np.clip(vals * 0.12 + 0.45, 0.1, 1)
+
 
 def vf_aurora(g, f, t, S, n_bands=3):
     """Horizontal aurora bands."""
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for i in range(n_bands):
-        fr = 0.08 + i*0.04; fc = 0.012 + i*0.008
-        sr = 0.7 + i*0.3; sc = 0.18 + i*0.12
-        val = val + np.sin(g.rr*fr + t*sr) * np.sin(g.cc*fc + t*sc) * (0.6/n_bands)
-    return np.clip(val * (f.get("lomid_r",0.3)*3 + 0.2), 0, 0.7)
+        fr = 0.08 + i * 0.04
+        fc = 0.012 + i * 0.008
+        sr = 0.7 + i * 0.3
+        sc = 0.18 + i * 0.12
+        val = val + np.sin(g.rr * fr + t * sr) * np.sin(g.cc * fc + t * sc) * (
+            0.6 / n_bands
+        )
+    return np.clip(val * (f.get("lomid_r", 0.3) * 3 + 0.2), 0, 0.7)
+
 
 def vf_ripple(g, f, t, S, sources=None, freq=0.3, damping=0.02):
     """Concentric ripples from point sources."""
-    if sources is None: sources = [(0.5, 0.5)]
+    if sources is None:
+        sources = [(0.5, 0.5)]
     val = np.zeros((g.rows, g.cols), dtype=np.float32)
     for ry, rx in sources:
-        dy = g.rr - g.rows*ry; dx = g.cc - g.cols*rx
+        dy = g.rr - g.rows * ry
+        dx = g.cc - g.cols * rx
         d = np.sqrt(dy**2 + dx**2)
-        val = val + np.sin(d*freq - t*4) * np.exp(-d*damping) * 0.5
+        val = val + np.sin(d * freq - t * 4) * np.exp(-d * damping) * 0.5
     return np.clip(val + 0.5, 0, 1)
+
 
 def vf_plasma(g, f, t, S):
     """Classic plasma: sum of sines at different orientations and speeds."""
@@ -856,14 +1035,22 @@ def vf_plasma(g, f, t, S):
     v = v + np.sin(g.dist_n * 4 - t * 0.8) * 0.3
     return np.clip(v * 0.5 + 0.5, 0, 1)
 
+
 def vf_diamond(g, f, t, S, freq=0.15):
     """Diamond/checkerboard pattern."""
-    val = np.abs(np.sin(g.cc * freq + t * 0.5)) * np.abs(np.sin(g.rr * freq * 1.2 - t * 0.3))
-    return np.clip(val * (0.6 + f.get("rms",0.3)*0.8), 0, 1)
+    val = np.abs(np.sin(g.cc * freq + t * 0.5)) * np.abs(
+        np.sin(g.rr * freq * 1.2 - t * 0.3)
+    )
+    return np.clip(val * (0.6 + f.get("rms", 0.3) * 0.8), 0, 1)
+
 
 def vf_noise_static(g, f, t, S, density=0.4):
     """Random noise — different each frame. Non-deterministic."""
-    return np.random.random((g.rows, g.cols)).astype(np.float32) * density * (0.5 + f.get("rms",0.3)*0.5)
+    return (
+        np.random.random((g.rows, g.cols)).astype(np.float32)
+        * density
+        * (0.5 + f.get("rms", 0.3) * 0.5)
+    )
 ```
 
 #### Noise-Based Fields (organic, non-periodic)
@@ -876,17 +1063,20 @@ def _hash2d(ix, iy):
     # Good-quality hash via large prime mixing
     n = ix * 374761393 + iy * 668265263
     n = (n ^ (n >> 13)) * 1274126177
-    return ((n ^ (n >> 16)) & 0x7fffffff).astype(np.float32) / 0x7fffffff
+    return ((n ^ (n >> 16)) & 0x7FFFFFFF).astype(np.float32) / 0x7FFFFFFF
+
 
 def _smoothstep(t):
     """Hermite smoothstep: 3t^2 - 2t^3. Smooth interpolation in [0,1]."""
     t = np.clip(t, 0, 1)
     return t * t * (3 - 2 * t)
 
+
 def _smootherstep(t):
     """Perlin's improved smoothstep: 6t^5 - 15t^4 + 10t^3. C2-continuous."""
     t = np.clip(t, 0, 1)
     return t * t * t * (t * (t * 6 - 15) + 10)
+
 
 def _value_noise_2d(x, y):
     """2D value noise at arbitrary float coordinates. Returns float32 in [0,1].
@@ -905,6 +1095,7 @@ def _value_noise_2d(x, y):
     nx1 = n01 * (1 - fx) + n11 * fx
     return nx0 * (1 - fy) + nx1 * fy
 
+
 def vf_noise(g, f, t, S, freq=0.08, speed=0.3, bri=0.7):
     """Value noise. Smooth, organic, no axis alignment artifacts.
     freq: spatial frequency (higher = finer detail).
@@ -913,8 +1104,10 @@ def vf_noise(g, f, t, S, freq=0.08, speed=0.3, bri=0.7):
     y = g.rr * freq * 0.8 - t * speed * 0.4
     return np.clip(_value_noise_2d(x, y) * bri, 0, 1)
 
-def vf_fbm(g, f, t, S, octaves=5, freq=0.06, lacunarity=2.0, gain=0.5,
-           speed=0.2, bri=0.8):
+
+def vf_fbm(
+    g, f, t, S, octaves=5, freq=0.06, lacunarity=2.0, gain=0.5, speed=0.2, bri=0.8
+):
     """Fractal Brownian Motion — octaved noise with lacunarity/gain control.
     The standard building block for clouds, terrain, smoke, organic textures.
 
@@ -937,11 +1130,13 @@ def vf_fbm(g, f, t, S, octaves=5, freq=0.06, lacunarity=2.0, gain=0.5,
         f_x *= lacunarity
         f_y *= lacunarity
     # Normalize to [0,1]
-    max_amp = (1 - gain ** octaves) / (1 - gain) if gain != 1 else octaves
+    max_amp = (1 - gain**octaves) / (1 - gain) if gain != 1 else octaves
     return np.clip(val / max_amp * bri * (0.6 + f.get("rms", 0.3) * 0.6), 0, 1)
 
-def vf_domain_warp(g, f, t, S, base_fn=None, warp_fn=None,
-                   warp_strength=15.0, freq=0.06, speed=0.2):
+
+def vf_domain_warp(
+    g, f, t, S, base_fn=None, warp_fn=None, warp_strength=15.0, freq=0.06, speed=0.2
+):
     """Domain warping — feed one noise field's output as coordinate offsets
     into another noise field. Produces flowing, melting organic distortion.
     Signature technique of high-end generative art (Inigo Quilez).
@@ -962,22 +1157,34 @@ def vf_domain_warp(g, f, t, S, base_fn=None, warp_fn=None,
     if base_fn is not None:
         # Create a temporary grid-like object with warped coords
         # Simplification: evaluate base_fn with modified coordinates
-        val = _value_noise_2d(warped_cc * freq * 0.8 + t * speed * 0.5,
-                              warped_rr * freq * 0.7 - t * speed * 0.3)
+        val = _value_noise_2d(
+            warped_cc * freq * 0.8 + t * speed * 0.5,
+            warped_rr * freq * 0.7 - t * speed * 0.3,
+        )
     else:
         # Default: fbm at warped coordinates
         val = np.zeros((g.rows, g.cols), dtype=np.float32)
         amp = 1.0
         fx, fy = freq * 0.8, freq * 0.7
         for i in range(4):
-            val = val + _value_noise_2d(warped_cc * fx + t * speed * 0.5 + i * 13.7,
-                                        warped_rr * fy - t * speed * 0.3 + i * 27.3) * amp
-            amp *= 0.5; fx *= 2.0; fy *= 2.0
+            val = (
+                val
+                + _value_noise_2d(
+                    warped_cc * fx + t * speed * 0.5 + i * 13.7,
+                    warped_rr * fy - t * speed * 0.3 + i * 27.3,
+                )
+                * amp
+            )
+            amp *= 0.5
+            fx *= 2.0
+            fy *= 2.0
         val = val / 1.875  # normalize 4-octave sum
     return np.clip(val * 0.8, 0, 1)
 
-def vf_voronoi(g, f, t, S, n_cells=20, speed=0.3, edge_width=1.5,
-               mode="distance", seed=42):
+
+def vf_voronoi(
+    g, f, t, S, n_cells=20, speed=0.3, edge_width=1.5, mode="distance", seed=42
+):
     """Voronoi diagram as value field. Proper implementation with
     nearest/second-nearest distance for cell interiors and edges.
 
@@ -1024,9 +1231,19 @@ def vf_voronoi(g, f, t, S, n_cells=20, speed=0.3, edge_width=1.5,
 These use persistent state `S` to evolve patterns frame-by-frame. They produce complexity that can't be achieved with stateless math.
 
 ```python
-def vf_reaction_diffusion(g, f, t, S, feed=0.055, kill=0.062,
-                          da=1.0, db=0.5, dt=1.0, steps_per_frame=8,
-                          init_mode="spots"):
+def vf_reaction_diffusion(
+    g,
+    f,
+    t,
+    S,
+    feed=0.055,
+    kill=0.062,
+    da=1.0,
+    db=0.5,
+    dt=1.0,
+    steps_per_frame=8,
+    init_mode="spots",
+):
     """Gray-Scott reaction-diffusion model. Produces coral, leopard spots,
     mitosis, worm-like, and labyrinthine patterns depending on feed/kill.
 
@@ -1057,10 +1274,10 @@ def vf_reaction_diffusion(g, f, t, S, feed=0.055, kill=0.062,
             rng = np.random.RandomState(42)
             for _ in range(max(3, g.rows * g.cols // 200)):
                 r, c = rng.randint(2, g.rows - 2), rng.randint(2, g.cols - 2)
-                B[r - 1:r + 2, c - 1:c + 2] = 1.0
+                B[r - 1 : r + 2, c - 1 : c + 2] = 1.0
         elif init_mode == "center":
             cr, cc = g.rows // 2, g.cols // 2
-            B[cr - 3:cr + 3, cc - 3:cc + 3] = 1.0
+            B[cr - 3 : cr + 3, cc - 3 : cc + 3] = 1.0
         elif init_mode == "ring":
             mask = (g.dist_n > 0.2) & (g.dist_n < 0.3)
             B[mask] = 1.0
@@ -1081,12 +1298,16 @@ def vf_reaction_diffusion(g, f, t, S, feed=0.055, kill=0.062,
         # [0.05, 0.2, 0.05]
         pA = np.pad(A, 1, mode="wrap")
         pB = np.pad(B, 1, mode="wrap")
-        lapA = (pA[:-2, 1:-1] + pA[2:, 1:-1] + pA[1:-1, :-2] + pA[1:-1, 2:]) * 0.2 \
-             + (pA[:-2, :-2] + pA[:-2, 2:] + pA[2:, :-2] + pA[2:, 2:]) * 0.05 \
-             - A * 1.0
-        lapB = (pB[:-2, 1:-1] + pB[2:, 1:-1] + pB[1:-1, :-2] + pB[1:-1, 2:]) * 0.2 \
-             + (pB[:-2, :-2] + pB[:-2, 2:] + pB[2:, :-2] + pB[2:, 2:]) * 0.05 \
-             - B * 1.0
+        lapA = (
+            (pA[:-2, 1:-1] + pA[2:, 1:-1] + pA[1:-1, :-2] + pA[1:-1, 2:]) * 0.2
+            + (pA[:-2, :-2] + pA[:-2, 2:] + pA[2:, :-2] + pA[2:, 2:]) * 0.05
+            - A * 1.0
+        )
+        lapB = (
+            (pB[:-2, 1:-1] + pB[2:, 1:-1] + pB[1:-1, :-2] + pB[1:-1, 2:]) * 0.2
+            + (pB[:-2, :-2] + pB[:-2, 2:] + pB[2:, :-2] + pB[2:, 2:]) * 0.05
+            - B * 1.0
+        )
         ABB = A * B * B
         A = A + (da * lapA - ABB + f_mod * (1 - A)) * dt
         B = B + (db * lapB + ABB - (f_mod + k_mod) * B) * dt
@@ -1098,8 +1319,20 @@ def vf_reaction_diffusion(g, f, t, S, feed=0.055, kill=0.062,
     # Output B chemical as value (the visible pattern)
     return np.clip(B * 2.0, 0, 1)
 
-def vf_game_of_life(g, f, t, S, rule="life", birth=None, survive=None,
-                    steps_per_frame=1, density=0.3, fade=0.92, seed=42):
+
+def vf_game_of_life(
+    g,
+    f,
+    t,
+    S,
+    rule="life",
+    birth=None,
+    survive=None,
+    steps_per_frame=1,
+    density=0.3,
+    fade=0.92,
+    seed=42,
+):
     """Cellular automaton as value field with analog fade trails.
     Grid cells are born/die by neighbor count rules. Dead cells fade
     gradually instead of snapping to black, producing ghost trails.
@@ -1115,10 +1348,10 @@ def vf_game_of_life(g, f, t, S, rule="life", birth=None, survive=None,
     fade: how fast dead cells dim (0.9 = slow trails, 0.5 = fast)
     """
     presets = {
-        "life":      ({3}, {2, 3}),
-        "coral":     ({3}, {4, 5, 6, 7, 8}),
-        "maze":      ({3}, {1, 2, 3, 4, 5}),
-        "anneal":    ({4, 6, 7, 8}, {3, 5, 6, 7, 8}),
+        "life": ({3}, {2, 3}),
+        "coral": ({3}, {4, 5, 6, 7, 8}),
+        "maze": ({3}, {1, 2, 3, 4, 5}),
+        "anneal": ({4, 6, 7, 8}, {3, 5, 6, 7, 8}),
         "day_night": ({3, 6, 7, 8}, {3, 4, 6, 7, 8}),
     }
     if birth is None or survive is None:
@@ -1141,9 +1374,16 @@ def vf_game_of_life(g, f, t, S, rule="life", birth=None, survive=None,
     for _ in range(steps_per_frame):
         # Count neighbors (toroidal wrap)
         padded = np.pad(grid > 0.5, 1, mode="wrap").astype(np.int8)
-        neighbors = (padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
-                     padded[1:-1, :-2] +                     padded[1:-1, 2:] +
-                     padded[2:, :-2]  + padded[2:, 1:-1]  + padded[2:, 2:])
+        neighbors = (
+            padded[:-2, :-2]
+            + padded[:-2, 1:-1]
+            + padded[:-2, 2:]
+            + padded[1:-1, :-2]
+            + padded[1:-1, 2:]
+            + padded[2:, :-2]
+            + padded[2:, 1:-1]
+            + padded[2:, 2:]
+        )
         alive = grid > 0.5
         new_alive = np.zeros_like(grid, dtype=bool)
         for b in birth:
@@ -1158,9 +1398,19 @@ def vf_game_of_life(g, f, t, S, rule="life", birth=None, survive=None,
     S[key + "_display"] = display
     return np.clip(display, 0, 1)
 
-def vf_strange_attractor(g, f, t, S, attractor="clifford",
-                         n_points=50000, warmup=500, bri=0.8, seed=42,
-                         params=None):
+
+def vf_strange_attractor(
+    g,
+    f,
+    t,
+    S,
+    attractor="clifford",
+    n_points=50000,
+    warmup=500,
+    bri=0.8,
+    seed=42,
+    params=None,
+):
     """Strange attractor projected to 2D density field.
     Iterates N points through attractor equations, bins to grid,
     produces a density map. Elegant, non-repeating curves.
@@ -1239,14 +1489,21 @@ def sdf_render(dist, edge_width=1.5, invert=False):
     """Convert signed distance to value field [0,1].
     edge_width: controls anti-aliasing / softness of the boundary.
     invert: True = bright inside shape, False = bright outside."""
-    val = 1.0 - np.clip(dist / edge_width, 0, 1) if not invert else np.clip(dist / edge_width, 0, 1)
+    val = (
+        1.0 - np.clip(dist / edge_width, 0, 1)
+        if not invert
+        else np.clip(dist / edge_width, 0, 1)
+    )
     return np.clip(val, 0, 1)
+
 
 def sdf_glow(dist, falloff=0.05):
     """Render SDF as glowing outline — bright at boundary, fading both directions."""
     return np.clip(np.exp(-np.abs(dist) * falloff), 0, 1)
 
+
 # --- Primitives ---
+
 
 def sdf_circle(g, cx_frac=0.5, cy_frac=0.5, radius=0.3):
     """Circle SDF. cx/cy/radius in normalized [0,1] coordinates."""
@@ -1254,18 +1511,21 @@ def sdf_circle(g, cx_frac=0.5, cy_frac=0.5, radius=0.3):
     dy = g.rr / g.rows - cy_frac
     return np.sqrt(dx**2 + dy**2) - radius
 
+
 def sdf_box(g, cx_frac=0.5, cy_frac=0.5, w=0.3, h=0.2, round_r=0.0):
     """Rounded rectangle SDF."""
     dx = np.abs(g.cc / g.cols - cx_frac) * (g.cols / g.rows) - w + round_r
     dy = np.abs(g.rr / g.rows - cy_frac) - h + round_r
-    outside = np.sqrt(np.maximum(dx, 0)**2 + np.maximum(dy, 0)**2)
+    outside = np.sqrt(np.maximum(dx, 0) ** 2 + np.maximum(dy, 0) ** 2)
     inside = np.minimum(np.maximum(dx, dy), 0)
     return outside + inside - round_r
+
 
 def sdf_ring(g, cx_frac=0.5, cy_frac=0.5, radius=0.3, thickness=0.03):
     """Ring (annulus) SDF."""
     d = sdf_circle(g, cx_frac, cy_frac, radius)
     return np.abs(d) - thickness
+
 
 def sdf_line(g, x0=0.2, y0=0.5, x1=0.8, y1=0.5, thickness=0.01):
     """Line segment SDF between two points (normalized coords)."""
@@ -1277,6 +1537,7 @@ def sdf_line(g, x0=0.2, y0=0.5, x1=0.8, y1=0.5, thickness=0.01):
     dx = ax - bx * h
     dy = ay - by * h
     return np.sqrt(dx**2 + dy**2) - thickness
+
 
 def sdf_triangle(g, cx=0.5, cy=0.5, size=0.25):
     """Equilateral triangle SDF centered at (cx, cy)."""
@@ -1292,6 +1553,7 @@ def sdf_triangle(g, cx=0.5, cy=0.5, size=0.25):
     px2 = np.clip(px2, -2.0, 0.0)
     return -np.sqrt(px2**2 + py2**2) * np.sign(py2) * size
 
+
 def sdf_star(g, cx=0.5, cy=0.5, n_points=5, outer_r=0.25, inner_r=0.12):
     """Star polygon SDF — n-pointed star."""
     px = (g.cc / g.cols - cx) * (g.cols / g.rows)
@@ -1302,8 +1564,11 @@ def sdf_star(g, cx=0.5, cy=0.5, n_points=5, outer_r=0.25, inner_r=0.12):
     wedge = 2 * np.pi / n_points
     a = np.abs((angle % wedge) - wedge / 2)
     # Interpolate radius between inner and outer
-    r_at_angle = inner_r + (outer_r - inner_r) * np.clip(np.cos(a * n_points) * 0.5 + 0.5, 0, 1)
+    r_at_angle = inner_r + (outer_r - inner_r) * np.clip(
+        np.cos(a * n_points) * 0.5 + 0.5, 0, 1
+    )
     return dist - r_at_angle
+
 
 def sdf_heart(g, cx=0.5, cy=0.45, size=0.25):
     """Heart shape SDF."""
@@ -1311,23 +1576,28 @@ def sdf_heart(g, cx=0.5, cy=0.45, size=0.25):
     py = -(g.rr / g.rows - cy) / size + 0.3  # flip y, offset
     px = np.abs(px)
     cond = (px + py) > 1.0
-    d1 = np.sqrt((px - 0.25)**2 + (py - 0.75)**2) - np.sqrt(2.0) / 4.0
-    d2 = np.sqrt((px + py - 1.0)**2) / np.sqrt(2.0)
+    d1 = np.sqrt((px - 0.25) ** 2 + (py - 0.75) ** 2) - np.sqrt(2.0) / 4.0
+    d2 = np.sqrt((px + py - 1.0) ** 2) / np.sqrt(2.0)
     return np.where(cond, d1, d2) * size
 
+
 # --- Combinators ---
+
 
 def sdf_union(d1, d2):
     """Boolean union — shape is wherever either SDF is inside."""
     return np.minimum(d1, d2)
 
+
 def sdf_intersect(d1, d2):
     """Boolean intersection — shape is where both SDFs overlap."""
     return np.maximum(d1, d2)
 
+
 def sdf_subtract(d1, d2):
     """Boolean subtraction — d1 minus d2."""
     return np.maximum(d1, -d2)
+
 
 def sdf_smooth_union(d1, d2, k=0.1):
     """Smooth minimum (polynomial) — blends shapes with rounded join.
@@ -1335,28 +1605,46 @@ def sdf_smooth_union(d1, d2, k=0.1):
     h = np.clip(0.5 + 0.5 * (d2 - d1) / k, 0, 1)
     return d2 * (1 - h) + d1 * h - k * h * (1 - h)
 
+
 def sdf_smooth_subtract(d1, d2, k=0.1):
     """Smooth subtraction — d1 minus d2 with rounded edge."""
     return sdf_smooth_union(d1, -d2, k)
+
 
 def sdf_repeat(g, sdf_fn, spacing_x=0.25, spacing_y=0.25, **sdf_kwargs):
     """Tile an SDF primitive infinitely. spacing in normalized coords."""
     # Modular coordinates
     mod_cc = (g.cc / g.cols) % spacing_x - spacing_x / 2
     mod_rr = (g.rr / g.rows) % spacing_y - spacing_y / 2
+
     # Create modified grid-like arrays for the SDF
     # This is a simplified approach — build a temporary namespace
     class ModGrid:
         pass
+
     mg = ModGrid()
-    mg.cc = mod_cc * g.cols; mg.rr = mod_rr * g.rows
-    mg.cols = g.cols; mg.rows = g.rows
+    mg.cc = mod_cc * g.cols
+    mg.rr = mod_rr * g.rows
+    mg.cols = g.cols
+    mg.rows = g.rows
     return sdf_fn(mg, **sdf_kwargs)
+
 
 # --- SDF as Value Field ---
 
-def vf_sdf(g, f, t, S, sdf_fn=sdf_circle, edge_width=1.5, glow=False,
-           glow_falloff=0.03, animate=True, **sdf_kwargs):
+
+def vf_sdf(
+    g,
+    f,
+    t,
+    S,
+    sdf_fn=sdf_circle,
+    edge_width=1.5,
+    glow=False,
+    glow_falloff=0.03,
+    animate=True,
+    **sdf_kwargs,
+):
     """Wrap any SDF primitive as a standard vf_* value field.
     If animate=True, applies slow rotation and breathing to the shape."""
     if animate:
@@ -1375,58 +1663,82 @@ These produce float32 hue arrays [0,1]. Independently combinable with any value 
 ```python
 def hf_fixed(hue):
     """Single hue everywhere."""
+
     def fn(g, f, t, S):
         return np.full((g.rows, g.cols), hue, dtype=np.float32)
+
     return fn
+
 
 def hf_angle(offset=0.0):
     """Hue mapped to angle from center — rainbow wheel."""
+
     def fn(g, f, t, S):
         return (g.angle / (2 * np.pi) + offset + t * 0.05) % 1.0
+
     return fn
+
 
 def hf_distance(base=0.5, scale=0.02):
     """Hue mapped to distance from center."""
+
     def fn(g, f, t, S):
         return (base + g.dist * scale + t * 0.03) % 1.0
+
     return fn
+
 
 def hf_time_cycle(speed=0.1):
     """Hue cycles uniformly over time."""
+
     def fn(g, f, t, S):
         return np.full((g.rows, g.cols), (t * speed) % 1.0, dtype=np.float32)
+
     return fn
+
 
 def hf_audio_cent():
     """Hue follows spectral centroid — timbral color shifting."""
+
     def fn(g, f, t, S):
         return np.full((g.rows, g.cols), f.get("cent", 0.5) * 0.3, dtype=np.float32)
+
     return fn
+
 
 def hf_gradient_h(start=0.0, end=1.0):
     """Left-to-right hue gradient."""
+
     def fn(g, f, t, S):
         h = np.broadcast_to(
-            start + (g.cc / g.cols) * (end - start),
-            (g.rows, g.cols)
+            start + (g.cc / g.cols) * (end - start), (g.rows, g.cols)
         ).copy()  # .copy() is CRITICAL — see troubleshooting.md
         return h % 1.0
+
     return fn
+
 
 def hf_gradient_v(start=0.0, end=1.0):
     """Top-to-bottom hue gradient."""
+
     def fn(g, f, t, S):
         h = np.broadcast_to(
-            start + (g.rr / g.rows) * (end - start),
-            (g.rows, g.cols)
+            start + (g.rr / g.rows) * (end - start), (g.rows, g.cols)
         ).copy()
         return h % 1.0
+
     return fn
+
 
 def hf_plasma(speed=0.3):
     """Plasma-style hue field — organic color variation."""
+
     def fn(g, f, t, S):
-        return (np.sin(g.cc*0.02 + t*speed)*0.5 + np.sin(g.rr*0.015 + t*speed*0.7)*0.5) % 1.0
+        return (
+            np.sin(g.cc * 0.02 + t * speed) * 0.5
+            + np.sin(g.rr * 0.015 + t * speed * 0.7) * 0.5
+        ) % 1.0
+
     return fn
 ```
 
@@ -1448,15 +1760,19 @@ def uv_rotate(g, angle):
     dy = g.rr - cy
     return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
 
+
 def uv_scale(g, sx=1.0, sy=1.0, cx_frac=0.5, cy_frac=0.5):
     """Scale UV coordinates around a center point.
     sx, sy > 1 = zoom in (fewer repeats), < 1 = zoom out (more repeats)."""
-    cx = g.cols * cx_frac; cy = g.rows * cy_frac
+    cx = g.cols * cx_frac
+    cy = g.rows * cy_frac
     return cx + (g.cc - cx) / sx, cy + (g.rr - cy) / sy
+
 
 def uv_skew(g, kx=0.0, ky=0.0):
     """Skew UV coordinates. kx shears horizontally, ky vertically."""
     return g.cc + g.rr * kx, g.rr + g.cc * ky
+
 
 def uv_tile(g, nx=3.0, ny=3.0, mirror=False):
     """Tile UV coordinates. nx, ny = number of repeats.
@@ -1470,11 +1786,13 @@ def uv_tile(g, nx=3.0, ny=3.0, mirror=False):
         v = np.where(flip_v, 1.0 - v, v)
     return u * g.cols, v * g.rows
 
+
 def uv_polar(g):
     """Convert Cartesian to polar UV. Returns (angle_as_cc, dist_as_rr).
     Use to make any linear effect radial."""
     # Angle wraps [0, cols), distance wraps [0, rows)
     return g.angle / (2 * np.pi) * g.cols, g.dist_n * g.rows
+
 
 def uv_cartesian_from_polar(g):
     """Convert polar-addressed effects back to Cartesian.
@@ -1484,16 +1802,20 @@ def uv_cartesian_from_polar(g):
     cx, cy = g.cols / 2.0, g.rows / 2.0
     return cx + radius * np.cos(angle) * cx, cy + radius * np.sin(angle) * cy
 
+
 def uv_twist(g, amount=2.0):
     """Twist: rotation increases with distance from center. Creates spiral distortion."""
     twist_angle = g.dist_n * amount
     return uv_rotate_raw(g.cc, g.rr, g.cols / 2, g.rows / 2, twist_angle)
 
+
 def uv_rotate_raw(cc, rr, cx, cy, angle):
     """Raw rotation on arbitrary coordinate arrays."""
     cos_a, sin_a = np.cos(angle), np.sin(angle)
-    dx = cc - cx; dy = rr - cy
+    dx = cc - cx
+    dy = rr - cy
     return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
+
 
 def uv_fisheye(g, strength=1.5):
     """Fisheye / barrel distortion on UV coordinates."""
@@ -1505,12 +1827,14 @@ def uv_fisheye(g, strength=1.5):
     scale = np.where(r > 0, r_distort / (r + 1e-10), 1.0)
     return cx + dx * scale * cx, cy + dy * scale * cy
 
+
 def uv_wave(g, t, freq=0.1, amp=3.0, axis="x"):
     """Sinusoidal coordinate displacement. Wobbles the UV space."""
     if axis == "x":
         return g.cc + np.sin(g.rr * freq + t * 3) * amp, g.rr
     else:
         return g.cc, g.rr + np.sin(g.cc * freq + t * 3) * amp
+
 
 def uv_mobius(g, a=1.0, b=0.0, c=0.0, d=1.0):
     """Möbius transformation (conformal map): f(z) = (az + b) / (cz + d).
@@ -1539,40 +1863,60 @@ Transforms modify what coordinates a value field sees. Wrap the transform around
 # Rotate a plasma field 45 degrees
 def vf_rotated_plasma(g, f, t, S):
     rc, rr = uv_rotate(g, np.pi / 4 + t * 0.1)
+
     class TG:  # transformed grid
         pass
-    tg = TG(); tg.cc = rc; tg.rr = rr
-    tg.rows = g.rows; tg.cols = g.cols
-    tg.dist_n = g.dist_n; tg.angle = g.angle; tg.dist = g.dist
+
+    tg = TG()
+    tg.cc = rc
+    tg.rr = rr
+    tg.rows = g.rows
+    tg.cols = g.cols
+    tg.dist_n = g.dist_n
+    tg.angle = g.angle
+    tg.dist = g.dist
     return vf_plasma(tg, f, t, S)
+
 
 # Tile a vortex 3x3 with mirror
 def vf_tiled_vortex(g, f, t, S):
     tc, tr = uv_tile(g, 3, 3, mirror=True)
+
     class TG:
         pass
-    tg = TG(); tg.cc = tc; tg.rr = tr
-    tg.rows = g.rows; tg.cols = g.cols
-    tg.dist = np.sqrt((tc - g.cols/2)**2 + (tr - g.rows/2)**2)
+
+    tg = TG()
+    tg.cc = tc
+    tg.rr = tr
+    tg.rows = g.rows
+    tg.cols = g.cols
+    tg.dist = np.sqrt((tc - g.cols / 2) ** 2 + (tr - g.rows / 2) ** 2)
     tg.dist_n = tg.dist / (tg.dist.max() + 1e-10)
-    tg.angle = np.arctan2(tr - g.rows/2, tc - g.cols/2)
+    tg.angle = np.arctan2(tr - g.rows / 2, tc - g.cols / 2)
     return vf_vortex(tg, f, t, S)
+
 
 # Helper: create transformed grid from coordinate arrays
 def make_tgrid(g, new_cc, new_rr):
     """Build a grid-like object with transformed coordinates.
     Preserves rows/cols for sizing, recomputes polar coords."""
+
     class TG:
         pass
+
     tg = TG()
-    tg.cc = new_cc; tg.rr = new_rr
-    tg.rows = g.rows; tg.cols = g.cols
+    tg.cc = new_cc
+    tg.rr = new_rr
+    tg.rows = g.rows
+    tg.cols = g.cols
     cx, cy = g.cols / 2.0, g.rows / 2.0
-    dx = new_cc - cx; dy = new_rr - cy
+    dx = new_cc - cx
+    dy = new_rr - cy
     tg.dist = np.sqrt(dx**2 + dy**2)
     tg.dist_n = tg.dist / (max(cx, cy) + 1e-10)
     tg.angle = np.arctan2(dy, dx)
-    tg.dx = dx; tg.dy = dy
+    tg.dx = dx
+    tg.dy = dy
     tg.dx_n = dx / max(g.cols, 1)
     tg.dy_n = dy / max(g.rows, 1)
     return tg
@@ -1589,32 +1933,68 @@ Tools for smooth, intentional parameter evolution over time. Replaces the defaul
 Standard animation easing curves. All take `t` in [0,1] and return [0,1]:
 
 ```python
-def ease_linear(t): return t
-def ease_in_quad(t): return t * t
-def ease_out_quad(t): return t * (2 - t)
-def ease_in_out_quad(t): return np.where(t < 0.5, 2*t*t, -1 + (4-2*t)*t)
-def ease_in_cubic(t): return t**3
-def ease_out_cubic(t): return (t - 1)**3 + 1
+def ease_linear(t):
+    return t
+
+
+def ease_in_quad(t):
+    return t * t
+
+
+def ease_out_quad(t):
+    return t * (2 - t)
+
+
+def ease_in_out_quad(t):
+    return np.where(t < 0.5, 2 * t * t, -1 + (4 - 2 * t) * t)
+
+
+def ease_in_cubic(t):
+    return t**3
+
+
+def ease_out_cubic(t):
+    return (t - 1) ** 3 + 1
+
+
 def ease_in_out_cubic(t):
-    return np.where(t < 0.5, 4*t**3, 1 - (-2*t + 2)**3 / 2)
-def ease_in_expo(t): return np.where(t == 0, 0, 2**(10*(t-1)))
-def ease_out_expo(t): return np.where(t == 1, 1, 1 - 2**(-10*t))
+    return np.where(t < 0.5, 4 * t**3, 1 - (-2 * t + 2) ** 3 / 2)
+
+
+def ease_in_expo(t):
+    return np.where(t == 0, 0, 2 ** (10 * (t - 1)))
+
+
+def ease_out_expo(t):
+    return np.where(t == 1, 1, 1 - 2 ** (-10 * t))
+
+
 def ease_elastic(t):
     """Elastic ease-out — overshoots then settles."""
-    return np.where(t == 0, 0, np.where(t == 1, 1,
-        2**(-10*t) * np.sin((t*10 - 0.75) * (2*np.pi) / 3) + 1))
+    return np.where(
+        t == 0,
+        0,
+        np.where(
+            t == 1, 1, 2 ** (-10 * t) * np.sin((t * 10 - 0.75) * (2 * np.pi) / 3) + 1
+        ),
+    )
+
+
 def ease_bounce(t):
     """Bounce ease-out — bounces at the end."""
     t = np.asarray(t, dtype=np.float64)
     result = np.empty_like(t)
-    m1 = t < 1/2.75
-    m2 = (~m1) & (t < 2/2.75)
-    m3 = (~m1) & (~m2) & (t < 2.5/2.75)
+    m1 = t < 1 / 2.75
+    m2 = (~m1) & (t < 2 / 2.75)
+    m3 = (~m1) & (~m2) & (t < 2.5 / 2.75)
     m4 = ~(m1 | m2 | m3)
-    result[m1] = 7.5625 * t[m1]**2
-    t2 = t[m2] - 1.5/2.75;   result[m2] = 7.5625 * t2**2 + 0.75
-    t3 = t[m3] - 2.25/2.75;  result[m3] = 7.5625 * t3**2 + 0.9375
-    t4 = t[m4] - 2.625/2.75; result[m4] = 7.5625 * t4**2 + 0.984375
+    result[m1] = 7.5625 * t[m1] ** 2
+    t2 = t[m2] - 1.5 / 2.75
+    result[m2] = 7.5625 * t2**2 + 0.75
+    t3 = t[m3] - 2.25 / 2.75
+    result[m3] = 7.5625 * t3**2 + 0.9375
+    t4 = t[m4] - 2.625 / 2.75
+    result[m4] = 7.5625 * t4**2 + 0.984375
     return result
 ```
 
@@ -1662,11 +2042,14 @@ def keyframe(t, points, ease_fn=ease_in_out_cubic, loop=False):
 
     return points[-1][1]
 
+
 def keyframe_array(t, points, ease_fn=ease_in_out_cubic):
     """Keyframe interpolation that works with numpy arrays as values.
     points: list of (time, np.array) tuples."""
-    if t <= points[0][0]: return points[0][1].copy()
-    if t >= points[-1][0]: return points[-1][1].copy()
+    if t <= points[0][0]:
+        return points[0][1].copy()
+    if t >= points[-1][0]:
+        return points[-1][1].copy()
     for i in range(len(points) - 1):
         t0, v0 = points[i]
         t1, v1 = points[i + 1]
@@ -1681,8 +2064,7 @@ def keyframe_array(t, points, ease_fn=ease_in_out_cubic):
 Smooth transition between two different value fields:
 
 ```python
-def vf_morph(g, f, t, S, vf_a, vf_b, t_start, t_end,
-             ease_fn=ease_in_out_cubic):
+def vf_morph(g, f, t, S, vf_a, vf_b, t_start, t_end, ease_fn=ease_in_out_cubic):
     """Morph between two value fields over a time range.
 
     Usage:
@@ -1700,8 +2082,10 @@ def vf_morph(g, f, t, S, vf_a, vf_b, t_start, t_end,
     b = vf_b(g, f, t, S)
     return a * (1 - progress) + b * progress
 
-def vf_sequence(g, f, t, S, fields, durations, crossfade=1.0,
-                ease_fn=ease_in_out_cubic):
+
+def vf_sequence(
+    g, f, t, S, fields, durations, crossfade=1.0, ease_fn=ease_in_out_cubic
+):
     """Cycle through a sequence of value fields with crossfades.
 
     fields: list of vf_* callables
@@ -1738,8 +2122,7 @@ def vf_sequence(g, f, t, S, fields, durations, crossfade=1.0,
 3D noise sampled at `(x, y, t)` — patterns evolve smoothly in time without per-frame discontinuities:
 
 ```python
-def vf_temporal_noise(g, f, t, S, freq=0.06, t_freq=0.3, octaves=4,
-                      bri=0.8):
+def vf_temporal_noise(g, f, t, S, freq=0.06, t_freq=0.3, octaves=4, bri=0.8):
     """Noise field that evolves smoothly in time. Uses 3D noise via
     two 2D noise lookups combined with temporal interpolation.
 
@@ -1753,14 +2136,27 @@ def vf_temporal_noise(g, f, t, S, freq=0.06, t_freq=0.3, octaves=4,
 
     val_lo = np.zeros((g.rows, g.cols), dtype=np.float32)
     val_hi = np.zeros((g.rows, g.cols), dtype=np.float32)
-    amp = 1.0; fx = freq
+    amp = 1.0
+    fx = freq
     for i in range(octaves):
-        val_lo = val_lo + _value_noise_2d(
-            g.cc * fx + t_lo * 7.3 + i * 13, g.rr * fx + t_lo * 3.1 + i * 29) * amp
-        val_hi = val_hi + _value_noise_2d(
-            g.cc * fx + (t_lo + 1) * 7.3 + i * 13, g.rr * fx + (t_lo + 1) * 3.1 + i * 29) * amp
-        amp *= 0.5; fx *= 2.0
-    max_amp = (1 - 0.5 ** octaves) / 0.5
+        val_lo = (
+            val_lo
+            + _value_noise_2d(
+                g.cc * fx + t_lo * 7.3 + i * 13, g.rr * fx + t_lo * 3.1 + i * 29
+            )
+            * amp
+        )
+        val_hi = (
+            val_hi
+            + _value_noise_2d(
+                g.cc * fx + (t_lo + 1) * 7.3 + i * 13,
+                g.rr * fx + (t_lo + 1) * 3.1 + i * 29,
+            )
+            * amp
+        )
+        amp *= 0.5
+        fx *= 2.0
+    max_amp = (1 - 0.5**octaves) / 0.5
     val = (val_lo * (1 - t_frac) + val_hi * t_frac) / max_amp
     return np.clip(val * bri * (0.6 + f.get("rms", 0.3) * 0.6), 0, 1)
 ```
@@ -1773,19 +2169,19 @@ The combinatorial explosion comes from mixing value fields with math:
 
 ```python
 # Multiplication = intersection (only shows where both have brightness)
-combined = vf_plasma(g,f,t,S) * vf_vortex(g,f,t,S)
+combined = vf_plasma(g, f, t, S) * vf_vortex(g, f, t, S)
 
 # Addition = union (shows both, clips at 1.0)
-combined = np.clip(vf_rings(g,f,t,S) + vf_spiral(g,f,t,S), 0, 1)
+combined = np.clip(vf_rings(g, f, t, S) + vf_spiral(g, f, t, S), 0, 1)
 
 # Interference = beat pattern (shows XOR-like patterns)
-combined = np.abs(vf_plasma(g,f,t,S) - vf_tunnel(g,f,t,S))
+combined = np.abs(vf_plasma(g, f, t, S) - vf_tunnel(g, f, t, S))
 
 # Modulation = one effect shapes the other
-combined = vf_rings(g,f,t,S) * (0.3 + 0.7 * vf_plasma(g,f,t,S))
+combined = vf_rings(g, f, t, S) * (0.3 + 0.7 * vf_plasma(g, f, t, S))
 
 # Maximum = shows the brightest of two effects
-combined = np.maximum(vf_spiral(g,f,t,S), vf_aurora(g,f,t,S))
+combined = np.maximum(vf_spiral(g, f, t, S), vf_aurora(g, f, t, S))
 ```
 
 ### Full Scene Example (v2 — Canvas Return)
@@ -1798,25 +2194,30 @@ def scene_complex(r, f, t, S):
     r = Renderer, f = audio features, t = time, S = persistent state dict."""
     g = r.grids["md"]
     rows, cols = g.rows, g.cols
-    
+
     # 1. Value field composition
     plasma = vf_plasma(g, f, t, S)
     vortex = vf_vortex(g, f, t, S, twist=4.0)
     combined = np.clip(plasma * 0.6 + vortex * 0.5 + plasma * vortex * 0.4, 0, 1)
-    
+
     # 2. Color from hue field
-    h = (hf_angle(0.3)(g,f,t,S) * 0.5 + hf_time_cycle(0.08)(g,f,t,S) * 0.5) % 1.0
-    
+    h = (hf_angle(0.3)(g, f, t, S) * 0.5 + hf_time_cycle(0.08)(g, f, t, S) * 0.5) % 1.0
+
     # 3. Render to canvas via _render_vf helper
     canvas = _render_vf(g, combined, h, sat=0.75, pal=PAL_DENSE)
-    
+
     # 4. Optional: blend a second layer
-    overlay = _render_vf(r.grids["sm"], vf_rings(r.grids["sm"],f,t,S),
-                         hf_fixed(0.6)(r.grids["sm"],f,t,S), pal=PAL_BLOCK)
+    overlay = _render_vf(
+        r.grids["sm"],
+        vf_rings(r.grids["sm"], f, t, S),
+        hf_fixed(0.6)(r.grids["sm"], f, t, S),
+        pal=PAL_BLOCK,
+    )
     canvas = blend_canvas(canvas, overlay, "screen", 0.4)
-    
+
     return canvas
-    
+
+
 # In the render_clip() loop (handled by the framework):
 # canvas = scene_fn(r, f, t, S)
 # canvas = tonemap(canvas, gamma=scene_gamma)

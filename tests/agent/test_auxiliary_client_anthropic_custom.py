@@ -17,8 +17,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     for key in (
-        "OPENAI_API_KEY", "OPENAI_BASE_URL",
-        "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -36,16 +38,19 @@ def test_custom_endpoint_anthropic_messages_builds_anthropic_wrapper():
     """api_mode=anthropic_messages → returns AnthropicAuxiliaryClient, not OpenAI."""
     from agent.auxiliary_client import _try_custom_endpoint, AnthropicAuxiliaryClient
 
-    with patch(
-        "agent.auxiliary_client._resolve_custom_runtime",
-        return_value=(
-            "https://api.minimax.io/anthropic",
-            "minimax-key",
-            "anthropic_messages",
+    with (
+        patch(
+            "agent.auxiliary_client._resolve_custom_runtime",
+            return_value=(
+                "https://api.minimax.io/anthropic",
+                "minimax-key",
+                "anthropic_messages",
+            ),
         ),
-    ), patch(
-        "agent.auxiliary_client._read_main_model",
-        return_value="claude-sonnet-4-6",
+        patch(
+            "agent.auxiliary_client._read_main_model",
+            return_value="claude-sonnet-4-6",
+        ),
     ):
         adapter_patch, fake_client = _install_anthropic_adapter_mocks()
         with adapter_patch:
@@ -68,15 +73,23 @@ def test_custom_endpoint_anthropic_messages_falls_back_when_sdk_missing():
 
     import_error = ImportError("anthropic package not installed")
 
-    with patch(
-        "agent.auxiliary_client._resolve_custom_runtime",
-        return_value=("https://api.minimax.io/anthropic", "k", "anthropic_messages"),
-    ), patch(
-        "agent.auxiliary_client._read_main_model",
-        return_value="claude-sonnet-4-6",
-    ), patch(
-        "agent.anthropic_adapter.build_anthropic_client",
-        side_effect=import_error,
+    with (
+        patch(
+            "agent.auxiliary_client._resolve_custom_runtime",
+            return_value=(
+                "https://api.minimax.io/anthropic",
+                "k",
+                "anthropic_messages",
+            ),
+        ),
+        patch(
+            "agent.auxiliary_client._read_main_model",
+            return_value="claude-sonnet-4-6",
+        ),
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client",
+            side_effect=import_error,
+        ),
     ):
         client, model = _try_custom_endpoint()
 
@@ -86,6 +99,7 @@ def test_custom_endpoint_anthropic_messages_falls_back_when_sdk_missing():
     assert model == "claude-sonnet-4-6"
     # OpenAI client, not AnthropicAuxiliaryClient.
     from agent.auxiliary_client import AnthropicAuxiliaryClient
+
     assert not isinstance(client, AnthropicAuxiliaryClient)
 
 
@@ -93,12 +107,15 @@ def test_custom_endpoint_chat_completions_still_uses_openai_wire():
     """Regression: default path (no api_mode) must remain OpenAI client."""
     from agent.auxiliary_client import _try_custom_endpoint, AnthropicAuxiliaryClient
 
-    with patch(
-        "agent.auxiliary_client._resolve_custom_runtime",
-        return_value=("https://api.example.com/v1", "key", None),
-    ), patch(
-        "agent.auxiliary_client._read_main_model",
-        return_value="my-model",
+    with (
+        patch(
+            "agent.auxiliary_client._resolve_custom_runtime",
+            return_value=("https://api.example.com/v1", "key", None),
+        ),
+        patch(
+            "agent.auxiliary_client._read_main_model",
+            return_value="my-model",
+        ),
     ):
         client, model = _try_custom_endpoint()
 

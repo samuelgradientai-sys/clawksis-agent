@@ -4,6 +4,7 @@ Used by the discovery shape of session_search: an FTS5 match becomes the
 anchor, the call returns goal (bookend_start) + match (window) + resolution
 (bookend_end) in a single round trip, no LLM.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -85,7 +86,9 @@ class TestRoleFiltering:
         user_ids = []
         for i in range(5):
             user_ids.append(db.append_message("s1", role="user", content=f"u{i}"))
-            db.append_message("s1", role="tool", content=f"tool output {i}", tool_name="x")
+            db.append_message(
+                "s1", role="tool", content=f"tool output {i}", tool_name="x"
+            )
         # Anchor on user message
         view = db.get_anchored_view("s1", user_ids[2], window=5, bookend=0)
         # No tool messages should appear in the window
@@ -95,7 +98,9 @@ class TestRoleFiltering:
     def test_anchor_preserved_even_when_tool_role(self, db):
         db.create_session("s1", source="cli")
         db.append_message("s1", role="user", content="ask")
-        tool_id = db.append_message("s1", role="tool", content="tool output", tool_name="x")
+        tool_id = db.append_message(
+            "s1", role="tool", content="tool output", tool_name="x"
+        )
         db.append_message("s1", role="user", content="follow-up")
         # Anchor on the tool message — should still appear despite default filter
         view = db.get_anchored_view("s1", tool_id, window=5, bookend=0)
@@ -106,7 +111,9 @@ class TestRoleFiltering:
         db.create_session("s1", source="cli")
         anchor_id = db.append_message("s1", role="user", content="ask")
         db.append_message("s1", role="tool", content="output", tool_name="x")
-        view = db.get_anchored_view("s1", anchor_id, window=5, bookend=0, keep_roles=None)
+        view = db.get_anchored_view(
+            "s1", anchor_id, window=5, bookend=0, keep_roles=None
+        )
         roles = [m.get("role") for m in view["window"]]
         assert "tool" in roles
 
@@ -119,14 +126,28 @@ class TestEmptyContentFilter:
         # Real prose opener
         opener = db.append_message("s1", role="user", content="Let's start the work")
         # Empty content assistant turn (tool-call-only — common in agent loops)
-        db.append_message("s1", role="assistant", content="", tool_calls=[{"id": "t1", "function": {"name": "x", "arguments": "{}"}}])
+        db.append_message(
+            "s1",
+            role="assistant",
+            content="",
+            tool_calls=[{"id": "t1", "function": {"name": "x", "arguments": "{}"}}],
+        )
         # More prose
         for i in range(20):
-            db.append_message("s1", role="user" if i % 2 == 0 else "assistant", content=f"prose {i}")
+            db.append_message(
+                "s1", role="user" if i % 2 == 0 else "assistant", content=f"prose {i}"
+            )
         # Another empty assistant near the end
-        db.append_message("s1", role="assistant", content="", tool_calls=[{"id": "t2", "function": {"name": "y", "arguments": "{}"}}])
+        db.append_message(
+            "s1",
+            role="assistant",
+            content="",
+            tool_calls=[{"id": "t2", "function": {"name": "y", "arguments": "{}"}}],
+        )
         # Prose closer
-        closer = db.append_message("s1", role="assistant", content="Final decision: ship it.")
+        closer = db.append_message(
+            "s1", role="assistant", content="Final decision: ship it."
+        )
 
         # Anchor mid-session
         view = db.get_anchored_view("s1", opener + 15, window=2, bookend=3)

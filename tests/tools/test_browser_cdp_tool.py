@@ -4,6 +4,7 @@ Uses a tiny in-process ``websockets`` server to simulate a CDP endpoint —
 gives real protocol coverage (connect, send, recv, close) without needing
 a real Chrome instance.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -113,6 +114,7 @@ class _CDPServer:
 
     def stop(self) -> None:
         if self._loop and self._server:
+
             def _close() -> None:
                 self._server.close()
 
@@ -134,9 +136,7 @@ def cdp_server(monkeypatch):
     """Start a CDP mock and route tool resolution to it."""
     server = _CDPServer()
     ws_url = server.start()
-    monkeypatch.setattr(
-        browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url
-    )
+    monkeypatch.setattr(browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url)
     try:
         yield server
     finally:
@@ -211,8 +211,18 @@ def test_browser_level_success(cdp_server):
         "Target.getTargets",
         lambda params, sid: {
             "targetInfos": [
-                {"targetId": "A", "type": "page", "title": "Tab 1", "url": "about:blank"},
-                {"targetId": "B", "type": "page", "title": "Tab 2", "url": "https://a.test"},
+                {
+                    "targetId": "A",
+                    "type": "page",
+                    "title": "Tab 1",
+                    "url": "about:blank",
+                },
+                {
+                    "targetId": "B",
+                    "type": "page",
+                    "title": "Tab 2",
+                    "url": "https://a.test",
+                },
             ]
         },
     )
@@ -277,9 +287,7 @@ def test_target_attach_then_call(cdp_server):
 
 def test_cdp_method_error_returns_tool_error(cdp_server):
     # No handler registered -> server returns CDP error
-    result = json.loads(
-        browser_cdp_tool.browser_cdp(method="NonExistent.method")
-    )
+    result = json.loads(browser_cdp_tool.browser_cdp(method="NonExistent.method"))
     assert "error" in result
     assert "CDP error" in result["error"]
     assert result.get("method") == "NonExistent.method"
@@ -311,9 +319,7 @@ def test_timeout_when_server_never_replies(cdp_server):
 
     cdp_server.on("Page.slowMethod", slow)
     result = json.loads(
-        browser_cdp_tool.browser_cdp(
-            method="Page.slowMethod", timeout=0.5
-        )
+        browser_cdp_tool.browser_cdp(method="Page.slowMethod", timeout=0.5)
     )
     assert "error" in result
     assert "tim" in result["error"].lower()

@@ -131,14 +131,12 @@ class ExaWebSearchProvider(WebSearchProvider):
             web_results = []
             for i, result in enumerate(response.results or []):
                 highlights = result.highlights or []
-                web_results.append(
-                    {
-                        "url": result.url or "",
-                        "title": result.title or "",
-                        "description": " ".join(highlights) if highlights else "",
-                        "position": i + 1,
-                    }
-                )
+                web_results.append({
+                    "url": result.url or "",
+                    "title": result.title or "",
+                    "description": " ".join(highlights) if highlights else "",
+                    "position": i + 1,
+                })
 
             return {"success": True, "data": {"web": web_results}}
         except ValueError as exc:
@@ -161,9 +159,7 @@ class ExaWebSearchProvider(WebSearchProvider):
             from tools.interrupt import is_interrupted
 
             if is_interrupted():
-                return [
-                    {"url": u, "error": "Interrupted", "title": ""} for u in urls
-                ]
+                return [{"url": u, "error": "Interrupted", "title": ""} for u in urls]
 
             logger.info("Exa extract: %d URL(s)", len(urls))
             response = _get_exa_client().get_contents(urls, text=True)
@@ -173,27 +169,37 @@ class ExaWebSearchProvider(WebSearchProvider):
                 content = result.text or ""
                 url = result.url or ""
                 title = result.title or ""
-                results.append(
-                    {
-                        "url": url,
-                        "title": title,
-                        "content": content,
-                        "raw_content": content,
-                        "metadata": {"sourceURL": url, "title": title},
-                    }
-                )
+                results.append({
+                    "url": url,
+                    "title": title,
+                    "content": content,
+                    "raw_content": content,
+                    "metadata": {"sourceURL": url, "title": title},
+                })
             return results
         except ValueError as exc:
-            return [{"url": u, "title": "", "content": "", "error": str(exc)} for u in urls]
+            return [
+                {"url": u, "title": "", "content": "", "error": str(exc)} for u in urls
+            ]
         except ImportError as exc:
             return [
-                {"url": u, "title": "", "content": "", "error": f"Exa SDK not installed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Exa SDK not installed: {exc}",
+                }
                 for u in urls
             ]
         except Exception as exc:  # noqa: BLE001
             logger.warning("Exa extract error: %s", exc)
             return [
-                {"url": u, "title": "", "content": "", "error": f"Exa extract failed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Exa extract failed: {exc}",
+                }
                 for u in urls
             ]
 

@@ -5,6 +5,7 @@ it through real LSP traffic, and asserts diagnostic flow.  This is
 the closest thing we have to integration coverage without requiring
 pyright/gopls/etc. to be installed in CI.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -82,7 +83,9 @@ async def test_client_didchange_bumps_version(tmp_path: Path):
     try:
         v0 = await client.open_file(str(f), language_id="python")
         f.write_text("print('hi 2')\n")
-        v1 = await client.open_file(str(f), language_id="python")  # re-open path = didChange
+        v1 = await client.open_file(
+            str(f), language_id="python"
+        )  # re-open path = didChange
         assert v1 == v0 + 1
         await client.wait_for_diagnostics(str(f), v1, mode="document")
         # Mock pushed a diagnostic for both events; merged view has one

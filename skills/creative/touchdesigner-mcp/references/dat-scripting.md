@@ -26,9 +26,9 @@ All have a docked DAT with predefined callback functions. You only fill in the b
 ## chopExecuteDAT — Numeric Triggers
 
 ```python
-ce = root.create(chopExecuteDAT, 'kick_handler')
-ce.par.chop = '/project1/audio/out_kick'      # source CHOP
-ce.par.offtoon = True                          # fire when channel rises above 0
+ce = root.create(chopExecuteDAT, "kick_handler")
+ce.par.chop = "/project1/audio/out_kick"  # source CHOP
+ce.par.offtoon = True  # fire when channel rises above 0
 ce.par.ontooff = False
 ce.par.whileon = False
 ce.par.valuechange = False
@@ -39,17 +39,20 @@ In the docked callback DAT:
 ```python
 def offToOn(channel, sampleIndex, val, prev):
     """Channel went from 0 to non-zero. Classic beat trigger."""
-    op('/project1/strobe').par.flash.pulse()
-    op('/project1/scene').par.index = (op('/project1/scene').par.index + 1) % 8
+    op("/project1/strobe").par.flash.pulse()
+    op("/project1/scene").par.index = (op("/project1/scene").par.index + 1) % 8
     return
+
 
 def onToOff(channel, sampleIndex, val, prev):
     """Channel went from non-zero to 0."""
     return
 
+
 def whileOn(channel, sampleIndex, val, prev):
     """Fires every frame while channel is non-zero. Use sparingly."""
     return
+
 
 def valueChange(channel, sampleIndex, val, prev):
     """Fires every frame the value changes (continuous). Heavy."""
@@ -65,9 +68,9 @@ def valueChange(channel, sampleIndex, val, prev):
 ## datExecuteDAT — Table/Text Changes
 
 ```python
-de = root.create(datExecuteDAT, 'api_response')
-de.par.dat = '/project1/api/web1'              # source DAT
-de.par.tablechange = True                      # any cell change
+de = root.create(datExecuteDAT, "api_response")
+de.par.dat = "/project1/api/web1"  # source DAT
+de.par.tablechange = True  # any cell change
 de.par.cellchange = False
 de.par.rowchange = False
 de.par.colchange = False
@@ -80,14 +83,16 @@ def onTableChange(dat):
         return
     # If it's a webDAT response, parse JSON
     import json
+
     try:
         data = json.loads(dat.text)
     except json.JSONDecodeError:
-        debug(f'Bad JSON: {dat.text[:100]}')
+        debug(f"Bad JSON: {dat.text[:100]}")
         return
     # Write to a CHOP
-    op('/project1/api_value').par.value0 = float(data.get('count', 0))
+    op("/project1/api_value").par.value0 = float(data.get("count", 0))
     return
+
 
 def onCellChange(dat, cells, prev):
     """Specific cells changed."""
@@ -104,9 +109,9 @@ def onCellChange(dat, cells, prev):
 ## parameterExecuteDAT — Param Changes & Pulse
 
 ```python
-pe = root.create(parameterExecuteDAT, 'comp_params')
-pe.par.op = '/project1/my_component'           # COMP whose params to watch
-pe.par.parameters = '*'                         # or specific names like 'Intensity Reset'
+pe = root.create(parameterExecuteDAT, "comp_params")
+pe.par.op = "/project1/my_component"  # COMP whose params to watch
+pe.par.parameters = "*"  # or specific names like 'Intensity Reset'
 pe.par.valuechange = True
 pe.par.pulse = True
 ```
@@ -114,25 +119,29 @@ pe.par.pulse = True
 ```python
 def onValueChange(par, prev):
     """par is a Par object. par.name, par.eval(), par.owner."""
-    if par.name == 'Intensity':
-        op('/project1/bloom').par.threshold = par.eval()
+    if par.name == "Intensity":
+        op("/project1/bloom").par.threshold = par.eval()
     return
+
 
 def onPulse(par):
     """Pulse param was triggered."""
-    if par.name == 'Reset':
-        op('/project1/scene').par.index = 0
-        op('/project1/audio_player').par.cuepoint = 0
-        op('/project1/audio_player').par.cuepulse.pulse()
+    if par.name == "Reset":
+        op("/project1/scene").par.index = 0
+        op("/project1/audio_player").par.cuepoint = 0
+        op("/project1/audio_player").par.cuepulse.pulse()
     return
+
 
 def onExpressionChange(par, val, prev):
     """User changed the expression on a param."""
     return
 
+
 def onExportChange(par, val, prev):
     """Export source changed."""
     return
+
 
 def onModeChange(par, val, prev):
     """Param mode changed (CONSTANT / EXPRESSION / EXPORT / etc)."""
@@ -146,28 +155,31 @@ def onModeChange(par, val, prev):
 For interactive control surfaces. See `panel-ui.md` for the full panel COMP context.
 
 ```python
-pe = root.create(panelExecuteDAT, 'btn_handler')
-pe.par.panel = '/project1/play_btn'
-pe.par.click = True              # mouse click events
-pe.par.value = True              # state changes (toggle)
+pe = root.create(panelExecuteDAT, "btn_handler")
+pe.par.panel = "/project1/play_btn"
+pe.par.click = True  # mouse click events
+pe.par.value = True  # state changes (toggle)
 pe.par.lockedchange = False
 ```
 
 ```python
 def onOffToOn(panelValue):
     """Panel value rose to 1 (button pressed, slider crossed threshold)."""
-    op('/project1/scene_timer').par.start.pulse()
+    op("/project1/scene_timer").par.start.pulse()
     return
+
 
 def onOnToOff(panelValue):
     """Panel value dropped to 0."""
     return
 
+
 def onValueChange(panelValue):
     """Continuous: every frame the value changes."""
     val = panelValue.eval()
-    op('/project1/master').par.opacity = val
+    op("/project1/master").par.opacity = val
     return
+
 
 def onClick(panelValue):
     """Discrete click event, fires once per click."""
@@ -183,8 +195,8 @@ def onClick(panelValue):
 Watches creation/deletion/renaming of operators in a parent COMP.
 
 ```python
-oe = root.create(opExecuteDAT, 'lifecycle')
-oe.par.op = '/project1'
+oe = root.create(opExecuteDAT, "lifecycle")
+oe.par.op = "/project1"
 oe.par.create = True
 oe.par.destroy = True
 oe.par.namechange = True
@@ -194,15 +206,17 @@ oe.par.flagchange = False
 ```python
 def onCreate(opCreated):
     """A new operator was created. Useful for auto-applying conventions."""
-    if opCreated.OPType == 'glslTOP':
+    if opCreated.OPType == "glslTOP":
         # Always wrap with a null
-        n = opCreated.parent().create(nullTOP, opCreated.name + '_out')
+        n = opCreated.parent().create(nullTOP, opCreated.name + "_out")
         n.inputConnectors[0].connect(opCreated)
     return
+
 
 def onDestroy(opDestroyed):
     """Operator was deleted. opDestroyed.path is still valid for one frame."""
     return
+
 
 def onNameChange(opChanged):
     """Operator was renamed."""
@@ -218,7 +232,7 @@ Useful for dev-time scaffolding (auto-create downstream nullTOPs, auto-name conv
 The catch-all. Gets you hooks into project start, save, load, frame-start, frame-end.
 
 ```python
-exec_dat = root.create(executeDAT, 'lifecycle')
+exec_dat = root.create(executeDAT, "lifecycle")
 exec_dat.par.start = True
 exec_dat.par.create = True
 exec_dat.par.framestart = True
@@ -228,29 +242,35 @@ exec_dat.par.frameend = False
 ```python
 def onStart():
     """Project just started cooking. Run once."""
-    op('/project1/scene').par.index = 0
-    debug('Project started')
+    op("/project1/scene").par.index = 0
+    debug("Project started")
     return
+
 
 def onCreate():
     """Component was just created (only fires for component executeDATs, not project root)."""
     return
 
+
 def onFrameStart(frame):
     """Per-frame, BEFORE network cooks. Heavy logic here = bottleneck."""
     return
+
 
 def onFrameEnd(frame):
     """Per-frame, AFTER network cooks. Use for capture, recording, post-network logic."""
     return
 
+
 def onPlayStateChange(playing):
     """Project play/pause toggled."""
     return
 
+
 def onProjectPreSave():
     """Right before saving the .toe file."""
     return
+
 
 def onProjectPostSave():
     return
@@ -267,19 +287,20 @@ Heavy per-frame logic in `onFrameStart` is one of the top performance regression
 # Goal: on each kick, run a 1.5s scale pulse + color flash
 
 # Setup (create once)
-animator = root.create(timerCHOP, 'pulse_anim')
+animator = root.create(timerCHOP, "pulse_anim")
 animator.par.length = 1.5
 animator.par.cycle = False
 
 # Param expressions on visual targets:
-op('logo').par.sx.expr = "1.0 + (1 - op('pulse_anim')['timer_fraction']) * 0.3"
-op('logo').par.sx.mode = ParMode.EXPRESSION
-op('logo').par.sy.expr = "1.0 + (1 - op('pulse_anim')['timer_fraction']) * 0.3"
-op('logo').par.sy.mode = ParMode.EXPRESSION
+op("logo").par.sx.expr = "1.0 + (1 - op('pulse_anim')['timer_fraction']) * 0.3"
+op("logo").par.sx.mode = ParMode.EXPRESSION
+op("logo").par.sy.expr = "1.0 + (1 - op('pulse_anim')['timer_fraction']) * 0.3"
+op("logo").par.sy.mode = ParMode.EXPRESSION
+
 
 # In a chopExecuteDAT watching the kick CHOP:
 def offToOn(channel, sampleIndex, val, prev):
-    op('pulse_anim').par.start.pulse()
+    op("pulse_anim").par.start.pulse()
     return
 ```
 
@@ -291,17 +312,19 @@ def offToOn(channel, sampleIndex, val, prev):
 # webDAT polls an API every 5 seconds
 # datExecuteDAT parses the response and writes to a constantCHOP
 
+
 def onTableChange(dat):
     import json
+
     try:
         data = json.loads(dat.text)
     except:
         return
-    target = op('/project1/external_state')
-    target.par.name0 = 'temperature'
-    target.par.value0 = float(data['temp_c'])
-    target.par.name1 = 'humidity'
-    target.par.value1 = float(data['humidity'])
+    target = op("/project1/external_state")
+    target.par.name0 = "temperature"
+    target.par.value0 = float(data["temp_c"])
+    target.par.name1 = "humidity"
+    target.par.value1 = float(data["humidity"])
     return
 ```
 
@@ -314,9 +337,10 @@ Visuals just reference `op('external_state')['temperature']` — they update liv
 ```python
 # An opExecuteDAT watching for orphaned helper ops, deleting them after their parent disappears
 
+
 def onDestroy(opDestroyed):
     parent_name = opDestroyed.name
-    helper = op(f'/project1/{parent_name}_helper')
+    helper = op(f"/project1/{parent_name}_helper")
     if helper:
         helper.destroy()
     return

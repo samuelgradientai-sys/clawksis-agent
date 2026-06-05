@@ -11,20 +11,18 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+
 def setup_distributed():
     # Environment variables set by launcher
     rank = int(os.environ["RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     local_rank = int(os.environ["LOCAL_RANK"])
 
-    dist.init_process_group(
-        backend="nccl",
-        rank=rank,
-        world_size=world_size
-    )
+    dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
     torch.cuda.set_device(local_rank)
     return rank, world_size, local_rank
+
 
 def main():
     rank, world_size, local_rank = setup_distributed()
@@ -41,6 +39,7 @@ def main():
             torch.save(model.module.state_dict(), f"checkpoint_{epoch}.pt")
 
     dist.destroy_process_group()
+
 
 if __name__ == "__main__":
     main()
@@ -83,8 +82,7 @@ from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 # Wrap policy for transformer models
 auto_wrap_policy = functools.partial(
-    transformer_auto_wrap_policy,
-    transformer_layer_cls={LlamaDecoderLayer}
+    transformer_auto_wrap_policy, transformer_layer_cls={LlamaDecoderLayer}
 )
 
 model = FSDP(
@@ -110,8 +108,8 @@ model = FSDP(
     "zero_optimization": {
         "stage": 3,
         "offload_optimizer": {"device": "cpu"},
-        "offload_param": {"device": "cpu"}
-    }
+        "offload_param": {"device": "cpu"},
+    },
 }
 ```
 
@@ -141,11 +139,11 @@ import time
 import lambda_cloud_client
 from lambda_cloud_client.models import LaunchInstanceRequest
 
+
 class LambdaJobManager:
     def __init__(self, api_key: str):
         self.config = lambda_cloud_client.Configuration(
-            host="https://cloud.lambdalabs.com/api/v1",
-            access_token=api_key
+            host="https://cloud.lambdalabs.com/api/v1", access_token=api_key
         )
 
     def find_available_gpu(self, gpu_types: list[str], regions: list[str] = None):
@@ -163,9 +161,14 @@ class LambdaJobManager:
 
         return None, None
 
-    def launch_and_wait(self, instance_type: str, region: str,
-                        ssh_key: str, filesystem: str = None,
-                        timeout: int = 900) -> dict:
+    def launch_and_wait(
+        self,
+        instance_type: str,
+        region: str,
+        ssh_key: str,
+        filesystem: str = None,
+        timeout: int = 900,
+    ) -> dict:
         """Launch instance and wait for it to be ready."""
         with lambda_cloud_client.ApiClient(self.config) as client:
             api = lambda_cloud_client.DefaultApi(client)
@@ -188,7 +191,7 @@ class LambdaJobManager:
                     return {
                         "id": instance_id,
                         "ip": instance.data.ip,
-                        "status": "active"
+                        "status": "active",
                     }
                 time.sleep(30)
 
@@ -209,15 +212,12 @@ manager = LambdaJobManager(os.environ["LAMBDA_API_KEY"])
 
 # Find available H100 or A100
 gpu_type, region = manager.find_available_gpu(
-    ["gpu_8x_h100_sxm5", "gpu_8x_a100_80gb_sxm4"],
-    regions=["us-west-1", "us-east-1"]
+    ["gpu_8x_h100_sxm5", "gpu_8x_a100_80gb_sxm4"], regions=["us-west-1", "us-east-1"]
 )
 
 if gpu_type:
     instance = manager.launch_and_wait(
-        gpu_type, region,
-        ssh_key="my-key",
-        filesystem="training-data"
+        gpu_type, region, ssh_key="my-key", filesystem="training-data"
     )
     print(f"Ready: ssh ubuntu@{instance['ip']}")
 ```
@@ -227,6 +227,7 @@ if gpu_type:
 ```python
 import subprocess
 import paramiko
+
 
 def run_remote_job(ip: str, ssh_key_path: str, commands: list[str]):
     """Execute commands on remote instance."""
@@ -242,12 +243,13 @@ def run_remote_job(ip: str, ssh_key_path: str, commands: list[str]):
 
     client.close()
 
+
 # Submit training job
 commands = [
     "cd /lambda/nfs/storage/project",
     "git pull",
     "pip install -r requirements.txt",
-    "nohup torchrun --nproc_per_node=8 train.py > train.log 2>&1 &"
+    "nohup torchrun --nproc_per_node=8 train.py > train.log 2>&1 &",
 ]
 
 run_remote_job(instance["ip"], "~/.ssh/lambda_key", commands)
@@ -474,10 +476,7 @@ import wandb
 wandb.login(key=os.environ["WANDB_API_KEY"])
 
 # Start run
-wandb.init(
-    project="lambda-training",
-    config={"learning_rate": 1e-4, "epochs": 100}
-)
+wandb.init(project="lambda-training", config={"learning_rate": 1e-4, "epochs": 100})
 
 # Log metrics
 wandb.log({"loss": loss, "accuracy": acc})
@@ -493,21 +492,27 @@ wandb.save("/lambda/nfs/storage/checkpoints/best_model.pt")
 ```python
 import os
 
+
 def save_checkpoint(model, optimizer, epoch, loss, path):
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss,
-    }, path)
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": loss,
+        },
+        path,
+    )
+
 
 def load_checkpoint(path, model, optimizer):
     if os.path.exists(path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint['epoch'], checkpoint['loss']
-    return 0, float('inf')
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        return checkpoint["epoch"], checkpoint["loss"]
+    return 0, float("inf")
+
 
 # Save every N steps to filesystem
 checkpoint_path = "/lambda/nfs/storage/checkpoints/latest.pt"
@@ -548,6 +553,7 @@ def recommend_instance(model_params: int, batch_size: int, task: str) -> str:
 ```python
 import time
 from datetime import datetime, timedelta
+
 
 def auto_terminate_idle(api_key: str, idle_threshold_hours: float = 2):
     """Terminate instances idle for too long."""

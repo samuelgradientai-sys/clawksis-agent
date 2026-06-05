@@ -7,19 +7,28 @@ from typing import Any
 
 from gateway.config import Platform
 from plugins.teams_pipeline.pipeline import TeamsMeetingPipeline
-from plugins.teams_pipeline.store import TeamsPipelineStore, resolve_teams_pipeline_store_path
+from plugins.teams_pipeline.store import (
+    TeamsPipelineStore,
+    resolve_teams_pipeline_store_path,
+)
 from plugins.teams_pipeline.subscriptions import build_graph_client
 
 logger = logging.getLogger(__name__)
 
 
-def _teams_delivery_is_configured(teams_extra: dict[str, Any], teams_delivery: dict[str, Any]) -> bool:
-    delivery_mode = str(
-        teams_delivery.get("mode")
-        or teams_delivery.get("delivery_mode")
-        or teams_extra.get("delivery_mode")
-        or ""
-    ).strip().lower()
+def _teams_delivery_is_configured(
+    teams_extra: dict[str, Any], teams_delivery: dict[str, Any]
+) -> bool:
+    delivery_mode = (
+        str(
+            teams_delivery.get("mode")
+            or teams_delivery.get("delivery_mode")
+            or teams_extra.get("delivery_mode")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
 
     if delivery_mode == "incoming_webhook":
         return bool(
@@ -66,7 +75,9 @@ def build_pipeline_runtime_config(gateway_config: Any) -> dict[str, Any]:
                 teams_delivery[key] = value
 
         if teams_delivery:
-            teams_delivery["enabled"] = _teams_delivery_is_configured(teams_extra, teams_delivery)
+            teams_delivery["enabled"] = _teams_delivery_is_configured(
+                teams_extra, teams_delivery
+            )
             pipeline_config["teams_delivery"] = teams_delivery
 
     return pipeline_config

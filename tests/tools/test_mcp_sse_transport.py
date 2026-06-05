@@ -74,8 +74,10 @@ def patch_sse_client():
         async def __aexit__(self, *a):
             return False
 
-    with patch("tools.mcp_tool.sse_client", new=fake_sse_client), \
-         patch("tools.mcp_tool.ClientSession", new=_FakeSession):
+    with (
+        patch("tools.mcp_tool.sse_client", new=fake_sse_client),
+        patch("tools.mcp_tool.ClientSession", new=_FakeSession),
+    ):
         yield captured_kwargs
 
 
@@ -89,9 +91,14 @@ class TestSSEReadTimeout:
         server = _build_server_with_sse()
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -111,7 +118,9 @@ class TestSSEReadTimeout:
             f"(expected 300.0) — SSE idle disconnect regression"
         )
 
-    def test_sse_read_timeout_still_300s_when_tool_timeout_is_large(self, patch_sse_client):
+    def test_sse_read_timeout_still_300s_when_tool_timeout_is_large(
+        self, patch_sse_client
+    ):
         """Even if user sets a large ``timeout``, ``sse_read_timeout`` stays
         decoupled — it's a transport-level budget for inter-event silence,
         not a per-call budget."""
@@ -120,9 +129,14 @@ class TestSSEReadTimeout:
         server = _build_server_with_sse()
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -153,10 +167,15 @@ class TestSSEOAuthForwarding:
         fake_manager.get_or_build_provider.return_value = fake_oauth_provider
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()), \
-                 patch("tools.mcp_oauth_manager.get_manager", return_value=fake_manager):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+                patch("tools.mcp_oauth_manager.get_manager", return_value=fake_manager),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({
@@ -186,9 +205,14 @@ class TestSSEOAuthForwarding:
         server = _build_server_with_sse(oauth=False)
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
                         server._run_http({

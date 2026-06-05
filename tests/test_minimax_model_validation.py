@@ -26,8 +26,10 @@ class TestMiniMaxModelValidation:
             "suggested_base_url": None,
             "used_fallback": False,
         }
-        with patch("clawk_cli.models.fetch_api_models", return_value=None), \
-             patch("clawk_cli.models.probe_api_models", return_value=probe_payload):
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=None),
+            patch("clawk_cli.models.probe_api_models", return_value=probe_payload),
+        ):
             yield
 
     # -------------------------------------------------------------------------
@@ -121,8 +123,10 @@ class TestMiniMaxCatalogPathRequired:
             "suggested_base_url": None,
             "used_fallback": False,
         }
-        with patch("clawk_cli.models.fetch_api_models", return_value=None), \
-             patch("clawk_cli.models.probe_api_models", return_value=probe_payload):
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=None),
+            patch("clawk_cli.models.probe_api_models", return_value=probe_payload),
+        ):
             # Before fix: this would return accepted=False because api_models is None
             # After fix: returns accepted=True via catalog path
             result = validate_requested_model("MiniMax-M2.7", "minimax")

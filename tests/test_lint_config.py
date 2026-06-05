@@ -39,12 +39,7 @@ class TestRuffConfig:
     def test_plw1514_is_in_select_list(self):
         """pyproject.toml must keep PLW1514 in [tool.ruff.lint.select]."""
         cfg = _load_pyproject()
-        selected = (
-            cfg.get("tool", {})
-            .get("ruff", {})
-            .get("lint", {})
-            .get("select", [])
-        )
+        selected = cfg.get("tool", {}).get("ruff", {}).get("lint", {}).get("select", [])
         assert "PLW1514" in selected, (
             "PLW1514 (unspecified-encoding) was removed from "
             "[tool.ruff.lint.select].  This rule blocks bare open() calls "
@@ -71,9 +66,7 @@ class TestLintWorkflow:
     WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "lint.yml"
 
     def test_workflow_exists(self):
-        assert self.WORKFLOW_PATH.exists(), (
-            f"CI workflow missing: {self.WORKFLOW_PATH}"
-        )
+        assert self.WORKFLOW_PATH.exists(), f"CI workflow missing: {self.WORKFLOW_PATH}"
 
     def test_workflow_has_blocking_ruff_step(self):
         """The workflow must run a blocking ``ruff check .`` step
@@ -90,7 +83,7 @@ class TestLintWorkflow:
             if stripped.startswith("ruff check") and "--exit-zero" not in stripped:
                 # Also check it's not piped to `|| true` which would mask
                 # the exit code.
-                window = " ".join(lines[i:i + 3])
+                window = " ".join(lines[i : i + 3])
                 if "|| true" not in window:
                     found_blocking = True
                     break
@@ -105,6 +98,7 @@ class TestLintWorkflow:
         """Workflow file must parse as valid YAML (can't ship a broken
         CI config to main)."""
         import yaml
+
         content = self.WORKFLOW_PATH.read_text(encoding="utf-8")
         try:
             parsed = yaml.safe_load(content)

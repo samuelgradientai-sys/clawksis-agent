@@ -63,24 +63,37 @@ G0DM0D3 是一个开源越狱工具包，通过三种互补的攻击模式自动
 
 最快路径——自动检测当前模型，按有效性顺序测试策略，并锁定获胜配置：
 
-```python
-# In execute_code:
-import os
-exec(open(os.path.expanduser(
-    "~/.clawksis/skills/red-teaming/godmode/scripts/load_godmode.py"
-)).read())
-
-# Auto-detect model from config and jailbreak it
-result = auto_jailbreak()
-
-# Or specify a model explicitly
-result = auto_jailbreak(model="anthropic/claude-sonnet-4")
-
-# Dry run — test without writing config
-result = auto_jailbreak(dry_run=True)
-
-# Undo — remove jailbreak settings
-undo_jailbreak()
+```python# In execute_code:
+
+import os
+
+exec(
+    open(
+        os.path.expanduser(
+            "~/.clawksis/skills/red-teaming/godmode/scripts/load_godmode.py"
+        )
+    ).read()
+)
+
+
+# Auto-detect model from config and jailbreak it
+
+result = auto_jailbreak()
+
+
+# Or specify a model explicitly
+
+result = auto_jailbreak(model="anthropic/claude-sonnet-4")
+
+
+# Dry run — test without writing config
+
+result = auto_jailbreak(dry_run=True)
+
+
+# Undo — remove jailbreak settings
+
+undo_jailbreak()
 ```
 
 ### auto_jailbreak 的执行流程

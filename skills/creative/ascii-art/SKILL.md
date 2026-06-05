@@ -239,17 +239,22 @@ curl -s 'https://ascii.co.uk/art/cat' -o /tmp/ascii_art.html
 
 **Step 2 — Extract art from pre tags:**
 
-```python
-import re, html
-with open('/tmp/ascii_art.html') as f:
-    text = f.read()
-arts = re.findall(r'<pre[^>]*>(.*?)</pre>', text, re.DOTALL)
-for art in arts:
-    clean = re.sub(r'<[^>]+>', '', art)
-    clean = html.unescape(clean).strip()
-    if len(clean) > 30:
-        print(clean)
-        print('\n---\n')
+```pythonimport re, html
+
+with open("/tmp/ascii_art.html") as f:
+    text = f.read()
+
+arts = re.findall(r"<pre[^>]*>(.*?)</pre>", text, re.DOTALL)
+
+for art in arts:
+    clean = re.sub(r"<[^>]+>", "", art)
+
+    clean = html.unescape(clean).strip()
+
+    if len(clean) > 30:
+        print(clean)
+
+        print("\n---\n")
 ```
 
 **Available subjects** (use as URL path):

@@ -194,24 +194,31 @@ Compute Budget Checklist:
 ```
 
 随着实验运行跟踪实际支出：
-```python
-# Simple cost tracker pattern
-import json, os
-from datetime import datetime
-
-COST_LOG = "results/cost_log.jsonl"
-
-def log_cost(experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float):
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "experiment": experiment,
-        "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "cost_usd": cost_usd,
-    }
-    with open(COST_LOG, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```python# Simple cost tracker pattern
+
+import json, os
+
+from datetime import datetime
+
+
+COST_LOG = "results/cost_log.jsonl"
+
+
+def log_cost(
+    experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float
+):
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "experiment": experiment,
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+    }
+
+    with open(COST_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 **预算紧张时**：在进行完整扫描之前，先运行试点实验（1-2 个随机种子，任务子集）。调试流水线时使用更便宜的模型，最终运行时再切换到目标模型。
@@ -337,17 +344,20 @@ Citation Verification (MANDATORY per citation):
 If ANY step fails → mark as [CITATION NEEDED], inform scientist
 ```
 
-```python
-# Fetch BibTeX via DOI
-import requests
-
-def doi_to_bibtex(doi: str) -> str:
-    response = requests.get(
-        f"https://doi.org/{doi}",
-        headers={"Accept": "application/x-bibtex"}
-    )
-    response.raise_for_status()
-    return response.text
+```python# Fetch BibTeX via DOI
+
+import requests
+
+
+def doi_to_bibtex(doi: str) -> str:
+
+    response = requests.get(
+        f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
+    )
+
+    response.raise_for_status()
+
+    return response.text
 ```
 
 如果无法核实某条引用：
@@ -408,14 +418,17 @@ def doi_to_bibtex(doi: str) -> str:
 遵循成功研究流水线中的以下模式：
 
 **增量保存**——每步后保存结果，以便崩溃恢复：
-```python
-# Save after each problem/task
-result_path = f"results/{task}/{strategy}/result.json"
-if os.path.exists(result_path):
-    continue  # Skip already-completed work
-# ... run experiment ...
-with open(result_path, 'w') as f:
-    json.dump(result, f, indent=2)
+```python# Save after each problem/task
+
+result_path = f"results/{task}/{strategy}/result.json"
+
+if os.path.exists(result_path):
+    continue  # Skip already-completed work
+
+# ... run experiment ...
+
+with open(result_path, "w") as f:
+    json.dump(result, f, indent=2)
 ```
 
 **制品保存**——保存所有中间输出：
@@ -583,22 +596,31 @@ cp experiment.py results/exp_003/experiment_snapshot.py
 2. 计算每个任务和总体指标
 3. 生成汇总表格
 
-```python
-# Standard analysis pattern
-import json, os
-from pathlib import Path
-
-results = {}
-for result_file in Path("results/").rglob("result.json"):
-    data = json.loads(result_file.read_text())
-    strategy = result_file.parent.name
-    task = result_file.parent.parent.name
-    results.setdefault(strategy, {})[task] = data
-
-# Compute aggregate metrics
-for strategy, tasks in results.items():
-    scores = [t["score"] for t in tasks.values()]
-    print(f"{strategy}: mean={np.mean(scores):.1f}, std={np.std(scores):.1f}")
+```python# Standard analysis pattern
+
+import json, os
+
+from pathlib import Path
+
+
+results = {}
+
+for result_file in Path("results/").rglob("result.json"):
+    data = json.loads(result_file.read_text())
+
+    strategy = result_file.parent.name
+
+    task = result_file.parent.parent.name
+
+    results.setdefault(strategy, {})[task] = data
+
+
+# Compute aggregate metrics
+
+for strategy, tasks in results.items():
+    scores = [t["score"] for t in tasks.values()]
+
+    print(f"{strategy}: mean={np.mean(scores):.1f}, std={np.std(scores):.1f}")
 ```
 
 ### 步骤 4.2：统计显著性
@@ -1104,16 +1126,22 @@ require [specific additional work].
 - 在要求披露的会议上忘记披露 LLM 使用情况
 
 **计算碳足迹**（对训练密集型论文）：
-```python
-# Estimate using ML CO2 Impact tool methodology
-gpu_hours = 1000  # total GPU hours
-gpu_tdp_watts = 400  # e.g., A100 = 400W
-pue = 1.1  # Power Usage Effectiveness (data center overhead)
-carbon_intensity = 0.429  # kg CO2/kWh (US average; varies by region)
-
-energy_kwh = (gpu_hours * gpu_tdp_watts * pue) / 1000
-carbon_kg = energy_kwh * carbon_intensity
-print(f"Energy: {energy_kwh:.0f} kWh, Carbon: {carbon_kg:.0f} kg CO2eq")
+```python# Estimate using ML CO2 Impact tool methodology
+
+gpu_hours = 1000  # total GPU hours
+
+gpu_tdp_watts = 400  # e.g., A100 = 400W
+
+pue = 1.1  # Power Usage Effectiveness (data center overhead)
+
+carbon_intensity = 0.429  # kg CO2/kWh (US average; varies by region)
+
+
+energy_kwh = (gpu_hours * gpu_tdp_watts * pue) / 1000
+
+carbon_kg = energy_kwh * carbon_intensity
+
+print(f"Energy: {energy_kwh:.0f} kWh, Carbon: {carbon_kg:.0f} kg CO2eq")
 ```
 
 ### 步骤 5.11：数据集说明书与模型卡（如适用）
@@ -1525,22 +1553,32 @@ latexdiff --flatten paper_v1.tex paper_v2.tex > paper_diff.tex
 pip install SciencePlots
 ```
 
-```python
-import matplotlib.pyplot as plt
-import scienceplots  # registers styles
-
-# Use science style (IEEE-like, clean)
-with plt.style.context(['science', 'no-latex']):
-    fig, ax = plt.subplots(figsize=(3.5, 2.5))  # Single-column width
-    ax.plot(x, y, label='Ours', color='#0072B2')
-    ax.plot(x, y2, label='Baseline', color='#D55E00', linestyle='--')
-    ax.set_xlabel('Training Steps')
-    ax.set_ylabel('Accuracy')
-    ax.legend()
-    fig.savefig('paper/fig_results.pdf', bbox_inches='tight')
-
-# Available styles: 'science', 'ieee', 'nature', 'science+ieee'
-# Add 'no-latex' if LaTeX is not installed on the machine generating plots
+```pythonimport matplotlib.pyplot as plt
+
+import scienceplots  # registers styles
+
+
+# Use science style (IEEE-like, clean)
+
+with plt.style.context(["science", "no-latex"]):
+    fig, ax = plt.subplots(figsize=(3.5, 2.5))  # Single-column width
+
+    ax.plot(x, y, label="Ours", color="#0072B2")
+
+    ax.plot(x, y2, label="Baseline", color="#D55E00", linestyle="--")
+
+    ax.set_xlabel("Training Steps")
+
+    ax.set_ylabel("Accuracy")
+
+    ax.legend()
+
+    fig.savefig("paper/fig_results.pdf", bbox_inches="tight")
+
+
+# Available styles: 'science', 'ieee', 'nature', 'science+ieee'
+
+# Add 'no-latex' if LaTeX is not installed on the machine generating plots
 ```
 
 **标准图形尺寸**（双栏格式）：
@@ -2196,19 +2234,26 @@ delegate_task("Draft the Experiments section. Read all result files in results/.
 每个委派作为**全新子 agent** 运行，无共享上下文——在 prompt（提示词）中提供所有必要信息。收集输出并整合。
 
 **引用核实**（使用 execute_code）：
-```python
-# In execute_code:
-from semanticscholar import SemanticScholar
-import requests
-
-sch = SemanticScholar()
-results = sch.search_paper("attention mechanism transformers", limit=5)
-for paper in results:
-    doi = paper.externalIds.get('DOI', 'N/A')
-    if doi != 'N/A':
-        bibtex = requests.get(f"https://doi.org/{doi}", 
-                              headers={"Accept": "application/x-bibtex"}).text
-        print(bibtex)
+```python# In execute_code:
+
+from semanticscholar import SemanticScholar
+
+import requests
+
+
+sch = SemanticScholar()
+
+results = sch.search_paper("attention mechanism transformers", limit=5)
+
+for paper in results:
+    doi = paper.externalIds.get("DOI", "N/A")
+
+    if doi != "N/A":
+        bibtex = requests.get(
+            f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
+        ).text
+
+        print(bibtex)
 ```
 
 ### 使用 `memory` 和 `todo` 进行状态管理

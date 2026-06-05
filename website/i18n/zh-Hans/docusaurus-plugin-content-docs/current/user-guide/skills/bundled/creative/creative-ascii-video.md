@@ -181,13 +181,18 @@ INPUT → ANALYZE → SCENE_FN → TONEMAP → SHADE → ENCODE
 
 这是第一大视觉问题。黑色背景上的 ASCII 本质上偏暗。**绝不使用 `canvas * N` 乘数**——它们会截断高光。使用自适应 tonemap：
 
-```python
-def tonemap(canvas, gamma=0.75):
-    f = canvas.astype(np.float32)
-    lo, hi = np.percentile(f[::4, ::4], [1, 99.5])
-    if hi - lo < 10: hi = lo + 10
-    f = np.clip((f - lo) / (hi - lo), 0, 1) ** gamma
-    return (f * 255).astype(np.uint8)
+```pythondef tonemap(canvas, gamma=0.75):
+
+    f = canvas.astype(np.float32)
+
+    lo, hi = np.percentile(f[::4, ::4], [1, 99.5])
+
+    if hi - lo < 10:
+        hi = lo + 10
+
+    f = np.clip((f - lo) / (hi - lo), 0, 1) ** gamma
+
+    return (f * 255).astype(np.uint8)
 ```
 
 流水线：`scene_fn() → tonemap() → FeedbackBuffer → ShaderChain → ffmpeg`

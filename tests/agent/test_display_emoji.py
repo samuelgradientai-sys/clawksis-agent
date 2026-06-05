@@ -12,8 +12,10 @@ class TestGetToolEmoji:
         """Registry-registered emoji is used when no skin is active."""
         mock_registry = MagicMock()
         mock_registry.get_emoji.return_value = "🎨"
-        with mock_patch("agent.display._get_skin", return_value=None), \
-             mock_patch("agent.display.registry", mock_registry, create=True):
+        with (
+            mock_patch("agent.display._get_skin", return_value=None),
+            mock_patch("agent.display.registry", mock_registry, create=True),
+        ):
             # Need to patch the import inside get_tool_emoji
             pass
         # Direct test: patch the lazy import path
@@ -23,6 +25,7 @@ class TestGetToolEmoji:
             mock_reg.get_emoji.return_value = "📖"
             with mock_patch.dict("sys.modules", {}):
                 import sys
+
                 # Patch tools.registry module
                 mock_module = MagicMock()
                 mock_module.registry = mock_reg
@@ -45,10 +48,13 @@ class TestGetToolEmoji:
         mock_reg = MagicMock()
         mock_reg.get_emoji.return_value = "💻"
         import sys
+
         mock_module = MagicMock()
         mock_module.registry = mock_reg
-        with mock_patch("agent.display._get_skin", return_value=skin), \
-             mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
+        with (
+            mock_patch("agent.display._get_skin", return_value=skin),
+            mock_patch.dict(sys.modules, {"tools.registry": mock_module}),
+        ):
             result = get_tool_emoji("terminal")
             assert result == "💻"
 
@@ -59,10 +65,13 @@ class TestGetToolEmoji:
         mock_reg = MagicMock()
         mock_reg.get_emoji.return_value = ""
         import sys
+
         mock_module = MagicMock()
         mock_module.registry = mock_reg
-        with mock_patch("agent.display._get_skin", return_value=skin), \
-             mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
+        with (
+            mock_patch("agent.display._get_skin", return_value=skin),
+            mock_patch.dict(sys.modules, {"tools.registry": mock_module}),
+        ):
             result = get_tool_emoji("unknown_tool")
             assert result == "⚡"
 
@@ -72,6 +81,7 @@ class TestGetToolEmoji:
             mock_reg = MagicMock()
             mock_reg.get_emoji.return_value = ""
             import sys
+
             mock_module = MagicMock()
             mock_module.registry = mock_reg
             with mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
@@ -85,10 +95,13 @@ class TestGetToolEmoji:
         mock_reg = MagicMock()
         mock_reg.get_emoji.return_value = "🔍"
         import sys
+
         mock_module = MagicMock()
         mock_module.registry = mock_reg
-        with mock_patch("agent.display._get_skin", return_value=skin), \
-             mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
+        with (
+            mock_patch("agent.display._get_skin", return_value=skin),
+            mock_patch.dict(sys.modules, {"tools.registry": mock_module}),
+        ):
             assert get_tool_emoji("terminal") == "⚔"  # skin override
             assert get_tool_emoji("web_search") == "🔍"  # registry fallback
 
@@ -98,17 +111,20 @@ class TestSkinConfigToolEmojis:
 
     def test_skin_config_has_tool_emojis_field(self):
         from clawk_cli.skin_engine import SkinConfig
+
         skin = SkinConfig(name="test")
         assert skin.tool_emojis == {}
 
     def test_skin_config_accepts_tool_emojis(self):
         from clawk_cli.skin_engine import SkinConfig
+
         emojis = {"terminal": "⚔", "web_search": "🔮"}
         skin = SkinConfig(name="test", tool_emojis=emojis)
         assert skin.tool_emojis == emojis
 
     def test_build_skin_config_includes_tool_emojis(self):
         from clawk_cli.skin_engine import _build_skin_config
+
         data = {
             "name": "custom",
             "tool_emojis": {"terminal": "🗡️", "patch": "⚒️"},
@@ -118,6 +134,7 @@ class TestSkinConfigToolEmojis:
 
     def test_build_skin_config_empty_tool_emojis_default(self):
         from clawk_cli.skin_engine import _build_skin_config
+
         data = {"name": "minimal"}
         skin = _build_skin_config(data)
         assert skin.tool_emojis == {}

@@ -66,65 +66,91 @@ pip install tokenizers transformers
 
 ### Load pretrained tokenizer
 
-```python
-from tokenizers import Tokenizer
-
-# Load from HuggingFace Hub
-tokenizer = Tokenizer.from_pretrained("bert-base-uncased")
-
-# Encode text
-output = tokenizer.encode("Hello, how are you?")
-print(output.tokens)  # ['hello', ',', 'how', 'are', 'you', '?']
-print(output.ids)     # [7592, 1010, 2129, 2024, 2017, 1029]
-
-# Decode back
-text = tokenizer.decode(output.ids)
-print(text)  # "hello, how are you?"
+```pythonfrom tokenizers import Tokenizer
+
+
+# Load from HuggingFace Hub
+
+tokenizer = Tokenizer.from_pretrained("bert-base-uncased")
+
+
+# Encode text
+
+output = tokenizer.encode("Hello, how are you?")
+
+print(output.tokens)  # ['hello', ',', 'how', 'are', 'you', '?']
+
+print(output.ids)  # [7592, 1010, 2129, 2024, 2017, 1029]
+
+
+# Decode back
+
+text = tokenizer.decode(output.ids)
+
+print(text)  # "hello, how are you?"
 ```
 
 ### Train custom BPE tokenizer
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import Whitespace
-
-# Initialize tokenizer with BPE model
-tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
-tokenizer.pre_tokenizer = Whitespace()
-
-# Configure trainer
-trainer = BpeTrainer(
-    vocab_size=30000,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
-    min_frequency=2
-)
-
-# Train on files
-files = ["train.txt", "validation.txt"]
-tokenizer.train(files, trainer)
-
-# Save
-tokenizer.save("my-tokenizer.json")
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import BPE
+
+from tokenizers.trainers import BpeTrainer
+
+from tokenizers.pre_tokenizers import Whitespace
+
+
+# Initialize tokenizer with BPE model
+
+tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
+
+tokenizer.pre_tokenizer = Whitespace()
+
+
+# Configure trainer
+
+trainer = BpeTrainer(
+    vocab_size=30000,
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+    min_frequency=2,
+)
+
+
+# Train on files
+
+files = ["train.txt", "validation.txt"]
+
+tokenizer.train(files, trainer)
+
+
+# Save
+
+tokenizer.save("my-tokenizer.json")
 ```
 
 **Training time**: ~1-2 minutes for 100MB corpus, ~10-20 minutes for 1GB
 
 ### Batch encoding with padding
 
-```python
-# Enable padding
-tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
-
-# Encode batch
-texts = ["Hello world", "This is a longer sentence"]
-encodings = tokenizer.encode_batch(texts)
-
-for encoding in encodings:
-    print(encoding.ids)
-# [101, 7592, 2088, 102, 3, 3, 3]
-# [101, 2023, 2003, 1037, 2936, 6251, 102]
+```python# Enable padding
+
+tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
+
+
+# Encode batch
+
+texts = ["Hello world", "This is a longer sentence"]
+
+encodings = tokenizer.encode_batch(texts)
+
+
+for encoding in encodings:
+    print(encoding.ids)
+
+# [101, 7592, 2088, 102, 3, 3, 3]
+
+# [101, 2023, 2003, 1037, 2936, 6251, 102]
 ```
 
 ## Tokenization algorithms
@@ -139,22 +165,26 @@ for encoding in encodings:
 
 **Used by**: GPT-2, GPT-3, RoBERTa, BART, DeBERTa
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import ByteLevel
-
-tokenizer = Tokenizer(BPE(unk_token="<|endoftext|>"))
-tokenizer.pre_tokenizer = ByteLevel()
-
-trainer = BpeTrainer(
-    vocab_size=50257,
-    special_tokens=["<|endoftext|>"],
-    min_frequency=2
-)
-
-tokenizer.train(files=["data.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import BPE
+
+from tokenizers.trainers import BpeTrainer
+
+from tokenizers.pre_tokenizers import ByteLevel
+
+
+tokenizer = Tokenizer(BPE(unk_token="<|endoftext|>"))
+
+tokenizer.pre_tokenizer = ByteLevel()
+
+
+trainer = BpeTrainer(
+    vocab_size=50257, special_tokens=["<|endoftext|>"], min_frequency=2
+)
+
+
+tokenizer.train(files=["data.txt"], trainer=trainer)
 ```
 
 **Advantages**:
@@ -176,24 +206,32 @@ tokenizer.train(files=["data.txt"], trainer=trainer)
 
 **Used by**: BERT, DistilBERT, MobileBERT
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import WordPiece
-from tokenizers.trainers import WordPieceTrainer
-from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.normalizers import BertNormalizer
-
-tokenizer = Tokenizer(WordPiece(unk_token="[UNK]"))
-tokenizer.normalizer = BertNormalizer(lowercase=True)
-tokenizer.pre_tokenizer = Whitespace()
-
-trainer = WordPieceTrainer(
-    vocab_size=30522,
-    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
-    continuing_subword_prefix="##"
-)
-
-tokenizer.train(files=["corpus.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import WordPiece
+
+from tokenizers.trainers import WordPieceTrainer
+
+from tokenizers.pre_tokenizers import Whitespace
+
+from tokenizers.normalizers import BertNormalizer
+
+
+tokenizer = Tokenizer(WordPiece(unk_token="[UNK]"))
+
+tokenizer.normalizer = BertNormalizer(lowercase=True)
+
+tokenizer.pre_tokenizer = Whitespace()
+
+
+trainer = WordPieceTrainer(
+    vocab_size=30522,
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+    continuing_subword_prefix="##",
+)
+
+
+tokenizer.train(files=["corpus.txt"], trainer=trainer)
 ```
 
 **Advantages**:
@@ -214,20 +252,22 @@ tokenizer.train(files=["corpus.txt"], trainer=trainer)
 
 **Used by**: ALBERT, T5, mBART, XLNet (via SentencePiece)
 
-```python
-from tokenizers import Tokenizer
-from tokenizers.models import Unigram
-from tokenizers.trainers import UnigramTrainer
-
-tokenizer = Tokenizer(Unigram())
-
-trainer = UnigramTrainer(
-    vocab_size=8000,
-    special_tokens=["<unk>", "<s>", "</s>"],
-    unk_token="<unk>"
-)
-
-tokenizer.train(files=["data.txt"], trainer=trainer)
+```pythonfrom tokenizers import Tokenizer
+
+from tokenizers.models import Unigram
+
+from tokenizers.trainers import UnigramTrainer
+
+
+tokenizer = Tokenizer(Unigram())
+
+
+trainer = UnigramTrainer(
+    vocab_size=8000, special_tokens=["<unk>", "<s>", "</s>"], unk_token="<unk>"
+)
+
+
+tokenizer.train(files=["data.txt"], trainer=trainer)
 ```
 
 **Advantages**:
@@ -247,17 +287,19 @@ Complete pipeline: **Normalization → Pre-tokenization → Model → Post-proce
 
 Clean and standardize text:
 
-```python
-from tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
-
-tokenizer.normalizer = Sequence([
-    NFD(),           # Unicode normalization (decompose)
-    Lowercase(),     # Convert to lowercase
-    StripAccents()   # Remove accents
-])
-
-# Input: "Héllo WORLD"
-# After normalization: "hello world"
+```pythonfrom tokenizers.normalizers import NFD, StripAccents, Lowercase, Sequence
+
+
+tokenizer.normalizer = Sequence([
+    NFD(),  # Unicode normalization (decompose)
+    Lowercase(),  # Convert to lowercase
+    StripAccents(),  # Remove accents
+])
+
+
+# Input: "Héllo WORLD"
+
+# After normalization: "hello world"
 ```
 
 **Common normalizers**:
@@ -271,17 +313,17 @@ tokenizer.normalizer = Sequence([
 
 Split text into word-like units:
 
-```python
-from tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
-
-# Split on whitespace and punctuation
-tokenizer.pre_tokenizer = Sequence([
-    Whitespace(),
-    Punctuation()
-])
-
-# Input: "Hello, world!"
-# After pre-tokenization: ["Hello", ",", "world", "!"]
+```pythonfrom tokenizers.pre_tokenizers import Whitespace, Punctuation, Sequence, ByteLevel
+
+
+# Split on whitespace and punctuation
+
+tokenizer.pre_tokenizer = Sequence([Whitespace(), Punctuation()])
+
+
+# Input: "Hello, world!"
+
+# After pre-tokenization: ["Hello", ",", "world", "!"]
 ```
 
 **Common pre-tokenizers**:
@@ -295,53 +337,60 @@ tokenizer.pre_tokenizer = Sequence([
 
 Add special tokens for model input:
 
-```python
-from tokenizers.processors import TemplateProcessing
-
-# BERT-style: [CLS] sentence [SEP]
-tokenizer.post_processor = TemplateProcessing(
-    single="[CLS] $A [SEP]",
-    pair="[CLS] $A [SEP] $B [SEP]",
-    special_tokens=[
-        ("[CLS]", 1),
-        ("[SEP]", 2),
-    ],
-)
+```pythonfrom tokenizers.processors import TemplateProcessing
+
+
+# BERT-style: [CLS] sentence [SEP]
+
+tokenizer.post_processor = TemplateProcessing(
+    single="[CLS] $A [SEP]",
+    pair="[CLS] $A [SEP] $B [SEP]",
+    special_tokens=[
+        ("[CLS]", 1),
+        ("[SEP]", 2),
+    ],
+)
 ```
 
 **Common patterns**:
-```python
-# GPT-2: sentence <|endoftext|>
-TemplateProcessing(
-    single="$A <|endoftext|>",
-    special_tokens=[("<|endoftext|>", 50256)]
-)
-
-# RoBERTa: <s> sentence </s>
-TemplateProcessing(
-    single="<s> $A </s>",
-    pair="<s> $A </s> </s> $B </s>",
-    special_tokens=[("<s>", 0), ("</s>", 2)]
-)
+```python# GPT-2: sentence <|endoftext|>
+
+TemplateProcessing(single="$A <|endoftext|>", special_tokens=[("<|endoftext|>", 50256)])
+
+
+# RoBERTa: <s> sentence </s>
+
+TemplateProcessing(
+    single="<s> $A </s>",
+    pair="<s> $A </s> </s> $B </s>",
+    special_tokens=[("<s>", 0), ("</s>", 2)],
+)
 ```
 
 ## Alignment tracking
 
 Track token positions in original text:
 
-```python
-output = tokenizer.encode("Hello, world!")
-
-# Get token offsets
-for token, offset in zip(output.tokens, output.offsets):
-    start, end = offset
-    print(f"{token:10} → [{start:2}, {end:2}): {text[start:end]!r}")
-
-# Output:
-# hello      → [ 0,  5): 'Hello'
-# ,          → [ 5,  6): ','
-# world      → [ 7, 12): 'world'
-# !          → [12, 13): '!'
+```pythonoutput = tokenizer.encode("Hello, world!")
+
+
+# Get token offsets
+
+for token, offset in zip(output.tokens, output.offsets):
+    start, end = offset
+
+    print(f"{token:10} → [{start:2}, {end:2}): {text[start:end]!r}")
+
+
+# Output:
+
+# hello      → [ 0,  5): 'Hello'
+
+# ,          → [ 5,  6): ','
+
+# world      → [ 7, 12): 'world'
+
+# !          → [12, 13): '!'
 ```
 
 **Use cases**:
@@ -353,114 +402,145 @@ for token, offset in zip(output.tokens, output.offsets):
 
 ### Load with AutoTokenizer
 
-```python
-from transformers import AutoTokenizer
-
-# AutoTokenizer automatically uses fast tokenizers
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-
-# Check if using fast tokenizer
-print(tokenizer.is_fast)  # True
-
-# Access underlying tokenizers.Tokenizer
-fast_tokenizer = tokenizer.backend_tokenizer
-print(type(fast_tokenizer))  # <class 'tokenizers.Tokenizer'>
+```pythonfrom transformers import AutoTokenizer
+
+
+# AutoTokenizer automatically uses fast tokenizers
+
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+
+# Check if using fast tokenizer
+
+print(tokenizer.is_fast)  # True
+
+
+# Access underlying tokenizers.Tokenizer
+
+fast_tokenizer = tokenizer.backend_tokenizer
+
+print(type(fast_tokenizer))  # <class 'tokenizers.Tokenizer'>
 ```
 
 ### Convert custom tokenizer to transformers
 
-```python
-from tokenizers import Tokenizer
-from transformers import PreTrainedTokenizerFast
-
-# Train custom tokenizer
-tokenizer = Tokenizer(BPE())
-# ... train tokenizer ...
-tokenizer.save("my-tokenizer.json")
-
-# Wrap for transformers
-transformers_tokenizer = PreTrainedTokenizerFast(
-    tokenizer_file="my-tokenizer.json",
-    unk_token="[UNK]",
-    pad_token="[PAD]",
-    cls_token="[CLS]",
-    sep_token="[SEP]",
-    mask_token="[MASK]"
-)
-
-# Use like any transformers tokenizer
-outputs = transformers_tokenizer(
-    "Hello world",
-    padding=True,
-    truncation=True,
-    max_length=512,
-    return_tensors="pt"
-)
+```pythonfrom tokenizers import Tokenizer
+
+from transformers import PreTrainedTokenizerFast
+
+
+# Train custom tokenizer
+
+tokenizer = Tokenizer(BPE())
+
+# ... train tokenizer ...
+
+tokenizer.save("my-tokenizer.json")
+
+
+# Wrap for transformers
+
+transformers_tokenizer = PreTrainedTokenizerFast(
+    tokenizer_file="my-tokenizer.json",
+    unk_token="[UNK]",
+    pad_token="[PAD]",
+    cls_token="[CLS]",
+    sep_token="[SEP]",
+    mask_token="[MASK]",
+)
+
+
+# Use like any transformers tokenizer
+
+outputs = transformers_tokenizer(
+    "Hello world", padding=True, truncation=True, max_length=512, return_tensors="pt"
+)
 ```
 
 ## Common patterns
 
 ### Train from iterator (large datasets)
 
-```python
-from datasets import load_dataset
-
-# Load dataset
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-
-# Create batch iterator
-def batch_iterator(batch_size=1000):
-    for i in range(0, len(dataset), batch_size):
-        yield dataset[i:i + batch_size]["text"]
-
-# Train tokenizer
-tokenizer.train_from_iterator(
-    batch_iterator(),
-    trainer=trainer,
-    length=len(dataset)  # For progress bar
-)
+```pythonfrom datasets import load_dataset
+
+
+# Load dataset
+
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+
+
+# Create batch iterator
+
+
+def batch_iterator(batch_size=1000):
+
+    for i in range(0, len(dataset), batch_size):
+        yield dataset[i : i + batch_size]["text"]
+
+
+# Train tokenizer
+
+tokenizer.train_from_iterator(
+    batch_iterator(),
+    trainer=trainer,
+    length=len(dataset),  # For progress bar
+)
 ```
 
 **Performance**: Processes 1GB in ~10-20 minutes
 
 ### Enable truncation and padding
 
-```python
-# Enable truncation
-tokenizer.enable_truncation(max_length=512)
-
-# Enable padding
-tokenizer.enable_padding(
-    pad_id=tokenizer.token_to_id("[PAD]"),
-    pad_token="[PAD]",
-    length=512  # Fixed length, or None for batch max
-)
-
-# Encode with both
-output = tokenizer.encode("This is a long sentence that will be truncated...")
-print(len(output.ids))  # 512
+```python# Enable truncation
+
+tokenizer.enable_truncation(max_length=512)
+
+
+# Enable padding
+
+tokenizer.enable_padding(
+    pad_id=tokenizer.token_to_id("[PAD]"),
+    pad_token="[PAD]",
+    length=512,  # Fixed length, or None for batch max
+)
+
+
+# Encode with both
+
+output = tokenizer.encode("This is a long sentence that will be truncated...")
+
+print(len(output.ids))  # 512
 ```
 
 ### Multi-processing
 
-```python
-from tokenizers import Tokenizer
-from multiprocessing import Pool
-
-# Load tokenizer
-tokenizer = Tokenizer.from_file("tokenizer.json")
-
-def encode_batch(texts):
-    return tokenizer.encode_batch(texts)
-
-# Process large corpus in parallel
-with Pool(8) as pool:
-    # Split corpus into chunks
-    chunk_size = 1000
-    chunks = [corpus[i:i+chunk_size] for i in range(0, len(corpus), chunk_size)]
-
-    # Encode in parallel
-    results = pool.map(encode_batch, chunks)
+```pythonfrom tokenizers import Tokenizer
+
+from multiprocessing import Pool
+
+
+# Load tokenizer
+
+tokenizer = Tokenizer.from_file("tokenizer.json")
+
+
+def encode_batch(texts):
+
+    return tokenizer.encode_batch(texts)
+
+
+# Process large corpus in parallel
+
+with Pool(8) as pool:
+    # Split corpus into chunks
+
+    chunk_size = 1000
+
+    chunks = [corpus[i : i + chunk_size] for i in range(0, len(corpus), chunk_size)]
+
+    # Encode in parallel
+
+    results = pool.map(encode_batch, chunks)
 ```
 
 **Speedup**: 5-8× with 8 cores

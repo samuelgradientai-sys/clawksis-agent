@@ -28,7 +28,11 @@ def gateway_runner():
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.new_event_loop().run_until_complete(coro)
+    return (
+        asyncio.get_event_loop().run_until_complete(coro)
+        if False
+        else asyncio.new_event_loop().run_until_complete(coro)
+    )
 
 
 class TestEnrichMessageWithVision:
@@ -38,8 +42,13 @@ class TestEnrichMessageWithVision:
             "success": True,
             "analysis": "A photograph of a sunset over the ocean.",
         })
-        with patch("tools.vision_tools.vision_analyze_tool", new=AsyncMock(return_value=fake_result)):
-            out = _run(gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"]))
+        with patch(
+            "tools.vision_tools.vision_analyze_tool",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            out = _run(
+                gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"])
+            )
         assert "sunset over the ocean" in out
 
     def test_memory_context_fence_stripped(self, gateway_runner):
@@ -53,8 +62,13 @@ class TestEnrichMessageWithVision:
             "A photograph of a cat."
         )
         fake_result = json.dumps({"success": True, "analysis": leaked})
-        with patch("tools.vision_tools.vision_analyze_tool", new=AsyncMock(return_value=fake_result)):
-            out = _run(gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"]))
+        with patch(
+            "tools.vision_tools.vision_analyze_tool",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            out = _run(
+                gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"])
+            )
         assert "photograph of a cat" in out
         assert "<memory-context>" not in out
         assert "User details and preferences" not in out
@@ -73,8 +87,13 @@ class TestEnrichMessageWithVision:
             "A photograph of a dog."
         )
         fake_result = json.dumps({"success": True, "analysis": leaked})
-        with patch("tools.vision_tools.vision_analyze_tool", new=AsyncMock(return_value=fake_result)):
-            out = _run(gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"]))
+        with patch(
+            "tools.vision_tools.vision_analyze_tool",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            out = _run(
+                gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"])
+            )
         assert "photograph of a dog" in out
         assert "fenced leak" not in out
         assert "<memory-context>" not in out

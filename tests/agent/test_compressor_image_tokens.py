@@ -77,7 +77,10 @@ class TestContentLengthForBudget:
         """Anthropic native shape: {type: image, source: {...}}."""
         content = [
             {"type": "text", "text": "hi"},
-            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "XX"}},
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": "XX"},
+            },
         ]
         assert _content_length_for_budget(content) == 2 + _IMAGE_CHAR_EQUIVALENT
 
@@ -120,7 +123,10 @@ class TestTokenBudgetWithImages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": f"turn {i}"},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAA"},
+                    },
                 ],
             })
             messages.append({

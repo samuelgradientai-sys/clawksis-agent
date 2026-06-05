@@ -6,7 +6,7 @@ Palette values are sourced from `pixel-art-studio` (MIT) — see ATTRIBUTION.md 
 Usage: pass the palette name as `palette=` or let a preset select it.
 
 ```python
-pixel_art("in.png", "out.png", preset="nes")           # preset selects NES
+pixel_art("in.png", "out.png", preset="nes")  # preset selects NES
 pixel_art("in.png", "out.png", preset="custom", palette="PICO_8", block=6)
 ```
 

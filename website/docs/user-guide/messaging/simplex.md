@@ -70,19 +70,17 @@ By default **all contacts are denied**. You must either:
 
 ## Using SimpleX with cron jobs
 
-```python
-cronjob(
-    action="create",
-    schedule="every 1h",
-    deliver="simplex",          # uses SIMPLEX_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
-)
+```pythoncronjob(
+    action="create",
+    schedule="every 1h",
+    deliver="simplex",  # uses SIMPLEX_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
+)
 ```
 
 Or target a specific contact:
 
-```python
-send_message(target="simplex:<contact-id>", message="Done!")
+```pythonsend_message(target="simplex:<contact-id>", message="Done!")
 ```
 
 ## Privacy notes

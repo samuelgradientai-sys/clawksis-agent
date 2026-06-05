@@ -178,24 +178,31 @@ Compute Budget Checklist:
 ```
 
 Track actual spend as experiments run:
-```python
-# Simple cost tracker pattern
-import json, os
-from datetime import datetime
-
-COST_LOG = "results/cost_log.jsonl"
-
-def log_cost(experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float):
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "experiment": experiment,
-        "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "cost_usd": cost_usd,
-    }
-    with open(COST_LOG, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+```python# Simple cost tracker pattern
+
+import json, os
+
+from datetime import datetime
+
+
+COST_LOG = "results/cost_log.jsonl"
+
+
+def log_cost(
+    experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float
+):
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "experiment": experiment,
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+    }
+
+    with open(COST_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 ```
 
 **When budget is tight**: Run pilot experiments (1-2 seeds, subset of tasks) before committing to full sweeps. Use cheaper models for debugging pipelines, then switch to target models for final runs.
@@ -321,17 +328,20 @@ Citation Verification (MANDATORY per citation):
 If ANY step fails → mark as [CITATION NEEDED], inform scientist
 ```
 
-```python
-# Fetch BibTeX via DOI
-import requests
-
-def doi_to_bibtex(doi: str) -> str:
-    response = requests.get(
-        f"https://doi.org/{doi}",
-        headers={"Accept": "application/x-bibtex"}
-    )
-    response.raise_for_status()
-    return response.text
+```python# Fetch BibTeX via DOI
+
+import requests
+
+
+def doi_to_bibtex(doi: str) -> str:
+
+    response = requests.get(
+        f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
+    )
+
+    response.raise_for_status()
+
+    return response.text
 ```
 
 If you cannot verify a citation:
@@ -392,14 +402,17 @@ Before running anything, specify:
 Follow these patterns from successful research pipelines:
 
 **Incremental saving** — save results after each step for crash recovery:
-```python
-# Save after each problem/task
-result_path = f"results/{task}/{strategy}/result.json"
-if os.path.exists(result_path):
-    continue  # Skip already-completed work
-# ... run experiment ...
-with open(result_path, 'w') as f:
-    json.dump(result, f, indent=2)
+```python# Save after each problem/task
+
+result_path = f"results/{task}/{strategy}/result.json"
+
+if os.path.exists(result_path):
+    continue  # Skip already-completed work
+
+# ... run experiment ...
+
+with open(result_path, "w") as f:
+    json.dump(result, f, indent=2)
 ```
 
 **Artifact preservation** — save all intermediate outputs:
@@ -567,22 +580,31 @@ Write analysis scripts that:
 2. Compute per-task and aggregate metrics
 3. Generate summary tables
 
-```python
-# Standard analysis pattern
-import json, os
-from pathlib import Path
-
-results = {}
-for result_file in Path("results/").rglob("result.json"):
-    data = json.loads(result_file.read_text())
-    strategy = result_file.parent.name
-    task = result_file.parent.parent.name
-    results.setdefault(strategy, {})[task] = data
-
-# Compute aggregate metrics
-for strategy, tasks in results.items():
-    scores = [t["score"] for t in tasks.values()]
-    print(f"{strategy}: mean={np.mean(scores):.1f}, std={np.std(scores):.1f}")
+```python# Standard analysis pattern
+
+import json, os
+
+from pathlib import Path
+
+
+results = {}
+
+for result_file in Path("results/").rglob("result.json"):
+    data = json.loads(result_file.read_text())
+
+    strategy = result_file.parent.name
+
+    task = result_file.parent.parent.name
+
+    results.setdefault(strategy, {})[task] = data
+
+
+# Compute aggregate metrics
+
+for strategy, tasks in results.items():
+    scores = [t["score"] for t in tasks.values()]
+
+    print(f"{strategy}: mean={np.mean(scores):.1f}, std={np.std(scores):.1f}")
 ```
 
 ### Step 4.2: Statistical Significance
@@ -1086,16 +1108,22 @@ require [specific additional work].
 - Forgetting to disclose LLM use at venues that require it
 
 **Compute carbon footprint** (for training-heavy papers):
-```python
-# Estimate using ML CO2 Impact tool methodology
-gpu_hours = 1000  # total GPU hours
-gpu_tdp_watts = 400  # e.g., A100 = 400W
-pue = 1.1  # Power Usage Effectiveness (data center overhead)
-carbon_intensity = 0.429  # kg CO2/kWh (US average; varies by region)
-
-energy_kwh = (gpu_hours * gpu_tdp_watts * pue) / 1000
-carbon_kg = energy_kwh * carbon_intensity
-print(f"Energy: {energy_kwh:.0f} kWh, Carbon: {carbon_kg:.0f} kg CO2eq")
+```python# Estimate using ML CO2 Impact tool methodology
+
+gpu_hours = 1000  # total GPU hours
+
+gpu_tdp_watts = 400  # e.g., A100 = 400W
+
+pue = 1.1  # Power Usage Effectiveness (data center overhead)
+
+carbon_intensity = 0.429  # kg CO2/kWh (US average; varies by region)
+
+
+energy_kwh = (gpu_hours * gpu_tdp_watts * pue) / 1000
+
+carbon_kg = energy_kwh * carbon_intensity
+
+print(f"Energy: {energy_kwh:.0f} kWh, Carbon: {carbon_kg:.0f} kg CO2eq")
 ```
 
 ### Step 5.11: Datasheets & Model Cards (If Applicable)
@@ -1507,22 +1535,32 @@ Install and use for publication-quality plots:
 pip install SciencePlots
 ```
 
-```python
-import matplotlib.pyplot as plt
-import scienceplots  # registers styles
-
-# Use science style (IEEE-like, clean)
-with plt.style.context(['science', 'no-latex']):
-    fig, ax = plt.subplots(figsize=(3.5, 2.5))  # Single-column width
-    ax.plot(x, y, label='Ours', color='#0072B2')
-    ax.plot(x, y2, label='Baseline', color='#D55E00', linestyle='--')
-    ax.set_xlabel('Training Steps')
-    ax.set_ylabel('Accuracy')
-    ax.legend()
-    fig.savefig('paper/fig_results.pdf', bbox_inches='tight')
-
-# Available styles: 'science', 'ieee', 'nature', 'science+ieee'
-# Add 'no-latex' if LaTeX is not installed on the machine generating plots
+```pythonimport matplotlib.pyplot as plt
+
+import scienceplots  # registers styles
+
+
+# Use science style (IEEE-like, clean)
+
+with plt.style.context(["science", "no-latex"]):
+    fig, ax = plt.subplots(figsize=(3.5, 2.5))  # Single-column width
+
+    ax.plot(x, y, label="Ours", color="#0072B2")
+
+    ax.plot(x, y2, label="Baseline", color="#D55E00", linestyle="--")
+
+    ax.set_xlabel("Training Steps")
+
+    ax.set_ylabel("Accuracy")
+
+    ax.legend()
+
+    fig.savefig("paper/fig_results.pdf", bbox_inches="tight")
+
+
+# Available styles: 'science', 'ieee', 'nature', 'science+ieee'
+
+# Add 'no-latex' if LaTeX is not installed on the machine generating plots
 ```
 
 **Standard figure sizes** (two-column format):
@@ -2178,19 +2216,26 @@ delegate_task("Draft the Experiments section. Read all result files in results/.
 Each delegate runs as a **fresh subagent** with no shared context — provide all necessary information in the prompt. Collect outputs and integrate.
 
 **Citation verification** (using execute_code):
-```python
-# In execute_code:
-from semanticscholar import SemanticScholar
-import requests
-
-sch = SemanticScholar()
-results = sch.search_paper("attention mechanism transformers", limit=5)
-for paper in results:
-    doi = paper.externalIds.get('DOI', 'N/A')
-    if doi != 'N/A':
-        bibtex = requests.get(f"https://doi.org/{doi}", 
-                              headers={"Accept": "application/x-bibtex"}).text
-        print(bibtex)
+```python# In execute_code:
+
+from semanticscholar import SemanticScholar
+
+import requests
+
+
+sch = SemanticScholar()
+
+results = sch.search_paper("attention mechanism transformers", limit=5)
+
+for paper in results:
+    doi = paper.externalIds.get("DOI", "N/A")
+
+    if doi != "N/A":
+        bibtex = requests.get(
+            f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
+        ).text
+
+        print(bibtex)
 ```
 
 ### State Management with `memory` and `todo`
