@@ -1024,6 +1024,18 @@ export const api = {
 
   getToolsets: () => fetchJSON<ToolsetInfo[]>("/api/tools/toolsets"),
 
+  toggleToolset: (name: string, enabled: boolean) =>
+
+    fetchJSON<{ ok: boolean }>(`/api/tools/toolsets/${encodeURIComponent(name)}`, {
+
+      method: "PUT",
+
+      headers: { "Content-Type": "application/json" },
+
+      body: JSON.stringify({ enabled }),
+
+    }),
+
 
 
   // Session search (FTS5)

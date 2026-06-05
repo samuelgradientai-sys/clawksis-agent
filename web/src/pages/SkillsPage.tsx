@@ -208,6 +208,12 @@ export default function SkillsPage() {
 
   const [togglingSkills, setTogglingSkills] = useState<Set<string>>(new Set());
 
+  const [togglingToolsets, setTogglingToolsets] = useState<Set<string>>(
+
+    new Set(),
+
+  );
+
   const { toast, showToast } = useToast();
 
   const { t } = useI18n();
@@ -275,6 +281,56 @@ export default function SkillsPage() {
         const next = new Set(prev);
 
         next.delete(skill.name);
+
+        return next;
+
+      });
+
+    }
+
+  };
+
+
+
+  /* ---- Toggle toolset ---- */
+
+  const handleToggleToolset = async (ts: ToolsetInfo) => {
+
+    setTogglingToolsets((prev) => new Set(prev).add(ts.name));
+
+    try {
+
+      await api.toggleToolset(ts.name, !ts.enabled);
+
+      setToolsets((prev) =>
+
+        prev.map((s) =>
+
+          s.name === ts.name ? { ...s, enabled: !s.enabled } : s,
+
+        ),
+
+      );
+
+      showToast(
+
+        `${ts.label.trim() || ts.name} ${ts.enabled ? t.common.disabled : t.common.enabled}`,
+
+        "success",
+
+      );
+
+    } catch {
+
+      showToast(`${t.common.failedToToggle} ${ts.name}`, "error");
+
+    } finally {
+
+      setTogglingToolsets((prev) => {
+
+        const next = new Set(prev);
+
+        next.delete(ts.name);
 
         return next;
 
@@ -905,6 +961,18 @@ export default function SkillsPage() {
                                     : t.common.inactive}
 
                                 </Badge>
+
+                                <Switch
+
+                                  className="ml-auto shrink-0"
+
+                                  checked={ts.enabled}
+
+                                  onCheckedChange={() => handleToggleToolset(ts)}
+
+                                  disabled={togglingToolsets.has(ts.name)}
+
+                                />
 
                               </div>
 
