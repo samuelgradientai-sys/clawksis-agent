@@ -30,4 +30,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-extras
-      - run: uv run pytest tests/ -q -rfE --timeout=30
+      - run: uv run pytest tests/ -x -q --timeout=30

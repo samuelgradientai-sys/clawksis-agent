@@ -827,17 +827,22 @@ def run_doctor(args):
 
     print_clawksis_banner()
     print(
-        color("┌─────────────────────────────────────────────────────────┐", Colors.RED)
-    )
-
-    print(
         color(
-            "│                 🩺 Clawksis Doctor                        │", Colors.RED
+            "┌─────────────────────────────────────────────────────────┐", Colors.MORADO
         )
     )
 
     print(
-        color("└─────────────────────────────────────────────────────────┘", Colors.RED)
+        color(
+            "│                 🩺 Clawksis Doctor                        │",
+            Colors.MORADO,
+        )
+    )
+
+    print(
+        color(
+            "└─────────────────────────────────────────────────────────┘", Colors.MORADO
+        )
     )
 
     _section("Security Advisories")
