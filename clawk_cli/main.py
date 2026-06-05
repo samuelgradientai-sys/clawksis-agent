@@ -221,7 +221,7 @@ def _config_default_interface_early() -> str:
             cfg_path = os.path.join(home, "config.yaml")
 
         else:
-            cfg_path = os.path.join(os.path.expanduser("~"), ".clawk", "config.yaml")
+            cfg_path = os.path.join(os.path.expanduser("~"), ".clawksis", "config.yaml")
 
         if os.path.exists(cfg_path):
             import yaml as _yaml_iface
@@ -2161,7 +2161,7 @@ def _ensure_tui_node() -> None:
     if not helper.is_file():
         return
 
-    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk")
+    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
 
     try:
         # Helper writes logs to stderr; we ask bash to print `command -v node`

@@ -181,7 +181,7 @@ def slack_manifest_command(args) -> int:
 
             except Exception:
                 target = (
-                    Path(os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk"))
+                    Path(os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis"))
                     / "slack-manifest.json"
                 )
 

@@ -1224,7 +1224,7 @@ def _auth_file_path() -> Path:
     # production (no PYTEST_CURRENT_TEST) this is a single dict lookup.
 
     if os.environ.get("PYTEST_CURRENT_TEST"):
-        real_home_auth = (Path.home() / ".clawk" / "auth.json").resolve(strict=False)
+        real_home_auth = (Path.home() / ".clawksis" / "auth.json").resolve(strict=False)
 
         try:
             resolved = path.resolve(strict=False)

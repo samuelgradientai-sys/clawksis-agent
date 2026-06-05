@@ -3222,7 +3222,7 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
 
     current_clawk = get_clawk_home().resolve()
 
-    current_default = (Path.home() / ".clawk").resolve()
+    current_default = (Path.home() / ".clawksis").resolve()
 
     target_default = Path(target_home_dir) / ".clawk"
 

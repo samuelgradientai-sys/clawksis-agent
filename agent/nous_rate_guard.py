@@ -55,7 +55,7 @@ def _state_path() -> str:
         base = get_clawk_home()
 
     except ImportError:
-        base = os.path.join(os.path.expanduser("~"), ".clawk")
+        base = os.path.join(os.path.expanduser("~"), ".clawksis")
 
     return os.path.join(base, _STATE_SUBDIR, _STATE_FILENAME)
 

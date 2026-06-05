@@ -59,7 +59,7 @@ sys.path.insert(0, REPO_ROOT)
 
 # Ensure CLAWK_HOME is set for imports that touch it at module level.
 
-os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawk"))
+os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis"))
 
 
 from clawk_cli.models import OPENROUTER_MODELS, _PROVIDER_MODELS  # noqa: E402

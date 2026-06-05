@@ -5071,7 +5071,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--target",
-        default=os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk"),
+        default=os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis"),
         help="Clawksis home directory",
     )
 

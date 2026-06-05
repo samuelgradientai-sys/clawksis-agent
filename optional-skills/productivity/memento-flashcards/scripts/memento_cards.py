@@ -29,7 +29,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-_CLAWK_HOME = Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawk"))
+_CLAWK_HOME = Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis"))
 
 DATA_DIR = _CLAWK_HOME / "skills" / "productivity" / "memento-flashcards" / "data"
 

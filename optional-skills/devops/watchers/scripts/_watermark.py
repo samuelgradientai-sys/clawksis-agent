@@ -60,7 +60,7 @@ def _state_dir() -> Path:
 
     # Default: $CLAWK_HOME/watcher-state/, falling back to ~/.clawksis/watcher-state/.
 
-    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk")
+    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
 
     return Path(clawk_home) / "watcher-state"
 

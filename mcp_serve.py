@@ -115,7 +115,7 @@ def _get_sessions_dir() -> Path:
         return get_clawk_home() / "sessions"
 
     except ImportError:
-        return Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawk")) / "sessions"
+        return Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis")) / "sessions"
 
 
 def _get_session_db():
@@ -168,7 +168,7 @@ def _load_channel_directory() -> dict:
 
     except ImportError:
         directory_file = (
-            Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawk"))
+            Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis"))
             / "channel_directory.json"
         )
 
@@ -549,7 +549,7 @@ class EventBridge:
 
         except ImportError:
             db_file = (
-                Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawk")) / "state.db"
+                Path(os.environ.get("CLAWK_HOME", Path.home() / ".clawksis")) / "state.db"
             )
 
         try:

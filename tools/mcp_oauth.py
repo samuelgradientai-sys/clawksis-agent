@@ -199,7 +199,7 @@ def _get_token_dir() -> Path:
         base = Path(get_clawk_home())
 
     except ImportError:
-        base = Path(os.environ.get("CLAWK_HOME", str(Path.home() / ".clawk")))
+        base = Path(os.environ.get("CLAWK_HOME", str(Path.home() / ".clawksis")))
 
     return base / "mcp-tokens"
 

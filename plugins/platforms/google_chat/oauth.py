@@ -167,7 +167,7 @@ except (ModuleNotFoundError, ImportError):
 
         val = os.environ.get("CLAWK_HOME", "").strip()
 
-        return Path(val) if val else Path.home() / ".clawk"
+        return Path(val) if val else Path.home() / ".clawksis"
 
     def get_default_clawk_root() -> Path:
 
@@ -177,7 +177,7 @@ except (ModuleNotFoundError, ImportError):
 
         # found regardless of which profile is active.
 
-        native_home = Path.home() / ".clawk"
+        native_home = Path.home() / ".clawksis"
 
         env_home = os.environ.get("CLAWK_HOME", "").strip()
 

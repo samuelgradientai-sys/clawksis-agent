@@ -66,7 +66,7 @@ from typing import Any, Dict, List, Tuple
 
 ORIGINAL_HOME = os.environ.get("CLAWK_HOME")
 
-ORIGINAL_AUTH = Path.home() / ".clawk" / "auth.json"
+ORIGINAL_AUTH = Path.home() / ".clawksis" / "auth.json"
 
 
 _THIS_DIR = Path(__file__).resolve().parent
@@ -351,7 +351,7 @@ def setup_isolated_home(enabled: bool) -> Path:
 
     # running inside the isolated home.
 
-    real_env_file = Path.home() / ".clawk" / ".env"
+    real_env_file = Path.home() / ".clawksis" / ".env"
 
     if real_env_file.exists():
         shutil.copy(real_env_file, clawk_home / ".env")
@@ -370,7 +370,7 @@ def setup_isolated_home(enabled: bool) -> Path:
 
         from clawk_cli.env_loader import load_clawk_dotenv
 
-        load_clawk_dotenv(clawk_home=str(Path.home() / ".clawk"))
+        load_clawk_dotenv(clawk_home=str(Path.home() / ".clawksis"))
 
     cfg = {
         "model": {

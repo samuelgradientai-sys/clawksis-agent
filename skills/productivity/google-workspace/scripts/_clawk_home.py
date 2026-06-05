@@ -52,7 +52,7 @@ except (ModuleNotFoundError, ImportError):
 
         val = os.environ.get("CLAWK_HOME", "").strip()
 
-        return Path(val) if val else Path.home() / ".clawk"
+        return Path(val) if val else Path.home() / ".clawksis"
 
     def display_clawk_home() -> str:
         """Return a user-friendly ``~/``-shortened display string.

@@ -907,7 +907,7 @@ class GoogleChatAdapter(BasePlatformAdapter):
             _clawk_home = _get_clawk_home()
 
         except (ModuleNotFoundError, ImportError):
-            _clawk_home = _Path.home() / ".clawk"
+            _clawk_home = _Path.home() / ".clawksis"
 
         self._thread_count_store = _ThreadCountStore(
             _clawk_home / "google_chat_thread_counts.json"
@@ -1150,7 +1150,7 @@ class GoogleChatAdapter(BasePlatformAdapter):
     def _bot_id_cache_path(self) -> _Path:
         """Location where the resolved bot user_id is cached across restarts."""
 
-        base = os.getenv("CLAWK_HOME", str(_Path.home() / ".clawk"))
+        base = os.getenv("CLAWK_HOME", str(_Path.home() / ".clawksis"))
 
         return _Path(base) / "google_chat_bot_id.json"
 

@@ -81,7 +81,7 @@ except ImportError:
 
         val = (os.environ.get("CLAWK_HOME") or "").strip()
 
-        return Path(val) if val else Path.home() / ".clawk"
+        return Path(val) if val else Path.home() / ".clawksis"
 
 
 DEFAULT_TUI_DIR = Path(

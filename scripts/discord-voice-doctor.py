@@ -36,7 +36,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
-CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
 
 ENV_FILE = CLAWK_HOME / ".env"
 

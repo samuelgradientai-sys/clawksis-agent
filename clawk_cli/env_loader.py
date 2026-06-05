@@ -360,7 +360,7 @@ def load_clawk_dotenv(
 
     loaded: list[Path] = []
 
-    home_path = Path(clawk_home or os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+    home_path = Path(clawk_home or os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
 
     user_env = home_path / ".env"
 

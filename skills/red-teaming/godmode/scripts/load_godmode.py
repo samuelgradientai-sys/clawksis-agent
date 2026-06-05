@@ -34,7 +34,7 @@ from pathlib import Path
 
 
 _gm_scripts_dir = (
-    Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+    Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
     / "skills"
     / "red-teaming"
     / "godmode"

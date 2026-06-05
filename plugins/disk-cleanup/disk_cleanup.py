@@ -64,7 +64,7 @@ except Exception:  # pragma: no cover — plugin may load before constants resol
 
         val = (os.environ.get("CLAWK_HOME") or "").strip()
 
-        return Path(val).resolve() if val else (Path.home() / ".clawk").resolve()
+        return Path(val).resolve() if val else (Path.home() / ".clawksis").resolve()
 
 
 logger = logging.getLogger(__name__)

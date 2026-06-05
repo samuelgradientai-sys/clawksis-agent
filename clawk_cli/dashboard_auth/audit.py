@@ -105,7 +105,7 @@ def _resolve_log_path() -> Path:
 
     """
 
-    home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk")
+    home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
 
     return Path(home) / "logs" / "dashboard-auth.log"
 

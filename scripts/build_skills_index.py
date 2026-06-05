@@ -56,7 +56,7 @@ sys.path.insert(0, REPO_ROOT)
 
 # Ensure CLAWK_HOME is set (needed by tools/skills_hub.py imports)
 
-os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawk"))
+os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis"))
 
 
 from tools.skills_hub import (

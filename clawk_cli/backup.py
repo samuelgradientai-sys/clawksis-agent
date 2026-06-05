@@ -434,7 +434,7 @@ def _detect_prefix(zf: zipfile.ZipFile) -> str:
 
         # Only strip if it looks like a clawk dir name
 
-        if prefix in {".clawk", "clawk"}:
+        if prefix in {".clawksis", "clawksis", ".clawk", "clawk"}:
             return prefix + "/"
 
     return ""

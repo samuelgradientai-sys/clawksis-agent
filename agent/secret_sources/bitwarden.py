@@ -167,7 +167,7 @@ def _disk_cache_path(home_path: Optional[Path] = None) -> Path:
     """
 
     if home_path is None:
-        home_path = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+        home_path = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
 
     return home_path / "cache" / _DISK_CACHE_BASENAME
 

@@ -179,7 +179,7 @@ def clawk_lsp_bin_dir() -> Path:
     home = os.environ.get("CLAWK_HOME")
 
     if home is None:
-        home = os.path.join(os.path.expanduser("~"), ".clawk")
+        home = os.path.join(os.path.expanduser("~"), ".clawksis")
 
     p = Path(home) / "lsp" / "bin"
 

@@ -10226,7 +10226,7 @@ def _kanban_worker_skill_available(clawk_home: Optional[str]) -> bool:
 
     # home (``~/.clawksis``), which ships the bundled skill.
 
-    base = _Path(clawk_home) if clawk_home else (_Path.home() / ".clawk")
+    base = _Path(clawk_home) if clawk_home else (_Path.home() / ".clawksis")
 
     skills_root = base / "skills"
 
@@ -10350,7 +10350,7 @@ def _default_spawn(
 
     # If CLAWK_HOME is absent from the child's env, get_clawk_home() falls
 
-    # back to Path.home() / ".clawk" (the DEFAULT profile root), ignoring the
+    # back to Path.home() / ".clawksis" (the DEFAULT profile root), ignoring the
 
     # profile-specific config entirely.  Fixes profile-scoped fallback_providers
 
