@@ -101,23 +101,16 @@ def _skin_color(key: str, fallback: str) -> str:
 from clawk_cli import __version__ as VERSION, __release_date__ as RELEASE_DATE
 
 
-CLAWK_AGENT_LOGO = """[bold #C01010]  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗[/]
-[bold #A80000] ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝[/]
-[bold #900000] ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗[/]
-[bold #800000] ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╔════██║██║╔════██║[/]
-[bold #6B0000] ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║[/]
-[bold #560000]  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝  ╚═╝ ╚══════╝╚═╝╚══════╝[/]"""
+CLAWK_AGENT_LOGO = """[bold #C01010]  ██████████ ██         ██████████ ██      ██ ██      ██ ██████████   ██████   ██████████[/]
+[bold #A80000]  ██         ██         ██      ██ ██      ██ ██    ██   ██             ██     ██[/]
+[bold #900000]  ██         ██         ██████████ ██  ██  ██ ██████     ██████████     ██     ██████████[/]
+[bold #6B0000]  ██         ██         ██      ██ ████  ████ ██    ██           ██     ██             ██[/]
+[bold #560000]  ██████████ ██████████ ██      ██ ██      ██ ██      ██ ██████████   ██████   ██████████[/]"""
 
 
-CLAWK_CADUCEUS = """[bold #A80000]     __|__[/]
-[bold #A80000]    ( ∇ )[/]
-[#900000]   ___|___|___[/]
-[#900000]  |           |[/]
-[#800000]  | CLAWKSIS  |[/]
-[#6B0000]  |___________|[/]
-[#560000]      |   |[/]
-[#560000]      |   |[/]
-[#400000]      |___|[/]"""
+CLAWK_CADUCEUS = """[bold #A80000]  ███  [/]
+[#900000] █████ [/]
+[#6B0000]  ███  [/]"""
 
 
 # =========================================================================
@@ -754,29 +747,29 @@ def get_update_result(timeout: float = 0.5) -> Optional[int]:
 
 
 def print_clawksis_banner():
-    """Imprime el banner CLAWKSIS vinotinto — usar al inicio de cada comando."""
-    WINE = "\033[38;5;124m"
-    WINE2 = "\033[38;5;160m"
-    WINE3 = "\033[38;5;88m"
-    BOLD = "\033[1m"
-    RST = "\033[0m"
-    art = [
-        "  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗",
-        " ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝",
-        " ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗",
-        " ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╚════██║██║╚════██║",
-        " ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║",
-        "  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝",
-    ]
-    colors = [WINE2, WINE2, WINE, WINE, WINE3, WINE3]
+    """Imprime el banner CLAWKSIS vinotinto solido. Robusto a cualquier terminal UTF-8."""
+    import sys
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     from clawk_cli.colors import should_use_color
-
+    rows = [
+        "  ██████████ ██         ██████████ ██      ██ ██      ██ ██████████   ██████   ██████████",
+        "  ██         ██         ██      ██ ██      ██ ██    ██   ██             ██     ██",
+        "  ██         ██         ██████████ ██  ██  ██ ██████     ██████████     ██     ██████████",
+        "  ██         ██         ██      ██ ████  ████ ██    ██           ██     ██             ██",
+        "  ██████████ ██████████ ██      ██ ██      ██ ██      ██ ██████████   ██████   ██████████",
+    ]
+    ansi = ["[38;5;160m", "[38;5;124m", "[38;5;124m", "[38;5;88m", "[38;5;52m"]
+    BOLD = "[1m"
+    RST = "[0m"
     print()
     if should_use_color():
-        for i, line in enumerate(art):
-            print(f"{BOLD}{colors[i]}{line}{RST}")
+        for i, line in enumerate(rows):
+            print(f"{BOLD}{ansi[i]}{line}{RST}")
     else:
-        for line in art:
+        for line in rows:
             print(line)
     print()
 
@@ -1242,7 +1235,7 @@ def build_welcome_banner(
 
     term_width = shutil.get_terminal_size().columns
 
-    if term_width >= 95:
+    if term_width >= 90:
         _logo = (
             _bskin.banner_logo
             if _bskin and hasattr(_bskin, "banner_logo") and _bskin.banner_logo
