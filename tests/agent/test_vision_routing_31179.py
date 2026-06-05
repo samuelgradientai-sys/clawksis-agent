@@ -271,6 +271,26 @@ model:
 
         _fresh_modules()
 
+        # Hermetic: don't depend on a live models.dev fetch to learn that
+        # DeepSeek is text-only. In CI the network fetch can fail/timeout,
+        # leaving capability lookup as ``None`` (→ default "attempt anyway"),
+        # which would build a client and flake this test. Pin the capability
+        # to text-only so the test deterministically exercises the skip path.
+        import agent.models_dev as _models_dev
+
+        _text_only_caps = _models_dev.ModelCapabilities(
+            supports_tools=True,
+            supports_vision=False,
+            supports_reasoning=True,
+        )
+        monkeypatch.setattr(
+            _models_dev,
+            "get_model_capabilities",
+            lambda provider, model: (
+                _text_only_caps if provider == "deepseek" else None
+            ),
+        )
+
         from agent.auxiliary_client import resolve_vision_provider_client
 
         provider, client, _model = resolve_vision_provider_client(provider="auto")
