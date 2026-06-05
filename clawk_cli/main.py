@@ -13820,6 +13820,67 @@ def _run_with_idle_timeout(
 
 
 
+class _Spinner:
+    """Minimal in-place braille spinner for long, quiet steps (e.g. npm install).
+
+    Animates ``<frame> <label>…`` on one line while a blocking call runs, then
+    clears the line on exit so the caller can print its own ``✓`` / ``⚠``
+    result. No-op when stdout is not a TTY (CI, redirected logs, a dropped SSH
+    session): there it prints the label once so non-interactive logs still show
+    progress. Best-effort — every write is guarded so a vanishing terminal never
+    breaks the work running on the main thread.
+    """
+
+    _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, label: str):
+        self._label = label
+        self._stop = threading.Event()
+        self._thread = None
+        try:
+            self._tty = bool(sys.stdout.isatty())
+        except Exception:
+            self._tty = False
+
+    def __enter__(self):
+        if not self._tty:
+            try:
+                print(f"  → {self._label}…")
+            except Exception:
+                pass
+            return self
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+        return self
+
+    def _spin(self):
+        i = 0
+        while not self._stop.is_set():
+            try:
+                frame = self._FRAMES[i % len(self._FRAMES)]
+                sys.stdout.write(f"\r  {frame} {self._label}…")
+                sys.stdout.flush()
+            except Exception:
+                return
+            i += 1
+            self._stop.wait(0.1)
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread is not None:
+            try:
+                self._thread.join(timeout=1)
+            except Exception:
+                pass
+        if self._tty:
+            try:
+                sys.stdout.write("\r\033[K")
+                sys.stdout.flush()
+            except Exception:
+                pass
+        return False
+
+
 def _run_npm_install_deterministic(
 
     npm: str,
@@ -18974,72 +19035,51 @@ def _update_node_dependencies() -> None:
     # (see _desktop_build_needed).
 
     print("→ Updating Node.js dependencies...")
+    # Capture npm output instead of streaming it: dependency postinstall
+    # scripts (e.g. unicode-animations) print large ASCII banners, and npm
+    # emits EBADENGINE / deprecation warnings that bury the update progress.
+    # We show a discreet spinner instead and only dump npm's output if a step
+    # actually fails. --loglevel=error trims the captured noise too.
+    extra_args = [
+        "--no-fund", "--no-audit", "--progress=false", "--loglevel=error",
+    ]
 
-    extra_args = ["--no-fund", "--no-audit", "--progress=false"]
-
-
+    def _npm_failure_tail(result, max_lines: int = 12) -> None:
+        combined = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+        if not combined:
+            return
+        for line in combined.splitlines()[-max_lines:]:
+            print(f"    {line}")
 
     # Step 1: root install (no workspace recursion).
-
     root_args = [*extra_args, "--workspaces=false"]
-
-    root_result = _run_npm_install_deterministic(
-
-        npm,
-
-        PROJECT_ROOT,
-
-        extra_args=tuple(root_args),
-
-        capture_output=False,
-
-    )
-
+    with _Spinner("Installing root dependencies"):
+        root_result = _run_npm_install_deterministic(
+            npm,
+            PROJECT_ROOT,
+            extra_args=tuple(root_args),
+            capture_output=True,
+        )
     if root_result.returncode != 0:
-
         print("  ⚠ npm install failed in repo root")
-
-        stderr = (root_result.stderr or "").strip() if root_result.stderr else ""
-
-        if stderr:
-
-            print(f"    {stderr.splitlines()[-1]}")
-
+        _npm_failure_tail(root_result)
         return
 
-
-
     # Step 2: install only the workspaces update needs (ui-tui, web).
-
     # --workspace selects specific workspaces; the rest (desktop) are skipped.
-
     ws_args = [*extra_args, "--workspace", "ui-tui", "--workspace", "web"]
-
-    ws_result = _run_npm_install_deterministic(
-
-        npm,
-
-        PROJECT_ROOT,
-
-        extra_args=tuple(ws_args),
-
-        capture_output=False,
-
-    )
-
+    with _Spinner("Installing ui-tui + web workspaces"):
+        ws_result = _run_npm_install_deterministic(
+            npm,
+            PROJECT_ROOT,
+            extra_args=tuple(ws_args),
+            capture_output=True,
+        )
     if ws_result.returncode == 0:
-
         print("  ✓ repo root + ui-tui, web workspaces (desktop skipped)")
-
     else:
-
         print("  ⚠ npm workspace install failed")
-
-        stderr = (ws_result.stderr or "").strip() if ws_result.stderr else ""
-
-        if stderr:
-
-            print(f"    {stderr.splitlines()[-1]}")
+        _npm_failure_tail(ws_result)
 
 
 
