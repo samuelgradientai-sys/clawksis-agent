@@ -1,3 +1,4 @@
+from clawk_cli.banner import print_clawksis_banner
 """
 
 Gateway subcommand for clawk CLI.
@@ -7001,6 +7002,7 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
 
 
 
+    print_clawksis_banner()
     print("┌─────────────────────────────────────────────────────────┐")
 
     print("│           ∇ Clawksis Gateway Starting...                 │")

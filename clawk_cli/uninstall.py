@@ -1,3 +1,4 @@
+from clawk_cli.banner import print_clawksis_banner
 """
 
 Clawksis Uninstaller.
@@ -1021,6 +1022,7 @@ def run_uninstall(args):
 
     print()
 
+    print_clawksis_banner()
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.MAGENTA, Colors.BOLD))
 
     print(color("│            ∇ Clawksis Uninstaller                  │", Colors.MAGENTA, Colors.BOLD))
