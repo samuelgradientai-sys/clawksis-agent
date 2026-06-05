@@ -170,9 +170,9 @@ class TestLightModeRemap:
 
         cli_mod._LIGHT_MODE_CACHE = True
 
-        assert cli_mod._maybe_remap_for_light_mode("#E8E0FF") == "#1A1A1A"
+        assert cli_mod._maybe_remap_for_light_mode("#FFF8DC") == "#1A1A1A"
 
-        assert cli_mod._maybe_remap_for_light_mode("#8D70F0") == "#4A2E8C"
+        assert cli_mod._maybe_remap_for_light_mode("#FFD700") == "#9A6B00"
 
     def test_remap_case_insensitive(self, cli_mod, monkeypatch):
 
@@ -180,7 +180,7 @@ class TestLightModeRemap:
 
         # Lowercase input should still remap.
 
-        assert cli_mod._maybe_remap_for_light_mode("#e8e0ff") == "#1A1A1A"
+        assert cli_mod._maybe_remap_for_light_mode("#fff8dc") == "#1A1A1A"
 
     def test_remap_unknown_color_passthrough(self, cli_mod, monkeypatch):
 
