@@ -5,6 +5,8 @@
    `fonts.css`, so without this import the DS variables resolve to font
    families the browser never loads and components fall back to a system
    stack (Tabs, Segmented, Typography, Buttons, etc. all look unstyled). */
+@import '@nous-research/ui/styles/fonts.css';
+@import '@nous-research/ui/styles/globals.css';
 
 /* Scan the published design-system bundle so its utility classes survive
    Tailwind's JIT purge. */
