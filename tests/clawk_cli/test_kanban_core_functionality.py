@@ -64,7 +64,7 @@ from clawk_cli.kanban import run_slash
 
 def kanban_home(tmp_path, monkeypatch):
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -2468,7 +2468,7 @@ def test_migration_renames_legacy_event_kinds(tmp_path, monkeypatch):
 
     in place on init_db()."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -2554,7 +2554,7 @@ def test_list_profiles_on_disk(tmp_path, monkeypatch):
 
     monkeypatch.delenv("CLAWK_HOME", raising=False)
 
-    profiles = tmp_path / ".clawk" / "profiles"
+    profiles = tmp_path / ".clawksis" / "profiles"
 
     profiles.mkdir(parents=True)
 
@@ -2618,11 +2618,11 @@ def test_known_assignees_merges_disk_and_board(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    profiles = tmp_path / ".clawk" / "profiles"
+    profiles = tmp_path / ".clawksis" / "profiles"
 
     profiles.mkdir(parents=True)
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
 
 
@@ -4392,7 +4392,7 @@ def test_cli_create_on_fresh_home_auto_inits(tmp_path, monkeypatch):
 
     'no such table: tasks' — init_db auto-runs now."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -4444,7 +4444,7 @@ def test_connect_auto_inits_fresh_db(tmp_path, monkeypatch):
 
     schema. Previously callers had to remember kb.init_db() first."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -4664,7 +4664,7 @@ def test_migration_backfill_idempotent_under_re_run(tmp_path, monkeypatch):
 
     dispatcher is simultaneously claiming."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

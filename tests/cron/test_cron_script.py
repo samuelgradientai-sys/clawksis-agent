@@ -46,7 +46,7 @@ def cron_env(tmp_path, monkeypatch):
 
     """Isolated cron environment with temp CLAWK_HOME."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 

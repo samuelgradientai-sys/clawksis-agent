@@ -1724,7 +1724,7 @@ class TestMediaDeliveryDefaultMode:
 
         fake_home = tmp_path / "home"
 
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
 
         clawk_dir.mkdir(parents=True)
 
@@ -1758,7 +1758,7 @@ class TestMediaDeliveryDefaultMode:
 
         fake_home = tmp_path / "home"
 
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
 
         clawk_dir.mkdir(parents=True)
 
@@ -1792,11 +1792,11 @@ class TestMediaDeliveryDefaultMode:
 
         fake_home = tmp_path / "home"
 
-        profile_home = fake_home / ".clawk" / "profiles" / "work"
+        profile_home = fake_home / ".clawksis" / "profiles" / "work"
 
         profile_home.mkdir(parents=True)
 
-        clawk_root = fake_home / ".clawk"
+        clawk_root = fake_home / ".clawksis"
 
         config_file = clawk_root / "config.yaml"
 
@@ -2016,7 +2016,7 @@ class TestMediaDeliveryDefaultMode:
 
         fake_home = tmp_path / "root"
 
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
 
         clawk_dir.mkdir(parents=True)
 

@@ -38,7 +38,7 @@ class TestOfferOpenclawMigration:
 
         with patch("clawk_cli.setup.Path.home", return_value=tmp_path):
 
-            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawk") is False
+            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawksis") is False
 
 
 
@@ -58,7 +58,7 @@ class TestOfferOpenclawMigration:
 
         ):
 
-            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawk") is False
+            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawksis") is False
 
 
 
@@ -84,7 +84,7 @@ class TestOfferOpenclawMigration:
 
         ):
 
-            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawk") is False
+            assert setup_mod._offer_openclaw_migration(tmp_path / ".clawksis") is False
 
 
 
@@ -100,7 +100,7 @@ class TestOfferOpenclawMigration:
 
         # Create a fake clawk home with config
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -238,7 +238,7 @@ class TestOfferOpenclawMigration:
 
 
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -336,7 +336,7 @@ class TestOfferOpenclawMigration:
 
         openclaw_dir.mkdir()
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -388,7 +388,7 @@ class TestOfferOpenclawMigration:
 
         openclaw_dir.mkdir()
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 

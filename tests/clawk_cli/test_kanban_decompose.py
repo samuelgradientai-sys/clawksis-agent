@@ -40,7 +40,7 @@ from clawk_cli import kanban_decompose as decomp
 
 def kanban_home(tmp_path, monkeypatch):
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

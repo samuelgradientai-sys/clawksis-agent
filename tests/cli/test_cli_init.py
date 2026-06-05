@@ -976,7 +976,7 @@ class TestRootLevelProviderOverride:
 
 
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1022,7 +1022,7 @@ class TestRootLevelProviderOverride:
 
 
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1068,7 +1068,7 @@ class TestRootLevelProviderOverride:
 
 
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 

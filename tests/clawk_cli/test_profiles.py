@@ -100,7 +100,7 @@ def profile_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
 
     default_home.mkdir(exist_ok=True)
 
@@ -266,7 +266,7 @@ class TestGetProfileDir:
 
         result = get_profile_dir("default")
 
-        assert result == tmp_path / ".clawk"
+        assert result == tmp_path / ".clawksis"
 
 
 
@@ -276,7 +276,7 @@ class TestGetProfileDir:
 
         result = get_profile_dir("coder")
 
-        assert result == tmp_path / ".clawk" / "profiles" / "coder"
+        assert result == tmp_path / ".clawksis" / "profiles" / "coder"
 
 
 
@@ -284,7 +284,7 @@ class TestGetProfileDir:
 
         tmp_path = profile_env
 
-        assert get_profile_dir("Coder") == tmp_path / ".clawk" / "profiles" / "coder"
+        assert get_profile_dir("Coder") == tmp_path / ".clawksis" / "profiles" / "coder"
 
 
 
@@ -348,7 +348,7 @@ class TestCreateProfile:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         # Create source config files in default profile
 
@@ -376,7 +376,7 @@ class TestCreateProfile:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         skill_dir = default_home / "skills" / "custom" / "installed-skill"
 
@@ -410,7 +410,7 @@ class TestCreateProfile:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         # Populate default with some content
 
@@ -456,7 +456,7 @@ class TestCreateProfile:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         profiles_root = default_home / "profiles"
 
@@ -500,7 +500,7 @@ class TestCreateProfile:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         # Simulate infrastructure dirs that only the default profile has
 
@@ -992,7 +992,7 @@ class TestActiveProfile:
 
         tmp_path = profile_env
 
-        active_path = tmp_path / ".clawk" / "active_profile"
+        active_path = tmp_path / ".clawksis" / "active_profile"
 
         active_path.write_text("")
 
@@ -1008,7 +1008,7 @@ class TestActiveProfile:
 
         set_active_profile("coder")
 
-        active_path = tmp_path / ".clawk" / "active_profile"
+        active_path = tmp_path / ".clawksis" / "active_profile"
 
         assert active_path.exists()
 
@@ -1058,7 +1058,7 @@ class TestGetActiveProfileName:
 
         create_profile("coder", no_alias=True)
 
-        profile_dir = tmp_path / ".clawk" / "profiles" / "coder"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "coder"
 
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
 
@@ -1112,7 +1112,7 @@ class TestResolveProfileEnv:
 
         result = resolve_profile_env("coder")
 
-        assert result == str(tmp_path / ".clawk" / "profiles" / "coder")
+        assert result == str(tmp_path / ".clawksis" / "profiles" / "coder")
 
 
 
@@ -1122,7 +1122,7 @@ class TestResolveProfileEnv:
 
         result = resolve_profile_env("default")
 
-        assert result == str(tmp_path / ".clawk")
+        assert result == str(tmp_path / ".clawksis")
 
 
 
@@ -1440,7 +1440,7 @@ class TestRenameProfile:
 
         create_profile("oldname", no_alias=True)
 
-        old_dir = tmp_path / ".clawk" / "profiles" / "oldname"
+        old_dir = tmp_path / ".clawksis" / "profiles" / "oldname"
 
         assert old_dir.is_dir()
 
@@ -1458,7 +1458,7 @@ class TestRenameProfile:
 
         assert new_dir.is_dir()
 
-        assert new_dir == tmp_path / ".clawk" / "profiles" / "newname"
+        assert new_dir == tmp_path / ".clawksis" / "profiles" / "newname"
 
 
 
@@ -1468,7 +1468,7 @@ class TestRenameProfile:
 
         create_profile("ssi_health", no_alias=True)
 
-        honcho_path = tmp_path / ".clawk" / "honcho.json"
+        honcho_path = tmp_path / ".clawksis" / "honcho.json"
 
         honcho_path.write_text(json.dumps({
 
@@ -1522,7 +1522,7 @@ class TestRenameProfile:
 
         create_profile("ssi_health", no_alias=True)
 
-        honcho_path = tmp_path / ".clawk" / "honcho.json"
+        honcho_path = tmp_path / ".clawksis" / "honcho.json"
 
         honcho_path.write_text(json.dumps({
 
@@ -1558,7 +1558,7 @@ class TestRenameProfile:
 
         create_profile("ssi_health", no_alias=True)
 
-        honcho_path = tmp_path / ".clawk" / "honcho.json"
+        honcho_path = tmp_path / ".clawksis" / "honcho.json"
 
         honcho_path.write_text(json.dumps({
 
@@ -2257,7 +2257,7 @@ class TestInternalHelpers:
 
         root = _get_profiles_root()
 
-        assert root == tmp_path / ".clawk" / "profiles"
+        assert root == tmp_path / ".clawksis" / "profiles"
 
 
 
@@ -2267,7 +2267,7 @@ class TestInternalHelpers:
 
         home = _get_default_clawk_home()
 
-        assert home == tmp_path / ".clawk"
+        assert home == tmp_path / ".clawksis"
 
 
 
@@ -2311,7 +2311,7 @@ class TestInternalHelpers:
 
         """In profile mode (CLAWK_HOME under ~/.clawksis), profiles root is still ~/.clawksis/profiles."""
 
-        native = tmp_path / ".clawk"
+        native = tmp_path / ".clawksis"
 
         profile_dir = native / "profiles" / "coder"
 
@@ -2425,7 +2425,7 @@ class TestEdgeCases:
 
         result = create_profile("mybot", no_alias=True)
 
-        expected = tmp_path / ".clawk" / "profiles" / "mybot"
+        expected = tmp_path / ".clawksis" / "profiles" / "mybot"
 
         assert result == expected
 
@@ -2453,7 +2453,7 @@ class TestEdgeCases:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
 
 
@@ -2479,7 +2479,7 @@ class TestEdgeCases:
 
         tmp_path = profile_env
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
 
 

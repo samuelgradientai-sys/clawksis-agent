@@ -92,7 +92,7 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     """Redirect CLAWK_HOME so banner cache and config writes are sandboxed."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

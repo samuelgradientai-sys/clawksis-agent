@@ -4244,9 +4244,9 @@ class TestExecuteToolCalls:
 
     def test_result_truncation_over_100k(self, agent, tmp_path, monkeypatch):
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
-        (tmp_path / ".clawk").mkdir()
+        (tmp_path / ".clawksis").mkdir()
 
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
@@ -4875,9 +4875,9 @@ class TestConcurrentToolExecution:
 
         """Concurrent path should save oversized results to file."""
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
-        (tmp_path / ".clawk").mkdir()
+        (tmp_path / ".clawksis").mkdir()
 
         tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
 

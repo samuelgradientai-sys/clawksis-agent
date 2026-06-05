@@ -28,7 +28,7 @@ import pytest
 
 def _isolate_home(tmp_path, monkeypatch):
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 

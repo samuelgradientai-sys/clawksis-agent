@@ -315,7 +315,7 @@ def test_invalidate_update_cache_clears_all_profiles(tmp_path):
 
     # Build a fake ~/.clawksis with default + two named profiles
 
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
 
     default_home.mkdir()
 
@@ -362,7 +362,7 @@ def test_invalidate_update_cache_no_profiles_dir(tmp_path):
 
 
 
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
 
     default_home.mkdir()
 

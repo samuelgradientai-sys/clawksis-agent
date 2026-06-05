@@ -212,7 +212,7 @@ def test_migrator_copies_skill_and_merges_allowlist(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -302,7 +302,7 @@ def test_migrator_optionally_imports_supported_secrets_and_messaging_settings(tm
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
 
 
@@ -380,7 +380,7 @@ def test_messaging_cwd_skipped_when_inside_source(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -442,7 +442,7 @@ def test_migrator_can_execute_only_selected_categories(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -516,7 +516,7 @@ def test_migrator_records_preset_in_report(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -572,7 +572,7 @@ def test_source_candidate_finds_files_in_custom_workspace(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     custom_ws = tmp_path / "my-custom-workspace"
 
@@ -688,7 +688,7 @@ def test_source_candidate_prefers_standard_workspace_over_custom(tmp_path: Path)
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     custom_ws = tmp_path / "my-custom-workspace"
 
@@ -760,7 +760,7 @@ def test_migrator_exports_full_overflow_entries(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -822,7 +822,7 @@ def test_migrator_can_rename_conflicting_imported_skill(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -900,7 +900,7 @@ def test_migrator_can_overwrite_conflicting_imported_skill_with_backup(tmp_path:
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -976,7 +976,7 @@ def test_discord_settings_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1038,7 +1038,7 @@ def test_slack_settings_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1104,7 +1104,7 @@ def test_signal_settings_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1170,7 +1170,7 @@ def test_model_config_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1224,7 +1224,7 @@ def test_model_config_object_format(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1276,7 +1276,7 @@ def test_tts_config_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1346,7 +1346,7 @@ def test_shared_skills_migrated(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1394,7 +1394,7 @@ def test_daily_memory_merged(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1456,7 +1456,7 @@ def test_provider_keys_require_migrate_secrets_flag(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     target.mkdir()
 
@@ -1544,7 +1544,7 @@ def test_workspace_agents_records_skip_when_missing(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     source.mkdir()
 
@@ -1582,7 +1582,7 @@ def test_cron_store_is_archived_without_config_cron_section(tmp_path: Path):
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     output_dir = target / "migration-report"
 
@@ -1962,7 +1962,7 @@ def _run_model_migration(tmp_path: Path, openclaw_json: dict) -> dict:
 
     source = tmp_path / ".openclaw"
 
-    target = tmp_path / ".clawk"
+    target = tmp_path / ".clawksis"
 
     source.mkdir(parents=True)
 

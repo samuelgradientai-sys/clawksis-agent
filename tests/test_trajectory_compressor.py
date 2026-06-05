@@ -36,7 +36,7 @@ from trajectory_compressor import (
 
 def test_import_loads_env_from_clawk_home(tmp_path, monkeypatch):
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

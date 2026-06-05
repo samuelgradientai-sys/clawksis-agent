@@ -205,7 +205,7 @@ class TestConfigFilePermissions(unittest.TestCase):
 
     def test_ensure_clawk_home_sets_0700(self):
 
-        home = Path(self.tmpdir) / ".clawk"
+        home = Path(self.tmpdir) / ".clawksis"
 
         with patch("clawk_cli.config.get_clawk_home", return_value=home):
 

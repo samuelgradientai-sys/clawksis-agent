@@ -310,7 +310,7 @@ class TestBackup:
 
         """Backup creates a valid zip containing expected files."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -378,7 +378,7 @@ class TestBackup:
 
         """Backup does NOT include clawksis-agent/ directory."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -418,7 +418,7 @@ class TestBackup:
 
         """Backup does NOT include __pycache__ dirs."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -458,7 +458,7 @@ class TestBackup:
 
         """Backup does NOT include PID files."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -498,7 +498,7 @@ class TestBackup:
 
         """When no output path given, zip goes to ~/clawk-backup-*.zip."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -534,7 +534,7 @@ class TestBackup:
 
         """Backup must not dereference symlinks and leak files outside CLAWK_HOME."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -686,7 +686,7 @@ class TestImport:
 
         """Import extracts files into clawk home."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -736,7 +736,7 @@ class TestImport:
 
         """Import strips .clawksis/ prefix if all entries share it."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -778,7 +778,7 @@ class TestImport:
 
         """Import rejects an empty zip."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -812,7 +812,7 @@ class TestImport:
 
         """Import rejects a zip that doesn't look like a clawk backup."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -850,7 +850,7 @@ class TestImport:
 
         """Import blocks zip entries with path traversal."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -898,7 +898,7 @@ class TestImport:
 
         """Import aborts when user says no to confirmation."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -944,7 +944,7 @@ class TestImport:
 
         """Import with --force skips confirmation and overwrites."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -984,7 +984,7 @@ class TestImport:
 
         """Import exits with error for nonexistent file."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1010,7 +1010,7 @@ class TestImport:
 
         """Secret files must end up at 0600 after restore (zipfile drops mode bits)."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1074,7 +1074,7 @@ class TestRoundTrip:
 
         # Source
 
-        src_home = tmp_path / "source" / ".clawk"
+        src_home = tmp_path / "source" / ".clawksis"
 
         src_home.mkdir(parents=True)
 
@@ -1104,7 +1104,7 @@ class TestRoundTrip:
 
         # Import into a different location
 
-        dst_home = tmp_path / "dest" / ".clawk"
+        dst_home = tmp_path / "dest" / ".clawksis"
 
         dst_home.mkdir(parents=True)
 
@@ -1378,7 +1378,7 @@ class TestBackupEdgeCases:
 
         """Backup exits when clawk home doesn't exist."""
 
-        fake_home = tmp_path / "nonexistent" / ".clawk"
+        fake_home = tmp_path / "nonexistent" / ".clawksis"
 
         monkeypatch.setenv("CLAWK_HOME", str(fake_home))
 
@@ -1402,7 +1402,7 @@ class TestBackupEdgeCases:
 
         """When output path is a directory, zip is created inside it."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1442,7 +1442,7 @@ class TestBackupEdgeCases:
 
         """Output path without .zip gets suffix appended."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1478,7 +1478,7 @@ class TestBackupEdgeCases:
 
         """Backup handles empty clawk home (no files to back up)."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1516,7 +1516,7 @@ class TestBackupEdgeCases:
 
         """Backup handles permission errors gracefully."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1570,7 +1570,7 @@ class TestBackupEdgeCases:
 
         """Backup skips files with pre-1980 timestamps (ZIP limitation)."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1626,7 +1626,7 @@ class TestBackupEdgeCases:
 
         """Backup skips its own output zip if it's inside clawk root."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1682,7 +1682,7 @@ class TestImportEdgeCases:
 
         """Import rejects a non-zip file."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1712,7 +1712,7 @@ class TestImportEdgeCases:
 
         """Import handles EOFError during confirmation prompt."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1748,7 +1748,7 @@ class TestImportEdgeCases:
 
         """Import handles KeyboardInterrupt during confirmation prompt."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1784,7 +1784,7 @@ class TestImportEdgeCases:
 
         """Import handles permission errors during extraction."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1842,7 +1842,7 @@ class TestImportEdgeCases:
 
         """Import shows progress with 500+ files."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1908,7 +1908,7 @@ class TestProfileRestoration:
 
         """Import auto-creates wrapper scripts for restored profiles."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -1980,7 +1980,7 @@ class TestProfileRestoration:
 
         """Import doesn't create wrappers for profile dirs without config."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -2032,7 +2032,7 @@ class TestProfileRestoration:
 
         """Import gracefully handles missing profiles module (fresh install)."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -2196,7 +2196,7 @@ class TestQuickSnapshot:
 
         """Create a fake CLAWK_HOME with critical state files."""
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 
@@ -2618,7 +2618,7 @@ class TestPreUpdateBackup:
 
     def clawk_home(self, tmp_path):
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
 
         root.mkdir()
 
@@ -2946,7 +2946,7 @@ class TestRunPreUpdateBackup:
 
     def clawk_home(self, tmp_path, monkeypatch):
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
 
         root.mkdir()
 
@@ -3183,7 +3183,7 @@ class TestPreMigrationBackup:
 
     def clawk_home(self, tmp_path):
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
 
         root.mkdir()
 
@@ -3403,7 +3403,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 
@@ -3447,7 +3447,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 
@@ -3469,7 +3469,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 
@@ -3497,7 +3497,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 
@@ -3523,7 +3523,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 
@@ -3543,7 +3543,7 @@ class TestRestoreCronJobsIfEmptied:
 
         from clawk_cli.backup import restore_cron_jobs_if_emptied
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         jobs_path = clawk_home / "cron" / "jobs.json"
 

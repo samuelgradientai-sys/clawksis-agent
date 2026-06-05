@@ -30,7 +30,7 @@ import pytest
 
 def profile_env(tmp_path, monkeypatch):
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

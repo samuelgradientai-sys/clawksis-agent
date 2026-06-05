@@ -34,7 +34,7 @@ def curator_env(tmp_path, monkeypatch):
 
     """Isolated CLAWK_HOME + freshly reloaded curator + skill_usage modules."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     (home / "skills").mkdir(parents=True)
 

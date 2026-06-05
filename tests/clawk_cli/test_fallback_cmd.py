@@ -34,7 +34,7 @@ def isolated_home(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir(exist_ok=True)
 
@@ -48,7 +48,7 @@ def isolated_home(tmp_path, monkeypatch):
 
 def _write_config(home: Path, data: dict) -> None:
 
-    config_path = home / ".clawk" / "config.yaml"
+    config_path = home / ".clawksis" / "config.yaml"
 
     config_path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
@@ -58,7 +58,7 @@ def _write_config(home: Path, data: dict) -> None:
 
 def _read_config(home: Path) -> dict:
 
-    config_path = home / ".clawk" / "config.yaml"
+    config_path = home / ".clawksis" / "config.yaml"
 
     return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 

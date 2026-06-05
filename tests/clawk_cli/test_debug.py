@@ -28,7 +28,7 @@ def clawk_home(tmp_path, monkeypatch):
 
     """Set up an isolated CLAWK_HOME with minimal logs."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -300,7 +300,7 @@ class TestCaptureLogSnapshot:
 
     def test_returns_none_for_missing(self, tmp_path, monkeypatch):
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 
@@ -578,7 +578,7 @@ class TestCaptureLogSnapshotRedaction:
 
         """Isolated CLAWK_HOME whose agent.log contains a vendor-prefixed token."""
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 
@@ -928,7 +928,7 @@ class TestCollectDebugReport:
 
     def test_missing_logs_handled(self, tmp_path, monkeypatch):
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 
@@ -1261,7 +1261,7 @@ class TestRunDebugShare:
 
         """Only uploads logs that exist."""
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 
@@ -1422,7 +1422,7 @@ class TestRunDebugShareRedaction:
 
         """Isolated CLAWK_HOME whose agent.log contains a vendor-prefixed token."""
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
 
         home.mkdir()
 

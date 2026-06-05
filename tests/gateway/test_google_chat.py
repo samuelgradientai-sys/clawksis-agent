@@ -3322,7 +3322,7 @@ class TestUserOAuthHelper:
 
         """
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
 
         profile_home = root / "profiles" / "bot1"
 
@@ -3358,7 +3358,7 @@ class TestUserOAuthHelper:
 
         profile-scoped seed) overrides the host-wide default when present."""
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
 
         profile_home = root / "profiles" / "bot1"
 

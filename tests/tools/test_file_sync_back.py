@@ -202,7 +202,7 @@ class TestSyncBackNoop:
 
         # Should return immediately without error
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
         # Nothing to assert beyond "no exception raised"
 
@@ -250,7 +250,7 @@ class TestSyncBackNoChanges:
 
 
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -300,7 +300,7 @@ class TestSyncBackAppliesChanged:
 
 
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -346,7 +346,7 @@ class TestSyncBackNewRemoteFile:
 
 
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -410,7 +410,7 @@ class TestSyncBackConflict:
 
         with caplog.at_level(logging.WARNING, logger="tools.environments.file_sync"):
 
-            mgr.sync_back(clawk_home=tmp_path / ".clawk")
+            mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -460,7 +460,7 @@ class TestSyncBackRetries:
 
         mgr = _make_manager(tmp_path, bulk_download_fn=flaky_download)
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -494,7 +494,7 @@ class TestSyncBackRetries:
 
             # Should NOT raise -- failures are logged, not propagated
 
-            mgr.sync_back(clawk_home=tmp_path / ".clawk")
+            mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -626,7 +626,7 @@ class TestSyncBackFileLock:
 
 
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -660,7 +660,7 @@ class TestSyncBackFileLock:
 
             # Should not raise — locking is skipped
 
-            mgr.sync_back(clawk_home=tmp_path / ".clawk")
+            mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -785,7 +785,7 @@ class TestSyncBackSIGINT:
                     side_effect=original_getsignal) as mock_get, \
              patch("tools.environments.file_sync.signal.signal") as mock_set:
 
-            mgr.sync_back(clawk_home=tmp_path / ".clawk")
+            mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -833,7 +833,7 @@ class TestSyncBackSIGINT:
 
                 try:
 
-                    mgr.sync_back(clawk_home=tmp_path / ".clawk")
+                    mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
                 except Exception as e:
 
@@ -899,7 +899,7 @@ class TestSyncBackSizeCap:
 
             with patch("tools.environments.file_sync._SYNC_BACK_MAX_BYTES", 1):
 
-                mgr.sync_back(clawk_home=tmp_path / ".clawk")
+                mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
 
 
@@ -939,7 +939,7 @@ class TestSyncBackSizeCap:
 
         # Default cap (2 GiB) is far above our tiny tar; extraction should proceed
 
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
         assert Path(host_file).read_bytes() == b"remote_version"
 

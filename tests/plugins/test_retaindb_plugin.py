@@ -42,7 +42,7 @@ def _isolate_env(tmp_path, monkeypatch):
 
     """Ensure CLAWK_HOME and RETAINDB vars are isolated."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -636,9 +636,9 @@ class TestRetainDBMemoryProvider:
 
         monkeypatch.setenv("RETAINDB_API_KEY", api_key)
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
-        (tmp_path / ".clawk").mkdir(exist_ok=True)
+        (tmp_path / ".clawksis").mkdir(exist_ok=True)
 
         provider = RetainDBMemoryProvider()
 
@@ -694,7 +694,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         assert p._client is not None
 
@@ -710,7 +710,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         assert p._client.project == "default"
 
@@ -724,7 +724,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         assert p._client.project == "my-project"
 
@@ -750,13 +750,13 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        soul_path = tmp_path / ".clawk" / "SOUL.md"
+        soul_path = tmp_path / ".clawksis" / "SOUL.md"
 
         soul_path.write_text("I am a helpful agent.")
 
         with patch.object(RetainDBMemoryProvider, "_seed_soul") as mock_seed:
 
-            p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+            p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
             # Give thread time to start
 
@@ -772,7 +772,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         block = p.system_prompt_block()
 
@@ -800,7 +800,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_nonexistent", {}))
 
@@ -814,7 +814,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "get_profile", return_value={"memories": []}):
 
@@ -830,7 +830,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_search", {}))
 
@@ -844,7 +844,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "search", return_value={"results": [{"content": "found"}]}):
 
@@ -860,7 +860,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "search") as mock_search:
 
@@ -880,7 +880,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "add_memory", return_value={"id": "mem-1"}):
 
@@ -896,7 +896,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_remember", {}))
 
@@ -910,7 +910,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "delete_memory", return_value={"deleted": True}):
 
@@ -926,7 +926,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_forget", {}))
 
@@ -940,7 +940,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "query_context", return_value={"results": [{"content": "relevant"}]}), \
              patch.object(p._client, "get_profile", return_value={"memories": []}):
@@ -959,7 +959,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "list_files", return_value={"files": []}):
 
@@ -975,7 +975,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_upload_file", {}))
 
@@ -987,7 +987,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_upload_file", {"local_path": "/nonexistent/file.txt"}))
 
@@ -1001,7 +1001,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_read_file", {}))
 
@@ -1015,7 +1015,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_ingest_file", {}))
 
@@ -1029,7 +1029,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         result = json.loads(p.handle_tool_call("retaindb_delete_file", {}))
 
@@ -1043,7 +1043,7 @@ class TestRetainDBMemoryProvider:
 
         p = self._make_provider(tmp_path, monkeypatch)
 
-        p.initialize("test-session", clawk_home=str(tmp_path / ".clawk"))
+        p.initialize("test-session", clawk_home=str(tmp_path / ".clawksis"))
 
         with patch.object(p._client, "get_profile", side_effect=RuntimeError("API exploded")):
 
@@ -1075,7 +1075,7 @@ class TestPrefetch:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1273,7 +1273,7 @@ class TestSyncTurn:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1311,7 +1311,7 @@ class TestSyncTurn:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1351,7 +1351,7 @@ class TestOnMemoryWrite:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1377,7 +1377,7 @@ class TestOnMemoryWrite:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1401,7 +1401,7 @@ class TestOnMemoryWrite:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 
@@ -1425,7 +1425,7 @@ class TestOnMemoryWrite:
 
         monkeypatch.setenv("RETAINDB_API_KEY", "rdb-test-key")
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(exist_ok=True)
 

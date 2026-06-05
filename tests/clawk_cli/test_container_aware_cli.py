@@ -50,7 +50,7 @@ def container_env(tmp_path, monkeypatch):
 
     """Set up a fake CLAWK_HOME with .container-mode file."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -126,7 +126,7 @@ def test_get_container_exec_info_none_without_file(tmp_path, monkeypatch):
 
     """Returns None when .container-mode doesn't exist (native mode)."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -198,7 +198,7 @@ def test_get_container_exec_info_defaults():
 
     with tempfile.TemporaryDirectory() as tmpdir:
 
-        clawk_home = Path(tmpdir) / ".clawk"
+        clawk_home = Path(tmpdir) / ".clawksis"
 
         clawk_home.mkdir()
 

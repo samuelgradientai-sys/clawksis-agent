@@ -556,7 +556,7 @@ def test_persist_dm_topic_thread_id_writes_config(tmp_path):
 
 
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
 
     config_file.parent.mkdir(parents=True)
 
@@ -571,7 +571,7 @@ def test_persist_dm_topic_thread_id_writes_config(tmp_path):
 
 
     with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
+         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}):
 
         adapter._persist_dm_topic_thread_id(111, "General", 999)
 
@@ -635,7 +635,7 @@ def test_persist_dm_topic_thread_id_skips_if_already_set(tmp_path):
 
 
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
 
     config_file.parent.mkdir(parents=True)
 
@@ -711,7 +711,7 @@ def test_persist_dm_topic_thread_id_replaces_existing_when_requested(tmp_path):
 
 
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
 
     config_file.parent.mkdir(parents=True)
 
@@ -726,7 +726,7 @@ def test_persist_dm_topic_thread_id_replaces_existing_when_requested(tmp_path):
 
 
     with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
+         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}):
 
         adapter._persist_dm_topic_thread_id(111, "General", 999, replace_existing=True)
 
@@ -794,7 +794,7 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
 
 
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
 
     config_file.parent.mkdir(parents=True)
 
@@ -815,7 +815,7 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
 
 
     with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}), \
+         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}), \
          patch("yaml.dump", side_effect=fail_dump):
 
         adapter._persist_dm_topic_thread_id(111, "General", 999)
@@ -998,7 +998,7 @@ def test_get_dm_topic_info_hot_reloads_from_config(tmp_path):
 
     }
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
 
     config_file.parent.mkdir(parents=True)
 
@@ -1009,7 +1009,7 @@ def test_get_dm_topic_info_hot_reloads_from_config(tmp_path):
 
 
     with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
+         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}):
 
         result = adapter._get_dm_topic_info("111", "555")
 

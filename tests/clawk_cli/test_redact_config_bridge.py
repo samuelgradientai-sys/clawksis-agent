@@ -48,7 +48,7 @@ def test_redact_secrets_false_in_config_yaml_is_honored(tmp_path):
 
     redaction — even though it's set in YAML, not as an env var."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -160,7 +160,7 @@ def test_redact_secrets_default_true_when_unset(tmp_path):
 
     """
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -229,7 +229,7 @@ def test_redact_secrets_true_in_config_yaml_is_honored(tmp_path):
 
     redaction — even though it's set in YAML, not as an env var."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 
@@ -317,7 +317,7 @@ def test_dotenv_redact_secrets_beats_config_yaml(tmp_path):
 
     """.env CLAWK_REDACT_SECRETS takes precedence over config.yaml."""
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
 

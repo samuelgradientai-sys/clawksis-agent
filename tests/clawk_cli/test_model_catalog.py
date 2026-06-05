@@ -30,7 +30,7 @@ def isolated_home(tmp_path, monkeypatch):
 
     """Isolate CLAWK_HOME + reset any module-level catalog cache per test."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

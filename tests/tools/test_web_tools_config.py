@@ -282,7 +282,7 @@ class TestFirecrawlClientConfig:
 
         real_home = tmp_path / "real-home"
 
-        (real_home / ".clawk").mkdir(parents=True)
+        (real_home / ".clawksis").mkdir(parents=True)
 
 
 

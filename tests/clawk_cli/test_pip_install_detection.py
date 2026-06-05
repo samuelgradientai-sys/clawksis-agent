@@ -168,7 +168,7 @@ def test_banner_warns_on_pip_install(tmp_path):
 
 
 
-    hh = tmp_path / ".clawk"
+    hh = tmp_path / ".clawksis"
 
     hh.mkdir()
 
@@ -219,7 +219,7 @@ def test_banner_no_pip_warning_on_git_install(tmp_path):
 
 
 
-    hh = tmp_path / ".clawk"
+    hh = tmp_path / ".clawksis"
 
     hh.mkdir()
 

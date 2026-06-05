@@ -716,7 +716,7 @@ class TestResolveConfigPath:
 
         fake_home.mkdir()
 
-        default_home = fake_home / ".clawk"
+        default_home = fake_home / ".clawksis"
 
         profile_home = default_home / "profiles" / "work"
 
@@ -788,13 +788,13 @@ class TestResolveConfigPath:
 
         # Profile mode: from_global_config() reads the default-profile honcho.json
 
-        # via the HOME-anchored helper, not Path.home() / ".clawk".
+        # via the HOME-anchored helper, not Path.home() / ".clawksis".
 
         fake_home = tmp_path / "fakehome"
 
         fake_home.mkdir()
 
-        default_home = fake_home / ".clawk"
+        default_home = fake_home / ".clawksis"
 
         profile_home = default_home / "profiles" / "work"
 

@@ -40,7 +40,7 @@ def kanban_home(tmp_path, monkeypatch):
 
     """Isolated CLAWK_HOME with an empty kanban DB."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -182,7 +182,7 @@ def test_connect_rejects_tls_record_in_sqlite_header(tmp_path, monkeypatch):
 
     """Kanban should classify TLS-looking page-0 clobbers before WAL setup."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -3967,7 +3967,7 @@ def test_cleanup_workspace_honors_workspaces_root_env_override(tmp_path, monkeyp
 
     """
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -4439,7 +4439,7 @@ class TestSharedBoardPaths:
 
         # Standard install: CLAWK_HOME == ~/.clawksis, no profile active.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4477,7 +4477,7 @@ class TestSharedBoardPaths:
 
         # converge on ~/.clawksis/kanban.db.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4529,7 +4529,7 @@ class TestSharedBoardPaths:
 
         # dispatcher/worker handoff actually depends on.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4583,7 +4583,7 @@ class TestSharedBoardPaths:
 
         # is not a `<root>/profiles/<name>` shape and not under
 
-        # `Path.home() / ".clawk"`.
+        # `Path.home() / ".clawksis"`.
 
         custom_root = tmp_path / "opt" / "clawk"
 
@@ -4637,7 +4637,7 @@ class TestSharedBoardPaths:
 
         # resolution rule.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         profile_home = default_home / "profiles" / "any"
 
@@ -4669,7 +4669,7 @@ class TestSharedBoardPaths:
 
         # Empty/whitespace override is treated as unset.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4697,7 +4697,7 @@ class TestSharedBoardPaths:
 
         # fix the worker would open a different file and see no rows.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4745,7 +4745,7 @@ class TestSharedBoardPaths:
 
         # This is the env the dispatcher injects into workers.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4787,7 +4787,7 @@ class TestSharedBoardPaths:
 
         # CLAWK_KANBAN_WORKSPACES_ROOT pins the workspaces root directly.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4829,7 +4829,7 @@ class TestSharedBoardPaths:
 
         # CLAWK_KANBAN_HOME.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -4863,7 +4863,7 @@ class TestSharedBoardPaths:
 
         # `-p <profile>` flag rewrites CLAWK_HOME.
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
 
         default_home.mkdir()
 
@@ -5153,7 +5153,7 @@ def test_connect_falls_back_to_delete_on_locking_protocol(tmp_path, monkeypatch,
 
 
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 
@@ -6067,7 +6067,7 @@ def test_task_dict_survives_corrupt_created_at(tmp_path, monkeypatch):
 
     # Set up an isolated kanban home so we can write a corrupt created_at.
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

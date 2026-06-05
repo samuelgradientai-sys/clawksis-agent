@@ -26,7 +26,7 @@ def _isolate(tmp_path, monkeypatch):
 
     """Isolate CLAWK_HOME so tests don't touch real config."""
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
 
     home.mkdir()
 

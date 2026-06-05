@@ -134,7 +134,7 @@ class TestGatewayPrompt:
 
         import threading
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -182,7 +182,7 @@ class TestGatewayPrompt:
 
         import threading
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -242,7 +242,7 @@ class TestGatewayPrompt:
 
         """Returns default when no response within timeout."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
@@ -264,7 +264,7 @@ class TestGatewayPrompt:
 
         """Empty response file returns default."""
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
