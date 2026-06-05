@@ -1,4 +1,0 @@
-[console_scripts]
-clawk = clawk_cli.main:main
-clawk-acp = acp_adapter.entry:main
-clawk-agent = run_agent:main
