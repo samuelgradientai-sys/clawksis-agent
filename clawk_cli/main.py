@@ -10096,8 +10096,6 @@ def _run_with_idle_timeout(
     return subprocess.CompletedProcess(cmd, rc, stdout=combined, stderr="")
 
 
-
-
 def _run_npm_install_deterministic(
     npm: str,
     cwd: Path,
