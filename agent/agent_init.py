@@ -420,7 +420,7 @@ def init_agent(
 
         api_mode (str): API mode override: "chat_completions" or "codex_responses"
 
-        model (str): Model name to use (default: "anthropic/claude-opus-4.6")
+        model (str): Model name to use (default: "" -- resolved from config/provider; chosen via 'clawk setup'/'clawk model')
 
         max_iterations (int): Maximum number of tool calling iterations (default: 90)
 

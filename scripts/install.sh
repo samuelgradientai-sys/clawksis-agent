@@ -1953,7 +1953,7 @@ run_setup_wizard() {
     # but opening fails with ENXIO, so the wizard would proceed and
     # then crash on `< /dev/tty` below.
     if ! (: </dev/tty) 2>/dev/null; then
-        log_info "Setup wizard skipped (no terminal available). Run 'clawk setup' after install."
+        log_info "Setup wizard skipped (no terminal available). Run 'clawk setup' (or 'clawk model') after install to choose your model."
         return 0
     fi
 

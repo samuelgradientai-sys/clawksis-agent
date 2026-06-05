@@ -984,11 +984,11 @@ def run_doctor(args):
     print()
 
     print_clawksis_banner()
-    print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
+    print(color("┌─────────────────────────────────────────────────────────┐", Colors.RED))
 
-    print(color("│                 🩺 Clawksis Doctor                        │", Colors.CYAN))
+    print(color("│                 🩺 Clawksis Doctor                        │", Colors.RED))
 
-    print(color("└─────────────────────────────────────────────────────────┘", Colors.CYAN))
+    print(color("└─────────────────────────────────────────────────────────┘", Colors.RED))
 
 
 

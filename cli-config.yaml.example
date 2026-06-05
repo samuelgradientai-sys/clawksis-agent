@@ -8,7 +8,7 @@
 model:
   # Default model to use (can be overridden with --model flag)
   # Both "default" and "model" work as the key name here.
-  default: "anthropic/claude-opus-4.6"
+  default: ""  # empty on purpose -- run 'clawk setup' / 'clawk model' to pick the model at install (no silent default)
   
   # Inference provider selection:
   #   "auto"         - Auto-detect from credentials (default)
