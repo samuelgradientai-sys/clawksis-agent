@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # =========================================================================
 
 
-_GOLD = "\033[1;38;2;255;215;0m"  # True-color #FFD700 bold
+_GOLD = "\033[1;38;2;141;112;240m"  # True-color #8D70F0 morado Clawksis
 
 _BOLD = "\033[1m"
 
@@ -109,9 +109,35 @@ CLAWK_AGENT_LOGO = """[bold #8D70F0]  ██████╗██╗      ██
 [bold #34246E]  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝[/]"""
 
 
-CLAWK_CADUCEUS = """[bold #A80000]  ███  [/]
-[#900000] █████ [/]
-[#6B0000]  ███  [/]"""
+CLAWK_CADUCEUS = """[#4A3496]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⣀⣀⠀⢀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#4A3496]⠀⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣇⠸⣿⣿⠇⣸⣿⣿⣷⣦⣄⡀⠀⠀⠀⠀⠀⠀[/]
+
+[#6C4FD6]⠀⢀⣠⣴⣶⠿⠋⣩⡿⣿⡿⠻⣿⡇⢠⡄⢸⣿⠟⢿⣿⢿⣍⠙⠿⣶⣦⣄⡀⠀[/]
+
+[#6C4FD6]⠀⠀⠉⠉⠁⠶⠟⠋⠀⠉⠀⢀⣈⣁⡈⢁⣈⣁⡀⠀⠉⠀⠙⠻⠶⠈⠉⠉⠀⠀[/]
+
+[#8D70F0]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⡿⠛⢁⡈⠛⢿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#8D70F0]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠿⣿⣦⣤⣈⠁⢠⣴⣿⠿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#6C4FD6]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣿⣦⡉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#6C4FD6]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢷⣦⣈⠛⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#4A3496]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⠦⠈⠙⠿⣦⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#4A3496]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣤⡈⠁⢤⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#34246E]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠷⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#34246E]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠑⢶⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#34246E]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠁⢰⡆⠈⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#34246E]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⠈⣡⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
+
+[#34246E]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"""
 
 
 # =========================================================================
@@ -679,9 +705,9 @@ def print_recent_changes(console: "Console", limit: int = 5) -> None:
         from rich.panel import Panel
         from rich.table import Table
 
-        accent = _skin_color("banner_accent", "#FFBF00")
-        dim = _skin_color("banner_dim", "#B8860B")
-        text = _skin_color("banner_text", "#FFF8DC")
+        accent = _skin_color("banner_accent", "#6C4FD6")
+        dim = _skin_color("banner_dim", "#4A3496")
+        text = _skin_color("banner_text", "#E8E0FF")
 
         grid = Table.grid(padding=(0, 1))
         grid.add_column(justify="right")  # short hash
@@ -907,11 +933,11 @@ def build_welcome_banner(
 
     # Resolve skin colors once for the entire banner
 
-    accent = _skin_color("banner_accent", "#FFBF00")
+    accent = _skin_color("banner_accent", "#6C4FD6")
 
-    dim = _skin_color("banner_dim", "#B8860B")
+    dim = _skin_color("banner_dim", "#4A3496")
 
-    text = _skin_color("banner_text", "#FFF8DC")
+    text = _skin_color("banner_text", "#E8E0FF")
 
     session_color = _skin_color("session_border", "#8B8682")
 
@@ -1219,9 +1245,9 @@ def build_welcome_banner(
 
     layout_table.add_row(left_content, right_content)
 
-    title_color = _skin_color("banner_title", "#FFD700")
+    title_color = _skin_color("banner_title", "#8D70F0")
 
-    border_color = _skin_color("banner_border", "#CD7F32")
+    border_color = _skin_color("banner_border", "#4A3496")
 
     version_label = format_banner_version_label()
 
