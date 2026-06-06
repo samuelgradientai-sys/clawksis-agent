@@ -10096,6 +10096,71 @@ def _run_with_idle_timeout(
     return subprocess.CompletedProcess(cmd, rc, stdout=combined, stderr="")
 
 
+class _Spinner:
+    """Animated single-line spinner for long, output-captured steps.
+
+    Lets ``clawk update`` capture noisy npm output (UNICODE banner,
+    EBADENGINE warnings, package counts) while still proving liveness so
+    long silent downloads (e.g. camofox browser binary) don't look hung
+    (#18840). No-op when stdout isn't a TTY (CI/pipes): prints the label
+    once instead of animating.
+    """
+
+    _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, label: str):
+        self._label = label
+        self._stop = None
+        self._thread = None
+        self._tty = False
+
+    def __enter__(self):
+        import threading
+
+        try:
+            self._tty = bool(sys.stdout.isatty())
+        except Exception:
+            self._tty = False
+        if not self._tty:
+            print(f"  → {self._label}…")
+            return self
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+        return self
+
+    def _spin(self):
+        import itertools
+        import time as _t
+
+        purple = "\033[38;2;108;79;214m"
+        rst = "\033[0m"
+        for frame in itertools.cycle(self._FRAMES):
+            if self._stop.is_set():
+                break
+            sys.stdout.write(f"\r  {purple}{frame}{rst} {self._label}…   ")
+            sys.stdout.flush()
+            _t.sleep(0.08)
+
+    def __exit__(self, *_exc):
+        if self._tty and self._stop:
+            self._stop.set()
+            if self._thread:
+                self._thread.join(timeout=1)
+            sys.stdout.write("\r" + " " * (len(self._label) + 14) + "\r")
+            sys.stdout.flush()
+        return False
+
+
+def _dump_npm_failure_tail(result, max_lines: int = 12) -> None:
+    """Print the tail of captured npm output when an install step fails."""
+    combined = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+    if not combined:
+        return
+    for line in combined.splitlines()[-max_lines:]:
+        print(f"    {line}")
+
+
 def _run_npm_install_deterministic(
     npm: str,
     cwd: Path,
@@ -13990,39 +14055,39 @@ def _update_node_dependencies() -> None:
     print("→ Updating Node.js dependencies...")
     extra_args = ["--no-fund", "--no-audit", "--progress=false"]
 
-    # Step 1: root install (no workspace recursion). Streamed (not captured):
-    # long postinstall downloads (e.g. the camofox browser binary) must show
-    # progress or they look like a hang (#18840).
+    # Output is captured (not streamed) so npm's noise — the unicode-animations
+    # postinstall ASCII banner, EBADENGINE warnings, package counts — stays
+    # hidden. The animated spinner proves liveness so long silent downloads
+    # (e.g. the camofox browser binary) don't look hung (#18840). On failure
+    # we dump the captured tail so errors are still visible.
     root_args = [*extra_args, "--workspaces=false"]
-    root_result = _run_npm_install_deterministic(
-        npm,
-        PROJECT_ROOT,
-        extra_args=tuple(root_args),
-        capture_output=False,
-    )
+    with _Spinner("Installing dependencies"):
+        root_result = _run_npm_install_deterministic(
+            npm,
+            PROJECT_ROOT,
+            extra_args=tuple(root_args),
+            capture_output=True,
+        )
     if root_result.returncode != 0:
         print("  ⚠ npm install failed in repo root")
-        stderr = (root_result.stderr or "").strip() if root_result.stderr else ""
-        if stderr:
-            print(f"    {stderr.splitlines()[-1]}")
+        _dump_npm_failure_tail(root_result)
         return
 
     # Step 2: install only the workspaces update needs (ui-tui, web).
     # --workspace selects specific workspaces; the rest (desktop) are skipped.
     ws_args = [*extra_args, "--workspace", "ui-tui", "--workspace", "web"]
-    ws_result = _run_npm_install_deterministic(
-        npm,
-        PROJECT_ROOT,
-        extra_args=tuple(ws_args),
-        capture_output=False,
-    )
+    with _Spinner("Installing workspaces (ui-tui, web)"):
+        ws_result = _run_npm_install_deterministic(
+            npm,
+            PROJECT_ROOT,
+            extra_args=tuple(ws_args),
+            capture_output=True,
+        )
     if ws_result.returncode == 0:
-        print("  ✓ repo root + ui-tui, web workspaces (desktop skipped)")
+        print("  ✓ Dependencies updated")
     else:
         print("  ⚠ npm workspace install failed")
-        stderr = (ws_result.stderr or "").strip() if ws_result.stderr else ""
-        if stderr:
-            print(f"    {stderr.splitlines()[-1]}")
+        _dump_npm_failure_tail(ws_result)
 
 
 class _UpdateOutputStream:
