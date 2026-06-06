@@ -3224,7 +3224,7 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
 
     current_default = (Path.home() / ".clawksis").resolve()
 
-    target_default = Path(target_home_dir) / ".clawk"
+    target_default = Path(target_home_dir) / ".clawksis"
 
     # Default ~/.clawksis → remap to target user's default
 
