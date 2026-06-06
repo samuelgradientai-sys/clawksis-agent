@@ -12839,6 +12839,29 @@ def start_server(
 
     print(f"  Clawksis Web UI → http://{host}:{port}")
 
+    # Foreground server: the terminal "stays here" on purpose because uvicorn
+    # is serving. Make that obvious so it doesn't read as a hang.
+    print(
+        "  (running in the foreground — press Ctrl+C to stop; "
+        "add `&` or use nohup/systemd to keep it serving after you log out)"
+    )
+
+    # Over SSH a loopback bind (the secure default) is NOT reachable from the
+    # operator's laptop — http://127.0.0.1 there points at their own machine,
+    # not this box. Print a copy-paste SSH tunnel so the dashboard stays
+    # private (no public port) yet is reachable locally.
+    if host in ("127.0.0.1", "localhost", "::1") and (
+        os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")
+    ):
+        _ssh_parts = os.environ.get("SSH_CONNECTION", "").split()
+        _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<this-server>"
+        _ssh_user = os.environ.get("USER") or "root"
+        print(
+            "  Remote machine — bound to loopback. From YOUR laptop run:\n"
+            f"      ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}\n"
+            f"  then open http://127.0.0.1:{port} in your local browser."
+        )
+
     # proxy_headers defaults to False so _ws_client_is_allowed sees the real
 
     # connection peer rather than X-Forwarded-For's rewritten value (which
