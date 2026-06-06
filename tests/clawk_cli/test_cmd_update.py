@@ -411,14 +411,13 @@ class TestCmdUpdateBranchFallback:
 
         assert idle_kwargs["cwd"] == PROJECT_ROOT / "web"
 
-        # Regression for #18840: root npm installs must stream output
-
-        # (capture_output=False) so postinstall progress is visible
-
-        # to the user.  The _build_web_ui install uses --silent and
-
-        # capture_output=True, so exclude it.
-
+        # Root npm installs capture output (capture_output=True) so npm's
+        # noise — the unicode-animations postinstall ASCII banner, EBADENGINE
+        # warnings, package counts — stays hidden behind a clean animated
+        # spinner. The spinner proves liveness so long silent downloads (e.g.
+        # the camofox browser binary) don't look hung — addressing #18840's
+        # intent without dumping raw npm output. The _build_web_ui install also
+        # uses --silent + capture_output=True, so exclude it.
         root_install_calls = [
             call
             for call in mock_run.call_args_list
@@ -432,9 +431,9 @@ class TestCmdUpdateBranchFallback:
         assert len(root_install_calls) == 2  # root-only + workspace install
 
         for call in root_install_calls:
-            assert call.kwargs.get("capture_output") is False, (
-                "repo-root npm install must stream output "
-                "(no capture_output) so postinstall progress is visible"
+            assert call.kwargs.get("capture_output") is True, (
+                "repo-root npm install must capture output so npm noise stays "
+                "hidden behind the spinner (liveness covers #18840)"
             )
 
     def test_update_non_interactive_runs_safe_config_migrations(
