@@ -1931,7 +1931,7 @@ class TestClawkHomeIsolation:
 
         from tools.tirith_security import _failure_marker_path
 
-        with patch.dict(os.environ, {"CLAWK_HOME": "/custom/clawk"}):
+        with patch.dict(os.environ, {"CLAWK_HOME": "/custom/clawksis"}):
             result = _failure_marker_path()
 
         assert result == "/custom/clawksis/.tirith-install-failed"
