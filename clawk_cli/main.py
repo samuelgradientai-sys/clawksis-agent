@@ -9395,6 +9395,73 @@ def _model_flow_anthropic(config, current_model=""):
         print("No change.")
 
 
+def cmd_connect(args):
+    """Save your personal Clawksis API key (issued by the clawksis.com portal).
+
+    Distinct from ``clawk login``, which authenticates an LLM inference
+    provider.  The key is stored in ``~/.clawksis/.env`` as ``CLAWKSIS_API_KEY``
+    (reusing the same ``api_key`` env plumbing) and is never printed or logged.
+    When ``CLAWKSIS_PORTAL_URL`` is set, the key is verified against the portal
+    first (best-effort: a unreachable portal warns but still saves).
+    """
+    import getpass
+    import json
+    import urllib.error
+    import urllib.request
+
+    from clawk_cli.config import get_env_value, save_env_value
+
+    key = (args.key or getpass.getpass("Clawksis API key: ")).strip()
+    if not key:
+        print("No API key provided.")
+        sys.exit(2)
+
+    account = None
+    portal = (
+        os.environ.get("CLAWKSIS_PORTAL_URL")
+        or get_env_value("CLAWKSIS_PORTAL_URL")
+        or ""
+    ).rstrip("/")
+    if portal and not getattr(args, "no_verify", False):
+        try:
+            req = urllib.request.Request(
+                f"{portal}/api/keys/verify",
+                data=json.dumps({"api_key": key}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(
+                req, timeout=getattr(args, "timeout", 15.0)
+            ) as resp:
+                body = json.loads((resp.read() or b"{}").decode("utf-8"))
+            if body.get("valid") is False:
+                print("✗ The portal rejected that API key.")
+                sys.exit(1)
+            account = body.get("user") or body.get("account") or body.get("email")
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            # Best-effort verification — save anyway so offline setup still works.
+            print(
+                f"⚠ Could not reach {portal} to verify ({exc}); saving locally anyway."
+            )
+
+    save_env_value("CLAWKSIS_API_KEY", key)
+    # NEVER echo the key itself.
+    if account:
+        print(f"✓ Connected to Clawksis as {account}. Key saved to ~/.clawksis/.env.")
+    else:
+        print("✓ Clawksis API key saved to ~/.clawksis/.env.")
+
+
+def cmd_disconnect(args):
+    """Remove the stored personal Clawksis API key (see ``clawk connect``)."""
+    from clawk_cli.config import remove_env_value
+
+    if remove_env_value("CLAWKSIS_API_KEY"):
+        print("✓ Removed your stored Clawksis API key.")
+    else:
+        print("No Clawksis API key was stored.")
+
+
 def cmd_login(args):
     """Authenticate Clawksis CLI with a provider."""
 
@@ -19758,6 +19825,43 @@ def main():
     )
 
     logout_parser.set_defaults(func=cmd_logout)
+
+    # =========================================================================
+    # connect / disconnect — personal Clawksis API key (clawksis.com portal).
+    # Separate from login/logout (which handle LLM provider auth).
+    # =========================================================================
+    connect_parser = subparsers.add_parser(
+        "connect",
+        help="Save your personal Clawksis API key (from the clawksis.com portal)",
+        description=(
+            "Store the personal API key issued by your Clawksis portal in "
+            "~/.clawksis/.env. Distinct from `clawk login`, which authenticates "
+            "an LLM inference provider."
+        ),
+    )
+    connect_parser.add_argument(
+        "--key",
+        default=None,
+        help="The API key (omit to be prompted for it without echo).",
+    )
+    connect_parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Skip the portal verification call even if CLAWKSIS_PORTAL_URL is set.",
+    )
+    connect_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="Verification request timeout in seconds (default: 15).",
+    )
+    connect_parser.set_defaults(func=cmd_connect)
+
+    disconnect_parser = subparsers.add_parser(
+        "disconnect",
+        help="Remove your stored personal Clawksis API key",
+    )
+    disconnect_parser.set_defaults(func=cmd_disconnect)
 
     auth_parser = subparsers.add_parser(
         "auth",
