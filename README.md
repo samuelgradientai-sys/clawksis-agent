@@ -55,6 +55,9 @@ clawk doctor
 | `clawk model` | Cambiar modelo de forma interactiva |
 | `clawk tools` | Activar/desactivar herramientas |
 | `clawk config edit` | Editar configuración en tu editor |
+| `clawk soul` | Ver/editar la personalidad del agente (SOUL.md) |
+| `clawk memory show` | Ver la memoria que el agente almacenó (MEMORY.md) |
+| `clawk user` | Ver/editar el perfil del usuario (USER.md) |
 | `clawk doctor` | Diagnóstico completo del sistema |
 | `clawk doctor --fix` | Autocorregir problemas detectados |
 | `clawk update` | Actualizar a la última versión |
