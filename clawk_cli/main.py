@@ -9543,6 +9543,57 @@ def cmd_debug(args):
     run_debug(args)
 
 
+def cmd_soul(args):
+    """Open, show, or locate the agent persona file (SOUL.md) in CLAWK_HOME."""
+    import shutil
+    import subprocess
+    from clawk_cli.config import get_clawk_home
+
+    soul_path = get_clawk_home() / "SOUL.md"
+
+    if not soul_path.exists():
+        try:
+            from clawk_cli.default_soul import DEFAULT_SOUL_MD
+
+            soul_path.parent.mkdir(parents=True, exist_ok=True)
+            soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
+        except Exception:
+            pass
+
+    action = getattr(args, "soul_command", None)
+
+    if action == "path":
+        print(str(soul_path))
+        return
+
+    if action == "show":
+        try:
+            print(soul_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            print(f"Could not read {soul_path}: {exc}")
+        return
+
+    editor = os.getenv("EDITOR") or os.getenv("VISUAL")
+    if not editor:
+        candidates = (
+            ["notepad", "code", "vim", "vi", "nano"]
+            if sys.platform == "win32"
+            else ["nano", "vim", "vi", "code", "notepad"]
+        )
+        for _cmd in candidates:
+            if shutil.which(_cmd):
+                editor = _cmd
+                break
+
+    if not editor:
+        print("No editor found ($EDITOR not set). SOUL.md is at:")
+        print(f"  {soul_path}")
+        return
+
+    print(f"Opening {soul_path} in {editor}...")
+    subprocess.run([editor, str(soul_path)])
+
+
 def cmd_config(args):
     """Configuration management."""
 
@@ -20495,6 +20546,20 @@ Examples:
     config_subparsers.add_parser("migrate", help="Update config with new options")
 
     config_parser.set_defaults(func=cmd_config)
+
+    # =========================================================================
+    # soul -- view/edit the agent persona file (SOUL.md)
+    # =========================================================================
+    soul_parser = subparsers.add_parser(
+        "soul",
+        help="View or edit the agent persona file (SOUL.md)",
+        description="Open ~/.clawksis/SOUL.md (the agent personality) in your editor.",
+    )
+    soul_subparsers = soul_parser.add_subparsers(dest="soul_command")
+    soul_subparsers.add_parser("edit", help="Open SOUL.md in $EDITOR (default action)")
+    soul_subparsers.add_parser("show", help="Print SOUL.md contents")
+    soul_subparsers.add_parser("path", help="Print SOUL.md file path")
+    soul_parser.set_defaults(func=cmd_soul)
 
     # =========================================================================
 
