@@ -62,6 +62,7 @@ clawk doctor
 | `clawk gateway install` | Instalar gateway como servicio del sistema |
 | `clawk gateway status` | Ver si el gateway está corriendo |
 | `clawk dashboard` | Abrir el dashboard web en el browser |
+| `clawk dashboard --remote USER@HOST` | Abrir un dashboard remoto vía túnel SSH (sin `ssh -L` manual; agregá `--start` para arrancarlo en el remoto, `--ssh-opt` para opciones de ssh) |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
 
 ---
