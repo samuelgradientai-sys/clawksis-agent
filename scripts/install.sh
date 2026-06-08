@@ -1921,6 +1921,31 @@ install_node_deps() {
     restore_dirty_lockfiles "$INSTALL_DIR"
 }
 
+install_thirdparty_clis() {
+    # Optional third-party agent CLIs that Clawksis can drive as tools:
+    #   Claude Code (@anthropic-ai/claude-code) and Codex (@openai/codex).
+    # They let the agent delegate coding tasks using the user's OWN
+    # Claude/ChatGPT subscription (first-party billing). Always pull @latest.
+    # Best-effort: a failure here must NEVER block the Clawksis install.
+    if [ "${SKIP_THIRDPARTY_CLIS:-false}" = "true" ]; then
+        log_info "Skipping agent CLIs (SKIP_THIRDPARTY_CLIS=true)"
+        return 0
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+        log_warn "npm not available -- skipping Claude Code / Codex CLIs"
+        return 0
+    fi
+    local pkg
+    for pkg in "@anthropic-ai/claude-code@latest" "@openai/codex@latest"; do
+        if npm install -g "$pkg" --silent >/dev/null 2>&1; then
+            log_success "Installed/updated $pkg"
+        else
+            log_warn "Could not install $pkg (optional -- later: npm i -g ${pkg%@latest})"
+        fi
+    done
+}
+
+
 run_setup_wizard() {
     if [ "$RUN_SETUP" = false ]; then
         log_info "Skipping setup wizard (--skip-setup)"
@@ -2564,6 +2589,9 @@ main() {
 
     progress_bar "Instalando dependencias Node (browser tools)..."
     install_node_deps
+
+    progress_bar "Instalando CLIs de agentes (Claude Code + Codex, ultimas versiones)..."
+    install_thirdparty_clis
 
     progress_bar "Enlazando el comando clawk..."
     setup_path
