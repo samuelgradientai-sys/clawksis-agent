@@ -44,6 +44,44 @@ clawk doctor
 
 ---
 
+## Proveedores soportados
+
+Elegís el proveedor en `clawk setup` o con `clawk model`. Los **OAuth** se loguean sin pegar API key; el resto usan API key en `~/.clawksis/.env`. `auto` (default) detecta solo según las credenciales que tengas.
+
+### Con login OAuth (sin API key)
+| Proveedor | id | Cómo conectarlo |
+|---|---|---|
+| **Claude** (Anthropic, Pro/Max) | `anthropic` | `clawk auth add anthropic --type oauth` |
+| **OpenAI Codex** (ChatGPT Pro/Plus) | `openai-codex` | `clawk auth add openai-codex --type oauth` |
+| **Nous Portal** | `nous` | `clawk login` · `clawk portal` |
+| **xAI Grok** (SuperGrok / Premium+) | `xai-oauth` | `clawk auth add xai-oauth --type oauth` |
+| **Google Gemini** | `google-gemini-cli` | `clawk auth add google-gemini-cli --type oauth` |
+| **Qwen** | `qwen-oauth` | `clawk auth add qwen-oauth --type oauth` |
+| **MiniMax** | `minimax-oauth` | `clawk auth add minimax-oauth --type oauth` |
+| **GitHub Copilot** | `copilot` | `GITHUB_TOKEN` |
+
+### Con API key (en `~/.clawksis/.env`)
+| Proveedor | id | Variable |
+|---|---|---|
+| **OpenRouter** (acceso a casi todo) | `openrouter` | `OPENROUTER_API_KEY` |
+| **OpenAI** directo | `openai-api` | `OPENAI_API_KEY` |
+| **Anthropic** directo | `anthropic` | `ANTHROPIC_API_KEY` |
+| **DeepSeek** | `deepseek` | `DEEPSEEK_API_KEY` |
+| **Google AI Studio** | `gemini` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` |
+| **Nous Portal** (API key) | `nous-api` | `NOUS_API_KEY` |
+| **z.ai / ZhipuAI GLM** | `zai` | `GLM_API_KEY` |
+| **Kimi / Moonshot** | `kimi-coding` | `KIMI_API_KEY` |
+| **MiniMax** global / China | `minimax` / `minimax-cn` | `MINIMAX_API_KEY` / `MINIMAX_CN_API_KEY` |
+| **Hugging Face** | `huggingface` | `HF_TOKEN` |
+| **NVIDIA NIM** | `nvidia` | `NVIDIA_API_KEY` |
+| **Xiaomi MiMo** | `xiaomi` | `XIAOMI_API_KEY` |
+| **Arcee AI** | `arcee` | `ARCEEAI_API_KEY` |
+| **Ollama Cloud** | `ollama-cloud` | `OLLAMA_API_KEY` |
+| **KiloCode** | `kilocode` | `KILOCODE_API_KEY` |
+| **Azure / Foundry** | `azure-foundry` | API key o Entra ID |
+| **LM Studio** (local) | `lmstudio` | opcional `LM_API_KEY` |
+| **Cualquier OpenAI-compatible** | `custom` | `base_url` + key |
+
 ## Comandos
 
 ### Básicos
