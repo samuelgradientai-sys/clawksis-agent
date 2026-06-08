@@ -46,26 +46,76 @@ clawk doctor
 
 ## Comandos
 
+### Básicos
 | Comando | Qué hace |
 |---|---|
-| `clawk` | Chat interactivo en la terminal |
+| `clawk` | Chat interactivo con el agente en la terminal |
 | `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
-| `clawk -z "mensaje"` | Respuesta directa sin modo interactivo |
-| `clawk -m gpt-4o` | Override de modelo para esa sesión |
-| `clawk model` | Cambiar modelo de forma interactiva |
-| `clawk tools` | Activar/desactivar herramientas |
-| `clawk config edit` | Editar configuración en tu editor |
-| `clawk soul` | Ver/editar la personalidad del agente (SOUL.md) |
-| `clawk memory show` · `clawk memory edit` | Ver o **editar** la memoria del agente (MEMORY.md) |
-| `clawk user` · `clawk user edit` | Ver o **editar** el perfil del usuario (USER.md) |
-| `clawk doctor` | Diagnóstico completo del sistema |
-| `clawk doctor --fix` | Autocorregir problemas detectados |
+| `clawk -z "mensaje"` | Respuesta directa one-shot (sin modo interactivo) |
+| `clawk -m <modelo>` | Override de modelo para esa sesión |
+| `clawk model` | Elegir modelo y proveedor por defecto |
+| `clawk tools` | Activar/desactivar herramientas por plataforma |
+| `clawk status` | Estado de todos los componentes |
+| `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
-| `clawk gateway run` | Correr el gateway de mensajería en primer plano |
-| `clawk gateway install` | Instalar gateway como servicio del sistema |
-| `clawk gateway status` | Ver si el gateway está corriendo |
-| `clawk dashboard` | Abrir el dashboard web en el browser |
+| `clawk dashboard` | Abrir el dashboard web |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
+
+### Login y credenciales
+| Comando | Qué hace |
+|---|---|
+| `clawk auth add anthropic --type oauth` | **Login con Claude** (suscripción Pro/Max, estilo Claude Code). En remoto/headless agregá `--manual-paste` |
+| `clawk auth add openai-codex --type oauth` | **Login con Codex** (ChatGPT Pro/Plus, device-code) |
+| `clawk auth add <provider> --type oauth` | Otros OAuth: `nous`, `xai-oauth`, `qwen-oauth`, `google-gemini-cli`, `minimax-oauth` |
+| `clawk auth list` | Listar credenciales del pool (marca la activa) |
+| `clawk auth status <provider>` | Ver si estás logueado, scope y expiración |
+| `clawk auth logout <provider>` | Cerrar sesión y limpiar credenciales |
+| `clawk login` · `clawk logout` | Autenticar / desautenticar un proveedor de inferencia |
+| `clawk portal` | Setup de Nous Portal (login + modelo + Tool Gateway) |
+| `clawk config edit` | Editar `config.yaml` en tu editor |
+
+> 💡 Los logins OAuth (Claude, Codex…) son 100% navegador — **no instalan ninguna CLI**.
+
+### Personalidad, memoria y perfil
+| Comando | Qué hace |
+|---|---|
+| `clawk soul` | Ver/editar la **personalidad** del agente (SOUL.md) |
+| `clawk memory show` · `clawk memory edit` | Ver / **editar** la memoria del agente (MEMORY.md) |
+| `clawk user` · `clawk user edit` | Ver / **editar** el perfil del usuario (USER.md) |
+
+### Mensajería y proactividad
+| Comando | Qué hace |
+|---|---|
+| `clawk gateway run` | Gateway de mensajería en primer plano |
+| `clawk gateway install` | Gateway como servicio del sistema (boot + auto-restart) |
+| `clawk gateway status` | Ver si el gateway está corriendo |
+| `clawk cron` | Tareas programadas (`list`, `add`, `trigger`…) |
+| `clawk webhook` | Webhooks dinámicos (suscripciones a eventos) |
+| `clawk pairing` | Códigos de pairing para autorizar usuarios |
+| `clawk send` | Enviar un mensaje a una plataforma (scripts/cron/CI) |
+| `clawk whatsapp` · `clawk slack` | Integración WhatsApp / Slack |
+
+### Capacidades (skills, plugins, MCP)
+| Comando | Qué hace |
+|---|---|
+| `clawk skills` | Buscar, instalar y gestionar skills |
+| `clawk plugins` | Instalar / actualizar / quitar plugins |
+| `clawk mcp` | Gestionar servidores MCP (y correr Clawksis como MCP server) |
+| `clawk bundles` | Bundles de skills (alias de varias skills) |
+| `clawk curator` | Mantenimiento automático de skills (status/run/pause) |
+
+### Sesiones y mantenimiento
+| Comando | Qué hace |
+|---|---|
+| `clawk sessions` | Historial de sesiones (list/rename/export/prune/delete) |
+| `clawk logs` | Ver y filtrar logs |
+| `clawk insights` | Uso y analytics |
+| `clawk backup` · `clawk import` | Backup / restaurar `~/.clawksis/` |
+| `clawk checkpoints` | Inspeccionar / limpiar checkpoints |
+| `clawk profile` | Perfiles (instancias aisladas de Clawksis) |
+| `clawk security` | Auditoría supply-chain (OSV.dev) |
+| `clawk kanban` | Tablero de colaboración (tareas, links, comentarios) |
+| `clawk version` | Mostrar versión |
 
 ---
 
