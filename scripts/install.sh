@@ -32,6 +32,11 @@ fi
 # wrong user's home directory when running under sudo -u <user>.  See #21269.
 export UV_NO_CONFIG=1
 
+# Suppress vanity postinstall banners (e.g. unicode-animations' UNICODE ASCII
+# art) that write to /dev/tty during `npm install`. Their postinstall scripts
+# self-skip when CI is set — keeps the install output clean.
+export CI=1
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'

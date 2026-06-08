@@ -10301,6 +10301,13 @@ def _run_npm_install_deterministic(
 
     """
 
+    # Suppress vanity postinstall banners (e.g. unicode-animations' UNICODE
+    # ASCII art) that write straight to /dev/tty and so bypass capture_output.
+    # Those scripts self-skip when a CI env var is set — see
+    # node_modules/unicode-animations/scripts/postinstall.cjs (exits early on
+    # CI / CONTINUOUS_INTEGRATION / GITHUB_ACTIONS).
+    npm_env = {**os.environ, "CI": "1"}
+
     lockfile = cwd / "package-lock.json"
 
     if lockfile.exists():
@@ -10314,6 +10321,7 @@ def _run_npm_install_deterministic(
             encoding="utf-8",
             errors="replace",
             check=False,
+            env=npm_env,
         )
 
         if ci_result.returncode == 0:
@@ -10333,6 +10341,7 @@ def _run_npm_install_deterministic(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=npm_env,
     )
 
 
