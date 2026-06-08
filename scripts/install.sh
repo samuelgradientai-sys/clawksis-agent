@@ -1668,27 +1668,10 @@ copy_config_templates() {
         log_info "~/.clawksis/config.yaml already exists, keeping it"
     fi
 
-    # Create SOUL.md if it doesn't exist (global persona file)
-    if [ ! -f "$CLAWK_HOME/SOUL.md" ]; then
-        cat > "$CLAWK_HOME/SOUL.md" << 'SOUL_EOF'
-# Clawksis Persona
-
-<!--
-This file defines the agent's personality and tone.
-The agent will embody whatever you write here.
-Edit this to customize how Clawksis communicates with you.
-
-Examples:
-  - "You are a warm, playful assistant who uses kaomoji occasionally."
-  - "You are a concise technical expert. No fluff, just facts."
-  - "You speak like a friendly coworker who happens to know everything."
-
-This file is loaded fresh each message -- no restart needed.
-Delete the contents (or this file) to use the default personality.
--->
-SOUL_EOF
-        log_success "Created ~/.clawksis/SOUL.md (edit to customize personality)"
-    fi
+    # SOUL.md (global persona) is intentionally NOT created here. It is seeded
+    # from the bundled persona in clawk_cli/default_soul.py (DEFAULT_SOUL_MD) by
+    # _ensure_default_soul_md() during config init, so the in-repo persona stays
+    # the single source of truth and ships with every install.
 
     log_success "Configuration directory ready: ~/.clawksis/"
 
