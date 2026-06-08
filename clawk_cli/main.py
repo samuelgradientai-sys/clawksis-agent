@@ -15130,6 +15130,10 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
     assume_yes = bool(getattr(args, "yes", False))
 
+    from clawk_cli.banner import print_clawksis_banner
+
+    print_clawksis_banner()
+
     print("∇ Updating Clawksis...")
 
     print()
