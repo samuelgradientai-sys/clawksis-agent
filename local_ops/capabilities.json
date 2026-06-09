@@ -1,0 +1,143 @@
+{
+  "schema_version": "0.1.0",
+  "product": "clawksis",
+  "module": "local_ops",
+  "description": "Portable, safe, local operational capabilities for Clawksis.",
+  "security_model": {
+    "principle": "Clawksis should call safe capabilities instead of executing arbitrary shell commands.",
+    "default_mode": "read-only or allowlisted",
+    "shell_execution": "disabled",
+    "dangerous_requests": "blocked",
+    "secrets_policy": "Do not read, print, store, or commit secrets."
+  },
+  "capabilities": [
+    {
+      "name": "safe-command-execution",
+      "status": "available",
+      "risk": "low",
+      "mode": "allowlist",
+      "entrypoint": "./local_ops/clawk-safe-ops",
+      "description": "Runs only predefined safe intents through Hermes Lite."
+    },
+    {
+      "name": "health-json",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/health-json",
+      "description": "Generates machine-readable health information for local operations."
+    },
+    {
+      "name": "doctor",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/doctor",
+      "description": "Runs diagnostics for local operations, tests, and security checks."
+    },
+    {
+      "name": "bootstrap",
+      "status": "available",
+      "risk": "low",
+      "mode": "local-setup",
+      "entrypoint": "./local_ops/bootstrap",
+      "description": "Prepares portable runtime directories and permissions."
+    },
+    {
+      "name": "security-audit",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/security-audit",
+      "description": "Scans local ops files for unsafe execution patterns, secrets, and private keys."
+    },
+    {
+      "name": "quality-gate",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/quality-gate",
+      "description": "Runs the full local validation gate before future commits or deployments."
+    },
+    {
+      "name": "repo-status",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/repo-status",
+      "description": "Report current branch, modified files, upstream, dirty state, and last commits without modifying the repository."
+    },
+    {
+      "name": "service-status",
+      "status": "available",
+      "risk": "medium",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/service-status",
+      "description": "Read status of explicitly allowed local services without modifying or restarting them."
+    },
+    {
+      "name": "safe-logs",
+      "status": "planned",
+      "risk": "medium",
+      "mode": "read-only-limited",
+      "entrypoint": null,
+      "description": "Read only approved log files with line limits and secret redaction."
+    },
+    {
+      "name": "system-health",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only",
+      "entrypoint": "./local_ops/system-health",
+      "description": "Report CPU load, memory, disk, uptime, OS, Python, and current user without modifying the system."
+    },
+    {
+      "name": "client-report",
+      "status": "available",
+      "risk": "low",
+      "mode": "read-only-sanitized",
+      "entrypoint": "./local_ops/client-report",
+      "description": "Generate a client-safe product summary without exposing secrets, internal users, hostnames, raw logs, or repository internals."
+    },
+    {
+      "name": "customer-insights",
+      "status": "available",
+      "risk": "low",
+      "mode": "business-read-only",
+      "entrypoint": "./business_ops/customer-insights",
+      "description": "Analyze customer concentration, top customers, repeat customers, and one-time buyers from a sales CSV."
+    },
+    {
+      "name": "product-performance",
+      "status": "available",
+      "risk": "low",
+      "mode": "business-read-only",
+      "entrypoint": "./business_ops/product-performance",
+      "description": "Analyze product revenue, units sold, discounts, concentration, and low-performing products from a sales CSV."
+    },
+    {
+      "name": "sales-rep-performance",
+      "status": "available",
+      "risk": "low",
+      "mode": "business-read-only",
+      "entrypoint": "./business_ops/sales-rep-performance",
+      "description": "Analyze sales representative revenue, orders, average ticket, discounts, and concentration from a sales CSV."
+    },
+    {
+      "name": "executive-summary",
+      "status": "available",
+      "risk": "low",
+      "mode": "business-read-only",
+      "entrypoint": "./business_ops/executive-summary",
+      "description": "Combine sales, customer, product, and sales-rep reports into an executive commercial summary."
+    },
+    {
+      "name": "ventas",
+      "status": "available",
+      "risk": "low",
+      "mode": "business-read-only",
+      "entrypoint": "./business_ops/ventas",
+      "description": "Comando corto en español para generar reportes comerciales de ventas: ejecutivo, semanal, clientes, productos o vendedores."
+    }
+  ]
+}

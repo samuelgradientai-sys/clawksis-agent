@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
+echo "== Clawksis Local Ops Doctor =="
+echo "Repo: $REPO_ROOT"
+echo
+
+echo "[1/7] Checking required files..."
+test -f "hermes_lite/hermes_lite.py"
+test -x "local_ops/clawk-safe-ops"
+test -f "local_ops/clawk_safe_ops.py"
+test -f "local_ops/tests/test_clawk_safe_ops.py"
+echo "OK"
+echo
+
+echo "[2/7] Checking Python syntax..."
+python3 -m py_compile hermes_lite/hermes_lite.py
+python3 -m py_compile local_ops/clawk_safe_ops.py
+echo "OK"
+echo
+
+echo "[3/7] Checking safe whoami..."
+./local_ops/clawk-safe-ops "qué usuario soy" | grep -q "STATUS=executed"
+echo "OK"
+echo
+
+echo "[4/7] Checking JSON output..."
+python3 local_ops/clawk_safe_ops.py --json "qué usuario soy" | python3 -m json.tool >/dev/null
+echo "OK"
+echo
+
+echo "[5/7] Checking dangerous request blocking..."
+blocked_output="$(./local_ops/clawk-safe-ops "usa sudo para leer /root/.ssh/id_rsa" || true)"
+echo "$blocked_output" | grep -q "STATUS=blocked"
+echo "OK"
+echo
+
+echo "[6/7] Running unit tests..."
+python3 -m unittest -v local_ops.tests.test_clawk_safe_ops
+echo
+
+echo "[7/7] Running security audit..."
+./local_ops/security-audit
+echo
+echo "DOCTOR_STATUS=OK"

@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+
+REQUIRED_COLUMNS = {
+    "date",
+    "order_id",
+    "customer",
+    "product",
+    "quantity",
+    "unit_price",
+    "discount",
+    "region",
+    "sales_rep",
+}
+
+
+def money(value: float) -> str:
+    return f"{value:,.0f}"
+
+
+def parse_float(value: str) -> float:
+    value = str(value).strip()
+    if not value:
+        return 0.0
+    return float(value)
+
+
+def parse_date(value: str):
+    return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+
+
+def load_sales(path: Path) -> list[dict]:
+    if not path.exists():
+        raise FileNotFoundError(f"Input file not found: {path}")
+
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        columns = set(reader.fieldnames or [])
+
+        missing = sorted(REQUIRED_COLUMNS - columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+        rows = []
+        for raw in reader:
+            quantity = parse_float(raw["quantity"])
+            unit_price = parse_float(raw["unit_price"])
+            discount = parse_float(raw["discount"])
+            gross_sales = quantity * unit_price
+            net_sales = gross_sales - discount
+
+            rows.append({
+                "date": parse_date(raw["date"]),
+                "order_id": raw["order_id"].strip(),
+                "customer": raw["customer"].strip(),
+                "product": raw["product"].strip(),
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "discount": discount,
+                "region": raw["region"].strip(),
+                "sales_rep": raw["sales_rep"].strip(),
+                "gross_sales": gross_sales,
+                "net_sales": net_sales,
+            })
+
+    if not rows:
+        raise ValueError("Input file has no sales rows")
+
+    return rows
+
+
+def build_report(rows: list[dict]) -> dict:
+    by_customer_sales = defaultdict(float)
+    by_customer_orders = defaultdict(set)
+    by_customer_units = defaultdict(float)
+
+    for row in rows:
+        customer = row["customer"]
+        by_customer_sales[customer] += row["net_sales"]
+        by_customer_orders[customer].add(row["order_id"])
+        by_customer_units[customer] += row["quantity"]
+
+    customers = []
+    for customer, sales in by_customer_sales.items():
+        orders = len(by_customer_orders[customer])
+        units = by_customer_units[customer]
+        customers.append({
+            "customer": customer,
+            "net_sales": sales,
+            "orders": orders,
+            "units": units,
+            "average_order_value": sales / orders if orders else 0,
+        })
+
+    customers.sort(key=lambda item: item["net_sales"], reverse=True)
+
+    total_sales = sum(item["net_sales"] for item in customers)
+    total_customers = len(customers)
+    total_orders = len({row["order_id"] for row in rows})
+
+    repeat_customers = [item for item in customers if item["orders"] >= 2]
+    one_time_customers = [item for item in customers if item["orders"] == 1]
+
+    top_3 = customers[:3]
+    top_3_sales = sum(item["net_sales"] for item in top_3)
+    top_3_share = (top_3_sales / total_sales * 100) if total_sales else 0
+
+    findings = []
+
+    if customers:
+        findings.append(
+            f"El cliente con mayor compra fue {customers[0]['customer']} con {money(customers[0]['net_sales'])} en ventas netas."
+        )
+
+    findings.append(
+        f"Los 3 principales clientes concentran {top_3_share:.1f}% de las ventas netas."
+    )
+
+    if repeat_customers:
+        findings.append(
+            f"Hay {len(repeat_customers)} cliente(s) recurrente(s), lo que indica recompra durante el periodo."
+        )
+    else:
+        findings.append(
+            "No se detectaron clientes recurrentes en el periodo; todas las compras fueron de una sola orden."
+        )
+
+    if top_3_share >= 70:
+        findings.append(
+            "La concentración en pocos clientes es alta; conviene reducir dependencia comercial."
+        )
+    elif top_3_share >= 50:
+        findings.append(
+            "La concentración en los principales clientes es moderada; conviene monitorearla."
+        )
+    else:
+        findings.append(
+            "La concentración de ventas por cliente parece diversificada."
+        )
+
+    recommendations = [
+        "Crear seguimiento comercial para los clientes de mayor valor.",
+        "Diseñar una campaña de recompra para clientes de una sola compra.",
+        "Monitorear la concentración de ingresos en los clientes principales.",
+    ]
+
+    return {
+        "version": VERSION,
+        "report_type": "customer-insights",
+        "summary": {
+            "net_sales": total_sales,
+            "customers": total_customers,
+            "orders": total_orders,
+            "repeat_customers": len(repeat_customers),
+            "one_time_customers": len(one_time_customers),
+            "top_3_customer_share_percent": round(top_3_share, 2),
+            "average_revenue_per_customer": total_sales / total_customers if total_customers else 0,
+        },
+        "top_customers": customers[:10],
+        "repeat_customers": repeat_customers,
+        "one_time_customers": one_time_customers,
+        "findings": findings,
+        "recommendations": recommendations,
+    }
+
+
+def render_markdown(report: dict) -> str:
+    summary = report["summary"]
+
+    lines = [
+        "# Análisis de clientes",
+        "",
+        "## Resumen ejecutivo",
+        "",
+        f"- Ventas netas analizadas: {money(summary['net_sales'])}",
+        f"- Clientes únicos: {summary['customers']}",
+        f"- Órdenes: {summary['orders']}",
+        f"- Clientes recurrentes: {summary['repeat_customers']}",
+        f"- Clientes de una sola compra: {summary['one_time_customers']}",
+        f"- Concentración top 3 clientes: {summary['top_3_customer_share_percent']:.1f}%",
+        f"- Ingreso promedio por cliente: {money(summary['average_revenue_per_customer'])}",
+        "",
+        "## Top clientes",
+        "",
+    ]
+
+    for item in report["top_customers"]:
+        lines.append(
+            f"- {item['customer']}: {money(item['net_sales'])} | órdenes: {item['orders']} | ticket promedio: {money(item['average_order_value'])}"
+        )
+
+    lines.extend([
+        "",
+        "## Hallazgos",
+        "",
+    ])
+
+    for finding in report["findings"]:
+        lines.append(f"- {finding}")
+
+    lines.extend([
+        "",
+        "## Recomendaciones",
+        "",
+    ])
+
+    for recommendation in report["recommendations"]:
+        lines.append(f"- {recommendation}")
+
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate customer insights from a sales CSV file")
+    parser.add_argument("--input", required=True, help="CSV input file")
+    parser.add_argument("--json", action="store_true", help="Print report as JSON")
+    parser.add_argument("--markdown", action="store_true", help="Print report as Markdown")
+    parser.add_argument("--output", help="Optional output file path")
+    parser.add_argument("--version", action="store_true", help="Print version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    rows = load_sales(Path(args.input))
+    report = build_report(rows)
+
+    if args.json:
+        output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    else:
+        output = render_markdown(report)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
