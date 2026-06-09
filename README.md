@@ -104,7 +104,7 @@ clawk doctor
 |---|---|
 | `clawk auth add anthropic --type oauth` | **Login con Claude** (suscripción Pro/Max, estilo Claude Code). En remoto/headless agregá `--manual-paste` |
 | `clawk auth add openai-codex --type oauth` | **Login con Codex** (ChatGPT Pro/Plus, device-code) |
-| `clawk auth add <provider> --type oauth` | Otros OAuth: `nous`, `xai-oauth`, `qwen-oauth`, `google-gemini-cli`, `minimax-oauth` |
+| `clawk auth add <provider> --type oauth` | Otros OAuth: `xai-oauth`, `qwen-oauth`, `google-gemini-cli`, `minimax-oauth` |
 | `clawk auth list` | Listar credenciales del pool (marca la activa) |
 | `clawk auth status <provider>` | Ver si estás logueado, scope y expiración |
 | `clawk auth logout <provider>` | Cerrar sesión y limpiar credenciales |
