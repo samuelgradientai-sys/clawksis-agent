@@ -53,7 +53,6 @@ clawk doctor
 |---|---|---|
 | **Claude** (Anthropic, Pro/Max) | `anthropic` | `clawk auth add anthropic --type oauth` |
 | **OpenAI Codex** (ChatGPT Pro/Plus) | `openai-codex` | `clawk auth add openai-codex --type oauth` |
-| **Nous Portal** | `nous` | `clawk login` · `clawk portal` |
 | **xAI Grok** (SuperGrok / Premium+) | `xai-oauth` | `clawk auth add xai-oauth --type oauth` |
 | **Google Gemini** | `google-gemini-cli` | `clawk auth add google-gemini-cli --type oauth` |
 | **Qwen** | `qwen-oauth` | `clawk auth add qwen-oauth --type oauth` |
@@ -68,7 +67,6 @@ clawk doctor
 | **Anthropic** (API key) | `clawk auth add anthropic --type api-key` | `ANTHROPIC_API_KEY` |
 | **DeepSeek** | `clawk auth add deepseek` | `DEEPSEEK_API_KEY` |
 | **Google AI Studio** | `clawk auth add gemini` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` |
-| **Nous Portal** (API key) | `clawk auth add nous-api` | `NOUS_API_KEY` |
 | **z.ai / ZhipuAI GLM** | `clawk auth add zai` | `GLM_API_KEY` |
 | **Kimi / Moonshot** | `clawk auth add kimi-coding` | `KIMI_API_KEY` |
 | **MiniMax** global / China | `clawk auth add minimax` (o `minimax-cn`) | `MINIMAX_API_KEY` / `MINIMAX_CN_API_KEY` |
@@ -110,8 +108,6 @@ clawk doctor
 | `clawk auth list` | Listar credenciales del pool (marca la activa) |
 | `clawk auth status <provider>` | Ver si estás logueado, scope y expiración |
 | `clawk auth logout <provider>` | Cerrar sesión y limpiar credenciales |
-| `clawk login` · `clawk logout` | Autenticar / desautenticar un proveedor de inferencia |
-| `clawk portal` | Setup de Nous Portal (login + modelo + Tool Gateway) |
 | `clawk config edit` | Editar `config.yaml` en tu editor |
 
 > 💡 Los logins OAuth (Claude, Codex…) son 100% navegador — **no instalan ninguna CLI**.
