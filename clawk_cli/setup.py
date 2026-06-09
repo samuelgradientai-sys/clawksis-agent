@@ -4164,6 +4164,12 @@ def _run_portal_one_shot(config: dict) -> None:
 
     """
 
+    # Nous Portal was removed: Clawksis is BYOK (bring your own key).
+    # This legacy command no longer runs the Nous onboarding flow.
+    print("Nous Portal has been removed — Clawksis is BYOK (bring your own key).")
+    print("Run 'clawk model' to pick a provider, or 'clawk auth add <provider>'.")
+    return
+
     from clawk_cli.config import load_config
 
     print_clawksis_banner()
