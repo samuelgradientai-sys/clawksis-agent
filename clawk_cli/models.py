@@ -1206,11 +1206,9 @@ class ProviderEntry(NamedTuple):
 
 
 CANONICAL_PROVIDERS: list[ProviderEntry] = [
-    ProviderEntry(
-        "nous",
-        "Nous Portal",
-        "Nous Portal (Everything your agent needs, 300+ models with bundled tool use)",
-    ),
+    # Nous Portal removed: Clawksis is BYOK (bring your own key). The "nous"
+    # provider code remains available but is no longer listed or offered as a
+    # default in the setup wizard / model picker / provider inventory.
     ProviderEntry(
         "openrouter", "OpenRouter", "OpenRouter (Pay-per-use API aggregator)"
     ),
