@@ -112,7 +112,7 @@ export const fr: Translations = {
 
     footer: {
 
-      org: "Nous Research",
+      org: "Gradient AI",
 
     },
 

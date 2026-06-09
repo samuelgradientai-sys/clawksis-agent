@@ -110,7 +110,7 @@ export const zh: Translations = {
 
     footer: {
 
-      org: "Nous Research",
+      org: "Gradient AI",
 
     },
 
