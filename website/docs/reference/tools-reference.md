@@ -126,6 +126,54 @@ These two tools live in the `browser` toolset but only register when a Chrome De
 
 
 
+## `codex_cli` toolset
+
+
+
+| Tool | Description | Requires environment |
+
+|------|-------------|----------------------|
+
+| `codex_exec` | Delegate a coding task to OpenAI's Codex CLI, run headless via `codex exec`. Reads/edits files and runs commands autonomously in `workdir`, then returns a summary. Sandboxed (`workspace-write`) by default; `yolo=true` for full disk/network access. Requires the `codex` CLI installed (OPENAI_API_KEY or ChatGPT login). | — |
+
+
+
+## `claude_code_cli` toolset
+
+
+
+| Tool | Description | Requires environment |
+
+|------|-------------|----------------------|
+
+| `claude_code` | Delegate a coding task to Anthropic's Claude Code CLI, run headless via `claude -p`. Autonomous file edits + commands in `workdir`. `acceptEdits` permission mode by default; `yolo=true` skips all permission prompts. Requires the `claude` CLI installed (ANTHROPIC_API_KEY or subscription login). | — |
+
+
+
+## `opencode_cli` toolset
+
+
+
+| Tool | Description | Requires environment |
+
+|------|-------------|----------------------|
+
+| `opencode_run` | Delegate a coding task to the open-source OpenCode CLI via `opencode run`. Provider-agnostic (Anthropic / OpenAI / Google / OpenRouter / local). Requires the `opencode` CLI installed and a configured provider (`opencode auth login` or env keys). | — |
+
+
+
+## `mirofish` toolset
+
+
+
+| Tool | Description | Requires environment |
+
+|------|-------------|----------------------|
+
+| `mirofish` | Run a MiroFish multi-agent opinion/social simulation via its REST API and return a Markdown report. Long-running async job (`action`: simulate / status / report / interview). Requires a running MiroFish server (env `MIROFISH_BASE_URL`, default `http://localhost:5001`). | — |
+
+
+
 ## `feishu_doc` toolset
 
 

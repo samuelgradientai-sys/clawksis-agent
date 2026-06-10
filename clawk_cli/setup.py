@@ -4388,6 +4388,76 @@ def _seed_welcome_checkin() -> None:
         logger.debug("welcome check-in seeding skipped: %s", exc)
 
 
+def _install_coding_clis() -> None:
+    """Install the external coding-agent CLIs at install time (best-effort).
+
+    Codex, Claude Code, and OpenCode are installed globally via npm so the
+    agent can delegate coding tasks to them out of the box. Whether each is
+    actually *used* stays a per-toolset toggle in ``clawk tools`` — they ship
+    OFF by default; install only makes them available. MiroFish is a Docker
+    server, not a CLI, so it's left to its own setup hook.
+
+    Honors ``CLAWK_SKIP_CODING_CLIS=1`` to opt out. Never raises — a missing
+    npm or a failed install only prints a hint, it never breaks setup.
+    """
+
+    if str(os.environ.get("CLAWK_SKIP_CODING_CLIS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        logger.debug("coding-CLI install skipped via CLAWK_SKIP_CODING_CLIS")
+
+        return
+
+    try:
+        from clawk_cli.tools_config import _install_npm_cli
+    except Exception as exc:
+        logger.debug("coding-CLI install skipped (import failed): %s", exc)
+
+        return
+
+    print()
+
+    print_header("External Coding Agents")
+
+    print_info("Installing Codex, Claude Code, and OpenCode so your agent can")
+
+    print_info("delegate coding tasks. Toggle each later in `clawk tools`.")
+
+    try:
+        _install_npm_cli(
+            "@openai/codex",
+            "codex",
+            "Codex CLI",
+            login_hint="Auth: codex login (ChatGPT) or OPENAI_API_KEY.",
+        )
+
+        _install_npm_cli(
+            "@anthropic-ai/claude-code",
+            "claude",
+            "Claude Code CLI",
+            login_hint="Auth: run `claude` once, or set ANTHROPIC_API_KEY.",
+        )
+
+        _install_npm_cli(
+            "opencode-ai",
+            "opencode",
+            "OpenCode CLI",
+            login_hint="Auth: opencode auth login.",
+        )
+
+    except Exception as exc:
+        logger.debug("coding-CLI install error: %s", exc)
+
+        print_warning(f"Coding-CLI install encountered an error: {exc}")
+
+    print_info(
+        "MiroFish (opinion simulation) runs as a Docker server — configure it "
+        "in `clawk tools` → MiroFish. Not auto-installed."
+    )
+
+
 def run_setup_wizard(args):
     """Run the interactive setup wizard.
 
@@ -4712,6 +4782,8 @@ def run_setup_wizard(args):
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
     # installer (not the agent) owns it. Idempotent — never duplicates.
     if not is_existing:
+        _install_coding_clis()
+
         _seed_welcome_checkin()
 
     _print_setup_summary(config, clawk_home)
@@ -4831,6 +4903,8 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
     # installer (not the agent) owns it. Idempotent — never duplicates.
     if not is_existing:
+        _install_coding_clis()
+
         _seed_welcome_checkin()
 
     _print_setup_summary(config, clawk_home)

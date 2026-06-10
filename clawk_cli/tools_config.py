@@ -140,6 +140,13 @@ CONFIGURABLE_TOOLSETS = [
         "🖱️  Computer Use (macOS)",
         "background desktop control via cua-driver",
     ),
+    # External coding agents — installed once, toggled here. Each tool only
+    # exposes its schema when its CLI/server is present (check_fn), so an
+    # enabled-but-uninstalled entry simply stays dormant.
+    ("codex_cli", "🤖 Codex CLI (OpenAI)", "codex_exec"),
+    ("claude_code_cli", "🟣 Claude Code CLI (Anthropic)", "claude_code"),
+    ("opencode_cli", "🟧 OpenCode CLI (open source)", "opencode_run"),
+    ("mirofish", "🐟 MiroFish (opinion simulation)", "mirofish"),
 ]
 
 
@@ -208,6 +215,11 @@ _DEFAULT_OFF_TOOLSETS = {
     "video",
     "video_gen",
     "x_search",
+    # External coding agents — opt-in; require their CLI/server installed.
+    "codex_cli",
+    "claude_code_cli",
+    "opencode_cli",
+    "mirofish",
 }
 
 
@@ -792,6 +804,60 @@ TOOL_CATEGORIES = {
             },
         ],
     },
+    "codex_cli": {
+        "name": "Codex CLI (OpenAI)",
+        "icon": "🤖",
+        "providers": [
+            {
+                "name": "OpenAI Codex",
+                "tag": "Installs the `codex` CLI. Auth via `codex login` (ChatGPT) or OPENAI_API_KEY.",
+                "env_vars": [],
+                "post_setup": "codex_cli",
+            },
+        ],
+    },
+    "claude_code_cli": {
+        "name": "Claude Code CLI (Anthropic)",
+        "icon": "🟣",
+        "providers": [
+            {
+                "name": "Anthropic Claude Code",
+                "tag": "Installs the `claude` CLI. Auth via Claude subscription login or ANTHROPIC_API_KEY.",
+                "env_vars": [],
+                "post_setup": "claude_code_cli",
+            },
+        ],
+    },
+    "opencode_cli": {
+        "name": "OpenCode CLI (open source)",
+        "icon": "🟧",
+        "providers": [
+            {
+                "name": "OpenCode",
+                "tag": "Installs the `opencode` CLI. Configure a provider with `opencode auth login`.",
+                "env_vars": [],
+                "post_setup": "opencode_cli",
+            },
+        ],
+    },
+    "mirofish": {
+        "name": "MiroFish (opinion simulation)",
+        "icon": "🐟",
+        "providers": [
+            {
+                "name": "MiroFish server",
+                "tag": "Runs as a Docker service (REST API on :5001). Point elsewhere via MIROFISH_BASE_URL.",
+                "env_vars": [
+                    {
+                        "key": "MIROFISH_BASE_URL",
+                        "prompt": "MiroFish server URL",
+                        "default": "http://localhost:5001",
+                    },
+                ],
+                "post_setup": "mirofish",
+            },
+        ],
+    },
 }
 
 
@@ -1204,6 +1270,67 @@ def _run_cua_driver_installer(label: str = "Installing", verbose: bool = True) -
         _print_warning(f"    cua-driver {label.lower()} failed: {e}")
 
         return False
+
+
+def _install_npm_cli(
+    pkg: str, bin_name: str, label: str, *, login_hint: str = ""
+) -> None:
+    """Install a global npm-distributed coding CLI from a post-setup hook.
+
+    Idempotent: if ``bin_name`` already resolves on PATH we skip the install and
+    just print the auth hint. npm is required; when it's missing we print the
+    manual command instead of failing the whole setup flow.
+    """
+
+    import shutil
+    import subprocess
+
+    if shutil.which(bin_name):
+        _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+        return
+
+    npm_bin = shutil.which("npm")
+
+    if not npm_bin:
+        _print_warning(f"    npm not found — cannot auto-install {label}.")
+
+        _print_info(f"    Install Node.js, then run: npm install -g {pkg}")
+
+        return
+
+    _print_info(f"    Installing {label} (npm install -g {pkg})...")
+
+    try:
+        result = subprocess.run(
+            [npm_bin, "install", "-g", pkg],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+
+    except subprocess.TimeoutExpired:
+        _print_warning(f"    {label} install timed out (>10min).")
+
+        _print_info(f"    Run manually: npm install -g {pkg}")
+
+        return
+
+    if result.returncode == 0 and shutil.which(bin_name):
+        _print_success(f"    {label} installed")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+    else:
+        _print_warning(f"    {label} install failed:")
+
+        _print_info(f"      {(result.stderr or '').strip()[:300]}")
+
+        _print_info(f"    Run manually: npm install -g {pkg}")
 
 
 def _run_post_setup(post_setup_key: str):
@@ -1749,6 +1876,55 @@ def _run_post_setup(post_setup_key: str):
         else:
             _print_info(
                 "    xAI will remain inactive until credentials are configured."
+            )
+
+    elif post_setup_key == "codex_cli":
+        _install_npm_cli(
+            "@openai/codex",
+            "codex",
+            "Codex CLI",
+            login_hint="Authenticate with: codex login  (ChatGPT), or set OPENAI_API_KEY.",
+        )
+
+    elif post_setup_key == "claude_code_cli":
+        _install_npm_cli(
+            "@anthropic-ai/claude-code",
+            "claude",
+            "Claude Code CLI",
+            login_hint="Authenticate by running `claude` once, or set ANTHROPIC_API_KEY.",
+        )
+
+    elif post_setup_key == "opencode_cli":
+        _install_npm_cli(
+            "opencode-ai",
+            "opencode",
+            "OpenCode CLI",
+            login_hint="Configure a provider with: opencode auth login.",
+        )
+
+    elif post_setup_key == "mirofish":
+        # MiroFish is a Docker service, not a CLI binary — we can't `pip`/`npm`
+        # it. Print the stand-up steps; the tool's check_fn activates it once
+        # the server answers /health.
+        base = (
+            get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001"
+        ).rstrip("/")
+
+        _print_info("    MiroFish runs as a server (Docker), not a CLI binary. Setup:")
+
+        _print_info(
+            "      git clone https://github.com/666ghj/MiroFish && cd MiroFish"
+        )
+
+        _print_info("      cp .env.example .env   # set LLM_API_KEY and ZEP_API_KEY")
+
+        _print_info("      docker compose up -d   # REST API on http://localhost:5001")
+
+        _print_info(f"    The MiroFish tool activates once {base}/health responds.")
+
+        if not shutil.which("docker"):
+            _print_warning(
+                "    docker not found on PATH — install Docker to run MiroFish."
             )
 
 
