@@ -18369,29 +18369,35 @@ def _run_dashboard_remote(args):
 
     Forwards ``127.0.0.1:PORT`` to the remote's loopback, optionally starting
     ``clawk dashboard`` there (``--start``), and opens the browser locally once
-    the forwarded port answers.  ``ssh`` runs in the foreground; Ctrl+C tears the
-    tunnel down cleanly.  The remote bind and auth gate are untouched.
+    the dashboard actually answers HTTP.  ``ssh`` runs in the foreground; Ctrl+C
+    tears the tunnel down cleanly.  The remote bind and auth gate are untouched.
     """
-    import socket
     import threading
     import time
+    import urllib.error
+    import urllib.request
 
     target = args.remote
     port = args.port
     url = f"http://127.0.0.1:{port}/"
 
-    def _port_open():
+    def _http_ready():
+        # A real HTTP probe, NOT a bare TCP connect: `ssh -L` accepts the local
+        # connection the instant ssh links up — before (or even without) the
+        # remote dashboard serving — so a TCP check false-positives and we'd
+        # open the browser onto a dead "page unavailable".  Any HTTP response
+        # (including the auth gate's 401/403) means the dashboard is truly up.
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return True
-        except OSError:
+            urllib.request.urlopen(url, timeout=2).close()
+            return True
+        except urllib.error.HTTPError:
+            return True
+        except Exception:
             return False
 
-    # If the local port is already serving (a tunnel from a previous run, say),
-    # don't open a second forward that would fail under ExitOnForwardFailure —
-    # just open the browser.
-    if _port_open():
-        print(f"→ 127.0.0.1:{port} is already reachable — opening the dashboard.")
+    # Already serving locally (a tunnel from a previous run)?  Just open it.
+    if _http_ready():
+        print(f"→ 127.0.0.1:{port} is already serving — opening the dashboard.")
         _dashboard_open_browser(url)
         return
 
@@ -18399,15 +18405,32 @@ def _run_dashboard_remote(args):
         target, port, getattr(args, "start", False), getattr(args, "ssh_opt", None)
     )
 
-    # Open the browser once the forwarded port answers (background thread so ssh
-    # can stay in the foreground).  Give the tunnel ~20s to come up.
+    started = getattr(args, "start", False)
+    # A first-run `--start` builds the web UI on the remote, which can take a
+    # while; wait generously, and open the browser only once it truly answers.
+    deadline_s = 120 if started else 30
+
+    # Open the browser once the dashboard answers HTTP (background thread so ssh
+    # can stay in the foreground).
     def _wait_and_open():
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + deadline_s
         while time.monotonic() < deadline:
-            if _port_open():
+            if _http_ready():
                 _dashboard_open_browser(url)
                 return
-            time.sleep(0.5)
+            time.sleep(0.75)
+        # Never came up — don't open a dead page; explain why instead.
+        if not started:
+            print(
+                f"\n⚠ Nothing is serving on the remote's 127.0.0.1:{port} "
+                f"(tunnel is up, but the dashboard isn't). Re-run with --start "
+                "to launch it there, or start `clawk dashboard` on the remote."
+            )
+        else:
+            print(
+                f"\n⚠ The remote dashboard didn't answer within {deadline_s}s "
+                f"(first run builds the web UI). Open {url} once it's ready."
+            )
 
     threading.Thread(target=_wait_and_open, daemon=True).start()
 
