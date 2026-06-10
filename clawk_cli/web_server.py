@@ -12854,12 +12854,20 @@ def start_server(
         os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")
     ):
         _ssh_parts = os.environ.get("SSH_CONNECTION", "").split()
-        _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<this-server>"
+        _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<este-servidor>"
         _ssh_user = os.environ.get("USER") or "root"
+        _p = "\033[38;2;108;79;214m"  # Clawksis brand purple (#6C4FD6)
+        _b = "\033[1m"
+        _x = "\033[0m"
         print(
-            "  Remote machine — bound to loopback. From YOUR laptop run:\n"
-            f"      ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}\n"
-            f"  then open http://127.0.0.1:{port} in your local browser."
+            f"\n{_p}{_b}▼ Para abrirlo en tu navegador — corré esto en TU COMPUTADORA, "
+            f"NO en este servidor:{_x}\n"
+            f"{_p}  1) Dejá ESTA terminal abierta (acá corre el dashboard).{_x}\n"
+            f"{_p}  2) En tu PC abrí OTRA terminal (PowerShell/Terminal) y pegá esto "
+            f"— dejala abierta:{_x}\n"
+            f"{_p}{_b}        ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}{_x}\n"
+            f"{_p}  3) Recién ahí, en el navegador, abrí:  "
+            f"{_b}http://127.0.0.1:{port}{_x}"
         )
 
     # proxy_headers defaults to False so _ws_client_is_allowed sees the real
