@@ -12690,6 +12690,35 @@ app.include_router(_dashboard_auth_router)
 mount_spa(app)
 
 
+def print_dashboard_remote_hint(port):
+    """Brand-purple SSH-tunnel access notice for a loopback dashboard reached
+    over SSH (a remote server). Prints the Clawksis wordmark above it. Purple is
+    used only on what matters — the headline and the command to copy."""
+    _ssh_parts = os.environ.get("SSH_CONNECTION", "").split()
+    _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<este-servidor>"
+    _ssh_user = os.environ.get("USER") or "root"
+    _p = "\033[38;2;108;79;214m"  # Clawksis brand purple (#6C4FD6)
+    _b = "\033[1m"
+    _x = "\033[0m"
+    try:
+        from clawk_cli.banner import print_clawksis_banner
+
+        print_clawksis_banner()
+    except Exception:
+        pass
+    print(
+        f"{_p}{_b}▼ Estás en un servidor remoto — para verlo en tu navegador, "
+        f"corré el túnel en TU COMPUTADORA (no en este servidor):{_x}\n"
+        f"  1) Dejá ESTA terminal abierta (acá corre el dashboard).\n"
+        f"  2) En tu PC abrí OTRA terminal (PowerShell/Terminal) y pegá esto, "
+        f"dejala abierta:\n"
+        f"{_p}{_b}        ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}{_x}\n"
+        f"  3) Recién ahí, en el navegador, abrí:  {_b}http://127.0.0.1:{port}{_x}\n"
+        f"  · Si en cambio corrés esto en tu propia PC (no un servidor), ignorá lo de "
+        f"arriba: abrí {_b}http://127.0.0.1:{port}{_x} directamente."
+    )
+
+
 def start_server(
     host: str = "127.0.0.1",
     port: int = 9119,
@@ -12853,22 +12882,7 @@ def start_server(
     if host in ("127.0.0.1", "localhost", "::1") and (
         os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")
     ):
-        _ssh_parts = os.environ.get("SSH_CONNECTION", "").split()
-        _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<este-servidor>"
-        _ssh_user = os.environ.get("USER") or "root"
-        _p = "\033[38;2;108;79;214m"  # Clawksis brand purple (#6C4FD6)
-        _b = "\033[1m"
-        _x = "\033[0m"
-        print(
-            f"\n{_p}{_b}▼ Para abrirlo en tu navegador — corré esto en TU COMPUTADORA, "
-            f"NO en este servidor:{_x}\n"
-            f"{_p}  1) Dejá ESTA terminal abierta (acá corre el dashboard).{_x}\n"
-            f"{_p}  2) En tu PC abrí OTRA terminal (PowerShell/Terminal) y pegá esto "
-            f"— dejala abierta:{_x}\n"
-            f"{_p}{_b}        ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}{_x}\n"
-            f"{_p}  3) Recién ahí, en el navegador, abrí:  "
-            f"{_b}http://127.0.0.1:{port}{_x}"
-        )
+        print_dashboard_remote_hint(port)
 
     # proxy_headers defaults to False so _ws_client_is_allowed sees the real
 

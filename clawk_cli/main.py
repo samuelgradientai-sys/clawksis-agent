@@ -18520,6 +18520,22 @@ def cmd_dashboard(args):
         _run_dashboard_remote(args)
         return
 
+    # On a remote SSH session bound to loopback, run the server DETACHED so it
+    # survives the SSH session ending — otherwise SIGHUP kills it on logout and
+    # you have to re-run it. The parent prints the access notice and returns the
+    # prompt; the backgrounded child keeps serving. --no-detach disables this,
+    # `clawk dashboard --stop` kills it.
+    if (
+        os.name == "posix"
+        and args.host in ("127.0.0.1", "localhost", "::1")
+        and (os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"))
+        and sys.stdout.isatty()
+        and not os.environ.get("CLAWK_DASHBOARD_DETACHED")
+        and not getattr(args, "no_detach", False)
+    ):
+        _run_dashboard_detached(args)
+        return
+
     # Attach gui.log early so dashboard startup/build failures are captured in
 
     # the same logs directory as every other Clawksis surface.
@@ -18706,6 +18722,110 @@ def _dashboard_open_browser(url):
             webbrowser.open(url)
         except Exception:
             print(f"→ Open the dashboard manually: {url}")
+
+
+def _run_dashboard_detached(args):
+    """Launch the dashboard backgrounded + detached from the SSH session so it
+    survives logout, wait until it serves, then print the access notice and the
+    PID. Stop it with ``clawk dashboard --stop``."""
+    import time
+    import urllib.error
+    import urllib.request
+
+    host = args.host
+    port = args.port
+
+    try:
+        from clawk_cli.config import get_clawk_home
+
+        log_dir = get_clawk_home() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "dashboard.log"
+    except Exception:
+        import tempfile
+
+        log_path = Path(tempfile.gettempdir()) / "clawksis-dashboard.log"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "clawk_cli.main",
+        "dashboard",
+        "--no-open",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    if getattr(args, "skip_build", False):
+        cmd.append("--skip-build")
+    if getattr(args, "insecure", False):
+        cmd.append("--insecure")
+
+    env = dict(os.environ, CLAWK_DASHBOARD_DETACHED="1")
+    logf = open(log_path, "a", encoding="utf-8")
+    devnull = open(os.devnull, "rb")
+    try:
+        # start_new_session=True (setsid) detaches it from the controlling
+        # terminal, so closing the SSH session no longer sends it SIGHUP.
+        proc = subprocess.Popen(
+            cmd,
+            stdout=logf,
+            stderr=logf,
+            stdin=devnull,
+            start_new_session=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+    finally:
+        devnull.close()
+        logf.close()
+
+    # Wait until it actually answers HTTP (a first run builds the web UI).
+    url = f"http://127.0.0.1:{port}/"
+    up = False
+    for _ in range(180):  # ~90s
+        if proc.poll() is not None:
+            break
+        try:
+            urllib.request.urlopen(url, timeout=2).close()
+            up = True
+            break
+        except urllib.error.HTTPError:
+            up = True
+            break
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+    _p = "\033[38;2;108;79;214m"
+    _b = "\033[1m"
+    _x = "\033[0m"
+    _r = "\033[0;31m"
+
+    if not up:
+        print(f"{_r}✗ No se pudo iniciar el dashboard en segundo plano.{_x}")
+        print(f"  Log: {log_path}")
+        try:
+            with open(log_path, encoding="utf-8", errors="replace") as fh:
+                tail = fh.read().splitlines()[-30:]
+            if tail:
+                print("\n".join(tail))
+        except OSError:
+            pass
+        sys.exit(1)
+
+    try:
+        from clawk_cli.web_server import print_dashboard_remote_hint
+
+        print_dashboard_remote_hint(port)
+    except Exception:
+        pass
+    print(
+        f"\n{_p}{_b}✓ Dashboard corriendo en segundo plano (PID {proc.pid}) — "
+        f"sobrevive al cierre de SSH.{_x}\n"
+        f"  Pará el dashboard con:  {_b}clawk dashboard --stop{_x}   ·   log: {log_path}"
+    )
 
 
 def _run_dashboard_remote(args):
@@ -23211,6 +23331,13 @@ Examples:
             "Extra option forwarded to ssh (repeatable), e.g. "
             "`--ssh-opt -i --ssh-opt ~/.ssh/key` or `--ssh-opt -p --ssh-opt 2222`."
         ),
+    )
+
+    dashboard_parser.add_argument(
+        "--no-detach",
+        dest="no_detach",
+        action="store_true",
+        help="Run in the foreground even over SSH (don't auto-background; it will stop on logout)",
     )
 
     dashboard_parser.set_defaults(func=cmd_dashboard)
