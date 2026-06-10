@@ -392,14 +392,17 @@ class TestCmdUpdateBranchFallback:
             (ws_flags, PROJECT_ROOT),
         ]
 
-        if len(npm_calls) > 2:
-            # The web/ install runs from the workspace root when the root
+        # cmd_update now also rebuilds the TUI bundle (npm run build in ui-tui/)
+        # so the chat banner isn't left stale after an update.
+        ui_tui_build = (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "ui-tui")
+        assert ui_tui_build in npm_calls
 
-            # lockfile exists (npm workspaces hoist node_modules upward).
-
-            assert npm_calls[2:] == [
-                (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT),
-            ]
+        # After the two installs: optionally the web/ ci (when the root lockfile
+        # exists — npm hoists node_modules upward), then the TUI build last.
+        assert npm_calls[2:] in (
+            [ui_tui_build],
+            [(["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT), ui_tui_build],
+        )
 
         # The web UI build itself went through the streaming helper.
 

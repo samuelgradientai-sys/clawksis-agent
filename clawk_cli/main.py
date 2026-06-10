@@ -15404,6 +15404,46 @@ def _cmd_update_pip(args):
     print("✓ Update complete! Restart clawk to use the new version.")
 
 
+def _build_tui_bundle_for_update() -> None:
+    """Rebuild the TUI bundle (``ui-tui/dist/entry.js``) during ``clawk update``.
+
+    ``clawk update`` rebuilds the web UI but historically left the TUI bundle
+    stale, so the chat pane's banner kept the old branding until the next TUI
+    launch rebuilt it. Building it here keeps the post-update state complete and
+    the first chat fast. No-op on packaged installs without an ``ui-tui/`` source
+    tree or when node/npm is unavailable (the launch-time build is the fallback);
+    never fatal.
+    """
+    tui_dir = PROJECT_ROOT / "ui-tui"
+    if not (tui_dir / "package.json").is_file():
+        return
+    try:
+        _ensure_tui_node()
+        npm = shutil.which("npm")
+        if not npm:
+            print(
+                "  ⚠ TUI build skipped (npm not found) — it rebuilds on next chat launch"
+            )
+            return
+        result = subprocess.run(
+            [npm, "run", "build"],
+            cwd=tui_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print("  ✓ TUI rebuilt")
+        else:
+            print("  ⚠ TUI build failed (the chat pane will rebuild it on next launch)")
+            tail = "\n".join(
+                f"{result.stdout or ''}{result.stderr or ''}".strip().splitlines()[-15:]
+            )
+            if tail:
+                print(tail)
+    except Exception as exc:
+        print(f"  ⚠ TUI build skipped ({exc}) — it rebuilds on next chat launch")
+
+
 def _cmd_update_impl(args, gateway_mode: bool):
     """Body of ``cmd_update`` — kept separate so the wrapper can always
 
@@ -16074,6 +16114,8 @@ def _cmd_update_impl(args, gateway_mode: bool):
         _update_node_dependencies()
 
         _build_web_ui(PROJECT_ROOT / "web")
+
+        _build_tui_bundle_for_update()
 
         # Rebuild the desktop app if the source tree changed since the last
 
