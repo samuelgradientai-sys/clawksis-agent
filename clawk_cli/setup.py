@@ -4121,6 +4121,36 @@ def _offer_openclaw_migration(clawk_home: Path) -> bool:
 # =============================================================================
 
 
+def setup_example(config: dict):
+    """Example setup section — plantilla para sumar tu propio paso al wizard.
+
+    Registrada en SETUP_SECTIONS, así que corre tanto standalone
+    (``clawk setup example``) como dentro del wizard completo. Sigue el mismo
+    patrón que las demás secciones: header -> prompt -> guardar en ``config``
+    (el orquestador llama ``save_config`` después). Segura de borrar.
+    """
+    print_header("Example Section")
+    print_info(
+        "Sección de ejemplo: demuestra cómo agregar un paso propio a clawk setup."
+    )
+    print()
+
+    example_cfg = config.setdefault("example", {})
+    current = example_cfg.get("label", "")
+    if current:
+        print_info(f"Current: {current}")
+
+    label = prompt(
+        "Etiqueta personalizada para esta instalación Clawksis",
+        default=current,
+    )
+    if label:
+        example_cfg["label"] = label
+        print_success(f"Guardado example.label = {label}")
+    else:
+        print_info("Sin cambios.")
+
+
 SETUP_SECTIONS = [
     ("model", "Model & Provider", setup_model_provider),
     ("tts", "Text-to-Speech", setup_tts),
@@ -4128,6 +4158,7 @@ SETUP_SECTIONS = [
     ("gateway", "Messaging Platforms (Gateway)", setup_gateway),
     ("tools", "Tools", setup_tools),
     ("agent", "Agent Settings", setup_agent_settings),
+    ("example", "Example Section", setup_example),
 ]
 
 
