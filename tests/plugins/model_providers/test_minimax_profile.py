@@ -66,9 +66,7 @@ class TestMinimaxAuxModelM3:
             ("minimax-oauth", "MiniMax-M2.7"),
         ],
     )
-    def test_profile_advertises_expected_aux_model(
-        self, provider_id, expected
-    ):
+    def test_profile_advertises_expected_aux_model(self, provider_id, expected):
         import model_tools  # noqa: F401
         import providers
 

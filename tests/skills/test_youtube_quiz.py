@@ -7,7 +7,13 @@ from unittest import mock
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "productivity" / "memento-flashcards" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "productivity"
+    / "memento-flashcards"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import youtube_quiz
@@ -41,6 +47,7 @@ class TestFetchMissingDependency:
     def test_missing_youtube_transcript_api(self, capsys, monkeypatch):
         """When youtube-transcript-api is not installed, report the error."""
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

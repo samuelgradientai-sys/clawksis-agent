@@ -25,6 +25,7 @@ Output structure:
 
 Every finding traces to specific source rows. No naked claims.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,13 +57,17 @@ def build_findings(
     grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
     for i, row in enumerate(matches):
         row["__row__"] = str(i)
-        grouped[(row.get("left_normalized", ""), row.get("right_normalized", ""))].append(row)
+        grouped[
+            (row.get("left_normalized", ""), row.get("right_normalized", ""))
+        ].append(row)
 
     for (left_norm, right_norm), rows in grouped.items():
         if not left_norm or not right_norm:
             continue
         # Use the highest-confidence match for the finding's overall confidence.
-        best = min(rows, key=lambda r: CONFIDENCE_ORDER.get(r.get("confidence", "low"), 2))
+        best = min(
+            rows, key=lambda r: CONFIDENCE_ORDER.get(r.get("confidence", "low"), 2)
+        )
         finding_id = f"F{next_id:04d}"
         next_id += 1
         evidence = [
@@ -80,22 +85,20 @@ def build_findings(
             }
             for r in rows
         ]
-        findings.append(
-            {
-                "id": finding_id,
-                "title": f"Entity match: {best.get('left_name', '')} ↔ {best.get('right_name', '')}",
-                "severity": "MEDIUM" if best.get("confidence") == "high" else "LOW",
-                "confidence": best.get("confidence", "low"),
-                "summary": (
-                    f"{len(rows)} cross-link record(s) tie "
-                    f"'{best.get('left_name', '')}' to "
-                    f"'{best.get('right_name', '')}' "
-                    f"(best tier: {best.get('match_type', '')})."
-                ),
-                "evidence": evidence,
-                "sources": ["cross_links.csv"],
-            }
-        )
+        findings.append({
+            "id": finding_id,
+            "title": f"Entity match: {best.get('left_name', '')} ↔ {best.get('right_name', '')}",
+            "severity": "MEDIUM" if best.get("confidence") == "high" else "LOW",
+            "confidence": best.get("confidence", "low"),
+            "summary": (
+                f"{len(rows)} cross-link record(s) tie "
+                f"'{best.get('left_name', '')}' to "
+                f"'{best.get('right_name', '')}' "
+                f"(best tier: {best.get('match_type', '')})."
+            ),
+            "evidence": evidence,
+            "sources": ["cross_links.csv"],
+        })
 
     # 2. Bundled-donations findings (if cross_links carries donor↔candidate pattern).
     #    Heuristic: many distinct left names sharing the same right name.
@@ -112,31 +115,29 @@ def build_findings(
             continue
         rows = by_right_rows[right_norm]
         right_raw = rows[0].get("right_name", "")
-        findings.append(
-            {
-                "id": f"F{next_id:04d}",
-                "title": f"Bundled cross-links: {len(lefts)} distinct left entities ↔ '{right_raw}'",
-                "severity": "HIGH",
-                "confidence": "medium",
-                "summary": (
-                    f"{len(lefts)} distinct left-side entities link to "
-                    f"'{right_raw}'. Pattern suggests coordinated relationship "
-                    f"(e.g. bundled donations, multi-vendor employer)."
-                ),
-                "evidence": [
-                    {
-                        "source": "cross_links.csv",
-                        "row": int(r.get("__row__", "0")),
-                        "fields": {
-                            "left_name": r.get("left_name", ""),
-                            "match_type": r.get("match_type", ""),
-                        },
-                    }
-                    for r in rows
-                ],
-                "sources": ["cross_links.csv"],
-            }
-        )
+        findings.append({
+            "id": f"F{next_id:04d}",
+            "title": f"Bundled cross-links: {len(lefts)} distinct left entities ↔ '{right_raw}'",
+            "severity": "HIGH",
+            "confidence": "medium",
+            "summary": (
+                f"{len(lefts)} distinct left-side entities link to "
+                f"'{right_raw}'. Pattern suggests coordinated relationship "
+                f"(e.g. bundled donations, multi-vendor employer)."
+            ),
+            "evidence": [
+                {
+                    "source": "cross_links.csv",
+                    "row": int(r.get("__row__", "0")),
+                    "fields": {
+                        "left_name": r.get("left_name", ""),
+                        "match_type": r.get("match_type", ""),
+                    },
+                }
+                for r in rows
+            ],
+            "sources": ["cross_links.csv"],
+        })
         next_id += 1
 
     # 3. Timing-based findings.
@@ -145,31 +146,29 @@ def build_findings(
         for r in timing.get("results", []):
             if not r.get("significant"):
                 continue
-            findings.append(
-                {
-                    "id": f"F{next_id:04d}",
-                    "title": (
-                        f"Donation timing significantly clusters near awards: "
-                        f"{r['donor']} ↔ {r['recipient']}"
-                    ),
-                    "severity": "HIGH" if r["p_value"] < 0.01 else "MEDIUM",
-                    "confidence": "medium",
-                    "summary": (
-                        f"Mean nearest-award distance {r['observed_mean_days']} days "
-                        f"(null {r['null_mean_days']} days). p={r['p_value']}, "
-                        f"effect size {r['effect_size_sd']} SD. "
-                        f"{r['n_donations']} donations, {r['n_award_dates']} awards."
-                    ),
-                    "evidence": [
-                        {
-                            "source": "timing.json",
-                            "row": None,
-                            "fields": r,
-                        }
-                    ],
-                    "sources": ["timing.json"],
-                }
-            )
+            findings.append({
+                "id": f"F{next_id:04d}",
+                "title": (
+                    f"Donation timing significantly clusters near awards: "
+                    f"{r['donor']} ↔ {r['recipient']}"
+                ),
+                "severity": "HIGH" if r["p_value"] < 0.01 else "MEDIUM",
+                "confidence": "medium",
+                "summary": (
+                    f"Mean nearest-award distance {r['observed_mean_days']} days "
+                    f"(null {r['null_mean_days']} days). p={r['p_value']}, "
+                    f"effect size {r['effect_size_sd']} SD. "
+                    f"{r['n_donations']} donations, {r['n_award_dates']} awards."
+                ),
+                "evidence": [
+                    {
+                        "source": "timing.json",
+                        "row": None,
+                        "fields": r,
+                    }
+                ],
+                "sources": ["timing.json"],
+            })
             next_id += 1
 
     # Sort: severity → confidence → id.
@@ -195,7 +194,9 @@ def build_findings(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--cross-links", required=True)
     p.add_argument("--timing", help="Optional timing.json from timing_analysis.py")
     p.add_argument("--out", default="findings.json")

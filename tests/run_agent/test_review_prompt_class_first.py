@@ -21,6 +21,7 @@ from run_agent import AIAgent
 # _SKILL_REVIEW_PROMPT
 # ---------------------------------------------------------------------------
 
+
 def test_skill_review_prompt_biases_toward_active_updates():
     """Prompt must frame updating as the default stance, not something rare."""
     prompt = AIAgent._SKILL_REVIEW_PROMPT
@@ -46,9 +47,12 @@ def test_skill_review_prompt_treats_user_corrections_as_skill_signal():
         "must explicitly label user-preference corrections as first-class skill signals"
     )
     # Must mention the correction-type phrases to tune the model's ear
-    assert "stop doing" in lower or "don't" in lower or "hate" in lower or "frustrat" in lower, (
-        "must give concrete phrasing examples so the model recognizes corrections"
-    )
+    assert (
+        "stop doing" in lower
+        or "don't" in lower
+        or "hate" in lower
+        or "frustrat" in lower
+    ), "must give concrete phrasing examples so the model recognizes corrections"
 
 
 def test_skill_review_prompt_prefers_loaded_skills_first():
@@ -79,15 +83,21 @@ def test_skill_review_prompt_names_three_support_file_kinds():
     assert "templates/" in prompt, "must name templates/ as a support-file kind"
     assert "scripts/" in prompt, "must name scripts/ as a support-file kind"
     # Purpose hints for each kind
-    assert "knowledge" in prompt.lower() or "research" in prompt.lower() or "API docs" in prompt, (
-        "must mention knowledge-bank / research / API-docs role of references/"
-    )
-    assert "copied" in prompt.lower() or "starter" in prompt.lower() or "reproduce" in prompt.lower(), (
-        "must mention that templates/ are starter files to copy/modify"
-    )
-    assert "re-runnable" in prompt.lower() or "verification" in prompt.lower() or "probe" in prompt.lower(), (
-        "must mention that scripts/ are re-runnable actions"
-    )
+    assert (
+        "knowledge" in prompt.lower()
+        or "research" in prompt.lower()
+        or "API docs" in prompt
+    ), "must mention knowledge-bank / research / API-docs role of references/"
+    assert (
+        "copied" in prompt.lower()
+        or "starter" in prompt.lower()
+        or "reproduce" in prompt.lower()
+    ), "must mention that templates/ are starter files to copy/modify"
+    assert (
+        "re-runnable" in prompt.lower()
+        or "verification" in prompt.lower()
+        or "probe" in prompt.lower()
+    ), "must mention that scripts/ are re-runnable actions"
 
 
 def test_skill_review_prompt_has_name_veto_for_create():
@@ -126,6 +136,7 @@ def test_skill_review_prompt_still_has_opt_out_clause():
 # _COMBINED_REVIEW_PROMPT
 # ---------------------------------------------------------------------------
 
+
 def test_combined_review_prompt_has_memory_section():
     """Memory half must still cover user facts and preferences."""
     prompt = AIAgent._COMBINED_REVIEW_PROMPT
@@ -162,7 +173,11 @@ def test_combined_review_prompt_has_four_step_skill_ladder():
     assert "PATCH" in prompt
     assert "references/" in prompt or "REFERENCE" in prompt
     assert "CREATE" in prompt
-    assert "CLASS-LEVEL" in prompt or "class-level" in prompt or "class level" in prompt.lower()
+    assert (
+        "CLASS-LEVEL" in prompt
+        or "class-level" in prompt
+        or "class level" in prompt.lower()
+    )
 
 
 def test_combined_review_prompt_names_three_support_file_kinds():
@@ -195,9 +210,10 @@ def _assert_anti_pattern_guidance(prompt: str, label: str) -> None:
         f"{label}: must have an explicit 'Do NOT capture' section"
     )
     # Environment-dependent failures (the #6051 root cause)
-    assert any(k in lower for k in ("missing binar", "command not found", "uninstalled", "fresh-install")), (
-        f"{label}: must call out environment/setup failures as not-skill-worthy"
-    )
+    assert any(
+        k in lower
+        for k in ("missing binar", "command not found", "uninstalled", "fresh-install")
+    ), f"{label}: must call out environment/setup failures as not-skill-worthy"
     # Negative-framing avoidance
     assert any(k in lower for k in ("negative claim", "do not work", "is broken")), (
         f"{label}: must call out negative-claim phrasings as the failure mode"
@@ -219,12 +235,15 @@ def test_skill_review_prompt_has_anti_pattern_guidance():
 
 def test_combined_review_prompt_has_anti_pattern_guidance():
     """_COMBINED_REVIEW_PROMPT must carry the same guidance — same failure mode applies."""
-    _assert_anti_pattern_guidance(AIAgent._COMBINED_REVIEW_PROMPT, "_COMBINED_REVIEW_PROMPT")
+    _assert_anti_pattern_guidance(
+        AIAgent._COMBINED_REVIEW_PROMPT, "_COMBINED_REVIEW_PROMPT"
+    )
 
 
 # ---------------------------------------------------------------------------
 # _MEMORY_REVIEW_PROMPT — unchanged, still memory-focused
 # ---------------------------------------------------------------------------
+
 
 def test_memory_review_prompt_still_focused_on_user_facts():
     """Memory-only review prompt stays focused on user facts — not touched by this change."""

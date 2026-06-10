@@ -17,14 +17,17 @@ class TestInterpretExitCode:
 
     # ---- grep / rg family: exit 1 = no matches ----
 
-    @pytest.mark.parametrize("cmd", [
-        "grep 'pattern' file.txt",
-        "egrep 'pattern' file.txt",
-        "fgrep 'pattern' file.txt",
-        "rg 'foo' .",
-        "ag 'foo' .",
-        "ack 'foo' .",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "grep 'pattern' file.txt",
+            "egrep 'pattern' file.txt",
+            "fgrep 'pattern' file.txt",
+            "rg 'foo' .",
+            "ag 'foo' .",
+            "ack 'foo' .",
+        ],
+    )
     def test_grep_family_no_matches(self, cmd):
         result = _interpret_exit_code(cmd, 1)
         assert result is not None
@@ -132,13 +135,16 @@ class TestInterpretExitCode:
 
     # ---- unknown commands return None ----
 
-    @pytest.mark.parametrize("cmd", [
-        "python3 script.py",
-        "rm -rf /tmp/test",
-        "npm test",
-        "make build",
-        "cargo build",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "python3 script.py",
+            "rm -rf /tmp/test",
+            "npm test",
+            "make build",
+            "cargo build",
+        ],
+    )
     def test_unknown_commands_return_none(self, cmd):
         assert _interpret_exit_code(cmd, 1) is None
 

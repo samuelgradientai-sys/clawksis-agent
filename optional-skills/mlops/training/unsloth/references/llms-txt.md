@@ -1136,20 +1136,27 @@ And now we can select which QAT style you want:
 Example 1 (python):
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/Qwen3-4B-Instruct-2507",
-    max_seq_length = 2048,
-    load_in_16bit = True,
+    model_name="unsloth/Qwen3-4B-Instruct-2507",
+    max_seq_length=2048,
+    load_in_16bit=True,
 )
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 32,
-    
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=32,
     # We support fp8-int4, fp8-fp8, int8-int4, int4
-    qat_scheme = "int4",
+    qat_scheme="int4",
 )
 ```
 
@@ -1157,7 +1164,8 @@ Example 2 (python):
 ```python
 from torchao.quantization import quantize_
 from torchao.quantization.qat import QATConfig
-quantize_(model, QATConfig(step = "convert"))
+
+quantize_(model, QATConfig(step="convert"))
 ```
 
 ---
@@ -1559,10 +1567,11 @@ For more details, check out our ongoing [Pull Request](https://github.com/unslot
 Example 1 (python):
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
     "unsloth/Llama-3.3-70B-Instruct",
-    load_in_4bit = True,
-    device_map = "balanced",
+    load_in_4bit=True,
+    device_map="balanced",
 )
 ```
 
@@ -1641,7 +1650,7 @@ trainer = SFTTrainer(
 
 Example 2 (python):
 ```python
-trainer_stats = trainer.train(resume_from_checkpoint = True)
+trainer_stats = trainer.train(resume_from_checkpoint=True)
 ```
 
 ---
@@ -1683,6 +1692,7 @@ Sometimes when you execute a cell [this error](https://github.com/googlecolab/co
 Example 1 (python):
 ```python
 import locale
+
 locale.getpreferredencoding = lambda: "UTF-8"
 ```
 
@@ -1879,23 +1889,26 @@ All our GRPO notebooks have Unsloth Standby on by default and all optimizations!
 Example 1 (python):
 ```python
 import os
+
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 
 from unsloth import FastLanguageModel
 import torch
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/Qwen3-8B-Base",
-    max_seq_length = 2048, # Can increase for longer reasoning traces
-    load_in_4bit = False, # False for LoRA 16bit
-    fast_inference = True,
-    max_lora_rank = 32, # Larger rank = smarter, but slower
-    gpu_memory_utilization = 0.95,
+    model_name="unsloth/Qwen3-8B-Base",
+    max_seq_length=2048,  # Can increase for longer reasoning traces
+    load_in_4bit=False,  # False for LoRA 16bit
+    fast_inference=True,
+    max_lora_rank=32,  # Larger rank = smarter, but slower
+    gpu_memory_utilization=0.95,
 )
 ```
 
 Example 2 (python):
 ```python
 import os
+
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 ```
 
@@ -2624,17 +2637,24 @@ Example 1 (python):
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=8,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
 )
 ```
 
@@ -2642,8 +2662,17 @@ Example 2 (python):
 ```python
 def formatting_prompts_func(examples):
     convos = examples["messages"]
-    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
-    return { "text" : texts, }
+    texts = [
+        tokenizer.apply_chat_template(
+            convo, tokenize=False, add_generation_prompt=False
+        )
+        for convo in convos
+    ]
+    return {
+        "text": texts,
+    }
+
+
 pass
 
 from datasets import load_dataset
@@ -2655,18 +2684,22 @@ dataset
 Example 3 (python):
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
 Example 4 (python):
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 ---
@@ -2711,11 +2744,12 @@ Then use 2 different learning rates - a 2-10x smaller one for the `lm_head` or `
 Example 1 (python):
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "LORA_MODEL_NAME",
-    max_seq_length = max_seq_length,
-    dtype = dtype,
-    load_in_4bit = load_in_4bit,
+    model_name="LORA_MODEL_NAME",
+    max_seq_length=max_seq_length,
+    dtype=dtype,
+    load_in_4bit=load_in_4bit,
 )
 trainer = Trainer(...)
 trainer.train()
@@ -2725,11 +2759,19 @@ Example 2 (python):
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",
-                      "lm_head", "embed_tokens",],
-    lora_alpha = 16,
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+        "lm_head",
+        "embed_tokens",
+    ],
+    lora_alpha=16,
 )
 ```
 
@@ -3424,13 +3466,13 @@ However you CAN train the vision layers as well if you use inference via transfo
 
 Example 1 (python):
 ```python
-os.environ['UNSLOTH_VLLM_STANDBY'] = '1' # To enable memory efficient GRPO with vLLM
+os.environ["UNSLOTH_VLLM_STANDBY"] = "1"  # To enable memory efficient GRPO with vLLM
 model, tokenizer = FastVisionModel.from_pretrained(
-    model_name = "Qwen/Qwen2.5-VL-7B-Instruct",
-    max_seq_length = 16384, #Must be this large to fit image in context
-    load_in_4bit = True, # False for LoRA 16bit
-    fast_inference = True, # Enable vLLM fast inference
-    gpu_memory_utilization = 0.8, # Reduce if out of memory
+    model_name="Qwen/Qwen2.5-VL-7B-Instruct",
+    max_seq_length=16384,  # Must be this large to fit image in context
+    load_in_4bit=True,  # False for LoRA 16bit
+    fast_inference=True,  # Enable vLLM fast inference
+    gpu_memory_utilization=0.8,  # Reduce if out of memory
 )
 ```
 
@@ -3517,7 +3559,7 @@ Example 1 (python):
 ```python
 model, tokenizer = FastVisionModel.from_pretrained(
     "Qwen/Qwen2-VL-7B-Instruct",
-    use_exact_model_name = True,
+    use_exact_model_name=True,
 )
 ```
 
@@ -4312,7 +4354,11 @@ Then, save the model to F16:
 
 Example 1 (python):
 ```python
-model.save_pretrained_merged("merged_model", tokenizer, save_method = "merged_16bit",)
+model.save_pretrained_merged(
+    "merged_model",
+    tokenizer,
+    save_method="merged_16bit",
+)
 ```
 
 Example 2 (bash):
@@ -6330,23 +6376,32 @@ Fine-tuning has no single "best" approach, only best practices. Experimentation 
 
 Example 1 (python):
 ```python
-r = 16, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+r = (16,)  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
 ```
 
 Example 2 (python):
 ```python
-target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                     "gate_proj", "up_proj", "down_proj",],
+target_modules = (
+    [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+)
 ```
 
 Example 3 (python):
 ```python
-lora_alpha = 16,
+lora_alpha = (16,)
 ```
 
 Example 4 (python):
 ```python
-lora_dropout = 0, # Supports any, but = 0 is optimized
+lora_dropout = (0,)  # Supports any, but = 0 is optimized
 ```
 
 ---
@@ -6711,12 +6766,32 @@ If you already have Docker desktop, all you need to do is run the command below 
 Example 1 (python):
 ```python
 messages = [
-    {"role" : "user", "content" : "What is 1+1?"},
-    {"role" : "assistant", "content" : "2"},
-    {"role": "user",  "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30."},
-    {"role": "assistant",  "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.", "thinking" : ""},
-    {"role": "assistant", "content": "", "tool_calls": [{"name": "get_current_temperature", "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}'}]},
-    {"role": "tool", "name": "get_current_temperature", "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}'},
+    {"role": "user", "content": "What is 1+1?"},
+    {"role": "assistant", "content": "2"},
+    {
+        "role": "user",
+        "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30.",
+    },
+    {
+        "role": "assistant",
+        "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.",
+        "thinking": "",
+    },
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "name": "get_current_temperature",
+                "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}',
+            }
+        ],
+    },
+    {
+        "role": "tool",
+        "name": "get_current_temperature",
+        "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}',
+    },
 ]
 ```
 
@@ -6923,9 +6998,9 @@ Example 3 (py):
 ```py
 prompt_1 = 'How many "r" are in strawberry?'
 
-prompt_2 = 'John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?'
+prompt_2 = "John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?"
 
-prompt_3 = '9.11 and 9.8, which is greater?'
+prompt_3 = "9.11 and 9.8, which is greater?"
 ```
 
 Example 4 (py):
@@ -7213,19 +7288,18 @@ Example 1 (python):
 ```python
 model = FastVisionModel.get_peft_model(
     model,
-    finetune_vision_layers     = True, # False if not finetuning vision layers
-    finetune_language_layers   = True, # False if not finetuning language layers
-    finetune_attention_modules = True, # False if not finetuning attention layers
-    finetune_mlp_modules       = True, # False if not finetuning MLP layers
-
-    r = 16,                           # The larger, the higher the accuracy, but might overfit
-    lora_alpha = 16,                  # Recommended alpha == r at least
-    lora_dropout = 0,
-    bias = "none",
-    random_state = 3407,
-    use_rslora = False,               # We support rank stabilized LoRA
-    loftq_config = None,               # And LoftQ
-    target_modules = "all-linear",    # Optional now! Can specify a list if needed
+    finetune_vision_layers=True,  # False if not finetuning vision layers
+    finetune_language_layers=True,  # False if not finetuning language layers
+    finetune_attention_modules=True,  # False if not finetuning attention layers
+    finetune_mlp_modules=True,  # False if not finetuning MLP layers
+    r=16,  # The larger, the higher the accuracy, but might overfit
+    lora_alpha=16,  # Recommended alpha == r at least
+    lora_dropout=0,
+    bias="none",
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
+    target_modules="all-linear",  # Optional now! Can specify a list if needed
     modules_to_save=[
         "lm_head",
         "embed_tokens",
@@ -7244,12 +7318,14 @@ Dataset({
 Example 3 (python):
 ```python
 [
-{ "role": "user",
-  "content": [{"type": "text",  "text": instruction}, {"type": "image", "image": image} ]
-},
-{ "role": "assistant",
-  "content": [{"type": "text",  "text": answer} ]
-},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image", "image": image},
+        ],
+    },
+    {"role": "assistant", "content": [{"type": "text", "text": answer}]},
 ]
 ```
 
@@ -7612,26 +7688,31 @@ Example 2 (python):
 from unsloth import FastLanguageModel
 import torch
 
-max_seq_length = 768        # Increase if your task needs longer outputs
-lora_rank      = 4          # Higher rank → better but more VRAM/compute
+max_seq_length = 768  # Increase if your task needs longer outputs
+lora_rank = 4  # Higher rank → better but more VRAM/compute
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name        = "unsloth/gpt-oss-20b",  # or unsloth/gpt-oss-20b-BF16 on H100
-    max_seq_length    = max_seq_length,
-    load_in_4bit      = True,                    # False for 16‑bit
-    offload_embedding = True,                    # saves ~1GB VRAM
+    model_name="unsloth/gpt-oss-20b",  # or unsloth/gpt-oss-20b-BF16 on H100
+    max_seq_length=max_seq_length,
+    load_in_4bit=True,  # False for 16‑bit
+    offload_embedding=True,  # saves ~1GB VRAM
 )
 
 model = FastLanguageModel.get_peft_model(
     model,
-    r = lora_rank,
-    target_modules = [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
+    r=lora_rank,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
     ],
-    lora_alpha = lora_rank * 2,
-    use_gradient_checkpointing = "unsloth",     # big memory saver
-    random_state = 3407,
+    lora_alpha=lora_rank * 2,
+    use_gradient_checkpointing="unsloth",  # big memory saver
+    random_state=3407,
 )
 ```
 
@@ -7640,7 +7721,10 @@ Example 3 (python):
 def always_move_left(board):
     return "W"
 
-steps, outcome = execute_strategy(always_move_left, GameBoard(size=8, seed=42, target=2048, probability_fours=0.10))
+
+steps, outcome = execute_strategy(
+    always_move_left, GameBoard(size=8, seed=42, target=2048, probability_fours=0.10)
+)
 ```
 
 Example 4 (python):
@@ -8345,18 +8429,22 @@ Note that `pip install unsloth` will not work for this setup, as we need to use 
 Example 1 (python):
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
 Example 2 (python):
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 Example 3 (unknown):
@@ -9834,7 +9922,7 @@ Example 2 (python):
 ```python
 def sliding_window_causal(b, h, q_idx, kv_idx):
     causal_mask = q_idx >= kv_idx
-    window_mask = q_idx - kv_idx <= SLIDING_WINDOW 
+    window_mask = q_idx - kv_idx <= SLIDING_WINDOW
     return causal_mask & window_mask
 ```
 
@@ -9851,8 +9939,8 @@ Example 4 (python):
 ```python
 def sliding_window_causal(b, h, q_idx, kv_idx):
     causal_mask = q_idx >= kv_idx
-    window_mask = q_idx - kv_idx <= SLIDING_WINDOW # Default Flex Attention
-    window_mask = q_idx - kv_idx <  SLIDING_WINDOW # GPT-OSS version
+    window_mask = q_idx - kv_idx <= SLIDING_WINDOW  # Default Flex Attention
+    window_mask = q_idx - kv_idx < SLIDING_WINDOW  # GPT-OSS version
     return causal_mask & window_mask
 ```
 
@@ -10174,7 +10262,7 @@ text = tokenizer.apply_chat_template(
     messages,
     tokenize=False,
     add_generation_prompt=True,
-    enable_thinking=True  # Default is True
+    enable_thinking=True,  # Default is True
 )
 ```
 
@@ -10340,7 +10428,7 @@ from unsloth import FastModel
 model_name = "unsloth/orpheus-3b-0.1-pretrained"
 model, tokenizer = FastModel.from_pretrained(
     model_name,
-    load_in_4bit=False  # use 4-bit precision (QLoRA)
+    load_in_4bit=False,  # use 4-bit precision (QLoRA)
 )
 ```
 
@@ -10492,8 +10580,8 @@ After saving your finetune, you can simply do:
 
 Example 1 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_16bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_16bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_16bit", token="")
 ```
 
 Example 2 (python):
@@ -10504,8 +10592,8 @@ tokenizer.save_pretrained("tokenizer")
 
 Example 3 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "lora")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "lora", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="lora")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="lora", token="")
 ```
 
 Example 4 (bash):
@@ -11672,15 +11760,15 @@ All supported quantization options for `quantization_method` are listed below:
 
 Example 1 (python):
 ```python
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q4_k_m")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q8_0")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "f16")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q4_k_m")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q8_0")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="f16")
 ```
 
 Example 2 (python):
 ```python
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q4_k_m")
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q8_0")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q4_k_m")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q8_0")
 ```
 
 ---
@@ -11929,14 +12017,14 @@ Some important server flags to use are at [#vllm-deployment-server-flags-engine-
 
 Example 1 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_16bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_16bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_16bit", token="")
 ```
 
 Example 2 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_4bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_4bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_4bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_4bit", token="")
 ```
 
 Example 3 (python):
@@ -11947,8 +12035,8 @@ tokenizer.save_pretrained("tokenizer")
 
 Example 4 (python):
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "lora")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "lora", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="lora")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="lora", token="")
 ```
 
 ---

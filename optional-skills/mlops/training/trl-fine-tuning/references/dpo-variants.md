@@ -20,7 +20,7 @@ DPOConfig(
     loss_type="sigmoid",
     beta=0.1,  # KL penalty
     per_device_train_batch_size=64,
-    learning_rate=1e-6
+    learning_rate=1e-6,
 )
 ```
 
@@ -32,12 +32,7 @@ DPOConfig(
 
 **Config**:
 ```python
-DPOConfig(
-    loss_type="ipo",
-    beta=0.1,
-    per_device_train_batch_size=90,
-    learning_rate=1e-2
-)
+DPOConfig(loss_type="ipo", beta=0.1, per_device_train_batch_size=90, learning_rate=1e-2)
 ```
 
 ### 3. Hinge (SLiC)
@@ -49,10 +44,7 @@ DPOConfig(
 **Config**:
 ```python
 DPOConfig(
-    loss_type="hinge",
-    beta=0.1,
-    per_device_train_batch_size=512,
-    learning_rate=1e-4
+    loss_type="hinge", beta=0.1, per_device_train_batch_size=512, learning_rate=1e-4
 )
 ```
 
@@ -71,7 +63,7 @@ DPOConfig(
     per_device_train_batch_size=16,
     learning_rate=1e-3,
     max_prompt_length=128,
-    max_length=512
+    max_length=512,
 )
 ```
 
@@ -89,7 +81,7 @@ DPOConfig(
     per_device_train_batch_size=128,
     learning_rate=5e-7,
     max_prompt_length=1536,
-    max_completion_length=512
+    max_completion_length=512,
 )
 ```
 
@@ -101,10 +93,7 @@ DPOConfig(
 
 **Config**:
 ```python
-DPOConfig(
-    loss_type="sppo_hard",
-    beta=0.1
-)
+DPOConfig(loss_type="sppo_hard", beta=0.1)
 ```
 
 ### 7. DiscoPOP
@@ -120,7 +109,7 @@ DPOConfig(
     beta=0.05,
     discopop_tau=0.05,
     per_device_train_batch_size=64,
-    learning_rate=5e-7
+    learning_rate=5e-7,
 )
 ```
 
@@ -138,7 +127,7 @@ DPOConfig(
     per_device_train_batch_size=64,
     learning_rate=2e-7,
     max_prompt_length=512,
-    max_completion_length=512
+    max_completion_length=512,
 )
 ```
 
@@ -170,7 +159,7 @@ DPOConfig(
 DPOConfig(
     loss_type="aot_pair",  # or "aot"
     beta=0.1,
-    label_smoothing=0.0
+    label_smoothing=0.0,
 )
 ```
 
@@ -182,7 +171,7 @@ Combine multiple losses:
 DPOConfig(
     loss_type=["sigmoid", "ipo"],
     loss_weights=[0.7, 0.3],  # Weighted combination
-    beta=0.1
+    beta=0.1,
 )
 ```
 

@@ -8,7 +8,9 @@ from cli import _render_final_assistant_content
 
 def _render_to_text(renderable) -> str:
     buf = StringIO()
-    Console(file=buf, width=80, force_terminal=False, color_system=None).print(renderable)
+    Console(file=buf, width=80, force_terminal=False, color_system=None).print(
+        renderable
+    )
     return buf.getvalue()
 
 
@@ -141,12 +143,9 @@ def test_strip_mode_preserves_table_structure_while_cleaning_cell_markdown():
 
     # Every rendered table row shares the same pipe column offsets — the
     # alignment guarantee from realign_markdown_tables.
-    pipe_cols = [
-        [i for i, ch in enumerate(row) if ch == "|"] for row in body_rows
-    ]
+    pipe_cols = [[i for i, ch in enumerate(row) if ch == "|"] for row in body_rows]
     assert all(p == pipe_cols[0] for p in pipe_cols), (
-        "table rows misaligned after strip-mode rendering:\n"
-        + "\n".join(body_rows)
+        "table rows misaligned after strip-mode rendering:\n" + "\n".join(body_rows)
     )
 
 

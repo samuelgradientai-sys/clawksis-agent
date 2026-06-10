@@ -205,7 +205,9 @@ def test_model_picker_view_accepts_role_allowlist():
     "view_factory",
     [
         lambda: ExecApprovalView(session_key="s", allowed_user_ids=set()),
-        lambda: SlashConfirmView(session_key="s", confirm_id="c", allowed_user_ids=set()),
+        lambda: SlashConfirmView(
+            session_key="s", confirm_id="c", allowed_user_ids=set()
+        ),
         lambda: UpdatePromptView(session_key="s", allowed_user_ids=set()),
     ],
 )

@@ -1,7 +1,5 @@
 """Tests for tools/mcp_oauth.py — OAuth 2.1 PKCE support for MCP servers."""
 
-
-
 import json
 
 import os
@@ -15,43 +13,25 @@ from io import BytesIO
 from unittest.mock import patch, MagicMock
 
 
-
 import pytest
-
 
 
 import asyncio
 
 
-
 from tools.mcp_oauth import (
-
     ClawksisTokenStorage,
-
     OAuthNonInteractiveError,
-
     build_oauth_auth,
-
     remove_oauth_tokens,
-
     _find_free_port,
-
     _can_open_browser,
-
     _is_interactive,
-
     _wait_for_callback,
-
     _make_callback_handler,
-
     _redirect_handler,
-
     _paste_callback_reader,
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -61,44 +41,30 @@ from tools.mcp_oauth import (
 # ---------------------------------------------------------------------------
 
 
-
 class TestClawksisTokenStorage:
-
     def test_roundtrip_tokens(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         storage = ClawksisTokenStorage("test-server")
 
-
-
         import asyncio
-
-
 
         # Initially empty
 
         assert asyncio.run(storage.get_tokens()) is None
-
-
 
         # Save and retrieve
 
         mock_token = MagicMock()
 
         mock_token.model_dump.return_value = {
-
             "access_token": "abc123",
-
             "token_type": "Bearer",
-
             "refresh_token": "ref456",
-
         }
 
         asyncio.run(storage.set_tokens(mock_token))
-
-
 
         # File exists with correct permissions
 
@@ -110,12 +76,10 @@ class TestClawksisTokenStorage:
 
         assert data["access_token"] == "abc123"
 
-
-
-    @pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows")
-
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows"
+    )
     def test_token_file_created_with_0o600(self, tmp_path, monkeypatch):
-
         """Tokens must land on disk at 0o600 with no umask-default exposure window.
 
 
@@ -134,25 +98,17 @@ class TestClawksisTokenStorage:
 
         storage = ClawksisTokenStorage("perm-test-server")
 
-
-
         import asyncio
 
         mock_token = MagicMock()
 
         mock_token.model_dump.return_value = {
-
             "access_token": "secret-abc",
-
             "token_type": "Bearer",
-
             "refresh_token": "secret-ref",
-
         }
 
         asyncio.run(storage.set_tokens(mock_token))
-
-
 
         token_path = tmp_path / "mcp-tokens" / "perm-test-server.json"
 
@@ -160,19 +116,15 @@ class TestClawksisTokenStorage:
 
         mode = stat.S_IMODE(token_path.stat().st_mode)
 
-        assert mode == 0o600, f"token file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
-
-
+        assert mode == 0o600, (
+            f"token file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
+        )
 
         parent_mode = stat.S_IMODE(token_path.parent.stat().st_mode)
 
         assert parent_mode == 0o700, (
-
             f"token parent dir mode {oct(parent_mode)} != 0o700 — siblings can traverse"
-
         )
-
-
 
     def test_roundtrip_client_info(self, tmp_path, monkeypatch):
 
@@ -182,39 +134,26 @@ class TestClawksisTokenStorage:
 
         import asyncio
 
-
-
         assert asyncio.run(storage.get_client_info()) is None
-
-
 
         mock_client = MagicMock()
 
         mock_client.model_dump.return_value = {
-
             "client_id": "clawk-123",
-
             "client_secret": "secret",
-
         }
 
         asyncio.run(storage.set_client_info(mock_client))
 
-
-
         client_path = tmp_path / "mcp-tokens" / "test-server.client.json"
 
         assert client_path.exists()
-
-
 
     def test_remove_cleans_up(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         storage = ClawksisTokenStorage("test-server")
-
-
 
         # Create files
 
@@ -226,15 +165,11 @@ class TestClawksisTokenStorage:
 
         (d / "test-server.client.json").write_text("{}")
 
-
-
         storage.remove()
 
         assert not (d / "test-server.json").exists()
 
         assert not (d / "test-server.client.json").exists()
-
-
 
     def test_has_cached_tokens(self, tmp_path, monkeypatch):
 
@@ -242,23 +177,17 @@ class TestClawksisTokenStorage:
 
         storage = ClawksisTokenStorage("my-server")
 
-
-
         assert not storage.has_cached_tokens()
-
-
 
         d = tmp_path / "mcp-tokens"
 
         d.mkdir(parents=True)
 
-        (d / "my-server.json").write_text('{"access_token": "x", "token_type": "Bearer"}')
-
-
+        (d / "my-server.json").write_text(
+            '{"access_token": "x", "token_type": "Bearer"}'
+        )
 
         assert storage.has_cached_tokens()
-
-
 
     def test_corrupt_tokens_returns_none(self, tmp_path, monkeypatch):
 
@@ -266,21 +195,15 @@ class TestClawksisTokenStorage:
 
         storage = ClawksisTokenStorage("bad-server")
 
-
-
         d = tmp_path / "mcp-tokens"
 
         d.mkdir(parents=True)
 
         (d / "bad-server.json").write_text("NOT VALID JSON{{{")
 
-
-
         import asyncio
 
         assert asyncio.run(storage.get_tokens()) is None
-
-
 
     def test_corrupt_client_info_returns_none(self, tmp_path, monkeypatch):
 
@@ -288,22 +211,15 @@ class TestClawksisTokenStorage:
 
         storage = ClawksisTokenStorage("bad-server")
 
-
-
         d = tmp_path / "mcp-tokens"
 
         d.mkdir(parents=True)
 
         (d / "bad-server.client.json").write_text("GARBAGE")
 
-
-
         import asyncio
 
         assert asyncio.run(storage.get_client_info()) is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -313,28 +229,20 @@ class TestClawksisTokenStorage:
 # ---------------------------------------------------------------------------
 
 
-
 class TestBuildOAuthAuth:
-
     def test_returns_oauth_provider(self, tmp_path, monkeypatch):
 
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         auth = build_oauth_auth("test", "https://example.com/mcp")
 
         assert isinstance(auth, OAuthClientProvider)
-
-
 
     def test_returns_none_without_sdk(self, monkeypatch):
 
@@ -346,33 +254,25 @@ class TestBuildOAuthAuth:
 
         assert result is None
 
-
-
     def test_pre_registered_client_id_stored(self, tmp_path, monkeypatch):
 
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        build_oauth_auth("slack", "https://slack.example.com/mcp", {
-
-            "client_id": "my-app-id",
-
-            "client_secret": "my-secret",
-
-            "scope": "channels:read",
-
-        })
-
-
+        build_oauth_auth(
+            "slack",
+            "https://slack.example.com/mcp",
+            {
+                "client_id": "my-app-id",
+                "client_secret": "my-secret",
+                "scope": "channels:read",
+            },
+        )
 
         client_path = tmp_path / "mcp-tokens" / "slack.client.json"
 
@@ -384,34 +284,27 @@ class TestBuildOAuthAuth:
 
         assert data["client_secret"] == "my-secret"
 
-
-
     def test_scope_passed_through(self, tmp_path, monkeypatch):
 
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
-        provider = build_oauth_auth("scoped", "https://example.com/mcp", {
-
-            "scope": "read write admin",
-
-        })
+        provider = build_oauth_auth(
+            "scoped",
+            "https://example.com/mcp",
+            {
+                "scope": "read write admin",
+            },
+        )
 
         assert provider is not None
 
         assert provider.context.client_metadata.scope == "read write admin"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -421,9 +314,7 @@ class TestBuildOAuthAuth:
 # ---------------------------------------------------------------------------
 
 
-
 class TestUtilities:
-
     def test_find_free_port_returns_int(self):
 
         port = _find_free_port()
@@ -432,10 +323,7 @@ class TestUtilities:
 
         assert 1024 <= port <= 65535
 
-
-
     def test_find_free_port_unique(self):
-
         """Two consecutive calls should return different ports (usually)."""
 
         ports = {_find_free_port() for _ in range(5)}
@@ -444,15 +332,11 @@ class TestUtilities:
 
         assert len(ports) >= 2
 
-
-
     def test_can_open_browser_false_in_ssh(self, monkeypatch):
 
         monkeypatch.setenv("SSH_CLIENT", "1.2.3.4 1234 22")
 
         assert _can_open_browser() is False
-
-
 
     def test_can_open_browser_false_without_display(self, monkeypatch):
 
@@ -472,8 +356,6 @@ class TestUtilities:
 
         assert _can_open_browser() is False
 
-
-
     def test_can_open_browser_true_with_display(self, monkeypatch):
 
         monkeypatch.delenv("SSH_CLIENT", raising=False)
@@ -487,20 +369,12 @@ class TestUtilities:
         assert _can_open_browser() is True
 
 
-
-
-
 class TestRedirectHandlerSshHint:
-
     """_redirect_handler must print an SSH tunnel hint on remote sessions."""
-
-
 
     def _run(self, coro):
 
         return asyncio.get_event_loop().run_until_complete(coro)
-
-
 
     def test_ssh_hint_shown_on_ssh_session(self, monkeypatch, capsys):
 
@@ -514,11 +388,7 @@ class TestRedirectHandlerSshHint:
 
         monkeypatch.setattr(mco, "_can_open_browser", lambda: False)
 
-
-
         self._run(_redirect_handler("https://example.com/auth?foo=bar"))
-
-
 
         err = capsys.readouterr().err
 
@@ -527,8 +397,6 @@ class TestRedirectHandlerSshHint:
         assert "ssh -N -L" in err
 
         assert "Remote session detected" in err
-
-
 
     def test_ssh_hint_shown_via_ssh_tty(self, monkeypatch, capsys):
 
@@ -542,19 +410,13 @@ class TestRedirectHandlerSshHint:
 
         monkeypatch.setattr(mco, "_can_open_browser", lambda: False)
 
-
-
         self._run(_redirect_handler("https://example.com/auth"))
-
-
 
         err = capsys.readouterr().err
 
         assert "49201" in err
 
         assert "ssh -N -L" in err
-
-
 
     def test_no_ssh_hint_on_local_session(self, monkeypatch, capsys):
 
@@ -570,17 +432,11 @@ class TestRedirectHandlerSshHint:
 
         monkeypatch.setattr("webbrowser.open", lambda url, **kw: True)
 
-
-
         self._run(_redirect_handler("https://example.com/auth"))
-
-
 
         err = capsys.readouterr().err
 
         assert "ssh -N -L" not in err
-
-
 
     def test_no_ssh_hint_when_port_not_set(self, monkeypatch, capsys):
 
@@ -592,18 +448,11 @@ class TestRedirectHandlerSshHint:
 
         monkeypatch.setattr(mco, "_can_open_browser", lambda: False)
 
-
-
         self._run(_redirect_handler("https://example.com/auth"))
-
-
 
         err = capsys.readouterr().err
 
         assert "ssh -N -L" not in err
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -613,12 +462,8 @@ class TestRedirectHandlerSshHint:
 # ---------------------------------------------------------------------------
 
 
-
 class TestPathTraversal:
-
     """Verify server_name is sanitized to prevent path traversal."""
-
-
 
     def test_path_traversal_blocked(self, tmp_path, monkeypatch):
 
@@ -634,8 +479,6 @@ class TestPathTraversal:
 
         assert ".ssh" not in str(path.resolve())
 
-
-
     def test_dots_and_slashes_sanitized(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -648,8 +491,6 @@ class TestPathTraversal:
 
         assert resolved.is_relative_to((tmp_path / "mcp-tokens").resolve())
 
-
-
     def test_normal_name_unchanged(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -657,8 +498,6 @@ class TestPathTraversal:
         storage = ClawksisTokenStorage("my-mcp-server")
 
         assert "my-mcp-server.json" in str(storage._tokens_path())
-
-
 
     def test_special_chars_sanitized(self, tmp_path, monkeypatch):
 
@@ -675,9 +514,6 @@ class TestPathTraversal:
         assert "/" not in path.stem
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Callback handler isolation
@@ -685,12 +521,8 @@ class TestPathTraversal:
 # ---------------------------------------------------------------------------
 
 
-
 class TestCallbackHandlerIsolation:
-
     """Verify concurrent OAuth flows don't share state."""
-
-
 
     def test_independent_result_dicts(self):
 
@@ -698,27 +530,19 @@ class TestCallbackHandlerIsolation:
 
         _, result_b = _make_callback_handler()
 
-
-
         result_a["auth_code"] = "code_A"
 
         result_b["auth_code"] = "code_B"
 
-
-
         assert result_a["auth_code"] == "code_A"
 
         assert result_b["auth_code"] == "code_B"
-
-
 
     def test_handler_writes_to_own_result(self):
 
         HandlerClass, result = _make_callback_handler()
 
         assert result["auth_code"] is None
-
-
 
         # Simulate a GET request
 
@@ -736,19 +560,13 @@ class TestCallbackHandlerIsolation:
 
         handler.do_GET()
 
-
-
         assert result["auth_code"] == "test123"
 
         assert result["state"] == "mystate"
 
-
-
     def test_handler_captures_error(self):
 
         HandlerClass, result = _make_callback_handler()
-
-
 
         handler = HandlerClass.__new__(HandlerClass)
 
@@ -764,14 +582,9 @@ class TestCallbackHandlerIsolation:
 
         handler.do_GET()
 
-
-
         assert result["auth_code"] is None
 
         assert result["error"] == "access_denied"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -781,12 +594,8 @@ class TestCallbackHandlerIsolation:
 # ---------------------------------------------------------------------------
 
 
-
 class TestOAuthPortSharing:
-
     """Verify build_oauth_auth and _wait_for_callback use the same port."""
-
-
 
     def test_port_stored_globally(self, tmp_path, monkeypatch):
 
@@ -794,17 +603,11 @@ class TestOAuthPortSharing:
 
         mod._oauth_port = None
 
-
-
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -817,9 +620,6 @@ class TestOAuthPortSharing:
         assert 1024 <= mod._oauth_port <= 65535
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # remove_oauth_tokens
@@ -827,9 +627,7 @@ class TestOAuthPortSharing:
 # ---------------------------------------------------------------------------
 
 
-
 class TestRemoveOAuthTokens:
-
     def test_removes_files(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -842,26 +640,17 @@ class TestRemoveOAuthTokens:
 
         (d / "myserver.client.json").write_text("{}")
 
-
-
         remove_oauth_tokens("myserver")
-
-
 
         assert not (d / "myserver.json").exists()
 
         assert not (d / "myserver.client.json").exists()
-
-
 
     def test_no_error_when_files_missing(self, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         remove_oauth_tokens("nonexistent")  # should not raise
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -871,12 +660,8 @@ class TestRemoveOAuthTokens:
 # ---------------------------------------------------------------------------
 
 
-
 class TestIsInteractive:
-
     """_is_interactive() detects headless/daemon/container environments."""
-
-
 
     def test_false_when_stdin_not_tty(self, monkeypatch):
 
@@ -888,8 +673,6 @@ class TestIsInteractive:
 
         assert _is_interactive() is False
 
-
-
     def test_true_when_stdin_is_tty(self, monkeypatch):
 
         mock_stdin = MagicMock()
@@ -900,10 +683,7 @@ class TestIsInteractive:
 
         assert _is_interactive() is True
 
-
-
     def test_false_when_stdin_has_no_isatty(self, monkeypatch):
-
         """Some environments replace stdin with an object without isatty()."""
 
         mock_stdin = object()  # no isatty attribute
@@ -913,66 +693,46 @@ class TestIsInteractive:
         assert _is_interactive() is False
 
 
-
-
-
 class TestWaitForCallbackNoBlocking:
-
     """_wait_for_callback() must never call input() — it raises instead."""
 
-
-
     def test_raises_on_timeout_instead_of_input(self):
-
         """When no auth code arrives, raises OAuthNonInteractiveError."""
 
         import tools.mcp_oauth as mod
 
         import asyncio
 
-
-
         mod._oauth_port = _find_free_port()
-
-
 
         async def instant_sleep(_seconds):
 
             pass
 
-
-
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-
-            with patch("builtins.input", side_effect=AssertionError("input() must not be called")):
-
-                with pytest.raises(OAuthNonInteractiveError, match="callback timed out"):
-
+            with patch(
+                "builtins.input",
+                side_effect=AssertionError("input() must not be called"),
+            ):
+                with pytest.raises(
+                    OAuthNonInteractiveError, match="callback timed out"
+                ):
                     asyncio.run(_wait_for_callback())
 
 
-
-
-
 class TestBuildOAuthAuthNonInteractive:
-
     """build_oauth_auth() in non-interactive mode."""
 
-
-
-    def test_noninteractive_without_cached_tokens_warns(self, tmp_path, monkeypatch, caplog):
-
+    def test_noninteractive_without_cached_tokens_warns(
+        self, tmp_path, monkeypatch, caplog
+    ):
         """Without cached tokens, non-interactive mode logs a clear warning."""
 
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -982,15 +742,10 @@ class TestBuildOAuthAuthNonInteractive:
 
         monkeypatch.setattr("tools.mcp_oauth.sys.stdin", mock_stdin)
 
-
-
         import logging
 
         with caplog.at_level(logging.WARNING, logger="tools.mcp_oauth"):
-
             auth = build_oauth_auth("atlassian", "https://mcp.atlassian.com/v1/mcp")
-
-
 
         assert auth is not None
 
@@ -998,21 +753,16 @@ class TestBuildOAuthAuthNonInteractive:
 
         assert "non-interactive" in caplog.text.lower()
 
-
-
-    def test_noninteractive_with_cached_tokens_no_warning(self, tmp_path, monkeypatch, caplog):
-
+    def test_noninteractive_with_cached_tokens_no_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
         """With cached tokens, non-interactive mode logs no 'no cached tokens' warning."""
 
         try:
-
             from mcp.client.auth import OAuthClientProvider
 
         except ImportError:
-
             pytest.skip("MCP SDK auth not available")
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -1022,38 +772,27 @@ class TestBuildOAuthAuthNonInteractive:
 
         monkeypatch.setattr("tools.mcp_oauth.sys.stdin", mock_stdin)
 
-
-
         # Pre-populate cached tokens
 
         d = tmp_path / "mcp-tokens"
 
         d.mkdir(parents=True)
 
-        (d / "atlassian.json").write_text(json.dumps({
-
-            "access_token": "cached",
-
-            "token_type": "Bearer",
-
-        }))
-
-
+        (d / "atlassian.json").write_text(
+            json.dumps({
+                "access_token": "cached",
+                "token_type": "Bearer",
+            })
+        )
 
         import logging
 
         with caplog.at_level(logging.WARNING, logger="tools.mcp_oauth"):
-
             auth = build_oauth_auth("atlassian", "https://mcp.atlassian.com/v1/mcp")
-
-
 
         assert auth is not None
 
         assert "no cached tokens found" not in caplog.text.lower()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1063,26 +802,18 @@ class TestBuildOAuthAuthNonInteractive:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_build_client_metadata_basic():
-
     """_build_client_metadata returns metadata with expected defaults."""
 
     pytest.importorskip("mcp")
 
     from tools.mcp_oauth import _build_client_metadata, _configure_callback_port
 
-
-
     cfg = {"client_name": "Test Client"}
 
     _configure_callback_port(cfg)
 
     md = _build_client_metadata(cfg)
-
-
 
     assert md.client_name == "Test Client"
 
@@ -1091,18 +822,12 @@ def test_build_client_metadata_basic():
     assert "refresh_token" in md.grant_types
 
 
-
-
-
 def test_build_client_metadata_without_secret_is_public():
-
     """Without client_secret, token endpoint auth is 'none' (public client)."""
 
     pytest.importorskip("mcp")
 
     from tools.mcp_oauth import _build_client_metadata, _configure_callback_port
-
-
 
     cfg = {}
 
@@ -1113,18 +838,12 @@ def test_build_client_metadata_without_secret_is_public():
     assert md.token_endpoint_auth_method == "none"
 
 
-
-
-
 def test_build_client_metadata_with_secret_is_confidential():
-
     """With client_secret, token endpoint auth is 'client_secret_post'."""
 
     pytest.importorskip("mcp")
 
     from tools.mcp_oauth import _build_client_metadata, _configure_callback_port
-
-
 
     cfg = {"client_secret": "shh"}
 
@@ -1135,16 +854,10 @@ def test_build_client_metadata_with_secret_is_confidential():
     assert md.token_endpoint_auth_method == "client_secret_post"
 
 
-
-
-
 def test_configure_callback_port_picks_free_port():
-
     """_configure_callback_port(0) picks a free port in the ephemeral range."""
 
     from tools.mcp_oauth import _configure_callback_port
-
-
 
     cfg = {"redirect_port": 0}
 
@@ -1155,16 +868,10 @@ def test_configure_callback_port_picks_free_port():
     assert cfg["_resolved_port"] == port
 
 
-
-
-
 def test_configure_callback_port_uses_explicit_port():
-
     """An explicit redirect_port is preserved."""
 
     from tools.mcp_oauth import _configure_callback_port
-
-
 
     cfg = {"redirect_port": 54321}
 
@@ -1175,11 +882,7 @@ def test_configure_callback_port_uses_explicit_port():
     assert cfg["_resolved_port"] == 54321
 
 
-
-
-
 def test_build_oauth_auth_preserves_server_url_path():
-
     """server_url with path is forwarded to OAuthClientProvider unmodified.
 
 
@@ -1200,70 +903,47 @@ def test_build_oauth_auth_preserves_server_url_path():
 
     from tools import mcp_oauth
 
-
-
     captured: dict = {}
 
-
-
     class _FakeProvider:
-
         def __init__(self, **kwargs):
 
             captured.update(kwargs)
 
-
-
-    with patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True), \
-         patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider), \
-         patch.object(mcp_oauth, "_is_interactive", return_value=True), \
-         patch.object(mcp_oauth, "_maybe_preregister_client"), \
-         patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls:
-
+    with (
+        patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True),
+        patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider),
+        patch.object(mcp_oauth, "_is_interactive", return_value=True),
+        patch.object(mcp_oauth, "_maybe_preregister_client"),
+        patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls,
+    ):
         mock_storage_cls.return_value = MagicMock(has_cached_tokens=lambda: True)
 
         build_oauth_auth(
-
             server_name="notion",
-
             server_url="https://mcp.notion.com/mcp",
-
             oauth_config={},
-
         )
-
-
 
     assert captured["server_url"] == "https://mcp.notion.com/mcp"
 
 
-
-
-
-
-
 class TestPasteCallbackReader:
-
     """_paste_callback_reader parses redirect URLs / query strings from stdin."""
-
-
 
     def _empty_result(self):
 
         return {"auth_code": None, "state": None, "error": None}
-
-
 
     def test_parses_full_local_redirect_url(self, monkeypatch):
 
         result = self._empty_result()
 
         monkeypatch.setattr(
-
             "sys.stdin",
-
-            MagicMock(readline=lambda: "http://127.0.0.1:37949/callback?code=abc&state=xyz\n"),
-
+            MagicMock(
+                readline=lambda: "http://127.0.0.1:37949/callback?code=abc&state=xyz\n"
+            ),
         )
 
         _paste_callback_reader(result)
@@ -1274,10 +954,7 @@ class TestPasteCallbackReader:
 
         assert result["error"] is None
 
-
-
     def test_parses_remote_provider_url(self, monkeypatch):
-
         """User pastes the URL their browser ended up on, including a real host."""
 
         result = self._empty_result()
@@ -1292,18 +969,13 @@ class TestPasteCallbackReader:
 
         assert result["state"] == "eyJ0ZXN0Ijoi"
 
-
-
     def test_parses_bare_query_string(self, monkeypatch):
 
         result = self._empty_result()
 
         monkeypatch.setattr(
-
             "sys.stdin",
-
             MagicMock(readline=lambda: "code=token123&state=st1\n"),
-
         )
 
         _paste_callback_reader(result)
@@ -1312,18 +984,13 @@ class TestPasteCallbackReader:
 
         assert result["state"] == "st1"
 
-
-
     def test_parses_leading_question_mark(self, monkeypatch):
 
         result = self._empty_result()
 
         monkeypatch.setattr(
-
             "sys.stdin",
-
             MagicMock(readline=lambda: "?code=tok&state=stA\n"),
-
         )
 
         _paste_callback_reader(result)
@@ -1332,18 +999,13 @@ class TestPasteCallbackReader:
 
         assert result["state"] == "stA"
 
-
-
     def test_captures_error_param(self, monkeypatch):
 
         result = self._empty_result()
 
         monkeypatch.setattr(
-
             "sys.stdin",
-
             MagicMock(readline=lambda: "https://example/cb?error=access_denied\n"),
-
         )
 
         _paste_callback_reader(result)
@@ -1351,8 +1013,6 @@ class TestPasteCallbackReader:
         assert result["auth_code"] is None
 
         assert result["error"] == "access_denied"
-
-
 
     def test_empty_input_noop(self, monkeypatch):
 
@@ -1366,16 +1026,12 @@ class TestPasteCallbackReader:
 
         assert result["error"] is None
 
-
-
     def test_garbage_input_noop(self, monkeypatch, capsys):
 
         result = self._empty_result()
 
         monkeypatch.setattr(
-
             "sys.stdin", MagicMock(readline=lambda: "not a url at all\n")
-
         )
 
         _paste_callback_reader(result)
@@ -1388,20 +1044,14 @@ class TestPasteCallbackReader:
 
         assert "did not contain" in err or "Could not parse" in err
 
-
-
     def test_skips_when_http_listener_already_won(self, monkeypatch):
-
         """If HTTP listener filled the result first, paste must not overwrite."""
 
         result = {"auth_code": "from_http", "state": "http_state", "error": None}
 
         monkeypatch.setattr(
-
             "sys.stdin",
-
             MagicMock(readline=lambda: "code=from_paste&state=paste_state\n"),
-
         )
 
         _paste_callback_reader(result)
@@ -1410,10 +1060,7 @@ class TestPasteCallbackReader:
 
         assert result["state"] == "http_state"
 
-
-
     def test_swallows_stdin_errors(self, monkeypatch):
-
         """OSError / interrupt on readline must not propagate."""
 
         result = self._empty_result()
@@ -1429,14 +1076,8 @@ class TestPasteCallbackReader:
         assert result["auth_code"] is None
 
 
-
-
-
 class TestWaitForCallbackPasteIntegration:
-
     """_wait_for_callback offers the paste prompt only when interactive."""
-
-
 
     def test_paste_prompt_shown_on_tty(self, monkeypatch, capsys):
 
@@ -1458,26 +1099,19 @@ class TestWaitForCallbackPasteIntegration:
 
         monkeypatch.setattr("sys.stdin", MagicMock(readline=block_forever))
 
-
-
         async def instant_sleep(_):
 
             pass
 
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-
             with pytest.raises(OAuthNonInteractiveError):
-
                 asyncio.run(_wait_for_callback())
 
         err = capsys.readouterr().err
 
         assert "paste the redirect URL" in err
 
-
-
     def test_paste_prompt_NOT_shown_when_noninteractive(self, monkeypatch, capsys):
-
         """Preserves existing invariant: no input() / paste prompt in headless runs."""
 
         import tools.mcp_oauth as mod
@@ -1486,18 +1120,16 @@ class TestWaitForCallbackPasteIntegration:
 
         monkeypatch.setattr(mod, "_is_interactive", lambda: False)
 
-
-
         async def instant_sleep(_):
 
             pass
 
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-
-            with patch("builtins.input", side_effect=AssertionError("input() must not be called")):
-
+            with patch(
+                "builtins.input",
+                side_effect=AssertionError("input() must not be called"),
+            ):
                 with pytest.raises(OAuthNonInteractiveError):
-
                     asyncio.run(_wait_for_callback())
 
         err = capsys.readouterr().err
@@ -1505,23 +1137,16 @@ class TestWaitForCallbackPasteIntegration:
         assert "paste the redirect URL" not in err
 
 
-
-
-
 class TestPasteCallbackSkipToken:
-
     """User can type `skip` (or similar) at the paste prompt to bail out."""
-
-
 
     def _empty_result(self):
 
         return {"auth_code": None, "state": None, "error": None}
 
-
-
-    @pytest.mark.parametrize("token", ["skip", "SKIP", "Skip", "cancel", "s", "n", "no", "q", "quit"])
-
+    @pytest.mark.parametrize(
+        "token", ["skip", "SKIP", "Skip", "cancel", "s", "n", "no", "q", "quit"]
+    )
     def test_skip_tokens_set_sentinel(self, monkeypatch, token):
 
         from tools.mcp_oauth import _USER_SKIPPED_SENTINEL
@@ -1535,8 +1160,6 @@ class TestPasteCallbackSkipToken:
         assert result["error"] == _USER_SKIPPED_SENTINEL
 
         assert result["auth_code"] is None
-
-
 
     def test_skip_message_printed(self, monkeypatch, capsys):
 
@@ -1552,10 +1175,7 @@ class TestPasteCallbackSkipToken:
 
         assert "clawk mcp login" in err
 
-
-
     def test_skip_does_not_overwrite_http_winner(self, monkeypatch):
-
         """If HTTP listener already wrote a code, `skip` must not stomp it."""
 
         result = {"auth_code": "from_http", "state": "x", "error": None}
@@ -1568,10 +1188,7 @@ class TestPasteCallbackSkipToken:
 
         assert result["error"] is None
 
-
-
     def test_skip_token_not_parsed_as_url(self, monkeypatch, capsys):
-
         """`skip` must NOT fall through to URL parsing (which would silently no-op)."""
 
         from tools.mcp_oauth import _USER_SKIPPED_SENTINEL
@@ -1591,17 +1208,10 @@ class TestPasteCallbackSkipToken:
         assert "did not contain" not in err
 
 
-
-
-
 class TestWaitForCallbackSkipIntegration:
-
     """_wait_for_callback maps the skip sentinel to OAuthNonInteractiveError."""
 
-
-
     def test_skip_raises_non_interactive_error(self, monkeypatch):
-
         """Skip token must raise OAuthNonInteractiveError (mcp_tool handles as non-fatal)."""
 
         import tools.mcp_oauth as mod
@@ -1612,22 +1222,15 @@ class TestWaitForCallbackSkipIntegration:
 
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: "skip\n"))
 
-
-
         async def instant_sleep(_):
 
             pass
 
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-
             with pytest.raises(OAuthNonInteractiveError, match="user_skipped"):
-
                 asyncio.run(_wait_for_callback())
 
-
-
     def test_paste_prompt_mentions_skip(self, monkeypatch, capsys):
-
         """The interactive prompt must tell users about the skip option."""
 
         import tools.mcp_oauth as mod
@@ -1638,19 +1241,14 @@ class TestWaitForCallbackSkipIntegration:
 
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: "skip\n"))
 
-
-
         async def instant_sleep(_):
 
             pass
 
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-
             with pytest.raises(OAuthNonInteractiveError):
-
                 asyncio.run(_wait_for_callback())
 
         err = capsys.readouterr().err
 
         assert "skip" in err.lower()
-

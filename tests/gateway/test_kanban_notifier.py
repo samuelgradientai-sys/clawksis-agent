@@ -3,9 +3,6 @@ import asyncio
 from pathlib import Path
 
 
-
-
-
 from gateway.config import Platform
 
 from gateway.run import GatewayRunner
@@ -13,63 +10,40 @@ from gateway.run import GatewayRunner
 from clawk_cli import kanban_db as kb
 
 
-
-
-
 class RecordingAdapter:
-
     def __init__(self):
 
         self.sent = []
-
-
 
     async def send(self, chat_id, text, metadata=None):
 
         self.sent.append({"chat_id": chat_id, "text": text, "metadata": metadata or {}})
 
 
-
-
-
 class DisconnectedAdapters(dict):
-
     """Expose a platform during collection, then simulate disconnect on get()."""
-
-
 
     def get(self, key, default=None):
 
         return None
 
 
-
-
-
 async def _run_one_notifier_tick(monkeypatch, runner):
 
     real_sleep = asyncio.sleep
 
-
-
     async def fake_sleep(delay):
 
         if delay == 5:
-
             return None
 
         runner._running = False
 
         await real_sleep(0)
 
-
-
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     await runner._kanban_notifier_watcher(interval=1)
-
-
-
 
 
 def _make_runner(adapter):
@@ -85,15 +59,11 @@ def _make_runner(adapter):
     return runner
 
 
-
-
-
 def _create_completed_subscription(summary="done once"):
 
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="notify once", assignee="worker")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat-1")
@@ -103,11 +73,7 @@ def _create_completed_subscription(summary="done once"):
         return tid
 
     finally:
-
         conn.close()
-
-
-
 
 
 def _unseen_terminal_events(tid):
@@ -115,29 +81,18 @@ def _unseen_terminal_events(tid):
     conn = kb.connect()
 
     try:
-
         _, events = kb.unseen_events_for_sub(
-
             conn,
-
             task_id=tid,
-
             platform="telegram",
-
             chat_id="chat-1",
-
             kinds=["completed", "blocked", "gave_up", "crashed", "timed_out"],
-
         )
 
         return events
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_kanban_notifier_dedupes_board_slugs_pointing_to_same_db(tmp_path, monkeypatch):
@@ -152,30 +107,19 @@ def test_kanban_notifier_dedupes_board_slugs_pointing_to_same_db(tmp_path, monke
 
     kb.write_board_metadata("alias-b", name="Alias B")
 
-
-
     tid = _create_completed_subscription()
-
-
 
     adapter = RecordingAdapter()
 
     runner = _make_runner(adapter)
 
-
-
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
-
-
 
     assert len(adapter.sent) == 1
 
     assert "Kanban" in adapter.sent[0]["text"]
 
     assert tid in adapter.sent[0]["text"]
-
-
-
 
 
 def test_kanban_notifier_claim_prevents_second_watcher_send(tmp_path, monkeypatch):
@@ -186,30 +130,19 @@ def test_kanban_notifier_claim_prevents_second_watcher_send(tmp_path, monkeypatc
 
     kb.init_db()
 
-
-
     tid = _create_completed_subscription()
-
-
 
     adapter1 = RecordingAdapter()
 
     adapter2 = RecordingAdapter()
 
-
-
     asyncio.run(_run_one_notifier_tick(monkeypatch, _make_runner(adapter1)))
 
     asyncio.run(_run_one_notifier_tick(monkeypatch, _make_runner(adapter2)))
 
-
-
     assert len(adapter1.sent) == 1
 
     assert adapter2.sent == []
-
-
-
 
 
 def test_kanban_notifier_rewinds_claim_if_adapter_disconnects(tmp_path, monkeypatch):
@@ -222,8 +155,6 @@ def test_kanban_notifier_rewinds_claim_if_adapter_disconnects(tmp_path, monkeypa
 
     tid = _create_completed_subscription()
 
-
-
     runner = GatewayRunner.__new__(GatewayRunner)
 
     runner._running = True
@@ -232,16 +163,9 @@ def test_kanban_notifier_rewinds_claim_if_adapter_disconnects(tmp_path, monkeypa
 
     runner._kanban_sub_fail_counts = {}
 
-
-
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
 
-
-
     assert [ev.kind for ev in _unseen_terminal_events(tid)] == ["completed"]
-
-
-
 
 
 def test_kanban_db_path_is_test_isolated_from_real_home():
@@ -252,41 +176,27 @@ def test_kanban_db_path_is_test_isolated_from_real_home():
 
     assert kb.kanban_db_path().resolve() != production_db.resolve()
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="x", assignee="worker")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat-1")
 
     finally:
-
         conn.close()
-
-
 
     assert kb.kanban_db_path().resolve().is_relative_to(clawk_home.resolve())
 
     assert kb.kanban_db_path().resolve() != production_db.resolve()
 
 
-
-
-
 class FailingAdapter:
-
     """Adapter whose send() always raises, simulating a transient send error."""
-
-
 
     def __init__(self):
 
         self.attempts = 0
-
-
 
     async def send(self, chat_id, text, metadata=None):
 
@@ -295,11 +205,7 @@ class FailingAdapter:
         raise RuntimeError("simulated send failure")
 
 
-
-
-
 def test_kanban_notifier_rewinds_claim_on_send_exception(tmp_path, monkeypatch):
-
     """A raising adapter rewinds the claim so the next tick can retry.
 
 
@@ -322,17 +228,11 @@ def test_kanban_notifier_rewinds_claim_on_send_exception(tmp_path, monkeypatch):
 
     tid = _create_completed_subscription()
 
-
-
     adapter = FailingAdapter()
 
     runner = _make_runner(adapter)
 
-
-
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
-
-
 
     # Send was attempted (so we exercised the failure path, not just the
 
@@ -345,11 +245,7 @@ def test_kanban_notifier_rewinds_claim_on_send_exception(tmp_path, monkeypatch):
     assert [ev.kind for ev in _unseen_terminal_events(tid)] == ["completed"]
 
 
-
-
-
 def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
-
     """A retry cycle (crashed → reclaimed → crashed) notifies the user twice.
 
 
@@ -378,12 +274,9 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
 
     kb.init_db()
 
-
-
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="cycle test", assignee="worker")
 
         kb.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat-1")
@@ -393,10 +286,7 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
         kb._append_event(conn, tid, kind="crashed")
 
     finally:
-
         conn.close()
-
-
 
     adapter = RecordingAdapter()
 
@@ -404,15 +294,11 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
 
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
 
-
-
     # First crash delivered.
 
     assert len(adapter.sent) == 1
 
     assert "crashed" in adapter.sent[0]["text"].lower()
-
-
 
     # Subscription survives — the cursor advanced past event #1, but the
 
@@ -421,18 +307,12 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
     conn = kb.connect()
 
     try:
-
         subs = kb.list_notify_subs(conn, tid)
 
         assert len(subs) == 1, (
-
             "Subscription must survive a crashed event so a respawn-cycle "
-
             "second crash also notifies the user (issue #21398)."
-
         )
-
-
 
         # Second crash — same task, same dispatcher (or a respawn). Append
 
@@ -443,10 +323,7 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
         kb._append_event(conn, tid, kind="crashed")
 
     finally:
-
         conn.close()
-
-
 
     # New tick: the second event has a fresh id past the cursor advance,
 
@@ -456,15 +333,9 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
 
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
 
-
-
     assert len(adapter.sent) == 2, (
-
         f"Second crashed event should also notify; got {len(adapter.sent)} "
-
         f"deliveries (texts: {[d['text'] for d in adapter.sent]})"
-
     )
 
     assert "crashed" in adapter.sent[1]["text"].lower()
-

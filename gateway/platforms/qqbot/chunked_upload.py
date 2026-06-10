@@ -47,14 +47,14 @@ logger = logging.getLogger(__name__)
 
 
 # ── Error codes ──────────────────────────────────────────────────────
-_BIZ_CODE_DAILY_LIMIT = 40093002     # upload_prepare: daily cumulative limit
+_BIZ_CODE_DAILY_LIMIT = 40093002  # upload_prepare: daily cumulative limit
 _BIZ_CODE_PART_RETRYABLE = 40093001  # upload_part_finish: transient
 
 # ── Part upload tuning ───────────────────────────────────────────────
 _DEFAULT_CONCURRENT_PARTS = 1
 _MAX_CONCURRENT_PARTS = 10
 
-_PART_UPLOAD_TIMEOUT = 300.0        # 5 minutes per COS PUT
+_PART_UPLOAD_TIMEOUT = 300.0  # 5 minutes per COS PUT
 _PART_UPLOAD_MAX_RETRIES = 2
 _PART_FINISH_RETRY_INTERVAL = 1.0
 _PART_FINISH_DEFAULT_TIMEOUT = 120.0
@@ -69,6 +69,7 @@ _MD5_10M_SIZE = 10_002_432
 
 # ── Exceptions ───────────────────────────────────────────────────────
 
+
 class UploadDailyLimitExceededError(Exception):
     """Raised when ``upload_prepare`` returns biz_code 40093002.
 
@@ -80,9 +81,7 @@ class UploadDailyLimitExceededError(Exception):
     def __init__(self, file_name: str, file_size: int, message: str = "") -> None:
         self.file_name = file_name
         self.file_size = file_size
-        super().__init__(
-            message or f"Daily upload limit exceeded for {file_name!r}"
-        )
+        super().__init__(message or f"Daily upload limit exceeded for {file_name!r}")
 
     @property
     def file_size_human(self) -> str:
@@ -122,6 +121,7 @@ class UploadFileTooLargeError(Exception):
 
 # ── Progress tracking ────────────────────────────────────────────────
 
+
 @dataclass
 class _UploadProgress:
     total_parts: int = 0
@@ -131,6 +131,7 @@ class _UploadProgress:
 
 
 # ── Prepare-response shape ───────────────────────────────────────────
+
 
 @dataclass
 class _PreparePart:
@@ -156,15 +157,11 @@ def _parse_prepare_response(raw: Dict[str, Any]) -> _PrepareResult:
     src = raw.get("data") if isinstance(raw.get("data"), dict) else raw
     upload_id = str(src.get("upload_id", ""))
     if not upload_id:
-        raise ValueError(
-            f"upload_prepare response missing upload_id: {str(raw)[:200]}"
-        )
+        raise ValueError(f"upload_prepare response missing upload_id: {str(raw)[:200]}")
     block_size = int(src.get("block_size", 0))
     raw_parts = src.get("parts") or src.get("part_list") or []
     if not isinstance(raw_parts, list) or not raw_parts:
-        raise ValueError(
-            f"upload_prepare response missing parts: {str(raw)[:200]}"
-        )
+        raise ValueError(f"upload_prepare response missing parts: {str(raw)[:200]}")
     parts: List[_PreparePart] = []
     for p in raw_parts:
         if not isinstance(p, dict):
@@ -172,9 +169,7 @@ def _parse_prepare_response(raw: Dict[str, Any]) -> _PrepareResult:
         parts.append(
             _PreparePart(
                 index=int(p.get("part_index") or p.get("index") or 0),
-                presigned_url=str(
-                    p.get("presigned_url") or p.get("url") or ""
-                ),
+                presigned_url=str(p.get("presigned_url") or p.get("url") or ""),
                 block_size=int(p.get("block_size", 0)),
             )
         )
@@ -182,7 +177,8 @@ def _parse_prepare_response(raw: Dict[str, Any]) -> _PrepareResult:
         upload_id=upload_id,
         block_size=block_size,
         parts=parts,
-        concurrency=int(src.get("concurrency", _DEFAULT_CONCURRENT_PARTS)) or _DEFAULT_CONCURRENT_PARTS,
+        concurrency=int(src.get("concurrency", _DEFAULT_CONCURRENT_PARTS))
+        or _DEFAULT_CONCURRENT_PARTS,
         retry_timeout=float(src.get("retry_timeout", 0.0) or 0.0),
     )
 
@@ -240,16 +236,17 @@ class ChunkedUploader:
         :raises RuntimeError: On other API or I/O failures.
         """
         if chat_type not in {"c2c", "group"}:
-            raise ValueError(
-                f"ChunkedUploader: unsupported chat_type {chat_type!r}"
-            )
+            raise ValueError(f"ChunkedUploader: unsupported chat_type {chat_type!r}")
 
         path = Path(file_path)
         file_size = path.stat().st_size
 
         logger.info(
             "[%s] Chunked upload start: file=%s size=%s type=%d",
-            self._log_tag, file_name, format_size(file_size), file_type,
+            self._log_tag,
+            file_name,
+            format_size(file_size),
+            file_type,
         )
 
         # Step 1: compute hashes (blocking I/O → executor).
@@ -263,13 +260,18 @@ class ChunkedUploader:
         )
         max_concurrent = min(prepare.concurrency, _MAX_CONCURRENT_PARTS)
         retry_timeout = min(
-            prepare.retry_timeout if prepare.retry_timeout > 0 else _PART_FINISH_DEFAULT_TIMEOUT,
+            prepare.retry_timeout
+            if prepare.retry_timeout > 0
+            else _PART_FINISH_DEFAULT_TIMEOUT,
             _PART_FINISH_MAX_TIMEOUT,
         )
         logger.info(
             "[%s] Prepared: upload_id=%s block_size=%s parts=%d concurrency=%d",
-            self._log_tag, prepare.upload_id, format_size(prepare.block_size),
-            len(prepare.parts), max_concurrent,
+            self._log_tag,
+            prepare.upload_id,
+            format_size(prepare.block_size),
+            len(prepare.parts),
+            max_concurrent,
         )
 
         progress = _UploadProgress(
@@ -297,7 +299,8 @@ class ChunkedUploader:
 
         logger.info(
             "[%s] All %d parts uploaded, completing…",
-            self._log_tag, len(prepare.parts),
+            self._log_tag,
+            len(prepare.parts),
         )
 
         # Step 4: complete_upload (retry on transient errors).
@@ -370,24 +373,36 @@ class ChunkedUploader:
 
         logger.debug(
             "[%s] Part %d/%d: uploading %s (offset=%d md5=%s)",
-            self._log_tag, part_index, progress.total_parts,
-            format_size(length), offset, md5_hex,
+            self._log_tag,
+            part_index,
+            progress.total_parts,
+            format_size(length),
+            offset,
+            md5_hex,
         )
 
         await self._put_to_presigned_url(
             part.presigned_url, data, part_index, progress.total_parts
         )
         await self._part_finish_with_retry(
-            chat_type, target_id, upload_id,
-            part_index, length, md5_hex, retry_timeout,
+            chat_type,
+            target_id,
+            upload_id,
+            part_index,
+            length,
+            md5_hex,
+            retry_timeout,
         )
 
         progress.completed_parts += 1
         progress.uploaded_bytes += length
         logger.debug(
             "[%s] Part %d/%d done (%d/%d total)",
-            self._log_tag, part_index, progress.total_parts,
-            progress.completed_parts, progress.total_parts,
+            self._log_tag,
+            part_index,
+            progress.total_parts,
+            progress.completed_parts,
+            progress.total_parts,
         )
 
     async def _put_to_presigned_url(
@@ -414,7 +429,10 @@ class ChunkedUploader:
                 if 200 <= status < 300:
                     logger.debug(
                         "[%s] PUT part %d/%d: %d OK",
-                        self._log_tag, part_index, total_parts, status,
+                        self._log_tag,
+                        part_index,
+                        total_parts,
+                        status,
                     )
                     return
                 body_preview = ""
@@ -422,17 +440,19 @@ class ChunkedUploader:
                     body_preview = getattr(resp, "text", "")[:200]
                 except Exception:  # pragma: no cover — defensive
                     pass
-                raise RuntimeError(
-                    f"COS PUT returned {status}: {body_preview}"
-                )
+                raise RuntimeError(f"COS PUT returned {status}: {body_preview}")
             except Exception as exc:
                 last_exc = exc
                 if attempt < _PART_UPLOAD_MAX_RETRIES:
-                    delay = 1.0 * (2 ** attempt)
+                    delay = 1.0 * (2**attempt)
                     logger.warning(
                         "[%s] PUT part %d/%d attempt %d failed, retry in %.1fs: %s",
-                        self._log_tag, part_index, total_parts,
-                        attempt + 1, delay, exc,
+                        self._log_tag,
+                        part_index,
+                        total_parts,
+                        attempt + 1,
+                        delay,
+                        exc,
                     )
                     await asyncio.sleep(delay)
         raise RuntimeError(
@@ -481,9 +501,11 @@ class ChunkedUploader:
                     ) from exc
                 attempt += 1
                 logger.debug(
-                    "[%s] part_finish retryable error, attempt %d, "
-                    "elapsed=%.1fs: %s",
-                    self._log_tag, attempt, elapsed, exc,
+                    "[%s] part_finish retryable error, attempt %d, elapsed=%.1fs: %s",
+                    self._log_tag,
+                    attempt,
+                    elapsed,
+                    exc,
                 )
                 await asyncio.sleep(_PART_FINISH_RETRY_INTERVAL)
 
@@ -515,11 +537,13 @@ class ChunkedUploader:
             except Exception as exc:
                 last_exc = exc
                 if attempt < _COMPLETE_UPLOAD_MAX_RETRIES:
-                    delay = _COMPLETE_UPLOAD_BASE_DELAY * (2 ** attempt)
+                    delay = _COMPLETE_UPLOAD_BASE_DELAY * (2**attempt)
                     logger.warning(
-                        "[%s] complete_upload attempt %d failed, "
-                        "retry in %.1fs: %s",
-                        self._log_tag, attempt + 1, delay, exc,
+                        "[%s] complete_upload attempt %d failed, retry in %.1fs: %s",
+                        self._log_tag,
+                        attempt + 1,
+                        delay,
+                        exc,
                     )
                     await asyncio.sleep(delay)
         raise RuntimeError(
@@ -529,6 +553,7 @@ class ChunkedUploader:
 
 
 # ── Helpers (module-level for testability) ───────────────────────────
+
 
 def format_size(size_bytes: int) -> str:
     """Return a human-readable file size string (e.g. ``'12.3 MB'``)."""

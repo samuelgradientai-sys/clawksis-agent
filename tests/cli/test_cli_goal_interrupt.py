@@ -18,10 +18,7 @@ minimal ``ClawksisCLI`` stub (pattern used elsewhere in tests/cli).
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import queue
@@ -33,11 +30,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
-
-
-
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -47,13 +40,8 @@ import pytest
 # ──────────────────────────────────────────────────────────────────────
 
 
-
-
-
 @pytest.fixture
-
 def clawk_home(tmp_path, monkeypatch):
-
     """Isolated CLAWK_HOME so SessionDB.state_meta writes stay hermetic."""
 
     home = tmp_path / ".clawksis"
@@ -63,8 +51,6 @@ def clawk_home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
-
-
 
     # Bust the goal module's DB cache so it re-resolves CLAWK_HOME each test.
 
@@ -77,18 +63,12 @@ def clawk_home(tmp_path, monkeypatch):
     goals._DB_CACHE.clear()
 
 
-
-
-
 def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
-
     """Build a minimal ClawksisCLI stub with an active goal wired in."""
 
     from cli import ClawksisCLI
 
     from clawk_cli.goals import GoalManager
-
-
 
     cli = ClawksisCLI.__new__(ClawksisCLI)
 
@@ -110,8 +90,6 @@ def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
 
     cli.agent.session_id = session_id
 
-
-
     mgr = GoalManager(session_id=session_id, default_max_turns=5)
 
     mgr.set(goal_text)
@@ -121,9 +99,6 @@ def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
     return cli, mgr
 
 
-
-
-
 # ──────────────────────────────────────────────────────────────────────
 
 # Tests
@@ -131,13 +106,8 @@ def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
 # ──────────────────────────────────────────────────────────────────────
 
 
-
-
-
 class TestInterruptAutoPause:
-
     def test_interrupted_turn_pauses_goal_and_skips_continuation(self, clawk_home):
-
         """Ctrl+C mid-turn must auto-pause the goal, not queue another round."""
 
         sid = f"sid-interrupt-{uuid.uuid4().hex}"
@@ -149,40 +119,26 @@ class TestInterruptAutoPause:
         cli._last_turn_interrupted = True
 
         cli.conversation_history = [
-
             {"role": "user", "content": "kickoff"},
-
             {"role": "assistant", "content": "starting work..."},
-
         ]
-
-
 
         # Judge MUST NOT run on an interrupted turn. If it does, we've
 
         # regressed — fail loudly instead of silently querying a mock.
 
         with patch("clawk_cli.goals.judge_goal") as judge_mock:
-
             judge_mock.side_effect = AssertionError(
-
                 "judge_goal called on an interrupted turn"
-
             )
 
             cli._maybe_continue_goal_after_turn()
 
-
-
         # Pending input must NOT contain a continuation prompt.
 
         assert cli._pending_input.empty(), (
-
             "Interrupted turn should not enqueue a continuation prompt"
-
         )
-
-
 
         # Goal should be paused, not active.
 
@@ -194,10 +150,7 @@ class TestInterruptAutoPause:
 
         assert "interrupt" in (state.paused_reason or "").lower()
 
-
-
     def test_interrupted_turn_is_resumable(self, clawk_home):
-
         """After auto-pause from Ctrl+C, /goal resume puts it back to active."""
 
         sid = f"sid-resume-{uuid.uuid4().hex}"
@@ -207,31 +160,21 @@ class TestInterruptAutoPause:
         cli._last_turn_interrupted = True
 
         cli.conversation_history = [
-
             {"role": "assistant", "content": "partial"},
-
         ]
 
         with patch("clawk_cli.goals.judge_goal"):
-
             cli._maybe_continue_goal_after_turn()
 
         assert mgr.state.status == "paused"
-
-
 
         mgr.resume()
 
         assert mgr.state.status == "active"
 
 
-
-
-
 class TestEmptyResponseSkip:
-
     def test_empty_response_does_not_invoke_judge(self, clawk_home):
-
         """Whitespace-only replies skip judging (transient failure guard)."""
 
         sid = f"sid-empty-{uuid.uuid4().hex}"
@@ -241,26 +184,16 @@ class TestEmptyResponseSkip:
         cli._last_turn_interrupted = False
 
         cli.conversation_history = [
-
             {"role": "user", "content": "go"},
-
             {"role": "assistant", "content": "   \n\n   "},
-
         ]
 
-
-
         with patch("clawk_cli.goals.judge_goal") as judge_mock:
-
             judge_mock.side_effect = AssertionError(
-
                 "judge_goal called on an empty response"
-
             )
 
             cli._maybe_continue_goal_after_turn()
-
-
 
         # No continuation queued; goal still active (neither paused nor done).
 
@@ -268,10 +201,7 @@ class TestEmptyResponseSkip:
 
         assert mgr.state.status == "active"
 
-
-
     def test_no_assistant_message_skipped(self, clawk_home):
-
         """Conversation with zero assistant replies must not trip the judge."""
 
         sid = f"sid-noassistant-{uuid.uuid4().hex}"
@@ -281,41 +211,26 @@ class TestEmptyResponseSkip:
         cli._last_turn_interrupted = False
 
         cli.conversation_history = [
-
             {"role": "user", "content": "go"},
-
         ]
 
-
-
         with patch("clawk_cli.goals.judge_goal") as judge_mock:
-
             judge_mock.side_effect = AssertionError(
-
                 "judge_goal called without an assistant response"
-
             )
 
             cli._maybe_continue_goal_after_turn()
-
-
 
         assert cli._pending_input.empty()
 
         assert mgr.state.status == "active"
 
 
-
-
-
 class TestHealthyTurnStillRuns:
-
     def test_clean_response_enqueues_continuation_when_judge_says_continue(
-
-        self, clawk_home,
-
+        self,
+        clawk_home,
     ):
-
         """Sanity check: the hook still works in the happy path."""
 
         sid = f"sid-healthy-{uuid.uuid4().hex}"
@@ -325,28 +240,17 @@ class TestHealthyTurnStillRuns:
         cli._last_turn_interrupted = False
 
         cli.conversation_history = [
-
             {"role": "user", "content": "go"},
-
             {"role": "assistant", "content": "did some work, more to do"},
-
         ]
-
-
 
         # Force the judge to say "continue" without touching the network.
 
         with patch(
-
             "clawk_cli.goals.judge_goal",
-
             return_value=("continue", "needs more steps", False),
-
         ):
-
             cli._maybe_continue_goal_after_turn()
-
-
 
         # Continuation prompt must be queued.
 
@@ -358,8 +262,6 @@ class TestHealthyTurnStillRuns:
 
         assert mgr.state.status == "active"
 
-
-
     def test_clean_response_marks_done_when_judge_says_done(self, clawk_home):
 
         sid = f"sid-done-{uuid.uuid4().hex}"
@@ -369,37 +271,22 @@ class TestHealthyTurnStillRuns:
         cli._last_turn_interrupted = False
 
         cli.conversation_history = [
-
             {"role": "assistant", "content": "all finished, here's the result"},
-
         ]
 
-
-
         with patch(
-
             "clawk_cli.goals.judge_goal",
-
             return_value=("done", "goal satisfied", False),
-
         ):
-
             cli._maybe_continue_goal_after_turn()
-
-
 
         assert cli._pending_input.empty()
 
         assert mgr.state.status == "done"
 
 
-
-
-
 class TestInterruptFlagLifecycle:
-
     def test_chat_resets_flag_at_entry(self, clawk_home):
-
         """chat() must reset _last_turn_interrupted at the top of each turn.
 
 
@@ -420,8 +307,6 @@ class TestInterruptFlagLifecycle:
 
         import inspect
 
-
-
         src = inspect.getsource(ClawksisCLI.chat)
 
         # Look for an explicit reset near the top of chat().
@@ -429,12 +314,7 @@ class TestInterruptFlagLifecycle:
         head = src.split("if not self._ensure_runtime_credentials", 1)[0]
 
         assert "self._last_turn_interrupted = False" in head, (
-
             "chat() must reset _last_turn_interrupted before run_conversation "
-
             "runs — otherwise a prior turn's interrupt state leaks into the "
-
             "next turn's goal hook decision."
-
         )
-

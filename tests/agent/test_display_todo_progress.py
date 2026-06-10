@@ -31,21 +31,18 @@ class TestTodoRead:
         assert "0.5s" in msg
 
     def test_read_with_progress(self):
-        msg = get_cute_tool_message("todo", {}, 0.5,
-                                    result=_todo_result(4, 2))
+        msg = get_cute_tool_message("todo", {}, 0.5, result=_todo_result(4, 2))
         assert "2/4" in msg
         assert "task(s)" in msg
 
     def test_read_all_done(self):
-        msg = get_cute_tool_message("todo", {}, 0.5,
-                                    result=_todo_result(4, 4))
+        msg = get_cute_tool_message("todo", {}, 0.5, result=_todo_result(4, 4))
         assert "4/4" in msg
         assert "task(s)" in msg
 
     def test_read_zero_total(self):
         """Edge case: empty todo list returns summary with total=0."""
-        msg = get_cute_tool_message("todo", {}, 0.5,
-                                    result=_todo_result(0, 0))
+        msg = get_cute_tool_message("todo", {}, 0.5, result=_todo_result(0, 0))
         assert "reading tasks" in msg
 
     def test_read_invalid_result_fallback(self):
@@ -54,8 +51,7 @@ class TestTodoRead:
         assert "reading tasks" in msg
 
     def test_read_result_missing_summary(self):
-        msg = get_cute_tool_message("todo", {}, 0.5,
-                                    result='{"todos": []}')
+        msg = get_cute_tool_message("todo", {}, 0.5, result='{"todos": []}')
         assert "reading tasks" in msg
 
 
@@ -64,41 +60,57 @@ class TestTodoCreate:
 
     def test_create_default(self):
         """Brand-new plan: all pending, no result — plain count."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [
-                                        {"id": "a", "content": "x", "status": "pending"},
-                                    ]}, 0.3)
+        msg = get_cute_tool_message(
+            "todo",
+            {
+                "todos": [
+                    {"id": "a", "content": "x", "status": "pending"},
+                ]
+            },
+            0.3,
+        )
         assert "1 task(s)" in msg
         assert "0.3s" in msg
         assert "/" not in msg  # no progress fraction
 
     def test_create_multiple(self):
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [
-                                        {"id": "a", "content": "x", "status": "pending"},
-                                        {"id": "b", "content": "y", "status": "pending"},
-                                        {"id": "c", "content": "z", "status": "pending"},
-                                    ]}, 0.2)
+        msg = get_cute_tool_message(
+            "todo",
+            {
+                "todos": [
+                    {"id": "a", "content": "x", "status": "pending"},
+                    {"id": "b", "content": "y", "status": "pending"},
+                    {"id": "c", "content": "z", "status": "pending"},
+                ]
+            },
+            0.2,
+        )
         assert "3 task(s)" in msg
 
     def test_create_with_result_shows_progress_when_done(self):
         """Even on create, if result has completed tasks show it."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "content": "x", "status": "completed"}]},
-                                    0.4,
-                                    result=_todo_result(1, 1))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "content": "x", "status": "completed"}]},
+            0.4,
+            result=_todo_result(1, 1),
+        )
         assert "1/1" in msg
         assert "task(s)" in msg
 
     def test_create_with_result_zero_done(self):
         """New plan with 0 done — plain count, no progress fraction."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [
-                                        {"id": "a", "content": "x", "status": "pending"},
-                                        {"id": "b", "content": "y", "status": "pending"},
-                                    ]},
-                                    0.3,
-                                    result=_todo_result(2, 0))
+        msg = get_cute_tool_message(
+            "todo",
+            {
+                "todos": [
+                    {"id": "a", "content": "x", "status": "pending"},
+                    {"id": "b", "content": "y", "status": "pending"},
+                ]
+            },
+            0.3,
+            result=_todo_result(2, 0),
+        )
         assert "2 task(s)" in msg
         assert "/" not in msg
 
@@ -108,92 +120,104 @@ class TestTodoUpdate:
 
     def test_update_no_result(self):
         """No result available — plain update N task(s)."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True}, 0.5)
+        msg = get_cute_tool_message(
+            "todo", {"todos": [{"id": "a", "status": "completed"}], "merge": True}, 0.5
+        )
         assert "update 1 task(s)" in msg
 
     def test_update_partial_progress(self):
         """1/4 tasks completed — show fraction with checkmark."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True},
-                                    0.5,
-                                    result=_todo_result(4, 1))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "status": "completed"}], "merge": True},
+            0.5,
+            result=_todo_result(4, 1),
+        )
         assert "update" in msg
         assert "1/4" in msg
         assert "✓" in msg
 
     def test_update_halfway(self):
         """2/4 — midpoint progress."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "b", "status": "in_progress"}],
-                                     "merge": True},
-                                    0.7,
-                                    result=_todo_result(4, 2))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "b", "status": "in_progress"}], "merge": True},
+            0.7,
+            result=_todo_result(4, 2),
+        )
         assert "2/4" in msg
         assert "✓" in msg
 
     def test_update_all_completed(self):
         """4/4 — full checkmark."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "d", "status": "completed"}],
-                                     "merge": True},
-                                    0.2,
-                                    result=_todo_result(4, 4))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "d", "status": "completed"}], "merge": True},
+            0.2,
+            result=_todo_result(4, 4),
+        )
         assert "4/4" in msg
         assert "✓" in msg
 
     def test_update_zero_done(self):
         """No completed tasks yet — plain update N task(s)."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "pending"}],
-                                     "merge": True},
-                                    0.3,
-                                    result=_todo_result(3, 0))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "status": "pending"}], "merge": True},
+            0.3,
+            result=_todo_result(3, 0),
+        )
         assert "update 1 task(s)" in msg
         assert "✓" not in msg
         assert "/" not in msg  # no progress fraction when done=0
 
     def test_update_invalid_result_fallback(self):
         """Bad JSON result — fall back to plain update N task(s)."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True},
-                                    0.6,
-                                    result="{broken")
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "status": "completed"}], "merge": True},
+            0.6,
+            result="{broken",
+        )
         assert "update 1 task(s)" in msg
         assert "✓" not in msg
 
     def test_update_result_missing_summary(self):
         """Result no summary key — fall back to plain update."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True},
-                                    0.4,
-                                    result='{"todos": []}')
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "status": "completed"}], "merge": True},
+            0.4,
+            result='{"todos": []}',
+        )
         assert "update 1 task(s)" in msg
         assert "✓" not in msg
 
     def test_update_total_not_in_summary(self):
         """Result summary missing total key."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True},
-                                    0.3,
-                                    result=json.dumps({"summary": {"completed": 2}}))
+        msg = get_cute_tool_message(
+            "todo",
+            {"todos": [{"id": "a", "status": "completed"}], "merge": True},
+            0.3,
+            result=json.dumps({"summary": {"completed": 2}}),
+        )
         assert "update 1 task(s)" in msg
         assert "✓" not in msg
 
     def test_update_multiple_tasks_in_line(self):
         """Update line with several tasks in the update request."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [
-                                        {"id": "a", "status": "completed"},
-                                        {"id": "b", "status": "in_progress"},
-                                    ], "merge": True},
-                                    0.5,
-                                    result=_todo_result(5, 3))
+        msg = get_cute_tool_message(
+            "todo",
+            {
+                "todos": [
+                    {"id": "a", "status": "completed"},
+                    {"id": "b", "status": "in_progress"},
+                ],
+                "merge": True,
+            },
+            0.5,
+            result=_todo_result(5, 3),
+        )
         assert "update" in msg
         assert "3/5" in msg
         assert "✓" in msg
@@ -204,9 +228,9 @@ class TestTodoEdgeCases:
 
     def test_merge_default_value(self):
         """merge defaults to False in function signature, should be False when absent."""
-        msg = get_cute_tool_message("todo",
-                                    {"todos": [{"id": "a", "content": "x", "status": "pending"}]},
-                                    1.0)
+        msg = get_cute_tool_message(
+            "todo", {"todos": [{"id": "a", "content": "x", "status": "pending"}]}, 1.0
+        )
         assert "1 task(s)" in msg
 
     def test_duration_formatting(self):

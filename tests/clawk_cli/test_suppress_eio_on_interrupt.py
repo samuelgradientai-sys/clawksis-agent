@@ -22,6 +22,7 @@ import pytest
 # _suppress_closed_loop_errors – asyncio exception handler
 # ---------------------------------------------------------------------------
 
+
 def _make_suppress_fn():
     """Build a standalone copy of ``_suppress_closed_loop_errors``.
 
@@ -29,6 +30,7 @@ def _make_suppress_fn():
     ``CLI._run_interactive``; we reconstruct an equivalent here so the
     unit tests don't need a full CLI instance.
     """
+
     def _suppress_closed_loop_errors(loop, context):
         exc = context.get("exception")
         if isinstance(exc, RuntimeError) and "Event loop is closed" in str(exc):
@@ -38,6 +40,7 @@ def _make_suppress_fn():
         if isinstance(exc, OSError) and getattr(exc, "errno", None) == errno.EIO:
             return
         loop.default_exception_handler(context)
+
     return _suppress_closed_loop_errors
 
 
@@ -91,6 +94,7 @@ class TestSuppressClosedLoopErrors:
 # Outer except block – EIO handling
 # ---------------------------------------------------------------------------
 
+
 class TestOuterExceptEIO:
     """Verify the outer ``except (KeyError, OSError)`` block logic."""
 
@@ -142,6 +146,7 @@ def _make_signal_handler(logger, agent_state):
     CLI instance.  Mirrors cli.py:_signal_handler as of #13710 regression
     fix — guarded logger.debug + agent interrupt + KeyboardInterrupt.
     """
+
     def _signal_handler(signum, frame):
         # Guarded: logging must never raise through a signal handler.
         try:
@@ -154,6 +159,7 @@ def _make_signal_handler(logger, agent_state):
         except Exception:
             pass  # never block signal handling
         raise KeyboardInterrupt()
+
     return _signal_handler
 
 

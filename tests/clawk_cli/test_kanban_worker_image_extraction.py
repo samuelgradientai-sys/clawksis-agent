@@ -29,29 +29,20 @@ DB during startup. These tests cover the round-trip:
 from __future__ import annotations
 
 
-
 import base64
 
 from pathlib import Path
 
 
-
 import pytest
-
 
 
 from clawk_cli import kanban_db as kb
 
 from agent.image_routing import (
-
     build_native_content_parts,
-
     extract_image_refs,
-
 )
-
-
-
 
 
 # Tiny 1×1 transparent PNG used to back any path the tests stick into a
@@ -61,19 +52,12 @@ from agent.image_routing import (
 # byte content has to be a real readable file (any image bytes will do).
 
 _PNG = base64.b64decode(
-
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg=="
-
 )
 
 
-
-
-
 @pytest.fixture
-
 def kanban_home(tmp_path: Path, monkeypatch):
-
     """Isolated CLAWK_HOME with a fresh kanban DB for each test."""
 
     home = tmp_path / ".clawksis"
@@ -89,37 +73,23 @@ def kanban_home(tmp_path: Path, monkeypatch):
     return home
 
 
-
-
-
 def _add_task_with_body(body: str, *, title: str = "Look at this") -> str:
 
     conn = kb.connect()
 
     try:
-
         task_id = kb.create_task(
-
             conn,
-
             title=title,
-
             body=body,
-
             assignee="worker-a",
-
             tenant=None,
-
         )
 
     finally:
-
         conn.close()
 
     return task_id
-
-
-
 
 
 def _read_body(task_id: str) -> str:
@@ -127,24 +97,16 @@ def _read_body(task_id: str) -> str:
     conn = kb.connect()
 
     try:
-
         task = kb.get_task(conn, task_id)
 
         return (task.body if task is not None else "") or ""
 
     finally:
-
         conn.close()
 
 
-
-
-
 class TestExtractFromTaskBody:
-
     """Read a real kanban task body and run it through extract_image_refs."""
-
-
 
     def test_local_path_in_body_round_trips(self, kanban_home, tmp_path):
 
@@ -153,14 +115,8 @@ class TestExtractFromTaskBody:
         img.write_bytes(_PNG)
 
         tid = _add_task_with_body(
-
-            f"Please review the screenshot at {img} and confirm "
-
-            "the alignment is right."
-
+            f"Please review the screenshot at {img} and confirm the alignment is right."
         )
-
-
 
         body = _read_body(tid)
 
@@ -170,19 +126,12 @@ class TestExtractFromTaskBody:
 
         assert urls == []
 
-
-
     def test_url_in_body_round_trips(self, kanban_home):
 
         tid = _add_task_with_body(
-
             "The design lives at https://example.com/mock/v3.png — "
-
             "make the implementation match it."
-
         )
-
-
 
         body = _read_body(tid)
 
@@ -192,8 +141,6 @@ class TestExtractFromTaskBody:
 
         assert urls == ["https://example.com/mock/v3.png"]
 
-
-
     def test_mixed_path_and_url_in_body(self, kanban_home, tmp_path):
 
         img = tmp_path / "current.png"
@@ -201,14 +148,9 @@ class TestExtractFromTaskBody:
         img.write_bytes(_PNG)
 
         tid = _add_task_with_body(
-
             f"Compare the current screenshot {img} against the design at "
-
             "https://example.com/target.png and write a diff."
-
         )
-
-
 
         body = _read_body(tid)
 
@@ -218,17 +160,11 @@ class TestExtractFromTaskBody:
 
         assert urls == ["https://example.com/target.png"]
 
-
-
     def test_body_without_images_yields_nothing(self, kanban_home):
 
         tid = _add_task_with_body(
-
             "Refactor the auth module to use the new session helper."
-
         )
-
-
 
         body = _read_body(tid)
 
@@ -237,15 +173,11 @@ class TestExtractFromTaskBody:
         assert paths == []
 
         assert urls == []
-
-
 
     def test_empty_body_is_safe(self, kanban_home):
 
         tid = _add_task_with_body("")
 
-
-
         body = _read_body(tid)
 
         paths, urls = extract_image_refs(body)
@@ -255,14 +187,8 @@ class TestExtractFromTaskBody:
         assert urls == []
 
 
-
-
-
 class TestBuildPartsFromTaskBody:
-
     """Verify the full pipeline produces a multimodal user turn."""
-
-
 
     def test_local_path_becomes_native_image_part(self, kanban_home, tmp_path):
 
@@ -276,8 +202,6 @@ class TestBuildPartsFromTaskBody:
 
         paths, urls = extract_image_refs(body)
 
-
-
         # Mirrors the cli.py wiring: pass the worker's literal -q argument
 
         # (the dispatcher uses ``"work kanban task <id>"``) plus the
@@ -285,16 +209,10 @@ class TestBuildPartsFromTaskBody:
         # extracted refs through build_native_content_parts.
 
         parts, skipped = build_native_content_parts(
-
             f"work kanban task {tid}",
-
             paths,
-
             image_urls=urls or None,
-
         )
-
-
 
         assert skipped == []
 
@@ -312,33 +230,21 @@ class TestBuildPartsFromTaskBody:
 
         assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
-
-
     def test_url_becomes_image_url_part(self, kanban_home):
 
         tid = _add_task_with_body(
-
             "Reference: https://example.com/target.jpg — match it."
-
         )
 
         body = _read_body(tid)
 
         paths, urls = extract_image_refs(body)
 
-
-
         parts, skipped = build_native_content_parts(
-
             f"work kanban task {tid}",
-
             paths,
-
             image_urls=urls or None,
-
         )
-
-
 
         assert skipped == []
 
@@ -349,14 +255,9 @@ class TestBuildPartsFromTaskBody:
         assert "[Image attached: https://example.com/target.jpg]" in parts[0]["text"]
 
         assert parts[1] == {
-
             "type": "image_url",
-
             "image_url": {"url": "https://example.com/target.jpg"},
-
         }
-
-
 
     def test_body_with_both_yields_two_image_parts(self, kanban_home, tmp_path):
 
@@ -365,28 +266,18 @@ class TestBuildPartsFromTaskBody:
         img.write_bytes(_PNG)
 
         tid = _add_task_with_body(
-
             f"Diff {img} vs https://example.com/target.png — explain it."
-
         )
 
         body = _read_body(tid)
 
         paths, urls = extract_image_refs(body)
 
-
-
         parts, skipped = build_native_content_parts(
-
             f"work kanban task {tid}",
-
             paths,
-
             image_urls=urls or None,
-
         )
-
-
 
         assert skipped == []
 
@@ -400,33 +291,21 @@ class TestBuildPartsFromTaskBody:
 
         assert image_parts[1]["image_url"]["url"] == "https://example.com/target.png"
 
-
-
     def test_body_with_no_images_leaves_query_untouched(self, kanban_home):
 
         tid = _add_task_with_body(
-
             "Rewrite the README intro paragraph to focus on use cases."
-
         )
 
         body = _read_body(tid)
 
         paths, urls = extract_image_refs(body)
 
-
-
         parts, skipped = build_native_content_parts(
-
             f"work kanban task {tid}",
-
             paths,
-
             image_urls=urls or None,
-
         )
-
-
 
         # No images → plain text-only return (single part, no list mutation).
 
@@ -438,8 +317,6 @@ class TestBuildPartsFromTaskBody:
 
         assert parts[0]["text"] == f"work kanban task {tid}"
 
-
-
     def test_code_block_example_is_not_attached(self, kanban_home, tmp_path):
 
         # Only the real image outside the fenced code block should attach.
@@ -449,28 +326,18 @@ class TestBuildPartsFromTaskBody:
         real.write_bytes(_PNG)
 
         tid = _add_task_with_body(
-
             f"Real screenshot:\n{real}\n\n"
-
             "Example we DON'T want attached:\n"
-
             "```\n"
-
             "image: /tmp/example_only.png\n"
-
             "url: https://example.com/example.png\n"
-
             "```\n"
-
         )
 
         body = _read_body(tid)
 
         paths, urls = extract_image_refs(body)
 
-
-
         assert paths == [str(real)]
 
         assert urls == []
-

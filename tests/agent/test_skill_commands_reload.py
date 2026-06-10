@@ -20,8 +20,6 @@ dicts. Descriptions are truncated to 60 chars.
 
 """
 
-
-
 import shutil
 
 import tempfile
@@ -31,11 +29,7 @@ import textwrap
 from pathlib import Path
 
 
-
 import pytest
-
-
-
 
 
 def _write_skill(skills_dir: Path, name: str, description: str = "") -> Path:
@@ -45,36 +39,27 @@ def _write_skill(skills_dir: Path, name: str, description: str = "") -> Path:
     skill_dir.mkdir(parents=True, exist_ok=True)
 
     (skill_dir / "SKILL.md").write_text(
-
         textwrap.dedent(
-
             f"""\
             ---
 
             name: {name}
 
-            description: {description or f'{name} skill'}
+            description: {description or f"{name} skill"}
 
             ---
 
             body
 
             """
-
         )
-
     )
 
     return skill_dir
 
 
-
-
-
 @pytest.fixture
-
 def clawk_home(monkeypatch):
-
     """Isolate CLAWK_HOME for ``reload_skills`` tests.
 
 
@@ -97,8 +82,6 @@ def clawk_home(monkeypatch):
 
     (home / "skills").mkdir(parents=True, exist_ok=True)
 
-
-
     # Import lazily (inside fixture) so the modules are already resident,
 
     # then redirect their captured paths at the new temp dir.
@@ -106,8 +89,6 @@ def clawk_home(monkeypatch):
     import tools.skills_tool as _st
 
     import agent.skill_commands as _sc
-
-
 
     monkeypatch.setattr(_st, "CLAWK_HOME", home, raising=False)
 
@@ -117,29 +98,17 @@ def clawk_home(monkeypatch):
 
     monkeypatch.setattr(_sc, "_skill_commands", {}, raising=False)
 
-
-
     yield home
-
-
 
     shutil.rmtree(td, ignore_errors=True)
 
 
-
-
-
 class TestReloadSkillsHelper:
-
     """``agent.skill_commands.reload_skills``."""
-
-
 
     def test_returns_expected_keys(self, clawk_home):
 
         from agent.skill_commands import reload_skills
-
-
 
         result = reload_skills()
 
@@ -151,25 +120,17 @@ class TestReloadSkillsHelper:
 
         assert result["removed"] == []
 
-
-
     def test_detects_newly_added_skill_with_description(self, clawk_home):
 
         from agent.skill_commands import reload_skills, get_skill_commands
-
-
 
         # Prime the cache so subsequent diff is meaningful
 
         get_skill_commands()
 
-
-
         _write_skill(clawk_home / "skills", "demo", "a demo skill")
 
         result = reload_skills()
-
-
 
         assert result["added"] == [{"name": "demo", "description": "a demo skill"}]
 
@@ -179,13 +140,9 @@ class TestReloadSkillsHelper:
 
         assert result["commands"] == 1
 
-
-
     def test_detects_removed_skill_carries_description(self, clawk_home):
 
         from agent.skill_commands import reload_skills
-
-
 
         skill_dir = _write_skill(clawk_home / "skills", "demo", "soon to be gone")
 
@@ -197,8 +154,6 @@ class TestReloadSkillsHelper:
 
         assert first["added"] == [{"name": "demo", "description": "soon to be gone"}]
 
-
-
         # Remove and reload — the description must survive the removal diff
 
         # (we cached it from the pre-rescan snapshot).
@@ -207,18 +162,13 @@ class TestReloadSkillsHelper:
 
         second = reload_skills()
 
-
-
         assert second["removed"] == [{"name": "demo", "description": "soon to be gone"}]
 
         assert second["added"] == []
 
         assert second["total"] == 0
 
-
-
     def test_description_passes_through_verbatim(self, clawk_home):
-
         """``description`` must be the full SKILL.md frontmatter string — no
 
         truncation. The system prompt renders skills as
@@ -231,15 +181,11 @@ class TestReloadSkillsHelper:
 
         from agent.skill_commands import reload_skills, get_skill_commands
 
-
-
         get_skill_commands()  # prime
 
         long_desc = "x" * 200
 
         _write_skill(clawk_home / "skills", "longdesc", long_desc)
-
-
 
         result = reload_skills()
 
@@ -247,21 +193,15 @@ class TestReloadSkillsHelper:
 
         assert result["added"][0]["description"] == long_desc
 
-
-
     def test_unchanged_skills_appear_in_unchanged_list(self, clawk_home):
 
         from agent.skill_commands import reload_skills, get_skill_commands
-
-
 
         _write_skill(clawk_home / "skills", "alpha")
 
         # Prime cache
 
         get_skill_commands()
-
-
 
         # Call reload again with no FS changes
 
@@ -273,10 +213,7 @@ class TestReloadSkillsHelper:
 
         assert result["removed"] == []
 
-
-
     def test_does_not_invalidate_prompt_cache_snapshot(self, clawk_home):
-
         """reload_skills must NOT delete the skills prompt-cache snapshot.
 
 
@@ -293,8 +230,6 @@ class TestReloadSkillsHelper:
 
         from agent.skill_commands import reload_skills
 
-
-
         snapshot = _skills_prompt_snapshot_path()
 
         snapshot.parent.mkdir(parents=True, exist_ok=True)
@@ -303,17 +238,9 @@ class TestReloadSkillsHelper:
 
         assert snapshot.exists()
 
-
-
         reload_skills()
 
-
-
         assert snapshot.exists(), (
-
             "prompt cache snapshot should be preserved — skills don't live "
-
             "in the system prompt so there's no reason to invalidate it"
-
         )
-

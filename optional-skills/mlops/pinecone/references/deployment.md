@@ -18,8 +18,8 @@ pc.create_index(
     metric="cosine",
     spec=ServerlessSpec(
         cloud="aws",  # or "gcp", "azure"
-        region="us-east-1"
-    )
+        region="us-east-1",
+    ),
 )
 ```
 
@@ -47,8 +47,8 @@ pc.create_index(
         environment="us-east1-gcp",
         pod_type="p1.x1",  # or p1.x2, p1.x4, p1.x8
         pods=2,  # Number of pods
-        replicas=2  # High availability
-    )
+        replicas=2,  # High availability
+    ),
 )
 ```
 
@@ -69,27 +69,26 @@ pc.create_index(
 
 ```python
 # Upsert with both dense and sparse vectors
-index.upsert(vectors=[
-    {
-        "id": "doc1",
-        "values": [0.1, 0.2, ...],  # Dense (semantic)
-        "sparse_values": {
-            "indices": [10, 45, 123],  # Token IDs
-            "values": [0.5, 0.3, 0.8]   # TF-IDF/BM25 scores
-        },
-        "metadata": {"text": "..."}
-    }
-])
+index.upsert(
+    vectors=[
+        {
+            "id": "doc1",
+            "values": [0.1, 0.2, ...],  # Dense (semantic)
+            "sparse_values": {
+                "indices": [10, 45, 123],  # Token IDs
+                "values": [0.5, 0.3, 0.8],  # TF-IDF/BM25 scores
+            },
+            "metadata": {"text": "..."},
+        }
+    ]
+)
 
 # Hybrid query
 results = index.query(
     vector=[0.1, 0.2, ...],  # Dense query
-    sparse_vector={
-        "indices": [10, 45],
-        "values": [0.5, 0.3]
-    },
+    sparse_vector={"indices": [10, 45], "values": [0.5, 0.3]},
     top_k=10,
-    alpha=0.5  # 0=sparse only, 1=dense only, 0.5=balanced
+    alpha=0.5,  # 0=sparse only, 1=dense only, 0.5=balanced
 )
 ```
 
@@ -102,21 +101,14 @@ results = index.query(
 
 ```python
 # Separate data by user/tenant
-index.upsert(
-    vectors=[{"id": "doc1", "values": [...]}],
-    namespace="user-123"
-)
+index.upsert(vectors=[{"id": "doc1", "values": [...]}], namespace="user-123")
 
 # Query specific namespace
-results = index.query(
-    vector=[...],
-    namespace="user-123",
-    top_k=5
-)
+results = index.query(vector=[...], namespace="user-123", top_k=5)
 
 # List namespaces
 stats = index.describe_index_stats()
-print(stats['namespaces'])
+print(stats["namespaces"])
 ```
 
 **Use cases:**
@@ -129,20 +121,14 @@ print(stats['namespaces'])
 ### Exact match
 
 ```python
-results = index.query(
-    vector=[...],
-    filter={"category": "tutorial"},
-    top_k=5
-)
+results = index.query(vector=[...], filter={"category": "tutorial"}, top_k=5)
 ```
 
 ### Range queries
 
 ```python
 results = index.query(
-    vector=[...],
-    filter={"price": {"$gte": 100, "$lte": 500}},
-    top_k=5
+    vector=[...], filter={"price": {"$gte": 100, "$lte": 500}}, top_k=5
 )
 ```
 
@@ -155,10 +141,10 @@ results = index.query(
         "$and": [
             {"category": {"$in": ["tutorial", "guide"]}},
             {"difficulty": {"$lte": 3}},
-            {"published": {"$gte": "2024-01-01"}}
+            {"published": {"$gte": "2024-01-01"}},
         ]
     },
-    top_k=5
+    top_k=5,
 )
 ```
 

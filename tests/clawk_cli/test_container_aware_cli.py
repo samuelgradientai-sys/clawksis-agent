@@ -19,19 +19,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
 
 
-
 from clawk_cli.config import (
-
     get_container_exec_info,
-
 )
-
-
-
 
 
 # =============================================================================
@@ -41,13 +34,8 @@ from clawk_cli.config import (
 # =============================================================================
 
 
-
-
-
 @pytest.fixture
-
 def container_env(tmp_path, monkeypatch):
-
     """Set up a fake CLAWK_HOME with .container-mode file."""
 
     clawk_home = tmp_path / ".clawksis"
@@ -58,39 +46,24 @@ def container_env(tmp_path, monkeypatch):
 
     monkeypatch.delenv("CLAWK_DEV", raising=False)
 
-
-
     container_mode = clawk_home / ".container-mode"
 
     container_mode.write_text(
-
         "# Written by NixOS activation script. Do not edit manually.\n"
-
         "backend=podman\n"
-
         "container_name=clawksis-agent\n"
-
         "exec_user=clawk\n"
-
         "clawk_bin=/data/current-package/bin/clawk\n"
-
     )
 
     return clawk_home
 
 
-
-
-
 def test_get_container_exec_info_returns_metadata(container_env):
-
     """Reads .container-mode and returns all fields including exec_user."""
 
     with patch("clawk_constants.is_container", return_value=False):
-
         info = get_container_exec_info()
-
-
 
     assert info is not None
 
@@ -103,27 +76,16 @@ def test_get_container_exec_info_returns_metadata(container_env):
     assert info["clawk_bin"] == "/data/current-package/bin/clawk"
 
 
-
-
-
 def test_get_container_exec_info_none_inside_container(container_env):
-
     """Returns None when we're already inside a container."""
 
     with patch("clawk_constants.is_container", return_value=True):
-
         info = get_container_exec_info()
-
-
 
     assert info is None
 
 
-
-
-
 def test_get_container_exec_info_none_without_file(tmp_path, monkeypatch):
-
     """Returns None when .container-mode doesn't exist (native mode)."""
 
     clawk_home = tmp_path / ".clawksis"
@@ -134,91 +96,59 @@ def test_get_container_exec_info_none_without_file(tmp_path, monkeypatch):
 
     monkeypatch.delenv("CLAWK_DEV", raising=False)
 
-
-
     with patch("clawk_constants.is_container", return_value=False):
-
         info = get_container_exec_info()
-
-
 
     assert info is None
 
 
-
-
-
 def test_get_container_exec_info_skipped_when_clawk_dev(container_env, monkeypatch):
-
     """Returns None when CLAWK_DEV=1 is set (dev mode bypass)."""
 
     monkeypatch.setenv("CLAWK_DEV", "1")
 
-
-
     with patch("clawk_constants.is_container", return_value=False):
-
         info = get_container_exec_info()
-
-
 
     assert info is None
 
 
-
-
-
-def test_get_container_exec_info_not_skipped_when_clawk_dev_zero(container_env, monkeypatch):
-
+def test_get_container_exec_info_not_skipped_when_clawk_dev_zero(
+    container_env, monkeypatch
+):
     """CLAWK_DEV=0 does NOT trigger bypass — only '1' does."""
 
     monkeypatch.setenv("CLAWK_DEV", "0")
 
-
-
     with patch("clawk_constants.is_container", return_value=False):
-
         info = get_container_exec_info()
-
-
 
     assert info is not None
 
 
-
-
-
 def test_get_container_exec_info_defaults():
-
     """Falls back to defaults for missing keys."""
 
     import tempfile
 
-
-
     with tempfile.TemporaryDirectory() as tmpdir:
-
         clawk_home = Path(tmpdir) / ".clawksis"
 
         clawk_home.mkdir()
 
-        (clawk_home / ".container-mode").write_text(
+        (clawk_home / ".container-mode").write_text("# minimal file with no keys\n")
 
-            "# minimal file with no keys\n"
-
-        )
-
-
-
-        with patch("clawk_constants.is_container", return_value=False), \
-             patch.dict(get_container_exec_info.__globals__, {"get_clawk_home": lambda: clawk_home}), \
-             patch.dict(os.environ, {}, clear=False):
-
+        with (
+            patch("clawk_constants.is_container", return_value=False),
+            patch.dict(
+                get_container_exec_info.__globals__,
+                {"get_clawk_home": lambda: clawk_home},
+            ),
+            patch.dict(os.environ, {}, clear=False),
+        ):
             os.environ.pop("CLAWK_DEV", None)
 
             info = get_container_exec_info()
-
-
 
         assert info is not None
 
@@ -231,32 +161,18 @@ def test_get_container_exec_info_defaults():
         assert info["clawk_bin"] == "/data/current-package/bin/clawk"
 
 
-
-
-
 def test_get_container_exec_info_docker_backend(container_env):
-
     """Correctly reads docker backend with custom exec_user."""
 
     (container_env / ".container-mode").write_text(
-
         "backend=docker\n"
-
         "container_name=clawk-custom\n"
-
         "exec_user=myuser\n"
-
         "clawk_bin=/opt/clawksis/bin/clawk\n"
-
     )
 
-
-
     with patch("clawk_constants.is_container", return_value=False):
-
         info = get_container_exec_info()
-
-
 
     assert info["backend"] == "docker"
 
@@ -267,22 +183,15 @@ def test_get_container_exec_info_docker_backend(container_env):
     assert info["clawk_bin"] == "/opt/clawksis/bin/clawk"
 
 
-
-
-
 def test_get_container_exec_info_crashes_on_permission_error(container_env):
-
     """PermissionError propagates instead of being silently swallowed."""
 
-    with patch("clawk_constants.is_container", return_value=False), \
-         patch("builtins.open", side_effect=PermissionError("permission denied")):
-
+    with (
+        patch("clawk_constants.is_container", return_value=False),
+        patch("builtins.open", side_effect=PermissionError("permission denied")),
+    ):
         with pytest.raises(PermissionError):
-
             get_container_exec_info()
-
-
-
 
 
 # =============================================================================
@@ -292,76 +201,49 @@ def test_get_container_exec_info_crashes_on_permission_error(container_env):
 # =============================================================================
 
 
-
-
-
 @pytest.fixture
-
 def docker_container_info():
 
     return {
-
         "backend": "docker",
-
         "container_name": "clawksis-agent",
-
         "exec_user": "clawk",
-
         "clawk_bin": "/data/current-package/bin/clawk",
-
     }
-
-
-
 
 
 @pytest.fixture
-
 def podman_container_info():
 
     return {
-
         "backend": "podman",
-
         "container_name": "clawksis-agent",
-
         "exec_user": "clawk",
-
         "clawk_bin": "/data/current-package/bin/clawk",
-
     }
 
 
-
-
-
 def test_exec_in_container_calls_execvp(docker_container_info):
-
     """Verifies os.execvp is called with correct args: runtime, tty flags,
 
     user, env vars, container name, binary, and CLI args."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
-    with patch("shutil.which", return_value="/usr/bin/docker"), \
-         patch("subprocess.run") as mock_run, \
-         patch("sys.stdin") as mock_stdin, \
-         patch("os.execvp") as mock_execvp, \
-         patch.dict(os.environ, {"TERM": "xterm-256color", "LANG": "en_US.UTF-8"},
-
-                    clear=False):
-
+    with (
+        patch("shutil.which", return_value="/usr/bin/docker"),
+        patch("subprocess.run") as mock_run,
+        patch("sys.stdin") as mock_stdin,
+        patch("os.execvp") as mock_execvp,
+        patch.dict(
+            os.environ, {"TERM": "xterm-256color", "LANG": "en_US.UTF-8"}, clear=False
+        ),
+    ):
         mock_stdin.isatty.return_value = True
 
         mock_run.return_value = MagicMock(returncode=0)
 
-
-
         _exec_in_container(docker_container_info, ["chat", "-m", "opus"])
-
-
 
     mock_execvp.assert_called_once()
 
@@ -392,31 +274,22 @@ def test_exec_in_container_calls_execvp(docker_container_info):
     assert "chat" in cmd
 
 
-
-
-
 def test_exec_in_container_non_tty_uses_i_only(docker_container_info):
-
     """Non-TTY mode uses -i instead of -it."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
-    with patch("shutil.which", return_value="/usr/bin/docker"), \
-         patch("subprocess.run") as mock_run, \
-         patch("sys.stdin") as mock_stdin, \
-         patch("os.execvp") as mock_execvp:
-
+    with (
+        patch("shutil.which", return_value="/usr/bin/docker"),
+        patch("subprocess.run") as mock_run,
+        patch("sys.stdin") as mock_stdin,
+        patch("os.execvp") as mock_execvp,
+    ):
         mock_stdin.isatty.return_value = False
 
         mock_run.return_value = MagicMock(returncode=0)
 
-
-
         _exec_in_container(docker_container_info, ["sessions", "list"])
-
-
 
     cmd = mock_execvp.call_args[0][1]
 
@@ -425,25 +298,18 @@ def test_exec_in_container_non_tty_uses_i_only(docker_container_info):
     assert "-it" not in cmd
 
 
-
-
-
 def test_exec_in_container_no_runtime_hard_fails(podman_container_info):
-
     """Hard fails when runtime not found (no fallback)."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
-    with patch("shutil.which", return_value=None), \
-         patch("subprocess.run") as mock_run, \
-         patch("os.execvp") as mock_execvp, \
-         pytest.raises(SystemExit) as exc_info:
-
+    with (
+        patch("shutil.which", return_value=None),
+        patch("subprocess.run") as mock_run,
+        patch("os.execvp") as mock_execvp,
+        pytest.raises(SystemExit) as exc_info,
+    ):
         _exec_in_container(podman_container_info, ["chat"])
-
-
 
     mock_run.assert_not_called()
 
@@ -452,53 +318,37 @@ def test_exec_in_container_no_runtime_hard_fails(podman_container_info):
     assert exc_info.value.code != 0
 
 
-
-
-
 def test_exec_in_container_sudo_probe_sets_prefix(podman_container_info):
-
     """When first probe fails and sudo probe succeeds, execvp is called
 
     with sudo -n prefix."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
     def which_side_effect(name):
 
         if name == "podman":
-
             return "/usr/bin/podman"
 
         if name == "sudo":
-
             return "/usr/bin/sudo"
 
         return None
 
-
-
-    with patch("shutil.which", side_effect=which_side_effect), \
-         patch("subprocess.run") as mock_run, \
-         patch("sys.stdin") as mock_stdin, \
-         patch("os.execvp") as mock_execvp:
-
+    with (
+        patch("shutil.which", side_effect=which_side_effect),
+        patch("subprocess.run") as mock_run,
+        patch("sys.stdin") as mock_stdin,
+        patch("os.execvp") as mock_execvp,
+    ):
         mock_stdin.isatty.return_value = True
 
         mock_run.side_effect = [
-
             MagicMock(returncode=1),  # direct probe fails
-
             MagicMock(returncode=0),  # sudo probe succeeds
-
         ]
 
-
-
         _exec_in_container(podman_container_info, ["chat"])
-
-
 
     mock_execvp.assert_called_once()
 
@@ -513,72 +363,55 @@ def test_exec_in_container_sudo_probe_sets_prefix(podman_container_info):
     assert cmd[3] == "exec"
 
 
-
-
-
 def test_exec_in_container_probe_timeout_prints_message(docker_container_info):
-
     """TimeoutExpired from probe produces a human-readable error, not a
 
     raw traceback."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
-    with patch("shutil.which", return_value="/usr/bin/docker"), \
-         patch("subprocess.run", side_effect=subprocess.TimeoutExpired(
-
-             cmd=["docker", "inspect"], timeout=15)), \
-         patch("os.execvp") as mock_execvp, \
-         pytest.raises(SystemExit) as exc_info:
-
+    with (
+        patch("shutil.which", return_value="/usr/bin/docker"),
+        patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(
+                cmd=["docker", "inspect"], timeout=15
+            ),
+        ),
+        patch("os.execvp") as mock_execvp,
+        pytest.raises(SystemExit) as exc_info,
+    ):
         _exec_in_container(docker_container_info, ["chat"])
-
-
 
     mock_execvp.assert_not_called()
 
     assert exc_info.value.code == 1
 
 
-
-
-
 def test_exec_in_container_container_not_running_no_sudo(docker_container_info):
-
     """When runtime exists but container not found and no sudo available,
 
     prints helpful error about root containers."""
 
     from clawk_cli.main import _exec_in_container
 
-
-
     def which_side_effect(name):
 
         if name == "docker":
-
             return "/usr/bin/docker"
 
         return None
 
-
-
-    with patch("shutil.which", side_effect=which_side_effect), \
-         patch("subprocess.run") as mock_run, \
-         patch("os.execvp") as mock_execvp, \
-         pytest.raises(SystemExit) as exc_info:
-
+    with (
+        patch("shutil.which", side_effect=which_side_effect),
+        patch("subprocess.run") as mock_run,
+        patch("os.execvp") as mock_execvp,
+        pytest.raises(SystemExit) as exc_info,
+    ):
         mock_run.return_value = MagicMock(returncode=1)
 
-
-
         _exec_in_container(docker_container_info, ["chat"])
-
-
 
     mock_execvp.assert_not_called()
 
     assert exc_info.value.code == 1
-

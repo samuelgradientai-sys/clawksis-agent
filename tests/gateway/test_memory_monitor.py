@@ -95,8 +95,10 @@ def test_periodic_timer_fires(caplog):
     mm.stop_memory_monitoring(timeout=1.0)
 
     periodic = [
-        r for r in caplog.records
-        if r.getMessage().startswith("[MEMORY] rss=") or r.getMessage().startswith("[MEMORY] rss=unavailable")
+        r
+        for r in caplog.records
+        if r.getMessage().startswith("[MEMORY] rss=")
+        or r.getMessage().startswith("[MEMORY] rss=unavailable")
     ]
     # baseline + at least 2 periodic + shutdown — but shutdown has the
     # "shutdown " prefix so it won't match the strict "[MEMORY] rss=" start.
@@ -119,4 +121,6 @@ def test_unavailable_rss_warns_and_does_not_start(caplog, monkeypatch):
     started = mm.start_memory_monitoring(interval_seconds=3600.0)
     assert started is False
     assert mm.is_running() is False
-    assert any("Memory monitoring unavailable" in r.getMessage() for r in caplog.records)
+    assert any(
+        "Memory monitoring unavailable" in r.getMessage() for r in caplog.records
+    )

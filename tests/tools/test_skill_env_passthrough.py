@@ -47,9 +47,7 @@ class TestSkillViewRegistersPassthrough:
                 "    prompt: Enter your Tenor API key\n"
             ),
         )
-        monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
-        )
+        monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", tmp_path)
         # Set the env var so it's "available"
         monkeypatch.setenv("TENOR_API_KEY", "test-value-123")
 
@@ -103,9 +101,7 @@ class TestSkillViewRegistersPassthrough:
                 "    prompt: Enter your key\n"
             ),
         )
-        monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
-        )
+        monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", tmp_path)
         monkeypatch.delenv("NONEXISTENT_SKILL_KEY_XYZ", raising=False)
 
         with patch("tools.skills_tool._secret_capture_callback", None):
@@ -119,9 +115,7 @@ class TestSkillViewRegistersPassthrough:
     def test_no_env_vars_skill_no_registration(self, tmp_path, monkeypatch):
         """Skills without required_environment_variables shouldn't register anything."""
         _create_skill(tmp_path, "simple-skill")
-        monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
-        )
+        monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", tmp_path)
 
         with patch("tools.skills_tool._secret_capture_callback", None):
             from tools.skills_tool import skill_view
@@ -130,4 +124,5 @@ class TestSkillViewRegistersPassthrough:
 
         assert result["success"] is True
         from tools.env_passthrough import get_all_passthrough
+
         assert len(get_all_passthrough()) == 0

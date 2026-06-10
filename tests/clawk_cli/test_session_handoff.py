@@ -20,34 +20,22 @@ flip pending → running, and finishes with ``complete_handoff`` or
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import time
 
 
-
 import pytest
-
 
 
 from clawk_state import SessionDB
 
 
-
-
-
 class TestHandoffStateDB:
-
     """Test the handoff schema + helper methods on SessionDB."""
 
-
-
     @pytest.fixture
-
     def db(self, tmp_path, monkeypatch):
 
         home = tmp_path / ".clawksis"
@@ -58,39 +46,25 @@ class TestHandoffStateDB:
 
         return SessionDB(db_path=home / "state.db")
 
-
-
     def _make_session(self, db, session_id, source="cli", title=None):
-
         """Insert a session row directly for testing."""
 
         def _do(conn):
 
             conn.execute(
-
                 "INSERT OR IGNORE INTO sessions (id, source, title, started_at) "
-
                 "VALUES (?, ?, ?, ?)",
-
                 (session_id, source, title, time.time()),
-
             )
 
         db._execute_write(_do)
 
-
-
     def test_columns_exist(self, db):
 
         db._conn.execute(
-
             "SELECT handoff_state, handoff_platform, handoff_error "
-
             "FROM sessions LIMIT 0"
-
         )
-
-
 
     def test_request_handoff_marks_pending(self, db):
 
@@ -98,25 +72,15 @@ class TestHandoffStateDB:
 
         self._make_session(db, sid)
 
-
-
         assert db.request_handoff(sid, "telegram") is True
-
-
 
         state = db.get_handoff_state(sid)
 
         assert state == {
-
             "state": "pending",
-
             "platform": "telegram",
-
             "error": None,
-
         }
-
-
 
     def test_request_handoff_rejects_in_flight(self, db):
 
@@ -124,23 +88,17 @@ class TestHandoffStateDB:
 
         self._make_session(db, sid)
 
-
-
         assert db.request_handoff(sid, "telegram") is True
 
         # Still pending → reject re-request
 
         assert db.request_handoff(sid, "discord") is False
 
-
-
         # And after gateway claims it (running) → still rejected
 
         assert db.claim_handoff(sid) is True
 
         assert db.request_handoff(sid, "discord") is False
-
-
 
     def test_request_handoff_after_terminal_state_resets_error(self, db):
 
@@ -154,8 +112,6 @@ class TestHandoffStateDB:
 
         db.fail_handoff(sid, "earlier failure")
 
-
-
         # User retries — should be allowed and clear the prior error.
 
         assert db.request_handoff(sid, "discord") is True
@@ -168,17 +124,12 @@ class TestHandoffStateDB:
 
         assert state["error"] is None
 
-
-
     def test_list_pending_handoffs_excludes_running_and_terminal(self, db):
 
         a, b, c, d = "sess-a", "sess-b", "sess-c", "sess-d"
 
         for sid in (a, b, c, d):
-
             self._make_session(db, sid)
-
-
 
         db.request_handoff(a, "telegram")
 
@@ -194,15 +145,11 @@ class TestHandoffStateDB:
 
         db.complete_handoff(d)  # d is terminal
 
-
-
         pending = db.list_pending_handoffs()
 
         ids = [r["id"] for r in pending]
 
         assert set(ids) == {a, b}
-
-
 
     def test_claim_handoff_is_atomic(self, db):
 
@@ -211,8 +158,6 @@ class TestHandoffStateDB:
         self._make_session(db, sid)
 
         db.request_handoff(sid, "telegram")
-
-
 
         # First claim wins
 
@@ -223,8 +168,6 @@ class TestHandoffStateDB:
         assert db.claim_handoff(sid) is False
 
         assert db.get_handoff_state(sid)["state"] == "running"
-
-
 
     def test_complete_handoff_clears_error(self, db):
 
@@ -246,15 +189,11 @@ class TestHandoffStateDB:
 
         db.complete_handoff(sid)
 
-
-
         state = db.get_handoff_state(sid)
 
         assert state["state"] == "completed"
 
         assert state["error"] is None
-
-
 
     def test_fail_handoff_records_reason(self, db):
 
@@ -268,15 +207,11 @@ class TestHandoffStateDB:
 
         db.fail_handoff(sid, "no home channel for telegram")
 
-
-
         state = db.get_handoff_state(sid)
 
         assert state["state"] == "failed"
 
         assert state["error"] == "no home channel for telegram"
-
-
 
     def test_fail_handoff_truncates_long_reasons(self, db):
 
@@ -288,30 +223,21 @@ class TestHandoffStateDB:
 
         db.claim_handoff(sid)
 
-
-
         # 1000-character error string
 
         big_err = "x" * 1000
 
         db.fail_handoff(sid, big_err)
 
-
-
         state = db.get_handoff_state(sid)
 
         assert len(state["error"]) <= 500
-
-
 
     def test_get_handoff_state_for_unknown_session(self, db):
 
         assert db.get_handoff_state("does-not-exist") is None
 
-
-
     def test_full_pending_to_completed_flow(self, db):
-
         """End-to-end sequence the CLI + gateway watcher follow."""
 
         sid = "sess-flow"
@@ -322,15 +248,11 @@ class TestHandoffStateDB:
 
         db.append_message(sid, "assistant", "Hi there!")
 
-
-
         # CLI: request handoff
 
         assert db.request_handoff(sid, "telegram") is True
 
         assert db.get_handoff_state(sid)["state"] == "pending"
-
-
 
         # Gateway watcher: discover + claim
 
@@ -344,8 +266,6 @@ class TestHandoffStateDB:
 
         assert db.get_handoff_state(sid)["state"] == "running"
 
-
-
         # Gateway uses get_messages to load the transcript (real flow uses
 
         # session_store.switch_session which reads the same table).
@@ -353,8 +273,6 @@ class TestHandoffStateDB:
         messages = db.get_messages(sid)
 
         assert [m["role"] for m in messages] == ["user", "assistant"]
-
-
 
         # Gateway: mark completed
 
@@ -365,14 +283,8 @@ class TestHandoffStateDB:
         assert db.list_pending_handoffs() == []
 
 
-
-
-
 class TestHandoffCommandRegistration:
-
     """Slash-command surface checks."""
-
-
 
     def test_command_registered(self):
 
@@ -386,10 +298,7 @@ class TestHandoffCommandRegistration:
 
         assert cmd.category == "Session"
 
-
-
     def test_command_is_cli_only(self):
-
         """`/handoff` is initiated from the CLI; gateway shouldn't expose it."""
 
         from clawk_cli.commands import resolve_command, GATEWAY_KNOWN_COMMANDS
@@ -401,4 +310,3 @@ class TestHandoffCommandRegistration:
         assert cmd.cli_only is True
 
         assert "handoff" not in GATEWAY_KNOWN_COMMANDS
-

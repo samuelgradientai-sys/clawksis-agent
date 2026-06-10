@@ -31,13 +31,12 @@ def test_matrix_extra_not_in_all():
     """
     optional_dependencies = _load_optional_dependencies()
 
-    assert "matrix" in optional_dependencies, "[matrix] extra must still exist for explicit `pip install clawksis-agent[matrix]`"
+    assert "matrix" in optional_dependencies, (
+        "[matrix] extra must still exist for explicit `pip install clawksis-agent[matrix]`"
+    )
     # Must NOT appear in [all] in any form — neither unconditional nor
     # platform-gated. Lazy-install handles it.
-    matrix_in_all = [
-        dep for dep in optional_dependencies["all"]
-        if "matrix" in dep
-    ]
+    matrix_in_all = [dep for dep in optional_dependencies["all"] if "matrix" in dep]
     assert not matrix_in_all, (
         "matrix must not appear in [all] — it's lazy-installed via "
         "tools/lazy_deps.py LAZY_DEPS['platform.matrix']. Found: "
@@ -65,21 +64,30 @@ def test_lazy_installable_extras_excluded_from_all():
     # someone adds a new lazy-install backend, they have to update
     # this list AND verify [all] doesn't contain it.
     lazy_covered_extras = {
-        "anthropic", "bedrock",
-        "exa", "firecrawl", "parallel-web",
+        "anthropic",
+        "bedrock",
+        "exa",
+        "firecrawl",
+        "parallel-web",
         "fal",
-        "edge-tts", "tts-premium",
+        "edge-tts",
+        "tts-premium",
         "voice",  # faster-whisper / sounddevice / numpy
-        "modal", "daytona",
-        "messaging", "slack", "matrix", "dingtalk", "feishu",
-        "honcho", "hindsight",
+        "modal",
+        "daytona",
+        "messaging",
+        "slack",
+        "matrix",
+        "dingtalk",
+        "feishu",
+        "honcho",
+        "hindsight",
         "mistral",  # mistralai — Voxtral STT/TTS, lazy-installed (stt.mistral / tts.mistral)
     }
     all_extra_specs = optional_dependencies["all"]
     for extra in lazy_covered_extras:
         offending = [
-            spec for spec in all_extra_specs
-            if f"clawksis-agent[{extra}]" in spec
+            spec for spec in all_extra_specs if f"clawksis-agent[{extra}]" in spec
         ]
         assert not offending, (
             f"[{extra}] is in [all] but also in LAZY_DEPS. "
@@ -94,8 +102,7 @@ def test_dev_extra_excluded_from_all():
 
     assert "dev" in optional_dependencies
     assert not any(
-        spec == "clawksis-agent[dev]"
-        for spec in optional_dependencies["all"]
+        spec == "clawksis-agent[dev]" for spec in optional_dependencies["all"]
     )
 
 
@@ -129,8 +136,7 @@ def test_nemo_relay_extra_uses_official_0_3_distribution():
 
     assert optional_dependencies["nemo-relay"] == ["nemo-relay==0.3"]
     assert not any(
-        spec == "clawksis-agent[nemo-relay]"
-        for spec in optional_dependencies["all"]
+        spec == "clawksis-agent[nemo-relay]" for spec in optional_dependencies["all"]
     )
 
 

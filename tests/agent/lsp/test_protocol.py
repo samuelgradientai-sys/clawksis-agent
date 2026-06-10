@@ -9,6 +9,7 @@ deadlock.  These tests exercise:
 - envelope helpers (request, response, notification, error)
 - message classification
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -92,7 +93,7 @@ async def test_read_message_clean_eof_returns_none():
 @pytest.mark.asyncio
 async def test_read_message_truncated_body_raises():
     msg = encode_message({"jsonrpc": "2.0", "method": "x"})
-    truncated = msg[: -3]  # cut the body
+    truncated = msg[:-3]  # cut the body
     reader = await _stream_from_bytes(truncated)
     with pytest.raises(LSPProtocolError):
         await read_message(reader)
@@ -120,7 +121,7 @@ async def test_read_message_rejects_runaway_header():
     """A pathological server that streams headers without ever emitting
     the CRLF-CRLF terminator must not loop forever — the 8 KiB cap kicks
     in and surfaces a protocol error."""
-    flood = (b"X-Junk: " + b"A" * 200 + b"\r\n") * 60   # ~12 KiB worth
+    flood = (b"X-Junk: " + b"A" * 200 + b"\r\n") * 60  # ~12 KiB worth
     reader = await _stream_from_bytes(flood)
     with pytest.raises(LSPProtocolError) as exc:
         await read_message(reader)

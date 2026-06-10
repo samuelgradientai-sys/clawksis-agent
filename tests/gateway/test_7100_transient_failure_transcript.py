@@ -16,7 +16,6 @@ The gateway classifier must distinguish:
 """
 
 
-
 def _classify(agent_result: dict, history_len: int) -> tuple[bool, bool]:
     """Replicate the gateway classifier from GatewayRunner._run_agent.
 
@@ -26,13 +25,23 @@ def _classify(agent_result: dict, history_len: int) -> tuple[bool, bool]:
     err = str(agent_result.get("error", "")).lower()
     is_context_overflow_failure = agent_failed_early and (
         bool(agent_result.get("compression_exhausted"))
-        or any(p in err for p in (
-            "context length", "context size", "context window",
-            "maximum context", "token limit", "too many tokens",
-            "reduce the length", "exceeds the limit",
-            "request entity too large", "prompt is too long",
-            "payload too large", "input is too long",
-        ))
+        or any(
+            p in err
+            for p in (
+                "context length",
+                "context size",
+                "context window",
+                "maximum context",
+                "token limit",
+                "too many tokens",
+                "reduce the length",
+                "exceeds the limit",
+                "request entity too large",
+                "prompt is too long",
+                "payload too large",
+                "input is too long",
+            )
+        )
         or ("400" in err and history_len > 50)
     )
     return agent_failed_early, is_context_overflow_failure

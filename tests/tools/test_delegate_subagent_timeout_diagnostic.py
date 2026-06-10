@@ -33,7 +33,6 @@ These tests pin:
 from __future__ import annotations
 
 
-
 import threading
 
 import time
@@ -43,15 +42,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture
-
 def clawk_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -63,27 +57,16 @@ def clawk_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 class _StubChild:
-
     """Minimal stand-in for an AIAgent subagent."""
 
     def __init__(
-
         self,
-
         *,
-
         api_call_count: int = 0,
-
         hang_seconds: float = 5.0,
-
         subagent_id: str = "sa-0-stubabc",
-
         tool_schema=None,
-
     ):
 
         self._subagent_id = subagent_id
@@ -116,13 +99,14 @@ class _StubChild:
 
         self.valid_tool_names = {"web_search", "terminal"}
 
-        self.tools = tool_schema if tool_schema is not None else [
-
-            {"name": "web_search", "description": "search"},
-
-            {"name": "terminal", "description": "shell"},
-
-        ]
+        self.tools = (
+            tool_schema
+            if tool_schema is not None
+            else [
+                {"name": "web_search", "description": "search"},
+                {"name": "terminal", "description": "shell"},
+            ]
+        )
 
         self._api_call_count = api_call_count
 
@@ -130,62 +114,43 @@ class _StubChild:
 
         self._hang_seconds = hang_seconds
 
-
-
     def get_activity_summary(self):
 
         return {
-
             "api_call_count": self._api_call_count,
-
             "max_iterations": self.max_iterations,
-
             "current_tool": None,
-
             "seconds_since_activity": 60,
-
         }
-
-
 
     def run_conversation(self, user_message, task_id=None):
 
         self._hang.wait(self._hang_seconds)
 
-        return {"final_response": "", "completed": False, "api_calls": self._api_call_count}
-
-
+        return {
+            "final_response": "",
+            "completed": False,
+            "api_calls": self._api_call_count,
+        }
 
     def interrupt(self):
 
         self._hang.set()
 
 
-
-
-
 # ── _dump_subagent_timeout_diagnostic ──────────────────────────────────
 
 
-
 class TestDumpSubagentTimeoutDiagnostic:
-
-
-
     def test_writes_log_with_expected_sections(self, clawk_home):
 
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
 
         child = _StubChild(subagent_id="sa-7-abc123")
 
-
-
         worker = threading.Thread(
-
             target=lambda: child.run_conversation("test"),
-
             daemon=True,
-
         )
 
         worker.start()
@@ -193,30 +158,19 @@ class TestDumpSubagentTimeoutDiagnostic:
         time.sleep(0.1)
 
         try:
-
             path = _dump_subagent_timeout_diagnostic(
-
                 child=child,
-
                 task_index=7,
-
                 timeout_seconds=300.0,
-
                 duration_seconds=300.01,
-
                 worker_thread=worker,
-
                 goal="Research something long",
-
             )
 
         finally:
-
             child.interrupt()
 
             worker.join(timeout=2.0)
-
-
 
         assert path is not None
 
@@ -231,8 +185,6 @@ class TestDumpSubagentTimeoutDiagnostic:
         assert p.name.startswith("subagent-timeout-sa-7-abc123-")
 
         assert p.suffix == ".log"
-
-
 
         content = p.read_text()
 
@@ -290,8 +242,6 @@ class TestDumpSubagentTimeoutDiagnostic:
 
         assert "acquire" in content or "wait" in content
 
-
-
     def test_truncates_very_long_goal(self, clawk_home):
 
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
@@ -300,27 +250,16 @@ class TestDumpSubagentTimeoutDiagnostic:
 
         huge_goal = "x" * 5000
 
-
-
         path = _dump_subagent_timeout_diagnostic(
-
             child=child,
-
             task_index=0,
-
             timeout_seconds=300.0,
-
             duration_seconds=300.0,
-
             worker_thread=None,
-
             goal=huge_goal,
-
         )
 
         child.interrupt()
-
-
 
         content = Path(path).read_text()
 
@@ -332,8 +271,6 @@ class TestDumpSubagentTimeoutDiagnostic:
 
         assert len(goal_block) < 1200
 
-
-
     def test_missing_worker_thread_is_handled(self, clawk_home):
 
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
@@ -341,19 +278,12 @@ class TestDumpSubagentTimeoutDiagnostic:
         child = _StubChild()
 
         path = _dump_subagent_timeout_diagnostic(
-
             child=child,
-
             task_index=0,
-
             timeout_seconds=300.0,
-
             duration_seconds=300.0,
-
             worker_thread=None,
-
             goal="x",
-
         )
 
         child.interrupt()
@@ -361,8 +291,6 @@ class TestDumpSubagentTimeoutDiagnostic:
         content = Path(path).read_text()
 
         assert "<no worker thread handle>" in content
-
-
 
     def test_exited_worker_thread_is_handled(self, clawk_home):
 
@@ -381,19 +309,12 @@ class TestDumpSubagentTimeoutDiagnostic:
         assert not t.is_alive()
 
         path = _dump_subagent_timeout_diagnostic(
-
             child=child,
-
             task_index=0,
-
             timeout_seconds=300.0,
-
             duration_seconds=300.0,
-
             worker_thread=t,
-
             goal="x",
-
         )
 
         child.interrupt()
@@ -401,8 +322,6 @@ class TestDumpSubagentTimeoutDiagnostic:
         content = Path(path).read_text()
 
         assert "<worker thread already exited>" in content
-
-
 
     def test_returns_none_on_unwritable_logs_dir(self, tmp_path, monkeypatch):
 
@@ -418,8 +337,6 @@ class TestDumpSubagentTimeoutDiagnostic:
 
         child = _StubChild()
 
-
-
         # Make the logs dir itself unwritable by creating it as a FILE
 
         # so mkdir(exist_ok=True) → NotADirectoryError and we fall through.
@@ -431,19 +348,12 @@ class TestDumpSubagentTimeoutDiagnostic:
         (bogus / "logs").write_text("not a dir")
 
         result = _dump_subagent_timeout_diagnostic(
-
             child=child,
-
             task_index=0,
-
             timeout_seconds=300.0,
-
             duration_seconds=300.0,
-
             worker_thread=None,
-
             goal="x",
-
         )
 
         child.interrupt()
@@ -455,23 +365,15 @@ class TestDumpSubagentTimeoutDiagnostic:
         assert result is None or Path(result).exists()
 
 
-
-
-
 # ── _run_single_child timeout branch wiring ───────────────────────────
 
 
-
 class TestRunSingleChildTimeoutDump:
-
     """The timeout branch in _run_single_child must emit the diagnostic
 
     dump when api_calls == 0, and must NOT emit it when api_calls > 0."""
 
-
-
     def _invoke_with_short_timeout(self, child, monkeypatch):
-
         """Run _run_single_child with a tiny timeout to force the timeout branch."""
 
         from tools import delegate_tool
@@ -480,8 +382,6 @@ class TestRunSingleChildTimeoutDump:
 
         monkeypatch.setattr(delegate_tool, "_get_child_timeout", lambda: 0.3)
 
-
-
         parent = MagicMock()
 
         parent._touch_activity = MagicMock()
@@ -489,26 +389,19 @@ class TestRunSingleChildTimeoutDump:
         parent._current_task_id = None
 
         return delegate_tool._run_single_child(
-
             task_index=0,
-
             goal="test goal",
-
             child=child,
-
             parent_agent=parent,
-
         )
 
-
-
-    def test_zero_api_calls_writes_dump_and_surfaces_path(self, clawk_home, monkeypatch):
+    def test_zero_api_calls_writes_dump_and_surfaces_path(
+        self, clawk_home, monkeypatch
+    ):
 
         child = _StubChild(api_call_count=0, hang_seconds=10.0)
 
         result = self._invoke_with_short_timeout(child, monkeypatch)
-
-
 
         assert result["status"] == "timeout"
 
@@ -522,8 +415,6 @@ class TestRunSingleChildTimeoutDump:
 
         assert dump_path.parent == clawk_home / "logs"
 
-
-
         # Error message surfaces the path and the "no API call" phrasing
 
         assert "without making any API call" in result["error"]
@@ -532,15 +423,13 @@ class TestRunSingleChildTimeoutDump:
 
         assert str(dump_path) in result["error"]
 
-
-
-    def test_nonzero_api_calls_skips_dump_and_uses_old_message(self, clawk_home, monkeypatch):
+    def test_nonzero_api_calls_skips_dump_and_uses_old_message(
+        self, clawk_home, monkeypatch
+    ):
 
         child = _StubChild(api_call_count=5, hang_seconds=10.0)
 
         result = self._invoke_with_short_timeout(child, monkeypatch)
-
-
 
         assert result["status"] == "timeout"
 
@@ -561,8 +450,6 @@ class TestRunSingleChildTimeoutDump:
         logs_dir = clawk_home / "logs"
 
         if logs_dir.is_dir():
-
             dumps = list(logs_dir.glob("subagent-timeout-*.log"))
 
             assert dumps == []
-

@@ -1,4 +1,5 @@
 """Tests for agent.models_dev — models.dev registry integration."""
+
 from unittest.mock import patch, MagicMock
 
 from agent.models_dev import (
@@ -174,6 +175,7 @@ class TestFetchModelsDev:
 
         # Clear caches
         import agent.models_dev as md
+
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
@@ -188,6 +190,7 @@ class TestFetchModelsDev:
         mock_get.side_effect = Exception("network error")
 
         import agent.models_dev as md
+
         md._models_dev_cache = SAMPLE_REGISTRY
         md._models_dev_cache_time = 0  # expired
 
@@ -200,6 +203,7 @@ class TestFetchModelsDev:
     def test_in_memory_cache_used(self, mock_get):
         import agent.models_dev as md
         import time
+
         md._models_dev_cache = SAMPLE_REGISTRY
         md._models_dev_cache_time = time.time()  # fresh
 
@@ -218,12 +222,15 @@ class TestFetchModelsDev:
         from an earlier run.
         """
         import agent.models_dev as md
+
         # Empty in-mem cache so stage 1 doesn't short-circuit.
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
-        with patch.object(md, "_disk_cache_age_seconds", return_value=60.0), \
-             patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY):
+        with (
+            patch.object(md, "_disk_cache_age_seconds", return_value=60.0),
+            patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY),
+        ):
             result = fetch_models_dev()
 
         # The whole point: no network call.
@@ -238,6 +245,7 @@ class TestFetchModelsDev:
         """When the disk cache is OLDER than TTL, we must hit the network
         (and only fall back to the stale disk data if network fails)."""
         import agent.models_dev as md
+
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
@@ -248,10 +256,15 @@ class TestFetchModelsDev:
         mock_get.return_value = mock_resp
 
         # Disk cache exists but is older than the TTL — must NOT short-circuit.
-        with patch.object(md, "_disk_cache_age_seconds",
-                          return_value=md._MODELS_DEV_CACHE_TTL + 60), \
-             patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY), \
-             patch.object(md, "_save_disk_cache"):
+        with (
+            patch.object(
+                md,
+                "_disk_cache_age_seconds",
+                return_value=md._MODELS_DEV_CACHE_TTL + 60,
+            ),
+            patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY),
+            patch.object(md, "_save_disk_cache"),
+        ):
             result = fetch_models_dev()
 
         mock_get.assert_called_once()
@@ -264,6 +277,7 @@ class TestFetchModelsDev:
         anywhere else the user explicitly asked for fresh data.
         """
         import agent.models_dev as md
+
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
@@ -274,9 +288,11 @@ class TestFetchModelsDev:
         mock_get.return_value = mock_resp
 
         # Disk cache is fresh, but force_refresh must override it.
-        with patch.object(md, "_disk_cache_age_seconds", return_value=60.0), \
-             patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY), \
-             patch.object(md, "_save_disk_cache"):
+        with (
+            patch.object(md, "_disk_cache_age_seconds", return_value=60.0),
+            patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY),
+            patch.object(md, "_save_disk_cache"),
+        ):
             result = fetch_models_dev(force_refresh=True)
 
         mock_get.assert_called_once()
@@ -287,6 +303,7 @@ class TestFetchModelsDev:
         """If the disk cache file doesn't exist (first-ever run, or it
         was deleted), fall through cleanly to network."""
         import agent.models_dev as md
+
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
@@ -296,8 +313,10 @@ class TestFetchModelsDev:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        with patch.object(md, "_disk_cache_age_seconds", return_value=None), \
-             patch.object(md, "_save_disk_cache"):
+        with (
+            patch.object(md, "_disk_cache_age_seconds", return_value=None),
+            patch.object(md, "_save_disk_cache"),
+        ):
             result = fetch_models_dev()
 
         mock_get.assert_called_once()
@@ -383,13 +402,16 @@ class TestGetModelCapabilities:
     def test_modalities_non_dict_handled(self):
         """Non-dict modalities field should not crash."""
         registry = {
-            "google": {"id": "google", "models": {
-                "weird-model": {
-                    "id": "weird-model",
-                    "modalities": "text",  # not a dict
-                    "limit": {"context": 200000, "output": 8192},
+            "google": {
+                "id": "google",
+                "models": {
+                    "weird-model": {
+                        "id": "weird-model",
+                        "modalities": "text",  # not a dict
+                        "limit": {"context": 200000, "output": 8192},
+                    },
                 },
-            }},
+            },
         }
         with patch("agent.models_dev.fetch_models_dev", return_value=registry):
             caps = get_model_capabilities("gemini", "weird-model")

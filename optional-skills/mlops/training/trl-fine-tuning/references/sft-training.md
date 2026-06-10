@@ -64,15 +64,12 @@ config = SFTConfig(
     per_device_train_batch_size=4,
     num_train_epochs=1,
     learning_rate=2e-5,
-    save_strategy="epoch"
+    save_strategy="epoch",
 )
 
 # Train
 trainer = SFTTrainer(
-    model=model,
-    args=config,
-    train_dataset=dataset,
-    tokenizer=tokenizer
+    model=model, args=config, train_dataset=dataset, tokenizer=tokenizer
 )
 trainer.train()
 ```
@@ -86,7 +83,7 @@ trainer = SFTTrainer(
     model=model,
     args=config,
     train_dataset=dataset,  # Messages format
-    tokenizer=tokenizer
+    tokenizer=tokenizer,
     # Chat template applied automatically
 )
 ```
@@ -97,6 +94,7 @@ def format_chat(example):
     messages = example["messages"]
     text = tokenizer.apply_chat_template(messages, tokenize=False)
     return {"text": text}
+
 
 dataset = dataset.map(format_chat)
 ```
@@ -109,7 +107,7 @@ Pack multiple sequences into one to maximize GPU utilization:
 config = SFTConfig(
     packing=True,  # Enable packing
     max_seq_length=2048,
-    dataset_text_field="text"
+    dataset_text_field="text",
 )
 ```
 
@@ -128,7 +126,7 @@ config = SFTConfig(
     output_dir="model-sft",
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
-    num_train_epochs=1
+    num_train_epochs=1,
 )
 ```
 
@@ -142,14 +140,14 @@ lora_config = LoraConfig(
     lora_alpha=32,
     target_modules="all-linear",
     lora_dropout=0.05,
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 
 trainer = SFTTrainer(
     model=model,
     args=config,
     train_dataset=dataset,
-    peft_config=lora_config  # Add LoRA
+    peft_config=lora_config,  # Add LoRA
 )
 ```
 

@@ -6,6 +6,7 @@ registration API chains them rather than clobbering. Per-callback
 exceptions are swallowed so one bad callback can't sabotage the others.
 Stale-generation registrations are rejected.
 """
+
 import pytest
 
 from gateway.config import Platform, PlatformConfig
@@ -97,9 +98,7 @@ class TestPostDeliveryCallbackChaining:
         assert fired == ["gen7"]
 
     def test_pop_at_wrong_generation_returns_none(self, adapter):
-        adapter.register_post_delivery_callback(
-            "s", lambda: None, generation=5
-        )
+        adapter.register_post_delivery_callback("s", lambda: None, generation=5)
         assert adapter.pop_post_delivery_callback("s", generation=99) is None
         # Correct generation still finds it.
         assert adapter.pop_post_delivery_callback("s", generation=5) is not None

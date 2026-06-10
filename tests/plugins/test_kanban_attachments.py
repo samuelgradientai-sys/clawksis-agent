@@ -20,10 +20,7 @@ The plugin router is attached to a bare FastAPI app — same approach as
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import importlib.util
@@ -33,7 +30,6 @@ import sys
 from pathlib import Path
 
 
-
 import pytest
 
 from fastapi import FastAPI
@@ -41,11 +37,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-
 from clawk_cli import kanban_db as kb
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +45,6 @@ from clawk_cli import kanban_db as kb
 # Fixtures
 
 # ---------------------------------------------------------------------------
-
-
-
 
 
 def _load_plugin_router():
@@ -67,9 +56,8 @@ def _load_plugin_router():
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
 
     spec = importlib.util.spec_from_file_location(
-
-        "clawk_dashboard_plugin_kanban_attach_test", plugin_file,
-
+        "clawk_dashboard_plugin_kanban_attach_test",
+        plugin_file,
     )
 
     assert spec is not None and spec.loader is not None
@@ -83,11 +71,7 @@ def _load_plugin_router():
     return mod.router
 
 
-
-
-
 @pytest.fixture
-
 def kanban_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -103,11 +87,7 @@ def kanban_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 @pytest.fixture
-
 def client(kanban_home):
 
     app = FastAPI()
@@ -117,15 +97,9 @@ def client(kanban_home):
     return TestClient(app)
 
 
-
-
-
 def _make_task(conn, title="t") -> str:
 
     return kb.create_task(conn, title=title)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -135,15 +109,11 @@ def _make_task(conn, title="t") -> str:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_add_list_get_delete_attachment(kanban_home, tmp_path):
 
     conn = kb.connect()
 
     try:
-
         task_id = _make_task(conn)
 
         # Write a real blob under the per-task dir so delete can unlink it.
@@ -156,29 +126,17 @@ def test_add_list_get_delete_attachment(kanban_home, tmp_path):
 
         blob.write_bytes(b"%PDF-1.4 fake")
 
-
-
         att_id = kb.add_attachment(
-
             conn,
-
             task_id,
-
             filename="source.pdf",
-
             stored_path=str(blob),
-
             content_type="application/pdf",
-
             size=blob.stat().st_size,
-
             uploaded_by="tester",
-
         )
 
         assert att_id > 0
-
-
 
         atts = kb.list_attachments(conn, task_id)
 
@@ -196,13 +154,9 @@ def test_add_list_get_delete_attachment(kanban_home, tmp_path):
 
         assert a.stored_path == str(blob)
 
-
-
         got = kb.get_attachment(conn, att_id)
 
         assert got is not None and got.id == att_id
-
-
 
         removed = kb.delete_attachment(conn, att_id)
 
@@ -215,11 +169,7 @@ def test_add_list_get_delete_attachment(kanban_home, tmp_path):
         assert kb.get_attachment(conn, att_id) is None
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_add_attachment_rejects_unknown_task(kanban_home):
@@ -227,21 +177,13 @@ def test_add_attachment_rejects_unknown_task(kanban_home):
     conn = kb.connect()
 
     try:
-
         with pytest.raises(ValueError):
-
             kb.add_attachment(
-
                 conn, "t_doesnotexist", filename="x.txt", stored_path="/tmp/x.txt"
-
             )
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_add_attachment_appends_event(kanban_home):
@@ -249,13 +191,10 @@ def test_add_attachment_appends_event(kanban_home):
     conn = kb.connect()
 
     try:
-
         task_id = _make_task(conn)
 
         kb.add_attachment(
-
             conn, task_id, filename="a.txt", stored_path="/tmp/a.txt", size=3
-
         )
 
         kinds = [e.kind for e in kb.list_events(conn, task_id)]
@@ -263,11 +202,7 @@ def test_add_attachment_appends_event(kanban_home):
         assert "attached" in kinds
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_delete_attachment_missing_returns_none(kanban_home):
@@ -275,15 +210,10 @@ def test_delete_attachment_missing_returns_none(kanban_home):
     conn = kb.connect()
 
     try:
-
         assert kb.delete_attachment(conn, 999999) is None
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_attachments_root_is_per_board(kanban_home, monkeypatch):
@@ -303,9 +233,6 @@ def test_attachments_root_is_per_board(kanban_home, monkeypatch):
     assert named == default_root
 
 
-
-
-
 def test_attachments_root_env_override(kanban_home, monkeypatch, tmp_path):
 
     override = tmp_path / "custom-attach"
@@ -317,9 +244,6 @@ def test_attachments_root_env_override(kanban_home, monkeypatch, tmp_path):
     assert kb.task_attachments_dir("t_abc") == override / "t_abc"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Worker context surfacing
@@ -327,15 +251,11 @@ def test_attachments_root_env_override(kanban_home, monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_worker_context_lists_attachments_with_absolute_path(kanban_home):
 
     conn = kb.connect()
 
     try:
-
         task_id = _make_task(conn, title="translate PDF")
 
         dest_dir = kb.task_attachments_dir(task_id)
@@ -347,19 +267,12 @@ def test_worker_context_lists_attachments_with_absolute_path(kanban_home):
         blob.write_bytes(b"data")
 
         kb.add_attachment(
-
             conn,
-
             task_id,
-
             filename="manual.pdf",
-
             stored_path=str(blob.resolve()),
-
             content_type="application/pdf",
-
             size=4,
-
         )
 
         ctx = kb.build_worker_context(conn, task_id)
@@ -373,11 +286,7 @@ def test_worker_context_lists_attachments_with_absolute_path(kanban_home):
         assert str(blob.resolve()) in ctx
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_worker_context_no_attachments_section_when_empty(kanban_home):
@@ -385,7 +294,6 @@ def test_worker_context_no_attachments_section_when_empty(kanban_home):
     conn = kb.connect()
 
     try:
-
         task_id = _make_task(conn)
 
         ctx = kb.build_worker_context(conn, task_id)
@@ -393,11 +301,7 @@ def test_worker_context_no_attachments_section_when_empty(kanban_home):
         assert "## Attachments" not in ctx
 
     finally:
-
         conn.close()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -405,9 +309,6 @@ def test_worker_context_no_attachments_section_when_empty(kanban_home):
 # REST surface — upload / list / download / delete round-trip
 
 # ---------------------------------------------------------------------------
-
-
-
 
 
 def _create_task_via_api(client) -> str:
@@ -419,25 +320,17 @@ def _create_task_via_api(client) -> str:
     return r.json()["task"]["id"]
 
 
-
-
-
 def test_upload_list_download_delete_roundtrip(client):
 
     task_id = _create_task_via_api(client)
 
     content = b"hello attachment world"
 
-
-
     # Upload
 
     r = client.post(
-
         f"/api/plugins/kanban/tasks/{task_id}/attachments",
-
         files={"file": ("notes.txt", content, "text/plain")},
-
     )
 
     assert r.status_code == 200, r.text
@@ -450,8 +343,6 @@ def test_upload_list_download_delete_roundtrip(client):
 
     att_id = att["id"]
 
-
-
     # List (drawer also embeds it in GET /tasks/:id)
 
     r = client.get(f"/api/plugins/kanban/tasks/{task_id}/attachments")
@@ -460,15 +351,11 @@ def test_upload_list_download_delete_roundtrip(client):
 
     assert [a["filename"] for a in r.json()["attachments"]] == ["notes.txt"]
 
-
-
     detail = client.get(f"/api/plugins/kanban/tasks/{task_id}").json()
 
     assert "attachments" in detail
 
     assert len(detail["attachments"]) == 1
-
-
 
     # Download streams the exact bytes back
 
@@ -478,8 +365,6 @@ def test_upload_list_download_delete_roundtrip(client):
 
     assert r.content == content
 
-
-
     # Delete removes the row and the file
 
     r = client.delete(f"/api/plugins/kanban/attachments/{att_id}")
@@ -488,14 +373,12 @@ def test_upload_list_download_delete_roundtrip(client):
 
     assert client.get(f"/api/plugins/kanban/attachments/{att_id}").status_code == 404
 
-    assert client.get(
-
-        f"/api/plugins/kanban/tasks/{task_id}/attachments"
-
-    ).json()["attachments"] == []
-
-
-
+    assert (
+        client.get(f"/api/plugins/kanban/tasks/{task_id}/attachments").json()[
+            "attachments"
+        ]
+        == []
+    )
 
 
 def test_upload_sanitizes_traversal_filename(client):
@@ -503,11 +386,8 @@ def test_upload_sanitizes_traversal_filename(client):
     task_id = _create_task_via_api(client)
 
     r = client.post(
-
         f"/api/plugins/kanban/tasks/{task_id}/attachments",
-
         files={"file": ("../../../../etc/passwd", b"x", "text/plain")},
-
     )
 
     assert r.status_code == 200, r.text
@@ -523,60 +403,38 @@ def test_upload_sanitizes_traversal_filename(client):
     assert Path(stored_path).resolve().is_relative_to(task_dir)
 
 
-
-
-
 def test_upload_name_collision_gets_suffixed(client):
 
     task_id = _create_task_via_api(client)
 
     for _ in range(2):
-
         r = client.post(
-
             f"/api/plugins/kanban/tasks/{task_id}/attachments",
-
             files={"file": ("dup.txt", b"a", "text/plain")},
-
         )
 
         assert r.status_code == 200, r.text
 
     names = sorted(
-
         a["filename"]
-
-        for a in client.get(
-
-            f"/api/plugins/kanban/tasks/{task_id}/attachments"
-
-        ).json()["attachments"]
-
+        for a in client.get(f"/api/plugins/kanban/tasks/{task_id}/attachments").json()[
+            "attachments"
+        ]
     )
 
     assert names == ["dup (1).txt", "dup.txt"]
 
 
-
-
-
 def test_upload_unknown_task_404(client):
 
     r = client.post(
-
         "/api/plugins/kanban/tasks/t_nope/attachments",
-
         files={"file": ("x.txt", b"x", "text/plain")},
-
     )
 
     assert r.status_code == 404
 
 
-
-
-
 def test_download_unknown_attachment_404(client):
 
     assert client.get("/api/plugins/kanban/attachments/424242").status_code == 404
-

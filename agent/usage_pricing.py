@@ -567,18 +567,55 @@ def resolve_billing_route(
             model = bare_model
 
     if provider_name == "openai-codex":
-        return BillingRoute(provider="openai-codex", model=model, base_url=base_url or "", billing_mode="subscription_included")
-    if provider_name == "openrouter" or base_url_host_matches(base_url or "", "openrouter.ai"):
-        return BillingRoute(provider="openrouter", model=model, base_url=base_url or "", billing_mode="official_models_api")
+        return BillingRoute(
+            provider="openai-codex",
+            model=model,
+            base_url=base_url or "",
+            billing_mode="subscription_included",
+        )
+    if provider_name == "openrouter" or base_url_host_matches(
+        base_url or "", "openrouter.ai"
+    ):
+        return BillingRoute(
+            provider="openrouter",
+            model=model,
+            base_url=base_url or "",
+            billing_mode="official_models_api",
+        )
     if provider_name == "anthropic":
-        return BillingRoute(provider="anthropic", model=model.split("/")[-1], base_url=base_url or "", billing_mode="official_docs_snapshot")
+        return BillingRoute(
+            provider="anthropic",
+            model=model.split("/")[-1],
+            base_url=base_url or "",
+            billing_mode="official_docs_snapshot",
+        )
     if provider_name == "openai":
-        return BillingRoute(provider="openai", model=model.split("/")[-1], base_url=base_url or "", billing_mode="official_docs_snapshot")
+        return BillingRoute(
+            provider="openai",
+            model=model.split("/")[-1],
+            base_url=base_url or "",
+            billing_mode="official_docs_snapshot",
+        )
     if provider_name in {"minimax", "minimax-cn"}:
-        return BillingRoute(provider=provider_name, model=model.split("/")[-1], base_url=base_url or "", billing_mode="official_docs_snapshot")
+        return BillingRoute(
+            provider=provider_name,
+            model=model.split("/")[-1],
+            base_url=base_url or "",
+            billing_mode="official_docs_snapshot",
+        )
     if provider_name in {"custom", "local"} or (base and "localhost" in base):
-        return BillingRoute(provider=provider_name or "custom", model=model, base_url=base_url or "", billing_mode="unknown")
-    return BillingRoute(provider=provider_name or "unknown", model=model.split("/")[-1] if model else "", base_url=base_url or "", billing_mode="unknown")
+        return BillingRoute(
+            provider=provider_name or "custom",
+            model=model,
+            base_url=base_url or "",
+            billing_mode="unknown",
+        )
+    return BillingRoute(
+        provider=provider_name or "unknown",
+        model=model.split("/")[-1] if model else "",
+        base_url=base_url or "",
+        billing_mode="unknown",
+    )
 
 
 def _normalize_anthropic_model_name(model: str) -> str:
@@ -591,7 +628,7 @@ def _normalize_anthropic_model_name(model: str) -> str:
     """
     name = model.lower().strip()
     if name.startswith("anthropic/"):
-        name = name[len("anthropic/"):]
+        name = name[len("anthropic/") :]
     # Normalize dots to dashes in version numbers (e.g. 4.7 → 4-7, 4.6 → 4-6)
     # But preserve the rest of the name structure
     name = re.sub(r"(\d+)\.(\d+)", r"\1-\2", name)
@@ -723,13 +760,19 @@ def normalize_usage(
     if mode == "anthropic_messages" or provider_name == "anthropic":
         input_tokens = _to_int(getattr(response_usage, "input_tokens", 0))
         output_tokens = _to_int(getattr(response_usage, "output_tokens", 0))
-        cache_read_tokens = _to_int(getattr(response_usage, "cache_read_input_tokens", 0))
-        cache_write_tokens = _to_int(getattr(response_usage, "cache_creation_input_tokens", 0))
+        cache_read_tokens = _to_int(
+            getattr(response_usage, "cache_read_input_tokens", 0)
+        )
+        cache_write_tokens = _to_int(
+            getattr(response_usage, "cache_creation_input_tokens", 0)
+        )
     elif mode == "codex_responses":
         input_total = _to_int(getattr(response_usage, "input_tokens", 0))
         output_tokens = _to_int(getattr(response_usage, "output_tokens", 0))
         details = getattr(response_usage, "input_tokens_details", None)
-        cache_read_tokens = _to_int(getattr(details, "cached_tokens", 0) if details else 0)
+        cache_read_tokens = _to_int(
+            getattr(details, "cached_tokens", 0) if details else 0
+        )
         cache_write_tokens = _to_int(
             getattr(details, "cache_creation_tokens", 0) if details else 0
         )
@@ -744,9 +787,13 @@ def normalize_usage(
         # fallback, cache writes are undercounted as 0 and cache reads can be
         # missed when the proxy only surfaces them at the top level.
         # Port of cline/cline#10266.
-        cache_read_tokens = _to_int(getattr(details, "cached_tokens", 0) if details else 0)
+        cache_read_tokens = _to_int(
+            getattr(details, "cached_tokens", 0) if details else 0
+        )
         if not cache_read_tokens:
-            cache_read_tokens = _to_int(getattr(response_usage, "cache_read_input_tokens", 0))
+            cache_read_tokens = _to_int(
+                getattr(response_usage, "cache_read_input_tokens", 0)
+            )
         cache_write_tokens = _to_int(
             getattr(details, "cache_write_tokens", 0) if details else 0
         )
@@ -788,7 +835,9 @@ def estimate_usage_cost(
             pricing_version="included-route",
         )
 
-    entry = get_pricing_entry(model_name, provider=provider, base_url=base_url, api_key=api_key)
+    entry = get_pricing_entry(
+        model_name, provider=provider, base_url=base_url, api_key=api_key
+    )
     if not entry:
         return CostResult(amount_usd=None, status="unknown", source="none", label="n/a")
 
@@ -796,9 +845,13 @@ def estimate_usage_cost(
     amount = _ZERO
 
     if usage.input_tokens and entry.input_cost_per_million is None:
-        return CostResult(amount_usd=None, status="unknown", source=entry.source, label="n/a")
+        return CostResult(
+            amount_usd=None, status="unknown", source=entry.source, label="n/a"
+        )
     if usage.output_tokens and entry.output_cost_per_million is None:
-        return CostResult(amount_usd=None, status="unknown", source=entry.source, label="n/a")
+        return CostResult(
+            amount_usd=None, status="unknown", source=entry.source, label="n/a"
+        )
     if usage.cache_read_tokens:
         if entry.cache_read_cost_per_million is None:
             return CostResult(
@@ -819,13 +872,25 @@ def estimate_usage_cost(
             )
 
     if entry.input_cost_per_million is not None:
-        amount += Decimal(usage.input_tokens) * entry.input_cost_per_million / _ONE_MILLION
+        amount += (
+            Decimal(usage.input_tokens) * entry.input_cost_per_million / _ONE_MILLION
+        )
     if entry.output_cost_per_million is not None:
-        amount += Decimal(usage.output_tokens) * entry.output_cost_per_million / _ONE_MILLION
+        amount += (
+            Decimal(usage.output_tokens) * entry.output_cost_per_million / _ONE_MILLION
+        )
     if entry.cache_read_cost_per_million is not None:
-        amount += Decimal(usage.cache_read_tokens) * entry.cache_read_cost_per_million / _ONE_MILLION
+        amount += (
+            Decimal(usage.cache_read_tokens)
+            * entry.cache_read_cost_per_million
+            / _ONE_MILLION
+        )
     if entry.cache_write_cost_per_million is not None:
-        amount += Decimal(usage.cache_write_tokens) * entry.cache_write_cost_per_million / _ONE_MILLION
+        amount += (
+            Decimal(usage.cache_write_tokens)
+            * entry.cache_write_cost_per_million
+            / _ONE_MILLION
+        )
     if entry.request_cost is not None and usage.request_count:
         amount += Decimal(usage.request_count) * entry.request_cost
 
@@ -836,7 +901,9 @@ def estimate_usage_cost(
         label = "included"
 
     if route.provider == "openrouter":
-        notes.append("OpenRouter cost is estimated from the models API until reconciled.")
+        notes.append(
+            "OpenRouter cost is estimated from the models API until reconciled."
+        )
 
     return CostResult(
         amount_usd=amount,
@@ -863,9 +930,10 @@ def has_known_pricing(
     route = resolve_billing_route(model_name, provider=provider, base_url=base_url)
     if route.billing_mode == "subscription_included":
         return True
-    entry = get_pricing_entry(model_name, provider=provider, base_url=base_url, api_key=api_key)
+    entry = get_pricing_entry(
+        model_name, provider=provider, base_url=base_url, api_key=api_key
+    )
     return entry is not None
-
 
 
 def format_duration_compact(seconds: float) -> str:

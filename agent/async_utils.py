@@ -20,6 +20,7 @@ The helper deliberately does NOT also handle ``future.result()`` failures —
 that is a separate concern.  Once the loop has accepted the coroutine, its
 lifecycle belongs to the loop, not the scheduling thread.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -58,6 +58,7 @@ def _stub_child_builder(monkeypatch):
     """Replace _build_child_agent with a MagicMock factory so delegate_task
     never transitively imports run_agent / openai.  Keeps the test runnable
     in environments without heavyweight runtime deps installed."""
+
     def _fake_build_child(task_index, **kwargs):
         child = MagicMock()
         child._delegate_saved_tool_names = []
@@ -65,7 +66,8 @@ def _stub_child_builder(monkeypatch):
         return child
 
     monkeypatch.setattr(
-        "tools.delegate_tool._build_child_agent", _fake_build_child,
+        "tools.delegate_tool._build_child_agent",
+        _fake_build_child,
     )
 
 
@@ -112,8 +114,11 @@ class TestSingleTask:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": None,
             }
             delegate_task(goal="go", parent_agent=_make_parent())
@@ -125,8 +130,11 @@ class TestSingleTask:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": None,
             }
             delegate_task(
@@ -146,19 +154,36 @@ class TestBatchMode:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
-                {"task_index": 0, "status": "completed",
-                 "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
-                 "_child_role": "role-a"},
-                {"task_index": 1, "status": "completed",
-                 "summary": "B", "api_calls": 2, "duration_seconds": 2.0,
-                 "_child_role": "role-b"},
-                {"task_index": 2, "status": "completed",
-                 "summary": "C", "api_calls": 3, "duration_seconds": 3.0,
-                 "_child_role": "role-c"},
+                {
+                    "task_index": 0,
+                    "status": "completed",
+                    "summary": "A",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": "role-a",
+                },
+                {
+                    "task_index": 1,
+                    "status": "completed",
+                    "summary": "B",
+                    "api_calls": 2,
+                    "duration_seconds": 2.0,
+                    "_child_role": "role-b",
+                },
+                {
+                    "task_index": 2,
+                    "status": "completed",
+                    "summary": "C",
+                    "api_calls": 3,
+                    "duration_seconds": 3.0,
+                    "_child_role": "role-c",
+                },
             ]
             delegate_task(
                 tasks=[
-                    {"goal": "A"}, {"goal": "B"}, {"goal": "C"},
+                    {"goal": "A"},
+                    {"goal": "B"},
+                    {"goal": "C"},
                 ],
                 parent_agent=_make_parent(),
             )
@@ -173,12 +198,22 @@ class TestBatchMode:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
-                {"task_index": 0, "status": "completed",
-                 "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
-                 "_child_role": None},
-                {"task_index": 1, "status": "completed",
-                 "summary": "B", "api_calls": 2, "duration_seconds": 2.0,
-                 "_child_role": None},
+                {
+                    "task_index": 0,
+                    "status": "completed",
+                    "summary": "A",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": None,
+                },
+                {
+                    "task_index": 1,
+                    "status": "completed",
+                    "summary": "B",
+                    "api_calls": 2,
+                    "duration_seconds": 2.0,
+                    "_child_role": None,
+                },
             ]
             delegate_task(
                 tasks=[{"goal": "A"}, {"goal": "B"}],
@@ -198,8 +233,11 @@ class TestPayloadShape:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 # Deliberately omit _child_role — pre-M3 shape.
             }
             delegate_task(goal="do X", parent_agent=_make_parent())
@@ -213,8 +251,11 @@ class TestPayloadShape:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": "leaf",
             }
             raw = delegate_task(goal="do X", parent_agent=_make_parent())

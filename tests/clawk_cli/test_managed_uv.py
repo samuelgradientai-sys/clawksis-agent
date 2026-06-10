@@ -1,9 +1,6 @@
 """Tests for clawk_cli.managed_uv — one path, no guessing."""
 
-
-
 from __future__ import annotations
-
 
 
 import os
@@ -15,11 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -29,9 +22,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-
 def _make_executable(path: Path) -> None:
-
     """Create a minimal fake uv binary at *path*."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,9 +32,6 @@ def _make_executable(path: Path) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # managed_uv_path
@@ -51,31 +39,26 @@ def _make_executable(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-
 class TestManagedUvPath:
-
     def test_posix(self, tmp_path):
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv.platform.system", return_value="Linux"):
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch("clawk_cli.managed_uv.platform.system", return_value="Linux"),
+        ):
             from clawk_cli.managed_uv import managed_uv_path
 
             assert managed_uv_path() == tmp_path / "bin" / "uv"
 
-
-
     def test_windows(self, tmp_path):
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv.platform.system", return_value="Windows"):
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch("clawk_cli.managed_uv.platform.system", return_value="Windows"),
+        ):
             from clawk_cli.managed_uv import managed_uv_path
 
             assert managed_uv_path() == tmp_path / "bin" / "uv.exe"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -85,32 +68,24 @@ class TestManagedUvPath:
 # ---------------------------------------------------------------------------
 
 
-
 class TestResolveUv:
-
     def test_missing_returns_none(self, tmp_path):
 
         with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path):
-
             from clawk_cli.managed_uv import resolve_uv
 
             assert resolve_uv() is None
-
-
 
     def test_existing_executable(self, tmp_path):
 
         _make_executable(tmp_path / "bin" / "uv")
 
         with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path):
-
             from clawk_cli.managed_uv import resolve_uv
 
             result = resolve_uv()
 
             assert result == str(tmp_path / "bin" / "uv")
-
-
 
     def test_non_executable_file_returns_none(self, tmp_path):
 
@@ -125,13 +100,9 @@ class TestResolveUv:
         uv.chmod(0o644)
 
         with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path):
-
             from clawk_cli.managed_uv import resolve_uv
 
             assert resolve_uv() is None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -141,15 +112,12 @@ class TestResolveUv:
 # ---------------------------------------------------------------------------
 
 
-
 class TestEnsureUv:
-
     def test_already_installed_no_bootstrap(self, tmp_path):
 
         _make_executable(tmp_path / "bin" / "uv")
 
         with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path):
-
             from clawk_cli.managed_uv import ensure_uv
 
             path, fresh = ensure_uv()
@@ -158,13 +126,12 @@ class TestEnsureUv:
 
             assert fresh is False
 
-
-
     def test_installs_if_missing_sets_bootstrap_flag(self, tmp_path):
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv._install_uv") as mock_install:
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch("clawk_cli.managed_uv._install_uv") as mock_install,
+        ):
             # Simulate the installer creating the binary
 
             def fake_install(target):
@@ -172,8 +139,6 @@ class TestEnsureUv:
                 _make_executable(target)
 
             mock_install.side_effect = fake_install
-
-
 
             from clawk_cli.managed_uv import ensure_uv
 
@@ -185,13 +150,15 @@ class TestEnsureUv:
 
             mock_install.assert_called_once()
 
-
-
     def test_install_failure_returns_none_false(self, tmp_path):
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv._install_uv", side_effect=RuntimeError("network down")):
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch(
+                "clawk_cli.managed_uv._install_uv",
+                side_effect=RuntimeError("network down"),
+            ),
+        ):
             from clawk_cli.managed_uv import ensure_uv
 
             path, fresh = ensure_uv()
@@ -201,9 +168,6 @@ class TestEnsureUv:
             assert fresh is False
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # rebuild_venv
@@ -211,11 +175,8 @@ class TestEnsureUv:
 # ---------------------------------------------------------------------------
 
 
-
 class TestRebuildVenv:
-
     def test_moves_old_venv_aside_and_creates_new(self, tmp_path):
-
         """The old venv is moved aside to <venv>.old (never rmtree'd in place),
 
         uv is invoked with --clear, the moved-aside backup is removed on
@@ -228,13 +189,9 @@ class TestRebuildVenv:
 
         (venv_dir / "old_file").write_text("stale")
 
-
-
         uv_bin = str(tmp_path / "bin" / "uv")
 
         call_log: list[list[str]] = []
-
-
 
         def fake_run(cmd, **kwargs):
 
@@ -243,7 +200,6 @@ class TestRebuildVenv:
             m = MagicMock(returncode=0, stderr="", stdout="")
 
             if len(cmd) >= 2 and cmd[1] == "venv":
-
                 # Simulate uv creating the venv dir with a python interpreter
 
                 bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
@@ -255,20 +211,14 @@ class TestRebuildVenv:
                 (bin_dir / python_name).write_text("#!/bin/sh\necho Python 3.11.0")
 
             elif "--version" in cmd:
-
                 m.stdout = "Python 3.11.0"
 
             return m
 
-
-
         with patch("clawk_cli.managed_uv.subprocess.run", side_effect=fake_run):
-
             from clawk_cli.managed_uv import rebuild_venv
 
             result = rebuild_venv(uv_bin, venv_dir)
-
-
 
         assert result is True
 
@@ -284,10 +234,7 @@ class TestRebuildVenv:
 
         assert not (tmp_path / "venv.old").exists()
 
-
-
     def test_aborts_without_deleting_when_venv_in_use(self, tmp_path):
-
         """If os.replace fails (Windows file lock — venv in use), we must abort
 
         cleanly WITHOUT deleting the venv and WITHOUT invoking uv."""
@@ -296,13 +243,11 @@ class TestRebuildVenv:
 
         venv_dir.mkdir()
 
-        (venv_dir / "locked") .write_text("held open")
+        (venv_dir / "locked").write_text("held open")
 
         uv_bin = str(tmp_path / "bin" / "uv")
 
         call_log: list[list[str]] = []
-
-
 
         def fake_run(cmd, **kwargs):
 
@@ -310,16 +255,13 @@ class TestRebuildVenv:
 
             return MagicMock(returncode=0, stderr="", stdout="")
 
-
-
-        with patch("clawk_cli.managed_uv.subprocess.run", side_effect=fake_run), \
-             patch("clawk_cli.managed_uv.os.replace", side_effect=OSError("in use")):
-
+        with (
+            patch("clawk_cli.managed_uv.subprocess.run", side_effect=fake_run),
+            patch("clawk_cli.managed_uv.os.replace", side_effect=OSError("in use")),
+        ):
             from clawk_cli.managed_uv import rebuild_venv
 
             result = rebuild_venv(uv_bin, venv_dir)
-
-
 
         assert result is False
 
@@ -329,10 +271,7 @@ class TestRebuildVenv:
 
         assert [c for c in call_log if len(c) >= 2 and c[1] == "venv"] == []
 
-
-
     def test_restores_backup_when_rebuild_fails(self, tmp_path):
-
         """If uv venv exits non-zero, the moved-aside venv is restored so we
 
         never leave Clawksis with no venv at all."""
@@ -345,21 +284,14 @@ class TestRebuildVenv:
 
         uv_bin = str(tmp_path / "bin" / "uv")
 
-
-
         def fake_run(cmd, **kwargs):
 
             return MagicMock(returncode=1, stderr="boom", stdout="")
 
-
-
         with patch("clawk_cli.managed_uv.subprocess.run", side_effect=fake_run):
-
             from clawk_cli.managed_uv import rebuild_venv
 
             result = rebuild_venv(uv_bin, venv_dir)
-
-
 
         assert result is False
 
@@ -369,18 +301,13 @@ class TestRebuildVenv:
 
         assert not (tmp_path / "venv.old").exists()
 
-
-
     def test_rebuild_failure_returns_false(self, tmp_path):
 
         venv_dir = tmp_path / "venv"
 
         uv_bin = str(tmp_path / "bin" / "uv")
 
-
-
         with patch("clawk_cli.managed_uv.subprocess.run") as mock_run:
-
             mock_run.return_value = MagicMock(returncode=1, stderr="nope")
 
             from clawk_cli.managed_uv import rebuild_venv
@@ -389,10 +316,7 @@ class TestRebuildVenv:
 
             assert result is False
 
-
-
     def test_rebuild_success_without_python_returns_false(self, tmp_path):
-
         """uv can exit 0 yet leave no interpreter; that must not count as success
 
         (guard adapted from #38511)."""
@@ -401,10 +325,7 @@ class TestRebuildVenv:
 
         uv_bin = str(tmp_path / "bin" / "uv")
 
-
-
         with patch("clawk_cli.managed_uv.subprocess.run") as mock_run:
-
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
             from clawk_cli.managed_uv import rebuild_venv
@@ -418,9 +339,6 @@ class TestRebuildVenv:
             assert mock_run.call_count == 1
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # update_managed_uv
@@ -428,26 +346,22 @@ class TestRebuildVenv:
 # ---------------------------------------------------------------------------
 
 
-
 class TestUpdateManagedUv:
-
     def test_no_uv_returns_none(self, tmp_path):
 
         with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path):
-
             from clawk_cli.managed_uv import update_managed_uv
 
             assert update_managed_uv() is None
-
-
 
     def test_self_update_success(self, tmp_path):
 
         _make_executable(tmp_path / "bin" / "uv")
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv.subprocess.run") as mock_run:
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch("clawk_cli.managed_uv.subprocess.run") as mock_run,
+        ):
             # uv self update succeeds
 
             mock_run.return_value = MagicMock(returncode=0, stdout="uv 0.2.0")
@@ -462,17 +376,20 @@ class TestUpdateManagedUv:
 
             assert mock_run.call_count == 2
 
-            assert mock_run.call_args_list[0][0][0] == [str(tmp_path / "bin" / "uv"), "self", "update"]
-
-
+            assert mock_run.call_args_list[0][0][0] == [
+                str(tmp_path / "bin" / "uv"),
+                "self",
+                "update",
+            ]
 
     def test_self_update_failure_non_fatal(self, tmp_path):
 
         _make_executable(tmp_path / "bin" / "uv")
 
-        with patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path), \
-             patch("clawk_cli.managed_uv.subprocess.run") as mock_run:
-
+        with (
+            patch("clawk_cli.managed_uv.get_clawk_home", return_value=tmp_path),
+            patch("clawk_cli.managed_uv.subprocess.run") as mock_run,
+        ):
             mock_run.return_value = MagicMock(returncode=1, stderr="nope")
 
             from clawk_cli.managed_uv import update_managed_uv
@@ -484,9 +401,6 @@ class TestUpdateManagedUv:
             assert result == str(tmp_path / "bin" / "uv")
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _install_uv internals
@@ -494,15 +408,12 @@ class TestUpdateManagedUv:
 # ---------------------------------------------------------------------------
 
 
-
 class TestInstallUvInternals:
-
     def test_posix_sets_uv_unmanaged_install(self, tmp_path):
 
         target = tmp_path / "bin" / "uv"
 
         with patch("clawk_cli.managed_uv._install_uv_posix") as mock_posix:
-
             from clawk_cli.managed_uv import _install_uv
 
             _install_uv(target)
@@ -513,15 +424,14 @@ class TestInstallUvInternals:
 
             assert call_env["UV_UNMANAGED_INSTALL"] == str(tmp_path / "bin")
 
-
-
     def test_windows_sets_uv_install_dir(self, tmp_path):
 
         target = tmp_path / "bin" / "uv.exe"
 
-        with patch("clawk_cli.managed_uv.platform.system", return_value="Windows"), \
-             patch("clawk_cli.managed_uv._install_uv_windows") as mock_windows:
-
+        with (
+            patch("clawk_cli.managed_uv.platform.system", return_value="Windows"),
+            patch("clawk_cli.managed_uv._install_uv_windows") as mock_windows,
+        ):
             from clawk_cli.managed_uv import _install_uv
 
             _install_uv(target)
@@ -531,4 +441,3 @@ class TestInstallUvInternals:
             call_env = mock_windows.call_args[0][0]
 
             assert call_env["UV_INSTALL_DIR"] == str(tmp_path / "bin")
-

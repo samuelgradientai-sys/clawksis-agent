@@ -22,7 +22,10 @@ class TestPostRegistration:
     def test_post_registration_returns_parsed_json(self, mock_urlopen_fn):
         from gateway.platforms.feishu import _post_registration
 
-        mock_urlopen_fn.return_value = _mock_urlopen({"nonce": "abc", "supported_auth_methods": ["client_secret"]})
+        mock_urlopen_fn.return_value = _mock_urlopen({
+            "nonce": "abc",
+            "supported_auth_methods": ["client_secret"],
+        })
         result = _post_registration("https://accounts.feishu.cn", {"action": "init"})
         assert result["nonce"] == "abc"
         assert "client_secret" in result["supported_auth_methods"]
@@ -32,7 +35,9 @@ class TestPostRegistration:
         from gateway.platforms.feishu import _post_registration
 
         mock_urlopen_fn.return_value = _mock_urlopen({})
-        _post_registration("https://accounts.feishu.cn", {"action": "init", "key": "val"})
+        _post_registration(
+            "https://accounts.feishu.cn", {"action": "init", "key": "val"}
+        )
         call_args = mock_urlopen_fn.call_args
         request = call_args[0][0]
         body = request.data.decode("utf-8")
@@ -146,7 +151,9 @@ class TestPollRegistration:
 
     @patch("gateway.platforms.feishu.time")
     @patch("gateway.platforms.feishu.urlopen")
-    def test_poll_switches_domain_on_lark_tenant_brand(self, mock_urlopen_fn, mock_time):
+    def test_poll_switches_domain_on_lark_tenant_brand(
+        self, mock_urlopen_fn, mock_time
+    ):
         from gateway.platforms.feishu import _poll_registration
 
         mock_time.monotonic.side_effect = [0, 1, 2]
@@ -171,7 +178,9 @@ class TestPollRegistration:
 
     @patch("gateway.platforms.feishu.time")
     @patch("gateway.platforms.feishu.urlopen")
-    def test_poll_success_with_lark_brand_in_same_response(self, mock_urlopen_fn, mock_time):
+    def test_poll_success_with_lark_brand_in_same_response(
+        self, mock_urlopen_fn, mock_time
+    ):
         """Credentials and lark tenant_brand in one response must not be discarded."""
         from gateway.platforms.feishu import _poll_registration
 
@@ -296,7 +305,10 @@ class TestProbeBot:
         from gateway.platforms.feishu import probe_bot
 
         token_resp = _mock_urlopen({"code": 0, "tenant_access_token": "t-123"})
-        bot_resp = _mock_urlopen({"code": 0, "bot": {"bot_name": "HttpBot", "open_id": "ou_http"}})
+        bot_resp = _mock_urlopen({
+            "code": 0,
+            "bot": {"bot_name": "HttpBot", "open_id": "ou_http"},
+        })
         mock_urlopen_fn.side_effect = [token_resp, bot_resp]
 
         result = probe_bot("cli_app", "secret", "feishu")
@@ -420,7 +432,9 @@ class TestQrRegister:
         """Server returns begin response without device_code → RuntimeError → None."""
         from gateway.platforms.feishu import qr_register
 
-        mock_begin.side_effect = RuntimeError("Feishu registration did not return a device_code")
+        mock_begin.side_effect = RuntimeError(
+            "Feishu registration did not return a device_code"
+        )
         result = qr_register()
         assert result is None
 

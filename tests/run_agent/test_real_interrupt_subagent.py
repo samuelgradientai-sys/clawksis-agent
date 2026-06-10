@@ -15,6 +15,7 @@ from tools.interrupt import set_interrupt
 
 def _make_slow_api_response(delay=5.0):
     """Create a mock that simulates a slow API response (like a real LLM call)."""
+
     def slow_create(**kwargs):
         # Simulate a slow API call
         time.sleep(delay)
@@ -32,6 +33,7 @@ def _make_slow_api_response(delay=5.0):
         resp.usage.total_tokens = 110
         resp.usage.prompt_tokens_details = None
         return resp
+
     return slow_create
 
 
@@ -87,15 +89,21 @@ class TestRealSubagentInterrupt(unittest.TestCase):
         def run_delegate():
             try:
                 # Patch the OpenAI client creation inside AIAgent.__init__
-                with patch('run_agent.OpenAI') as MockOpenAI:
+                with patch("run_agent.OpenAI") as MockOpenAI:
                     mock_client = MagicMock()
                     # API call takes 5 seconds — should be interrupted before that
-                    mock_client.chat.completions.create = _make_slow_api_response(delay=5.0)
+                    mock_client.chat.completions.create = _make_slow_api_response(
+                        delay=5.0
+                    )
                     mock_client.close = MagicMock()
                     MockOpenAI.return_value = mock_client
 
                     # Patch the instance method so it skips prompt assembly
-                    with patch.object(AIAgent, '_build_system_prompt', return_value="You are a test agent"):
+                    with patch.object(
+                        AIAgent,
+                        "_build_system_prompt",
+                        return_value="You are a test agent",
+                    ):
                         # Signal when child starts
                         original_run = AIAgent.run_conversation
 
@@ -103,7 +111,7 @@ class TestRealSubagentInterrupt(unittest.TestCase):
                             child_started.set()
                             return original_run(self_agent, *args, **kwargs)
 
-                        with patch.object(AIAgent, 'run_conversation', patched_run):
+                        with patch.object(AIAgent, "run_conversation", patched_run):
                             # Build a real child agent (AIAgent is NOT patched here,
                             # only run_conversation and _build_system_prompt are)
                             child = AIAgent(
@@ -130,6 +138,7 @@ class TestRealSubagentInterrupt(unittest.TestCase):
                             result_holder[0] = result
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 error_holder[0] = e
 
@@ -149,8 +158,9 @@ class TestRealSubagentInterrupt(unittest.TestCase):
 
         # Verify child is registered
         print(f"Active children: {len(parent._active_children)}")
-        self.assertGreaterEqual(len(parent._active_children), 1,
-                                "Child not registered in _active_children")
+        self.assertGreaterEqual(
+            len(parent._active_children), 1, "Child not registered in _active_children"
+        )
 
         # Interrupt! (simulating what CLI does)
         start = time.monotonic()
@@ -159,9 +169,12 @@ class TestRealSubagentInterrupt(unittest.TestCase):
         # Check propagation
         child = parent._active_children[0] if parent._active_children else None
         if child:
-            print(f"Child._interrupt_requested after parent.interrupt(): {child._interrupt_requested}")
-            self.assertTrue(child._interrupt_requested,
-                           "Interrupt did not propagate to child!")
+            print(
+                f"Child._interrupt_requested after parent.interrupt(): {child._interrupt_requested}"
+            )
+            self.assertTrue(
+                child._interrupt_requested, "Interrupt did not propagate to child!"
+            )
 
         # Wait for delegate to finish (should be fast since interrupted)
         agent_thread.join(timeout=5)
@@ -176,10 +189,16 @@ class TestRealSubagentInterrupt(unittest.TestCase):
         print(f"Full result: {result}")
 
         # The child should have been interrupted, not completed the full 5s API call
-        self.assertLess(elapsed, 3.0,
-                       f"Took {elapsed:.2f}s — interrupt was not detected quickly enough")
-        self.assertEqual(result["status"], "interrupted",
-                        f"Expected 'interrupted', got '{result['status']}'")
+        self.assertLess(
+            elapsed,
+            3.0,
+            f"Took {elapsed:.2f}s — interrupt was not detected quickly enough",
+        )
+        self.assertEqual(
+            result["status"],
+            "interrupted",
+            f"Expected 'interrupted', got '{result['status']}'",
+        )
 
 
 if __name__ == "__main__":

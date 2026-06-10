@@ -30,7 +30,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
-
 def _make_init_result(*, resources: bool, prompts: bool):
     """Build a fake ``InitializeResult`` whose ``capabilities`` sub-object
     matches a server that advertises exactly the given capability set.
@@ -111,7 +110,10 @@ class TestCapabilityGatedRegistration:
         )
         selected = _select_utility_schemas("full", server, {})
         assert _handler_keys(selected) == {
-            "list_resources", "read_resource", "list_prompts", "get_prompt",
+            "list_resources",
+            "read_resource",
+            "list_prompts",
+            "get_prompt",
         }
 
 
@@ -159,7 +161,10 @@ class TestLegacyFallback:
         # so all four stubs should register (old behavior).
         selected = _select_utility_schemas("legacy", server, {})
         assert _handler_keys(selected) == {
-            "list_resources", "read_resource", "list_prompts", "get_prompt",
+            "list_resources",
+            "read_resource",
+            "list_prompts",
+            "get_prompt",
         }
 
     def test_no_initialize_result_respects_session_spec(self):

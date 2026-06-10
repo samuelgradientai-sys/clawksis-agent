@@ -224,8 +224,6 @@ Activate with ``/skin <name>`` in the CLI or ``display.skin: <name>`` in config.
 
 """
 
-
-
 import logging
 
 from dataclasses import dataclass, field
@@ -235,15 +233,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-
 from clawk_constants import get_clawk_home
 
 
-
 logger = logging.getLogger(__name__)
-
-
-
 
 
 # =============================================================================
@@ -253,11 +246,8 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-
 @dataclass
-
 class SkinConfig:
-
     """Complete skin configuration."""
 
     name: str
@@ -272,24 +262,20 @@ class SkinConfig:
 
     tool_prefix: str = "┊"
 
-    tool_emojis: Dict[str, str] = field(default_factory=dict)  # per-tool emoji overrides
+    tool_emojis: Dict[str, str] = field(
+        default_factory=dict
+    )  # per-tool emoji overrides
 
-    banner_logo: str = ""    # Rich-markup ASCII art logo (replaces CLAWK_AGENT_LOGO)
+    banner_logo: str = ""  # Rich-markup ASCII art logo (replaces CLAWK_AGENT_LOGO)
 
-    banner_hero: str = ""    # Rich-markup hero art (replaces CLAWK_CADUCEUS)
-
-
+    banner_hero: str = ""  # Rich-markup hero art (replaces CLAWK_CADUCEUS)
 
     def get_color(self, key: str, fallback: str = "") -> str:
-
         """Get a color value with fallback."""
 
         return self.colors.get(key, fallback)
 
-
-
     def get_spinner_wings(self) -> List[Tuple[str, str]]:
-
         """Get spinner wing pairs, or empty list if none."""
 
         raw = self.spinner.get("wings", [])
@@ -297,23 +283,15 @@ class SkinConfig:
         result = []
 
         for pair in raw:
-
             if isinstance(pair, (list, tuple)) and len(pair) == 2:
-
                 result.append((str(pair[0]), str(pair[1])))
 
         return result
 
-
-
     def get_branding(self, key: str, fallback: str = "") -> str:
-
         """Get a branding value with fallback."""
 
         return self.branding.get(key, fallback)
-
-
-
 
 
 # =============================================================================
@@ -323,179 +301,98 @@ class SkinConfig:
 # =============================================================================
 
 
-
 _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
-
     "default": {
-
         "name": "default",
-
         "description": "Clawksis — vinotinto (Gradient AI)",
-
         "colors": {
-
-            "banner_border": "#800000",
-
-            "banner_title": "#C01010",
-
-            "banner_accent": "#A80000",
-
-            "banner_dim": "#6B0000",
-
-            "banner_text": "#FFE0E0",
-
-            "ui_accent": "#A80000",
-
-            "ui_label": "#8B0000",
-
+            "banner_border": "#4A3496",
+            "banner_title": "#8D70F0",
+            "banner_accent": "#6C4FD6",
+            "banner_dim": "#4A3496",
+            "banner_text": "#E8E0FF",
+            "ui_accent": "#6C4FD6",
+            "ui_label": "#6C4FD6",
             "ui_ok": "#4caf50",
-
             "ui_error": "#ef5350",
-
             "ui_warn": "#ffa726",
-
-            "prompt": "#FFE0E0",
-
-            "input_rule": "#800000",
-
-            "response_border": "#C01010",
-
-            "status_bar_bg": "#1a0000",
-
-            "session_label": "#8B0000",
-
+            "prompt": "#E8E0FF",
+            "input_rule": "#4A3496",
+            "response_border": "#8D70F0",
+            "status_bar_bg": "#160826",
+            "session_label": "#6C4FD6",
             "session_border": "#8B8682",
-
         },
-
         "spinner": {
-
             # Empty = use hardcoded defaults in display.py
-
         },
-
         "branding": {
-
             "agent_name": "Clawksis",
-
             "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
-
             "goodbye": "Goodbye! ∇",
-
             "response_label": " ∇ Clawksis ",
-
             "prompt_symbol": "❯",
-
             "help_header": "(^_^)? Available Commands",
-
         },
-
         "tool_prefix": "┊",
-
     },
-
     "ares": {
-
         "name": "ares",
-
         "description": "War-god theme — crimson and bronze",
-
         "colors": {
-
             "banner_border": "#9F1C1C",
-
             "banner_title": "#C7A96B",
-
             "banner_accent": "#DD4A3A",
-
             "banner_dim": "#6B1717",
-
             "banner_text": "#F1E6CF",
-
             "ui_accent": "#DD4A3A",
-
             "ui_label": "#C7A96B",
-
             "ui_ok": "#4caf50",
-
             "ui_error": "#ef5350",
-
             "ui_warn": "#ffa726",
-
             "prompt": "#F1E6CF",
-
             "input_rule": "#9F1C1C",
-
             "response_border": "#C7A96B",
-
             "status_bar_bg": "#2A1212",
-
             "status_bar_text": "#F1E6CF",
-
             "status_bar_strong": "#C7A96B",
-
             "status_bar_dim": "#6E584B",
-
             "status_bar_good": "#7BC96F",
-
             "status_bar_warn": "#C7A96B",
-
             "status_bar_bad": "#DD4A3A",
-
             "status_bar_critical": "#EF5350",
-
             "session_label": "#C7A96B",
-
             "session_border": "#6E584B",
-
         },
-
         "spinner": {
-
             "waiting_faces": ["(⚔)", "(⛨)", "(▲)", "(<>)", "(/)"],
-
             "thinking_faces": ["(⚔)", "(⛨)", "(▲)", "(⌁)", "(<>)"],
-
             "thinking_verbs": [
-
-                "forging", "marching", "sizing the field", "holding the line",
-
-                "hammering plans", "tempering steel", "plotting impact", "raising the shield",
-
+                "forging",
+                "marching",
+                "sizing the field",
+                "holding the line",
+                "hammering plans",
+                "tempering steel",
+                "plotting impact",
+                "raising the shield",
             ],
-
             "wings": [
-
                 ["⟪⚔", "⚔⟫"],
-
                 ["⟪▲", "▲⟫"],
-
                 ["⟪╸", "╺⟫"],
-
                 ["⟪⛨", "⛨⟫"],
-
             ],
-
         },
-
         "branding": {
-
             "agent_name": "Ares Agent",
-
             "welcome": "Welcome to Ares Agent! Type your message or /help for commands.",
-
             "goodbye": "Farewell, warrior! ⚔",
-
             "response_label": " ⚔ Ares ",
-
             "prompt_symbol": "⚔",
-
             "help_header": "(⚔) Available Commands",
-
         },
-
         "tool_prefix": "╎",
-
         "banner_logo": """[bold #A3261F] █████╗ ██████╗ ███████╗███████╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗[/]
 
 [bold #B73122]██╔══██╗██╔══██╗██╔════╝██╔════╝      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/]
@@ -507,7 +404,6 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#E15A2D]██║  ██║██║  ██║███████╗███████║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║[/]
 
 [#EB6C32]╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝[/]""",
-
         "banner_hero": """[#9F1C1C]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣤⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [#9F1C1C]⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⠟⠻⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
@@ -535,417 +431,216 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#DD4A3A]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⚔⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [dim #6B1717]⠀⠀⠀⠀⠀⠀⠀⠀war god online⠀⠀⠀⠀⠀⠀⠀⠀[/]""",
-
     },
-
     "mono": {
-
         "name": "mono",
-
         "description": "Monochrome — clean grayscale",
-
         "colors": {
-
             "banner_border": "#555555",
-
             "banner_title": "#e6edf3",
-
             "banner_accent": "#aaaaaa",
-
             "banner_dim": "#444444",
-
             "banner_text": "#c9d1d9",
-
             "ui_accent": "#aaaaaa",
-
             "ui_label": "#888888",
-
             "ui_ok": "#888888",
-
             "ui_error": "#cccccc",
-
             "ui_warn": "#999999",
-
             "prompt": "#c9d1d9",
-
             "input_rule": "#444444",
-
             "response_border": "#aaaaaa",
-
             "status_bar_bg": "#1F1F1F",
-
             "status_bar_text": "#C9D1D9",
-
             "status_bar_strong": "#E6EDF3",
-
             "status_bar_dim": "#777777",
-
             "status_bar_good": "#B5B5B5",
-
             "status_bar_warn": "#AAAAAA",
-
             "status_bar_bad": "#D0D0D0",
-
             "status_bar_critical": "#F0F0F0",
-
             "session_label": "#888888",
-
             "session_border": "#555555",
-
         },
-
         "spinner": {},
-
         "branding": {
-
             "agent_name": "Clawksis",
-
             "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
-
             "goodbye": "Goodbye! ∇",
-
             "response_label": " ∇ Clawksis ",
-
             "prompt_symbol": "❯",
-
             "help_header": "[?] Available Commands",
-
         },
-
         "tool_prefix": "┊",
-
     },
-
     "slate": {
-
         "name": "slate",
-
         "description": "Cool blue — developer-focused",
-
         "colors": {
-
             "banner_border": "#4169e1",
-
             "banner_title": "#7eb8f6",
-
             "banner_accent": "#8EA8FF",
-
             "banner_dim": "#4b5563",
-
             "banner_text": "#c9d1d9",
-
             "ui_accent": "#7eb8f6",
-
             "ui_label": "#8EA8FF",
-
             "ui_ok": "#63D0A6",
-
             "ui_error": "#F7A072",
-
             "ui_warn": "#e6a855",
-
             "prompt": "#c9d1d9",
-
             "input_rule": "#4169e1",
-
             "response_border": "#7eb8f6",
-
             "status_bar_bg": "#151C2F",
-
             "status_bar_text": "#C9D1D9",
-
             "status_bar_strong": "#7EB8F6",
-
             "status_bar_dim": "#4B5563",
-
             "status_bar_good": "#63D0A6",
-
             "status_bar_warn": "#E6A855",
-
             "status_bar_bad": "#F7A072",
-
             "status_bar_critical": "#FF7A7A",
-
             "session_label": "#7eb8f6",
-
             "session_border": "#4b5563",
-
         },
-
         "spinner": {},
-
         "branding": {
-
             "agent_name": "Clawksis",
-
             "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
-
             "goodbye": "Goodbye! ∇",
-
             "response_label": " ∇ Clawksis ",
-
             "prompt_symbol": "❯",
-
             "help_header": "(^_^)? Available Commands",
-
         },
-
         "tool_prefix": "┊",
-
     },
-
     "daylight": {
-
         "name": "daylight",
-
         "description": "Light theme for bright terminals with dark text and cool blue accents",
-
         "colors": {
-
             "banner_border": "#2563EB",
-
             "banner_title": "#0F172A",
-
             "banner_accent": "#1D4ED8",
-
             "banner_dim": "#475569",
-
             "banner_text": "#111827",
-
             "ui_accent": "#2563EB",
-
             "ui_label": "#0F766E",
-
             "ui_ok": "#15803D",
-
             "ui_error": "#B91C1C",
-
             "ui_warn": "#B45309",
-
             "prompt": "#111827",
-
             "input_rule": "#93C5FD",
-
             "response_border": "#2563EB",
-
             "session_label": "#1D4ED8",
-
             "session_border": "#64748B",
-
             "status_bar_bg": "#E5EDF8",
-
             "voice_status_bg": "#E5EDF8",
-
             "completion_menu_bg": "#F8FAFC",
-
             "completion_menu_current_bg": "#DBEAFE",
-
             "completion_menu_meta_bg": "#EEF2FF",
-
             "completion_menu_meta_current_bg": "#BFDBFE",
-
         },
-
         "spinner": {},
-
         "branding": {
-
             "agent_name": "Clawksis",
-
             "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
-
             "goodbye": "Goodbye! ∇",
-
             "response_label": " ∇ Clawksis ",
-
             "prompt_symbol": "❯",
-
             "help_header": "[?] Available Commands",
-
         },
-
         "tool_prefix": "│",
-
     },
-
     "warm-lightmode": {
-
         "name": "warm-lightmode",
-
         "description": "Warm light mode — dark brown/gold text for light terminal backgrounds",
-
         "colors": {
-
             "banner_border": "#8B6914",
-
             "banner_title": "#5C3D11",
-
             "banner_accent": "#8B4513",
-
             "banner_dim": "#8B7355",
-
             "banner_text": "#2C1810",
-
             "ui_accent": "#8B4513",
-
             "ui_label": "#5C3D11",
-
             "ui_ok": "#2E7D32",
-
             "ui_error": "#C62828",
-
             "ui_warn": "#E65100",
-
             "prompt": "#2C1810",
-
             "input_rule": "#8B6914",
-
             "response_border": "#8B6914",
-
             "session_label": "#5C3D11",
-
             "session_border": "#A0845C",
-
             "status_bar_bg": "#F5F0E8",
-
             "voice_status_bg": "#F5F0E8",
-
             "completion_menu_bg": "#F5EFE0",
-
             "completion_menu_current_bg": "#E8DCC8",
-
             "completion_menu_meta_bg": "#F0E8D8",
-
             "completion_menu_meta_current_bg": "#DFCFB0",
-
         },
-
         "spinner": {},
-
         "branding": {
-
             "agent_name": "Clawksis",
-
             "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
-
             "goodbye": "Goodbye! \u2695",
-
             "response_label": " \u2695 Clawksis ",
-
             "prompt_symbol": "\u276f",
-
             "help_header": "(^_^)? Available Commands",
-
         },
-
         "tool_prefix": "\u250a",
-
     },
-
     "poseidon": {
-
         "name": "poseidon",
-
         "description": "Ocean-god theme — deep blue and seafoam",
-
         "colors": {
-
             "banner_border": "#2A6FB9",
-
             "banner_title": "#A9DFFF",
-
             "banner_accent": "#5DB8F5",
-
             "banner_dim": "#153C73",
-
             "banner_text": "#EAF7FF",
-
             "ui_accent": "#5DB8F5",
-
             "ui_label": "#A9DFFF",
-
             "ui_ok": "#4caf50",
-
             "ui_error": "#ef5350",
-
             "ui_warn": "#ffa726",
-
             "prompt": "#EAF7FF",
-
             "input_rule": "#2A6FB9",
-
             "response_border": "#5DB8F5",
-
             "status_bar_bg": "#0F2440",
-
             "status_bar_text": "#EAF7FF",
-
             "status_bar_strong": "#A9DFFF",
-
             "status_bar_dim": "#496884",
-
             "status_bar_good": "#6ED7B0",
-
             "status_bar_warn": "#5DB8F5",
-
             "status_bar_bad": "#2A6FB9",
-
             "status_bar_critical": "#D94F4F",
-
             "session_label": "#A9DFFF",
-
             "session_border": "#496884",
-
         },
-
         "spinner": {
-
             "waiting_faces": ["(≈)", "(Ψ)", "(∿)", "(◌)", "(◠)"],
-
             "thinking_faces": ["(Ψ)", "(∿)", "(≈)", "(⌁)", "(◌)"],
-
             "thinking_verbs": [
-
-                "charting currents", "sounding the depth", "reading foam lines",
-
-                "steering the trident", "tracking undertow", "plotting sea lanes",
-
-                "calling the swell", "measuring pressure",
-
+                "charting currents",
+                "sounding the depth",
+                "reading foam lines",
+                "steering the trident",
+                "tracking undertow",
+                "plotting sea lanes",
+                "calling the swell",
+                "measuring pressure",
             ],
-
             "wings": [
-
                 ["⟪≈", "≈⟫"],
-
                 ["⟪Ψ", "Ψ⟫"],
-
                 ["⟪∿", "∿⟫"],
-
                 ["⟪◌", "◌⟫"],
-
             ],
-
         },
-
         "branding": {
-
             "agent_name": "Poseidon Agent",
-
             "welcome": "Welcome to Poseidon Agent! Type your message or /help for commands.",
-
             "goodbye": "Fair winds! Ψ",
-
             "response_label": " Ψ Poseidon ",
-
             "prompt_symbol": "Ψ",
-
             "help_header": "(Ψ) Available Commands",
-
         },
-
         "tool_prefix": "│",
-
         "banner_logo": """[bold #B8E8FF]██████╗  ██████╗ ███████╗███████╗██╗██████╗  ██████╗ ███╗   ██╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗[/]
 
 [bold #97D6FF]██╔══██╗██╔═══██╗██╔════╝██╔════╝██║██╔══██╗██╔═══██╗████╗  ██║      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/]
@@ -957,7 +652,6 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#2E7CC7]██║     ╚██████╔╝███████║███████╗██║██████╔╝╚██████╔╝██║ ╚████║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║[/]
 
 [#1B4F95]╚═╝      ╚═════╝ ╚══════╝╚══════╝╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═══╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝[/]""",
-
         "banner_hero": """[#2A6FB9]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [#5DB8F5]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
@@ -983,113 +677,64 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#A9DFFF]⠀⠀⠀⠀⠀⠀≈≈≈≈≈≈≈≈≈≈≈≈≈⠀⠀⠀⠀⠀⠀[/]
 
 [dim #153C73]⠀⠀⠀⠀⠀⠀⠀deep waters hold⠀⠀⠀⠀⠀⠀⠀[/]""",
-
     },
-
     "sisyphus": {
-
         "name": "sisyphus",
-
         "description": "Sisyphean theme — austere grayscale with persistence",
-
         "colors": {
-
             "banner_border": "#B7B7B7",
-
             "banner_title": "#F5F5F5",
-
             "banner_accent": "#E7E7E7",
-
             "banner_dim": "#4A4A4A",
-
             "banner_text": "#D3D3D3",
-
             "ui_accent": "#E7E7E7",
-
             "ui_label": "#D3D3D3",
-
             "ui_ok": "#919191",
-
             "ui_error": "#E7E7E7",
-
             "ui_warn": "#B7B7B7",
-
             "prompt": "#F5F5F5",
-
             "input_rule": "#656565",
-
             "response_border": "#B7B7B7",
-
             "status_bar_bg": "#202020",
-
             "status_bar_text": "#D3D3D3",
-
             "status_bar_strong": "#F5F5F5",
-
             "status_bar_dim": "#656565",
-
             "status_bar_good": "#B7B7B7",
-
             "status_bar_warn": "#D3D3D3",
-
             "status_bar_bad": "#E7E7E7",
-
             "status_bar_critical": "#F5F5F5",
-
             "session_label": "#919191",
-
             "session_border": "#656565",
-
         },
-
         "spinner": {
-
             "waiting_faces": ["(◉)", "(◌)", "(◬)", "(⬤)", "(::)"],
-
             "thinking_faces": ["(◉)", "(◬)", "(◌)", "(○)", "(●)"],
-
             "thinking_verbs": [
-
-                "finding traction", "measuring the grade", "resetting the boulder",
-
-                "counting the ascent", "testing leverage", "setting the shoulder",
-
-                "pushing uphill", "enduring the loop",
-
+                "finding traction",
+                "measuring the grade",
+                "resetting the boulder",
+                "counting the ascent",
+                "testing leverage",
+                "setting the shoulder",
+                "pushing uphill",
+                "enduring the loop",
             ],
-
             "wings": [
-
                 ["⟪◉", "◉⟫"],
-
                 ["⟪◬", "◬⟫"],
-
                 ["⟪◌", "◌⟫"],
-
                 ["⟪⬤", "⬤⟫"],
-
             ],
-
         },
-
         "branding": {
-
             "agent_name": "Sisyphus Agent",
-
             "welcome": "Welcome to Sisyphus Agent! Type your message or /help for commands.",
-
             "goodbye": "The boulder waits. ◉",
-
             "response_label": " ◉ Sisyphus ",
-
             "prompt_symbol": "◉",
-
             "help_header": "(◉) Available Commands",
-
         },
-
         "tool_prefix": "│",
-
         "banner_logo": """[bold #F5F5F5]███████╗██╗███████╗██╗   ██╗██████╗ ██╗  ██╗██╗   ██╗███████╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗[/]
 
 [bold #E7E7E7]██╔════╝██║██╔════╝╚██╗ ██╔╝██╔══██╗██║  ██║██║   ██║██╔════╝      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/]
@@ -1101,7 +746,6 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#8F8F8F]███████║██║███████║   ██║   ██║     ██║  ██║╚██████╔╝███████║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║[/]
 
 [#626262]╚══════╝╚═╝╚══════╝   ╚═╝   ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝[/]""",
-
         "banner_hero": """[#B7B7B7]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [#D3D3D3]⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀[/]
@@ -1129,123 +773,69 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#656565]⠀⠀⠀━━━━━━━━━━━━━━━━━━━━━━━⠀⠀⠀[/]
 
 [dim #4A4A4A]⠀⠀⠀⠀⠀⠀⠀⠀⠀the boulder⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]""",
-
     },
-
     "charizard": {
-
         "name": "charizard",
-
         "description": "Volcanic theme — burnt orange and ember",
-
         "colors": {
-
             "banner_border": "#C75B1D",
-
             "banner_title": "#FFD39A",
-
             "banner_accent": "#F29C38",
-
             "banner_dim": "#C58A45",
-
             "banner_text": "#FFF0D4",
-
             "ui_accent": "#F29C38",
-
             "ui_label": "#FFD39A",
-
             "ui_ok": "#4caf50",
-
             "ui_error": "#ef5350",
-
             "ui_warn": "#ffa726",
-
             "prompt": "#FFF0D4",
-
             "input_rule": "#C75B1D",
-
             "response_border": "#F29C38",
-
             "status_bar_bg": "#2B160E",
-
             "status_bar_text": "#FFF0D4",
-
             "status_bar_strong": "#FFD39A",
-
             "status_bar_dim": "#6C4724",
-
             "status_bar_good": "#6BCB77",
-
             "status_bar_warn": "#F29C38",
-
             "status_bar_bad": "#E2832B",
-
             "status_bar_critical": "#EF5350",
-
             "session_label": "#FFD39A",
-
             "session_border": "#6C4724",
-
             "selection_bg": "#5A260D",
-
             "completion_menu_bg": "#0B0503",
-
             "completion_menu_current_bg": "#4A1B07",
-
             "completion_menu_meta_bg": "#120806",
-
             "completion_menu_meta_current_bg": "#5A260D",
-
         },
-
         "spinner": {
-
             "waiting_faces": ["(✦)", "(▲)", "(◇)", "(<>)", "(🔥)"],
-
             "thinking_faces": ["(✦)", "(▲)", "(◇)", "(⌁)", "(🔥)"],
-
             "thinking_verbs": [
-
-                "banking into the draft", "measuring burn", "reading the updraft",
-
-                "tracking ember fall", "setting wing angle", "holding the flame core",
-
-                "plotting a hot landing", "coiling for lift",
-
+                "banking into the draft",
+                "measuring burn",
+                "reading the updraft",
+                "tracking ember fall",
+                "setting wing angle",
+                "holding the flame core",
+                "plotting a hot landing",
+                "coiling for lift",
             ],
-
             "wings": [
-
                 ["⟪✦", "✦⟫"],
-
                 ["⟪▲", "▲⟫"],
-
                 ["⟪◌", "◌⟫"],
-
                 ["⟪◇", "◇⟫"],
-
             ],
-
         },
-
         "branding": {
-
             "agent_name": "Charizard Agent",
-
             "welcome": "Welcome to Charizard Agent! Type your message or /help for commands.",
-
             "goodbye": "Flame out! ✦",
-
             "response_label": " ✦ Charizard ",
-
             "prompt_symbol": "✦",
-
             "help_header": "(✦) Available Commands",
-
         },
-
         "tool_prefix": "│",
-
         "banner_logo": """[bold #FFF0D4] ██████╗██╗  ██╗ █████╗ ██████╗ ██╗███████╗ █████╗ ██████╗ ██████╗        █████╗  ██████╗ ███████╗███╗   ██╗████████╗[/]
 
 [bold #FFD39A]██╔════╝██║  ██║██╔══██╗██╔══██╗██║╚══███╔╝██╔══██╗██╔══██╗██╔══██╗      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/]
@@ -1257,7 +847,6 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#C75B1D]╚██████╗██║  ██║██║  ██║██║  ██║██║███████╗██║  ██║██║  ██║██████╔╝      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║[/]
 
 [#7A3511] ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝       ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝[/]""",
-
         "banner_hero": """[#FFD39A]⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⠶⠶⠶⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [#F29C38]⠀⠀⠀⠀⠀⠀⣴⠟⠁⠀⠀⠀⠀⠈⠻⣦⠀⠀⠀⠀⠀⠀[/]
@@ -1283,13 +872,8 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 [#F29C38]⠀⠀⠀⠀⠀⠀⠀⣼⡟⠀⠀⢻⣧⠀⠀⠀⠀⠀⠀⠀⠀[/]
 
 [dim #7A3511]⠀⠀⠀⠀⠀⠀⠀tail flame lit⠀⠀⠀⠀⠀⠀⠀⠀[/]""",
-
     },
-
 }
-
-
-
 
 
 # =============================================================================
@@ -1299,83 +883,55 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 # =============================================================================
 
 
-
 _active_skin: Optional[SkinConfig] = None
 
 _active_skin_name: str = "default"
 
 
-
-
-
 def _skins_dir() -> Path:
-
     """User skins directory."""
 
     return get_clawk_home() / "skins"
 
 
-
-
-
 def _load_skin_from_yaml(path: Path) -> Optional[Dict[str, Any]]:
-
     """Load a skin definition from a YAML file."""
 
     try:
-
         import yaml
 
         with open(path, "r", encoding="utf-8") as f:
-
             data = yaml.safe_load(f)
 
         if isinstance(data, dict) and "name" in data:
-
             return data
 
     except Exception as e:
-
         logger.debug("Failed to load skin from %s: %s", path, e)
 
     return None
 
 
-
-
-
 def _mapping_or_empty(value: Any, *, section: str, skin_name: str) -> Dict[str, Any]:
-
     """Return a mapping value or an empty dict when the section type is invalid."""
 
     if isinstance(value, dict):
-
         return value
 
     if value is None:
-
         return {}
 
     logger.warning(
-
         "Skin '%s' has invalid '%s' section type (%s); ignoring section",
-
         skin_name,
-
         section,
-
         type(value).__name__,
-
     )
 
     return {}
 
 
-
-
-
 def _build_skin_config(data: Dict[str, Any]) -> SkinConfig:
-
     """Build a SkinConfig from a raw dict (built-in or loaded from YAML)."""
 
     # Start with default values as base for missing keys
@@ -1384,15 +940,21 @@ def _build_skin_config(data: Dict[str, Any]) -> SkinConfig:
 
     skin_name = str(data.get("name", "unknown"))
 
-    color_overrides = _mapping_or_empty(data.get("colors"), section="colors", skin_name=skin_name)
+    color_overrides = _mapping_or_empty(
+        data.get("colors"), section="colors", skin_name=skin_name
+    )
 
-    spinner_overrides = _mapping_or_empty(data.get("spinner"), section="spinner", skin_name=skin_name)
+    spinner_overrides = _mapping_or_empty(
+        data.get("spinner"), section="spinner", skin_name=skin_name
+    )
 
-    branding_overrides = _mapping_or_empty(data.get("branding"), section="branding", skin_name=skin_name)
+    branding_overrides = _mapping_or_empty(
+        data.get("branding"), section="branding", skin_name=skin_name
+    )
 
-    emoji_overrides = _mapping_or_empty(data.get("tool_emojis"), section="tool_emojis", skin_name=skin_name)
-
-
+    emoji_overrides = _mapping_or_empty(
+        data.get("tool_emojis"), section="tool_emojis", skin_name=skin_name
+    )
 
     colors = dict(default.get("colors", {}))
 
@@ -1406,36 +968,20 @@ def _build_skin_config(data: Dict[str, Any]) -> SkinConfig:
 
     branding.update(branding_overrides)
 
-
-
     return SkinConfig(
-
         name=skin_name,
-
         description=data.get("description", ""),
-
         colors=colors,
-
         spinner=spinner,
-
         branding=branding,
-
         tool_prefix=data.get("tool_prefix", default.get("tool_prefix", "┊")),
-
         tool_emojis=emoji_overrides,
-
         banner_logo=data.get("banner_logo", ""),
-
         banner_hero=data.get("banner_hero", ""),
-
     )
 
 
-
-
-
 def list_skins() -> List[Dict[str, str]]:
-
     """List all available skins (built-in + user-installed).
 
 
@@ -1447,57 +993,36 @@ def list_skins() -> List[Dict[str, str]]:
     result = []
 
     for name, data in _BUILTIN_SKINS.items():
-
         result.append({
-
             "name": name,
-
             "description": data.get("description", ""),
-
             "source": "builtin",
-
         })
-
-
 
     skins_path = _skins_dir()
 
     if skins_path.is_dir():
-
         for f in sorted(skins_path.glob("*.yaml")):
-
             data = _load_skin_from_yaml(f)
 
             if data:
-
                 skin_name = data.get("name", f.stem)
 
                 # Skip if it shadows a built-in
 
                 if any(s["name"] == skin_name for s in result):
-
                     continue
 
                 result.append({
-
                     "name": skin_name,
-
                     "description": data.get("description", ""),
-
                     "source": "user",
-
                 })
-
-
 
     return result
 
 
-
-
-
 def load_skin(name: str) -> SkinConfig:
-
     """Load a skin by name. Checks user skins first, then built-in."""
 
     # Check user skins directory
@@ -1507,22 +1032,15 @@ def load_skin(name: str) -> SkinConfig:
     user_file = skins_path / f"{name}.yaml"
 
     if user_file.is_file():
-
         data = _load_skin_from_yaml(user_file)
 
         if data:
-
             return _build_skin_config(data)
-
-
 
     # Check built-in skins
 
     if name in _BUILTIN_SKINS:
-
         return _build_skin_config(_BUILTIN_SKINS[name])
-
-
 
     # Fallback to default
 
@@ -1531,27 +1049,18 @@ def load_skin(name: str) -> SkinConfig:
     return _build_skin_config(_BUILTIN_SKINS["default"])
 
 
-
-
-
 def get_active_skin() -> SkinConfig:
-
     """Get the currently active skin config (cached)."""
 
     global _active_skin
 
     if _active_skin is None:
-
         _active_skin = load_skin(_active_skin_name)
 
     return _active_skin
 
 
-
-
-
 def set_active_skin(name: str) -> SkinConfig:
-
     """Switch the active skin. Returns the new SkinConfig."""
 
     global _active_skin, _active_skin_name
@@ -1563,21 +1072,13 @@ def set_active_skin(name: str) -> SkinConfig:
     return _active_skin
 
 
-
-
-
 def get_active_skin_name() -> str:
-
     """Get the name of the currently active skin."""
 
     return _active_skin_name
 
 
-
-
-
 def init_skin_from_config(config: dict) -> None:
-
     """Initialize the active skin from CLI config at startup.
 
 
@@ -1589,21 +1090,15 @@ def init_skin_from_config(config: dict) -> None:
     display = config.get("display") or {}
 
     if not isinstance(display, dict):
-
         display = {}
 
     skin_name = display.get("skin", "default")
 
     if isinstance(skin_name, str) and skin_name.strip():
-
         set_active_skin(skin_name.strip())
 
     else:
-
         set_active_skin("default")
-
-
-
 
 
 # =============================================================================
@@ -1613,11 +1108,7 @@ def init_skin_from_config(config: dict) -> None:
 # =============================================================================
 
 
-
-
-
 def get_active_prompt_symbol(fallback: str = "❯") -> str:
-
     """Return the interactive prompt symbol with a single trailing space.
 
 
@@ -1631,65 +1122,37 @@ def get_active_prompt_symbol(fallback: str = "❯") -> str:
     """
 
     try:
-
         raw = get_active_skin().get_branding("prompt_symbol", fallback)
 
     except Exception:
-
         raw = fallback
 
-
-
     cleaned = (raw or fallback).strip()
-
-
 
     return f"{cleaned or fallback.strip()} "
 
 
-
-
-
-
-
 def get_active_help_header(fallback: str = "(^_^)? Available Commands") -> str:
-
     """Get the /help header from the active skin."""
 
     try:
-
         return get_active_skin().get_branding("help_header", fallback)
 
     except Exception:
-
         return fallback
-
-
-
-
-
 
 
 def get_active_goodbye(fallback: str = "Goodbye! ∇") -> str:
-
     """Get the goodbye line from the active skin."""
 
     try:
-
         return get_active_skin().get_branding("goodbye", fallback)
 
     except Exception:
-
         return fallback
 
 
-
-
-
-
-
 def get_prompt_toolkit_style_overrides() -> Dict[str, str]:
-
     """Return prompt_toolkit style overrides derived from the active skin.
 
 
@@ -1701,14 +1164,10 @@ def get_prompt_toolkit_style_overrides() -> Dict[str, str]:
     """
 
     try:
-
         skin = get_active_skin()
 
     except Exception:
-
         return {}
-
-
 
     # Input/prompt: leave unset by default so the typed text inherits
 
@@ -1720,11 +1179,11 @@ def get_prompt_toolkit_style_overrides() -> Dict[str, str]:
 
     prompt = skin.get_color("prompt", "")
 
-    input_rule = skin.get_color("input_rule", "#CD7F32")
+    input_rule = skin.get_color("input_rule", "#4A3496")
 
-    title = skin.get_color("banner_title", "#FFD700")
+    title = skin.get_color("banner_title", "#8D70F0")
 
-    text = skin.get_color("banner_text", "#FFF8DC")
+    text = skin.get_color("banner_text", "#E8E0FF")
 
     dim = skin.get_color("banner_dim", "#555555")
 
@@ -1758,95 +1217,51 @@ def get_prompt_toolkit_style_overrides() -> Dict[str, str]:
 
     menu_meta_bg = skin.get_color("completion_menu_meta_bg", menu_bg)
 
-    menu_meta_current_bg = skin.get_color("completion_menu_meta_current_bg", menu_current_bg)
-
-
+    menu_meta_current_bg = skin.get_color(
+        "completion_menu_meta_current_bg", menu_current_bg
+    )
 
     return {
-
         # Typed input always uses terminal default fg/bg so it's
-
         # readable in both light and dark Terminal.app modes.  The
-
         # skin's `prompt` color (if any) only styles the prompt symbol,
-
         # NOT the user's typed text.
-
         "input-area": "",
-
         "placeholder": f"{dim} italic",
-
         "prompt": prompt,
-
         "prompt-working": f"{dim} italic",
-
         "hint": f"{dim} italic",
-
         "status-bar": f"bg:{status_bg} {status_text}",
-
         "status-bar-strong": f"bg:{status_bg} {status_strong} bold",
-
         "status-bar-dim": f"bg:{status_bg} {status_dim}",
-
         "status-bar-good": f"bg:{status_bg} {status_good} bold",
-
         "status-bar-warn": f"bg:{status_bg} {status_warn} bold",
-
         "status-bar-bad": f"bg:{status_bg} {status_bad} bold",
-
         "status-bar-critical": f"bg:{status_bg} {status_critical} bold",
-
         "input-rule": input_rule,
-
         "image-badge": f"{label} bold",
-
         "completion-menu": f"bg:{menu_bg} {text}",
-
         "completion-menu.completion": f"bg:{menu_bg} {text}",
-
         "completion-menu.completion.current": f"bg:{menu_current_bg} {title}",
-
         "completion-menu.meta.completion": f"bg:{menu_meta_bg} {dim}",
-
         "completion-menu.meta.completion.current": f"bg:{menu_meta_current_bg} {label}",
-
         "clarify-border": input_rule,
-
         "clarify-title": f"{title} bold",
-
         "clarify-question": f"{text} bold",
-
         "clarify-choice": dim,
-
         "clarify-selected": f"{title} bold",
-
         "clarify-active-other": f"{title} italic",
-
         "clarify-countdown": input_rule,
-
         "sudo-prompt": f"{error} bold",
-
         "sudo-border": input_rule,
-
         "sudo-title": f"{error} bold",
-
         "sudo-text": text,
-
         "approval-border": input_rule,
-
         "approval-title": f"{warn} bold",
-
         "approval-desc": f"{text} bold",
-
         "approval-cmd": f"{dim} italic",
-
         "approval-choice": dim,
-
         "approval-selected": f"{title} bold",
-
         "voice-status": f"bg:{voice_bg} {label}",
-
         "voice-status-recording": f"bg:{voice_bg} {error} bold",
-
     }
-

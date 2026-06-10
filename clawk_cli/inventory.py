@@ -220,17 +220,15 @@ def _append_unconfigured_rows(rows: list[dict], ctx: ConfigContext) -> list[dict
     for entry in CANONICAL_PROVIDERS:
         if entry.slug.lower() in seen:
             continue
-        extras.append(
-            {
-                "slug": entry.slug,
-                "name": _PROVIDER_LABELS.get(entry.slug, entry.label),
-                "is_current": entry.slug.lower() == cur,
-                "is_user_defined": False,
-                "models": [],
-                "total_models": 0,
-                "source": "canonical",
-            }
-        )
+        extras.append({
+            "slug": entry.slug,
+            "name": _PROVIDER_LABELS.get(entry.slug, entry.label),
+            "is_current": entry.slug.lower() == cur,
+            "is_user_defined": False,
+            "models": [],
+            "total_models": 0,
+            "source": "canonical",
+        })
     return extras
 
 
@@ -258,11 +256,7 @@ def _apply_picker_hints(rows: list[dict]) -> None:
             continue
         cfg = PROVIDER_REGISTRY.get(row["slug"])
         auth_type = cfg.auth_type if cfg else "api_key"
-        key_env = (
-            cfg.api_key_env_vars[0]
-            if (cfg and cfg.api_key_env_vars)
-            else ""
-        )
+        key_env = cfg.api_key_env_vars[0] if (cfg and cfg.api_key_env_vars) else ""
         row["auth_type"] = auth_type
         row["key_env"] = key_env
         row["warning"] = (

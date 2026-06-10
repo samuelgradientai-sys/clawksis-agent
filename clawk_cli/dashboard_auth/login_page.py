@@ -19,6 +19,7 @@ Test-stable class names: the existing test suite extracts the
 class name MUST NOT change without updating
 ``tests/clawk_cli/test_dashboard_auth_401_reauth.py``.
 """
+
 from __future__ import annotations
 
 import html
@@ -475,6 +476,7 @@ def render_login_html(*, next_path: str = "") -> str:
         # so a value that round-tripped from /login?next=... back into
         # the button href is byte-identical.
         from urllib.parse import quote
+
         next_qs = f"&next={html.escape(quote(next_path, safe=''), quote=True)}"
     else:
         next_qs = ""
@@ -489,7 +491,7 @@ def render_login_html(*, next_path: str = "") -> str:
             buttons.append(
                 f'      <a class="provider-btn" '
                 f'href="/auth/login?provider={html.escape(p.name, quote=True)}{next_qs}">'
-                f'Sign in with {html.escape(p.display_name)}</a>'
+                f"Sign in with {html.escape(p.display_name)}</a>"
             )
     script = _PASSWORD_FORM_SCRIPT if needs_password_script else ""
     return _LOGIN_HTML_TEMPLATE.format(
@@ -522,13 +524,13 @@ def _render_password_form(provider, next_path: str) -> str:
         f'          <input class="field-input" type="text" name="username" '
         f'autocomplete="username" autocapitalize="none" '
         f'autocorrect="off" spellcheck="false" required>\n'
-        f'        </label>\n'
+        f"        </label>\n"
         f'        <label class="field">\n'
         f'          <span class="field-label">Password</span>\n'
         f'          <input class="field-input" type="password" name="password" '
         f'autocomplete="current-password" required>\n'
-        f'        </label>\n'
+        f"        </label>\n"
         f'        <div class="form-error" role="alert" hidden></div>\n'
         f'        <button class="provider-btn" type="submit">Sign in</button>\n'
-        f'      </form>'
+        f"      </form>"
     )

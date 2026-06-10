@@ -11,11 +11,11 @@ Bloom, CRT scanlines, chromatic aberration, and feedback glow patterns for live 
 TD's `bloomTOP` is the fastest path — GPU-accelerated, no shader needed.
 
 ```python
-bloom = root.create(bloomTOP, 'bloom1')
-bloom.par.threshold = 0.6     # Luminance threshold (0-1)
-bloom.par.size = 0.03         # Spread radius (0-1)
-bloom.par.strength = 1.5      # Bloom intensity
-bloom.par.blendmode = 'add'   # 'add' or 'screen'
+bloom = root.create(bloomTOP, "bloom1")
+bloom.par.threshold = 0.6  # Luminance threshold (0-1)
+bloom.par.size = 0.03  # Spread radius (0-1)
+bloom.par.strength = 1.5  # Bloom intensity
+bloom.par.blendmode = "add"  # 'add' or 'screen'
 ```
 
 **Audio reactive bloom:**

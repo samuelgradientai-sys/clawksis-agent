@@ -107,7 +107,10 @@ def test_inherited_handoff_detected_in_resumed_protected_head():
     Task read as live intent)."""
     messages = [
         {"role": "system", "content": "system prompt"},
-        {"role": "user", "content": f"{SUMMARY_PREFIX}\n## Active Task\nUser asked: 'task A'"},
+        {
+            "role": "user",
+            "content": f"{SUMMARY_PREFIX}\n## Active Task\nUser asked: 'task A'",
+        },
         {"role": "assistant", "content": "ok"},
         {"role": "user", "content": "Unrelated task B: what's the capital of France?"},
     ]
@@ -129,7 +132,10 @@ def test_historical_prefixed_handoff_detected_and_stripped():
     stale 'resume exactly' text as a fresh turn."""
     messages = [
         {"role": "system", "content": "system prompt"},
-        {"role": "user", "content": f"{_OLD_CONFLICTING_PREFIX}\n## Active Task\nUser asked: 'task A'"},
+        {
+            "role": "user",
+            "content": f"{_OLD_CONFLICTING_PREFIX}\n## Active Task\nUser asked: 'task A'",
+        },
         {"role": "assistant", "content": "ok"},
         {"role": "user", "content": "Unrelated task B"},
     ]

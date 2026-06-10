@@ -14,6 +14,7 @@ These tests pin:
 - the first uncached call also returns a fresh list (the fix)
 - every call returns a list that is not the cached one, even after mutation
 """
+
 from __future__ import annotations
 
 import pytest
@@ -30,7 +31,6 @@ def _clear_cache():
 
 
 class TestQuietModeCacheIsolation:
-
     def test_first_uncached_call_returns_fresh_list(self):
         """The first quiet_mode call must not alias the cached object \u2014
         otherwise a caller mutating the returned list mutates the cache."""

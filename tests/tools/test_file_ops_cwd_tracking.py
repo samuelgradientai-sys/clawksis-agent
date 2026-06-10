@@ -18,7 +18,6 @@ Fix: _exec() now prefers the LIVE ``env.cwd`` over the init-time
 from __future__ import annotations
 
 
-
 from tools.file_operations import ShellFileOperations
 
 
@@ -37,6 +36,7 @@ class _FakeEnv:
 
     def execute(self, command: str, cwd: str = None, **kwargs) -> dict:
         import subprocess
+
         self.calls.append({"command": command, "cwd": cwd})
         # Simulate cd by updating self.cwd (the real env does the same
         # via _extract_cwd_from_output after a successful command)
@@ -142,8 +142,10 @@ class TestShellFileOpsCwdTracking:
         class _NoCwdEnv:
             def execute(self, command, cwd=None, **kwargs):
                 import subprocess
-                proc = subprocess.run(["bash", "-c", command], cwd=cwd,
-                                      capture_output=True, text=True)
+
+                proc = subprocess.run(
+                    ["bash", "-c", command], cwd=cwd, capture_output=True, text=True
+                )
                 return {"output": proc.stdout, "returncode": proc.returncode}
 
         env = _NoCwdEnv()

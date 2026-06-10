@@ -13,6 +13,7 @@ TypeScript implementation.  We keep it deliberately small — just the
 framer + envelope helpers — so :class:`agent.lsp.client.LSPClient` can
 focus on protocol semantics.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -40,26 +40,38 @@ def test_xai_provider_lists_text_and_current_image_video_models():
 def test_xai_routes_default_models_by_modality():
     from plugins.video_gen.xai import _resolve_model_for_modality
 
-    assert _resolve_model_for_modality(
-        "grok-imagine-video",
-        modality="text",
-        explicit_model=False,
-    ) == "grok-imagine-video"
-    assert _resolve_model_for_modality(
-        "grok-imagine-video",
-        modality="image",
-        explicit_model=False,
-    ) == "grok-imagine-video-1.5-preview"
-    assert _resolve_model_for_modality(
-        "grok-imagine-video-1.5-preview",
-        modality="text",
-        explicit_model=False,
-    ) == "grok-imagine-video"
-    assert _resolve_model_for_modality(
-        "grok-imagine-video-1.5-preview",
-        modality="text",
-        explicit_model=True,
-    ) == "grok-imagine-video-1.5-preview"
+    assert (
+        _resolve_model_for_modality(
+            "grok-imagine-video",
+            modality="text",
+            explicit_model=False,
+        )
+        == "grok-imagine-video"
+    )
+    assert (
+        _resolve_model_for_modality(
+            "grok-imagine-video",
+            modality="image",
+            explicit_model=False,
+        )
+        == "grok-imagine-video-1.5-preview"
+    )
+    assert (
+        _resolve_model_for_modality(
+            "grok-imagine-video-1.5-preview",
+            modality="text",
+            explicit_model=False,
+        )
+        == "grok-imagine-video"
+    )
+    assert (
+        _resolve_model_for_modality(
+            "grok-imagine-video-1.5-preview",
+            modality="text",
+            explicit_model=True,
+        )
+        == "grok-imagine-video-1.5-preview"
+    )
 
 
 def test_xai_capabilities_text_and_image_only():

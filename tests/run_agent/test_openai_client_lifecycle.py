@@ -19,9 +19,7 @@ class FakeRequestClient:
     def __init__(self, responder):
         self._responder = responder
         self._client = SimpleNamespace(is_closed=False)
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
         self.responses = SimpleNamespace()
         self.close_calls = 0
 
@@ -77,7 +75,9 @@ def _connection_error():
 
 
 def test_retry_after_api_connection_error_recreates_request_client(monkeypatch):
-    first_request = FakeRequestClient(lambda **kwargs: (_ for _ in ()).throw(_connection_error()))
+    first_request = FakeRequestClient(
+        lambda **kwargs: (_ for _ in ()).throw(_connection_error())
+    )
     second_request = FakeRequestClient(lambda **kwargs: {"ok": True})
     factory = OpenAIFactory([first_request, second_request])
     monkeypatch.setattr(run_agent, "OpenAI", factory)
@@ -114,7 +114,11 @@ def test_stale_non_stream_close_is_single_owner(monkeypatch):
 
 
 def test_closed_shared_client_is_recreated_before_request(monkeypatch):
-    stale_shared = FakeSharedClient(lambda **kwargs: (_ for _ in ()).throw(AssertionError("stale shared client used")))
+    stale_shared = FakeSharedClient(
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("stale shared client used")
+        )
+    )
     stale_shared._client.is_closed = True
 
     replacement_shared = FakeSharedClient(lambda **kwargs: {"replacement": True})
@@ -132,7 +136,9 @@ def test_closed_shared_client_is_recreated_before_request(monkeypatch):
     assert len(factory.calls) == 2
 
 
-def test_concurrent_requests_do_not_break_each_other_when_one_client_closes(monkeypatch):
+def test_concurrent_requests_do_not_break_each_other_when_one_client_closes(
+    monkeypatch,
+):
     first_started = threading.Event()
     first_closed = threading.Event()
 
@@ -157,7 +163,10 @@ def test_concurrent_requests_do_not_break_each_other_when_one_client_closes(monk
 
     def run_call(name):
         try:
-            results[name] = agent._interruptible_api_call({"model": agent.model, "messages": []})
+            results[name] = agent._interruptible_api_call({
+                "model": agent.model,
+                "messages": [],
+            })
         except Exception as exc:  # noqa: BLE001 - asserting exact type below
             results[name] = exc
 
@@ -174,20 +183,33 @@ def test_concurrent_requests_do_not_break_each_other_when_one_client_closes(monk
     assert len(factory.calls) == 2
 
 
-
 def test_streaming_call_recreates_closed_shared_client_before_request(monkeypatch):
     chunks = iter([
         SimpleNamespace(
             model="gpt-5-codex",
-            choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello", tool_calls=None), finish_reason=None)],
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="Hello", tool_calls=None),
+                    finish_reason=None,
+                )
+            ],
         ),
         SimpleNamespace(
             model="gpt-5-codex",
-            choices=[SimpleNamespace(delta=SimpleNamespace(content=" world", tool_calls=None), finish_reason="stop")],
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content=" world", tool_calls=None),
+                    finish_reason="stop",
+                )
+            ],
         ),
     ])
 
-    stale_shared = FakeSharedClient(lambda **kwargs: (_ for _ in ()).throw(AssertionError("stale shared client used")))
+    stale_shared = FakeSharedClient(
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("stale shared client used")
+        )
+    )
     stale_shared._client.is_closed = True
 
     replacement_shared = FakeSharedClient(lambda **kwargs: {"replacement": True})
@@ -200,7 +222,10 @@ def test_streaming_call_recreates_closed_shared_client_before_request(monkeypatc
     # Force chat_completions mode so the streaming path uses
     # chat.completions.create(stream=True) instead of Codex responses.stream()
     agent.api_mode = "chat_completions"
-    response = agent._interruptible_streaming_api_call({"model": agent.model, "messages": []})
+    response = agent._interruptible_streaming_api_call({
+        "model": agent.model,
+        "messages": [],
+    })
 
     assert response.choices[0].message.content == "Hello world"
     assert agent.client is replacement_shared

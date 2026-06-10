@@ -36,7 +36,12 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
-    DEFAULT_LOCAL_HOST, ENV_API_KEY, log, new_client_id, resolve_api_key, is_cloud_host,
+    DEFAULT_LOCAL_HOST,
+    ENV_API_KEY,
+    log,
+    new_client_id,
+    resolve_api_key,
+    is_cloud_host,
 )
 
 
@@ -69,7 +74,13 @@ def parse_binary_frame(data: bytes) -> dict | None:
     type_code = struct.unpack(">I", data[0:4])[0]
     if type_code == BINARY_PREVIEW_IMAGE:
         image_type = struct.unpack(">I", data[4:8])[0]
-        ext = "jpg" if image_type == IMAGE_TYPE_JPEG else "png" if image_type == IMAGE_TYPE_PNG else "bin"
+        ext = (
+            "jpg"
+            if image_type == IMAGE_TYPE_JPEG
+            else "png"
+            if image_type == IMAGE_TYPE_PNG
+            else "bin"
+        )
         return {
             "kind": "preview",
             "image_type": image_type,
@@ -111,24 +122,36 @@ def parse_binary_frame(data: bytes) -> dict | None:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Real-time ComfyUI WebSocket monitor")
     p.add_argument("--host", default=DEFAULT_LOCAL_HOST, help="ComfyUI server URL")
-    p.add_argument("--api-key", help=f"API key for cloud (or set ${ENV_API_KEY} env var)")
+    p.add_argument(
+        "--api-key", help=f"API key for cloud (or set ${ENV_API_KEY} env var)"
+    )
     p.add_argument("--client-id", default=None, help="Client ID (default: random UUID)")
-    p.add_argument("--prompt-id", default=None,
-                   help="Filter to a specific prompt_id (default: all jobs)")
-    p.add_argument("--previews", default=None,
-                   help="Directory to save in-progress preview frames")
+    p.add_argument(
+        "--prompt-id",
+        default=None,
+        help="Filter to a specific prompt_id (default: all jobs)",
+    )
+    p.add_argument(
+        "--previews", default=None, help="Directory to save in-progress preview frames"
+    )
     p.add_argument("--no-color", action="store_true", help="Disable ANSI colour")
-    p.add_argument("--timeout", type=float, default=600.0,
-                   help="Hard cap on monitor duration (default 600s)")
+    p.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+        help="Hard cap on monitor duration (default 600s)",
+    )
     args = p.parse_args(argv)
 
     try:
         import websocket  # type: ignore[import-not-found]
     except ImportError:
-        print(json.dumps({
-            "error": "websocket-client not installed",
-            "install": "pip install websocket-client",
-        }))
+        print(
+            json.dumps({
+                "error": "websocket-client not installed",
+                "install": "pip install websocket-client",
+            })
+        )
         return 1
 
     api_key = resolve_api_key(args.api_key)
@@ -170,7 +193,10 @@ def main(argv: list[str] | None = None) -> int:
                 parsed = parse_binary_frame(msg)
                 if parsed is None:
                     continue
-                if parsed["kind"] in {"preview", "preview_with_metadata"} and preview_dir:
+                if (
+                    parsed["kind"] in {"preview", "preview_with_metadata"}
+                    and preview_dir
+                ):
                     img_bytes = parsed.get("image_bytes", b"")
                     if img_bytes:
                         ext = parsed.get("ext", "png")
@@ -192,16 +218,31 @@ def main(argv: list[str] | None = None) -> int:
                 continue
 
             if mtype == "status":
-                qr = mdata.get("status", {}).get("exec_info", {}).get("queue_remaining", "?")
-                print(fmt_color(f"[status] queue_remaining={qr}", DIM, color_on=color_on))
+                qr = (
+                    mdata
+                    .get("status", {})
+                    .get("exec_info", {})
+                    .get("queue_remaining", "?")
+                )
+                print(
+                    fmt_color(f"[status] queue_remaining={qr}", DIM, color_on=color_on)
+                )
             elif mtype == "execution_start":
                 print(fmt_color(f"[start] prompt_id={pid}", BOLD, color_on=color_on))
             elif mtype == "executing":
                 node = mdata.get("node")
                 if node:
-                    print(fmt_color(f"  [executing] node={node}", CYAN, color_on=color_on))
+                    print(
+                        fmt_color(f"  [executing] node={node}", CYAN, color_on=color_on)
+                    )
                 else:
-                    print(fmt_color(f"  [executing] (workflow done) prompt_id={pid}", DIM, color_on=color_on))
+                    print(
+                        fmt_color(
+                            f"  [executing] (workflow done) prompt_id={pid}",
+                            DIM,
+                            color_on=color_on,
+                        )
+                    )
             elif mtype == "progress":
                 v, m = mdata.get("value", 0), mdata.get("max", 0)
                 pct = (v / m * 100) if m else 0
@@ -211,7 +252,13 @@ def main(argv: list[str] | None = None) -> int:
                 nodes = mdata.get("nodes") or {}
                 running = [k for k, v in nodes.items() if v.get("running")]
                 if running:
-                    print(fmt_color(f"    [progress_state] running={running}", DIM, color_on=color_on))
+                    print(
+                        fmt_color(
+                            f"    [progress_state] running={running}",
+                            DIM,
+                            color_on=color_on,
+                        )
+                    )
             elif mtype == "executed":
                 node = mdata.get("node")
                 out = mdata.get("output") or {}
@@ -220,19 +267,37 @@ def main(argv: list[str] | None = None) -> int:
                     if out.get(key):
                         summary_parts.append(f"{key}={len(out[key])}")
                 summary = ", ".join(summary_parts) if summary_parts else "(no files)"
-                print(fmt_color(f"  [executed] node={node} {summary}", GREEN, color_on=color_on))
+                print(
+                    fmt_color(
+                        f"  [executed] node={node} {summary}", GREEN, color_on=color_on
+                    )
+                )
             elif mtype == "execution_cached":
                 cached = mdata.get("nodes") or []
                 if cached:
-                    print(fmt_color(f"  [cached] {len(cached)} nodes skipped", DIM, color_on=color_on))
+                    print(
+                        fmt_color(
+                            f"  [cached] {len(cached)} nodes skipped",
+                            DIM,
+                            color_on=color_on,
+                        )
+                    )
             elif mtype == "execution_success":
-                print(fmt_color(f"[success] prompt_id={pid}", GREEN + BOLD, color_on=color_on))
+                print(
+                    fmt_color(
+                        f"[success] prompt_id={pid}", GREEN + BOLD, color_on=color_on
+                    )
+                )
                 if args.prompt_id:
                     return 0
             elif mtype == "execution_error":
                 exc_type = mdata.get("exception_type", "?")
                 exc_msg = mdata.get("exception_message", "?")
-                print(fmt_color(f"[error] {exc_type}: {exc_msg}", RED + BOLD, color_on=color_on))
+                print(
+                    fmt_color(
+                        f"[error] {exc_type}: {exc_msg}", RED + BOLD, color_on=color_on
+                    )
+                )
                 tb = mdata.get("traceback")
                 if tb:
                     if isinstance(tb, list):
@@ -243,7 +308,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.prompt_id:
                     return 1
             elif mtype == "execution_interrupted":
-                print(fmt_color(f"[interrupted] prompt_id={pid}", YELLOW, color_on=color_on))
+                print(
+                    fmt_color(
+                        f"[interrupted] prompt_id={pid}", YELLOW, color_on=color_on
+                    )
+                )
                 if args.prompt_id:
                     return 1
             elif mtype == "notification":
@@ -251,7 +320,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(fmt_color(f"[notification] {v}", DIM, color_on=color_on))
             else:
                 # Unknown / lightly-used types: print compactly
-                print(fmt_color(f"[{mtype}] {json.dumps(mdata, default=str)[:200]}", DIM, color_on=color_on))
+                print(
+                    fmt_color(
+                        f"[{mtype}] {json.dumps(mdata, default=str)[:200]}",
+                        DIM,
+                        color_on=color_on,
+                    )
+                )
 
     except KeyboardInterrupt:
         log("Interrupted")

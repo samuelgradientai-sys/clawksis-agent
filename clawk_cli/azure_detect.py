@@ -89,9 +89,10 @@ class DetectionResult:
     is_anthropic: bool = False
 
 
-def _resolve_credential(api_key: Any,
-                        token_provider: Optional[Callable[[], str]] = None,
-                        ) -> tuple[Optional[str], str]:
+def _resolve_credential(
+    api_key: Any,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> tuple[Optional[str], str]:
     """Coerce wizard inputs into a (token, mode) pair.
 
     Returns ``(token_or_None, mode)`` where ``mode`` is:
@@ -128,9 +129,9 @@ def _resolve_credential(api_key: Any,
     return None, "api_key"
 
 
-def _apply_auth_headers(req: urllib_request.Request,
-                        token: Optional[str],
-                        mode: str) -> None:
+def _apply_auth_headers(
+    req: urllib_request.Request, token: Optional[str], mode: str
+) -> None:
     """Attach the right auth headers to ``req`` based on credential mode."""
     if not token:
         return
@@ -145,12 +146,13 @@ def _apply_auth_headers(req: urllib_request.Request,
         req.add_header("Authorization", f"Bearer {token}")
 
 
-def _http_get_json(url: str,
-                   api_key: Any,
-                   timeout: float = 6.0,
-                   *,
-                   token_provider: Optional[Callable[[], str]] = None,
-                   ) -> tuple[int, Optional[dict]]:
+def _http_get_json(
+    url: str,
+    api_key: Any,
+    timeout: float = 6.0,
+    *,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> tuple[int, Optional[dict]]:
     """GET a URL with the appropriate auth headers.  Return
     ``(status_code, parsed_json_or_None)``.  Never raises."""
     token, mode = _resolve_credential(api_key, token_provider)
@@ -208,11 +210,12 @@ def _extract_model_ids(payload: dict) -> list[str]:
     return ids
 
 
-def _probe_openai_models(base_url: str,
-                         api_key: Any,
-                         *,
-                         token_provider: Optional[Callable[[], str]] = None,
-                         ) -> tuple[bool, list[str]]:
+def _probe_openai_models(
+    base_url: str,
+    api_key: Any,
+    *,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> tuple[bool, list[str]]:
     """Probe ``<base>/models`` for an OpenAI-shaped response.
 
     Returns ``(ok, models)``.  ``ok`` is True iff the endpoint accepted
@@ -234,7 +237,8 @@ def _probe_openai_models(base_url: str,
             if ids:
                 logger.info(
                     "azure_detect: /models probe OK at %s (%d models)",
-                    url, len(ids),
+                    url,
+                    len(ids),
                 )
                 return True, ids
             # 200 + empty list still counts as "OpenAI shape, no models
@@ -244,11 +248,12 @@ def _probe_openai_models(base_url: str,
     return False, []
 
 
-def _probe_anthropic_messages(base_url: str,
-                              api_key: Any,
-                              *,
-                              token_provider: Optional[Callable[[], str]] = None,
-                              ) -> bool:
+def _probe_anthropic_messages(
+    base_url: str,
+    api_key: Any,
+    *,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> bool:
     """Send a zero-token request to ``<base>/v1/messages`` and check
     whether the endpoint at least *recognises* the Anthropic Messages
     shape (any 4xx that mentions ``messages`` or ``model``, or a 400
@@ -294,11 +299,12 @@ def _probe_anthropic_messages(base_url: str,
         return False
 
 
-def detect(base_url: str,
-           api_key: Any = "",
-           *,
-           token_provider: Optional[Callable[[], str]] = None,
-           ) -> DetectionResult:
+def detect(
+    base_url: str,
+    api_key: Any = "",
+    *,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> DetectionResult:
     """Inspect an Azure endpoint and describe its transport + models.
 
     Call this from the wizard before asking the user to pick an API
@@ -359,12 +365,13 @@ def detect(base_url: str,
     return result
 
 
-def lookup_context_length(model: str,
-                          base_url: str,
-                          api_key: Any = "",
-                          *,
-                          token_provider: Optional[Callable[[], str]] = None,
-                          ) -> Optional[int]:
+def lookup_context_length(
+    model: str,
+    base_url: str,
+    api_key: Any = "",
+    *,
+    token_provider: Optional[Callable[[], str]] = None,
+) -> Optional[int]:
     """Thin wrapper around :func:`agent.model_metadata.get_model_context_length`
     that returns ``None`` when only the fallback default (128k) would
     fire, so the wizard can distinguish "we actually know this" from

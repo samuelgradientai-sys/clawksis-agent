@@ -49,6 +49,7 @@ def web_registry_populated():
     register_all_web_providers()
     yield
     from agent.web_search_registry import _reset_for_tests
+
     _reset_for_tests()
 
 

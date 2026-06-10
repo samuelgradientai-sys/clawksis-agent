@@ -26,6 +26,7 @@ import math
 
 try:
     import numpy as np
+
     _HAS_NUMPY = True
 except ImportError:
     _HAS_NUMPY = False
@@ -119,10 +120,7 @@ def encode_text(text: str, dim: int = 1024) -> "np.ndarray":
     """
     _require_numpy()
 
-    tokens = [
-        token.strip(".,!?;:\"'()[]{}")
-        for token in text.lower().split()
-    ]
+    tokens = [token.strip(".,!?;:\"'()[]{}") for token in text.lower().split()]
     tokens = [t for t in tokens if t]
 
     if not tokens:
@@ -150,9 +148,7 @@ def encode_fact(content: str, entities: list[str], dim: int = 1024) -> "np.ndarr
     role_content = encode_atom("__hrr_role_content__", dim)
     role_entity = encode_atom("__hrr_role_entity__", dim)
 
-    components: list[np.ndarray] = [
-        bind(encode_text(content, dim), role_content)
-    ]
+    components: list[np.ndarray] = [bind(encode_text(content, dim), role_content)]
 
     for entity in entities:
         components.append(bind(encode_atom(entity.lower(), dim), role_entity))

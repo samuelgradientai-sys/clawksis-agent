@@ -87,7 +87,9 @@ class MicrosoftGraphClient:
         json_body: Any | None = None,
         headers: dict[str, str] | None = None,
     ) -> Any:
-        response = await self._request("POST", path, json_body=json_body, headers=headers)
+        response = await self._request(
+            "POST", path, json_body=json_body, headers=headers
+        )
         return self._decode_json(response)
 
     async def patch_json(
@@ -97,7 +99,9 @@ class MicrosoftGraphClient:
         json_body: Any | None = None,
         headers: dict[str, str] | None = None,
     ) -> Any:
-        response = await self._request("PATCH", path, json_body=json_body, headers=headers)
+        response = await self._request(
+            "PATCH", path, json_body=json_body, headers=headers
+        )
         if response.status_code == 204 or not response.content:
             return {}
         return self._decode_json(response)
@@ -208,9 +212,7 @@ class MicrosoftGraphClient:
                                 and attempt < self.max_retries
                             ):
                                 self.token_provider.clear_cache()
-                                await self._sleep(
-                                    self._retry_delay(response, attempt)
-                                )
+                                await self._sleep(self._retry_delay(response, attempt))
                                 attempt += 1
                                 continue
 
@@ -218,9 +220,7 @@ class MicrosoftGraphClient:
                                 self._should_retry(response)
                                 and attempt < self.max_retries
                             ):
-                                await self._sleep(
-                                    self._retry_delay(response, attempt)
-                                )
+                                await self._sleep(self._retry_delay(response, attempt))
                                 attempt += 1
                                 continue
 
@@ -363,7 +363,7 @@ class MicrosoftGraphClient:
                     return max(0.0, float(retry_after))
                 except ValueError:
                     pass
-        return min(8.0, 0.5 * (2 ** attempt))
+        return min(8.0, 0.5 * (2**attempt))
 
     @staticmethod
     def _build_api_error(

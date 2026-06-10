@@ -23,10 +23,7 @@ lm = models.Anthropic("claude-sonnet-4-5-20250929")
 # Reads ANTHROPIC_API_KEY from environment
 
 # Explicit API key
-lm = models.Anthropic(
-    model="claude-sonnet-4-5-20250929",
-    api_key="your-api-key-here"
-)
+lm = models.Anthropic(model="claude-sonnet-4-5-20250929", api_key="your-api-key-here")
 ```
 
 #### Available Models
@@ -51,11 +48,11 @@ lm = models.Anthropic("claude-3-5-haiku-20241022")
 lm = models.Anthropic(
     model="claude-sonnet-4-5-20250929",
     api_key="your-api-key",
-    max_tokens=4096,           # Max tokens to generate
-    temperature=0.7,            # Sampling temperature (0-1)
-    top_p=0.9,                  # Nucleus sampling
-    timeout=30,                 # Request timeout (seconds)
-    max_retries=3              # Retry failed requests
+    max_tokens=4096,  # Max tokens to generate
+    temperature=0.7,  # Sampling temperature (0-1)
+    top_p=0.9,  # Nucleus sampling
+    timeout=30,  # Request timeout (seconds)
+    max_retries=3,  # Retry failed requests
 )
 ```
 
@@ -90,10 +87,7 @@ lm = models.OpenAI("gpt-4o")
 # Reads OPENAI_API_KEY from environment
 
 # Explicit API key
-lm = models.OpenAI(
-    model="gpt-4o",
-    api_key="your-api-key-here"
-)
+lm = models.OpenAI(model="gpt-4o", api_key="your-api-key-here")
 ```
 
 #### Available Models
@@ -123,7 +117,7 @@ lm = models.OpenAI(
     top_p=1.0,
     frequency_penalty=0.0,
     presence_penalty=0.0,
-    timeout=30
+    timeout=30,
 )
 ```
 
@@ -137,7 +131,7 @@ lm = models.OpenAI("gpt-4o-mini")
 # OpenAI uses chat format
 lm += [
     {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "What is 2+2?"}
+    {"role": "user", "content": "What is 2+2?"},
 ]
 
 # Generate response
@@ -154,7 +148,7 @@ lm = models.AzureOpenAI(
     azure_endpoint="https://your-resource.openai.azure.com/",
     api_key="your-azure-api-key",
     api_version="2024-02-15-preview",
-    deployment_name="your-deployment-name"
+    deployment_name="your-deployment-name",
 )
 ```
 
@@ -175,22 +169,16 @@ lm = Transformers("microsoft/Phi-4-mini-instruct")
 
 ```python
 # Use GPU
-lm = Transformers(
-    "microsoft/Phi-4-mini-instruct",
-    device="cuda"
-)
+lm = Transformers("microsoft/Phi-4-mini-instruct", device="cuda")
 
 # Use specific GPU
 lm = Transformers(
     "microsoft/Phi-4-mini-instruct",
-    device="cuda:0"  # GPU 0
+    device="cuda:0",  # GPU 0
 )
 
 # Use CPU
-lm = Transformers(
-    "microsoft/Phi-4-mini-instruct",
-    device="cpu"
-)
+lm = Transformers("microsoft/Phi-4-mini-instruct", device="cpu")
 ```
 
 #### Advanced Configuration
@@ -199,10 +187,10 @@ lm = Transformers(
 lm = Transformers(
     "microsoft/Phi-4-mini-instruct",
     device="cuda",
-    torch_dtype="float16",      # Use FP16 (faster, less memory)
-    load_in_8bit=True,          # 8-bit quantization
-    max_memory={0: "20GB"},     # GPU memory limit
-    offload_folder="./offload"  # Offload to disk if needed
+    torch_dtype="float16",  # Use FP16 (faster, less memory)
+    load_in_8bit=True,  # 8-bit quantization
+    max_memory={0: "20GB"},  # GPU memory limit
+    offload_folder="./offload",  # Offload to disk if needed
 )
 ```
 
@@ -231,20 +219,13 @@ lm = Transformers("google/gemma-2-9b-it")
 #### Generation Configuration
 
 ```python
-lm = Transformers(
-    "microsoft/Phi-4-mini-instruct",
-    device="cuda"
-)
+lm = Transformers("microsoft/Phi-4-mini-instruct", device="cuda")
 
 # Configure generation
 from guidance import gen
 
 result = lm + gen(
-    max_tokens=100,
-    temperature=0.7,
-    top_p=0.9,
-    top_k=50,
-    repetition_penalty=1.1
+    max_tokens=100, temperature=0.7, top_p=0.9, top_k=50, repetition_penalty=1.1
 )
 ```
 
@@ -258,7 +239,7 @@ from guidance.models import LlamaCpp
 # Load GGUF model
 lm = LlamaCpp(
     model_path="/path/to/model.gguf",
-    n_ctx=4096  # Context window
+    n_ctx=4096,  # Context window
 )
 ```
 
@@ -270,14 +251,14 @@ lm = LlamaCpp(
     model_path="/path/to/model.gguf",
     n_ctx=4096,
     n_gpu_layers=35,  # Offload 35 layers to GPU
-    n_threads=8       # CPU threads for remaining layers
+    n_threads=8,  # CPU threads for remaining layers
 )
 
 # Full GPU offload
 lm = LlamaCpp(
     model_path="/path/to/model.gguf",
     n_ctx=4096,
-    n_gpu_layers=-1  # Offload all layers
+    n_gpu_layers=-1,  # Offload all layers
 )
 ```
 
@@ -286,14 +267,14 @@ lm = LlamaCpp(
 ```python
 lm = LlamaCpp(
     model_path="/path/to/llama-3.1-8b-instruct.Q4_K_M.gguf",
-    n_ctx=8192,          # Context window (tokens)
-    n_gpu_layers=35,     # GPU layers
-    n_threads=8,         # CPU threads
-    n_batch=512,         # Batch size for prompt processing
-    use_mmap=True,       # Memory-map the model file
-    use_mlock=False,     # Lock model in RAM
-    seed=42,             # Random seed
-    verbose=False        # Suppress verbose output
+    n_ctx=8192,  # Context window (tokens)
+    n_gpu_layers=35,  # GPU layers
+    n_threads=8,  # CPU threads
+    n_batch=512,  # Batch size for prompt processing
+    use_mmap=True,  # Memory-map the model file
+    use_mlock=False,  # Lock model in RAM
+    seed=42,  # Random seed
+    verbose=False,  # Suppress verbose output
 )
 ```
 
@@ -425,23 +406,15 @@ from guidance.models import Transformers
 
 # Use FP16 for 2x speedup
 lm = Transformers(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    device="cuda",
-    torch_dtype="float16"
+    "meta-llama/Llama-3.1-8B-Instruct", device="cuda", torch_dtype="float16"
 )
 
 # Use 8-bit quantization for 4x memory reduction
-lm = Transformers(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    device="cuda",
-    load_in_8bit=True
-)
+lm = Transformers("meta-llama/Llama-3.1-8B-Instruct", device="cuda", load_in_8bit=True)
 
 # Use flash attention (requires flash-attn package)
 lm = Transformers(
-    "meta-llama/Llama-3.1-8B-Instruct",
-    device="cuda",
-    use_flash_attention_2=True
+    "meta-llama/Llama-3.1-8B-Instruct", device="cuda", use_flash_attention_2=True
 )
 ```
 
@@ -453,21 +426,21 @@ from guidance.models import LlamaCpp
 # Maximize GPU layers
 lm = LlamaCpp(
     model_path="/path/to/model.Q4_K_M.gguf",
-    n_gpu_layers=-1  # All layers on GPU
+    n_gpu_layers=-1,  # All layers on GPU
 )
 
 # Optimize batch size
 lm = LlamaCpp(
     model_path="/path/to/model.Q4_K_M.gguf",
-    n_batch=512,     # Larger batch = faster prompt processing
-    n_gpu_layers=-1
+    n_batch=512,  # Larger batch = faster prompt processing
+    n_gpu_layers=-1,
 )
 
 # Use Metal (Apple Silicon)
 lm = LlamaCpp(
     model_path="/path/to/model.Q4_K_M.gguf",
     n_gpu_layers=-1,  # Use Metal GPU acceleration
-    use_mmap=True
+    use_mmap=True,
 )
 ```
 
@@ -475,11 +448,7 @@ lm = LlamaCpp(
 
 ```python
 # Process multiple requests efficiently
-requests = [
-    "What is 2+2?",
-    "What is the capital of France?",
-    "What is photosynthesis?"
-]
+requests = ["What is 2+2?", "What is the capital of France?", "What is photosynthesis?"]
 
 # Bad: Sequential processing
 for req in requests:
@@ -503,9 +472,7 @@ from guidance.models import Transformers
 # Load custom model
 tokenizer = AutoTokenizer.from_pretrained("your-model")
 model = AutoModelForCausalLM.from_pretrained(
-    "your-model",
-    device_map="auto",
-    torch_dtype="float16"
+    "your-model", device_map="auto", torch_dtype="float16"
 )
 
 # Use with Guidance
@@ -532,6 +499,7 @@ export CUDA_VISIBLE_DEVICES=0,1  # Use GPU 0 and 1
 ```python
 # Enable verbose logging
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 # Check backend info

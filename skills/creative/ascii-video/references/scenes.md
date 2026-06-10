@@ -142,7 +142,9 @@ offset_b = -(1 - progress) * g.cols * 0.4
 wave_b = np.sin((g.cc + offset_b) * 0.08 - t * 2) * 0.5 + 0.5
 
 # Interference peaks at collision
-combined = wave_a * 0.5 + wave_b * 0.5 + np.abs(wave_a - wave_b) * (1 - collision_phase) * 0.5
+combined = (
+    wave_a * 0.5 + wave_b * 0.5 + np.abs(wave_a - wave_b) * (1 - collision_phase) * 0.5
+)
 ```
 
 ### Progressive Fragmentation
@@ -179,6 +181,7 @@ Layers enter one at a time, building to overwhelming density:
 def layer_strength(enter_t, ramp=1.5):
     """0.0 until enter_t, ramps to 1.0 over ramp seconds."""
     return max(0.0, min(1.0, (local - enter_t) / ramp))
+
 
 # Layer 1: always present
 s1 = layer_strength(0.0)
@@ -247,9 +250,9 @@ This replaces the v1 protocol where scenes returned `(chars, colors)` tuples. Th
 ```python
 class Renderer:
     def __init__(self):
-        self.grids = {}   # lazy-initialized grid cache
-        self.g = None      # "active" grid (for backward compat)
-        self.S = {}        # persistent state dict
+        self.grids = {}  # lazy-initialized grid cache
+        self.g = None  # "active" grid (for backward compat)
+        self.S = {}  # persistent state dict
 
     def get_grid(self, key):
         """Get or create a GridLayer by size key."""
@@ -271,9 +274,17 @@ class Renderer:
 ```python
 def fx_simple_rings(r, f, t, S):
     """Single-grid scene: rings with distance-mapped hue."""
-    canvas = _render_vf(r, "md",
+    canvas = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_rings(g, f, t, S, n_base=8, spacing_base=3),
-        hf_distance(0.3, 0.02), PAL_STARS, f, t, S, sat=0.85)
+        hf_distance(0.3, 0.02),
+        PAL_STARS,
+        f,
+        t,
+        S,
+        sat=0.85,
+    )
     return canvas
 ```
 
@@ -282,14 +293,40 @@ def fx_simple_rings(r, f, t, S):
 ```python
 def fx_tunnel_ripple(r, f, t, S):
     """Two-grid scene: tunnel depth exclusion-blended with ripple."""
-    canvas_a = _render_vf(r, "md",
+    canvas_a = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_tunnel(g, f, t, S, speed=5.0, complexity=10) * 1.3,
-        hf_distance(0.55, 0.02), PAL_GREEK, f, t, S, sat=0.7)
+        hf_distance(0.55, 0.02),
+        PAL_GREEK,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
 
-    canvas_b = _render_vf(r, "sm",
-        lambda g, f, t, S: vf_ripple(g, f, t, S,
-            sources=[(0.3,0.3), (0.7,0.7), (0.5,0.2)], freq=0.5, damping=0.012) * 1.4,
-        hf_angle(0.1), PAL_STARS, f, t, S, sat=0.8)
+    canvas_b = _render_vf(
+        r,
+        "sm",
+        lambda g, f, t, S: (
+            vf_ripple(
+                g,
+                f,
+                t,
+                S,
+                sources=[(0.3, 0.3), (0.7, 0.7), (0.5, 0.2)],
+                freq=0.5,
+                damping=0.012,
+            )
+            * 1.4
+        ),
+        hf_angle(0.1),
+        PAL_STARS,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
 
     return blend_canvas(canvas_a, canvas_b, "exclusion", 0.8)
 ```
@@ -300,15 +337,30 @@ def fx_tunnel_ripple(r, f, t, S):
 def fx_rings_explosion(r, f, t, S):
     """Three-grid scene with particles and conditional kaleidoscope."""
     # Layer 1: rings
-    canvas_a = _render_vf(r, "sm",
+    canvas_a = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_rings(g, f, t, S, n_base=10, spacing_base=2) * 1.4,
-        lambda g, f, t, S: (g.angle / (2*np.pi) + t * 0.15) % 1.0,
-        PAL_STARS, f, t, S, sat=0.9)
+        lambda g, f, t, S: (g.angle / (2 * np.pi) + t * 0.15) % 1.0,
+        PAL_STARS,
+        f,
+        t,
+        S,
+        sat=0.9,
+    )
 
     # Layer 2: vortex on different grid
-    canvas_b = _render_vf(r, "md",
+    canvas_b = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_vortex(g, f, t, S, twist=6.0) * 1.2,
-        hf_time_cycle(0.15), PAL_BLOCKS, f, t, S, sat=0.8)
+        hf_time_cycle(0.15),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
 
     result = blend_canvas(canvas_b, canvas_a, "screen", 0.7)
 
@@ -316,7 +368,13 @@ def fx_rings_explosion(r, f, t, S):
     g = r.get_grid("sm")
     if "px" not in S:
         S["px"], S["py"], S["vx"], S["vy"], S["life"], S["pch"] = (
-            [], [], [], [], [], [])
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
     if f.get("beat", 0) > 0.5:
         chars = list("\u2605\u2736\u2733\u2738\u2726\u2728*+")
         for _ in range(int(80 + f.get("rms", 0.3) * 120)):
@@ -334,16 +392,20 @@ def fx_rings_explosion(r, f, t, S):
     co_p = np.zeros((g.rows, g.cols, 3), dtype=np.uint8)
     i = 0
     while i < len(S["px"]):
-        S["px"][i] += S["vx"][i]; S["py"][i] += S["vy"][i]
-        S["vy"][i] += 0.03; S["life"][i] -= 0.02
+        S["px"][i] += S["vx"][i]
+        S["py"][i] += S["vy"][i]
+        S["vy"][i] += 0.03
+        S["life"][i] -= 0.02
         if S["life"][i] <= 0:
-            for k in ("px","py","vx","vy","life","pch"): S[k].pop(i)
+            for k in ("px", "py", "vx", "vy", "life", "pch"):
+                S[k].pop(i)
         else:
             pr, pc = int(S["py"][i]), int(S["px"][i])
             if 0 <= pr < g.rows and 0 <= pc < g.cols:
                 ch_p[pr, pc] = S["pch"][i]
                 co_p[pr, pc] = hsv2rgb_scalar(
-                    0.08 + (1-S["life"][i])*0.15, 0.95, S["life"][i])
+                    0.08 + (1 - S["life"][i]) * 0.15, 0.95, S["life"][i]
+                )
             i += 1
 
     canvas_p = g.render(ch_p, co_p)
@@ -375,7 +437,8 @@ def fx_matrix_layered(r, f, t, S):
         S["rch"] = np.random.randint(1, len(pal), (rows, cols))
 
     speed = 0.6 + f.get("bass", 0.3) * 3
-    if f.get("beat", 0) > 0.5: speed *= 2.5
+    if f.get("beat", 0) > 0.5:
+        speed *= 2.5
     S["ry"] += S["rsp"] * speed
 
     ch = np.full((rows, cols), " ", dtype="U1")
@@ -390,16 +453,24 @@ def fx_matrix_layered(r, f, t, S):
                 ch[row, c] = pal[S["rch"][row, c] % len(pal)]
                 if i == 0:
                     v = int(min(255, fade * 300))
-                    co[row, c] = (int(v*0.9), v, int(v*0.9))
+                    co[row, c] = (int(v * 0.9), v, int(v * 0.9))
                 else:
                     v = int(fade * 240)
-                    co[row, c] = (int(v*0.1), v, int(v*0.4))
+                    co[row, c] = (int(v * 0.1), v, int(v * 0.4))
     canvas_a = g.render(ch, co)
 
     # Layer 2: Tunnel on sm grid for depth texture
-    canvas_b = _render_vf(r, "sm",
+    canvas_b = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_tunnel(g, f, t, S, speed=5.0, complexity=10),
-        hf_distance(0.3, 0.02), PAL_BLOCKS, f, t, S, sat=0.6)
+        hf_distance(0.3, 0.02),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.6,
+    )
 
     return blend_canvas(canvas_a, canvas_b, "screen", 0.5)
 ```
@@ -415,18 +486,18 @@ The scene table defines the timeline: which scene plays when, with what configur
 ```python
 SCENES = [
     {
-        "start": 0.0,           # start time in seconds
-        "end": 3.96,            # end time in seconds
-        "name": "starfield",    # identifier (used for clip filenames)
-        "grid": "sm",           # default grid (for render_clip setup)
-        "fx": fx_starfield,     # scene function reference (must be module-level)
-        "gamma": 0.75,          # tonemap gamma override (default 0.75)
-        "shaders": [            # shader chain (applied after tonemap + feedback)
+        "start": 0.0,  # start time in seconds
+        "end": 3.96,  # end time in seconds
+        "name": "starfield",  # identifier (used for clip filenames)
+        "grid": "sm",  # default grid (for render_clip setup)
+        "fx": fx_starfield,  # scene function reference (must be module-level)
+        "gamma": 0.75,  # tonemap gamma override (default 0.75)
+        "shaders": [  # shader chain (applied after tonemap + feedback)
             ("bloom", {"thr": 120}),
             ("vignette", {"s": 0.2}),
             ("grain", {"amt": 8}),
         ],
-        "feedback": None,       # feedback buffer config (None = disabled)
+        "feedback": None,  # feedback buffer config (None = disabled)
         # "feedback": {"decay": 0.8, "blend": "screen", "opacity": 0.3,
         #              "transform": "zoom", "transform_amt": 0.02, "hue_shift": 0.02},
     },
@@ -492,13 +563,33 @@ def render_clip(seg, features, clip_path):
     fx_fn = seg["fx"]
 
     # Open ffmpeg pipe
-    cmd = ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-           "-s", f"{VW}x{VH}", "-r", str(FPS), "-i", "pipe:0",
-           "-c:v", "libx264", "-preset", "fast", "-crf", "20",
-           "-pix_fmt", "yuv420p", clip_path]
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{VW}x{VH}",
+        "-r",
+        str(FPS),
+        "-i",
+        "pipe:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        clip_path,
+    ]
     stderr_fh = open(clip_path.replace(".mp4", ".log"), "w")
-    pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                            stdout=subprocess.DEVNULL, stderr=stderr_fh)
+    pipe = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_fh
+    )
 
     for fi in range(seg["frame_start"], seg["frame_end"]):
         t = fi / FPS
@@ -519,7 +610,9 @@ def render_clip(seg, features, clip_path):
 
         pipe.stdin.write(canvas.tobytes())
 
-    pipe.stdin.close(); pipe.wait(); stderr_fh.close()
+    pipe.stdin.close()
+    pipe.wait()
+    stderr_fh.close()
 ```
 
 ### Building Segments from Scene Table
@@ -618,9 +711,17 @@ One grid, one value field, one hue field. The simplest possible scene.
 ```python
 def fx_breathing_plasma(r, f, t, S):
     """Plasma field with time-cycling hue. Audio modulates brightness."""
-    canvas = _render_vf(r, "md",
+    canvas = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_plasma(g, f, t, S) * 1.3,
-        hf_time_cycle(0.08), PAL_DENSE, f, t, S, sat=0.8)
+        hf_time_cycle(0.08),
+        PAL_DENSE,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
     return canvas
 ```
 
@@ -632,10 +733,19 @@ Single grid, simulation-based field. Evolves organically over time.
 def fx_coral(r, f, t, S):
     """Gray-Scott reaction-diffusion — coral branching pattern.
     Slow-evolving, organic. Best for ambient/chill sections."""
-    canvas = _render_vf(r, "sm",
-        lambda g, f, t, S: vf_reaction_diffusion(g, f, t, S,
-            feed=0.037, kill=0.060, steps_per_frame=6, init_mode="center"),
-        hf_distance(0.55, 0.015), PAL_DOTS, f, t, S, sat=0.7)
+    canvas = _render_vf(
+        r,
+        "sm",
+        lambda g, f, t, S: vf_reaction_diffusion(
+            g, f, t, S, feed=0.037, kill=0.060, steps_per_frame=6, init_mode="center"
+        ),
+        hf_distance(0.55, 0.015),
+        PAL_DOTS,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
     return canvas
 ```
 
@@ -646,12 +756,14 @@ Geometric shapes from SDFs. Clean, precise, graphic.
 ```python
 def fx_sdf_rings(r, f, t, S):
     """Concentric SDF rings with smooth pulsing."""
+
     def val_fn(g, f, t, S):
         d1 = sdf_ring(g, radius=0.15 + f.get("bass", 0.3) * 0.05, thickness=0.015)
         d2 = sdf_ring(g, radius=0.25 + f.get("mid", 0.3) * 0.05, thickness=0.012)
         d3 = sdf_ring(g, radius=0.35 + f.get("hi", 0.3) * 0.04, thickness=0.010)
         combined = sdf_smooth_union(sdf_smooth_union(d1, d2, 0.05), d3, 0.05)
         return sdf_glow(combined, falloff=0.08) * (0.5 + f.get("rms", 0.3) * 0.8)
+
     canvas = _render_vf(r, "md", val_fn, hf_angle(0.0), PAL_STARS, f, t, S, sat=0.85)
     return canvas
 ```
@@ -667,13 +779,29 @@ Two grids at different densities, screen blended. The fine noise texture shows t
 ```python
 def fx_tunnel_noise(r, f, t, S):
     """Tunnel depth on md grid + fBM noise on sm grid, screen blended."""
-    canvas_a = _render_vf(r, "md",
+    canvas_a = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_tunnel(g, f, t, S, speed=4.0, complexity=8) * 1.2,
-        hf_distance(0.5, 0.02), PAL_BLOCKS, f, t, S, sat=0.7)
+        hf_distance(0.5, 0.02),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
 
-    canvas_b = _render_vf(r, "sm",
+    canvas_b = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_fbm(g, f, t, S, octaves=4, freq=0.05, speed=0.15) * 1.3,
-        hf_time_cycle(0.06), PAL_RUNE, f, t, S, sat=0.6)
+        hf_time_cycle(0.06),
+        PAL_RUNE,
+        f,
+        t,
+        S,
+        sat=0.6,
+    )
 
     return blend_canvas(canvas_a, canvas_b, "screen", 0.7)
 ```
@@ -685,14 +813,31 @@ Voronoi cell edges with a spiral arm pattern overlaid.
 ```python
 def fx_voronoi_spiral(r, f, t, S):
     """Voronoi edge detection on md + logarithmic spiral on lg."""
-    canvas_a = _render_vf(r, "md",
-        lambda g, f, t, S: vf_voronoi(g, f, t, S,
-            n_cells=15, mode="edge", edge_width=2.0, speed=0.4),
-        hf_angle(0.2), PAL_CIRCUIT, f, t, S, sat=0.75)
+    canvas_a = _render_vf(
+        r,
+        "md",
+        lambda g, f, t, S: vf_voronoi(
+            g, f, t, S, n_cells=15, mode="edge", edge_width=2.0, speed=0.4
+        ),
+        hf_angle(0.2),
+        PAL_CIRCUIT,
+        f,
+        t,
+        S,
+        sat=0.75,
+    )
 
-    canvas_b = _render_vf(r, "lg",
+    canvas_b = _render_vf(
+        r,
+        "lg",
         lambda g, f, t, S: vf_spiral(g, f, t, S, n_arms=4, tightness=3.0) * 1.2,
-        hf_distance(0.1, 0.03), PAL_BLOCKS, f, t, S, sat=0.9)
+        hf_distance(0.1, 0.03),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.9,
+    )
 
     return blend_canvas(canvas_a, canvas_b, "exclusion", 0.6)
 ```
@@ -704,14 +849,31 @@ Two layers of the same fBM, one domain-warped, difference-blended for psychedeli
 ```python
 def fx_organic_warp(r, f, t, S):
     """Clean fBM vs domain-warped fBM, difference blended."""
-    canvas_a = _render_vf(r, "sm",
+    canvas_a = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_fbm(g, f, t, S, octaves=5, freq=0.04, speed=0.1),
-        hf_plasma(0.2), PAL_DENSE, f, t, S, sat=0.6)
+        hf_plasma(0.2),
+        PAL_DENSE,
+        f,
+        t,
+        S,
+        sat=0.6,
+    )
 
-    canvas_b = _render_vf(r, "md",
-        lambda g, f, t, S: vf_domain_warp(g, f, t, S,
-            warp_strength=20.0, freq=0.05, speed=0.15),
-        hf_time_cycle(0.05), PAL_BRAILLE, f, t, S, sat=0.7)
+    canvas_b = _render_vf(
+        r,
+        "md",
+        lambda g, f, t, S: vf_domain_warp(
+            g, f, t, S, warp_strength=20.0, freq=0.05, speed=0.15
+        ),
+        hf_time_cycle(0.05),
+        PAL_BRAILLE,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
 
     return blend_canvas(canvas_a, canvas_b, "difference", 0.7)
 ```
@@ -729,20 +891,45 @@ def fx_cathedral(r, f, t, S):
     """Three-layer cathedral: interference + rings + noise, kaleidoscope on beat,
     feedback zoom tunnel."""
     # Layer 1: interference pattern on sm grid
-    canvas_a = _render_vf(r, "sm",
+    canvas_a = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_interference(g, f, t, S, n_waves=7) * 1.3,
-        hf_angle(0.0), PAL_MATH, f, t, S, sat=0.8)
+        hf_angle(0.0),
+        PAL_MATH,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
 
     # Layer 2: pulsing rings on md grid
-    canvas_b = _render_vf(r, "md",
+    canvas_b = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_rings(g, f, t, S, n_base=10, spacing_base=3) * 1.4,
-        hf_distance(0.3, 0.02), PAL_STARS, f, t, S, sat=0.9)
+        hf_distance(0.3, 0.02),
+        PAL_STARS,
+        f,
+        t,
+        S,
+        sat=0.9,
+    )
 
     # Layer 3: temporal noise on lg grid (slow morph)
-    canvas_c = _render_vf(r, "lg",
-        lambda g, f, t, S: vf_temporal_noise(g, f, t, S,
-            freq=0.04, t_freq=0.2, octaves=3),
-        hf_time_cycle(0.12), PAL_BLOCKS, f, t, S, sat=0.7)
+    canvas_c = _render_vf(
+        r,
+        "lg",
+        lambda g, f, t, S: vf_temporal_noise(
+            g, f, t, S, freq=0.04, t_freq=0.2, octaves=3
+        ),
+        hf_time_cycle(0.12),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
 
     # Blend: A screen B, then difference with C
     result = blend_canvas(canvas_a, canvas_b, "screen", 0.8)
@@ -754,6 +941,7 @@ def fx_cathedral(r, f, t, S):
         result = sh_kaleidoscope(result.copy(), folds=folds)
 
     return result
+
 
 # Scene table entry with feedback:
 # {"start": 30.0, "end": 50.0, "name": "cathedral", "fx": fx_cathedral,
@@ -774,30 +962,49 @@ def fx_masked_life(r, f, t, S):
     g_md = r.get_grid("md")
 
     # Layer 1: strange attractor density field (background)
-    canvas_bg = _render_vf(r, "sm",
-        lambda g, f, t, S: vf_strange_attractor(g, f, t, S,
-            attractor="clifford", n_points=30000),
-        hf_time_cycle(0.04), PAL_DOTS, f, t, S, sat=0.5)
+    canvas_bg = _render_vf(
+        r,
+        "sm",
+        lambda g, f, t, S: vf_strange_attractor(
+            g, f, t, S, attractor="clifford", n_points=30000
+        ),
+        hf_time_cycle(0.04),
+        PAL_DOTS,
+        f,
+        t,
+        S,
+        sat=0.5,
+    )
 
     # Layer 2: reaction-diffusion (foreground, will be masked)
-    canvas_rd = _render_vf(r, "md",
-        lambda g, f, t, S: vf_reaction_diffusion(g, f, t, S,
-            feed=0.046, kill=0.063, steps_per_frame=4, init_mode="ring"),
-        hf_angle(0.15), PAL_HALFFILL, f, t, S, sat=0.85)
+    canvas_rd = _render_vf(
+        r,
+        "md",
+        lambda g, f, t, S: vf_reaction_diffusion(
+            g, f, t, S, feed=0.046, kill=0.063, steps_per_frame=4, init_mode="ring"
+        ),
+        hf_angle(0.15),
+        PAL_HALFFILL,
+        f,
+        t,
+        S,
+        sat=0.85,
+    )
 
     # Animated iris mask — opens over first 5 seconds of scene
     scene_start = S.get("_scene_start", t)
     if "_scene_start" not in S:
         S["_scene_start"] = t
-    mask = mask_iris(g_md, t, scene_start, scene_start + 5.0,
-                     max_radius=0.6)
+    mask = mask_iris(g_md, t, scene_start, scene_start + 5.0, max_radius=0.6)
     canvas_rd = apply_mask_canvas(canvas_rd, mask, bg_canvas=canvas_bg)
 
     # Layer 3: flow-field particles following the R-D gradient
-    rd_field = vf_reaction_diffusion(g_sm, f, t, S,
-        feed=0.046, kill=0.063, steps_per_frame=0)  # read without stepping
-    ch_p, co_p = update_flow_particles(S, g_sm, f, rd_field,
-        n=300, speed=0.8, char_set=list("·•◦∘°"))
+    rd_field = vf_reaction_diffusion(
+        g_sm, f, t, S, feed=0.046, kill=0.063, steps_per_frame=0
+    )  # read without stepping
+    ch_p, co_p = update_flow_particles(
+        S, g_sm, f, rd_field, n=300, speed=0.8, char_set=list("·•◦∘°")
+    )
     canvas_p = g_sm.render(ch_p, co_p)
 
     result = blend_canvas(canvas_rd, canvas_p, "add", 0.7)
@@ -813,8 +1020,12 @@ def fx_morphing_journey(r, f, t, S):
     """Morphs through 4 value fields over 20 seconds with eased transitions.
     Parameters (twist, arm count) also keyframed."""
     # Keyframed twist parameter
-    twist = keyframe(t, [(0, 1.0), (5, 5.0), (10, 2.0), (15, 8.0), (20, 1.0)],
-                     ease_fn=ease_in_out_cubic, loop=True)
+    twist = keyframe(
+        t,
+        [(0, 1.0), (5, 5.0), (10, 2.0), (15, 8.0), (20, 1.0)],
+        ease_fn=ease_in_out_cubic,
+        loop=True,
+    )
 
     # Sequence of value fields with 2s crossfade
     fields = [
@@ -825,19 +1036,26 @@ def fx_morphing_journey(r, f, t, S):
     ]
     durations = [5.0, 5.0, 5.0, 5.0]
 
-    val_fn = lambda g, f, t, S: vf_sequence(g, f, t, S, fields, durations,
-                                             crossfade=2.0)
+    val_fn = lambda g, f, t, S: vf_sequence(
+        g, f, t, S, fields, durations, crossfade=2.0
+    )
 
     # Render with slowly rotating hue
-    canvas = _render_vf(r, "md", val_fn, hf_time_cycle(0.06),
-                        PAL_DENSE, f, t, S, sat=0.8)
+    canvas = _render_vf(
+        r, "md", val_fn, hf_time_cycle(0.06), PAL_DENSE, f, t, S, sat=0.8
+    )
 
     # Second layer: tiled version of same sequence at smaller grid
     tiled_fn = lambda g, f, t, S: vf_sequence(
         make_tgrid(g, *uv_tile(g, 3, 3, mirror=True)),
-        f, t, S, fields, durations, crossfade=2.0)
-    canvas_b = _render_vf(r, "sm", tiled_fn, hf_angle(0.1),
-                          PAL_RUNE, f, t, S, sat=0.6)
+        f,
+        t,
+        S,
+        fields,
+        durations,
+        crossfade=2.0,
+    )
+    canvas_b = _render_vf(r, "sm", tiled_fn, hf_angle(0.1), PAL_RUNE, f, t, S, sat=0.6)
 
     return blend_canvas(canvas, canvas_b, "screen", 0.5)
 ```
@@ -854,16 +1072,42 @@ Cellular automaton with analog fade trails. Beat injects random cells.
 def fx_life(r, f, t, S):
     """Conway's Game of Life with fading ghost trails.
     Beat events inject random live cells for disruption."""
-    canvas = _render_vf(r, "sm",
-        lambda g, f, t, S: vf_game_of_life(g, f, t, S,
-            rule="life", steps_per_frame=1, fade=0.92, density=0.25),
-        hf_fixed(0.33), PAL_BLOCKS, f, t, S, sat=0.8)
+    canvas = _render_vf(
+        r,
+        "sm",
+        lambda g, f, t, S: vf_game_of_life(
+            g, f, t, S, rule="life", steps_per_frame=1, fade=0.92, density=0.25
+        ),
+        hf_fixed(0.33),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
 
     # Overlay: coral automaton on lg grid for chunky texture
-    canvas_b = _render_vf(r, "lg",
-        lambda g, f, t, S: vf_game_of_life(g, f, t, S,
-            rule="coral", steps_per_frame=1, fade=0.85, density=0.15, seed=99),
-        hf_time_cycle(0.1), PAL_HATCH, f, t, S, sat=0.6)
+    canvas_b = _render_vf(
+        r,
+        "lg",
+        lambda g, f, t, S: vf_game_of_life(
+            g,
+            f,
+            t,
+            S,
+            rule="coral",
+            steps_per_frame=1,
+            fade=0.85,
+            density=0.15,
+            seed=99,
+        ),
+        hf_time_cycle(0.1),
+        PAL_HATCH,
+        f,
+        t,
+        S,
+        sat=0.6,
+    )
 
     return blend_canvas(canvas, canvas_b, "screen", 0.5)
 ```
@@ -876,15 +1120,25 @@ Emergent swarm movement over a cellular background.
 def fx_boid_swarm(r, f, t, S):
     """Flocking boids over animated voronoi cells."""
     # Background: voronoi cells
-    canvas_bg = _render_vf(r, "md",
-        lambda g, f, t, S: vf_voronoi(g, f, t, S,
-            n_cells=20, mode="distance", speed=0.2),
-        hf_distance(0.4, 0.02), PAL_CIRCUIT, f, t, S, sat=0.5)
+    canvas_bg = _render_vf(
+        r,
+        "md",
+        lambda g, f, t, S: vf_voronoi(
+            g, f, t, S, n_cells=20, mode="distance", speed=0.2
+        ),
+        hf_distance(0.4, 0.02),
+        PAL_CIRCUIT,
+        f,
+        t,
+        S,
+        sat=0.5,
+    )
 
     # Foreground: boids
     g = r.get_grid("md")
-    ch_b, co_b = update_boids(S, g, f, n_boids=150, perception=6.0,
-                              max_speed=1.5, char_set=list("▸▹►▻→⟶"))
+    ch_b, co_b = update_boids(
+        S, g, f, n_boids=150, perception=6.0, max_speed=1.5, char_set=list("▸▹►▻→⟶")
+    )
     canvas_boids = g.render(ch_b, co_b)
 
     # Trails for the boids
@@ -909,18 +1163,38 @@ def fx_fire_text(r, f, t, S):
     g = r.get_grid("lg")
 
     # Full-screen fire (will be masked)
-    canvas_fire = _render_vf(r, "sm",
+    canvas_fire = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: np.clip(
-            vf_fbm(g, f, t, S, octaves=4, freq=0.08, speed=0.8) *
-            (1.0 - g.rr / g.rows) *  # fade toward top
-            (0.6 + f.get("bass", 0.3) * 0.8), 0, 1),
-        hf_fixed(0.05), PAL_BLOCKS, f, t, S, sat=0.9)  # fire hue
+            vf_fbm(g, f, t, S, octaves=4, freq=0.08, speed=0.8)
+            * (1.0 - g.rr / g.rows)  # fade toward top
+            * (0.6 + f.get("bass", 0.3) * 0.8),
+            0,
+            1,
+        ),
+        hf_fixed(0.05),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.9,
+    )  # fire hue
 
     # Background: dark domain warp
-    canvas_bg = _render_vf(r, "md",
-        lambda g, f, t, S: vf_domain_warp(g, f, t, S,
-            warp_strength=8, freq=0.03, speed=0.05) * 0.3,
-        hf_fixed(0.6), PAL_DENSE, f, t, S, sat=0.4)
+    canvas_bg = _render_vf(
+        r,
+        "md",
+        lambda g, f, t, S: (
+            vf_domain_warp(g, f, t, S, warp_strength=8, freq=0.03, speed=0.05) * 0.3
+        ),
+        hf_fixed(0.6),
+        PAL_DENSE,
+        f,
+        t,
+        S,
+        sat=0.4,
+    )
 
     # Text stencil mask
     mask = mask_text(g, "FIRE", row_frac=0.45)
@@ -944,31 +1218,50 @@ def fx_portrait_rain_quote(r, f, t, S):
     g = r.get_grid("md")  # ~112x100 in portrait
 
     # Matrix rain — long trails benefit from portrait's extra rows
-    ch, co, S = eff_matrix_rain(g, f, t, S,
-        hue=0.33, bri=0.6, pal=PAL_KATA, speed_base=0.4, speed_beat=2.5)
+    ch, co, S = eff_matrix_rain(
+        g, f, t, S, hue=0.33, bri=0.6, pal=PAL_KATA, speed_base=0.4, speed_beat=2.5
+    )
     canvas_rain = g.render(ch, co)
 
     # Tunnel depth underneath for texture
-    canvas_tunnel = _render_vf(r, "sm",
+    canvas_tunnel = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_tunnel(g, f, t, S, speed=3.0, complexity=6) * 0.8,
-        hf_fixed(0.33), PAL_BLOCKS, f, t, S, sat=0.5)
+        hf_fixed(0.33),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.5,
+    )
 
     result = blend_canvas(canvas_tunnel, canvas_rain, "screen", 0.8)
 
     # Quote text — portrait layout: short lines, many of them
     g_text = r.get_grid("lg")  # ~90x80 in portrait
     quote_lines = layout_text_portrait(
-        "The code is the art and the art is the code",
-        max_chars_per_line=20)
+        "The code is the art and the art is the code", max_chars_per_line=20
+    )
     # Center vertically
     block_start = (g_text.rows - len(quote_lines)) // 2
     ch_t = np.full((g_text.rows, g_text.cols), " ", dtype="U1")
     co_t = np.zeros((g_text.rows, g_text.cols, 3), dtype=np.uint8)
     total_chars = sum(len(l) for l in quote_lines)
     progress = min(1.0, (t - S.get("_scene_start", t)) / 3.0)
-    if "_scene_start" not in S: S["_scene_start"] = t
-    render_typewriter(ch_t, co_t, quote_lines, block_start, g_text.cols,
-                      progress, total_chars, (200, 255, 220), t)
+    if "_scene_start" not in S:
+        S["_scene_start"] = t
+    render_typewriter(
+        ch_t,
+        co_t,
+        quote_lines,
+        block_start,
+        g_text.cols,
+        progress,
+        total_chars,
+        (200, 255, 220),
+        t,
+    )
     canvas_text = g_text.render(ch_t, co_t)
 
     result = blend_canvas(result, canvas_text, "add", 0.9)
@@ -983,29 +1276,74 @@ Wire scenes into a complete video:
 
 ```python
 SCENES = [
-    {"start": 0.0,  "end": 5.0,  "name": "coral",
-     "fx": fx_coral, "grid": "sm", "gamma": 0.70,
-     "shaders": [("bloom", {"thr": 110}), ("vignette", {"s": 0.2})],
-     "feedback": {"decay": 0.8, "blend": "screen", "opacity": 0.3,
-                  "transform": "zoom", "transform_amt": 0.01}},
-
-    {"start": 5.0,  "end": 15.0, "name": "tunnel_noise",
-     "fx": fx_tunnel_noise, "grid": "md", "gamma": 0.75,
-     "shaders": [("chromatic", {"amt": 3}), ("bloom", {"thr": 120}),
-                 ("scanlines", {"intensity": 0.06}), ("grain", {"amt": 8})],
-     "feedback": None},
-
-    {"start": 15.0, "end": 35.0, "name": "cathedral",
-     "fx": fx_cathedral, "grid": "sm", "gamma": 0.65,
-     "shaders": [("bloom", {"thr": 100}), ("chromatic", {"amt": 5}),
-                 ("color_wobble", {"amt": 0.2}), ("vignette", {"s": 0.18})],
-     "feedback": {"decay": 0.75, "blend": "screen", "opacity": 0.35,
-                  "transform": "zoom", "transform_amt": 0.012, "hue_shift": 0.015}},
-
-    {"start": 35.0, "end": 50.0, "name": "morphing",
-     "fx": fx_morphing_journey, "grid": "md", "gamma": 0.70,
-     "shaders": [("bloom", {"thr": 110}), ("grain", {"amt": 6})],
-     "feedback": {"decay": 0.7, "blend": "screen", "opacity": 0.25,
-                  "transform": "rotate_cw", "transform_amt": 0.003}},
+    {
+        "start": 0.0,
+        "end": 5.0,
+        "name": "coral",
+        "fx": fx_coral,
+        "grid": "sm",
+        "gamma": 0.70,
+        "shaders": [("bloom", {"thr": 110}), ("vignette", {"s": 0.2})],
+        "feedback": {
+            "decay": 0.8,
+            "blend": "screen",
+            "opacity": 0.3,
+            "transform": "zoom",
+            "transform_amt": 0.01,
+        },
+    },
+    {
+        "start": 5.0,
+        "end": 15.0,
+        "name": "tunnel_noise",
+        "fx": fx_tunnel_noise,
+        "grid": "md",
+        "gamma": 0.75,
+        "shaders": [
+            ("chromatic", {"amt": 3}),
+            ("bloom", {"thr": 120}),
+            ("scanlines", {"intensity": 0.06}),
+            ("grain", {"amt": 8}),
+        ],
+        "feedback": None,
+    },
+    {
+        "start": 15.0,
+        "end": 35.0,
+        "name": "cathedral",
+        "fx": fx_cathedral,
+        "grid": "sm",
+        "gamma": 0.65,
+        "shaders": [
+            ("bloom", {"thr": 100}),
+            ("chromatic", {"amt": 5}),
+            ("color_wobble", {"amt": 0.2}),
+            ("vignette", {"s": 0.18}),
+        ],
+        "feedback": {
+            "decay": 0.75,
+            "blend": "screen",
+            "opacity": 0.35,
+            "transform": "zoom",
+            "transform_amt": 0.012,
+            "hue_shift": 0.015,
+        },
+    },
+    {
+        "start": 35.0,
+        "end": 50.0,
+        "name": "morphing",
+        "fx": fx_morphing_journey,
+        "grid": "md",
+        "gamma": 0.70,
+        "shaders": [("bloom", {"thr": 110}), ("grain", {"amt": 6})],
+        "feedback": {
+            "decay": 0.7,
+            "blend": "screen",
+            "opacity": 0.25,
+            "transform": "rotate_cw",
+            "transform_amt": 0.003,
+        },
+    },
 ]
 ```

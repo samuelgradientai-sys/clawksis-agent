@@ -18,9 +18,7 @@ from clawk_cli.webhook import (
 def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Default: webhooks enabled (most tests need this)
-    monkeypatch.setattr(
-        "clawk_cli.webhook._is_webhook_enabled", lambda: True
-    )
+    monkeypatch.setattr("clawk_cli.webhook._is_webhook_enabled", lambda: True)
 
 
 def _make_args(**kwargs):
@@ -50,15 +48,17 @@ class TestSubscribe:
         assert "test-hook" in subs
 
     def test_with_options(self, capsys):
-        webhook_command(_make_args(
-            webhook_action="subscribe",
-            name="gh-issues",
-            events="issues,pull_request",
-            prompt="Issue: {issue.title}",
-            deliver="telegram",
-            deliver_chat_id="12345",
-            description="Watch GitHub",
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe",
+                name="gh-issues",
+                events="issues,pull_request",
+                prompt="Issue: {issue.title}",
+                deliver="telegram",
+                deliver_chat_id="12345",
+                description="Watch GitHub",
+            )
+        )
         subs = _load_subscriptions()
         route = subs["gh-issues"]
         assert route["events"] == ["issues", "pull_request"]
@@ -67,9 +67,9 @@ class TestSubscribe:
         assert route["deliver_extra"] == {"chat_id": "12345"}
 
     def test_custom_secret(self):
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="s", secret="my-secret"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="s", secret="my-secret")
+        )
         assert _load_subscriptions()["s"]["secret"] == "my-secret"
 
     def test_auto_secret(self):
@@ -202,6 +202,7 @@ class TestWebhookEnabledGate:
             lambda: bool({}.get("enabled")),
         )
         import clawk_cli.webhook as wh_mod
+
         assert wh_mod._is_webhook_enabled() is False
 
     def test_real_check_enabled(self, monkeypatch):
@@ -210,4 +211,5 @@ class TestWebhookEnabledGate:
             lambda: True,
         )
         import clawk_cli.webhook as wh_mod
+
         assert wh_mod._is_webhook_enabled() is True

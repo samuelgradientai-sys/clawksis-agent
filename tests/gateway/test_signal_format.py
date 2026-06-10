@@ -15,6 +15,7 @@ from gateway.platforms.signal import SignalAdapter
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _m2s(text: str):
     """Shorthand: call the static method and return (plain_text, styles)."""
     return SignalAdapter._markdown_to_signal(text)
@@ -33,6 +34,7 @@ def _find_style(styles: list[str], style_type: str) -> list[str]:
 # ===========================================================================
 # Basic formatting
 # ===========================================================================
+
 
 class TestMarkdownToSignalBasic:
     """Core formatting: bold, italic, strikethrough, monospace."""
@@ -106,6 +108,7 @@ class TestMarkdownToSignalBasic:
 # ===========================================================================
 # Italic false-positive regressions
 # ===========================================================================
+
 
 class TestItalicFalsePositives:
     """Regressions from signal-italic-false-positive-fix.md and
@@ -220,6 +223,7 @@ class TestItalicFalsePositives:
 # Style position accuracy
 # ===========================================================================
 
+
 class TestStylePositions:
     """Verify that start:length positions map to the correct text."""
 
@@ -260,6 +264,7 @@ class TestStylePositions:
 # ===========================================================================
 # Edge cases
 # ===========================================================================
+
 
 class TestEdgeCases:
     """Tricky inputs that have caused issues or could regress."""
@@ -315,9 +320,10 @@ class TestEdgeCases:
 # signal-markdown-strip-patch: core conversion pipeline
 # ===========================================================================
 
+
 class TestMarkdownStripPatch:
     """Tests for the original signal-markdown-strip-patch.
-    
+
     Covers: fenced code blocks with language tags, links preserved,
     headings converted to bold, multiple headings, UTF-16 correctness
     for multi-byte characters, and marker stripping completeness.
@@ -412,9 +418,10 @@ class TestMarkdownStripPatch:
 # signal-streaming-patch: SUPPORTS_MESSAGE_EDITING and send() behavior
 # ===========================================================================
 
+
 class TestSignalStreamingPatch:
     """Tests for signal-streaming-patch: cursor suppression and edit support.
-    
+
     These verify the adapter-level properties that prevent the streaming
     cursor from leaking into Signal messages.
     """
@@ -423,6 +430,7 @@ class TestSignalStreamingPatch:
         """SignalAdapter.SUPPORTS_MESSAGE_EDITING must be False."""
         monkeypatch.setenv("SIGNAL_GROUP_ALLOWED_USERS", "")
         from gateway.platforms.signal import SignalAdapter
+
         assert SignalAdapter.SUPPORTS_MESSAGE_EDITING is False
 
     @pytest.mark.asyncio

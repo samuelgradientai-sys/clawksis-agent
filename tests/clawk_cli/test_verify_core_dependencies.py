@@ -32,7 +32,8 @@ def temp_pyproject(tmp_path, monkeypatch):
     redirecting PROJECT_ROOT keeps the test hermetic.
     """
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(textwrap.dedent("""\
+    pyproject.write_text(
+        textwrap.dedent("""\
         [project]
         name = "fake"
         version = "0.0.0"
@@ -41,8 +42,10 @@ def temp_pyproject(tmp_path, monkeypatch):
           "pydantic==2.13.4",
           "ptyprocess>=0.7.0,<1; sys_platform != 'win32'",
         ]
-    """))
+    """)
+    )
     import clawk_cli.main as main_mod
+
     monkeypatch.setattr(main_mod, "PROJECT_ROOT", tmp_path)
     return tmp_path
 
@@ -64,19 +67,26 @@ class TestVerifyCoreDependencies:
         py, venv_root = fake_venv_python
         env = {"VIRTUAL_ENV": str(venv_root)}
 
-        with patch("clawk_cli.main._resolve_install_target_python", return_value=py), \
-             patch("clawk_cli.main.subprocess.run") as mock_run, \
-             patch("clawk_cli.main._run_install_with_heartbeat") as mock_install:
+        with (
+            patch("clawk_cli.main._resolve_install_target_python", return_value=py),
+            patch("clawk_cli.main.subprocess.run") as mock_run,
+            patch("clawk_cli.main._run_install_with_heartbeat") as mock_install,
+        ):
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env=env)
 
             # Probe ran, repair install did not.
             assert mock_run.called, "verification probe should have run"
-            assert not mock_install.called, "repair install should not fire when nothing is missing"
+            assert not mock_install.called, (
+                "repair install should not fire when nothing is missing"
+            )
 
-    def test_triggers_reinstall_when_dep_missing(self, temp_pyproject, fake_venv_python):
+    def test_triggers_reinstall_when_dep_missing(
+        self, temp_pyproject, fake_venv_python
+    ):
         """The regression: one base dep is missing → trigger --reinstall."""
         py, venv_root = fake_venv_python
         env = {"VIRTUAL_ENV": str(venv_root)}
@@ -91,19 +101,25 @@ class TestVerifyCoreDependencies:
                 return MagicMock(returncode=0, stdout="pathspec\n", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("clawk_cli.main._resolve_install_target_python", return_value=py), \
-             patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run), \
-             patch("clawk_cli.main._run_install_with_heartbeat") as mock_install:
-
+        with (
+            patch("clawk_cli.main._resolve_install_target_python", return_value=py),
+            patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run),
+            patch("clawk_cli.main._run_install_with_heartbeat") as mock_install,
+        ):
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env=env)
 
             assert mock_install.called, "repair install must fire when a dep is missing"
             # First repair must use --reinstall to force re-resolution.
             first_repair = mock_install.call_args_list[0]
             args = first_repair[0][0]  # positional: install_cmd
-            assert "--reinstall" in args, f"repair install should pass --reinstall, got {args}"
-            assert "-e" in args and "." in args, "first repair should be base group reinstall"
+            assert "--reinstall" in args, (
+                f"repair install should pass --reinstall, got {args}"
+            )
+            assert "-e" in args and "." in args, (
+                "first repair should be base group reinstall"
+            )
 
     def test_falls_back_to_per_package_install_when_reinstall_did_not_help(
         self, temp_pyproject, fake_venv_python
@@ -125,11 +141,13 @@ class TestVerifyCoreDependencies:
                 return MagicMock(returncode=0, stdout="pathspec\n", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("clawk_cli.main._resolve_install_target_python", return_value=py), \
-             patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run), \
-             patch("clawk_cli.main._run_install_with_heartbeat") as mock_install:
-
+        with (
+            patch("clawk_cli.main._resolve_install_target_python", return_value=py),
+            patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run),
+            patch("clawk_cli.main._run_install_with_heartbeat") as mock_install,
+        ):
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env=env)
 
             assert mock_install.call_count >= 2, (
@@ -142,7 +160,9 @@ class TestVerifyCoreDependencies:
                 f"second repair should pin pathspec from pyproject; got {second_repair_args}"
             )
 
-    def test_skips_deps_excluded_by_environment_markers(self, temp_pyproject, fake_venv_python):
+    def test_skips_deps_excluded_by_environment_markers(
+        self, temp_pyproject, fake_venv_python
+    ):
         """``ptyprocess ; sys_platform != 'win32'`` should NOT be reported as
         missing on Windows. Without marker evaluation, the verification step
         would false-positive on every cross-platform exclusion and chase its
@@ -157,17 +177,23 @@ class TestVerifyCoreDependencies:
 
         # Force sys.platform to look like Windows so the marker filters
         # ptyprocess out. (We need the actual marker.evaluate() to see win32.)
-        with patch("clawk_cli.main._resolve_install_target_python", return_value=py), \
-             patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run), \
-             patch("clawk_cli.main._run_install_with_heartbeat"), \
-             patch("sys.platform", "win32"):
-
+        with (
+            patch("clawk_cli.main._resolve_install_target_python", return_value=py),
+            patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run),
+            patch("clawk_cli.main._run_install_with_heartbeat"),
+            patch("sys.platform", "win32"),
+        ):
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env=env)
 
         # Find the probe argv — it's the call that passed the dep names.
         probe = next(
-            (argv for argv in captured_argv if any("importlib.metadata" in str(a) for a in argv)),
+            (
+                argv
+                for argv in captured_argv
+                if any("importlib.metadata" in str(a) for a in argv)
+            ),
             None,
         )
         assert probe is not None, "verification probe should have run"
@@ -182,11 +208,15 @@ class TestVerifyCoreDependencies:
         """If pyproject.toml is missing (unusual but possible in some test
         envs), the verification step must short-circuit, not crash."""
         import clawk_cli.main as main_mod
+
         monkeypatch.setattr(main_mod, "PROJECT_ROOT", tmp_path)
         # No pyproject.toml in tmp_path.
-        with patch("clawk_cli.main._resolve_install_target_python") as mock_resolve, \
-             patch("clawk_cli.main._run_install_with_heartbeat") as mock_install:
+        with (
+            patch("clawk_cli.main._resolve_install_target_python") as mock_resolve,
+            patch("clawk_cli.main._run_install_with_heartbeat") as mock_install,
+        ):
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env={})
             assert not mock_resolve.called
             assert not mock_install.called
@@ -206,6 +236,7 @@ class TestResolveInstallTargetPython:
 
         with patch("clawk_cli.main._is_windows", return_value=True):
             from clawk_cli.main import _resolve_install_target_python
+
             result = _resolve_install_target_python(
                 ["uv", "pip"], env={"VIRTUAL_ENV": str(venv_root)}
             )
@@ -217,6 +248,7 @@ class TestResolveInstallTargetPython:
         cleanly short-circuits instead of crashing on FileNotFoundError."""
         with patch("clawk_cli.main._is_windows", return_value=True):
             from clawk_cli.main import _resolve_install_target_python
+
             result = _resolve_install_target_python(
                 ["uv", "pip"], env={"VIRTUAL_ENV": str(tmp_path / "does_not_exist")}
             )

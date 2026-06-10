@@ -47,26 +47,26 @@ POP buffers carry standard channels: `P` (position), `v` (velocity), `life`, `id
 
 ```python
 # Create a geometry COMP to hold the POP network
-geo = root.create(geometryCOMP, 'particles_geo')
+geo = root.create(geometryCOMP, "particles_geo")
 
 # 1. Source — emit particles from a point
-src = geo.create(popSourceTOP, 'src')
-src.par.birthrate = 500          # per second
-src.par.life = 4.0                # seconds
+src = geo.create(popSourceTOP, "src")
+src.par.birthrate = 500  # per second
+src.par.life = 4.0  # seconds
 
 # 2. Gravity force
-grav = geo.create(popForceTOP, 'gravity')
-grav.par.forcetype = 'gravity'
+grav = geo.create(popForceTOP, "gravity")
+grav.par.forcetype = "gravity"
 grav.par.fy = -9.8
 
 # 3. Lifetime cleanup
-delp = geo.create(popDeleteTOP, 'cull')
-delp.par.condition = 'lifeleq'    # delete when life <= 0
+delp = geo.create(popDeleteTOP, "cull")
+delp.par.condition = "lifeleq"  # delete when life <= 0
 delp.par.value = 0
 
 # 4. Solver
-solv = geo.create(popSolverTOP, 'solver')
-solv.par.timestep = 'frame'
+solv = geo.create(popSolverTOP, "solver")
+solv.par.timestep = "frame"
 
 # Wire: source → force → delete → solver
 src.outputConnectors[0].connect(grav.inputConnectors[0])
@@ -100,15 +100,15 @@ Stack multiple `popForceTOP`s in series — each modifies velocity additively.
 
 ```python
 src.par.birthrate = 800
-src.par.life = 6.0       # variance via 'lifevariance'
+src.par.life = 6.0  # variance via 'lifevariance'
 src.par.lifevariance = 1.5
 ```
 
 ### Burst emission (e.g. explosion)
 
 ```python
-src.par.birthrate = 0    # no continuous emission
-src.par.burst.pulse()    # one burst on demand (verify param name)
+src.par.birthrate = 0  # no continuous emission
+src.par.burst.pulse()  # one burst on demand (verify param name)
 src.par.burstcount = 5000
 src.par.life = 1.5
 ```
@@ -118,10 +118,12 @@ src.par.life = 1.5
 Wire a `triggerCHOP` (from audio or MIDI) to pulse the burst:
 
 ```python
-op('/project1/audio_kick_trigger').outputConnectors[0].connect(...)
+op("/project1/audio_kick_trigger").outputConnectors[0].connect(...)
+
+
 # Then via a chopExecuteDAT, on each kick:
 def offToOn(channel, sampleIndex, val, prev):
-    op('/project1/particles_geo/src').par.burst.pulse()
+    op("/project1/particles_geo/src").par.burst.pulse()
     return
 ```
 
@@ -137,12 +139,13 @@ def offToOn(channel, sampleIndex, val, prev):
 # But for POPs, we typically render via glslMAT on a small "shape"
 
 # Simple billboard sphere per particle:
-shape = geo.create(sphereSOP, 'shape')
+shape = geo.create(sphereSOP, "shape")
 shape.par.rad = 0.05
-shape.par.rows = 6; shape.par.cols = 6   # low-poly to keep it fast
+shape.par.rows = 6
+shape.par.cols = 6  # low-poly to keep it fast
 
 # Material that uses POP buffer for instancing
-mat = root.create(glslMAT, 'particle_mat')
+mat = root.create(glslMAT, "particle_mat")
 # Configure mat.par.instancingTOP = solver output (verify param name)
 ```
 
@@ -158,8 +161,8 @@ For dense smoke/fire-like effects, use a `glslcopyPOP` that writes per-particle 
 
 ```python
 # Collision detection against an SOP
-coll = geo.create(popCollideTOP, 'ground_coll')
-coll.par.collidewithsop = '/project1/ground_geo'  # path to colliding SOP
+coll = geo.create(popCollideTOP, "ground_coll")
+coll.par.collidewithsop = "/project1/ground_geo"  # path to colliding SOP
 coll.par.bounce = 0.3
 coll.par.friction = 0.1
 # Insert between force and solver
@@ -175,9 +178,9 @@ Add a custom channel via `popAttribCreateTOP` (or by writing through `glslcopyPO
 
 ```python
 # Add a "phase" attribute initialized random per-particle, used in render shader
-attr = geo.create(popAttribCreateTOP, 'add_phase')
-attr.par.attribname = 'phase'
-attr.par.value0 = 'rand(@id)'   # expression in TD's POP attribute language
+attr = geo.create(popAttribCreateTOP, "add_phase")
+attr.par.attribname = "phase"
+attr.par.value0 = "rand(@id)"  # expression in TD's POP attribute language
 ```
 
 Then in the render shader, `texture(sTDPOPInputs[0].phase, ...)` (or whichever sampler convention your TD version uses — verify with `td_get_docs(topic='pops')`).
@@ -190,10 +193,10 @@ For quick demos or low-count systems:
 
 ```python
 # Inside a geo
-psrc = geo.create(addSOP, 'point_src')      # source: a single point
-psrc.par.points = '0 0 0'
+psrc = geo.create(addSOP, "point_src")  # source: a single point
+psrc.par.points = "0 0 0"
 
-part = geo.create(particleSOP, 'particles')
+part = geo.create(particleSOP, "particles")
 part.par.life = 3.0
 part.par.birthrate = 100
 part.par.gravityy = -9.8

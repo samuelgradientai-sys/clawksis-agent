@@ -64,11 +64,21 @@ _MAX_SCAN_BYTES = 256 * 1024
 
 
 def _block_mode_enabled() -> bool:
-    return os.environ.get("SECURITY_GUIDANCE_BLOCK", "").lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("SECURITY_GUIDANCE_BLOCK", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _plugin_disabled() -> bool:
-    return os.environ.get("SECURITY_GUIDANCE_DISABLE", "").lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("SECURITY_GUIDANCE_DISABLE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +105,9 @@ for _rule in _patterns.SECURITY_PATTERNS:
         except re.error as _err:
             logger.warning(
                 "security-guidance: skipping rule %s — invalid regex %r: %s",
-                _rule["ruleName"], _re_src, _err,
+                _rule["ruleName"],
+                _re_src,
+                _err,
             )
             continue
     _COMPILED.append(_entry)

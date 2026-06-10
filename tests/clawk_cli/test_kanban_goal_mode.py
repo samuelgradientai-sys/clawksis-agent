@@ -20,10 +20,7 @@ Covers three layers:
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import sqlite3
@@ -31,9 +28,7 @@ import sqlite3
 from pathlib import Path
 
 
-
 import pytest
-
 
 
 from clawk_cli import kanban_db as kb
@@ -41,11 +36,7 @@ from clawk_cli import kanban_db as kb
 from clawk_cli import goals
 
 
-
-
-
 @pytest.fixture
-
 def kanban_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawksis"
@@ -61,9 +52,6 @@ def kanban_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # DB layer
@@ -71,11 +59,9 @@ def kanban_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def test_goal_mode_defaults_off(kanban_home):
 
     with kb.connect() as conn:
-
         tid = kb.create_task(conn, title="plain task", assignee="worker")
 
         task = kb.get_task(conn, tid)
@@ -85,25 +71,15 @@ def test_goal_mode_defaults_off(kanban_home):
     assert task.goal_max_turns is None
 
 
-
-
-
 def test_goal_mode_persists(kanban_home):
 
     with kb.connect() as conn:
-
         tid = kb.create_task(
-
             conn,
-
             title="open-ended task",
-
             assignee="worker",
-
             goal_mode=True,
-
             goal_max_turns=7,
-
         )
 
         task = kb.get_task(conn, tid)
@@ -113,18 +89,10 @@ def test_goal_mode_persists(kanban_home):
     assert task.goal_max_turns == 7
 
 
-
-
-
 def test_goal_mode_without_max_turns(kanban_home):
 
     with kb.connect() as conn:
-
-        tid = kb.create_task(
-
-            conn, title="t", assignee="worker", goal_mode=True
-
-        )
+        tid = kb.create_task(conn, title="t", assignee="worker", goal_mode=True)
 
         task = kb.get_task(conn, tid)
 
@@ -133,11 +101,7 @@ def test_goal_mode_without_max_turns(kanban_home):
     assert task.goal_max_turns is None
 
 
-
-
-
 def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
-
     """A tasks table created without goal columns must gain them on init."""
 
     home = tmp_path / ".clawksis"
@@ -148,8 +112,6 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-
-
     db_path = kb.kanban_db_path()
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -159,7 +121,6 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
     legacy = sqlite3.connect(db_path)
 
     legacy.execute(
-
         """
 
         CREATE TABLE tasks (
@@ -195,29 +156,22 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
         )
 
         """
-
     )
 
     legacy.execute(
-
         "INSERT INTO tasks (id, title, status, priority, created_at, workspace_kind) "
-
         "VALUES ('legacy1', 'old', 'ready', 0, 1, 'scratch')"
-
     )
 
     legacy.commit()
 
     legacy.close()
 
-
-
     # init_db runs the additive migration.
 
     kb.init_db()
 
     with kb.connect() as conn:
-
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
 
         assert "goal_mode" in cols
@@ -233,9 +187,6 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
     assert task.goal_max_turns is None
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Spawn env
@@ -243,18 +194,12 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def test_spawn_sets_goal_env_only_when_enabled(kanban_home, monkeypatch):
 
     captured = {}
 
-
-
     class _FakeProc:
-
         pid = 4242
-
-
 
     def _fake_popen(cmd, **kwargs):
 
@@ -262,35 +207,22 @@ def test_spawn_sets_goal_env_only_when_enabled(kanban_home, monkeypatch):
 
         return _FakeProc()
 
-
-
     monkeypatch.setattr("subprocess.Popen", _fake_popen)
 
     # Avoid the kanban-worker skill probe touching the real skills dir.
 
     monkeypatch.setattr(kb, "_kanban_worker_skill_available", lambda home: False)
 
-
-
     with kb.connect() as conn:
-
         tid = kb.create_task(
-
             conn,
-
             title="goal task",
-
             assignee="default",
-
             goal_mode=True,
-
             goal_max_turns=5,
-
         )
 
         task = kb.get_task(conn, tid)
-
-
 
     kb._default_spawn(task, str(kanban_home))
 
@@ -301,20 +233,12 @@ def test_spawn_sets_goal_env_only_when_enabled(kanban_home, monkeypatch):
     assert env.get("CLAWK_KANBAN_GOAL_MAX_TURNS") == "5"
 
 
-
-
-
 def test_spawn_no_goal_env_for_plain_task(kanban_home, monkeypatch):
 
     captured = {}
 
-
-
     class _FakeProc:
-
         pid = 4243
-
-
 
     def _fake_popen(cmd, **kwargs):
 
@@ -322,21 +246,14 @@ def test_spawn_no_goal_env_for_plain_task(kanban_home, monkeypatch):
 
         return _FakeProc()
 
-
-
     monkeypatch.setattr("subprocess.Popen", _fake_popen)
 
     monkeypatch.setattr(kb, "_kanban_worker_skill_available", lambda home: False)
 
-
-
     with kb.connect() as conn:
-
         tid = kb.create_task(conn, title="plain", assignee="default")
 
         task = kb.get_task(conn, tid)
-
-
 
     kb._default_spawn(task, str(kanban_home))
 
@@ -347,9 +264,6 @@ def test_spawn_no_goal_env_for_plain_task(kanban_home, monkeypatch):
     assert "CLAWK_KANBAN_GOAL_MAX_TURNS" not in env
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Goal loop logic (callback-injected, no live model)
@@ -357,14 +271,10 @@ def test_spawn_no_goal_env_for_plain_task(kanban_home, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def _patch_judge(monkeypatch, verdicts):
-
     """Make judge_goal return a scripted sequence of verdicts."""
 
     seq = list(verdicts)
-
-
 
     def _fake_judge(goal, response, subgoals=None):
 
@@ -372,12 +282,7 @@ def _patch_judge(monkeypatch, verdicts):
 
         return v, f"scripted:{v}", False
 
-
-
     monkeypatch.setattr(goals, "judge_goal", _fake_judge)
-
-
-
 
 
 def test_loop_stops_when_worker_already_completed(monkeypatch):
@@ -388,30 +293,18 @@ def test_loop_stops_when_worker_already_completed(monkeypatch):
 
     turns = []
 
-
-
     res = goals.run_kanban_goal_loop(
-
         task_id="t1",
-
         goal_text="do the thing",
-
         run_turn=lambda p: turns.append(p) or "x",
-
         task_status_fn=lambda: "done",
-
         block_fn=lambda r: pytest.fail("should not block"),
-
         first_response="done already",
-
     )
 
     assert res["outcome"] == "completed_by_worker"
 
     assert turns == []  # no extra turns
-
-
-
 
 
 def test_loop_continues_then_worker_completes(monkeypatch):
@@ -422,24 +315,14 @@ def test_loop_continues_then_worker_completes(monkeypatch):
 
     turns = []
 
-
-
     res = goals.run_kanban_goal_loop(
-
         task_id="t2",
-
         goal_text="ship feature",
-
         run_turn=lambda p: turns.append(p) or f"turn{len(turns)}",
-
         task_status_fn=lambda: next(statuses),
-
         block_fn=lambda r: pytest.fail("should not block"),
-
         max_turns=10,
-
         first_response="started",
-
     )
 
     assert res["outcome"] == "completed_by_worker"
@@ -451,39 +334,24 @@ def test_loop_continues_then_worker_completes(monkeypatch):
     assert all("not done yet" in p for p in turns)
 
 
-
-
-
 def test_loop_blocks_on_budget_exhaustion(monkeypatch):
 
     _patch_judge(monkeypatch, ["continue"] * 10)
 
     blocked = {}
 
-
-
     def _block(reason):
 
         blocked["reason"] = reason
 
-
-
     res = goals.run_kanban_goal_loop(
-
         task_id="t3",
-
         goal_text="endless task",
-
         run_turn=lambda p: "still going",
-
         task_status_fn=lambda: "running",
-
         block_fn=_block,
-
         max_turns=3,
-
         first_response="turn1",
-
     )
 
     assert res["outcome"] == "blocked_budget"
@@ -491,9 +359,6 @@ def test_loop_blocks_on_budget_exhaustion(monkeypatch):
     assert res["turns_used"] == 3
 
     assert "turn budget" in blocked["reason"].lower()
-
-
-
 
 
 def test_loop_finalize_nudge_when_judge_done_but_open(monkeypatch):
@@ -508,24 +373,14 @@ def test_loop_finalize_nudge_when_judge_done_but_open(monkeypatch):
 
     turns = []
 
-
-
     res = goals.run_kanban_goal_loop(
-
         task_id="t4",
-
         goal_text="task",
-
         run_turn=lambda p: turns.append(p) or "ok",
-
         task_status_fn=lambda: next(statuses),
-
         block_fn=lambda r: pytest.fail("should not block"),
-
         max_turns=10,
-
         first_response="looks done",
-
     )
 
     assert res["outcome"] == "completed_by_worker"
@@ -533,9 +388,6 @@ def test_loop_finalize_nudge_when_judge_done_but_open(monkeypatch):
     assert len(turns) == 1
 
     assert "still open" in turns[0]
-
-
-
 
 
 def test_loop_blocks_when_judge_done_but_never_finalizes(monkeypatch):
@@ -548,24 +400,14 @@ def test_loop_blocks_when_judge_done_but_never_finalizes(monkeypatch):
 
     blocked = {}
 
-
-
     res = goals.run_kanban_goal_loop(
-
         task_id="t5",
-
         goal_text="task",
-
         run_turn=lambda p: "still not finalizing",
-
         task_status_fn=lambda: "running",
-
         block_fn=lambda r: blocked.update(reason=r),
-
         max_turns=10,
-
         first_response="looks done",
-
     )
 
     assert res["outcome"] == "blocked_budget"
@@ -573,28 +415,17 @@ def test_loop_blocks_when_judge_done_but_never_finalizes(monkeypatch):
     assert "finalize" in blocked["reason"].lower()
 
 
-
-
-
 def test_loop_stops_if_task_reclaimed(monkeypatch):
 
     _patch_judge(monkeypatch, ["continue"])
 
     res = goals.run_kanban_goal_loop(
-
         task_id="t6",
-
         goal_text="task",
-
         run_turn=lambda p: pytest.fail("should not run a turn"),
-
         task_status_fn=lambda: "archived",
-
         block_fn=lambda r: pytest.fail("should not block"),
-
         first_response="x",
-
     )
 
     assert res["outcome"] == "stopped"
-

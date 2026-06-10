@@ -19,10 +19,7 @@ from run_agent import AIAgent
 
 
 def _list_anthropic_tmpfiles(tmpdir: str) -> list[str]:
-    return [
-        name for name in os.listdir(tmpdir)
-        if name.startswith("anthropic_image_")
-    ]
+    return [name for name in os.listdir(tmpdir) if name.startswith("anthropic_image_")]
 
 
 def test_b64decode_failure_does_not_leak_tempfile(monkeypatch, tmp_path):

@@ -24,6 +24,7 @@ class TestInterruptPropagationToChild(unittest.TestCase):
     def _make_bare_agent(self):
         """Create a bare AIAgent via __new__ with all interrupt-related attrs."""
         from run_agent import AIAgent
+
         agent = AIAgent.__new__(AIAgent)
         agent._interrupt_requested = False
         agent._interrupt_message = None
@@ -81,9 +82,11 @@ class TestInterruptPropagationToChild(unittest.TestCase):
 
         # Mock a slow API call
         mock_client = MagicMock()
+
         def slow_api_call(**kwargs):
             time.sleep(5)  # Would take 5s normally
             return MagicMock()
+
         mock_client.chat.completions.create = slow_api_call
         mock_client.close = MagicMock()
         child.client = mock_client
@@ -92,6 +95,7 @@ class TestInterruptPropagationToChild(unittest.TestCase):
         def set_interrupt_later():
             time.sleep(0.2)
             child.interrupt("stop!")
+
         t = threading.Thread(target=set_interrupt_later, daemon=True)
         t.start()
 
@@ -102,7 +106,9 @@ class TestInterruptPropagationToChild(unittest.TestCase):
         except InterruptedError:
             elapsed = time.monotonic() - start
             # Should detect within ~0.5s (0.2s delay + 0.3s poll interval)
-            assert elapsed < 1.0, f"Took {elapsed:.2f}s to detect interrupt (expected < 1.0s)"
+            assert elapsed < 1.0, (
+                f"Took {elapsed:.2f}s to detect interrupt (expected < 1.0s)"
+            )
         finally:
             t.join(timeout=2)
             set_interrupt(False)
@@ -117,6 +123,7 @@ class TestInterruptPropagationToChild(unittest.TestCase):
 
         # Simulate child running (checking flag in a loop)
         child_detected = threading.Event()
+
         def simulate_child_loop():
             while not child._interrupt_requested:
                 time.sleep(0.05)
@@ -218,7 +225,9 @@ class TestPerThreadInterruptIsolation(unittest.TestCase):
         tb.join(timeout=3)
 
         assert results["a_interrupted"] is True, "Thread A should see the interrupt"
-        assert results["b_interrupted"] is False, "Thread B must NOT see thread A's interrupt"
+        assert results["b_interrupted"] is False, (
+            "Thread B must NOT see thread A's interrupt"
+        )
 
     def test_clear_interrupt_only_clears_target_thread(self):
         """Clearing one thread's interrupt doesn't clear another's."""
@@ -232,6 +241,7 @@ class TestPerThreadInterruptIsolation(unittest.TestCase):
 
         # Simulate checking from thread B's perspective
         from tools.interrupt import _interrupted_threads, _lock
+
         with _lock:
             assert tid_a not in _interrupted_threads
             assert tid_b in _interrupted_threads

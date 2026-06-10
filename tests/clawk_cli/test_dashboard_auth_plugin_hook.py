@@ -3,13 +3,16 @@
 Mirrors the image-gen / memory-provider hooks (see plugins.py:531 for prior
 art).
 """
+
 from __future__ import annotations
 
 import pytest
 
 from clawk_cli.dashboard_auth import clear_providers, get_provider
 from clawk_cli.dashboard_auth.base import (
-    DashboardAuthProvider, LoginStart, Session,
+    DashboardAuthProvider,
+    LoginStart,
+    Session,
 )
 from clawk_cli.plugins import PluginContext, PluginManifest
 
@@ -79,12 +82,12 @@ def test_plugin_ctx_silently_ignores_non_provider(caplog):
     We do NOT raise — a misbehaving plugin must not crash the host.
     """
     import logging
+
     ctx = _make_ctx("dashboard-auth-bad")
     with caplog.at_level(logging.WARNING):
         ctx.register_dashboard_auth_provider("not a provider")  # type: ignore[arg-type]
     assert get_provider("stub") is None
     assert any(
-        "dashboard-auth-bad" in rec.message
-        and "DashboardAuthProvider" in rec.message
+        "dashboard-auth-bad" in rec.message and "DashboardAuthProvider" in rec.message
         for rec in caplog.records
     )

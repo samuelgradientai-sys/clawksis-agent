@@ -93,8 +93,18 @@ class TestBuiltinAlwaysWins:
 
     @pytest.mark.parametrize(
         "builtin",
-        ["edge", "openai", "elevenlabs", "minimax", "gemini",
-         "mistral", "xai", "piper", "kittentts", "neutts"],
+        [
+            "edge",
+            "openai",
+            "elevenlabs",
+            "minimax",
+            "gemini",
+            "mistral",
+            "xai",
+            "piper",
+            "kittentts",
+            "neutts",
+        ],
     )
     def test_dispatcher_short_circuits_builtin(self, builtin):
         result = tts_tool._dispatch_to_plugin_provider(
@@ -114,9 +124,12 @@ class TestBuiltinAlwaysWins:
         for variant in ("EDGE", "Edge", "  edge  ", "eDgE"):
             assert (
                 tts_tool._dispatch_to_plugin_provider(
-                    text="hello", output_path="/tmp/x.mp3",
-                    provider=variant, tts_config={},
-                ) is None
+                    text="hello",
+                    output_path="/tmp/x.mp3",
+                    provider=variant,
+                    tts_config={},
+                )
+                is None
             )
 
 
@@ -295,8 +308,18 @@ class TestVoiceCompatibleHelper:
 
     @pytest.mark.parametrize(
         "builtin",
-        ["edge", "openai", "elevenlabs", "minimax", "gemini",
-         "mistral", "xai", "piper", "kittentts", "neutts"],
+        [
+            "edge",
+            "openai",
+            "elevenlabs",
+            "minimax",
+            "gemini",
+            "mistral",
+            "xai",
+            "piper",
+            "kittentts",
+            "neutts",
+        ],
     )
     def test_builtin_names_return_false(self, builtin):
         """voice_compatible helper short-circuits built-ins so they go

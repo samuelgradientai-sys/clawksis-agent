@@ -22,7 +22,9 @@ def test_moa_defaults_are_well_formed():
 
 
 @pytest.mark.asyncio
-async def test_reference_model_retry_warnings_avoid_exc_info_until_terminal_failure(monkeypatch):
+async def test_reference_model_retry_warnings_avoid_exc_info_until_terminal_failure(
+    monkeypatch,
+):
     fake_client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
@@ -51,7 +53,9 @@ async def test_reference_model_retry_warnings_avoid_exc_info_until_terminal_fail
 
 
 @pytest.mark.asyncio
-async def test_moa_top_level_error_logs_single_traceback_on_aggregator_failure(monkeypatch):
+async def test_moa_top_level_error_logs_single_traceback_on_aggregator_failure(
+    monkeypatch,
+):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(
         moa,

@@ -2503,6 +2503,7 @@ Example:
 ```python
 from torch.distributed.checkpoint.storage import StorageMeta
 
+
 class CustomStorageBackend:
     def get_storage_metadata(self):
         # Return storage-specific metadata that will be stored with the checkpoint

@@ -1,7 +1,5 @@
 """Tests for clawk_cli.doctor."""
 
-
-
 import os
 
 import sys
@@ -17,9 +15,7 @@ from argparse import Namespace
 from types import SimpleNamespace
 
 
-
 import pytest
-
 
 
 import clawk_cli.doctor as doctor
@@ -31,11 +27,7 @@ from clawk_cli import doctor as doctor_mod
 from clawk_cli.doctor import _has_provider_env_config
 
 
-
-
-
 class TestDoctorPlatformHints:
-
     def test_termux_package_hint(self, monkeypatch):
 
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
@@ -47,8 +39,6 @@ class TestDoctorPlatformHints:
         assert doctor._python_install_cmd() == "python -m pip install"
 
         assert doctor._system_package_install_cmd("ripgrep") == "pkg install ripgrep"
-
-
 
     def test_non_termux_package_hint_defaults_to_apt(self, monkeypatch):
 
@@ -62,21 +52,17 @@ class TestDoctorPlatformHints:
 
         assert doctor._python_install_cmd() == "uv pip install"
 
-        assert doctor._system_package_install_cmd("ripgrep") == "sudo apt install ripgrep"
-
-
-
+        assert (
+            doctor._system_package_install_cmd("ripgrep") == "sudo apt install ripgrep"
+        )
 
 
 class TestProviderEnvDetection:
-
     def test_detects_openai_api_key(self):
 
         content = "OPENAI_BASE_URL=http://localhost:1234/v1\nOPENAI_API_KEY=***"
 
         assert _has_provider_env_config(content)
-
-
 
     def test_detects_custom_endpoint_without_openrouter_key(self):
 
@@ -84,15 +70,11 @@ class TestProviderEnvDetection:
 
         assert _has_provider_env_config(content)
 
-
-
     def test_detects_kimi_cn_api_key(self):
 
         content = "KIMI_CN_API_KEY=sk-test\n"
 
         assert _has_provider_env_config(content)
-
-
 
     def test_returns_false_when_no_provider_settings(self):
 
@@ -101,28 +83,18 @@ class TestProviderEnvDetection:
         assert not _has_provider_env_config(content)
 
 
-
-
-
 class TestDoctorEnvFileEncoding:
-
     """Regression for #18637 (bug 3): `clawk doctor` crashed on Windows
 
     Chinese locale (GBK) because `.env` was read with Path.read_text() which
 
     defaults to the system locale encoding, not UTF-8."""
 
-
-
     def test_doctor_reads_env_as_utf8_even_when_locale_is_not_utf8(
-
         self, monkeypatch, tmp_path
-
     ):
 
         import pathlib
-
-
 
         clawk_home = tmp_path / ".clawksis"
 
@@ -139,22 +111,13 @@ class TestDoctorEnvFileEncoding:
         env_path = clawk_home / ".env"
 
         env_path.write_text(
-
             "OPENAI_API_KEY=sk-test  # em-dash here — should not crash\n",
-
             encoding="utf-8",
-
         )
-
-
 
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", clawk_home)
 
-
-
         orig_read_text = pathlib.Path.read_text
-
-
 
         def gbk_like_read_text(self, encoding=None, errors=None, **kwargs):
 
@@ -163,120 +126,84 @@ class TestDoctorEnvFileEncoding:
             # .env unless the caller pins encoding="utf-8".
 
             if self == env_path and encoding != "utf-8":
-
                 raise UnicodeDecodeError(
-
                     "gbk", b"\x94", 0, 1, "illegal multibyte sequence"
-
                 )
 
             return orig_read_text(self, encoding=encoding, errors=errors, **kwargs)
 
-
-
         monkeypatch.setattr(pathlib.Path, "read_text", gbk_like_read_text)
-
-
 
         # Short-circuit the expensive tool-availability probe — we only
 
         # need doctor to reach the .env read without crashing.
 
         fake_model_tools = types.SimpleNamespace(
-
-            check_tool_availability=lambda *a, **kw: (_ for _ in ()).throw(SystemExit(0)),
-
+            check_tool_availability=lambda *a, **kw: (_ for _ in ()).throw(
+                SystemExit(0)
+            ),
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
-
-
 
         # Run doctor. If the .env read still uses locale encoding, this
 
         # raises UnicodeDecodeError and the test fails.
 
         with pytest.raises(SystemExit):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
 
-
-
-
 class TestDoctorToolAvailabilityOverrides:
-
     def test_marks_honcho_available_when_configured(self, monkeypatch):
 
         monkeypatch.setattr(doctor, "_honcho_is_configured_for_doctor", lambda: True)
 
-
-
         available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-
             [],
-
             [{"name": "honcho", "env_vars": [], "tools": ["query_user_context"]}],
-
         )
-
-
 
         assert available == ["honcho"]
 
         assert unavailable == []
 
-
-
     def test_leaves_honcho_unavailable_when_not_configured(self, monkeypatch):
 
         monkeypatch.setattr(doctor, "_honcho_is_configured_for_doctor", lambda: False)
 
-
-
-        honcho_entry = {"name": "honcho", "env_vars": [], "tools": ["query_user_context"]}
+        honcho_entry = {
+            "name": "honcho",
+            "env_vars": [],
+            "tools": ["query_user_context"],
+        }
 
         available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-
             [],
-
             [honcho_entry],
-
         )
-
-
 
         assert available == []
 
         assert unavailable == [honcho_entry]
 
-
-
-    def test_marks_kanban_available_only_when_missing_worker_env_gate(self, monkeypatch):
+    def test_marks_kanban_available_only_when_missing_worker_env_gate(
+        self, monkeypatch
+    ):
 
         monkeypatch.setattr(doctor, "_honcho_is_configured_for_doctor", lambda: False)
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-
-
         available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-
             [],
-
             [{"name": "kanban", "env_vars": [], "tools": ["kanban_show"]}],
-
         )
-
-
 
         assert available == ["kanban"]
 
         assert unavailable == []
-
-
 
     def test_leaves_kanban_unavailable_when_worker_env_is_set(self, monkeypatch):
 
@@ -284,106 +211,69 @@ class TestDoctorToolAvailabilityOverrides:
 
         kanban_entry = {"name": "kanban", "env_vars": [], "tools": ["kanban_show"]}
 
-
-
         available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-
             [],
-
             [kanban_entry],
-
         )
-
-
 
         assert available == []
 
         assert unavailable == [kanban_entry]
-
-
 
     def test_leaves_non_worker_kanban_failure_unavailable(self, monkeypatch):
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        kanban_entry = {"name": "kanban", "env_vars": [], "tools": ["kanban_show", "not_a_kanban_tool"]}
-
-
+        kanban_entry = {
+            "name": "kanban",
+            "env_vars": [],
+            "tools": ["kanban_show", "not_a_kanban_tool"],
+        }
 
         available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-
             [],
-
             [kanban_entry],
-
         )
-
-
 
         assert available == []
 
         assert unavailable == [kanban_entry]
 
-
-
     def test_kanban_doctor_detail_explains_worker_gate(self, monkeypatch):
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-
-
-        assert doctor._doctor_tool_availability_detail("kanban") == "(runtime-gated; loaded only for dispatcher-spawned workers)"
-
-
-
+        assert (
+            doctor._doctor_tool_availability_detail("kanban")
+            == "(runtime-gated; loaded only for dispatcher-spawned workers)"
+        )
 
 
 class TestHonchoDoctorConfigDetection:
-
     def test_reports_configured_when_enabled_with_api_key(self, monkeypatch):
 
         fake_config = SimpleNamespace(enabled=True, api_key="***")
 
-
-
         monkeypatch.setattr(
-
             "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
-
             lambda: fake_config,
-
         )
 
-
-
         assert doctor._honcho_is_configured_for_doctor()
-
-
 
     def test_reports_not_configured_without_api_key(self, monkeypatch):
 
         fake_config = SimpleNamespace(enabled=True, api_key="")
 
-
-
         monkeypatch.setattr(
-
             "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
-
             lambda: fake_config,
-
         )
-
-
 
         assert not doctor._honcho_is_configured_for_doctor()
 
 
-
-
-
 def test_run_doctor_sets_interactive_env_for_tool_checks(monkeypatch, tmp_path):
-
     """Doctor should present CLI-gated tools as available in CLI context."""
 
     project_root = tmp_path / "project"
@@ -394,19 +284,13 @@ def test_run_doctor_sets_interactive_env_for_tool_checks(monkeypatch, tmp_path):
 
     clawk_home.mkdir()
 
-
-
     monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project_root)
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", clawk_home)
 
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
 
-
-
     seen = {}
-
-
 
     def fake_check_tool_availability(*args, **kwargs):
 
@@ -414,39 +298,26 @@ def test_run_doctor_sets_interactive_env_for_tool_checks(monkeypatch, tmp_path):
 
         raise SystemExit(0)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=fake_check_tool_availability,
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     with pytest.raises(SystemExit):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     assert seen["interactive"] == "1"
 
 
-
-
-
-def test_check_gateway_service_linger_warns_when_disabled(monkeypatch, tmp_path, capsys):
+def test_check_gateway_service_linger_warns_when_disabled(
+    monkeypatch, tmp_path, capsys
+):
 
     unit_path = tmp_path / "clawk-gateway.service"
 
     unit_path.write_text("[Unit]\n")
-
-
 
     monkeypatch.setattr(gateway_cli, "is_linux", lambda: True)
 
@@ -454,13 +325,9 @@ def test_check_gateway_service_linger_warns_when_disabled(monkeypatch, tmp_path,
 
     monkeypatch.setattr(gateway_cli, "get_systemd_linger_status", lambda: (False, ""))
 
-
-
     issues = []
 
     doctor._check_gateway_service_linger(issues)
-
-
 
     out = capsys.readouterr().out
 
@@ -471,32 +338,23 @@ def test_check_gateway_service_linger_warns_when_disabled(monkeypatch, tmp_path,
     assert "loginctl enable-linger" in out
 
     assert issues == [
-
         "Enable linger for the gateway user service: sudo loginctl enable-linger $USER"
-
     ]
 
 
-
-
-
-def test_check_gateway_service_linger_skips_when_service_not_installed(monkeypatch, tmp_path, capsys):
+def test_check_gateway_service_linger_skips_when_service_not_installed(
+    monkeypatch, tmp_path, capsys
+):
 
     unit_path = tmp_path / "missing.service"
-
-
 
     monkeypatch.setattr(gateway_cli, "is_linux", lambda: True)
 
     monkeypatch.setattr(gateway_cli, "get_systemd_unit_path", lambda: unit_path)
 
-
-
     issues = []
 
     doctor._check_gateway_service_linger(issues)
-
-
 
     out = capsys.readouterr().out
 
@@ -505,23 +363,13 @@ def test_check_gateway_service_linger_skips_when_service_not_installed(monkeypat
     assert issues == []
 
 
-
-
-
 # ── Memory provider section (doctor should only check the *active* provider) ──
 
 
-
-
-
 class TestDoctorMemoryProviderSection:
-
     """The ◆ Memory Provider section should respect memory.provider config."""
 
-
-
     def _make_clawk_home(self, tmp_path, provider=""):
-
         """Create a minimal CLAWK_HOME with config.yaml."""
 
         home = tmp_path / ".clawksis"
@@ -536,10 +384,7 @@ class TestDoctorMemoryProviderSection:
 
         return home
 
-
-
     def _run_doctor_and_capture(self, monkeypatch, tmp_path, provider=""):
-
         """Run doctor and capture stdout."""
 
         home = self._make_clawk_home(tmp_path, provider)
@@ -552,26 +397,18 @@ class TestDoctorMemoryProviderSection:
 
         (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
         # Stub tool availability (returns empty) so doctor runs past it
 
         fake_model_tools = types.SimpleNamespace(
-
             check_tool_availability=lambda *a, **kw: ([], []),
-
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         # Stub auth checks to avoid real API calls
 
         try:
-
             from clawk_cli import auth as _auth_mod
 
             monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -581,22 +418,16 @@ class TestDoctorMemoryProviderSection:
             monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
         except Exception:
-
             pass
-
-
 
         import io, contextlib
 
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
         return buf.getvalue()
-
-
 
     def test_no_provider_shows_builtin_ok(self, monkeypatch, tmp_path):
 
@@ -612,17 +443,11 @@ class TestDoctorMemoryProviderSection:
 
         assert "Mem0" not in out
 
-
-
     def test_honcho_provider_not_installed_shows_fail(self, monkeypatch, tmp_path):
 
         # Make honcho import fail
 
-        monkeypatch.setitem(
-
-            sys.modules, "plugins.memory.honcho.client", None
-
-        )
+        monkeypatch.setitem(sys.modules, "plugins.memory.honcho.client", None)
 
         out = self._run_doctor_and_capture(monkeypatch, tmp_path, provider="honcho")
 
@@ -631,8 +456,6 @@ class TestDoctorMemoryProviderSection:
         # Should show failure since honcho is set but not importable
 
         assert "Built-in memory active" not in out
-
-
 
     def test_mem0_provider_not_installed_shows_fail(self, monkeypatch, tmp_path):
 
@@ -647,10 +470,9 @@ class TestDoctorMemoryProviderSection:
         assert "Built-in memory active" not in out
 
 
-
-
-
-def test_run_doctor_termux_treats_docker_and_browser_warnings_as_expected(monkeypatch, tmp_path):
+def test_run_doctor_termux_treats_docker_and_browser_warnings_as_expected(
+    monkeypatch, tmp_path
+):
 
     helper = TestDoctorMemoryProviderSection()
 
@@ -658,33 +480,25 @@ def test_run_doctor_termux_treats_docker_and_browser_warnings_as_expected(monkey
 
     monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
 
-
-
     real_which = doctor_mod.shutil.which
-
-
 
     def fake_which(cmd):
 
         if cmd in {"docker", "node", "npm"}:
-
             return None
 
         return real_which(cmd)
 
-
-
     monkeypatch.setattr(doctor_mod.shutil, "which", fake_which)
-
-
 
     out = helper._run_doctor_and_capture(monkeypatch, tmp_path, provider="")
 
-
-
     assert "Docker backend is not available inside Termux" in out
 
-    assert "Node.js not found (browser tools are optional in the tested Termux path)" in out
+    assert (
+        "Node.js not found (browser tools are optional in the tested Termux path)"
+        in out
+    )
 
     assert "Install Node.js on Termux with: pkg install nodejs" in out
 
@@ -704,63 +518,40 @@ def test_run_doctor_termux_treats_docker_and_browser_warnings_as_expected(monkey
 
     assert "Local faster-whisper extra is excluded on Termux" in out
 
-    assert "STT fallback: use Groq Whisper (set GROQ_API_KEY) or OpenAI Whisper (set VOICE_TOOLS_OPENAI_KEY)." in out
+    assert (
+        "STT fallback: use Groq Whisper (set GROQ_API_KEY) or OpenAI Whisper (set VOICE_TOOLS_OPENAI_KEY)."
+        in out
+    )
 
     assert "docker not found (optional)" not in out
 
 
-
-
-
-def test_run_doctor_accepts_named_provider_from_providers_section(monkeypatch, tmp_path):
+def test_run_doctor_accepts_named_provider_from_providers_section(
+    monkeypatch, tmp_path
+):
 
     home = tmp_path / ".clawksis"
 
     home.mkdir(parents=True, exist_ok=True)
 
-
-
     import yaml
 
-
-
     (home / "config.yaml").write_text(
-
-        yaml.dump(
-
-            {
-
-                "model": {
-
-                    "provider": "volcengine-plan",
-
-                    "default": "doubao-seed-2.0-code",
-
-                },
-
-                "providers": {
-
-                    "volcengine-plan": {
-
-                        "name": "volcengine-plan",
-
-                        "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
-
-                        "default_model": "doubao-seed-2.0-code",
-
-                        "models": {"doubao-seed-2.0-code": {}},
-
-                    }
-
-                },
-
-            }
-
-        )
-
+        yaml.dump({
+            "model": {
+                "provider": "volcengine-plan",
+                "default": "doubao-seed-2.0-code",
+            },
+            "providers": {
+                "volcengine-plan": {
+                    "name": "volcengine-plan",
+                    "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+                    "default_model": "doubao-seed-2.0-code",
+                    "models": {"doubao-seed-2.0-code": {}},
+                }
+            },
+        })
     )
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -770,22 +561,14 @@ def test_run_doctor_accepts_named_provider_from_providers_section(monkeypatch, t
 
     (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -795,25 +578,16 @@ def test_run_doctor_accepts_named_provider_from_providers_section(monkeypatch, t
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     out = buf.getvalue()
 
     assert "model.provider 'volcengine-plan' is not a recognised provider" not in out
-
-
-
 
 
 def test_run_doctor_accepts_bare_custom_provider(monkeypatch, tmp_path):
@@ -823,20 +597,12 @@ def test_run_doctor_accepts_bare_custom_provider(monkeypatch, tmp_path):
     home.mkdir(parents=True, exist_ok=True)
 
     (home / "config.yaml").write_text(
-
         "model:\n"
-
         "  provider: custom\n"
-
         "  default: local-model\n"
-
         "  base_url: http://localhost:8000/v1\n",
-
         encoding="utf-8",
-
     )
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -846,22 +612,14 @@ def test_run_doctor_accepts_bare_custom_provider(monkeypatch, tmp_path):
 
     (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -871,46 +629,30 @@ def test_run_doctor_accepts_bare_custom_provider(monkeypatch, tmp_path):
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     out = buf.getvalue()
 
     assert "model.provider 'custom' is not a recognised provider" not in out
 
 
-
-
-
-def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(monkeypatch, tmp_path):
+def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(
+    monkeypatch, tmp_path
+):
 
     home = tmp_path / ".clawksis"
 
     home.mkdir(parents=True, exist_ok=True)
 
     (home / "config.yaml").write_text(
-
-        "model:\n"
-
-        "  provider: openrouter\n"
-
-        "  default: openai/gpt-4.1-mini\n",
-
+        "model:\n  provider: openrouter\n  default: openai/gpt-4.1-mini\n",
         encoding="utf-8",
-
     )
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -920,14 +662,9 @@ def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(mon
 
     (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
@@ -936,13 +673,8 @@ def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(mon
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
-
-
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
 
@@ -953,18 +685,12 @@ def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(mon
         monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     out = buf.getvalue()
 
@@ -973,29 +699,16 @@ def test_run_doctor_flags_missing_credentials_for_active_openrouter_provider(mon
     assert "No credentials found for provider 'openrouter'." in out
 
 
-
-
-
 @pytest.mark.parametrize(
-
     ("provider", "default_model"),
-
     [
-
         ("opencode-zen", "anthropic/claude-sonnet-4.6"),
-
         ("kilocode", "anthropic/claude-sonnet-4.6"),
-
         ("kimi-coding", "kimi-k2"),
-
     ],
-
 )
-
 def test_run_doctor_accepts_clawk_provider_ids_that_catalog_aliases(
-
     monkeypatch, tmp_path, provider, default_model
-
 ):
 
     home = tmp_path / ".clawksis"
@@ -1003,18 +716,9 @@ def test_run_doctor_accepts_clawk_provider_ids_that_catalog_aliases(
     home.mkdir(parents=True, exist_ok=True)
 
     (home / "config.yaml").write_text(
-
-        "model:\n"
-
-        f"  provider: {provider}\n"
-
-        f"  default: {default_model}\n",
-
+        f"model:\n  provider: {provider}\n  default: {default_model}\n",
         encoding="utf-8",
-
     )
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -1024,22 +728,14 @@ def test_run_doctor_accepts_clawk_provider_ids_that_catalog_aliases(
 
     (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -1049,18 +745,12 @@ def test_run_doctor_accepts_clawk_provider_ids_that_catalog_aliases(
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     out = buf.getvalue()
 
@@ -1069,21 +759,10 @@ def test_run_doctor_accepts_clawk_provider_ids_that_catalog_aliases(
     assert f"model.provider '{provider}' is unknown" not in out
 
     if provider in {"opencode-zen", "kilocode"}:
-
         assert (
-
             f"model.default '{default_model}' uses a vendor/model slug but provider is '{provider}'"
-
             not in out
-
         )
-
-
-
-
-
-
-
 
 
 def test_run_doctor_accepts_kimi_coding_cn_provider(monkeypatch, tmp_path):
@@ -1095,18 +774,9 @@ def test_run_doctor_accepts_kimi_coding_cn_provider(monkeypatch, tmp_path):
     (home / ".env").write_text("KIMI_CN_API_KEY=***\n", encoding="utf-8")
 
     (home / "config.yaml").write_text(
-
-        "model:\n"
-
-        "  provider: kimi-coding-cn\n"
-
-        "  default: kimi-k2.6\n",
-
+        "model:\n  provider: kimi-coding-cn\n  default: kimi-k2.6\n",
         encoding="utf-8",
-
     )
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -1116,55 +786,42 @@ def test_run_doctor_accepts_kimi_coding_cn_provider(monkeypatch, tmp_path):
 
     (tmp_path / "project").mkdir(exist_ok=True)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
 
         monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
 
-        monkeypatch.setattr(_auth_mod, "get_auth_status", lambda provider: {"logged_in": True})
+        monkeypatch.setattr(
+            _auth_mod, "get_auth_status", lambda provider: {"logged_in": True}
+        )
 
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
-
-
 
     out = buf.getvalue()
 
     assert "model.provider 'kimi-coding-cn' is not a recognised provider" not in out
 
 
-
-
-
-def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser(monkeypatch, tmp_path):
+def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser(
+    monkeypatch, tmp_path
+):
 
     home = tmp_path / ".clawksis"
 
@@ -1176,8 +833,6 @@ def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser
 
     project.mkdir(exist_ok=True)
 
-
-
     monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
 
     monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
@@ -1188,30 +843,30 @@ def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser
 
     monkeypatch.setattr(doctor_mod, "_DHH", str(home))
 
-    monkeypatch.setattr(doctor_mod.shutil, "which", lambda cmd: "/data/data/com.termux/files/usr/bin/node" if cmd in {"node", "npm"} else None)
-
-
+    monkeypatch.setattr(
+        doctor_mod.shutil,
+        "which",
+        lambda cmd: (
+            "/data/data/com.termux/files/usr/bin/node"
+            if cmd in {"node", "npm"}
+            else None
+        ),
+    )
 
     fake_model_tools = types.SimpleNamespace(
-
-        check_tool_availability=lambda *a, **kw: (["terminal"], [{"name": "browser", "env_vars": [], "tools": ["browser_navigate"]}]),
-
+        check_tool_availability=lambda *a, **kw: (
+            ["terminal"],
+            [{"name": "browser", "env_vars": [], "tools": ["browser_navigate"]}],
+        ),
         TOOLSET_REQUIREMENTS={
-
             "terminal": {"name": "terminal"},
-
             "browser": {"name": "browser"},
-
         },
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -1221,22 +876,16 @@ def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
-
-
 
     import io, contextlib
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
 
     out = buf.getvalue()
-
-
 
     assert "✓ browser" not in out
 
@@ -1249,10 +898,9 @@ def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser
     assert "npm install -g agent-browser && agent-browser install" in out
 
 
-
-
-
-def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, tmp_path):
+def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(
+    monkeypatch, tmp_path
+):
 
     home = tmp_path / ".clawksis"
 
@@ -1266,8 +914,6 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
 
     project.mkdir(exist_ok=True)
 
-
-
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
     monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
@@ -1276,22 +922,14 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
 
     monkeypatch.setenv("KIMI_CN_API_KEY", "sk-test")
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -1301,14 +939,9 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except Exception:
-
         pass
 
-
-
     calls = []
-
-
 
     def fake_get(url, headers=None, timeout=None):
 
@@ -1316,25 +949,18 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
 
         return types.SimpleNamespace(status_code=200)
 
-
-
     import httpx
 
     monkeypatch.setattr(httpx, "get", fake_get)
-
-
 
     import io, contextlib
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
 
     out = buf.getvalue()
-
-
 
     assert "API key or custom endpoint configured" in out
 
@@ -1345,10 +971,9 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
     assert any(url == "https://api.moonshot.cn/v1/models" for url, _, _ in calls)
 
 
-
-
-
-def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(monkeypatch, tmp_path):
+def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(
+    monkeypatch, tmp_path
+):
 
     home = tmp_path / ".clawksis"
 
@@ -1362,8 +987,6 @@ def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(mon
 
     project.mkdir(exist_ok=True)
 
-
-
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
     monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
@@ -1374,22 +997,14 @@ def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(mon
 
     monkeypatch.delenv("DASHSCOPE_BASE_URL", raising=False)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -1399,14 +1014,9 @@ def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(mon
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except ImportError:
-
         pass
 
-
-
     calls = []
-
-
 
     def fake_get(url, headers=None, timeout=None):
 
@@ -1416,51 +1026,36 @@ def test_run_doctor_dashscope_retries_china_endpoint_after_intl_unauthorized(mon
 
         return types.SimpleNamespace(status_code=status)
 
-
-
     import httpx
 
     monkeypatch.setattr(httpx, "get", fake_get)
 
-
-
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
 
     out = buf.getvalue()
-
-
 
     assert "Alibaba/DashScope" in out
 
     assert "invalid API key" not in out
 
     assert any(
-
         url == "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models"
-
         for url, _, _ in calls
-
     )
 
     assert any(
-
         url == "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
-
         for url, _, _ in calls
-
     )
 
 
-
-
-
 @pytest.mark.parametrize("base_url", [None, "https://opencode.ai/zen/go/v1"])
-
-def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path, base_url):
+def test_run_doctor_opencode_go_skips_invalid_models_probe(
+    monkeypatch, tmp_path, base_url
+):
 
     home = tmp_path / ".clawksis"
 
@@ -1474,8 +1069,6 @@ def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path
 
     project.mkdir(exist_ok=True)
 
-
-
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
     monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
@@ -1485,29 +1078,19 @@ def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path
     monkeypatch.setenv("OPENCODE_GO_API_KEY", "sk-test")
 
     if base_url:
-
         monkeypatch.setenv("OPENCODE_GO_BASE_URL", base_url)
 
     else:
-
         monkeypatch.delenv("OPENCODE_GO_BASE_URL", raising=False)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     try:
-
         from clawk_cli import auth as _auth_mod
 
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
@@ -1517,14 +1100,9 @@ def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {})
 
     except ImportError:
-
         pass
 
-
-
     calls = []
-
-
 
     def fake_get(url, headers=None, timeout=None):
 
@@ -1532,47 +1110,33 @@ def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path
 
         return types.SimpleNamespace(status_code=200)
 
-
-
     import httpx
 
     monkeypatch.setattr(httpx, "get", fake_get)
-
-
 
     import io, contextlib
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
 
     out = buf.getvalue()
 
-
-
     assert any(
-
         "OpenCode Go" in line and "(key configured)" in line
-
         for line in out.splitlines()
-
     )
 
     assert not any(url == "https://opencode.ai/zen/go/v1/models" for url, _, _ in calls)
 
-    assert not any("opencode" in url.lower() and "models" in url.lower() for url, _, _ in calls)
-
-
-
+    assert not any(
+        "opencode" in url.lower() and "models" in url.lower() for url, _, _ in calls
+    )
 
 
 class TestGitHubTokenCheck:
-
     """Tests for GitHub token / gh auth detection in doctor."""
-
-
 
     def test_no_token_and_not_gh_authenticated_shows_warn(self, monkeypatch, tmp_path):
 
@@ -1584,29 +1148,20 @@ class TestGitHubTokenCheck:
 
         monkeypatch.setenv("PATH", "/nonexistent")  # gh not found
 
-
-
         from clawk_cli.doctor import run_doctor
 
         import io, contextlib
 
-
-
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             run_doctor(Namespace(fix=False))
 
         out = buf.getvalue()
 
-
-
         assert "No GITHUB_TOKEN" in out
 
         assert "60 req/hr" in out
-
-
 
     def test_token_env_present_shows_ok(self, monkeypatch, tmp_path):
 
@@ -1620,27 +1175,18 @@ class TestGitHubTokenCheck:
 
         monkeypatch.setenv("PATH", "/nonexistent")  # gh not found
 
-
-
         from clawk_cli.doctor import run_doctor
 
         import io, contextlib
 
-
-
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             run_doctor(Namespace(fix=False))
 
         out = buf.getvalue()
 
-
-
         assert "GitHub token configured" in out
-
-
 
     def test_gh_authenticated_without_env_token_shows_ok(self, monkeypatch, tmp_path):
 
@@ -1656,8 +1202,6 @@ class TestGitHubTokenCheck:
 
         monkeypatch.delenv("GH_TOKEN", raising=False)
 
-
-
         # Mock gh to return success
 
         import shutil
@@ -1670,8 +1214,6 @@ class TestGitHubTokenCheck:
 
         monkeypatch.setattr(shutil, "which", mock_which)
 
-
-
         call_log = []
 
         def mock_run(cmd, **kwargs):
@@ -1679,67 +1221,45 @@ class TestGitHubTokenCheck:
             call_log.append(cmd)
 
             if cmd[:2] == ["gh", "auth"]:
-
                 result = types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
             else:
-
                 result = types.SimpleNamespace(returncode=1, stdout="", stderr="")
 
             return result
-
-
 
         import subprocess
 
         monkeypatch.setattr(subprocess, "run", mock_run)
 
-
-
         from clawk_cli.doctor import run_doctor
 
         import io, contextlib
 
-
-
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             run_doctor(Namespace(fix=False))
 
         out = buf.getvalue()
 
-
-
-        assert "gh auth" in str(call_log) or any(c[0] == "gh" for c in call_log), f"gh not called: {call_log}"
+        assert "gh auth" in str(call_log) or any(c[0] == "gh" for c in call_log), (
+            f"gh not called: {call_log}"
+        )
 
         assert "GitHub authenticated via gh CLI" in out or "token configured" in out
 
 
-
-
-
 def _run_doctor_with_healthy_oauth_fallback(
-
     monkeypatch,
-
     tmp_path,
-
     *,
-
     env_key: str,
-
     bad_key: str,
-
     failing_host: str,
-
     gemini_oauth_status: dict,
-
     minimax_oauth_status: dict,
-
     xai_oauth_status: dict | None = None,
-
 ) -> str:
 
     home = tmp_path / ".clawksis"
@@ -1747,22 +1267,13 @@ def _run_doctor_with_healthy_oauth_fallback(
     home.mkdir(parents=True, exist_ok=True)
 
     (home / "config.yaml").write_text(
-
-        "model:\n"
-
-        "  provider: nous\n"
-
-        "  default: moonshotai/kimi-k2.6\n",
-
+        "model:\n  provider: nous\n  default: moonshotai/kimi-k2.6\n",
         encoding="utf-8",
-
     )
 
     project = tmp_path / "project"
 
     project.mkdir(exist_ok=True)
-
-
 
     monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
@@ -1786,37 +1297,30 @@ def _run_doctor_with_healthy_oauth_fallback(
 
     monkeypatch.setenv(env_key, bad_key)
 
-
-
     fake_model_tools = types.SimpleNamespace(
-
         check_tool_availability=lambda *a, **kw: ([], []),
-
         TOOLSET_REQUIREMENTS={},
-
     )
 
     monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
     from clawk_cli import auth as _auth_mod
-
-
 
     monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": True})
 
     monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
 
-    monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: gemini_oauth_status)
+    monkeypatch.setattr(
+        _auth_mod, "get_gemini_oauth_auth_status", lambda: gemini_oauth_status
+    )
 
-    monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: minimax_oauth_status)
+    monkeypatch.setattr(
+        _auth_mod, "get_minimax_oauth_auth_status", lambda: minimax_oauth_status
+    )
 
     _xai_status = xai_oauth_status if xai_oauth_status is not None else {}
 
     monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: _xai_status)
-
-
 
     def fake_get(url, headers=None, timeout=None):
 
@@ -1824,142 +1328,84 @@ def _run_doctor_with_healthy_oauth_fallback(
 
         return types.SimpleNamespace(status_code=status)
 
-
-
     import httpx
 
-
-
     monkeypatch.setattr(httpx, "get", fake_get)
-
-
 
     buf = io.StringIO()
 
     with contextlib.redirect_stdout(buf):
-
         doctor_mod.run_doctor(Namespace(fix=False))
 
     return buf.getvalue()
 
 
-
-
-
 @pytest.mark.parametrize(
-
-    ("env_key", "bad_key", "failing_host", "gemini_oauth_status", "minimax_oauth_status", "xai_oauth_status", "unexpected_issue"),
-
+    (
+        "env_key",
+        "bad_key",
+        "failing_host",
+        "gemini_oauth_status",
+        "minimax_oauth_status",
+        "xai_oauth_status",
+        "unexpected_issue",
+    ),
     [
-
         (
-
             "GOOGLE_API_KEY",
-
             "bad-gemini-key",
-
             "googleapis.com",
-
             {"logged_in": True, "email": "user@example.com"},
-
             {},
-
             None,
-
             "Check GOOGLE_API_KEY in .env",
-
         ),
-
         (
-
             "MINIMAX_API_KEY",
-
             "bad-minimax-key",
-
             "minimax.io",
-
             {},
-
             {"logged_in": True, "region": "global"},
-
             None,
-
             "Check MINIMAX_API_KEY in .env",
-
         ),
-
         (
-
             "XAI_API_KEY",
-
             "bad-xai-key",
-
             "api.x.ai",
-
             {},
-
             {},
-
             {"logged_in": True, "auth_mode": "oauth_pkce"},
-
             "Check XAI_API_KEY in .env",
-
         ),
-
     ],
-
 )
-
 def test_run_doctor_ignores_invalid_direct_keys_when_oauth_fallback_is_healthy(
-
     monkeypatch,
-
     tmp_path,
-
     env_key,
-
     bad_key,
-
     failing_host,
-
     gemini_oauth_status,
-
     minimax_oauth_status,
-
     xai_oauth_status,
-
     unexpected_issue,
-
 ):
 
     out = _run_doctor_with_healthy_oauth_fallback(
-
         monkeypatch,
-
         tmp_path,
-
         env_key=env_key,
-
         bad_key=bad_key,
-
         failing_host=failing_host,
-
         gemini_oauth_status=gemini_oauth_status,
-
         minimax_oauth_status=minimax_oauth_status,
-
         xai_oauth_status=xai_oauth_status,
-
     )
-
-
 
     assert "invalid API key" in out
 
     assert unexpected_issue not in out
-
-
-
 
 
 def test_has_healthy_oauth_fallback_returns_false_for_unknown_provider():
@@ -1969,34 +1415,30 @@ def test_has_healthy_oauth_fallback_returns_false_for_unknown_provider():
     assert _has_healthy_oauth_fallback_for_apikey_provider("unknown-provider") is False
 
 
-
-
-
 class TestHasHealthyOauthFallbackForXai:
-
     def test_returns_true_when_xai_oauth_healthy(self, monkeypatch):
 
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": True})
+        monkeypatch.setattr(
+            _auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": True}
+        )
 
         from clawk_cli.doctor import _has_healthy_oauth_fallback_for_apikey_provider
 
         assert _has_healthy_oauth_fallback_for_apikey_provider("xai") is True
 
-
-
     def test_returns_false_when_xai_oauth_not_logged_in(self, monkeypatch):
 
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
         from clawk_cli.doctor import _has_healthy_oauth_fallback_for_apikey_provider
 
         assert _has_healthy_oauth_fallback_for_apikey_provider("xai") is False
-
-
 
     def test_returns_false_when_xai_oauth_returns_none(self, monkeypatch):
 
@@ -2007,8 +1449,6 @@ class TestHasHealthyOauthFallbackForXai:
         from clawk_cli.doctor import _has_healthy_oauth_fallback_for_apikey_provider
 
         assert _has_healthy_oauth_fallback_for_apikey_provider("xai") is False
-
-
 
     def test_returns_false_when_xai_import_unavailable(self, monkeypatch):
 
@@ -2026,8 +1466,6 @@ class TestHasHealthyOauthFallbackForXai:
 
         assert _has_healthy_oauth_fallback_for_apikey_provider("xai") is False
 
-
-
     def test_xai_import_failure_does_not_affect_gemini(self, monkeypatch):
 
         import sys
@@ -2038,16 +1476,15 @@ class TestHasHealthyOauthFallbackForXai:
 
         monkeypatch.delattr(_auth_mod, "get_xai_oauth_auth_status", raising=False)
 
-        monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": True})
+        monkeypatch.setattr(
+            _auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": True}
+        )
 
         monkeypatch.delitem(sys.modules, "clawk_cli.doctor", raising=False)
 
         from clawk_cli.doctor import _has_healthy_oauth_fallback_for_apikey_provider
 
         assert _has_healthy_oauth_fallback_for_apikey_provider("gemini") is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2057,11 +1494,7 @@ class TestHasHealthyOauthFallbackForXai:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDoctorXaiOAuthStatus:
-
     """The ◆ Auth Providers section must show xAI OAuth login state.
 
 
@@ -2074,10 +1507,7 @@ class TestDoctorXaiOAuthStatus:
 
     """
 
-
-
     def _run(self, monkeypatch, tmp_path, *, xai_auth_fn) -> str:
-
         """Run doctor with a controlled xAI auth callable; return stdout."""
 
         home = tmp_path / ".clawksis"
@@ -2090,108 +1520,90 @@ class TestDoctorXaiOAuthStatus:
 
         project.mkdir(exist_ok=True)
 
-
-
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
         monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
 
         monkeypatch.setattr(doctor_mod, "_DHH", str(home))
 
-
-
         fake_model_tools = types.SimpleNamespace(
-
             check_tool_availability=lambda *a, **kw: ([], []),
-
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_nous_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
         monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", xai_auth_fn)
-
-
 
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
         return buf.getvalue()
 
-
-
     def test_logged_in_shows_ok(self, monkeypatch, tmp_path):
 
         out = self._run(
-
-            monkeypatch, tmp_path,
-
+            monkeypatch,
+            tmp_path,
             xai_auth_fn=lambda: {"logged_in": True},
-
         )
 
         assert "xAI OAuth" in out
 
         assert "(logged in)" in out
 
-
-
     def test_not_logged_in_shows_warn(self, monkeypatch, tmp_path):
 
         out = self._run(
-
-            monkeypatch, tmp_path,
-
+            monkeypatch,
+            tmp_path,
             xai_auth_fn=lambda: {"logged_in": False},
-
         )
 
         assert "xAI OAuth" in out
 
         assert "(not logged in)" in out
 
-
-
-    def test_error_shown_when_not_logged_in_and_error_present(self, monkeypatch, tmp_path):
+    def test_error_shown_when_not_logged_in_and_error_present(
+        self, monkeypatch, tmp_path
+    ):
 
         out = self._run(
-
-            monkeypatch, tmp_path,
-
+            monkeypatch,
+            tmp_path,
             xai_auth_fn=lambda: {"logged_in": False, "error": "refresh token expired"},
-
         )
 
         assert "xAI OAuth" in out
 
         assert "refresh token expired" in out
 
-
-
     def test_no_error_line_when_error_key_absent(self, monkeypatch, tmp_path):
 
         out = self._run(
-
-            monkeypatch, tmp_path,
-
+            monkeypatch,
+            tmp_path,
             xai_auth_fn=lambda: {"logged_in": False},
-
         )
 
         assert "xAI OAuth" in out
@@ -2202,16 +1614,14 @@ class TestDoctorXaiOAuthStatus:
 
         assert "refresh token expired" not in out
 
-
-
-    def test_logged_in_does_not_emit_not_logged_in_on_xai_line(self, monkeypatch, tmp_path):
+    def test_logged_in_does_not_emit_not_logged_in_on_xai_line(
+        self, monkeypatch, tmp_path
+    ):
 
         out = self._run(
-
-            monkeypatch, tmp_path,
-
+            monkeypatch,
+            tmp_path,
             xai_auth_fn=lambda: {"logged_in": True},
-
         )
 
         assert "xAI OAuth" in out
@@ -2224,10 +1634,7 @@ class TestDoctorXaiOAuthStatus:
 
         assert "(not logged in)" not in xai_line
 
-
-
     def test_import_failure_does_not_crash_doctor(self, monkeypatch, tmp_path):
-
         """Doctor must not crash when get_xai_oauth_auth_status cannot be imported."""
 
         home = tmp_path / ".clawksis"
@@ -2240,46 +1647,42 @@ class TestDoctorXaiOAuthStatus:
 
         project.mkdir(exist_ok=True)
 
-
-
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
         monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
 
         monkeypatch.setattr(doctor_mod, "_DHH", str(home))
 
-
-
         fake_model_tools = types.SimpleNamespace(
-
             check_tool_availability=lambda *a, **kw: ([], []),
-
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_nous_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
         monkeypatch.delattr(_auth_mod, "get_xai_oauth_auth_status", raising=False)
-
-
 
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
         out = buf.getvalue()
@@ -2288,10 +1691,9 @@ class TestDoctorXaiOAuthStatus:
 
         assert "Auth Providers" in out
 
-
-
-    def test_import_failure_does_not_affect_other_providers(self, monkeypatch, tmp_path):
-
+    def test_import_failure_does_not_affect_other_providers(
+        self, monkeypatch, tmp_path
+    ):
         """Nous / Codex / Gemini / MiniMax rows must survive an xAI import failure."""
 
         home = tmp_path / ".clawksis"
@@ -2304,46 +1706,42 @@ class TestDoctorXaiOAuthStatus:
 
         project.mkdir(exist_ok=True)
 
-
-
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
         monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
 
         monkeypatch.setattr(doctor_mod, "_DHH", str(home))
 
-
-
         fake_model_tools = types.SimpleNamespace(
-
             check_tool_availability=lambda *a, **kw: ([], []),
-
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": True})
+        monkeypatch.setattr(
+            _auth_mod, "get_nous_auth_status", lambda: {"logged_in": True}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
         monkeypatch.delattr(_auth_mod, "get_xai_oauth_auth_status", raising=False)
-
-
 
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
         out = buf.getvalue()
@@ -2352,26 +1750,18 @@ class TestDoctorXaiOAuthStatus:
 
         assert "logged in" in out
 
-
-
     def test_function_raises_does_not_crash_doctor(self, monkeypatch, tmp_path):
-
         """A runtime exception from get_xai_oauth_auth_status must be swallowed."""
 
         def _raise():
 
             raise RuntimeError("simulated xAI status failure")
 
-
-
         out = self._run(monkeypatch, tmp_path, xai_auth_fn=_raise)
 
         assert "Auth Providers" in out
 
-
-
     def test_function_returns_none_does_not_crash_doctor(self, monkeypatch, tmp_path):
-
         """None return is normalised to {} via `or {}` — must not AttributeError."""
 
         out = self._run(monkeypatch, tmp_path, xai_auth_fn=lambda: None)
@@ -2383,9 +1773,6 @@ class TestDoctorXaiOAuthStatus:
         assert "(not logged in)" in out
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # ◆ Auth Providers — codex CLI import hint placement (issue #27975)
@@ -2393,11 +1780,7 @@ class TestDoctorXaiOAuthStatus:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestDoctorCodexCliHintPlacement:
-
     """The `codex CLI not installed` hint belongs under OpenAI Codex auth.
 
 
@@ -2412,9 +1795,9 @@ class TestDoctorCodexCliHintPlacement:
 
     """
 
-
-
-    def _run(self, monkeypatch, tmp_path, *, codex_logged_in: bool, codex_cli_present: bool) -> str:
+    def _run(
+        self, monkeypatch, tmp_path, *, codex_logged_in: bool, codex_cli_present: bool
+    ) -> str:
 
         home = tmp_path / ".clawksis"
 
@@ -2426,77 +1809,70 @@ class TestDoctorCodexCliHintPlacement:
 
         project.mkdir(exist_ok=True)
 
-
-
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
 
         monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
 
         monkeypatch.setattr(doctor_mod, "_DHH", str(home))
 
-
-
         fake_model_tools = types.SimpleNamespace(
-
             check_tool_availability=lambda *a, **kw: ([], []),
-
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         from clawk_cli import auth as _auth_mod
 
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_nous_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": codex_logged_in})
+        monkeypatch.setattr(
+            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": codex_logged_in}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_gemini_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(
+            _auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
-        monkeypatch.setattr(_auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": False})
-
-
+        monkeypatch.setattr(
+            _auth_mod, "get_xai_oauth_auth_status", lambda: {"logged_in": False}
+        )
 
         real_which = doctor_mod.shutil.which
 
         monkeypatch.setattr(
-
             doctor_mod.shutil,
-
             "which",
-
-            lambda cmd: ("/usr/local/bin/codex" if codex_cli_present else None) if cmd == "codex" else real_which(cmd),
-
+            lambda cmd: (
+                ("/usr/local/bin/codex" if codex_cli_present else None)
+                if cmd == "codex"
+                else real_which(cmd)
+            ),
         )
-
-
 
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf):
-
             doctor_mod.run_doctor(Namespace(fix=False))
 
         return buf.getvalue()
 
-
-
     @staticmethod
-
     def _hint_line() -> str:
 
         return "codex CLI not installed"
 
-
-
     def test_hint_appears_under_codex_auth_when_missing(self, monkeypatch, tmp_path):
 
-        out = self._run(monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=False)
+        out = self._run(
+            monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=False
+        )
 
         lines = out.splitlines()
 
@@ -2510,21 +1886,21 @@ class TestDoctorCodexCliHintPlacement:
 
         assert codex_idx < hint_idx < minimax_idx
 
-
-
     def test_hint_suppressed_when_codex_cli_present(self, monkeypatch, tmp_path):
 
-        out = self._run(monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=True)
+        out = self._run(
+            monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=True
+        )
 
         assert "OpenAI Codex auth" in out
 
         assert self._hint_line() not in out
 
-
-
     def test_hint_suppressed_when_codex_logged_in(self, monkeypatch, tmp_path):
 
-        out = self._run(monkeypatch, tmp_path, codex_logged_in=True, codex_cli_present=False)
+        out = self._run(
+            monkeypatch, tmp_path, codex_logged_in=True, codex_cli_present=False
+        )
 
         assert "OpenAI Codex auth" in out
 
@@ -2532,11 +1908,11 @@ class TestDoctorCodexCliHintPlacement:
 
         assert self._hint_line() not in out
 
-
-
     def test_hint_never_attaches_to_minimax_row(self, monkeypatch, tmp_path):
 
-        out = self._run(monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=False)
+        out = self._run(
+            monkeypatch, tmp_path, codex_logged_in=False, codex_cli_present=False
+        )
 
         # The MiniMax OAuth row and the hint must not be adjacent — the hint
 
@@ -2548,14 +1924,13 @@ class TestDoctorCodexCliHintPlacement:
 
         assert self._hint_line() not in lines[minimax_idx - 1]
 
-        assert minimax_idx + 1 >= len(lines) or self._hint_line() not in lines[minimax_idx + 1]
-
-
-
+        assert (
+            minimax_idx + 1 >= len(lines)
+            or self._hint_line() not in lines[minimax_idx + 1]
+        )
 
 
 class TestDoctorStaleMaxIterationsDrift:
-
     """Regression for #17534: a stale CLAWK_MAX_ITERATIONS in .env shadows
 
     agent.max_turns in config.yaml. The repro symptom is config.yaml saying
@@ -2574,11 +1949,9 @@ class TestDoctorStaleMaxIterationsDrift:
 
     """
 
-
-
-    def _run_config_section(self, monkeypatch, tmp_path, *, fix, ghost, cfg_turns,
-
-                            os_environ_value=None):
+    def _run_config_section(
+        self, monkeypatch, tmp_path, *, fix, ghost, cfg_turns, os_environ_value=None
+    ):
 
         import pathlib
 
@@ -2588,27 +1961,20 @@ class TestDoctorStaleMaxIterationsDrift:
 
         from argparse import Namespace
 
-
-
         clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir(parents=True)
 
         (clawk_home / "config.yaml").write_text(
-
             f"agent:\n  max_turns: {cfg_turns}\n", encoding="utf-8"
-
         )
 
         env_lines = ["OPENAI_API_KEY=sk-test\n"]
 
         if ghost is not None:
-
             env_lines.append(f"CLAWK_MAX_ITERATIONS={ghost}\n")
 
         (clawk_home / ".env").write_text("".join(env_lines), encoding="utf-8")
-
-
 
         monkeypatch.setattr(doctor_mod, "CLAWK_HOME", clawk_home)
 
@@ -2619,51 +1985,42 @@ class TestDoctorStaleMaxIterationsDrift:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         if os_environ_value is not None:
-
             # Simulate the gateway bridge having already overridden os.environ.
 
             monkeypatch.setenv("CLAWK_MAX_ITERATIONS", str(os_environ_value))
 
         else:
-
             monkeypatch.delenv("CLAWK_MAX_ITERATIONS", raising=False)
-
-
 
         # Short-circuit at the Tool Availability stage — the drift check runs
 
         # well before it in the Configuration Files section.
 
         fake_model_tools = types.SimpleNamespace(
-
-            check_tool_availability=lambda *a, **kw: (_ for _ in ()).throw(SystemExit(0)),
-
+            check_tool_availability=lambda *a, **kw: (_ for _ in ()).throw(
+                SystemExit(0)
+            ),
             TOOLSET_REQUIREMENTS={},
-
         )
 
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
-
-
         buf = io.StringIO()
 
         with contextlib.redirect_stdout(buf), pytest.raises(SystemExit):
-
             doctor_mod.run_doctor(Namespace(fix=fix))
 
         return buf.getvalue(), clawk_home
 
-
-
     def test_detects_drift_warn_only(self, monkeypatch, tmp_path):
 
         out, clawk_home = self._run_config_section(
-
-            monkeypatch, tmp_path, fix=False, ghost=90, cfg_turns=400,
-
+            monkeypatch,
+            tmp_path,
+            fix=False,
+            ghost=90,
+            cfg_turns=400,
             os_environ_value=400,  # bridge contaminated os.environ
-
         )
 
         assert "CLAWK_MAX_ITERATIONS=90" in out
@@ -2672,18 +2029,19 @@ class TestDoctorStaleMaxIterationsDrift:
 
         # Warn-only must NOT mutate .env.
 
-        assert "CLAWK_MAX_ITERATIONS=90" in (clawk_home / ".env").read_text(encoding="utf-8")
-
-
+        assert "CLAWK_MAX_ITERATIONS=90" in (clawk_home / ".env").read_text(
+            encoding="utf-8"
+        )
 
     def test_fix_removes_ghost(self, monkeypatch, tmp_path):
 
         out, clawk_home = self._run_config_section(
-
-            monkeypatch, tmp_path, fix=True, ghost=90, cfg_turns=400,
-
+            monkeypatch,
+            tmp_path,
+            fix=True,
+            ghost=90,
+            cfg_turns=400,
             os_environ_value=400,
-
         )
 
         assert "Removed stale CLAWK_MAX_ITERATIONS" in out
@@ -2694,27 +2052,26 @@ class TestDoctorStaleMaxIterationsDrift:
 
         assert "OPENAI_API_KEY=sk-test" in env_after  # other keys preserved
 
-
-
     def test_no_drift_when_values_match(self, monkeypatch, tmp_path):
 
         out, _ = self._run_config_section(
-
-            monkeypatch, tmp_path, fix=False, ghost=400, cfg_turns=400,
-
+            monkeypatch,
+            tmp_path,
+            fix=False,
+            ghost=400,
+            cfg_turns=400,
         )
 
         assert "shadows" not in out
-
-
 
     def test_no_drift_when_ghost_absent(self, monkeypatch, tmp_path):
 
         out, _ = self._run_config_section(
-
-            monkeypatch, tmp_path, fix=False, ghost=None, cfg_turns=400,
-
+            monkeypatch,
+            tmp_path,
+            fix=False,
+            ghost=None,
+            cfg_turns=400,
         )
 
         assert "shadows" not in out
-

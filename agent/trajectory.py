@@ -17,18 +17,23 @@ def convert_scratchpad_to_think(content: str) -> str:
     """Convert <REASONING_SCRATCHPAD> tags to <think> tags."""
     if not content or "<REASONING_SCRATCHPAD>" not in content:
         return content
-    return content.replace("<REASONING_SCRATCHPAD>", "<think>").replace("</REASONING_SCRATCHPAD>", "</think>")
+    return content.replace("<REASONING_SCRATCHPAD>", "<think>").replace(
+        "</REASONING_SCRATCHPAD>", "</think>"
+    )
 
 
 def has_incomplete_scratchpad(content: str) -> bool:
     """Check if content has an opening <REASONING_SCRATCHPAD> without a closing tag."""
     if not content:
         return False
-    return "<REASONING_SCRATCHPAD>" in content and "</REASONING_SCRATCHPAD>" not in content
+    return (
+        "<REASONING_SCRATCHPAD>" in content and "</REASONING_SCRATCHPAD>" not in content
+    )
 
 
-def save_trajectory(trajectory: List[Dict[str, Any]], model: str,
-                    completed: bool, filename: str = None):
+def save_trajectory(
+    trajectory: List[Dict[str, Any]], model: str, completed: bool, filename: str = None
+):
     """Append a trajectory entry to a JSONL file.
 
     Args:
@@ -39,7 +44,9 @@ def save_trajectory(trajectory: List[Dict[str, Any]], model: str,
                   or failed_trajectories.jsonl based on ``completed``.
     """
     if filename is None:
-        filename = "trajectory_samples.jsonl" if completed else "failed_trajectories.jsonl"
+        filename = (
+            "trajectory_samples.jsonl" if completed else "failed_trajectories.jsonl"
+        )
 
     entry = {
         "conversations": trajectory,

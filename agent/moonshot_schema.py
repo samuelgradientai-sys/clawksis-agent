@@ -29,13 +29,24 @@ from typing import Any, Dict, List
 # Keys whose values are maps of name → schema (not schemas themselves).
 # When we recurse, we walk the values of these maps as schemas, but we do
 # NOT apply the missing-type repair to the map itself.
-_SCHEMA_MAP_KEYS = frozenset({"properties", "patternProperties", "$defs", "definitions"})
+_SCHEMA_MAP_KEYS = frozenset({
+    "properties",
+    "patternProperties",
+    "$defs",
+    "definitions",
+})
 
 # Keys whose values are lists of schemas.
 _SCHEMA_LIST_KEYS = frozenset({"anyOf", "oneOf", "allOf", "prefixItems"})
 
 # Keys whose values are a single nested schema.
-_SCHEMA_NODE_KEYS = frozenset({"items", "contains", "not", "additionalProperties", "propertyNames"})
+_SCHEMA_NODE_KEYS = frozenset({
+    "items",
+    "contains",
+    "not",
+    "additionalProperties",
+    "propertyNames",
+})
 
 
 def _repair_schema(node: Any, is_schema: bool = True) -> Any:
@@ -86,8 +97,11 @@ def _repair_schema(node: Any, is_schema: bool = True) -> Any:
     # Collapse the anyOf to the first non-null branch and infer its type.
     if "anyOf" in repaired and isinstance(repaired["anyOf"], list):
         repaired.pop("type", None)
-        non_null = [b for b in repaired["anyOf"]
-                    if isinstance(b, dict) and b.get("type") != "null"]
+        non_null = [
+            b
+            for b in repaired["anyOf"]
+            if isinstance(b, dict) and b.get("type") != "null"
+        ]
         if non_null and len(non_null) < len(repaired["anyOf"]):
             # Drop the anyOf wrapper — keep only the non-null branch.
             # If there's a single non-null branch, promote it and fall
@@ -123,8 +137,7 @@ def _repair_schema(node: Any, is_schema: bool = True) -> Any:
     if "enum" in repaired and isinstance(repaired["enum"], list):
         node_type = repaired.get("type")
         if node_type in {"string", "integer", "number", "boolean"}:
-            cleaned = [v for v in repaired["enum"]
-                       if v is not None and v != ""]
+            cleaned = [v for v in repaired["enum"] if v is not None and v != ""]
             if cleaned:
                 repaired["enum"] = cleaned
             else:

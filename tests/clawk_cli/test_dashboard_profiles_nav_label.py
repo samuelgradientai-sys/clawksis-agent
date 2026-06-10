@@ -1,4 +1,5 @@
 """Static dashboard tests for the Profiles navigation copy."""
+
 from pathlib import Path
 
 

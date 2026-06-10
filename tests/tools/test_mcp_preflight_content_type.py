@@ -44,9 +44,13 @@ def _serve(handler_cls):
         t.join(timeout=5)
 
 
-def _handler(status: int = 200,
-             content_type: "str | None" = "text/html; charset=utf-8",
-             body: bytes = b"<html>x</html>", head_status=None, record=None):
+def _handler(
+    status: int = 200,
+    content_type: "str | None" = "text/html; charset=utf-8",
+    body: bytes = b"<html>x</html>",
+    head_status=None,
+    record=None,
+):
     """Build a BaseHTTPRequestHandler that replies with the given shape.
 
     ``head_status`` lets HEAD return a different status than GET (to exercise
@@ -85,13 +89,17 @@ def _handler(status: int = 200,
 # Reject: non-MCP content types on a 2xx response
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("content_type", [
-    "text/html; charset=utf-8",
-    "text/html",
-    "text/plain",
-    "application/xml",
-    "text/HTML",  # case-insensitivity
-])
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "text/html; charset=utf-8",
+        "text/html",
+        "text/plain",
+        "application/xml",
+        "text/HTML",  # case-insensitivity
+    ],
+)
 def test_non_mcp_content_type_raises(content_type):
     task = _make_task("bad_srv")
     with _serve(_handler(status=200, content_type=content_type)) as base:
@@ -112,12 +120,16 @@ def test_non_mcp_error_is_non_retryable_connection_error():
 # Pass-through: valid MCP content types, ambiguous, and error responses
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("content_type", [
-    "application/json",
-    "application/json; charset=utf-8",
-    "text/event-stream",
-    "TEXT/EVENT-STREAM",
-])
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "application/json",
+        "application/json; charset=utf-8",
+        "text/event-stream",
+        "TEXT/EVENT-STREAM",
+    ],
+)
 def test_valid_mcp_content_types_pass(content_type):
     task = _make_task()
     with _serve(_handler(status=200, content_type=content_type, body=b"{}")) as base:
@@ -147,9 +159,7 @@ def test_network_error_passes():
     dead_port = s.server_address[1]
     s.server_close()
     asyncio.run(
-        task._preflight_content_type(
-            f"http://127.0.0.1:{dead_port}/mcp", timeout=2.0
-        )
+        task._preflight_content_type(f"http://127.0.0.1:{dead_port}/mcp", timeout=2.0)
     )
 
 
@@ -159,6 +169,7 @@ def test_cancelled_error_is_not_swallowed():
 
     async def _run():
         import httpx
+
         orig = httpx.AsyncClient
         try:
             # Patch the client so entering it raises CancelledError.
@@ -179,13 +190,18 @@ def test_cancelled_error_is_not_swallowed():
 # HEAD -> GET fallback
 # ---------------------------------------------------------------------------
 
+
 def test_head_405_falls_back_to_get_and_rejects_html():
     task = _make_task("fallback_srv")
     record: list[str] = []
-    with _serve(_handler(
-        status=200, content_type="text/html",
-        head_status=405, record=record,
-    )) as base:
+    with _serve(
+        _handler(
+            status=200,
+            content_type="text/html",
+            head_status=405,
+            record=record,
+        )
+    ) as base:
         with pytest.raises(NonMcpEndpointError):
             asyncio.run(task._preflight_content_type(f"{base}/", timeout=5.0))
     assert record == ["HEAD", "GET"]
@@ -194,10 +210,15 @@ def test_head_405_falls_back_to_get_and_rejects_html():
 def test_head_501_falls_back_to_get_and_passes_json():
     task = _make_task()
     record: list[str] = []
-    with _serve(_handler(
-        status=200, content_type="application/json", body=b"{}",
-        head_status=501, record=record,
-    )) as base:
+    with _serve(
+        _handler(
+            status=200,
+            content_type="application/json",
+            body=b"{}",
+            head_status=501,
+            record=record,
+        )
+    ) as base:
         asyncio.run(task._preflight_content_type(f"{base}/mcp", timeout=5.0))
     assert record == ["HEAD", "GET"]
 
@@ -205,6 +226,7 @@ def test_head_501_falls_back_to_get_and_passes_json():
 # ---------------------------------------------------------------------------
 # ssl_verify / client_cert forwarding to the probe client
 # ---------------------------------------------------------------------------
+
 
 def test_ssl_verify_and_cert_forwarded(monkeypatch):
     captured: dict = {}
@@ -226,12 +248,14 @@ def test_ssl_verify_and_cert_forwarded(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
     task = _make_task()
-    asyncio.run(task._preflight_content_type(
-        "https://mcp.example.com/mcp",
-        ssl_verify=False,
-        client_cert="/path/to/cert.pem",
-        timeout=3.0,
-    ))
+    asyncio.run(
+        task._preflight_content_type(
+            "https://mcp.example.com/mcp",
+            ssl_verify=False,
+            client_cert="/path/to/cert.pem",
+            timeout=3.0,
+        )
+    )
     assert captured.get("verify") is False
     assert captured.get("cert") == "/path/to/cert.pem"
     assert captured.get("follow_redirects") is True

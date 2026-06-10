@@ -160,7 +160,9 @@ class TestCopyReasoningContentForApi:
         agent._copy_reasoning_content_for_api(source, api_msg)
         assert api_msg["reasoning_content"] == " "
 
-    def test_non_thinking_provider_preserves_empty_reasoning_content_verbatim(self) -> None:
+    def test_non_thinking_provider_preserves_empty_reasoning_content_verbatim(
+        self,
+    ) -> None:
         """The stale-placeholder upgrade ONLY fires when the active provider
         enforces thinking-mode echo. On non-thinking providers, an empty
         reasoning_content must still round-trip verbatim.
@@ -293,7 +295,9 @@ class TestCopyReasoningContentForApi:
 class TestBuildAssistantMessageDeepSeekReasoningContent:
     """_build_assistant_message pins replay-safe DeepSeek tool-call state."""
 
-    def test_deepseek_tool_call_reasoning_is_backfilled_into_reasoning_content(self) -> None:
+    def test_deepseek_tool_call_reasoning_is_backfilled_into_reasoning_content(
+        self,
+    ) -> None:
         agent = _make_agent(provider="deepseek", model="deepseek-v4-flash")
         assistant_message = SimpleNamespace(
             content=None,
@@ -344,7 +348,9 @@ class TestBuildAssistantMessageDeepSeekReasoningContent:
 
         assert msg["reasoning_content"] == "DeepSeek model_extra reasoning"
 
-    def test_deepseek_tool_call_without_raw_reasoning_content_gets_space_placeholder(self) -> None:
+    def test_deepseek_tool_call_without_raw_reasoning_content_gets_space_placeholder(
+        self,
+    ) -> None:
         agent = _make_agent(provider="deepseek", model="deepseek-v4-flash")
         assistant_message = SimpleNamespace(
             content=None,
@@ -386,34 +392,54 @@ class TestBuildAssistantMessagePadsStrictProviders:
         "provider,model,base_url,sdk_reasoning_content,expected",
         [
             pytest.param(
-                "deepseek", "deepseek-v4-pro", "",
-                None, " ",
+                "deepseek",
+                "deepseek-v4-pro",
+                "",
+                None,
+                " ",
                 id="deepseek-attr-none",
             ),
             pytest.param(
-                "deepseek", "deepseek-v4-pro", "",
-                _ATTR_ABSENT, " ",
+                "deepseek",
+                "deepseek-v4-pro",
+                "",
+                _ATTR_ABSENT,
+                " ",
                 id="deepseek-attr-absent",
             ),
             pytest.param(
-                "kimi-coding", "kimi-k2.6", "",
-                None, " ",
+                "kimi-coding",
+                "kimi-k2.6",
+                "",
+                None,
+                " ",
                 id="kimi-attr-none",
             ),
             pytest.param(
-                "custom", "kimi-k2", "https://api.moonshot.ai/v1",
-                _ATTR_ABSENT, " ",
+                "custom",
+                "kimi-k2",
+                "https://api.moonshot.ai/v1",
+                _ATTR_ABSENT,
+                " ",
                 id="moonshot-base-url",
             ),
             pytest.param(
-                "openrouter", "anthropic/claude-sonnet-4.6", "https://openrouter.ai/api/v1",
-                _ATTR_ABSENT, _EXPECT_NOT_PRESENT,
+                "openrouter",
+                "anthropic/claude-sonnet-4.6",
+                "https://openrouter.ai/api/v1",
+                _ATTR_ABSENT,
+                _EXPECT_NOT_PRESENT,
                 id="openrouter-no-pad",
             ),
         ],
     )
     def test_tool_call_reasoning_content_pad(
-        self, provider, model, base_url, sdk_reasoning_content, expected,
+        self,
+        provider,
+        model,
+        base_url,
+        sdk_reasoning_content,
+        expected,
     ) -> None:
         agent = _make_agent(provider=provider, model=model, base_url=base_url)
         msg_in = _build_sdk_message(
@@ -526,7 +552,11 @@ class TestReapplyReasoningEchoForProviderSwitch:
         msgs = self._codex_built_history()
         padded = reapply_reasoning_echo_for_provider(agent, msgs)
         assert padded == 1
-        bare = [m for m in msgs if m.get("role") == "assistant" and not m.get("reasoning_content")]
+        bare = [
+            m
+            for m in msgs
+            if m.get("role") == "assistant" and not m.get("reasoning_content")
+        ]
         assert bare == []
         # existing summary preserved verbatim, not clobbered with the pad
         assert msgs[2]["reasoning_content"] == "summary from codex"

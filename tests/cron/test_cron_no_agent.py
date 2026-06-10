@@ -18,10 +18,7 @@ Covers:
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import json
@@ -29,17 +26,11 @@ import json
 from unittest.mock import patch
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture
-
 def clawk_env(tmp_path, monkeypatch):
-
     """Isolate CLAWK_HOME for each test so jobs/scripts don't leak."""
 
     home = tmp_path / ".clawksis"
@@ -50,11 +41,7 @@ def clawk_env(tmp_path, monkeypatch):
 
     (home / "cron").mkdir()
 
-
-
     monkeypatch.setenv("CLAWK_HOME", str(home))
-
-
 
     # Reload modules that cache get_clawk_home() at import time.
 
@@ -72,12 +59,7 @@ def clawk_env(tmp_path, monkeypatch):
 
     importlib.reload(cron.scheduler)
 
-
-
     return home
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -87,47 +69,28 @@ def clawk_env(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_create_job_no_agent_requires_script(clawk_env):
 
     from cron.jobs import create_job
 
-
-
     with pytest.raises(ValueError, match="no_agent=True requires a script"):
-
         create_job(prompt=None, schedule="every 5m", no_agent=True)
-
-
-
 
 
 def test_create_job_no_agent_stores_field(clawk_env):
 
     from cron.jobs import create_job
 
-
-
     script_path = clawk_env / "scripts" / "watchdog.sh"
 
     script_path.write_text("#!/bin/bash\necho hi\n")
 
-
-
     job = create_job(
-
         prompt=None,
-
         schedule="every 5m",
-
         script="watchdog.sh",
-
         no_agent=True,
-
         deliver="local",
-
     )
 
     assert job["no_agent"] is True
@@ -139,36 +102,26 @@ def test_create_job_no_agent_stores_field(clawk_env):
     assert job["prompt"] in {None, ""}
 
 
-
-
-
 def test_create_job_default_is_not_no_agent(clawk_env):
 
     from cron.jobs import create_job
-
-
 
     job = create_job(prompt="say hi", schedule="every 5m", deliver="local")
 
     assert job.get("no_agent") is False
 
 
-
-
-
 def test_update_job_roundtrips_no_agent_flag(clawk_env):
 
     from cron.jobs import create_job, update_job, get_job
-
-
 
     script_path = clawk_env / "scripts" / "w.sh"
 
     script_path.write_text("echo hi\n")
 
-    job = create_job(prompt=None, schedule="every 5m", script="w.sh", no_agent=True, deliver="local")
-
-
+    job = create_job(
+        prompt=None, schedule="every 5m", script="w.sh", no_agent=True, deliver="local"
+    )
 
     update_job(job["id"], {"no_agent": False})
 
@@ -176,16 +129,11 @@ def test_update_job_roundtrips_no_agent_flag(clawk_env):
 
     assert reloaded["no_agent"] is False
 
-
-
     update_job(job["id"], {"no_agent": True})
 
     reloaded = get_job(job["id"])
 
     assert reloaded["no_agent"] is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -195,19 +143,12 @@ def test_update_job_roundtrips_no_agent_flag(clawk_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_cronjob_tool_create_no_agent_without_script_errors(clawk_env):
 
     from tools.cronjob_tools import cronjob
 
-
-
     result = json.loads(
-
         cronjob(action="create", schedule="every 5m", no_agent=True, deliver="local")
-
     )
 
     assert result.get("success") is False
@@ -215,37 +156,22 @@ def test_cronjob_tool_create_no_agent_without_script_errors(clawk_env):
     assert "no_agent=True requires a script" in result.get("error", "")
 
 
-
-
-
 def test_cronjob_tool_create_no_agent_with_script_succeeds(clawk_env):
 
     from tools.cronjob_tools import cronjob
-
-
 
     script_path = clawk_env / "scripts" / "alert.sh"
 
     script_path.write_text("#!/bin/bash\necho alert\n")
 
-
-
     result = json.loads(
-
         cronjob(
-
             action="create",
-
             schedule="every 5m",
-
             script="alert.sh",
-
             no_agent=True,
-
             deliver="local",
-
         )
-
     )
 
     assert result.get("success") is True
@@ -255,50 +181,33 @@ def test_cronjob_tool_create_no_agent_with_script_succeeds(clawk_env):
     assert result["job"]["script"] == "alert.sh"
 
 
-
-
-
 def test_cronjob_tool_update_toggles_no_agent(clawk_env):
 
     from tools.cronjob_tools import cronjob
-
-
 
     script_path = clawk_env / "scripts" / "w.sh"
 
     script_path.write_text("echo hi\n")
 
-
-
     created = json.loads(
-
         cronjob(
-
             action="create",
-
             schedule="every 5m",
-
             script="w.sh",
-
             no_agent=True,
-
             deliver="local",
-
         )
-
     )
 
     job_id = created["job_id"]
 
-
-
-    off = json.loads(cronjob(action="update", job_id=job_id, no_agent=False, prompt="run"))
+    off = json.loads(
+        cronjob(action="update", job_id=job_id, no_agent=False, prompt="run")
+    )
 
     assert off["success"] is True
 
     assert off["job"].get("no_agent") in {False, None}
-
-
 
     on = json.loads(cronjob(action="update", job_id=job_id, no_agent=True))
 
@@ -307,26 +216,18 @@ def test_cronjob_tool_update_toggles_no_agent(clawk_env):
     assert on["job"]["no_agent"] is True
 
 
-
-
-
 def test_cronjob_tool_update_no_agent_without_script_errors(clawk_env):
-
     """Flipping no_agent=True on a job that has no script must fail."""
 
     from tools.cronjob_tools import cronjob
 
-
-
     created = json.loads(
-
-        cronjob(action="create", schedule="every 5m", prompt="do a thing", deliver="local")
-
+        cronjob(
+            action="create", schedule="every 5m", prompt="do a thing", deliver="local"
+        )
     )
 
     job_id = created["job_id"]
-
-
 
     result = json.loads(cronjob(action="update", job_id=job_id, no_agent=True))
 
@@ -335,45 +236,26 @@ def test_cronjob_tool_update_no_agent_without_script_errors(clawk_env):
     assert "without a script" in result.get("error", "")
 
 
-
-
-
 def test_cronjob_tool_create_does_not_require_prompt_when_no_agent(clawk_env):
-
     """The 'prompt or skill required' rule is relaxed for no_agent jobs."""
 
     from tools.cronjob_tools import cronjob
-
-
 
     script_path = clawk_env / "scripts" / "w.sh"
 
     script_path.write_text("echo hi\n")
 
-
-
     result = json.loads(
-
         cronjob(
-
             action="create",
-
             schedule="every 5m",
-
             script="w.sh",
-
             no_agent=True,
-
             deliver="local",
-
         )
-
     )
 
     assert result.get("success") is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -383,29 +265,23 @@ def test_cronjob_tool_create_does_not_require_prompt_when_no_agent(clawk_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_run_job_no_agent_success_returns_script_stdout(clawk_env):
-
     """Happy path: script exits 0 with output, delivered verbatim."""
 
     from cron.jobs import create_job
 
     from cron.scheduler import run_job
 
-
-
     script_path = clawk_env / "scripts" / "alert.sh"
 
     script_path.write_text("#!/bin/bash\necho 'RAM 92% on host'\n")
 
-
-
     job = create_job(
-
-        prompt=None, schedule="every 5m", script="alert.sh", no_agent=True, deliver="local"
-
+        prompt=None,
+        schedule="every 5m",
+        script="alert.sh",
+        no_agent=True,
+        deliver="local",
     )
 
     success, doc, final_response, error = run_job(job)
@@ -419,29 +295,23 @@ def test_run_job_no_agent_success_returns_script_stdout(clawk_env):
     assert "RAM 92% on host" in doc
 
 
-
-
-
 def test_run_job_no_agent_empty_output_is_silent(clawk_env):
-
     """Empty stdout → SILENT_MARKER, which suppresses delivery downstream."""
 
     from cron.jobs import create_job
 
     from cron.scheduler import run_job, SILENT_MARKER
 
-
-
     script_path = clawk_env / "scripts" / "quiet.sh"
 
     script_path.write_text("#!/bin/bash\n# nothing to say\n")
 
-
-
     job = create_job(
-
-        prompt=None, schedule="every 5m", script="quiet.sh", no_agent=True, deliver="local"
-
+        prompt=None,
+        schedule="every 5m",
+        script="quiet.sh",
+        no_agent=True,
+        deliver="local",
     )
 
     success, doc, final_response, error = run_job(job)
@@ -453,29 +323,23 @@ def test_run_job_no_agent_empty_output_is_silent(clawk_env):
     assert final_response == SILENT_MARKER
 
 
-
-
-
 def test_run_job_no_agent_wake_gate_is_silent(clawk_env):
-
     """wakeAgent=false gate in stdout triggers a silent run."""
 
     from cron.jobs import create_job
 
     from cron.scheduler import run_job, SILENT_MARKER
 
-
-
     script_path = clawk_env / "scripts" / "gated.sh"
 
-    script_path.write_text('#!/bin/bash\necho \'{"wakeAgent": false}\'\n')
-
-
+    script_path.write_text("#!/bin/bash\necho '{\"wakeAgent\": false}'\n")
 
     job = create_job(
-
-        prompt=None, schedule="every 5m", script="gated.sh", no_agent=True, deliver="local"
-
+        prompt=None,
+        schedule="every 5m",
+        script="gated.sh",
+        no_agent=True,
+        deliver="local",
     )
 
     success, doc, final_response, error = run_job(job)
@@ -485,29 +349,23 @@ def test_run_job_no_agent_wake_gate_is_silent(clawk_env):
     assert final_response == SILENT_MARKER
 
 
-
-
-
 def test_run_job_no_agent_script_failure_delivers_error(clawk_env):
-
     """Non-zero exit → success=False, error alert is the delivered message."""
 
     from cron.jobs import create_job
 
     from cron.scheduler import run_job
 
-
-
     script_path = clawk_env / "scripts" / "broken.sh"
 
     script_path.write_text("#!/bin/bash\necho oops >&2\nexit 3\n")
 
-
-
     job = create_job(
-
-        prompt=None, schedule="every 5m", script="broken.sh", no_agent=True, deliver="local"
-
+        prompt=None,
+        schedule="every 5m",
+        script="broken.sh",
+        no_agent=True,
+        deliver="local",
     )
 
     success, doc, final_response, error = run_job(job)
@@ -521,45 +379,29 @@ def test_run_job_no_agent_script_failure_delivers_error(clawk_env):
     assert "Cron watchdog" in final_response  # alert header
 
 
-
-
-
 def test_run_job_no_agent_never_invokes_aiagent(clawk_env):
-
     """no_agent jobs must NOT import/construct the AIAgent."""
 
     from cron.jobs import create_job
-
-
 
     script_path = clawk_env / "scripts" / "alert.sh"
 
     script_path.write_text("#!/bin/bash\necho alert\n")
 
-
-
     job = create_job(
-
-        prompt=None, schedule="every 5m", script="alert.sh", no_agent=True, deliver="local"
-
+        prompt=None,
+        schedule="every 5m",
+        script="alert.sh",
+        no_agent=True,
+        deliver="local",
     )
 
-
-
     with patch("run_agent.AIAgent") as ai_mock:
-
         from cron.scheduler import run_job
-
-
 
         run_job(job)
 
-
-
     ai_mock.assert_not_called()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -569,24 +411,16 @@ def test_run_job_no_agent_never_invokes_aiagent(clawk_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_run_job_script_shell_script_runs_via_bash(clawk_env):
-
     """.sh files should execute under /bin/bash even without a shebang line."""
 
     from cron.scheduler import _run_job_script
-
-
 
     script_path = clawk_env / "scripts" / "shelly.sh"
 
     # No shebang — relies on the interpreter-by-extension rule.
 
     script_path.write_text('echo "shell: $BASH_VERSION" | head -c 7\n')
-
-
 
     ok, output = _run_job_script("shelly.sh")
 
@@ -595,20 +429,13 @@ def test_run_job_script_shell_script_runs_via_bash(clawk_env):
     assert output.startswith("shell:")
 
 
-
-
-
 def test_run_job_script_bash_extension_also_runs_via_bash(clawk_env):
 
     from cron.scheduler import _run_job_script
 
-
-
     script_path = clawk_env / "scripts" / "thing.bash"
 
     script_path.write_text('printf "via bash\\n"\n')
-
-
 
     ok, output = _run_job_script("thing.bash")
 
@@ -617,22 +444,14 @@ def test_run_job_script_bash_extension_also_runs_via_bash(clawk_env):
     assert output == "via bash"
 
 
-
-
-
 def test_run_job_script_python_still_runs_via_python(clawk_env):
-
     """Regression: .py files must keep running via sys.executable."""
 
     from cron.scheduler import _run_job_script
 
-
-
     script_path = clawk_env / "scripts" / "py.py"
 
     script_path.write_text("import sys\nprint(f'python {sys.version_info.major}')\n")
-
-
 
     ok, output = _run_job_script("py.py")
 
@@ -641,16 +460,10 @@ def test_run_job_script_python_still_runs_via_python(clawk_env):
     assert output.startswith("python ")
 
 
-
-
-
 def test_run_job_script_path_traversal_still_blocked(clawk_env):
-
     """Security regression: shell-script support must NOT loosen containment."""
 
     from cron.scheduler import _run_job_script
-
-
 
     # Absolute path outside the scripts dir should be rejected.
 
@@ -659,4 +472,3 @@ def test_run_job_script_path_traversal_still_blocked(clawk_env):
     assert ok is False
 
     assert "Blocked" in output or "outside" in output
-

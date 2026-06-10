@@ -14,7 +14,7 @@ dora_config = LoraConfig(
     lora_alpha=32,
     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
     use_dora=True,  # Enable DoRA
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 
 model = get_peft_model(model, dora_config)
@@ -33,16 +33,16 @@ Automatically adjusts rank per layer based on importance:
 from peft import AdaLoraConfig
 
 adalora_config = AdaLoraConfig(
-    init_r=64,              # Initial rank
-    target_r=16,            # Target average rank
-    tinit=200,              # Warmup steps
-    tfinal=1000,            # Final pruning step
-    deltaT=10,              # Rank update frequency
+    init_r=64,  # Initial rank
+    target_r=16,  # Target average rank
+    tinit=200,  # Warmup steps
+    tfinal=1000,  # Final pruning step
+    deltaT=10,  # Rank update frequency
     beta1=0.85,
     beta2=0.85,
-    orth_reg_weight=0.5,    # Orthogonality regularization
+    orth_reg_weight=0.5,  # Orthogonality regularization
     target_modules=["q_proj", "v_proj"],
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 ```
 
@@ -88,7 +88,7 @@ lora_config = LoraConfig(
     r=64,
     lora_alpha=64,
     use_rslora=True,  # Enables rank-stabilized scaling
-    target_modules="all-linear"
+    target_modules="all-linear",
 )
 ```
 
@@ -107,8 +107,8 @@ from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 # LoftQ configuration
 loftq_config = LoftQConfig(
-    loftq_bits=4,              # Quantization bits
-    loftq_iter=5,              # Alternating optimization iterations
+    loftq_bits=4,  # Quantization bits
+    loftq_iter=5,  # Alternating optimization iterations
 )
 
 # LoRA config with LoftQ initialization
@@ -118,14 +118,13 @@ lora_config = LoraConfig(
     target_modules="all-linear",
     init_lora_weights="loftq",
     loftq_config=loftq_config,
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 
 # Load quantized model
 bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
 model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-3.1-8B",
-    quantization_config=bnb_config
+    "meta-llama/Llama-3.1-8B", quantization_config=bnb_config
 )
 
 model = get_peft_model(model, lora_config)
@@ -145,11 +144,13 @@ model = get_peft_model(model, lora_config)
 lora_config = LoraConfig(
     r=16,
     lora_alpha=32,
-    target_modules=["model.layers.0.self_attn.q_proj",
-                    "model.layers.0.self_attn.v_proj",
-                    "model.layers.31.self_attn.q_proj",
-                    "model.layers.31.self_attn.v_proj"],
-    layers_to_transform=[0, 31]  # Alternative approach
+    target_modules=[
+        "model.layers.0.self_attn.q_proj",
+        "model.layers.0.self_attn.v_proj",
+        "model.layers.31.self_attn.q_proj",
+        "model.layers.31.self_attn.v_proj",
+    ],
+    layers_to_transform=[0, 31],  # Alternative approach
 )
 ```
 
@@ -162,7 +163,7 @@ lora_config = LoraConfig(
     lora_alpha=32,
     target_modules="all-linear",
     layers_to_transform=list(range(11)),  # Layers 0-10
-    layers_pattern="model.layers"
+    layers_pattern="model.layers",
 )
 ```
 
@@ -234,7 +235,7 @@ model.add_weighted_adapter(
     adapters=["style", "task"],
     weights=[0.7, 0.3],
     adapter_name="combined",
-    combination_type="linear"  # or "cat", "svd"
+    combination_type="linear",  # or "cat", "svd"
 )
 
 model.set_adapter("combined")
@@ -248,7 +249,7 @@ model.add_weighted_adapter(
     adapters=["base", "domain", "task"],
     weights=[1.0, 1.0, 1.0],
     adapter_name="stacked",
-    combination_type="cat"  # Concatenate adapter outputs
+    combination_type="cat",  # Concatenate adapter outputs
 )
 ```
 
@@ -256,6 +257,7 @@ model.add_weighted_adapter(
 
 ```python
 import torch
+
 
 class MultiAdapterModel:
     def __init__(self, base_model_path, adapter_paths):
@@ -288,7 +290,7 @@ from peft import prepare_model_for_kbit_training
 model = prepare_model_for_kbit_training(
     model,
     use_gradient_checkpointing=True,
-    gradient_checkpointing_kwargs={"use_reentrant": False}
+    gradient_checkpointing_kwargs={"use_reentrant": False},
 )
 ```
 
@@ -300,7 +302,7 @@ from accelerate import Accelerator
 accelerator = Accelerator(
     mixed_precision="bf16",
     gradient_accumulation_steps=8,
-    cpu_offload=True  # Offload optimizer states to CPU
+    cpu_offload=True,  # Offload optimizer states to CPU
 )
 
 model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
@@ -315,7 +317,7 @@ from transformers import AutoModelForCausalLM
 model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-3.1-8B",
     attn_implementation="flash_attention_2",
-    torch_dtype=torch.bfloat16
+    torch_dtype=torch.bfloat16,
 )
 
 # Apply LoRA
@@ -335,8 +337,7 @@ from transformers import BitsAndBytesConfig
 
 bnb_config = BitsAndBytesConfig(load_in_4bit=True)
 quantized_model = AutoModelForCausalLM.from_pretrained(
-    "./merged-model",
-    quantization_config=bnb_config
+    "./merged-model", quantization_config=bnb_config
 )
 ```
 
@@ -353,10 +354,7 @@ merged_model.save_pretrained("./merged-model")
 # Export to ONNX
 from optimum.onnxruntime import ORTModelForCausalLM
 
-ort_model = ORTModelForCausalLM.from_pretrained(
-    "./merged-model",
-    export=True
-)
+ort_model = ORTModelForCausalLM.from_pretrained("./merged-model", export=True)
 ort_model.save_pretrained("./onnx-model")
 ```
 
@@ -371,7 +369,7 @@ llm = LLM(
     model="meta-llama/Llama-3.1-8B",
     enable_lora=True,
     max_lora_rank=64,
-    max_loras=4  # Max concurrent adapters
+    max_loras=4,  # Max concurrent adapters
 )
 
 # Batch with different adapters
@@ -381,10 +379,7 @@ requests = [
     ("prompt3", LoRARequest("adapter1", 1, "./adapter1")),
 ]
 
-outputs = llm.generate(
-    [r[0] for r in requests],
-    lora_request=[r[1] for r in requests]
-)
+outputs = llm.generate([r[0] for r in requests], lora_request=[r[1] for r in requests])
 ```
 
 ## Training Recipes
@@ -398,7 +393,7 @@ lora_config = LoraConfig(
     lora_dropout=0.05,
     target_modules="all-linear",
     bias="none",
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 
 training_args = TrainingArguments(
@@ -422,18 +417,26 @@ training_args = TrainingArguments(
 
 ```python
 lora_config = LoraConfig(
-    r=32,              # Higher rank for code
+    r=32,  # Higher rank for code
     lora_alpha=64,
     lora_dropout=0.1,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    target_modules=[
+        "q_proj",
+        "v_proj",
+        "k_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
     bias="none",
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
 )
 
 training_args = TrainingArguments(
-    learning_rate=1e-4,        # Lower LR for code
+    learning_rate=1e-4,  # Lower LR for code
     num_train_epochs=2,
-    max_seq_length=2048,       # Longer sequences
+    max_seq_length=2048,  # Longer sequences
 )
 ```
 
@@ -446,16 +449,18 @@ lora_config = LoraConfig(
     r=16,
     lora_alpha=16,  # alpha = r for chat
     lora_dropout=0.05,
-    target_modules="all-linear"
+    target_modules="all-linear",
 )
+
 
 # Use chat template
 def format_chat(example):
     messages = [
         {"role": "user", "content": example["instruction"]},
-        {"role": "assistant", "content": example["response"]}
+        {"role": "assistant", "content": example["response"]},
     ]
     return tokenizer.apply_chat_template(messages, tokenize=False)
+
 
 trainer = SFTTrainer(
     model=model,
@@ -503,12 +508,18 @@ print(f"Base: {tokenizer.decode(base_output[0])}")
 ```python
 from transformers import TrainerCallback
 
+
 class LoRACallback(TrainerCallback):
     def on_log(self, args, state, control, logs=None, **kwargs):
         if "loss" in logs:
             # Log adapter-specific metrics
             model = kwargs["model"]
-            lora_params = sum(p.numel() for n, p in model.named_parameters()
-                            if "lora" in n and p.requires_grad)
-            print(f"Step {state.global_step}: loss={logs['loss']:.4f}, lora_params={lora_params}")
+            lora_params = sum(
+                p.numel()
+                for n, p in model.named_parameters()
+                if "lora" in n and p.requires_grad
+            )
+            print(
+                f"Step {state.global_step}: loss={logs['loss']:.4f}, lora_params={lora_params}"
+            )
 ```

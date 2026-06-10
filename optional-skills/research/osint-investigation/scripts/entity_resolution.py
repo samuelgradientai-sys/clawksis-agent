@@ -16,6 +16,7 @@ Output CSV columns:
     left_normalized, right_normalized, left_row, right_row,
     overlap_ratio, shared_tokens
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,8 +45,7 @@ def _read_csv(path: str, name_col: str) -> list[dict[str, str]]:
         reader = csv.DictReader(fh)
         if name_col not in (reader.fieldnames or []):
             raise SystemExit(
-                f"Column {name_col!r} not in {path}. "
-                f"Available: {reader.fieldnames}"
+                f"Column {name_col!r} not in {path}. Available: {reader.fieldnames}"
             )
         for i, row in enumerate(reader):
             row["__row__"] = str(i)
@@ -89,20 +89,18 @@ def _emit(
     if key in seen:
         return
     seen.add(key)
-    out_rows.append(
-        {
-            "match_type": match_type,
-            "confidence": CONFIDENCE[match_type],
-            "left_name": left_raw,
-            "right_name": right_raw,
-            "left_normalized": normalize_name(left_raw),
-            "right_normalized": normalize_name(right_raw),
-            "left_row": left_row["__row__"],
-            "right_row": right_row["__row__"],
-            "overlap_ratio": f"{ratio:.3f}" if ratio else "",
-            "shared_tokens": str(shared) if shared else "",
-        }
-    )
+    out_rows.append({
+        "match_type": match_type,
+        "confidence": CONFIDENCE[match_type],
+        "left_name": left_raw,
+        "right_name": right_raw,
+        "left_normalized": normalize_name(left_raw),
+        "right_normalized": normalize_name(right_raw),
+        "left_row": left_row["__row__"],
+        "right_row": right_row["__row__"],
+        "overlap_ratio": f"{ratio:.3f}" if ratio else "",
+        "shared_tokens": str(shared) if shared else "",
+    })
 
 
 def resolve(
@@ -143,9 +141,7 @@ def resolve(
             if not normalize_name(l_raw):
                 continue
             for rrow in right_rows:
-                ratio, shared = token_overlap_ratio(
-                    l_raw, rrow.get(right_col, "")
-                )
+                ratio, shared = token_overlap_ratio(l_raw, rrow.get(right_col, ""))
                 if ratio >= overlap_threshold and shared >= min_shared:
                     _emit(
                         out_rows,
@@ -179,11 +175,11 @@ def resolve(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--left", required=True, help="Left CSV path")
-    p.add_argument(
-        "--left-name-col", required=True, help="Name column in left CSV"
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    p.add_argument("--left", required=True, help="Left CSV path")
+    p.add_argument("--left-name-col", required=True, help="Name column in left CSV")
     p.add_argument("--right", required=True, help="Right CSV path")
     p.add_argument(
         "--right-name-col",

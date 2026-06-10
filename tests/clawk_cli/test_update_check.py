@@ -1,7 +1,5 @@
 """Tests for the update check mechanism in clawk_cli.banner."""
 
-
-
 import json
 
 import os
@@ -15,34 +13,25 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 import pytest
 
 
-
-
-
 def test_version_string_no_v_prefix():
-
     """__version__ should be bare semver without a 'v' prefix."""
 
     from clawk_cli import __version__
 
-    assert not __version__.startswith("v"), f"__version__ should not start with 'v', got {__version__!r}"
-
-
-
+    assert not __version__.startswith("v"), (
+        f"__version__ should not start with 'v', got {__version__!r}"
+    )
 
 
 def test_check_for_updates_uses_cache(tmp_path, monkeypatch):
-
     """When cache is fresh, check_for_updates should return cached value without calling git."""
 
     from clawk_cli.banner import check_for_updates
 
     from clawk_cli import __version__
-
-
 
     # Create a fake git repo and fresh cache
 
@@ -52,32 +41,23 @@ def test_check_for_updates_uses_cache(tmp_path, monkeypatch):
 
     (repo_dir / ".git").mkdir()
 
-
-
     cache_file = tmp_path / ".update_check"
 
-    cache_file.write_text(json.dumps({"ts": time.time(), "behind": 3, "ver": __version__}))
-
-
+    cache_file.write_text(
+        json.dumps({"ts": time.time(), "behind": 3, "ver": __version__})
+    )
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     with patch("clawk_cli.banner.subprocess.run") as mock_run:
-
         result = check_for_updates()
-
-
 
     assert result == 3
 
     mock_run.assert_not_called()
 
 
-
-
-
 def test_check_for_updates_invalidates_on_version_change(tmp_path, monkeypatch):
-
     """A fresh cache from a different installed version must be re-checked, not reused.
 
 
@@ -92,8 +72,6 @@ def test_check_for_updates_invalidates_on_version_change(tmp_path, monkeypatch):
 
     import clawk_cli.banner as banner
 
-
-
     # No local git checkout -> the PyPI path is exercised (pip-install class).
 
     fake_banner = tmp_path / "clawk_cli" / "banner.py"
@@ -104,30 +82,23 @@ def test_check_for_updates_invalidates_on_version_change(tmp_path, monkeypatch):
 
     monkeypatch.setattr(banner, "__file__", str(fake_banner))
 
-
-
     # Fresh (within TTL) cache that says "behind", but stamped with an OLD version.
 
     cache_file = tmp_path / ".update_check"
 
     cache_file.write_text(
-
         json.dumps({"ts": time.time(), "behind": 1, "rev": None, "ver": "0.0.1-old"})
-
     )
-
-
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     monkeypatch.delenv("CLAWK_REVISION", raising=False)
 
-    with patch("clawk_cli.banner.subprocess.run") as mock_run, \
-         patch("clawk_cli.banner.check_via_pypi", return_value=0) as mock_pypi:
-
+    with (
+        patch("clawk_cli.banner.subprocess.run") as mock_run,
+        patch("clawk_cli.banner.check_via_pypi", return_value=0) as mock_pypi,
+    ):
         result = banner.check_for_updates()
-
-
 
     # Stale-version cache rejected -> fresh check ran -> up-to-date result.
 
@@ -137,8 +108,6 @@ def test_check_for_updates_invalidates_on_version_change(tmp_path, monkeypatch):
 
     mock_run.assert_not_called()
 
-
-
     # Cache rewritten with the current installed version.
 
     written = json.loads(cache_file.read_text())
@@ -146,16 +115,10 @@ def test_check_for_updates_invalidates_on_version_change(tmp_path, monkeypatch):
     assert written["ver"] == banner.VERSION
 
 
-
-
-
 def test_check_for_updates_expired_cache(tmp_path, monkeypatch):
-
     """When cache is expired, check_for_updates should call git fetch."""
 
     from clawk_cli.banner import check_for_updates
-
-
 
     repo_dir = tmp_path / "clawksis-agent"
 
@@ -163,43 +126,28 @@ def test_check_for_updates_expired_cache(tmp_path, monkeypatch):
 
     (repo_dir / ".git").mkdir()
 
-
-
     # Write an expired cache (timestamp far in the past)
 
     cache_file = tmp_path / ".update_check"
 
     cache_file.write_text(json.dumps({"ts": 0, "behind": 1}))
 
-
-
     mock_result = MagicMock(returncode=0, stdout="5\n")
-
-
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     with patch("clawk_cli.banner.subprocess.run", return_value=mock_result) as mock_run:
-
         result = check_for_updates()
-
-
 
     assert result == 5
 
     assert mock_run.call_count == 2  # git fetch + git rev-list
 
 
-
-
-
 def test_check_for_updates_no_git_dir(tmp_path, monkeypatch):
-
     """Falls back to PyPI check when .git directory doesn't exist anywhere."""
 
     import clawk_cli.banner as banner
-
-
 
     # Create a fake banner.py so the fallback path also has no .git
 
@@ -209,16 +157,12 @@ def test_check_for_updates_no_git_dir(tmp_path, monkeypatch):
 
     fake_banner.touch()
 
-
-
     monkeypatch.setattr(banner, "__file__", str(fake_banner))
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     with patch("clawk_cli.banner.subprocess.run") as mock_run:
-
         with patch("clawk_cli.banner.check_via_pypi", return_value=0):
-
             result = banner.check_for_updates()
 
     assert result == 0
@@ -226,31 +170,21 @@ def test_check_for_updates_no_git_dir(tmp_path, monkeypatch):
     mock_run.assert_not_called()
 
 
-
-
-
 def test_check_for_updates_fallback_to_project_root(tmp_path, monkeypatch):
-
     """Dev install: falls back to Path(__file__).parent.parent when CLAWK_HOME has no git repo."""
 
     import clawk_cli.banner as banner
 
-
-
     project_root = Path(banner.__file__).parent.parent.resolve()
 
     if not (project_root / ".git").exists():
-
         pytest.skip("Not running from a git checkout")
-
-
 
     # Point CLAWK_HOME at a temp dir with no clawksis-agent/.git
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     with patch("clawk_cli.banner.subprocess.run") as mock_run:
-
         mock_run.return_value = MagicMock(returncode=0, stdout="0\n")
 
         result = banner.check_for_updates()
@@ -260,16 +194,10 @@ def test_check_for_updates_fallback_to_project_root(tmp_path, monkeypatch):
     assert mock_run.call_count >= 1
 
 
-
-
-
 def test_prefetch_non_blocking():
-
     """prefetch_update_check() should return immediately without blocking."""
 
     import clawk_cli.banner as banner
-
-
 
     # Reset module state
 
@@ -277,23 +205,16 @@ def test_prefetch_non_blocking():
 
     banner._update_check_done = threading.Event()
 
-
-
     with patch.object(banner, "check_for_updates", return_value=5):
-
         start = time.monotonic()
 
         banner.prefetch_update_check()
 
         elapsed = time.monotonic() - start
 
-
-
         # Should return almost immediately (well under 1 second)
 
         assert elapsed < 1.0
-
-
 
         # Wait for the background thread to finish
 
@@ -302,16 +223,10 @@ def test_prefetch_non_blocking():
         assert banner._update_result == 5
 
 
-
-
-
 def test_invalidate_update_cache_clears_all_profiles(tmp_path):
-
     """_invalidate_update_cache() should delete .update_check from ALL profiles."""
 
     from clawk_cli.main import _invalidate_update_cache
-
-
 
     # Build a fake ~/.clawksis with default + two named profiles
 
@@ -321,46 +236,40 @@ def test_invalidate_update_cache_clears_all_profiles(tmp_path):
 
     (default_home / ".update_check").write_text('{"ts":1,"behind":50}')
 
-
-
     profiles_root = default_home / "profiles"
 
     for name in ("ops", "dev"):
-
         p = profiles_root / name
 
         p.mkdir(parents=True)
 
         (p / ".update_check").write_text('{"ts":1,"behind":50}')
 
-
-
-    with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(default_home)}):
-
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch.dict(os.environ, {"CLAWK_HOME": str(default_home)}),
+    ):
         _invalidate_update_cache()
-
-
 
     # All three caches should be gone
 
-    assert not (default_home / ".update_check").exists(), "default profile cache not cleared"
+    assert not (default_home / ".update_check").exists(), (
+        "default profile cache not cleared"
+    )
 
-    assert not (profiles_root / "ops" / ".update_check").exists(), "ops profile cache not cleared"
+    assert not (profiles_root / "ops" / ".update_check").exists(), (
+        "ops profile cache not cleared"
+    )
 
-    assert not (profiles_root / "dev" / ".update_check").exists(), "dev profile cache not cleared"
-
-
-
+    assert not (profiles_root / "dev" / ".update_check").exists(), (
+        "dev profile cache not cleared"
+    )
 
 
 def test_invalidate_update_cache_no_profiles_dir(tmp_path):
-
     """Works fine when no profiles directory exists (single-profile setup)."""
 
     from clawk_cli.main import _invalidate_update_cache
-
-
 
     default_home = tmp_path / ".clawksis"
 
@@ -368,14 +277,10 @@ def test_invalidate_update_cache_no_profiles_dir(tmp_path):
 
     (default_home / ".update_check").write_text('{"ts":1,"behind":5}')
 
-
-
-    with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(default_home)}):
-
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch.dict(os.environ, {"CLAWK_HOME": str(default_home)}),
+    ):
         _invalidate_update_cache()
 
-
-
     assert not (default_home / ".update_check").exists()
-

@@ -5,6 +5,7 @@ gets more than N workers running at once even if the global
 ``max_in_progress`` cap would allow it. Prevents one profile's local
 model / API quota / browser pool from being overwhelmed by a fan-out.
 """
+
 from __future__ import annotations
 
 import os
@@ -22,9 +23,14 @@ def isolated_kanban_home_with_profiles(monkeypatch):
         os.makedirs(os.path.join(test_home, "profiles", prof), exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", test_home)
     for mod in list(sys.modules.keys()):
-        if mod.startswith("clawk_cli") or mod.startswith("clawk_state") or mod == "clawk_constants":
+        if (
+            mod.startswith("clawk_cli")
+            or mod.startswith("clawk_state")
+            or mod == "clawk_constants"
+        ):
             del sys.modules[mod]
     from clawk_cli import kanban_db
+
     yield kanban_db
 
 
@@ -59,7 +65,9 @@ def test_cap_2_balances_two_profiles(isolated_kanban_home_with_profiles):
             kb.create_task(conn, title=f"b{i}", assignee="beta")
     with kb.connect_closing() as conn:
         res = kb.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=True,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=True,
             max_in_progress_per_profile=2,
         )
     spawn_assignees = [s[1] for s in res.spawned]
@@ -89,7 +97,9 @@ def test_pre_existing_running_counts_against_cap(isolated_kanban_home_with_profi
             kb.create_task(conn, title=f"b{i}", assignee="beta")
     with kb.connect_closing() as conn:
         res = kb.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=True,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=True,
             max_in_progress_per_profile=1,
         )
     spawn_assignees = [s[1] for s in res.spawned]
@@ -111,7 +121,9 @@ def test_invalid_cap_treated_as_no_cap(isolated_kanban_home_with_profiles, cap):
             kb.create_task(conn, title=f"a{i}", assignee="alpha")
     with kb.connect_closing() as conn:
         res = kb.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=True,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=True,
             max_in_progress_per_profile=cap,
         )
     assert not res.skipped_per_profile_capped
@@ -130,7 +142,9 @@ def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_pr
     # First tick: cap=1, only 1 alpha dispatched
     with kb.connect_closing() as conn:
         res1 = kb.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=False,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=False,
             max_in_progress_per_profile=1,
         )
     assert len(res1.spawned) == 1
@@ -149,7 +163,9 @@ def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_pr
     # Second tick: 1 more alpha should now dispatch
     with kb.connect_closing() as conn:
         res2 = kb.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=False,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=False,
             max_in_progress_per_profile=1,
         )
     assert len(res2.spawned) == 1
@@ -162,6 +178,7 @@ def test_dispatch_result_has_skipped_per_profile_capped_field():
     skipped_per_profile_capped field as a list of
     (task_id, assignee, current_running) tuples."""
     from clawk_cli.kanban_db import DispatchResult
+
     r = DispatchResult()
     assert hasattr(r, "skipped_per_profile_capped")
     assert r.skipped_per_profile_capped == []

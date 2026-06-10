@@ -18,18 +18,21 @@ Real-world examples of using Guidance for structured generation, agents, and wor
 ```python
 from guidance import models, gen, guidance
 
+
 @guidance
 def generate_user(lm):
     """Generate valid user JSON."""
     lm += "{\n"
     lm += '  "name": ' + gen("name", regex=r'"[A-Za-z ]+"') + ",\n"
     lm += '  "age": ' + gen("age", regex=r"[0-9]+") + ",\n"
-    lm += '  "email": ' + gen(
-        "email",
-        regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"'
-    ) + "\n"
+    lm += (
+        '  "email": '
+        + gen("email", regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"')
+        + "\n"
+    )
     lm += "}"
     return lm
+
 
 # Use it
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -51,10 +54,13 @@ def generate_order(lm):
     # Customer info
     lm += '  "customer": {\n'
     lm += '    "name": ' + gen("customer_name", regex=r'"[A-Za-z ]+"') + ",\n"
-    lm += '    "email": ' + gen(
-        "customer_email",
-        regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"'
-    ) + "\n"
+    lm += (
+        '    "email": '
+        + gen(
+            "customer_email", regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"'
+        )
+        + "\n"
+    )
     lm += "  },\n"
 
     # Order details
@@ -65,13 +71,15 @@ def generate_order(lm):
     lm += "  },\n"
 
     # Status
-    lm += '  "status": ' + gen(
-        "status",
-        regex=r'"(pending|processing|shipped|delivered)"'
-    ) + "\n"
+    lm += (
+        '  "status": '
+        + gen("status", regex=r'"(pending|processing|shipped|delivered)"')
+        + "\n"
+    )
 
     lm += "}"
     return lm
+
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = generate_order(lm)
@@ -98,6 +106,7 @@ def generate_user_list(lm, count=3):
     lm += "]"
     return lm
 
+
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = generate_user_list(lm, count=5)
 ```
@@ -107,6 +116,7 @@ lm = generate_user_list(lm, count=5)
 ```python
 import json
 from guidance import models, gen, guidance
+
 
 @guidance
 def json_from_schema(lm, schema):
@@ -137,6 +147,7 @@ def json_from_schema(lm, schema):
     lm += "}"
     return lm
 
+
 # Define schema
 schema = {
     "type": "object",
@@ -144,8 +155,8 @@ schema = {
         "name": {"type": "string"},
         "age": {"type": "integer"},
         "score": {"type": "number"},
-        "active": {"type": "boolean"}
-    }
+        "active": {"type": "boolean"},
+    },
 }
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -159,6 +170,7 @@ lm = json_from_schema(lm, schema)
 ```python
 from guidance import models, gen, guidance, system, user, assistant
 
+
 @guidance
 def extract_person_info(lm, text):
     """Extract structured info from text."""
@@ -168,13 +180,18 @@ def extract_person_info(lm, text):
         lm += "Name: " + gen("name", regex=r"[A-Za-z ]+", stop="\n") + "\n"
         lm += "Age: " + gen("age", regex=r"[0-9]+", max_tokens=3) + "\n"
         lm += "Occupation: " + gen("occupation", regex=r"[A-Za-z ]+", stop="\n") + "\n"
-        lm += "Email: " + gen(
-            "email",
-            regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-            stop="\n"
-        ) + "\n"
+        lm += (
+            "Email: "
+            + gen(
+                "email",
+                regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                stop="\n",
+            )
+            + "\n"
+        )
 
     return lm
+
 
 text = "John Smith is a 35-year-old software engineer. Contact: john@example.com"
 
@@ -222,6 +239,7 @@ def extract_entities(lm, text):
 
     return lm
 
+
 text = """
 Tim Cook and Satya Nadella met at Microsoft headquarters in Redmond on 2024-09-15
 to discuss the collaboration between Apple and Microsoft. The meeting continued
@@ -241,21 +259,22 @@ def batch_extract(lm, texts):
     lm += "Batch Extraction Results:\n\n"
 
     for i, text in enumerate(texts):
-        lm += f"=== Item {i+1} ===\n"
+        lm += f"=== Item {i + 1} ===\n"
         lm += f"Text: {text}\n"
         lm += "Name: " + gen(f"name_{i}", regex=r"[A-Za-z ]+", stop="\n") + "\n"
-        lm += "Sentiment: " + gen(
-            f"sentiment_{i}",
-            regex=r"(positive|negative|neutral)",
-            stop="\n"
-        ) + "\n\n"
+        lm += (
+            "Sentiment: "
+            + gen(f"sentiment_{i}", regex=r"(positive|negative|neutral)", stop="\n")
+            + "\n\n"
+        )
 
     return lm
+
 
 texts = [
     "Alice is happy with the product",
     "Bob is disappointed with the service",
-    "Carol has no strong feelings either way"
+    "Carol has no strong feelings either way",
 ]
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
@@ -274,10 +293,7 @@ lm = models.Anthropic("claude-sonnet-4-5-20250929")
 text = "This product is absolutely amazing! Best purchase ever."
 
 lm += f"Text: {text}\n\n"
-lm += "Sentiment: " + select(
-    ["positive", "negative", "neutral"],
-    name="sentiment"
-)
+lm += "Sentiment: " + select(["positive", "negative", "neutral"], name="sentiment")
 lm += "\nConfidence: " + gen("confidence", regex=r"[0-9]{1,3}") + "%\n"
 lm += "Reasoning: " + gen("reasoning", stop="\n", max_tokens=50)
 
@@ -295,27 +311,31 @@ def classify_article(lm, text):
     lm += f"Article: {text}\n\n"
 
     # Primary category
-    lm += "Primary Category: " + select(
-        ["Technology", "Business", "Science", "Politics", "Entertainment"],
-        name="primary_category"
-    ) + "\n"
+    lm += (
+        "Primary Category: "
+        + select(
+            ["Technology", "Business", "Science", "Politics", "Entertainment"],
+            name="primary_category",
+        )
+        + "\n"
+    )
 
     # Secondary categories (up to 3)
     lm += "\nSecondary Categories:\n"
     categories = ["Technology", "Business", "Science", "Politics", "Entertainment"]
     for i in range(3):
-        lm += f"{i+1}. " + select(categories, name=f"secondary_{i}") + "\n"
+        lm += f"{i + 1}. " + select(categories, name=f"secondary_{i}") + "\n"
 
     # Tags
     lm += "\nTags: " + gen("tags", stop="\n", max_tokens=50) + "\n"
 
     # Target audience
     lm += "Target Audience: " + select(
-        ["General", "Expert", "Beginner"],
-        name="audience"
+        ["General", "Expert", "Beginner"], name="audience"
     )
 
     return lm
+
 
 article = """
 Apple announced new AI features in iOS 18, leveraging machine learning to improve
@@ -335,30 +355,33 @@ def classify_intent(lm, message):
     lm += f"User Message: {message}\n\n"
 
     # Intent
-    lm += "Intent: " + select(
-        ["question", "complaint", "request", "feedback", "other"],
-        name="intent"
-    ) + "\n"
-
-    # Urgency
-    lm += "Urgency: " + select(
-        ["low", "medium", "high", "critical"],
-        name="urgency"
-    ) + "\n"
-
-    # Department
-    lm += "Route To: " + select(
-        ["support", "sales", "billing", "technical"],
-        name="department"
-    ) + "\n"
-
-    # Sentiment
-    lm += "Sentiment: " + select(
-        ["positive", "neutral", "negative"],
-        name="sentiment"
+    lm += (
+        "Intent: "
+        + select(
+            ["question", "complaint", "request", "feedback", "other"], name="intent"
+        )
+        + "\n"
     )
 
+    # Urgency
+    lm += (
+        "Urgency: "
+        + select(["low", "medium", "high", "critical"], name="urgency")
+        + "\n"
+    )
+
+    # Department
+    lm += (
+        "Route To: "
+        + select(["support", "sales", "billing", "technical"], name="department")
+        + "\n"
+    )
+
+    # Sentiment
+    lm += "Sentiment: " + select(["positive", "neutral", "negative"], name="sentiment")
+
     return lm
+
 
 message = "My account was charged twice for the same order. Need help ASAP!"
 
@@ -377,6 +400,7 @@ print(f"Department: {lm['department']}")
 ```python
 from guidance import models, gen, select, guidance
 
+
 @guidance(stateless=False)
 def react_agent(lm, question, tools, max_rounds=5):
     """ReAct agent with tool use."""
@@ -384,13 +408,12 @@ def react_agent(lm, question, tools, max_rounds=5):
 
     for round in range(max_rounds):
         # Thought
-        lm += f"Thought {round+1}: " + gen("thought", stop="\n", max_tokens=100) + "\n"
+        lm += (
+            f"Thought {round + 1}: " + gen("thought", stop="\n", max_tokens=100) + "\n"
+        )
 
         # Action selection
-        lm += "Action: " + select(
-            list(tools.keys()) + ["answer"],
-            name="action"
-        )
+        lm += "Action: " + select(list(tools.keys()) + ["answer"], name="action")
 
         if lm["action"] == "answer":
             lm += "\n\nFinal Answer: " + gen("answer", max_tokens=200)
@@ -409,11 +432,12 @@ def react_agent(lm, question, tools, max_rounds=5):
 
     return lm
 
+
 # Define tools
 tools = {
     "calculator": lambda expr: eval(expr),
     "search": lambda query: f"Search results for '{query}': [Mock results]",
-    "weather": lambda city: f"Weather in {city}: Sunny, 72°F"
+    "weather": lambda city: f"Weather in {city}: Sunny, 72°F",
 }
 
 # Use agent
@@ -432,14 +456,16 @@ def coordinator_agent(lm, task):
     lm += f"Task: {task}\n\n"
 
     # Determine which specialist to use
-    lm += "Specialist: " + select(
-        ["researcher", "writer", "coder", "analyst"],
-        name="specialist"
-    ) + "\n"
+    lm += (
+        "Specialist: "
+        + select(["researcher", "writer", "coder", "analyst"], name="specialist")
+        + "\n"
+    )
 
     lm += "Reasoning: " + gen("reasoning", stop="\n", max_tokens=100) + "\n"
 
     return lm
+
 
 @guidance
 def researcher_agent(lm, query):
@@ -447,8 +473,9 @@ def researcher_agent(lm, query):
     lm += f"Research Query: {query}\n\n"
     lm += "Findings:\n"
     for i in range(3):
-        lm += f"{i+1}. " + gen(f"finding_{i}", stop="\n", max_tokens=100) + "\n"
+        lm += f"{i + 1}. " + gen(f"finding_{i}", stop="\n", max_tokens=100) + "\n"
     return lm
+
 
 @guidance
 def writer_agent(lm, topic):
@@ -457,6 +484,7 @@ def writer_agent(lm, topic):
     lm += "Title: " + gen("title", stop="\n", max_tokens=50) + "\n"
     lm += "Content:\n" + gen("content", max_tokens=500)
     return lm
+
 
 # Coordination workflow
 task = "Write an article about AI safety"
@@ -480,7 +508,9 @@ def validated_tool_agent(lm, question):
     tools = {
         "add": lambda a, b: float(a) + float(b),
         "multiply": lambda a, b: float(a) * float(b),
-        "divide": lambda a, b: float(a) / float(b) if float(b) != 0 else "Error: Division by zero"
+        "divide": lambda a, b: (
+            float(a) / float(b) if float(b) != 0 else "Error: Division by zero"
+        ),
     }
 
     lm += f"Question: {question}\n\n"
@@ -503,6 +533,7 @@ def validated_tool_agent(lm, question):
 
     return lm
 
+
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = validated_tool_agent(lm, "What is (10 + 5) * 3?")
 ```
@@ -520,15 +551,18 @@ def chain_of_thought(lm, question):
     # Generate reasoning steps
     lm += "Let me think step by step:\n\n"
     for i in range(4):
-        lm += f"Step {i+1}: " + gen(f"step_{i+1}", stop="\n", max_tokens=100) + "\n"
+        lm += f"Step {i + 1}: " + gen(f"step_{i + 1}", stop="\n", max_tokens=100) + "\n"
 
     # Final answer
     lm += "\nTherefore, the answer is: " + gen("answer", stop="\n", max_tokens=50)
 
     return lm
 
+
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
-lm = chain_of_thought(lm, "If a train travels 60 mph for 2.5 hours, how far does it go?")
+lm = chain_of_thought(
+    lm, "If a train travels 60 mph for 2.5 hours, how far does it go?"
+)
 
 print(lm["answer"])
 ```
@@ -543,17 +577,19 @@ def self_consistency(lm, question, num_samples=3):
 
     answers = []
     for i in range(num_samples):
-        lm += f"=== Attempt {i+1} ===\n"
+        lm += f"=== Attempt {i + 1} ===\n"
         lm += "Reasoning: " + gen(f"reasoning_{i}", stop="\n", max_tokens=100) + "\n"
         lm += "Answer: " + gen(f"answer_{i}", stop="\n", max_tokens=50) + "\n\n"
         answers.append(lm[f"answer_{i}"])
 
     # Aggregate (simple majority vote)
     from collections import Counter
+
     most_common = Counter(answers).most_common(1)[0][0]
 
     lm += f"Final Answer (by majority): {most_common}\n"
     return lm
+
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = self_consistency(lm, "What is 15% of 200?")
@@ -571,19 +607,24 @@ def plan_and_execute(lm, goal):
     lm += "Plan:\n"
     num_steps = 4
     for i in range(num_steps):
-        lm += f"{i+1}. " + gen(f"plan_step_{i}", stop="\n", max_tokens=100) + "\n"
+        lm += f"{i + 1}. " + gen(f"plan_step_{i}", stop="\n", max_tokens=100) + "\n"
 
     # Execution phase
     lm += "\nExecution:\n\n"
     for i in range(num_steps):
-        lm += f"Step {i+1}: {lm[f'plan_step_{i}']}\n"
-        lm += "Status: " + select(["completed", "in-progress", "blocked"], name=f"status_{i}") + "\n"
+        lm += f"Step {i + 1}: {lm[f'plan_step_{i}']}\n"
+        lm += (
+            "Status: "
+            + select(["completed", "in-progress", "blocked"], name=f"status_{i}")
+            + "\n"
+        )
         lm += "Result: " + gen(f"result_{i}", stop="\n", max_tokens=150) + "\n\n"
 
     # Summary
     lm += "Summary: " + gen("summary", max_tokens=200)
 
     return lm
+
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = plan_and_execute(lm, "Build a REST API for a blog platform")
@@ -611,6 +652,7 @@ def generate_python_function(lm, description):
 
     return lm
 
+
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = generate_python_function(lm, "Check if a number is prime")
 
@@ -636,6 +678,7 @@ def generate_sql(lm, description):
     lm += " WHERE " + gen("where_clause", stop=";", max_tokens=100) + ";"
 
     return lm
+
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = generate_sql(lm, "Get all users who signed up in the last 30 days")
@@ -672,6 +715,7 @@ def generate_api_endpoint(lm, description):
 
     return lm
 
+
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = generate_api_endpoint(lm, "Create a new blog post")
 ```
@@ -700,6 +744,7 @@ def safe_extraction(lm, text):
 ```python
 from functools import lru_cache
 
+
 @lru_cache(maxsize=100)
 def cached_generation(text):
     """Cache LLM generations."""
@@ -707,6 +752,7 @@ def cached_generation(text):
     lm += f"Analyze: {text}\n"
     lm += "Sentiment: " + select(["positive", "negative", "neutral"], name="sentiment")
     return lm["sentiment"]
+
 
 # First call: hits LLM
 result1 = cached_generation("This is great!")
@@ -719,6 +765,7 @@ result2 = cached_generation("This is great!")  # Instant!
 
 ```python
 import time
+
 
 @guidance
 def monitored_generation(lm, text):
@@ -746,14 +793,15 @@ def batch_process(texts, batch_size=10):
     results = []
 
     for i in range(0, len(texts), batch_size):
-        batch = texts[i:i+batch_size]
+        batch = texts[i : i + batch_size]
 
         for text in batch:
             lm += f"Text: {text}\n"
-            lm += "Sentiment: " + select(
-                ["positive", "negative", "neutral"],
-                name=f"sentiment_{i}"
-            ) + "\n\n"
+            lm += (
+                "Sentiment: "
+                + select(["positive", "negative", "neutral"], name=f"sentiment_{i}")
+                + "\n\n"
+            )
 
         results.extend([lm[f"sentiment_{i}"] for i in range(len(batch))])
 

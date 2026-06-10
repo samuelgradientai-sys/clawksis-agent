@@ -17,7 +17,7 @@ Patterns for building modular multi-panel grids — useful for HUD interfaces, d
 Built-in grid compositor — fastest path for uniform tile grids.
 
 ```python
-layout = root.create(layoutTOP, 'layout1')
+layout = root.create(layoutTOP, "layout1")
 layout.par.resolutionw = 1920
 layout.par.resolutionh = 1080
 layout.par.cols = 3
@@ -27,9 +27,9 @@ layout.par.gap = 4
 
 Connect inputs (up to cols×rows):
 ```python
-layout.inputConnectors[0].connect(op('panel_radar'))
-layout.inputConnectors[1].connect(op('panel_wave'))
-layout.inputConnectors[2].connect(op('panel_data'))
+layout.inputConnectors[0].connect(op("panel_radar"))
+layout.inputConnectors[1].connect(op("panel_wave"))
+layout.inputConnectors[2].connect(op("panel_data"))
 ```
 
 **Variable-width columns:** Not directly supported. Use overTOP approach for non-uniform grids.
@@ -48,8 +48,9 @@ def create_panel(root, name, width, height, x=0, y=0):
     panel.viewer = True
     return panel
 
+
 # Composite with overTOP chain
-over1 = root.create(overTOP, 'over1')
+over1 = root.create(overTOP, "over1")
 over1.inputConnectors[0].connect(panel_radar)
 over1.inputConnectors[1].connect(panel_wave)
 over1.par.topx2 = 0

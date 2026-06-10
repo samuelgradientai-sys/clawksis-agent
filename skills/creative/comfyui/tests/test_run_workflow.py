@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-
 from extract_schema import extract_schema
 from run_workflow import (
     ComfyRunner,
@@ -37,11 +36,15 @@ class TestParseInputImageArg:
 class TestInjectParams:
     def test_basic_injection(self, sd15_workflow):
         schema = extract_schema(sd15_workflow)
-        wf, warnings = inject_params(sd15_workflow, schema, {
-            "prompt": "new prompt",
-            "seed": 999,
-            "steps": 25,
-        })
+        wf, warnings = inject_params(
+            sd15_workflow,
+            schema,
+            {
+                "prompt": "new prompt",
+                "seed": 999,
+                "steps": 25,
+            },
+        )
         assert wf["6"]["inputs"]["text"] == "new prompt"
         assert wf["3"]["inputs"]["seed"] == 999
         assert wf["3"]["inputs"]["steps"] == 25
@@ -62,7 +65,9 @@ class TestInjectParams:
     def test_randomize_seed_when_unset(self, sd15_workflow):
         schema = extract_schema(sd15_workflow)
         original = sd15_workflow["3"]["inputs"]["seed"]
-        wf, warnings = inject_params(sd15_workflow, schema, {}, randomize_seed_if_unset=True)
+        wf, warnings = inject_params(
+            sd15_workflow, schema, {}, randomize_seed_if_unset=True
+        )
         assert wf["3"]["inputs"]["seed"] != original
         assert isinstance(wf["3"]["inputs"]["seed"], int)
 
@@ -75,21 +80,43 @@ class TestInjectParams:
     def test_refuses_to_overwrite_link(self):
         wf = {
             "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "x"}},
-            "5": {"class_type": "EmptyLatentImage",
-                  "inputs": {"width": 512, "height": 512, "batch_size": 1}},
-            "6": {"class_type": "CLIPTextEncode",
-                  "inputs": {"text": ["3", 0], "clip": ["1", 1]}},  # text is a link!
-            "3": {"class_type": "KSampler",
-                  "inputs": {"seed": 1, "steps": 20, "cfg": 7.5,
-                             "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
-                             "model": ["1", 0], "positive": ["6", 0], "negative": ["6", 0],
-                             "latent_image": ["5", 0]}},
-            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["3", 0]}},
+            "5": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            },
+            "6": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": ["3", 0], "clip": ["1", 1]},
+            },  # text is a link!
+            "3": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "seed": 1,
+                    "steps": 20,
+                    "cfg": 7.5,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 1.0,
+                    "model": ["1", 0],
+                    "positive": ["6", 0],
+                    "negative": ["6", 0],
+                    "latent_image": ["5", 0],
+                },
+            },
+            "9": {
+                "class_type": "SaveImage",
+                "inputs": {"filename_prefix": "x", "images": ["3", 0]},
+            },
         }
         # Manually create a schema that has prompt pointing at 6.text
         schema = {
             "parameters": {
-                "prompt": {"node_id": "6", "field": "text", "type": "string", "value": ""},
+                "prompt": {
+                    "node_id": "6",
+                    "field": "text",
+                    "type": "string",
+                    "value": "",
+                },
             }
         }
         wf2, warnings = inject_params(wf, schema, {"prompt": "literal value"})
@@ -102,6 +129,7 @@ class TestInjectParams:
 # Output download walk
 # =============================================================================
 
+
 class TestDownloadOutputsWalk:
     """Test that download_outputs walks the structure correctly."""
 
@@ -110,7 +138,16 @@ class TestDownloadOutputsWalk:
         downloads = []
 
         class FakeRunner:
-            def download_output(self, *, filename, subfolder, file_type, output_dir, preserve_subfolder, overwrite):
+            def download_output(
+                self,
+                *,
+                filename,
+                subfolder,
+                file_type,
+                output_dir,
+                preserve_subfolder,
+                overwrite,
+            ):
                 downloads.append((filename, subfolder, file_type))
                 p = output_dir / filename
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -118,9 +155,15 @@ class TestDownloadOutputsWalk:
                 return p
 
         outputs = {
-            "9": {"images": [{"filename": "img1.png", "subfolder": "", "type": "output"}]},
-            "10": {"videos": [{"filename": "vid1.mp4", "subfolder": "", "type": "output"}]},
-            "11": {"gifs": [{"filename": "anim1.gif", "subfolder": "", "type": "output"}]},
+            "9": {
+                "images": [{"filename": "img1.png", "subfolder": "", "type": "output"}]
+            },
+            "10": {
+                "videos": [{"filename": "vid1.mp4", "subfolder": "", "type": "output"}]
+            },
+            "11": {
+                "gifs": [{"filename": "anim1.gif", "subfolder": "", "type": "output"}]
+            },
         }
 
         result = download_outputs(FakeRunner(), outputs, tmp_path)
@@ -129,15 +172,27 @@ class TestDownloadOutputsWalk:
 
     def test_handles_video_singular_cloud(self, tmp_path):
         """Cloud uses 'video' (singular)."""
+
         class FakeRunner:
-            def download_output(self, *, filename, subfolder, file_type, output_dir, preserve_subfolder, overwrite):
+            def download_output(
+                self,
+                *,
+                filename,
+                subfolder,
+                file_type,
+                output_dir,
+                preserve_subfolder,
+                overwrite,
+            ):
                 p = output_dir / filename
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_bytes(b"x")
                 return p
 
         outputs = {
-            "10": {"video": [{"filename": "cloud.mp4", "subfolder": "", "type": "output"}]},
+            "10": {
+                "video": [{"filename": "cloud.mp4", "subfolder": "", "type": "output"}]
+            },
         }
         result = download_outputs(FakeRunner(), outputs, tmp_path)
         assert len(result) == 1
@@ -145,8 +200,18 @@ class TestDownloadOutputsWalk:
 
     def test_preserves_subfolder(self, tmp_path):
         """When preserve_subfolder=True, server subfolder becomes local subdir."""
+
         class FakeRunner:
-            def download_output(self, *, filename, subfolder, file_type, output_dir, preserve_subfolder, overwrite):
+            def download_output(
+                self,
+                *,
+                filename,
+                subfolder,
+                file_type,
+                output_dir,
+                preserve_subfolder,
+                overwrite,
+            ):
                 if preserve_subfolder and subfolder:
                     p = output_dir / subfolder / filename
                 else:
@@ -156,12 +221,16 @@ class TestDownloadOutputsWalk:
                 return p
 
         outputs = {
-            "9": {"images": [
-                {"filename": "img.png", "subfolder": "myrun", "type": "output"},
-                {"filename": "img.png", "subfolder": "otherrun", "type": "output"},
-            ]},
+            "9": {
+                "images": [
+                    {"filename": "img.png", "subfolder": "myrun", "type": "output"},
+                    {"filename": "img.png", "subfolder": "otherrun", "type": "output"},
+                ]
+            },
         }
-        result = download_outputs(FakeRunner(), outputs, tmp_path, preserve_subfolder=True)
+        result = download_outputs(
+            FakeRunner(), outputs, tmp_path, preserve_subfolder=True
+        )
         files = [d["file"] for d in result]
         assert any("myrun" in f for f in files)
         assert any("otherrun" in f for f in files)
@@ -172,6 +241,7 @@ class TestDownloadOutputsWalk:
 # =============================================================================
 # ComfyRunner construction
 # =============================================================================
+
 
 class TestRunnerConstruction:
     def test_local_default(self):

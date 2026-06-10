@@ -10,7 +10,9 @@ def test_run_task_kimi_omits_temperature():
     with patch("openai.OpenAI") as mock_openai:
         client = MagicMock()
         client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))
+            ]
         )
         mock_openai.return_value = client
 
@@ -38,7 +40,9 @@ def test_run_task_public_moonshot_kimi_k2_5_omits_temperature():
         client = MagicMock()
         client.base_url = "https://api.moonshot.ai/v1"
         client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))
+            ]
         )
         mock_openai.return_value = client
 

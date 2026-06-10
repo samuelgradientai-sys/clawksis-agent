@@ -1,4 +1,5 @@
 """Tests for subprocess.run() timeout coverage in CLI utilities."""
+
 import ast
 from pathlib import Path
 
@@ -23,9 +24,12 @@ def _subprocess_run_calls(filepath: str) -> list[dict]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        if (isinstance(func, ast.Attribute) and func.attr == "run"
-                and isinstance(func.value, ast.Name)
-                and func.value.id == "subprocess"):
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "run"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "subprocess"
+        ):
             has_timeout = any(kw.arg == "timeout" for kw in node.keywords)
             calls.append({"line": node.lineno, "has_timeout": has_timeout})
     return calls

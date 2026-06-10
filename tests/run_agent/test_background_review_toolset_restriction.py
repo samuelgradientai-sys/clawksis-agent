@@ -33,6 +33,7 @@ def _make_agent_stub(agent_cls):
     agent.status_callback = None
     agent._cached_system_prompt = None
     import datetime as _dt
+
     agent.session_start = _dt.datetime(2026, 1, 1, 12, 0, 0)
     agent._MEMORY_REVIEW_PROMPT = "review memory"
     agent._SKILL_REVIEW_PROMPT = "review skills"
@@ -66,8 +67,10 @@ def test_background_review_matches_parent_toolset_config():
         captured["disabled_toolsets"] = kwargs.get("disabled_toolsets", "UNSET")
         raise RuntimeError("stop after capturing init args")
 
-    with patch.object(run_agent.AIAgent, "__init__", _capture_init), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent.AIAgent, "__init__", _capture_init),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -111,9 +114,11 @@ def test_background_review_installs_thread_local_whitelist():
         # set_thread_tool_whitelist.
         return None
 
-    with patch.object(run_agent.AIAgent, "__init__", _no_init), \
-         patch.object(_plugins, "set_thread_tool_whitelist", _capture_whitelist), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent.AIAgent, "__init__", _no_init),
+        patch.object(_plugins, "set_thread_tool_whitelist", _capture_whitelist),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,

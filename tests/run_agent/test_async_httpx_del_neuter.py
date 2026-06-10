@@ -22,6 +22,7 @@ import pytest
 # Layer 1: neuter_async_httpx_del
 # ---------------------------------------------------------------------------
 
+
 class TestNeuterAsyncHttpxDel:
     """Verify neuter_async_httpx_del replaces __del__ on the SDK class."""
 
@@ -80,6 +81,7 @@ class TestNeuterAsyncHttpxDel:
 # ---------------------------------------------------------------------------
 # Layer 3: cleanup_stale_async_clients
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupStaleAsyncClients:
     """Verify stale cache entries are evicted and force-closed."""
@@ -164,6 +166,7 @@ class TestCleanupStaleAsyncClients:
 # Cache bounded growth (#10200)
 # ---------------------------------------------------------------------------
 
+
 class TestClientCacheBoundedGrowth:
     """Verify the cache stays bounded when loops change (fix for #10200).
 
@@ -194,10 +197,13 @@ class TestClientCacheBoundedGrowth:
 
         try:
             # Now call _get_cached_client — should detect stale loop and evict
-            with patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve:
+            with patch(
+                "agent.auxiliary_client.resolve_provider_client"
+            ) as mock_resolve:
                 mock_resolve.return_value = (MagicMock(), "new-model")
                 client, model = _get_cached_client(
-                    "test_replace", async_mode=True,
+                    "test_replace",
+                    async_mode=True,
                 )
             # The old entry should have been replaced
             with _client_cache_lock:
@@ -276,12 +282,29 @@ class TestClientCacheBoundedGrowth:
                     _client_cache[key] = (mock_client, f"model-{i}", None)
 
             with _client_cache_lock:
-                assert len(_client_cache) <= _CLIENT_CACHE_MAX_SIZE, \
+                assert len(_client_cache) <= _CLIENT_CACHE_MAX_SIZE, (
                     f"Cache size {len(_client_cache)} exceeds max {_CLIENT_CACHE_MAX_SIZE}"
+                )
                 # The earliest entries should have been evicted
-                assert ("evict_test_0", False, "", "", "", (), False) not in _client_cache
+                assert (
+                    "evict_test_0",
+                    False,
+                    "",
+                    "",
+                    "",
+                    (),
+                    False,
+                ) not in _client_cache
                 # The latest entries should be present
-                assert (f"evict_test_{_CLIENT_CACHE_MAX_SIZE + 4}", False, "", "", "", (), False) in _client_cache
+                assert (
+                    f"evict_test_{_CLIENT_CACHE_MAX_SIZE + 4}",
+                    False,
+                    "",
+                    "",
+                    "",
+                    (),
+                    False,
+                ) in _client_cache
         finally:
             with _client_cache_lock:
                 _client_cache.clear()

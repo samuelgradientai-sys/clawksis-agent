@@ -57,6 +57,7 @@ class TestUninstallPathTraversal:
         is the standard tool for this.
         """
         import tools.skills_hub as hub
+
         skills_dir = tmp_path / "skills"
         hub_dir = skills_dir / ".hub"
         hub_dir.mkdir(parents=True)
@@ -88,13 +89,16 @@ class TestUninstallPathTraversal:
     def test_traversal_via_parent_segments_rejected(self, hub_setup):
         """install_path: "../do-not-delete" must NOT escape SKILLS_DIR."""
         skills_dir, hub_dir, victim = hub_setup
-        self._write_lock(hub_dir, {
-            "evil": {
-                "install_path": "../do-not-delete",
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "evil": {
+                    "install_path": "../do-not-delete",
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, msg = uninstall_skill("evil")
 
@@ -112,13 +116,16 @@ class TestUninstallPathTraversal:
     def test_absolute_path_rejected(self, hub_setup):
         """install_path that's an absolute path outside SKILLS_DIR must be refused."""
         skills_dir, hub_dir, victim = hub_setup
-        self._write_lock(hub_dir, {
-            "evil": {
-                "install_path": str(victim),
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "evil": {
+                    "install_path": str(victim),
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, msg = uninstall_skill("evil")
 
@@ -135,13 +142,16 @@ class TestUninstallPathTraversal:
         evil_link = skills_dir / "trapdoor"
         evil_link.symlink_to(victim)
 
-        self._write_lock(hub_dir, {
-            "trap": {
-                "install_path": "trapdoor",
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "trap": {
+                    "install_path": "trapdoor",
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, msg = uninstall_skill("trap")
 
@@ -157,14 +167,17 @@ class TestUninstallPathTraversal:
         legit.mkdir(parents=True)
         (legit / "SKILL.md").write_text("test")
 
-        self._write_lock(hub_dir, {
-            "my-skill": {
-                "install_path": "category/my-skill",
-                "source": "https://example.com",
-                "trust_level": "community",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "my-skill": {
+                    "install_path": "category/my-skill",
+                    "source": "https://example.com",
+                    "trust_level": "community",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, msg = uninstall_skill("my-skill")
 
@@ -257,6 +270,7 @@ class TestListPendingLock:
         in ``with self._lock:``. If anyone unwraps it again, the TOCTOU
         bug returns."""
         import gateway.pairing as _pairing_mod
+
         source = Path(_pairing_mod.__file__).read_text(encoding="utf-8")
         # Find the list_pending function body and assert the lock
         # context manager appears inside it. We grep the function
@@ -284,6 +298,7 @@ class TestListPendingLock:
     def test_list_pending_returns_correct_data(self, tmp_path):
         """End-to-end smoke: even with the lock held, basic operation works."""
         from gateway.pairing import PairingStore
+
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             store.generate_code("telegram", "user1", "Alice")

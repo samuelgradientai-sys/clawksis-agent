@@ -139,4 +139,3 @@ class TestRepairToolCallArguments:
         result = _repair_tool_call_arguments(raw, "t")
         parsed = json.loads(result)
         assert "line" in parsed["msg"]
-

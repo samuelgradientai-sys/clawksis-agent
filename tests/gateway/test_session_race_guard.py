@@ -14,7 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType, merge_pending_message_event
+from gateway.platforms.base import (
+    MessageEvent,
+    MessageType,
+    merge_pending_message_event,
+)
 from gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
 from gateway.session import SessionSource, build_session_key
 
@@ -69,7 +73,9 @@ def _make_runner():
 
 def _make_event(text="hello", chat_id="12345"):
     source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm",
+        platform=Platform.TELEGRAM,
+        chat_id=chat_id,
+        chat_type="dm",
         user_id="u1",
     )
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
@@ -269,6 +275,7 @@ async def test_recent_telegram_text_followup_is_queued_without_interrupt():
     fake_agent.get_activity_summary.return_value = {"seconds_since_activity": 0}
     runner._running_agents[session_key] = fake_agent
     import time as _time
+
     runner._running_agents_ts[session_key] = _time.time()
 
     result = await runner._handle_message(event)
@@ -290,6 +297,7 @@ async def test_recent_telegram_followups_append_in_pending_queue():
     fake_agent.get_activity_summary.return_value = {"seconds_since_activity": 0}
     runner._running_agents[session_key] = fake_agent
     import time as _time
+
     runner._running_agents_ts[session_key] = _time.time()
 
     await runner._handle_message(first)
@@ -309,12 +317,12 @@ async def test_command_messages_do_not_leave_sentinel():
     _handle_message.  They must NOT leave a sentinel behind."""
     runner = _make_runner()
     source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm",
+        platform=Platform.TELEGRAM,
+        chat_id="12345",
+        chat_type="dm",
         user_id="u1",
     )
-    event = MessageEvent(
-        text="/help", message_type=MessageType.TEXT, source=source
-    )
+    event = MessageEvent(text="/help", message_type=MessageType.TEXT, source=source)
     session_key = build_session_key(source)
 
     # Mock the help handler to avoid needing full runner setup
@@ -452,7 +460,9 @@ async def test_stop_hard_kills_running_agent():
     forever — showing 'writing...' but never producing output."""
     runner = _make_runner()
     session_key = build_session_key(
-        SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="u1")
+        SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="u1"
+        )
     )
 
     # Simulate a running (possibly hung) agent
@@ -491,7 +501,9 @@ async def test_stop_clears_pending_messages():
     queued during the run must be discarded."""
     runner = _make_runner()
     session_key = build_session_key(
-        SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="u1")
+        SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="u1"
+        )
     )
 
     fake_agent = MagicMock()
@@ -536,8 +548,10 @@ async def test_shutdown_skips_sentinel():
     runner._exit_reason = None
     runner._shutdown_all_gateway_honcho = lambda: None
 
-    with patch("gateway.status.remove_pid_file"), \
-         patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     # Real agent should have been interrupted

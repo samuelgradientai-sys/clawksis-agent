@@ -54,16 +54,22 @@ class TestProviderSelectionGate:
             tt = importlib.reload(tt)
 
         try:
-            with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-                 patch.object(tt, "_HAS_OPENAI", True), \
-                 patch.object(tt, "_has_local_command", return_value=False), \
-                 patch("clawk_cli.config.load_env",
-                       return_value={"GROQ_API_KEY": "dotenv-secret"}):
+            with (
+                patch.object(tt, "_HAS_FASTER_WHISPER", False),
+                patch.object(tt, "_HAS_OPENAI", True),
+                patch.object(tt, "_has_local_command", return_value=False),
+                patch(
+                    "clawk_cli.config.load_env",
+                    return_value={"GROQ_API_KEY": "dotenv-secret"},
+                ),
+            ):
                 assert tt._get_provider({"enabled": True, "provider": "groq"}) == "groq"
         finally:
             importlib.reload(tt)
 
-    def test_xai_resolver_import_after_config_env_patch_uses_restored_dotenv_loader(self):
+    def test_xai_resolver_import_after_config_env_patch_uses_restored_dotenv_loader(
+        self,
+    ):
         """xAI HTTP auth must not cache a temporarily patched env helper."""
         import importlib
         import clawk_cli.config as config_mod
@@ -74,15 +80,19 @@ class TestProviderSelectionGate:
             xai_http = importlib.reload(xai_http)
 
         try:
-            with patch(
-                "clawk_cli.runtime_provider.resolve_runtime_provider",
-                side_effect=RuntimeError("no oauth"),
-            ), patch(
-                "clawk_cli.auth.resolve_xai_oauth_runtime_credentials",
-                return_value={},
-            ), patch(
-                "clawk_cli.config.load_env",
-                return_value={"XAI_API_KEY": "dotenv-secret"},
+            with (
+                patch(
+                    "clawk_cli.runtime_provider.resolve_runtime_provider",
+                    side_effect=RuntimeError("no oauth"),
+                ),
+                patch(
+                    "clawk_cli.auth.resolve_xai_oauth_runtime_credentials",
+                    return_value={},
+                ),
+                patch(
+                    "clawk_cli.config.load_env",
+                    return_value={"XAI_API_KEY": "dotenv-secret"},
+                ),
             ):
                 creds = xai_http.resolve_xai_http_credentials()
         finally:
@@ -93,40 +103,61 @@ class TestProviderSelectionGate:
     def test_explicit_groq_sees_dotenv(self):
         from tools import transcription_tools as tt
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-             patch.object(tt, "_HAS_OPENAI", True), \
-             patch.object(tt, "_has_local_command", return_value=False), \
-             patch("clawk_cli.config.load_env",
-                   return_value={"GROQ_API_KEY": "dotenv-secret"}):
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", False),
+            patch.object(tt, "_HAS_OPENAI", True),
+            patch.object(tt, "_has_local_command", return_value=False),
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"GROQ_API_KEY": "dotenv-secret"},
+            ),
+        ):
             assert tt._get_provider({"enabled": True, "provider": "groq"}) == "groq"
 
     def test_explicit_mistral_sees_dotenv(self):
         from tools import transcription_tools as tt
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-             patch.object(tt, "_HAS_MISTRAL", True), \
-             patch.object(tt, "_has_local_command", return_value=False), \
-             patch("clawk_cli.config.load_env",
-                   return_value={"MISTRAL_API_KEY": "dotenv-secret"}):
-            assert tt._get_provider({"enabled": True, "provider": "mistral"}) == "mistral"
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", False),
+            patch.object(tt, "_HAS_MISTRAL", True),
+            patch.object(tt, "_has_local_command", return_value=False),
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"MISTRAL_API_KEY": "dotenv-secret"},
+            ),
+        ):
+            assert (
+                tt._get_provider({"enabled": True, "provider": "mistral"}) == "mistral"
+            )
 
     def test_explicit_xai_sees_dotenv(self):
         from tools import transcription_tools as tt
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-             patch.object(tt, "_has_local_command", return_value=False), \
-             patch("clawk_cli.config.load_env",
-                   return_value={"XAI_API_KEY": "dotenv-secret"}):
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", False),
+            patch.object(tt, "_has_local_command", return_value=False),
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"XAI_API_KEY": "dotenv-secret"},
+            ),
+        ):
             assert tt._get_provider({"enabled": True, "provider": "xai"}) == "xai"
 
     def test_explicit_elevenlabs_sees_dotenv(self):
         from tools import transcription_tools as tt
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-             patch.object(tt, "_has_local_command", return_value=False), \
-             patch("clawk_cli.config.load_env",
-                   return_value={"ELEVENLABS_API_KEY": "dotenv-secret"}):
-            assert tt._get_provider({"enabled": True, "provider": "elevenlabs"}) == "elevenlabs"
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", False),
+            patch.object(tt, "_has_local_command", return_value=False),
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"ELEVENLABS_API_KEY": "dotenv-secret"},
+            ),
+        ):
+            assert (
+                tt._get_provider({"enabled": True, "provider": "elevenlabs"})
+                == "elevenlabs"
+            )
 
     def test_auto_detect_sees_dotenv_groq(self):
         """No local backend, no explicit provider — auto-detect should fall
@@ -134,13 +165,17 @@ class TestProviderSelectionGate:
         it would return 'none'."""
         from tools import transcription_tools as tt
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", False), \
-             patch.object(tt, "_HAS_OPENAI", True), \
-             patch.object(tt, "_HAS_MISTRAL", False), \
-             patch.object(tt, "_has_local_command", return_value=False), \
-             patch.object(tt, "_has_openai_audio_backend", return_value=False), \
-             patch("clawk_cli.config.load_env",
-                   return_value={"GROQ_API_KEY": "dotenv-secret"}):
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", False),
+            patch.object(tt, "_HAS_OPENAI", True),
+            patch.object(tt, "_HAS_MISTRAL", False),
+            patch.object(tt, "_has_local_command", return_value=False),
+            patch.object(tt, "_has_openai_audio_backend", return_value=False),
+            patch(
+                "clawk_cli.config.load_env",
+                return_value={"GROQ_API_KEY": "dotenv-secret"},
+            ),
+        ):
             # No "provider" key → explicit=False → auto-detect branch
             assert tt._get_provider({"enabled": True}) == "groq"
 
@@ -156,10 +191,13 @@ class TestTranscribeCallSitesReadDotenv:
         seen_keys: list = []
 
         class FakeOpenAIClient:
-            def __init__(self, *, api_key=None, base_url=None, timeout=None, max_retries=None):
+            def __init__(
+                self, *, api_key=None, base_url=None, timeout=None, max_retries=None
+            ):
                 seen_keys.append(api_key)
                 self.audio = MagicMock()
                 self.audio.transcriptions.create.return_value = "hello"
+
             def close(self):
                 pass
 
@@ -169,10 +207,12 @@ class TestTranscribeCallSitesReadDotenv:
         fake_openai_module.APIConnectionError = Exception
         fake_openai_module.APITimeoutError = Exception
 
-        with patch.object(tt, "get_env_value", return_value="groq-dotenv-key"), \
-             patch.object(tt, "_HAS_OPENAI", True), \
-             patch.dict("sys.modules", {"openai": fake_openai_module}), \
-             patch("builtins.open", MagicMock()):
+        with (
+            patch.object(tt, "get_env_value", return_value="groq-dotenv-key"),
+            patch.object(tt, "_HAS_OPENAI", True),
+            patch.dict("sys.modules", {"openai": fake_openai_module}),
+            patch("builtins.open", MagicMock()),
+        ):
             result = tt._transcribe_groq("/tmp/fake.mp3", "whisper-large-v3-turbo")
 
         assert result["success"] is True
@@ -190,15 +230,21 @@ class TestTranscribeCallSitesReadDotenv:
                 completion = MagicMock()
                 completion.text = "hi"
                 self.audio.transcriptions.complete.return_value = completion
-            def __enter__(self): return self
-            def __exit__(self, *a): return False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
 
         fake_client_module = MagicMock()
         fake_client_module.Mistral = FakeMistralClient
 
-        with patch.object(tt, "get_env_value", return_value="mistral-dotenv-key"), \
-             patch.dict("sys.modules", {"mistralai.client": fake_client_module}), \
-             patch("builtins.open", MagicMock()):
+        with (
+            patch.object(tt, "get_env_value", return_value="mistral-dotenv-key"),
+            patch.dict("sys.modules", {"mistralai.client": fake_client_module}),
+            patch("builtins.open", MagicMock()),
+        ):
             result = tt._transcribe_mistral("/tmp/fake.mp3", "voxtral-mini-latest")
 
         assert result["success"] is True
@@ -231,9 +277,11 @@ class TestTranscribeCallSitesReadDotenv:
                 return "xai-dotenv-key"
             return None
 
-        with patch.object(xai_http, "get_env_value", side_effect=fake_get_env_value), \
-             patch("requests.post", side_effect=fake_post), \
-             patch("builtins.open", MagicMock()):
+        with (
+            patch.object(xai_http, "get_env_value", side_effect=fake_get_env_value),
+            patch("requests.post", side_effect=fake_post),
+            patch("builtins.open", MagicMock()),
+        ):
             result = tt._transcribe_xai("/tmp/fake.mp3", "grok-stt")
 
         assert result["success"] is True
@@ -257,10 +305,12 @@ class TestTranscribeCallSitesReadDotenv:
                 return "elevenlabs-dotenv-key"
             return None
 
-        with patch.object(tt, "get_env_value", side_effect=fake_get_env_value), \
-             patch.object(tt, "_load_stt_config", return_value={}), \
-             patch("requests.post", side_effect=fake_post), \
-             patch("builtins.open", MagicMock()):
+        with (
+            patch.object(tt, "get_env_value", side_effect=fake_get_env_value),
+            patch.object(tt, "_load_stt_config", return_value={}),
+            patch("requests.post", side_effect=fake_post),
+            patch("builtins.open", MagicMock()),
+        ):
             result = tt._transcribe_elevenlabs("/tmp/fake.mp3", "scribe_v2")
 
         assert result["success"] is True
@@ -288,15 +338,19 @@ class TestEndToEndRegressionGuard:
             response.json.return_value = {"text": "ok"}
             return response
 
-        with patch("clawk_cli.config.load_env",
-                   return_value={"XAI_API_KEY": "dotenv-secret"}):
+        with patch(
+            "clawk_cli.config.load_env", return_value={"XAI_API_KEY": "dotenv-secret"}
+        ):
             # Sanity: get_env_value resolves through load_env when
             # os.environ is empty.
             from clawk_cli.config import get_env_value as live_get
+
             assert live_get("XAI_API_KEY") == "dotenv-secret"
 
-            with patch("requests.post", side_effect=fake_post), \
-                 patch("builtins.open", MagicMock()):
+            with (
+                patch("requests.post", side_effect=fake_post),
+                patch("builtins.open", MagicMock()),
+            ):
                 result = tt._transcribe_xai("/tmp/fake.mp3", "grok-stt")
 
         assert result["success"] is True

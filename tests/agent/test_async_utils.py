@@ -16,6 +16,7 @@ from agent.async_utils import safe_schedule_threadsafe
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _no_unawaited_warnings(caught, *, coro_name: str = "") -> bool:
     """Return True if no "X was never awaited" warning slipped through.
 
@@ -24,7 +25,8 @@ def _no_unawaited_warnings(caught, *, coro_name: str = "") -> bool:
     (e.g. ``AsyncMockMixin._execute_mock_call``) from concurrent tests.
     """
     bad = [
-        w for w in caught
+        w
+        for w in caught
         if issubclass(w.category, RuntimeWarning)
         and "was never awaited" in str(w.message)
         and (not coro_name or coro_name in str(w.message))
@@ -36,11 +38,13 @@ def _no_unawaited_warnings(caught, *, coro_name: str = "") -> bool:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestSafeScheduleThreadsafe:
     def test_returns_future_on_success(self):
         loop = asyncio.new_event_loop()
         try:
             import threading
+
             ready = threading.Event()
             stop = threading.Event()
 
@@ -86,7 +90,7 @@ class TestSafeScheduleThreadsafe:
             gc.collect()
 
         assert result is None
-        assert _no_unawaited_warnings(caught, coro_name='_sample')
+        assert _no_unawaited_warnings(caught, coro_name="_sample")
 
     def test_none_loop_returns_none_and_closes_coroutine(self):
         async def _sample():
@@ -100,13 +104,14 @@ class TestSafeScheduleThreadsafe:
             gc.collect()
 
         assert result is None
-        assert _no_unawaited_warnings(caught, coro_name='_sample')
+        assert _no_unawaited_warnings(caught, coro_name="_sample")
 
     def test_scheduling_exception_closes_coroutine(self):
         """If run_coroutine_threadsafe raises, close the coroutine and return None."""
         # A loop that *looks* open but raises on submission
         loop = asyncio.new_event_loop()
         try:
+
             async def _sample():
                 return "ok"
 
@@ -122,12 +127,13 @@ class TestSafeScheduleThreadsafe:
                 gc.collect()
 
             assert result is None
-            assert _no_unawaited_warnings(caught, coro_name='_sample')
+            assert _no_unawaited_warnings(caught, coro_name="_sample")
         finally:
             loop.close()
 
     def test_logs_at_specified_level(self, caplog):
         import logging
+
         loop = asyncio.new_event_loop()
         loop.close()
 
@@ -137,7 +143,8 @@ class TestSafeScheduleThreadsafe:
         custom = logging.getLogger("test_async_utils")
         with caplog.at_level(logging.WARNING, logger="test_async_utils"):
             result = safe_schedule_threadsafe(
-                _sample(), loop,
+                _sample(),
+                loop,
                 logger=custom,
                 log_message="custom-msg",
                 log_level=logging.WARNING,

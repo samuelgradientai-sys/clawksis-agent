@@ -39,7 +39,9 @@ class TestResolveAgentCwd:
         monkeypatch.setenv("TERMINAL_CWD", "~")
         assert resolve_agent_cwd() == Path(os.path.expanduser("~"))
 
-    def test_whitespace_only_terminal_cwd_falls_back_to_getcwd(self, monkeypatch, tmp_path):
+    def test_whitespace_only_terminal_cwd_falls_back_to_getcwd(
+        self, monkeypatch, tmp_path
+    ):
         # "   ".strip() → "" → falsy, so the launch dir wins (not a "   " path).
         monkeypatch.setenv("TERMINAL_CWD", "   ")
         monkeypatch.chdir(tmp_path)

@@ -1,106 +1,62 @@
 """Tests for provider-aware `/model` validation in clawk_cli.models."""
 
-
-
 from unittest.mock import MagicMock, patch
 
 
-
 from clawk_cli.models import (
-
     azure_foundry_model_api_mode,
-
     copilot_model_api_mode,
-
     fetch_github_model_catalog,
-
     curated_models_for_provider,
-
     fetch_api_models,
-
     fetch_lmstudio_models,
-
     github_model_reasoning_efforts,
-
     normalize_copilot_model_id,
-
     normalize_opencode_model_id,
-
     normalize_provider,
-
     opencode_model_api_mode,
-
     parse_model_input,
-
     probe_api_models,
-
     provider_label,
-
     provider_model_ids,
-
     validate_requested_model,
-
 )
-
-
-
 
 
 # -- helpers -----------------------------------------------------------------
 
 
-
 FAKE_API_MODELS = [
-
     "anthropic/claude-opus-4.6",
-
     "anthropic/claude-sonnet-4.5",
-
     "openai/gpt-5.4-pro",
-
     "openai/gpt-5.4",
-
     "google/gemini-3-pro-preview",
-
 ]
 
 
-
-
-
 def _validate(model, provider="openrouter", api_models=FAKE_API_MODELS, **kw):
-
     """Shortcut: call validate_requested_model with mocked API."""
 
     probe_payload = {
-
         "models": api_models,
-
         "probed_url": "http://localhost:11434/v1/models",
-
         "resolved_base_url": kw.get("base_url", "") or "http://localhost:11434/v1",
-
         "suggested_base_url": None,
-
         "used_fallback": False,
-
     }
 
-    with patch("clawk_cli.models.fetch_api_models", return_value=api_models), \
-         patch("clawk_cli.models.probe_api_models", return_value=probe_payload):
-
+    with (
+        patch("clawk_cli.models.fetch_api_models", return_value=api_models),
+        patch("clawk_cli.models.probe_api_models", return_value=probe_payload),
+    ):
         return validate_requested_model(model, provider, **kw)
-
-
-
 
 
 # -- parse_model_input -------------------------------------------------------
 
 
-
 class TestParseModelInput:
-
     def test_plain_model_keeps_current_provider(self):
 
         provider, model = parse_model_input("anthropic/claude-sonnet-4.5", "openrouter")
@@ -109,17 +65,15 @@ class TestParseModelInput:
 
         assert model == "anthropic/claude-sonnet-4.5"
 
-
-
     def test_provider_colon_model_switches_provider(self):
 
-        provider, model = parse_model_input("openrouter:anthropic/claude-sonnet-4.5", "nous")
+        provider, model = parse_model_input(
+            "openrouter:anthropic/claude-sonnet-4.5", "nous"
+        )
 
         assert provider == "openrouter"
 
         assert model == "anthropic/claude-sonnet-4.5"
-
-
 
     def test_provider_alias_resolved(self):
 
@@ -129,8 +83,6 @@ class TestParseModelInput:
 
         assert model == "glm-5"
 
-
-
     def test_stepfun_alias_resolved(self):
 
         provider, model = parse_model_input("step:step-3.5-flash", "openrouter")
@@ -138,8 +90,6 @@ class TestParseModelInput:
         assert provider == "stepfun"
 
         assert model == "step-3.5-flash"
-
-
 
     def test_no_slash_no_colon_keeps_provider(self):
 
@@ -149,8 +99,6 @@ class TestParseModelInput:
 
         assert model == "gpt-5.4"
 
-
-
     def test_nous_provider_switch(self):
 
         provider, model = parse_model_input("nous:clawk-3", "openrouter")
@@ -158,8 +106,6 @@ class TestParseModelInput:
         assert provider == "nous"
 
         assert model == "clawk-3"
-
-
 
     def test_empty_model_after_colon_keeps_current(self):
 
@@ -169,8 +115,6 @@ class TestParseModelInput:
 
         assert model == "openrouter:"
 
-
-
     def test_colon_at_start_keeps_current(self):
 
         provider, model = parse_model_input(":something", "openrouter")
@@ -179,19 +123,16 @@ class TestParseModelInput:
 
         assert model == ":something"
 
-
-
     def test_unknown_prefix_colon_not_treated_as_provider(self):
-
         """Colons are only provider delimiters if the left side is a known provider."""
 
-        provider, model = parse_model_input("anthropic/claude-3.5-sonnet:beta", "openrouter")
+        provider, model = parse_model_input(
+            "anthropic/claude-3.5-sonnet:beta", "openrouter"
+        )
 
         assert provider == "openrouter"
 
         assert model == "anthropic/claude-3.5-sonnet:beta"
-
-
 
     def test_http_url_not_treated_as_provider(self):
 
@@ -201,10 +142,7 @@ class TestParseModelInput:
 
         assert model == "http://localhost:8080/model"
 
-
-
     def test_custom_colon_model_single(self):
-
         """custom:model-name → anonymous custom provider."""
 
         provider, model = parse_model_input("custom:qwen-2.5", "openrouter")
@@ -213,34 +151,29 @@ class TestParseModelInput:
 
         assert model == "qwen-2.5"
 
-
-
     def test_custom_triple_syntax(self):
-
         """custom:name:model → named custom provider."""
 
-        provider, model = parse_model_input("custom:local-server:qwen-2.5", "openrouter")
+        provider, model = parse_model_input(
+            "custom:local-server:qwen-2.5", "openrouter"
+        )
 
         assert provider == "custom:local-server"
 
         assert model == "qwen-2.5"
 
-
-
     def test_custom_triple_spaces(self):
-
         """Triple syntax should handle whitespace."""
 
-        provider, model = parse_model_input("custom: my-server : my-model ", "openrouter")
+        provider, model = parse_model_input(
+            "custom: my-server : my-model ", "openrouter"
+        )
 
         assert provider == "custom:my-server"
 
         assert model == "my-model"
 
-
-
     def test_custom_triple_empty_model_falls_back(self):
-
         """custom:name: with no model → treated as custom:name (bare)."""
 
         provider, model = parse_model_input("custom:name:", "openrouter")
@@ -252,60 +185,39 @@ class TestParseModelInput:
         assert model == "name:"
 
 
-
-
-
 # -- curated_models_for_provider ---------------------------------------------
 
 
-
 class TestCuratedModelsForProvider:
-
     def test_openrouter_returns_curated_list(self):
 
         with patch(
-
             "clawk_cli.models.fetch_openrouter_models",
-
             return_value=[
-
                 ("anthropic/claude-opus-4.6", "recommended"),
-
                 ("qwen/qwen3.6-plus", ""),
-
             ],
-
         ):
-
             models = curated_models_for_provider("openrouter")
 
         assert len(models) > 0
 
         assert any("claude" in m[0] for m in models)
 
-
-
     def test_unknown_provider_returns_empty(self):
 
         assert curated_models_for_provider("totally-unknown") == []
 
 
-
-
-
 # -- normalize_provider ------------------------------------------------------
 
 
-
 class TestNormalizeProvider:
-
     def test_defaults_to_openrouter(self):
 
         assert normalize_provider(None) == "openrouter"
 
         assert normalize_provider("") == "openrouter"
-
-
 
     def test_known_aliases(self):
 
@@ -319,18 +231,12 @@ class TestNormalizeProvider:
 
         assert normalize_provider("github-copilot") == "copilot"
 
-
-
     def test_case_insensitive(self):
 
         assert normalize_provider("OpenRouter") == "openrouter"
 
 
-
-
-
 class TestProviderLabel:
-
     def test_known_labels_and_auto(self):
 
         assert provider_label("anthropic") == "Anthropic"
@@ -345,157 +251,133 @@ class TestProviderLabel:
 
         assert provider_label("auto") == "Auto"
 
-
-
     def test_unknown_provider_preserves_original_name(self):
 
         assert provider_label("my-custom-provider") == "my-custom-provider"
 
 
-
-
-
 # -- provider_model_ids ------------------------------------------------------
 
 
-
 class TestProviderModelIds:
-
     def test_openrouter_returns_curated_list(self):
 
         with patch(
-
             "clawk_cli.models.fetch_openrouter_models",
-
             return_value=[
-
                 ("anthropic/claude-opus-4.6", "recommended"),
-
                 ("qwen/qwen3.6-plus", ""),
-
             ],
-
         ):
-
             ids = provider_model_ids("openrouter")
 
         assert len(ids) > 0
 
         assert all("/" in mid for mid in ids)
 
-
-
     def test_unknown_provider_returns_empty(self):
 
         assert provider_model_ids("some-unknown-provider") == []
 
-
-
     def test_stepfun_prefers_live_catalog(self):
 
-        with patch(
-
-            "clawk_cli.auth.resolve_api_key_provider_credentials",
-
-            return_value={"api_key": "***", "base_url": "https://api.stepfun.com/step_plan/v1"},
-
-        ), patch(
-
-            "clawk_cli.models.fetch_api_models",
-
-            return_value=["step-3.5-flash", "step-3-agent-lite"],
-
+        with (
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://api.stepfun.com/step_plan/v1",
+                },
+            ),
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["step-3.5-flash", "step-3-agent-lite"],
+            ),
         ):
-
-            assert provider_model_ids("stepfun") == ["step-3.5-flash", "step-3-agent-lite"]
-
-
+            assert provider_model_ids("stepfun") == [
+                "step-3.5-flash",
+                "step-3-agent-lite",
+            ]
 
     def test_copilot_prefers_live_catalog(self):
 
-        with patch("clawk_cli.auth.resolve_api_key_provider_credentials", return_value={"api_key": "gh-token"}), \
-             patch("clawk_cli.models._fetch_github_models", return_value=["gpt-5.4", "claude-sonnet-4.6"]):
-
+        with (
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={"api_key": "gh-token"},
+            ),
+            patch(
+                "clawk_cli.models._fetch_github_models",
+                return_value=["gpt-5.4", "claude-sonnet-4.6"],
+            ),
+        ):
             assert provider_model_ids("copilot") == ["gpt-5.4", "claude-sonnet-4.6"]
-
-
 
     def test_copilot_acp_reuses_copilot_catalog(self):
 
-        with patch("clawk_cli.auth.resolve_api_key_provider_credentials", return_value={"api_key": "gh-token"}), \
-             patch("clawk_cli.models._fetch_github_models", return_value=["gpt-5.4", "claude-sonnet-4.6"]):
-
+        with (
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={"api_key": "gh-token"},
+            ),
+            patch(
+                "clawk_cli.models._fetch_github_models",
+                return_value=["gpt-5.4", "claude-sonnet-4.6"],
+            ),
+        ):
             assert provider_model_ids("copilot-acp") == ["gpt-5.4", "claude-sonnet-4.6"]
-
-
-
 
 
 # -- fetch_api_models --------------------------------------------------------
 
 
-
 class TestFetchApiModels:
-
     def test_returns_none_when_no_base_url(self):
 
         assert fetch_api_models("key", None) is None
 
-
-
     def test_returns_none_on_network_error(self):
 
-        with patch("clawk_cli.models.urllib.request.urlopen", side_effect=Exception("timeout")):
-
+        with patch(
+            "clawk_cli.models.urllib.request.urlopen", side_effect=Exception("timeout")
+        ):
             assert fetch_api_models("key", "https://example.com/v1") is None
-
-
 
     def test_probe_api_models_tries_v1_fallback(self):
 
         class _Resp:
-
             def __enter__(self):
 
                 return self
-
-
 
             def __exit__(self, exc_type, exc, tb):
 
                 return False
 
-
-
             def read(self):
 
                 return b'{"data": [{"id": "local-model"}]}'
 
-
-
         calls = []
-
-
 
         def _fake_urlopen(req, timeout=5.0):
 
             calls.append(req.full_url)
 
             if req.full_url.endswith("/v1/models"):
-
                 return _Resp()
 
             raise Exception("404")
 
-
-
-        with patch("clawk_cli.models.urllib.request.urlopen", side_effect=_fake_urlopen):
-
+        with patch(
+            "clawk_cli.models.urllib.request.urlopen", side_effect=_fake_urlopen
+        ):
             probe = probe_api_models("key", "http://localhost:8000")
 
-
-
-        assert calls == ["http://localhost:8000/models", "http://localhost:8000/v1/models"]
+        assert calls == [
+            "http://localhost:8000/models",
+            "http://localhost:8000/v1/models",
+        ]
 
         assert probe["models"] == ["local-model"]
 
@@ -503,37 +385,30 @@ class TestFetchApiModels:
 
         assert probe["used_fallback"] is True
 
-
-
     def test_probe_api_models_uses_copilot_catalog(self):
 
         class _Resp:
-
             def __enter__(self):
 
                 return self
-
-
 
             def __exit__(self, exc_type, exc, tb):
 
                 return False
 
-
-
             def read(self):
 
                 return b'{"data": [{"id": "gpt-5.4", "model_picker_enabled": true, "supported_endpoints": ["/responses"], "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}}}, {"id": "claude-sonnet-4.6", "model_picker_enabled": true, "supported_endpoints": ["/chat/completions"], "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}}}, {"id": "text-embedding-3-small", "model_picker_enabled": true, "capabilities": {"type": "embedding"}}]}'
 
-
-
-        with patch("clawk_cli.models.urllib.request.urlopen", return_value=_Resp()) as mock_urlopen:
-
+        with patch(
+            "clawk_cli.models.urllib.request.urlopen", return_value=_Resp()
+        ) as mock_urlopen:
             probe = probe_api_models("gh-token", "https://api.githubcopilot.com")
 
-
-
-        assert mock_urlopen.call_args[0][0].full_url == "https://api.githubcopilot.com/models"
+        assert (
+            mock_urlopen.call_args[0][0].full_url
+            == "https://api.githubcopilot.com/models"
+        )
 
         assert probe["models"] == ["gpt-5.4", "claude-sonnet-4.6"]
 
@@ -541,85 +416,58 @@ class TestFetchApiModels:
 
         assert probe["used_fallback"] is False
 
-
-
     def test_fetch_github_model_catalog_filters_non_chat_models(self):
 
         class _Resp:
-
             def __enter__(self):
 
                 return self
-
-
 
             def __exit__(self, exc_type, exc, tb):
 
                 return False
 
-
-
             def read(self):
 
                 return b'{"data": [{"id": "gpt-5.4", "model_picker_enabled": true, "supported_endpoints": ["/responses"], "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}}}, {"id": "text-embedding-3-small", "model_picker_enabled": true, "capabilities": {"type": "embedding"}}]}'
 
-
-
         with patch("clawk_cli.models.urllib.request.urlopen", return_value=_Resp()):
-
             catalog = fetch_github_model_catalog("gh-token")
-
-
 
         assert catalog is not None
 
         assert [item["id"] for item in catalog] == ["gpt-5.4"]
 
 
-
-
-
 class TestGithubReasoningEfforts:
-
     def test_gpt5_supports_minimal_to_high(self):
 
-        catalog = [{
-
-            "id": "gpt-5.4",
-
-            "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}},
-
-            "supported_endpoints": ["/responses"],
-
-        }]
-
-        assert github_model_reasoning_efforts("gpt-5.4", catalog=catalog) == [
-
-            "low",
-
-            "medium",
-
-            "high",
-
+        catalog = [
+            {
+                "id": "gpt-5.4",
+                "capabilities": {
+                    "type": "chat",
+                    "supports": {"reasoning_effort": ["low", "medium", "high"]},
+                },
+                "supported_endpoints": ["/responses"],
+            }
         ]
 
-
+        assert github_model_reasoning_efforts("gpt-5.4", catalog=catalog) == [
+            "low",
+            "medium",
+            "high",
+        ]
 
     def test_legacy_catalog_reasoning_still_supported(self):
 
         catalog = [{"id": "openai/o3", "capabilities": ["reasoning"]}]
 
         assert github_model_reasoning_efforts("openai/o3", catalog=catalog) == [
-
             "low",
-
             "medium",
-
             "high",
-
         ]
-
-
 
     def test_non_reasoning_model_returns_empty(self):
 
@@ -628,21 +476,17 @@ class TestGithubReasoningEfforts:
         assert github_model_reasoning_efforts("gpt-4.1", catalog=catalog) == []
 
 
-
-
-
 class TestCopilotNormalization:
-
     def test_normalize_old_github_models_slug(self):
 
         catalog = [{"id": "gpt-4.1"}, {"id": "gpt-5.4"}]
 
-        assert normalize_copilot_model_id("openai/gpt-4.1-mini", catalog=catalog) == "gpt-4.1"
-
-
+        assert (
+            normalize_copilot_model_id("openai/gpt-4.1-mini", catalog=catalog)
+            == "gpt-4.1"
+        )
 
     def test_copilot_api_mode_gpt5_uses_responses(self):
-
         """GPT-5+ models should use Responses API (matching opencode)."""
 
         assert copilot_model_api_mode("gpt-5.4") == "codex_responses"
@@ -655,18 +499,12 @@ class TestCopilotNormalization:
 
         assert copilot_model_api_mode("gpt-5.2") == "codex_responses"
 
-
-
     def test_copilot_api_mode_gpt5_mini_uses_chat(self):
-
         """gpt-5-mini is the exception — uses Chat Completions."""
 
         assert copilot_model_api_mode("gpt-5-mini") == "chat_completions"
 
-
-
     def test_copilot_api_mode_non_gpt5_uses_chat(self):
-
         """Non-GPT-5 models use Chat Completions."""
 
         assert copilot_model_api_mode("gpt-4.1") == "chat_completions"
@@ -681,98 +519,127 @@ class TestCopilotNormalization:
 
         assert copilot_model_api_mode("gemini-2.5-pro") == "chat_completions"
 
-
-
     def test_copilot_api_mode_with_catalog_both_endpoints(self):
-
         """When catalog shows both endpoints, model ID pattern wins."""
 
-        catalog = [{
-
-            "id": "gpt-5.4",
-
-            "supported_endpoints": ["/chat/completions", "/responses"],
-
-        }]
+        catalog = [
+            {
+                "id": "gpt-5.4",
+                "supported_endpoints": ["/chat/completions", "/responses"],
+            }
+        ]
 
         # GPT-5.4 should use responses even though chat/completions is listed
 
         assert copilot_model_api_mode("gpt-5.4", catalog=catalog) == "codex_responses"
 
-
-
     def test_copilot_api_mode_with_catalog_only_responses(self):
 
-        catalog = [{
-
-            "id": "gpt-5.4",
-
-            "supported_endpoints": ["/responses"],
-
-            "capabilities": {"type": "chat"},
-
-        }]
+        catalog = [
+            {
+                "id": "gpt-5.4",
+                "supported_endpoints": ["/responses"],
+                "capabilities": {"type": "chat"},
+            }
+        ]
 
         assert copilot_model_api_mode("gpt-5.4", catalog=catalog) == "codex_responses"
 
-
-
     def test_normalize_opencode_model_id_strips_provider_prefix(self):
 
-        assert normalize_opencode_model_id("opencode-go", "opencode-go/kimi-k2.5") == "kimi-k2.5"
+        assert (
+            normalize_opencode_model_id("opencode-go", "opencode-go/kimi-k2.5")
+            == "kimi-k2.5"
+        )
 
-        assert normalize_opencode_model_id("opencode-zen", "opencode-zen/claude-sonnet-4-6") == "claude-sonnet-4-6"
+        assert (
+            normalize_opencode_model_id(
+                "opencode-zen", "opencode-zen/claude-sonnet-4-6"
+            )
+            == "claude-sonnet-4-6"
+        )
 
         assert normalize_opencode_model_id("opencode-go", "glm-5") == "glm-5"
-
-
 
     def test_opencode_zen_api_modes_match_docs(self):
 
         assert opencode_model_api_mode("opencode-zen", "gpt-5.4") == "codex_responses"
 
-        assert opencode_model_api_mode("opencode-zen", "gpt-5.3-codex") == "codex_responses"
+        assert (
+            opencode_model_api_mode("opencode-zen", "gpt-5.3-codex")
+            == "codex_responses"
+        )
 
-        assert opencode_model_api_mode("opencode-zen", "opencode-zen/gpt-5.4") == "codex_responses"
+        assert (
+            opencode_model_api_mode("opencode-zen", "opencode-zen/gpt-5.4")
+            == "codex_responses"
+        )
 
-        assert opencode_model_api_mode("opencode-zen", "claude-sonnet-4-6") == "anthropic_messages"
+        assert (
+            opencode_model_api_mode("opencode-zen", "claude-sonnet-4-6")
+            == "anthropic_messages"
+        )
 
-        assert opencode_model_api_mode("opencode-zen", "opencode-zen/claude-sonnet-4-6") == "anthropic_messages"
+        assert (
+            opencode_model_api_mode("opencode-zen", "opencode-zen/claude-sonnet-4-6")
+            == "anthropic_messages"
+        )
 
-        assert opencode_model_api_mode("opencode-zen", "gemini-3-flash") == "chat_completions"
+        assert (
+            opencode_model_api_mode("opencode-zen", "gemini-3-flash")
+            == "chat_completions"
+        )
 
-        assert opencode_model_api_mode("opencode-zen", "minimax-m2.5") == "chat_completions"
-
-
+        assert (
+            opencode_model_api_mode("opencode-zen", "minimax-m2.5")
+            == "chat_completions"
+        )
 
     def test_opencode_go_api_modes_match_docs(self):
 
         assert opencode_model_api_mode("opencode-go", "glm-5.1") == "chat_completions"
 
-        assert opencode_model_api_mode("opencode-go", "opencode-go/glm-5.1") == "chat_completions"
+        assert (
+            opencode_model_api_mode("opencode-go", "opencode-go/glm-5.1")
+            == "chat_completions"
+        )
 
         assert opencode_model_api_mode("opencode-go", "glm-5") == "chat_completions"
 
-        assert opencode_model_api_mode("opencode-go", "opencode-go/glm-5") == "chat_completions"
+        assert (
+            opencode_model_api_mode("opencode-go", "opencode-go/glm-5")
+            == "chat_completions"
+        )
 
         assert opencode_model_api_mode("opencode-go", "kimi-k2.5") == "chat_completions"
 
-        assert opencode_model_api_mode("opencode-go", "opencode-go/kimi-k2.5") == "chat_completions"
+        assert (
+            opencode_model_api_mode("opencode-go", "opencode-go/kimi-k2.5")
+            == "chat_completions"
+        )
 
-        assert opencode_model_api_mode("opencode-go", "minimax-m2.5") == "anthropic_messages"
+        assert (
+            opencode_model_api_mode("opencode-go", "minimax-m2.5")
+            == "anthropic_messages"
+        )
 
-        assert opencode_model_api_mode("opencode-go", "opencode-go/minimax-m2.5") == "anthropic_messages"
+        assert (
+            opencode_model_api_mode("opencode-go", "opencode-go/minimax-m2.5")
+            == "anthropic_messages"
+        )
 
-        assert opencode_model_api_mode("opencode-go", "qwen3.7-max") == "anthropic_messages"
+        assert (
+            opencode_model_api_mode("opencode-go", "qwen3.7-max")
+            == "anthropic_messages"
+        )
 
-        assert opencode_model_api_mode("opencode-go", "opencode-go/qwen3.7-max") == "anthropic_messages"
-
-
-
+        assert (
+            opencode_model_api_mode("opencode-go", "opencode-go/qwen3.7-max")
+            == "anthropic_messages"
+        )
 
 
 class TestAzureFoundryModelApiMode:
-
     """Azure Foundry deploys GPT-5.x / codex / o-series as Responses-API-only.
 
 
@@ -786,8 +653,6 @@ class TestAzureFoundryModelApiMode:
     that exact payload while gpt-4o-pure worked on the same endpoint.
 
     """
-
-
 
     def test_gpt5_family_uses_responses(self):
 
@@ -807,15 +672,11 @@ class TestAzureFoundryModelApiMode:
 
         assert azure_foundry_model_api_mode("gpt-5-mini") == "codex_responses"
 
-
-
     def test_codex_family_uses_responses(self):
 
         assert azure_foundry_model_api_mode("codex") == "codex_responses"
 
         assert azure_foundry_model_api_mode("codex-mini") == "codex_responses"
-
-
 
     def test_o_series_reasoning_uses_responses(self):
 
@@ -831,10 +692,7 @@ class TestAzureFoundryModelApiMode:
 
         assert azure_foundry_model_api_mode("o4-mini") == "codex_responses"
 
-
-
     def test_gpt4_family_returns_none(self):
-
         """GPT-4, GPT-4o, etc. speak chat completions on Azure."""
 
         assert azure_foundry_model_api_mode("gpt-4") is None
@@ -851,10 +709,7 @@ class TestAzureFoundryModelApiMode:
 
         assert azure_foundry_model_api_mode("gpt-3.5-turbo") is None
 
-
-
     def test_non_openai_deployments_return_none(self):
-
         """Llama, Mistral, Grok, etc. keep the default chat completions."""
 
         assert azure_foundry_model_api_mode("llama-3.1-70b") is None
@@ -865,17 +720,12 @@ class TestAzureFoundryModelApiMode:
 
         assert azure_foundry_model_api_mode("phi-3-medium") is None
 
-
-
     def test_vendor_prefix_stripped(self):
-
         """Users who copy-paste ``openai/gpt-5.3-codex`` should still match."""
 
         assert azure_foundry_model_api_mode("openai/gpt-5.3-codex") == "codex_responses"
 
         assert azure_foundry_model_api_mode("openai/gpt-4o") is None
-
-
 
     def test_empty_and_none_return_none(self):
 
@@ -885,8 +735,6 @@ class TestAzureFoundryModelApiMode:
 
         assert azure_foundry_model_api_mode("   ") is None
 
-
-
     def test_case_insensitive(self):
 
         assert azure_foundry_model_api_mode("GPT-5.3-Codex") == "codex_responses"
@@ -894,15 +742,10 @@ class TestAzureFoundryModelApiMode:
         assert azure_foundry_model_api_mode("Codex-Mini") == "codex_responses"
 
 
-
-
-
 # -- validate — format checks -----------------------------------------------
 
 
-
 class TestValidateFormatChecks:
-
     def test_empty_model_rejected(self):
 
         result = _validate("")
@@ -911,23 +754,17 @@ class TestValidateFormatChecks:
 
         assert "empty" in result["message"]
 
-
-
     def test_whitespace_only_rejected(self):
 
         result = _validate("   ")
 
         assert result["accepted"] is False
 
-
-
     def test_model_with_spaces_rejected(self):
 
         result = _validate("anthropic/ claude-opus")
 
         assert result["accepted"] is False
-
-
 
     def test_no_slash_model_still_probes_api(self):
 
@@ -936,8 +773,6 @@ class TestValidateFormatChecks:
         assert result["accepted"] is True
 
         assert result["persist"] is True
-
-
 
     def test_no_slash_model_rejected_if_not_in_api(self):
 
@@ -950,15 +785,10 @@ class TestValidateFormatChecks:
         assert "not found" in result["message"]
 
 
-
-
-
 # -- validate — API found ----------------------------------------------------
 
 
-
 class TestValidateApiFound:
-
     def test_model_found_in_api(self):
 
         result = _validate("anthropic/claude-opus-4.6")
@@ -969,16 +799,13 @@ class TestValidateApiFound:
 
         assert result["recognized"] is True
 
-
-
     def test_model_found_for_custom_endpoint(self):
 
         result = _validate(
-
-            "my-model", provider="openrouter",
-
-            api_models=["my-model"], base_url="http://localhost:11434/v1",
-
+            "my-model",
+            provider="openrouter",
+            api_models=["my-model"],
+            base_url="http://localhost:11434/v1",
         )
 
         assert result["accepted"] is True
@@ -988,15 +815,10 @@ class TestValidateApiFound:
         assert result["recognized"] is True
 
 
-
-
-
 # -- validate — API not found ------------------------------------------------
 
 
-
 class TestValidateApiNotFound:
-
     def test_model_not_in_api_rejected_with_guidance(self):
 
         result = _validate("anthropic/claude-nonexistent")
@@ -1007,8 +829,6 @@ class TestValidateApiNotFound:
 
         assert "not found" in result["message"]
 
-
-
     def test_warning_includes_suggestions(self):
 
         result = _validate("anthropic/claude-opus-4.5")
@@ -1017,12 +837,12 @@ class TestValidateApiNotFound:
 
         # Close match auto-corrects; less similar inputs show suggestions
 
-        assert "Auto-corrected" in result["message"] or "Similar models" in result["message"]
-
-
+        assert (
+            "Auto-corrected" in result["message"]
+            or "Similar models" in result["message"]
+        )
 
     def test_auto_correction_returns_corrected_model(self):
-
         """When a very close match exists, validate returns corrected_model."""
 
         result = _validate("anthropic/claude-opus-4.5")
@@ -1033,10 +853,7 @@ class TestValidateApiNotFound:
 
         assert result["recognized"] is True
 
-
-
     def test_dissimilar_model_shows_suggestions_not_autocorrect(self):
-
         """Models too different for auto-correction are rejected with suggestions."""
 
         result = _validate("anthropic/claude-nonexistent")
@@ -1048,15 +865,10 @@ class TestValidateApiNotFound:
         assert "not found" in result["message"]
 
 
-
-
-
 # -- validate — API unreachable — soft-accept via catalog or warning --------
 
 
-
 class TestValidateApiFallback:
-
     """When /models is unreachable, the validator must accept the model (with
 
     a warning) rather than reject it outright — otherwise provider switches
@@ -1085,20 +897,14 @@ class TestValidateApiFallback:
 
     """
 
-
-
     def test_known_model_accepted_via_catalog_when_api_down(self):
 
         # Force the openrouter catalog lookup to return a deterministic list.
 
         with patch(
-
             "clawk_cli.models.provider_model_ids",
-
             return_value=["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
-
         ):
-
             result = _validate("anthropic/claude-opus-4.6", api_models=None)
 
         assert result["accepted"] is True
@@ -1107,18 +913,12 @@ class TestValidateApiFallback:
 
         assert result["recognized"] is True
 
-
-
     def test_unknown_model_accepted_with_note_when_api_down(self):
 
         with patch(
-
             "clawk_cli.models.provider_model_ids",
-
             return_value=["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
-
         ):
-
             result = _validate("anthropic/claude-next-gen", api_models=None)
 
         assert result["accepted"] is True
@@ -1129,9 +929,10 @@ class TestValidateApiFallback:
 
         # Message flags it as unverified against the catalog.
 
-        assert "not found" in result["message"].lower() or "note" in result["message"].lower()
-
-
+        assert (
+            "not found" in result["message"].lower()
+            or "note" in result["message"].lower()
+        )
 
     def test_zai_known_model_accepted_via_catalog_when_api_down(self):
 
@@ -1145,15 +946,14 @@ class TestValidateApiFallback:
 
         assert result["recognized"] is True
 
-
-
     def test_unknown_provider_soft_accepted_when_api_down(self):
 
         # No catalog for unknown providers — soft-accept with a Note.
 
         with patch("clawk_cli.models.provider_model_ids", return_value=[]):
-
-            result = _validate("some-model", provider="totally-unknown", api_models=None)
+            result = _validate(
+                "some-model", provider="totally-unknown", api_models=None
+            )
 
         assert result["accepted"] is True
 
@@ -1163,43 +963,24 @@ class TestValidateApiFallback:
 
         assert "note" in result["message"].lower()
 
-
-
     def test_custom_endpoint_warns_with_probed_url_and_v1_hint(self):
 
         with patch(
-
             "clawk_cli.models.probe_api_models",
-
             return_value={
-
                 "models": None,
-
                 "probed_url": "http://localhost:8000/v1/models",
-
                 "resolved_base_url": "http://localhost:8000",
-
                 "suggested_base_url": "http://localhost:8000/v1",
-
                 "used_fallback": False,
-
             },
-
         ):
-
             result = validate_requested_model(
-
                 "qwen3",
-
                 "custom",
-
                 api_key="local-key",
-
                 base_url="http://localhost:8000",
-
             )
-
-
 
         # Unreachable /models on a custom endpoint no longer hard-rejects —
 
@@ -1215,8 +996,6 @@ class TestValidateApiFallback:
 
         assert "http://localhost:8000/v1" in result["message"]
 
-
-
     def test_fetch_lmstudio_models_filters_embedding_type(self):
 
         mock_resp = MagicMock()
@@ -1226,28 +1005,16 @@ class TestValidateApiFallback:
         mock_resp.__exit__.return_value = False
 
         mock_resp.read.return_value = (
-
             b'{"models":['
-
             b'{"key":"publisher/chat-model","id":"publisher/chat-model","type":"llm"},'
-
             b'{"key":"publisher/embed-model","id":"publisher/embed-model","type":"embedding"}'
-
-            b']}'
-
+            b"]}"
         )
 
-
-
         with patch("clawk_cli.models.urllib.request.urlopen", return_value=mock_resp):
-
             models = fetch_lmstudio_models(base_url="http://localhost:1234/v1")
 
-
-
         assert models == ["publisher/chat-model"]
-
-
 
     def test_validate_lmstudio_rejects_embedding_models(self):
 
@@ -1258,40 +1025,24 @@ class TestValidateApiFallback:
         mock_resp.__exit__.return_value = False
 
         mock_resp.read.return_value = (
-
             b'{"models":['
-
             b'{"key":"publisher/chat-model","id":"publisher/chat-model","type":"llm"},'
-
             b'{"key":"publisher/embed-model","id":"publisher/embed-model","type":"embedding"}'
-
-            b']}'
-
+            b"]}"
         )
 
-
-
         with patch("clawk_cli.models.urllib.request.urlopen", return_value=mock_resp):
-
             result = validate_requested_model(
-
                 "publisher/embed-model",
-
                 "lmstudio",
-
                 base_url="http://localhost:1234/v1",
-
             )
-
-
 
         assert result["accepted"] is False
 
         assert result["recognized"] is False
 
         assert "not found in LM Studio's model listing" in result["message"]
-
-
 
     def test_fetch_lmstudio_models_raises_auth_error_on_401(self):
 
@@ -1301,31 +1052,17 @@ class TestValidateApiFallback:
 
         import pytest
 
-
-
         http_error = urllib.error.HTTPError(
-
             url="http://localhost:1234/api/v1/models",
-
             code=401,
-
             msg="Unauthorized",
-
             hdrs=None,
-
             fp=None,
-
         )
 
-
-
         with patch("clawk_cli.models.urllib.request.urlopen", side_effect=http_error):
-
             with pytest.raises(AuthError) as excinfo:
-
                 fetch_lmstudio_models(base_url="http://localhost:1234/v1")
-
-
 
         assert excinfo.value.provider == "lmstudio"
 
@@ -1333,61 +1070,34 @@ class TestValidateApiFallback:
 
         assert "401" in str(excinfo.value)
 
-
-
     def test_fetch_lmstudio_models_returns_empty_on_network_error(self):
 
         with patch(
-
             "clawk_cli.models.urllib.request.urlopen",
-
             side_effect=ConnectionRefusedError(),
-
         ):
-
             models = fetch_lmstudio_models(base_url="http://localhost:1234/v1")
 
-
-
         assert models == []
-
-
 
     def test_validate_lmstudio_distinguishes_auth_failure(self):
 
         import urllib.error
 
-
-
         http_error = urllib.error.HTTPError(
-
             url="http://localhost:1234/api/v1/models",
-
             code=401,
-
             msg="Unauthorized",
-
             hdrs=None,
-
             fp=None,
-
         )
 
-
-
         with patch("clawk_cli.models.urllib.request.urlopen", side_effect=http_error):
-
             result = validate_requested_model(
-
                 "publisher/chat-model",
-
                 "lmstudio",
-
                 base_url="http://localhost:1234/v1",
-
             )
-
-
 
         assert result["accepted"] is False
 
@@ -1395,58 +1105,41 @@ class TestValidateApiFallback:
 
         assert "LM_API_KEY" in result["message"]
 
-
-
     def test_validate_lmstudio_distinguishes_unreachable(self):
 
         with patch(
-
             "clawk_cli.models.urllib.request.urlopen",
-
             side_effect=ConnectionRefusedError(),
-
         ):
-
             result = validate_requested_model(
-
                 "publisher/chat-model",
-
                 "lmstudio",
-
                 base_url="http://localhost:1234/v1",
-
             )
-
-
 
         assert result["accepted"] is False
 
         assert "Could not reach LM Studio" in result["message"]
 
 
-
-
-
 # -- validate — Codex auto-correction ------------------------------------------
 
 
-
 class TestValidateCodexAutoCorrection:
-
     """Auto-correction for typos on openai-codex provider."""
 
-
-
     def test_missing_dash_auto_corrects(self):
-
         """gpt5.3-codex (missing dash) auto-corrects to gpt-5.3-codex."""
 
-        codex_models = ["gpt-5.4-mini", "gpt-5.4", "gpt-5.3-codex",
-
-                        "gpt-5.2-codex", "gpt-5.1-codex-max"]
+        codex_models = [
+            "gpt-5.4-mini",
+            "gpt-5.4",
+            "gpt-5.3-codex",
+            "gpt-5.2-codex",
+            "gpt-5.1-codex-max",
+        ]
 
         with patch("clawk_cli.models.provider_model_ids", return_value=codex_models):
-
             result = validate_requested_model("gpt5.3-codex", "openai-codex")
 
         assert result["accepted"] is True
@@ -1457,16 +1150,12 @@ class TestValidateCodexAutoCorrection:
 
         assert "Auto-corrected" in result["message"]
 
-
-
     def test_exact_match_no_correction(self):
-
         """Exact model name does not trigger auto-correction."""
 
         codex_models = ["gpt-5.4-mini", "gpt-5.4", "gpt-5.3-codex"]
 
         with patch("clawk_cli.models.provider_model_ids", return_value=codex_models):
-
             result = validate_requested_model("gpt-5.3-codex", "openai-codex")
 
         assert result["accepted"] is True
@@ -1478,17 +1167,10 @@ class TestValidateCodexAutoCorrection:
         assert result["message"] is None
 
 
-
-
-
-
-
 # -- probe_api_models — Cloudflare UA mitigation --------------------------------
 
 
-
 class TestProbeApiModelsUserAgent:
-
     """Probing custom /v1/models must send a Clawksis User-Agent.
 
 
@@ -1507,8 +1189,6 @@ class TestProbeApiModelsUserAgent:
 
     """
 
-
-
     def _make_mock_response(self, body: bytes):
 
         from unittest.mock import MagicMock
@@ -1523,27 +1203,17 @@ class TestProbeApiModelsUserAgent:
 
         return mock_resp
 
-
-
     def test_probe_sends_clawk_user_agent(self):
 
         from unittest.mock import patch
 
-
-
         body = b'{"data":[{"id":"claude-opus-4.7"}]}'
 
         with patch(
-
             "clawk_cli.models.urllib.request.urlopen",
-
             return_value=self._make_mock_response(body),
-
         ) as mock_urlopen:
-
             result = probe_api_models("sk-test", "https://example.com/v1")
-
-
 
         assert result["models"] == ["claude-opus-4.7"]
 
@@ -1556,38 +1226,25 @@ class TestProbeApiModelsUserAgent:
         assert ua, "probe_api_models must send a User-Agent header"
 
         assert ua.startswith("clawk-cli/"), (
-
             f"User-Agent must advertise clawk-cli, got {ua!r}"
-
         )
 
         # Must not fall back to urllib's default — that's what Cloudflare 1010 blocks.
 
         assert not ua.startswith("Python-urllib")
 
-
-
     def test_probe_user_agent_sent_without_api_key(self):
-
         """UA must be present even for endpoints that don't need auth."""
 
         from unittest.mock import patch
 
-
-
         body = b'{"data":[]}'
 
         with patch(
-
             "clawk_cli.models.urllib.request.urlopen",
-
             return_value=self._make_mock_response(body),
-
         ) as mock_urlopen:
-
             probe_api_models(None, "https://example.com/v1")
-
-
 
         req = mock_urlopen.call_args[0][0]
 
@@ -1598,4 +1255,3 @@ class TestProbeApiModelsUserAgent:
         # No Authorization was set, but UA must still be present.
 
         assert req.get_header("Authorization") is None
-

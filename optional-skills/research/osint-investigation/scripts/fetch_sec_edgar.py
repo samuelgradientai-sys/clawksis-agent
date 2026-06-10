@@ -10,6 +10,7 @@ Filings JSON is published at:
 Company lookup uses:
     https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=<name>&output=atom
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,7 +54,12 @@ def _resolve_cik(company: str) -> tuple[str, str]:
     return value so callers can warn.
     """
     url = "https://www.sec.gov/cgi-bin/browse-edgar"
-    params = {"action": "getcompany", "company": company, "output": "atom", "owner": "include"}
+    params = {
+        "action": "getcompany",
+        "company": company,
+        "output": "atom",
+        "owner": "include",
+    }
     body = get(url, params=params, user_agent=_ua()).decode("utf-8", errors="replace")
     m = re.search(r"CIK=(\d{10})", body)
     if not m:
@@ -125,18 +131,16 @@ def fetch(
             if acc and pdoc
             else ""
         )
-        rows.append(
-            {
-                "cik": cik,
-                "company_name": name,
-                "form_type": ftype,
-                "filing_date": fdate,
-                "accession_number": acc,
-                "primary_document": pdoc,
-                "filing_url": filing_url,
-                "reporting_period": period[i] if i < len(period) else "",
-            }
-        )
+        rows.append({
+            "cik": cik,
+            "company_name": name,
+            "form_type": ftype,
+            "filing_date": fdate,
+            "accession_number": acc,
+            "primary_document": pdoc,
+            "filing_url": filing_url,
+            "reporting_period": period[i] if i < len(period) else "",
+        })
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -170,7 +174,9 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--cik", help="Central Index Key (will be 10-digit zero-padded)")
     p.add_argument("--company", help="Resolve to CIK by company name")
-    p.add_argument("--types", default="", help="Comma-separated form types (e.g. 10-K,10-Q,8-K)")
+    p.add_argument(
+        "--types", default="", help="Comma-separated form types (e.g. 10-K,10-Q,8-K)"
+    )
     p.add_argument("--since", help="Skip filings before YYYY-MM-DD")
     p.add_argument("--out", required=True)
     a = p.parse_args()

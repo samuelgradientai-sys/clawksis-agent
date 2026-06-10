@@ -35,7 +35,9 @@ class TodoStore:
     def __init__(self):
         self._items: List[Dict[str, str]] = []
 
-    def write(self, todos: List[Dict[str, Any]], merge: bool = False) -> List[Dict[str, str]]:
+    def write(
+        self, todos: List[Dict[str, Any]], merge: bool = False
+    ) -> List[Dict[str, str]]:
         """
         Write todos. Returns the full current list after writing.
 
@@ -108,8 +110,7 @@ class TodoStore:
         # Only inject pending/in_progress items — completed/cancelled ones
         # cause the model to re-do finished work after compression.
         active_items = [
-            item for item in self._items
-            if item["status"] in {"pending", "in_progress"}
+            item for item in self._items if item["status"] in {"pending", "in_progress"}
         ]
         if not active_items:
             return None
@@ -117,7 +118,9 @@ class TodoStore:
         lines = ["[Your active task list was preserved across context compression]"]
         for item in active_items:
             marker = markers.get(item["status"], "[?]")
-            lines.append(f"- {marker} {item['id']}. {item['content']} ({item['status']})")
+            lines.append(
+                f"- {marker} {item['id']}. {item['content']} ({item['status']})"
+            )
 
         return "\n".join(lines)
 
@@ -183,16 +186,19 @@ def todo_tool(
     completed = sum(1 for i in items if i["status"] == "completed")
     cancelled = sum(1 for i in items if i["status"] == "cancelled")
 
-    return json.dumps({
-        "todos": items,
-        "summary": {
-            "total": len(items),
-            "pending": pending,
-            "in_progress": in_progress,
-            "completed": completed,
-            "cancelled": cancelled,
+    return json.dumps(
+        {
+            "todos": items,
+            "summary": {
+                "total": len(items),
+                "pending": pending,
+                "in_progress": in_progress,
+                "completed": completed,
+                "cancelled": cancelled,
+            },
         },
-    }, ensure_ascii=False)
+        ensure_ascii=False,
+    )
 
 
 def check_todo_requirements() -> bool:
@@ -234,20 +240,25 @@ TODO_SCHEMA = {
                     "properties": {
                         "id": {
                             "type": "string",
-                            "description": "Unique item identifier"
+                            "description": "Unique item identifier",
                         },
                         "content": {
                             "type": "string",
-                            "description": "Task description"
+                            "description": "Task description",
                         },
                         "status": {
                             "type": "string",
-                            "enum": ["pending", "in_progress", "completed", "cancelled"],
-                            "description": "Current status"
-                        }
+                            "enum": [
+                                "pending",
+                                "in_progress",
+                                "completed",
+                                "cancelled",
+                            ],
+                            "description": "Current status",
+                        },
                     },
-                    "required": ["id", "content", "status"]
-                }
+                    "required": ["id", "content", "status"],
+                },
             },
             "merge": {
                 "type": "boolean",
@@ -255,11 +266,11 @@ TODO_SCHEMA = {
                     "true: update existing items by id, add new ones. "
                     "false (default): replace the entire list."
                 ),
-                "default": False
-            }
+                "default": False,
+            },
         },
-        "required": []
-    }
+        "required": [],
+    },
 }
 
 
@@ -271,7 +282,8 @@ registry.register(
     toolset="todo",
     schema=TODO_SCHEMA,
     handler=lambda args, **kw: todo_tool(
-        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")),
+        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")
+    ),
     check_fn=check_todo_requirements,
     emoji="📋",
 )

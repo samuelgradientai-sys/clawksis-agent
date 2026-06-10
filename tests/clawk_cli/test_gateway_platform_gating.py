@@ -13,7 +13,6 @@ Currently:
 """
 
 
-
 class TestMatrixHiddenOnWindows:
     def test_matrix_present_on_linux(self, monkeypatch):
         """Sanity: matrix is still in the picker on Linux/macOS."""
@@ -55,6 +54,5 @@ class TestMatrixHiddenOnWindows:
         # blockers — picker should still surface them.
         for must_have in ("telegram", "discord", "slack", "mattermost"):
             assert must_have in keys, (
-                f"{must_have} disappeared from Windows picker — gate is "
-                "over-filtering"
+                f"{must_have} disappeared from Windows picker — gate is over-filtering"
             )

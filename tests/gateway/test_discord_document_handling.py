@@ -22,6 +22,7 @@ from gateway.platforms.base import MessageType
 # Discord mock setup (copied from test_discord_free_response.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_discord_mock():
     """Install a mock discord module when discord.py isn't available."""
     if "discord" in sys.modules and hasattr(sys.modules["discord"], "__file__"):
@@ -34,14 +35,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -65,6 +76,7 @@ from plugins.platforms.discord.adapter import DiscordAdapter  # noqa: E402
 # Fake channel / thread types
 # ---------------------------------------------------------------------------
 
+
 class FakeDMChannel:
     def __init__(self, channel_id: int = 1):
         self.id = channel_id
@@ -85,6 +97,7 @@ class FakeThread:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _redirect_cache(tmp_path, monkeypatch):
     """Point document cache to tmp_path so tests never write to ~/.clawksis."""
@@ -95,7 +108,9 @@ def _redirect_cache(tmp_path, monkeypatch):
 
 @pytest.fixture
 def adapter(monkeypatch):
-    monkeypatch.setattr(discord_platform.discord, "DMChannel", FakeDMChannel, raising=False)
+    monkeypatch.setattr(
+        discord_platform.discord, "DMChannel", FakeDMChannel, raising=False
+    )
     monkeypatch.setattr(discord_platform.discord, "Thread", FakeThread, raising=False)
 
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -108,6 +123,7 @@ def adapter(monkeypatch):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_attachment(
     *,
@@ -157,15 +173,17 @@ def _mock_aiohttp_download(raw_bytes: bytes):
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestIncomingDocumentHandling:
 
+class TestIncomingDocumentHandling:
     @pytest.mark.asyncio
     async def test_pdf_document_cached(self, adapter):
         """A PDF attachment should be downloaded, cached, typed as DOCUMENT."""
         pdf_bytes = b"%PDF-1.4 fake content"
 
         with _mock_aiohttp_download(pdf_bytes):
-            msg = make_message([make_attachment(filename="report.pdf", content_type="application/pdf")])
+            msg = make_message([
+                make_attachment(filename="report.pdf", content_type="application/pdf")
+            ])
             await adapter._handle_message(msg)
 
         event = adapter.handle_message.call_args[0][0]
@@ -182,7 +200,9 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(file_content):
             msg = make_message(
-                attachments=[make_attachment(filename="notes.txt", content_type="text/plain")],
+                attachments=[
+                    make_attachment(filename="notes.txt", content_type="text/plain")
+                ],
                 content="summarize this",
             )
             await adapter._handle_message(msg)
@@ -201,7 +221,9 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(file_content):
             msg = make_message(
-                attachments=[make_attachment(filename="readme.md", content_type="text/markdown")],
+                attachments=[
+                    make_attachment(filename="readme.md", content_type="text/markdown")
+                ],
                 content="",
             )
             await adapter._handle_message(msg)
@@ -217,7 +239,11 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(file_content):
             msg = make_message(
-                attachments=[make_attachment(filename="btsnoop_hci.log", content_type="text/plain")],
+                attachments=[
+                    make_attachment(
+                        filename="btsnoop_hci.log", content_type="text/plain"
+                    )
+                ],
                 content="please inspect this",
             )
             await adapter._handle_message(msg)
@@ -307,7 +333,13 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(large_content):
             msg = make_message(
-                attachments=[make_attachment(filename="big.txt", content_type="text/plain", size=len(large_content))],
+                attachments=[
+                    make_attachment(
+                        filename="big.txt",
+                        content_type="text/plain",
+                        size=len(large_content),
+                    )
+                ],
                 content="",
             )
             await adapter._handle_message(msg)
@@ -350,7 +382,9 @@ class TestIncomingDocumentHandling:
 
             return FakeSession()
 
-        with patch("aiohttp.ClientSession", return_value=make_session([content1, content2])):
+        with patch(
+            "aiohttp.ClientSession", return_value=make_session([content1, content2])
+        ):
             msg = make_message(
                 attachments=[
                     make_attachment(filename="file1.txt", content_type="text/plain"),
@@ -405,7 +439,9 @@ class TestAllowAnyAttachment:
         """
         with _mock_aiohttp_download(b"should not be cached"):
             msg = make_message([
-                make_attachment(filename="weird.xyz", content_type="application/x-custom")
+                make_attachment(
+                    filename="weird.xyz", content_type="application/x-custom"
+                )
             ])
             await adapter._handle_message(msg)
 
@@ -420,7 +456,9 @@ class TestAllowAnyAttachment:
 
         with _mock_aiohttp_download(b"\x00\x01\x02 binary payload"):
             msg = make_message([
-                make_attachment(filename="weird.xyz", content_type="application/x-custom")
+                make_attachment(
+                    filename="weird.xyz", content_type="application/x-custom"
+                )
             ])
             await adapter._handle_message(msg)
 
@@ -500,7 +538,9 @@ class TestAllowAnyAttachment:
 
         with _mock_aiohttp_download(file_content):
             msg = make_message(
-                attachments=[make_attachment(filename="notes.txt", content_type="text/plain")],
+                attachments=[
+                    make_attachment(filename="notes.txt", content_type="text/plain")
+                ],
                 content="check this",
             )
             await adapter._handle_message(msg)
@@ -528,4 +568,3 @@ class TestAllowAnyAttachment:
         """Garbage in max_attachment_bytes config falls back to 32 MiB."""
         adapter.config.extra["max_attachment_bytes"] = "not-a-number"
         assert adapter._discord_max_attachment_bytes() == 32 * 1024 * 1024
-

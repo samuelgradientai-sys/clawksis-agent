@@ -22,6 +22,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_source(platform=Platform.TELEGRAM, chat_id="123", user_id="u1"):
     return SessionSource(
         platform=platform,
@@ -41,6 +42,7 @@ def _make_store(policy=None, tmp_path=None):
 # ---------------------------------------------------------------------------
 # _should_reset returns reason string
 # ---------------------------------------------------------------------------
+
 
 class TestShouldResetReason:
     def test_returns_none_when_not_expired(self, tmp_path):
@@ -66,7 +68,8 @@ class TestShouldResetReason:
             session_key="test",
             session_id="s1",
             created_at=datetime.now() - timedelta(hours=2),
-            updated_at=datetime.now() - timedelta(hours=1),  # 60min ago > 30min threshold
+            updated_at=datetime.now()
+            - timedelta(hours=1),  # 60min ago > 30min threshold
         )
         source = _make_source()
         assert store._should_reset(entry, source) == "idle"
@@ -104,6 +107,7 @@ class TestShouldResetReason:
 # ---------------------------------------------------------------------------
 # SessionEntry captures reason
 # ---------------------------------------------------------------------------
+
 
 class TestSessionEntryReason:
     def test_auto_reset_reason_stored(self, tmp_path):
@@ -167,6 +171,7 @@ class TestSessionEntryReason:
 # SessionResetPolicy notify config
 # ---------------------------------------------------------------------------
 
+
 class TestResetPolicyNotify:
     def test_notify_defaults_true(self):
         policy = SessionResetPolicy()
@@ -207,6 +212,7 @@ class TestResetPolicyNotify:
 # ---------------------------------------------------------------------------
 # SessionEntry to_dict / from_dict roundtrip for auto-reset fields
 # ---------------------------------------------------------------------------
+
 
 class TestSessionEntryAutoResetRoundtrip:
     def test_was_auto_reset_persists_across_roundtrip(self, tmp_path):

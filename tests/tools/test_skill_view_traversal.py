@@ -42,7 +42,9 @@ class TestPathTraversalBlocked:
 
     def test_dotdot_nested(self, fake_skills):
         """Nested .. traversal should also be rejected."""
-        result = json.loads(skill_view("test-skill", file_path="references/../../../.env"))
+        result = json.loads(
+            skill_view("test-skill", file_path="references/../../../.env")
+        )
         assert result["success"] is False
         assert "traversal" in result["error"].lower()
 
@@ -72,7 +74,10 @@ class TestPathTraversalBlocked:
         result = json.loads(skill_view("test-skill", file_path="evil-link"))
         # The resolve() check should catch the symlink escaping
         assert result["success"] is False
-        assert "escapes" in result["error"].lower() or "boundary" in result["error"].lower()
+        assert (
+            "escapes" in result["error"].lower()
+            or "boundary" in result["error"].lower()
+        )
 
     def test_sensitive_file_not_leaked(self, fake_skills):
         """Even if traversal somehow passes, sensitive content must not leak."""

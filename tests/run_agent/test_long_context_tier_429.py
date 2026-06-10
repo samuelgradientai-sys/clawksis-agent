@@ -84,9 +84,7 @@ class TestLongContextTierDetection:
 
     def test_rejects_partial_match(self):
         """Both 'extra usage' AND 'long context' must be present."""
-        assert not self._is_long_context_tier_error(
-            429, "extra usage required"
-        )
+        assert not self._is_long_context_tier_error(429, "extra usage required")
         assert not self._is_long_context_tier_error(
             429, "long context requests not supported"
         )
@@ -200,8 +198,5 @@ class TestAgentErrorPath:
         )
         assert not _is_long_context_tier_error
 
-        is_rate_limited = (
-            status_code == 429
-            or "rate limit" in error_msg
-        )
+        is_rate_limited = status_code == 429 or "rate limit" in error_msg
         assert is_rate_limited

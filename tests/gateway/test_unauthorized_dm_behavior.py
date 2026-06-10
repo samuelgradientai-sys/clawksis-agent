@@ -22,8 +22,11 @@ def _clear_auth_env(monkeypatch) -> None:
         "SMS_ALLOWED_USERS",
         "MATTERMOST_ALLOWED_USERS",
         "MATRIX_ALLOWED_USERS",
-        "DINGTALK_ALLOWED_USERS", "FEISHU_ALLOWED_USERS", "WECOM_ALLOWED_USERS",
-        "QQ_ALLOWED_USERS", "QQ_GROUP_ALLOWED_USERS",
+        "DINGTALK_ALLOWED_USERS",
+        "FEISHU_ALLOWED_USERS",
+        "WECOM_ALLOWED_USERS",
+        "QQ_ALLOWED_USERS",
+        "QQ_GROUP_ALLOWED_USERS",
         "GATEWAY_ALLOWED_USERS",
         "TELEGRAM_ALLOW_ALL_USERS",
         "DISCORD_ALLOW_ALL_USERS",
@@ -34,7 +37,9 @@ def _clear_auth_env(monkeypatch) -> None:
         "SMS_ALLOW_ALL_USERS",
         "MATTERMOST_ALLOW_ALL_USERS",
         "MATRIX_ALLOW_ALL_USERS",
-        "DINGTALK_ALLOW_ALL_USERS", "FEISHU_ALLOW_ALL_USERS", "WECOM_ALLOW_ALL_USERS",
+        "DINGTALK_ALLOW_ALL_USERS",
+        "FEISHU_ALLOW_ALL_USERS",
+        "WECOM_ALLOW_ALL_USERS",
         "QQ_ALLOW_ALL_USERS",
         "GATEWAY_ALLOW_ALL_USERS",
     ):
@@ -74,15 +79,21 @@ def _make_runner(platform: Platform, config: GatewayConfig):
     return runner, adapter
 
 
-def test_whatsapp_lid_user_matches_phone_allowlist_via_session_mapping(monkeypatch, tmp_path):
+def test_whatsapp_lid_user_matches_phone_allowlist_via_session_mapping(
+    monkeypatch, tmp_path
+):
     _clear_auth_env(monkeypatch)
     monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "15550000001")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     session_dir = tmp_path / "whatsapp" / "session"
     session_dir.mkdir(parents=True)
-    (session_dir / "lid-mapping-15550000001.json").write_text('"900000000000001"', encoding="utf-8")
-    (session_dir / "lid-mapping-900000000000001_reverse.json").write_text('"15550000001"', encoding="utf-8")
+    (session_dir / "lid-mapping-15550000001.json").write_text(
+        '"900000000000001"', encoding="utf-8"
+    )
+    (session_dir / "lid-mapping-900000000000001_reverse.json").write_text(
+        '"15550000001"', encoding="utf-8"
+    )
 
     runner, _adapter = _make_runner(
         Platform.WHATSAPP,
@@ -127,7 +138,9 @@ def test_star_wildcard_works_for_any_platform(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -180,13 +193,17 @@ def test_qq_group_allowlist_does_not_authorize_other_groups(monkeypatch):
     assert runner._is_user_authorized(source) is False
 
 
-def test_telegram_group_user_allowlist_authorizes_forum_sender_without_dm_allowlist(monkeypatch):
+def test_telegram_group_user_allowlist_authorizes_forum_sender_without_dm_allowlist(
+    monkeypatch,
+):
     _clear_auth_env(monkeypatch)
     monkeypatch.setenv("TELEGRAM_GROUP_ALLOWED_USERS", "999")
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
     source = SessionSource(
         platform=Platform.TELEGRAM,
@@ -205,7 +222,9 @@ def test_telegram_group_user_allowlist_rejects_other_senders(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
     source = SessionSource(
         platform=Platform.TELEGRAM,
@@ -224,7 +243,9 @@ def test_telegram_group_user_allowlist_wildcard_authorizes_any_sender(monkeypatc
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
     source = SessionSource(
         platform=Platform.TELEGRAM,
@@ -243,7 +264,9 @@ def test_telegram_group_user_allowlist_does_not_authorize_dms(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
     source = SessionSource(
         platform=Platform.TELEGRAM,
@@ -256,13 +279,17 @@ def test_telegram_group_user_allowlist_does_not_authorize_dms(monkeypatch):
     assert runner._is_user_authorized(source) is False
 
 
-def test_telegram_group_chat_allowlist_authorizes_group_chat_without_user_allowlist(monkeypatch):
+def test_telegram_group_chat_allowlist_authorizes_group_chat_without_user_allowlist(
+    monkeypatch,
+):
     _clear_auth_env(monkeypatch)
     monkeypatch.setenv("TELEGRAM_GROUP_ALLOWED_CHATS", "-1001878443972")
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -288,7 +315,9 @@ def test_telegram_group_chat_allowlist_authorizes_anonymous_sender(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -302,7 +331,9 @@ def test_telegram_group_chat_allowlist_authorizes_anonymous_sender(monkeypatch):
     assert runner._is_user_authorized(source) is True
 
 
-def test_telegram_group_chat_allowlist_rejects_anonymous_sender_in_other_chat(monkeypatch):
+def test_telegram_group_chat_allowlist_rejects_anonymous_sender_in_other_chat(
+    monkeypatch,
+):
     """Anonymous senders in a chat *not* on the allowlist must still be
     rejected — the early no-user-id path must not become an open gate.
     """
@@ -311,7 +342,9 @@ def test_telegram_group_chat_allowlist_rejects_anonymous_sender_in_other_chat(mo
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -326,7 +359,9 @@ def test_telegram_group_chat_allowlist_rejects_anonymous_sender_in_other_chat(mo
 
 
 @pytest.mark.asyncio
-async def test_handle_message_does_not_drop_anonymous_sender_in_allowlisted_chat(monkeypatch):
+async def test_handle_message_does_not_drop_anonymous_sender_in_allowlisted_chat(
+    monkeypatch,
+):
     """End-to-end: a group message with from_user=None in an allowlisted
     chat must reach the dispatch path — not get silently dropped by the
     no-user-id guard, and not trigger pairing (anonymous senders can't
@@ -415,7 +450,9 @@ def test_telegram_group_users_legacy_chat_ids_still_authorize(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -436,7 +473,9 @@ def test_telegram_group_users_legacy_does_not_cross_chats(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -457,7 +496,9 @@ def test_telegram_group_users_mixed_sender_and_legacy_chat(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     # Legacy chat ID path: any sender in the listed chat is authorized
@@ -610,6 +651,7 @@ async def test_global_ignore_suppresses_pairing_reply(monkeypatch):
 # Allowlist-configured platforms default to "ignore" for unauthorized users
 # (#9337: Signal gateway sends pairing spam when allowlist is configured)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_signal_with_allowlist_ignores_unauthorized_dm(monkeypatch):

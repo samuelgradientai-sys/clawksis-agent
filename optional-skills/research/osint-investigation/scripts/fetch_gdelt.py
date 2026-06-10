@@ -7,6 +7,7 @@ Free, anonymous, ~15-minute update frequency. Covers ~2015→present.
 Useful for surfacing news mentions of a person, company, or topic across
 international media — much wider net than Google News.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,9 +55,13 @@ def fetch(
     if timespan:
         params["timespan"] = timespan
     if start_datetime:
-        params["startdatetime"] = start_datetime.replace("-", "").replace(":", "").replace(" ", "")
+        params["startdatetime"] = (
+            start_datetime.replace("-", "").replace(":", "").replace(" ", "")
+        )
     if end_datetime:
-        params["enddatetime"] = end_datetime.replace("-", "").replace(":", "").replace(" ", "")
+        params["enddatetime"] = (
+            end_datetime.replace("-", "").replace(":", "").replace(" ", "")
+        )
     if source_country:
         params["sourcecountry"] = source_country
     if source_lang:
@@ -90,22 +95,20 @@ def fetch(
     if isinstance(payload, dict):
         articles = payload.get("articles", []) or []
         for a in articles[:limit]:
-            seen = (a.get("seendate") or "")
+            seen = a.get("seendate") or ""
             # GDELT format: 20260319T083000Z → 2026-03-19 08:30:00Z
             if len(seen) == 16 and "T" in seen:
                 seen = f"{seen[0:4]}-{seen[4:6]}-{seen[6:8]} {seen[9:11]}:{seen[11:13]}:{seen[13:15]}Z"
-            rows.append(
-                {
-                    "title": (a.get("title") or "").replace("\n", " ").strip(),
-                    "url": a.get("url") or "",
-                    "seen_date": seen,
-                    "domain": a.get("domain") or "",
-                    "language": a.get("language") or "",
-                    "source_country": a.get("sourcecountry") or "",
-                    "tone": str(a.get("tone") or ""),
-                    "social_image": a.get("socialimage") or "",
-                }
-            )
+            rows.append({
+                "title": (a.get("title") or "").replace("\n", " ").strip(),
+                "url": a.get("url") or "",
+                "seen_date": seen,
+                "domain": a.get("domain") or "",
+                "language": a.get("language") or "",
+                "source_country": a.get("sourcecountry") or "",
+                "tone": str(a.get("tone") or ""),
+                "social_image": a.get("socialimage") or "",
+            })
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -123,8 +126,14 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--query", required=True, help='Search query (supports GDELT operators: quoted phrases, AND/OR/NOT, sourcecountry:, theme:)')
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--query",
+        required=True,
+        help="Search query (supports GDELT operators: quoted phrases, AND/OR/NOT, sourcecountry:, theme:)",
+    )
     p.add_argument(
         "--mode",
         default="ArtList",

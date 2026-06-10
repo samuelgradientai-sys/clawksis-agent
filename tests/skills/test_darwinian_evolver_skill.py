@@ -7,6 +7,7 @@ so these tests verify:
   - shipped scripts parse as valid Python
   - the scripts reference the right env var / module paths
 """
+
 from __future__ import annotations
 
 import ast
@@ -16,7 +17,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-SKILL_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "research" / "darwinian-evolver"
+SKILL_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "research"
+    / "darwinian-evolver"
+)
 
 
 @pytest.fixture(scope="module")
@@ -54,7 +60,9 @@ def test_platforms_excludes_windows(frontmatter) -> None:
 
 def test_author_credits_contributor(frontmatter) -> None:
     author = frontmatter["author"]
-    assert "Bihruze" in author, f"author should credit the original contributor: {author!r}"
+    assert "Bihruze" in author, (
+        f"author should credit the original contributor: {author!r}"
+    )
 
 
 def test_license_mit(frontmatter) -> None:

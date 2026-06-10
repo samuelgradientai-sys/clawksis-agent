@@ -47,8 +47,9 @@ class NodeClient:
         req = _proto.make_request(type, self.token, payload)
         raw_out = _proto.encode(req)
 
-        with connect(self.url, open_timeout=self.timeout,
-                     close_timeout=self.timeout) as ws:
+        with connect(
+            self.url, open_timeout=self.timeout, close_timeout=self.timeout
+        ) as ws:
             ws.send(raw_out)
             raw_in = ws.recv(timeout=self.timeout)
 

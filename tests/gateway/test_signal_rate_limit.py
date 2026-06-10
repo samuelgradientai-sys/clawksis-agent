@@ -1,4 +1,5 @@
 """Tests for the SignalAttachmentScheduler token-bucket simulator."""
+
 import asyncio
 
 import pytest
@@ -25,6 +26,7 @@ def _patch_sleep_and_time(monkeypatch, capture: list):
     actually wait and advances time.monotonic to simulate time passing.
     Captures the requested duration per call."""
     offset = 0.0
+
     async def _fake_sleep(seconds):
         capture.append(seconds)
         nonlocal offset
@@ -45,7 +47,9 @@ class TestSchedulerInitialState:
 
     def test_default_refill_rate_from_default_retry_after(self):
         s = SignalAttachmentScheduler()
-        assert s.refill_rate == pytest.approx(1.0 / SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER)
+        assert s.refill_rate == pytest.approx(
+            1.0 / SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER
+        )
 
     def test_starts_full(self):
         s = SignalAttachmentScheduler()
@@ -138,6 +142,7 @@ class TestAcquire:
 
         with pytest.raises(Exception):
             await s.acquire(int(s.capacity) + 1)
+
 
 class TestFeedback:
     def test_calibrates_refill_rate_from_retry_after(self):

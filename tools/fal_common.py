@@ -43,12 +43,14 @@ def import_fal_client() -> Any:
     """
     try:
         from tools.lazy_deps import ensure as _lazy_ensure
+
         _lazy_ensure("image.fal", prompt=False)
     except ImportError:
         pass
     except Exception as exc:  # noqa: BLE001 — lazy_deps surfaces install hints
         raise ImportError(str(exc))
     import fal_client  # type: ignore  # noqa: WPS433 — intentionally lazy
+
     return fal_client
 
 
@@ -90,11 +92,15 @@ class _ManagedFalSyncClient:
     def __init__(self, fal_client: Any, *, key: str, queue_run_origin: str):
         sync_client_class = getattr(fal_client, "SyncClient", None)
         if sync_client_class is None:
-            raise RuntimeError("fal_client.SyncClient is required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.SyncClient is required for managed FAL gateway mode"
+            )
 
         client_module = getattr(fal_client, "client", None)
         if client_module is None:
-            raise RuntimeError("fal_client.client is required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.client is required for managed FAL gateway mode"
+            )
 
         self._queue_url_format = _normalize_fal_queue_url_format(queue_run_origin)
         self._sync_client = sync_client_class(key=key)
@@ -107,11 +113,17 @@ class _ManagedFalSyncClient:
         self._add_timeout_header = getattr(client_module, "add_timeout_header", None)
 
         if self._http_client is None:
-            raise RuntimeError("fal_client.SyncClient._client is required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.SyncClient._client is required for managed FAL gateway mode"
+            )
         if self._maybe_retry_request is None or self._raise_for_status is None:
-            raise RuntimeError("fal_client.client request helpers are required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.client request helpers are required for managed FAL gateway mode"
+            )
         if self._request_handle_class is None:
-            raise RuntimeError("fal_client.client.SyncRequestHandle is required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.client.SyncRequestHandle is required for managed FAL gateway mode"
+            )
 
     def submit(
         self,
@@ -136,11 +148,15 @@ class _ManagedFalSyncClient:
             self._add_hint_header(hint, request_headers)
         if priority is not None:
             if self._add_priority_header is None:
-                raise RuntimeError("fal_client.client.add_priority_header is required for priority requests")
+                raise RuntimeError(
+                    "fal_client.client.add_priority_header is required for priority requests"
+                )
             self._add_priority_header(priority, request_headers)
         if start_timeout is not None:
             if self._add_timeout_header is None:
-                raise RuntimeError("fal_client.client.add_timeout_header is required for timeout requests")
+                raise RuntimeError(
+                    "fal_client.client.add_timeout_header is required for timeout requests"
+                )
             self._add_timeout_header(start_timeout, request_headers)
 
         response = self._maybe_retry_request(

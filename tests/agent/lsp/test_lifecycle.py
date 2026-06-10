@@ -4,6 +4,7 @@ These cover the exit-cleanup behavior added to plug the language-server
 process leak — without the atexit hook, ``clawk chat`` exits while
 pyright/gopls/etc. are still alive on the host.
 """
+
 from __future__ import annotations
 
 import atexit

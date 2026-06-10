@@ -19,7 +19,6 @@ These tests pin the new caps + prune hooks.
 """
 
 
-
 class TestReadTrackerCaps:
     def setup_method(self):
         from tools import file_tools
@@ -141,6 +140,7 @@ class TestCompletionConsumedPrune:
         import time
 
         reg = ProcessRegistry()
+
         # Fake a finished session whose started_at is older than the TTL.
         class _FakeSess:
             def __init__(self, sid):
@@ -185,7 +185,9 @@ class TestCompletionConsumedPrune:
 
         # The _completion_consumed set should not contain session IDs that
         # are no longer in _running or _finished.
-        assert (reg._completion_consumed - (reg._running.keys() | reg._finished.keys())) == set()
+        assert (
+            reg._completion_consumed - (reg._running.keys() | reg._finished.keys())
+        ) == set()
 
     def test_prune_clears_dangling_completion_entries(self):
         """Stale entries in _completion_consumed without a backing session

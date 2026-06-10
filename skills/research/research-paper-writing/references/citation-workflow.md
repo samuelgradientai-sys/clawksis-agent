@@ -110,6 +110,7 @@ Confirm paper exists in at least two sources:
 ```python
 import requests
 
+
 def verify_paper(doi=None, arxiv_id=None, title=None):
     """Verify paper exists in multiple sources."""
     sources_found = []
@@ -129,9 +130,7 @@ def verify_paper(doi=None, arxiv_id=None, title=None):
 
     # Check arXiv
     if arxiv_id:
-        resp = requests.get(
-            f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
-        )
+        resp = requests.get(f"http://export.arxiv.org/api/query?id_list={arxiv_id}")
         if "<entry>" in resp.text:
             sources_found.append("arXiv")
 
@@ -145,15 +144,17 @@ Use DOI content negotiation for guaranteed accuracy:
 ```python
 import requests
 
+
 def doi_to_bibtex(doi: str) -> str:
     """Get verified BibTeX from DOI via CrossRef content negotiation."""
     response = requests.get(
         f"https://doi.org/{doi}",
         headers={"Accept": "application/x-bibtex"},
-        allow_redirects=True
+        allow_redirects=True,
     )
     response.raise_for_status()
     return response.text
+
 
 # Example: "Attention Is All You Need"
 bibtex = doi_to_bibtex("10.48550/arXiv.1706.03762")
@@ -170,6 +171,7 @@ def get_paper_abstract(doi):
     sch = SemanticScholar()
     paper = sch.get_paper(f"DOI:{doi}")
     return paper.abstract if paper else None
+
 
 # Verify claim appears in abstract
 abstract = get_paper_abstract("10.48550/arXiv.1706.03762")
@@ -188,21 +190,21 @@ def generate_citation_key(bibtex: str) -> str:
     import re
 
     # Extract author
-    author_match = re.search(r'author\s*=\s*\{([^}]+)\}', bibtex, re.I)
+    author_match = re.search(r"author\s*=\s*\{([^}]+)\}", bibtex, re.I)
     if author_match:
-        first_author = author_match.group(1).split(',')[0].split()[-1]
+        first_author = author_match.group(1).split(",")[0].split()[-1]
     else:
         first_author = "unknown"
 
     # Extract year
-    year_match = re.search(r'year\s*=\s*\{?(\d{4})\}?', bibtex, re.I)
+    year_match = re.search(r"year\s*=\s*\{?(\d{4})\}?", bibtex, re.I)
     year = year_match.group(1) if year_match else "0000"
 
     # Extract title first word
-    title_match = re.search(r'title\s*=\s*\{([^}]+)\}', bibtex, re.I)
+    title_match = re.search(r"title\s*=\s*\{([^}]+)\}", bibtex, re.I)
     if title_match:
         first_word = title_match.group(1).split()[0].lower()
-        first_word = re.sub(r'[^a-z]', '', first_word)
+        first_word = re.sub(r"[^a-z]", "", first_word)
     else:
         first_word = "paper"
 
@@ -232,6 +234,7 @@ except ImportError:
     print("Install: pip install semanticscholar")
     SemanticScholar = None
 
+
 @dataclass
 class Paper:
     title: str
@@ -242,6 +245,7 @@ class Paper:
     venue: Optional[str]
     citation_count: int
     abstract: Optional[str]
+
 
 class CitationManager:
     """Manage citations with verification."""
@@ -263,11 +267,11 @@ class CitationManager:
                 title=r.title,
                 authors=[a.name for a in (r.authors or [])],
                 year=r.year or 0,
-                doi=r.externalIds.get('DOI') if r.externalIds else None,
-                arxiv_id=r.externalIds.get('ArXiv') if r.externalIds else None,
+                doi=r.externalIds.get("DOI") if r.externalIds else None,
+                arxiv_id=r.externalIds.get("ArXiv") if r.externalIds else None,
                 venue=r.venue,
                 citation_count=r.citationCount or 0,
-                abstract=r.abstract
+                abstract=r.abstract,
             )
             papers.append(paper)
 
@@ -284,8 +288,7 @@ class CitationManager:
         if paper.doi:
             try:
                 resp = requests.get(
-                    f"https://api.crossref.org/works/{paper.doi}",
-                    timeout=10
+                    f"https://api.crossref.org/works/{paper.doi}", timeout=10
                 )
                 if resp.status_code == 200:
                     sources.append("CrossRef")
@@ -297,7 +300,7 @@ class CitationManager:
             try:
                 resp = requests.get(
                     f"http://export.arxiv.org/api/query?id_list={paper.arxiv_id}",
-                    timeout=10
+                    timeout=10,
                 )
                 if "<entry>" in resp.text and "<title>" in resp.text:
                     sources.append("arXiv")
@@ -314,7 +317,7 @@ class CitationManager:
                     f"https://doi.org/{paper.doi}",
                     headers={"Accept": "application/x-bibtex"},
                     timeout=10,
-                    allow_redirects=True
+                    allow_redirects=True,
                 )
                 if resp.status_code == 200:
                     return resp.text
@@ -328,7 +331,7 @@ class CitationManager:
         """Generate BibTeX from paper metadata."""
         # Generate citation key
         first_author = paper.authors[0].split()[-1] if paper.authors else "unknown"
-        first_word = paper.title.split()[0].lower().replace(',', '').replace(':', '')
+        first_word = paper.title.split()[0].lower().replace(",", "").replace(":", "")
         key = f"{first_author.lower()}_{paper.year}_{first_word}"
 
         # Format authors
@@ -338,9 +341,9 @@ class CitationManager:
   title = {{{paper.title}}},
   author = {{{authors}}},
   year = {{{paper.year}}},
-  {'doi = {' + paper.doi + '},' if paper.doi else ''}
-  {'eprint = {' + paper.arxiv_id + '},' if paper.arxiv_id else ''}
-  {'journal = {' + paper.venue + '},' if paper.venue else ''}
+  {"doi = {" + paper.doi + "}," if paper.doi else ""}
+  {"eprint = {" + paper.arxiv_id + "}," if paper.arxiv_id else ""}
+  {"journal = {" + paper.venue + "}," if paper.venue else ""}
 }}"""
         return bibtex
 
@@ -388,6 +391,7 @@ def quick_cite(query: str) -> str:
     cm = CitationManager()
     return cm.cite(query)
 
+
 def batch_cite(queries: List[str], output_file: str = "references.bib"):
     """Cite multiple papers and save to file."""
     cm = CitationManager()
@@ -400,7 +404,7 @@ def batch_cite(queries: List[str], output_file: str = "references.bib"):
             bibtex_entries.append(bibtex)
         time.sleep(1)  # Rate limiting
 
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write("\n\n".join(bibtex_entries))
 
     print(f"Saved {len(bibtex_entries)} citations to {output_file}")

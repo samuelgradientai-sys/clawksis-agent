@@ -64,9 +64,7 @@ class TestUntrustedToolClassification:
 # =========================================================================
 
 
-SAMPLE_LONG_TEXT = (
-    "This is a sample document fetched from a web page. " * 4
-)
+SAMPLE_LONG_TEXT = "This is a sample document fetched from a web page. " * 4
 
 
 class TestUntrustedWrapping:
@@ -104,7 +102,7 @@ class TestUntrustedWrapping:
         # sub-agent result) should not be wrapped again.
         already = (
             '<untrusted_tool_result source="web_extract">\n'
-            'pre-wrapped\n</untrusted_tool_result>'
+            "pre-wrapped\n</untrusted_tool_result>"
         )
         result = _maybe_wrap_untrusted("mcp_linear_get_issue", already)
         # Exact identity preservation
@@ -113,7 +111,9 @@ class TestUntrustedWrapping:
     def test_mcp_tool_result_wrapped(self):
         long = "Issue title: Foo\n" + ("body line\n" * 20)
         result = _maybe_wrap_untrusted("mcp_linear_get_issue", long)
-        assert result.startswith('<untrusted_tool_result source="mcp_linear_get_issue">')
+        assert result.startswith(
+            '<untrusted_tool_result source="mcp_linear_get_issue">'
+        )
         assert "Issue title: Foo" in result
 
     def test_browser_tool_result_wrapped(self):
@@ -145,9 +145,7 @@ class TestMakeToolResultMessage:
         assert msg["tool_name"] == "web_extract"
         assert msg["tool_call_id"] == "call_2"
         assert isinstance(msg["content"], str)
-        assert msg["content"].startswith(
-            '<untrusted_tool_result source="web_extract">'
-        )
+        assert msg["content"].startswith('<untrusted_tool_result source="web_extract">')
         assert SAMPLE_LONG_TEXT in msg["content"]
 
     def test_high_risk_message_with_multimodal_content_unwrapped(self):

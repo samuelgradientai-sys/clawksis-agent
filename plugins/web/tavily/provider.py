@@ -63,14 +63,12 @@ def _normalize_tavily_search_results(response: Dict[str, Any]) -> Dict[str, Any]
     """Map Tavily ``/search`` response to ``{success, data: {web: [...]}}``."""
     web_results = []
     for i, result in enumerate(response.get("results", [])):
-        web_results.append(
-            {
-                "title": result.get("title", ""),
-                "url": result.get("url", ""),
-                "description": result.get("content", ""),
-                "position": i + 1,
-            }
-        )
+        web_results.append({
+            "title": result.get("title", ""),
+            "url": result.get("url", ""),
+            "description": result.get("content", ""),
+            "position": i + 1,
+        })
     return {"success": True, "data": {"web": web_results}}
 
 
@@ -90,38 +88,32 @@ def _normalize_tavily_documents(
     for result in response.get("results", []):
         url = result.get("url", fallback_url)
         raw = result.get("raw_content", "") or result.get("content", "")
-        documents.append(
-            {
-                "url": url,
-                "title": result.get("title", ""),
-                "content": raw,
-                "raw_content": raw,
-                "metadata": {"sourceURL": url, "title": result.get("title", "")},
-            }
-        )
+        documents.append({
+            "url": url,
+            "title": result.get("title", ""),
+            "content": raw,
+            "raw_content": raw,
+            "metadata": {"sourceURL": url, "title": result.get("title", "")},
+        })
     for fail in response.get("failed_results", []):
-        documents.append(
-            {
-                "url": fail.get("url", fallback_url),
-                "title": "",
-                "content": "",
-                "raw_content": "",
-                "error": fail.get("error", "extraction failed"),
-                "metadata": {"sourceURL": fail.get("url", fallback_url)},
-            }
-        )
+        documents.append({
+            "url": fail.get("url", fallback_url),
+            "title": "",
+            "content": "",
+            "raw_content": "",
+            "error": fail.get("error", "extraction failed"),
+            "metadata": {"sourceURL": fail.get("url", fallback_url)},
+        })
     for fail_url in response.get("failed_urls", []):
         url_str = fail_url if isinstance(fail_url, str) else str(fail_url)
-        documents.append(
-            {
-                "url": url_str,
-                "title": "",
-                "content": "",
-                "raw_content": "",
-                "error": "extraction failed",
-                "metadata": {"sourceURL": url_str},
-            }
-        )
+        documents.append({
+            "url": url_str,
+            "title": "",
+            "content": "",
+            "raw_content": "",
+            "error": "extraction failed",
+            "metadata": {"sourceURL": url_str},
+        })
     return documents
 
 
@@ -181,9 +173,7 @@ class TavilyWebSearchProvider(WebSearchProvider):
             from tools.interrupt import is_interrupted
 
             if is_interrupted():
-                return [
-                    {"url": u, "error": "Interrupted", "title": ""} for u in urls
-                ]
+                return [{"url": u, "error": "Interrupted", "title": ""} for u in urls]
 
             logger.info("Tavily extract: %d URL(s)", len(urls))
             raw = _tavily_request(
@@ -197,11 +187,18 @@ class TavilyWebSearchProvider(WebSearchProvider):
                 raw, fallback_url=urls[0] if urls else ""
             )
         except ValueError as exc:
-            return [{"url": u, "title": "", "content": "", "error": str(exc)} for u in urls]
+            return [
+                {"url": u, "title": "", "content": "", "error": str(exc)} for u in urls
+            ]
         except Exception as exc:  # noqa: BLE001
             logger.warning("Tavily extract error: %s", exc)
             return [
-                {"url": u, "title": "", "content": "", "error": f"Tavily extract failed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Tavily extract failed: {exc}",
+                }
                 for u in urls
             ]
 

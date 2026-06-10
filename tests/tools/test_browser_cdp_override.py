@@ -21,7 +21,9 @@ class TestResolveCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = _resolve_cdp_override(HTTP_URL)
 
         assert resolved == WS_URL
@@ -34,7 +36,9 @@ class TestResolveCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = _resolve_cdp_override(f"ws://{HOST}:{PORT}")
 
         assert resolved == WS_URL
@@ -46,7 +50,9 @@ class TestResolveCdpOverride:
         with patch("tools.browser_tool.requests.get", side_effect=RuntimeError("boom")):
             assert _resolve_cdp_override(HTTP_URL) == HTTP_URL
 
-    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(self, monkeypatch):
+    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(
+        self, monkeypatch
+    ):
         import tools.browser_tool as browser_tool
 
         provider = Mock()
@@ -64,11 +70,15 @@ class TestResolveCdpOverride:
         monkeypatch.setattr(browser_tool, "_active_sessions", {})
         monkeypatch.setattr(browser_tool, "_session_last_activity", {})
         monkeypatch.setattr(browser_tool, "_start_browser_cleanup_thread", lambda: None)
-        monkeypatch.setattr(browser_tool, "_update_session_activity", lambda task_id: None)
+        monkeypatch.setattr(
+            browser_tool, "_update_session_activity", lambda task_id: None
+        )
         monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: "")
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             session_info = browser_tool._get_session_info("task-browser-use")
 
         assert session_info["cdp_url"] == WS_URL
@@ -95,7 +105,9 @@ class TestGetCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = browser_tool._get_cdp_override()
 
         assert resolved == WS_URL
@@ -110,8 +122,13 @@ class TestGetCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("clawk_cli.config.read_raw_config", return_value={"browser": {"cdp_url": HTTP_URL}}), \
-             patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with (
+            patch(
+                "clawk_cli.config.read_raw_config",
+                return_value={"browser": {"cdp_url": HTTP_URL}},
+            ),
+            patch("tools.browser_tool.requests.get", return_value=response) as mock_get,
+        ):
             resolved = browser_tool._get_cdp_override()
 
         assert resolved == WS_URL

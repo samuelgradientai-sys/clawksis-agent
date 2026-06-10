@@ -10,6 +10,7 @@ Usage:
 Reads USDA_API_KEY from environment, falls back to DEMO_KEY.
 No external dependencies.
 """
+
 import sys
 import os
 import json
@@ -38,7 +39,9 @@ def search(query, max_results=3):
 
 
 def display(food):
-    nutrients = {n["nutrientName"]: n.get("value", "?") for n in food.get("foodNutrients", [])}
+    nutrients = {
+        n["nutrientName"]: n.get("value", "?") for n in food.get("foodNutrients", [])
+    }
     cal = nutrients.get("Energy", "?")
     prot = nutrients.get("Protein", "?")
     fat = nutrients.get("Total lipid (fat)", "?")

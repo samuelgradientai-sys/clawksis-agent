@@ -53,7 +53,9 @@ class TestExplicitAuxVisionOverride:
         assert _explicit_aux_vision_override({}) is False
 
     def test_default_auto_is_not_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "model": "", "base_url": ""}}}
+        cfg = {
+            "auxiliary": {"vision": {"provider": "auto", "model": "", "base_url": ""}}
+        }
         assert _explicit_aux_vision_override(cfg) is False
 
     def test_provider_set_is_explicit(self):
@@ -61,11 +63,19 @@ class TestExplicitAuxVisionOverride:
         assert _explicit_aux_vision_override(cfg) is True
 
     def test_model_set_is_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "auto", "model": "google/gemini-2.5-flash"}
+            }
+        }
         assert _explicit_aux_vision_override(cfg) is True
 
     def test_base_url_set_is_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "base_url": "http://localhost:11434"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "auto", "base_url": "http://localhost:11434"}
+            }
+        }
         assert _explicit_aux_vision_override(cfg) is True
 
 
@@ -78,20 +88,29 @@ class TestDecideImageInputMode:
         # Non-vision model, aux-vision explicitly configured: native still wins.
         cfg["auxiliary"] = {"vision": {"provider": "openrouter", "model": "foo"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=False):
-            assert decide_image_input_mode("openrouter", "some-non-vision-model", cfg) == "native"
+            assert (
+                decide_image_input_mode("openrouter", "some-non-vision-model", cfg)
+                == "native"
+            )
 
     def test_explicit_text_overrides_everything(self):
         cfg = {"agent": {"image_input_mode": "text"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            )
 
     def test_auto_with_vision_capable_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", {}) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", {}) == "native"
+            )
 
     def test_auto_with_non_vision_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=False):
-            assert decide_image_input_mode("openrouter", "qwen/qwen3-235b", {}) == "text"
+            assert (
+                decide_image_input_mode("openrouter", "qwen/qwen3-235b", {}) == "text"
+            )
 
     def test_auto_with_unknown_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=None):
@@ -99,18 +118,29 @@ class TestDecideImageInputMode:
 
     def test_auto_respects_aux_vision_override_even_for_vision_model(self):
         """If the user configured a dedicated vision backend, don't bypass it."""
-        cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}
+            }
+        }
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            )
 
     def test_none_config_is_auto(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", None) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", None)
+                == "native"
+            )
 
     def test_invalid_mode_coerces_to_auto(self):
         cfg = {"agent": {"image_input_mode": "weird-value"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            )
 
     def test_auto_uses_text_for_text_only_modalities_even_with_attachment_flag(self):
         registry = {
@@ -284,7 +314,9 @@ class TestAutoModeRespectsOverride:
         # it even when supports_vision: true is also set.
         cfg = {
             "model": {"supports_vision": True},
-            "auxiliary": {"vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}},
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}
+            },
         }
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
             assert decide_image_input_mode("custom", "qwen3.6-35b", cfg) == "text"
@@ -329,7 +361,9 @@ class TestBuildNativeContentParts:
         assert parts[1]["type"] == "image_url"
 
     def test_missing_file_is_skipped(self, tmp_path: Path):
-        parts, skipped = build_native_content_parts("hi", [str(tmp_path / "missing.png")])
+        parts, skipped = build_native_content_parts(
+            "hi", [str(tmp_path / "missing.png")]
+        )
         assert skipped == [str(tmp_path / "missing.png")]
         # Skipped paths are NOT advertised in the path hints — the model
         # would otherwise be told a non-existent file is attached.
@@ -371,7 +405,9 @@ class TestBuildNativeContentParts:
         img2 = tmp_path / "b.png"
         img1.write_bytes(_png_bytes())
         img2.write_bytes(_png_bytes())
-        parts, skipped = build_native_content_parts("compare these", [str(img1), str(img2)])
+        parts, skipped = build_native_content_parts(
+            "compare these", [str(img1), str(img2)]
+        )
         assert skipped == []
         image_parts = [p for p in parts if p.get("type") == "image_url"]
         assert len(image_parts) == 2
@@ -435,6 +471,7 @@ class TestLargeImageHandling:
 
     def test_missing_file_returns_none(self, tmp_path: Path):
         from agent import image_routing as _ir
+
         missing = tmp_path / "does_not_exist.png"
         assert _ir._file_to_data_url(missing) is None
 
@@ -619,7 +656,9 @@ class TestBuildNativeContentPartsURLs:
         img.write_bytes(_png_bytes())
         # image_urls=[] should behave the same as not passing it at all.
         parts_no_urls, _ = build_native_content_parts("hi", [str(img)])
-        parts_empty_urls, _ = build_native_content_parts("hi", [str(img)], image_urls=[])
+        parts_empty_urls, _ = build_native_content_parts(
+            "hi", [str(img)], image_urls=[]
+        )
         assert parts_no_urls == parts_empty_urls
 
     def test_blank_url_strings_are_dropped(self):

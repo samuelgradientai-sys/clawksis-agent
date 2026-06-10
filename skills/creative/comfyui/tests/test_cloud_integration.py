@@ -62,7 +62,10 @@ class TestCloudEndpointsLive:
 class TestCloudCheckDepsLive:
     def test_check_deps_against_cloud(self, cloud_key, sd15_workflow):
         from check_deps import check_deps
-        report = check_deps(sd15_workflow, host="https://cloud.comfy.org", api_key=cloud_key)
+
+        report = check_deps(
+            sd15_workflow, host="https://cloud.comfy.org", api_key=cloud_key
+        )
         # Either node check passed OR was skipped (free tier)
         assert "missing_models" in report
         assert "is_cloud" in report and report["is_cloud"] is True
@@ -71,13 +74,17 @@ class TestCloudCheckDepsLive:
         """Flux uses unet/clip folders; cloud has them in diffusion_models/text_encoders.
         With folder aliasing, the check should still find them."""
         from check_deps import check_deps
-        report = check_deps(flux_workflow, host="https://cloud.comfy.org", api_key=cloud_key)
+
+        report = check_deps(
+            flux_workflow, host="https://cloud.comfy.org", api_key=cloud_key
+        )
         # The exact required Flux files (flux1-dev.safetensors, t5xxl_fp16, clip_l, ae)
         # are present on cloud; with folder aliasing, none should be missing.
         # If this fails, either the cloud removed the model or the aliasing logic broke.
         missing_filenames = {m["value"] for m in report["missing_models"]}
-        assert "ae.safetensors" not in missing_filenames, \
+        assert "ae.safetensors" not in missing_filenames, (
             "ae.safetensors should be on cloud's vae folder"
+        )
         # t5xxl_fp16 / clip_l should be reachable via the clip → text_encoders alias
         # flux1-dev.safetensors likewise via unet → diffusion_models
 
@@ -85,10 +92,12 @@ class TestCloudCheckDepsLive:
 class TestHealthCheckLive:
     def test_health_check_passes(self, cloud_key, capsys):
         from health_check import main as health_main
+
         rc = health_main(["--host", "https://cloud.comfy.org", "--api-key", cloud_key])
         captured = capsys.readouterr()
         # Should produce JSON
         import json
+
         report = json.loads(captured.out)
         assert report["server"]["reachable"] is True
         assert report["checkpoints"]["queryable"] is True

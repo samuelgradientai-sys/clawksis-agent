@@ -148,15 +148,19 @@ class MicrosoftGraphTokenProvider:
 
     async def get_access_token(self, *, force_refresh: bool = False) -> str:
         cached = self._cached_token
-        if not force_refresh and cached and not cached.is_expired(
-            skew_seconds=self.skew_seconds
+        if (
+            not force_refresh
+            and cached
+            and not cached.is_expired(skew_seconds=self.skew_seconds)
         ):
             return cached.access_token
 
         async with self._lock:
             cached = self._cached_token
-            if not force_refresh and cached and not cached.is_expired(
-                skew_seconds=self.skew_seconds
+            if (
+                not force_refresh
+                and cached
+                and not cached.is_expired(skew_seconds=self.skew_seconds)
             ):
                 return cached.access_token
 

@@ -65,32 +65,37 @@ def _is_permanent(error_str: str) -> bool:
 # 1. Error classification — transient vs permanent
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("error_str", [
-    "httpx.ConnectError: Connection refused",
-    "telegram.error.NetworkError: httpx.ConnectError",
-    "NetworkError: remote end closed connection without response",
-    "httpx.ReadTimeout: read timed out",
-    "ReadTimeout: timed out",
-    "Server disconnected",
-    "Temporarily unavailable",
-    "Temporary failure in name resolution",
-    "Connection error: failed to connect",
-])
+
+@pytest.mark.parametrize(
+    "error_str",
+    [
+        "httpx.ConnectError: Connection refused",
+        "telegram.error.NetworkError: httpx.ConnectError",
+        "NetworkError: remote end closed connection without response",
+        "httpx.ReadTimeout: read timed out",
+        "ReadTimeout: timed out",
+        "Server disconnected",
+        "Temporarily unavailable",
+        "Temporary failure in name resolution",
+        "Connection error: failed to connect",
+    ],
+)
 def test_transient_errors_are_classified_as_transient(error_str):
     """Network / transient errors must be classified as retryable."""
-    assert _is_transient(error_str), (
-        f"Expected {error_str!r} to be transient"
-    )
+    assert _is_transient(error_str), f"Expected {error_str!r} to be transient"
 
 
-@pytest.mark.parametrize("error_str", [
-    "Bad Request: message to edit not found",
-    "Bad Request: message can't be edited",
-    "Bad Request: not enough rights to edit the message",
-    "Bad Request: MESSAGE_ID_INVALID",
-    "flood_control:30.0",
-    "Forbidden: bot was blocked by the user",
-])
+@pytest.mark.parametrize(
+    "error_str",
+    [
+        "Bad Request: message to edit not found",
+        "Bad Request: message can't be edited",
+        "Bad Request: not enough rights to edit the message",
+        "Bad Request: MESSAGE_ID_INVALID",
+        "flood_control:30.0",
+        "Forbidden: bot was blocked by the user",
+    ],
+)
 def test_permanent_errors_are_not_transient(error_str):
     """Permanent edit failures must NOT be classified as retryable."""
     assert not _is_transient(error_str), (
@@ -101,6 +106,7 @@ def test_permanent_errors_are_not_transient(error_str):
 # ---------------------------------------------------------------------------
 # 2. SendResult retryable field
 # ---------------------------------------------------------------------------
+
 
 def test_send_result_retryable_default_is_false():
     r = SendResult(success=True, message_id="1")
@@ -128,6 +134,7 @@ def test_send_result_retryable_false_for_permanent():
 #          can_edit = False
 #
 # ---------------------------------------------------------------------------
+
 
 def _simulate_progress_loop(edit_results):
     """

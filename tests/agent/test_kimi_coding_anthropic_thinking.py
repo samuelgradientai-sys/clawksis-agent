@@ -205,7 +205,8 @@ class TestKimiCodingSkipsAnthropicThinking:
         assistant_msg = next(m for m in converted if m["role"] == "assistant")
         assistant_blocks = assistant_msg["content"]
         thinking_blocks = [
-            b for b in assistant_blocks
+            b
+            for b in assistant_blocks
             if isinstance(b, dict) and b.get("type") == "thinking"
         ]
         assert len(thinking_blocks) == 1

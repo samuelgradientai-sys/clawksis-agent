@@ -18,8 +18,6 @@ clamps with ``min(8, curses.COLORS - 1)``.
 
 """
 
-
-
 import curses
 
 import re
@@ -29,21 +27,12 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
-
-
-
-
-
 # Path to the source files under test
 
 _SRC_ROOT = Path(__file__).parent.parent.parent / "clawk_cli"
 
 
-
-
-
 class TestInitPairClampingBehavior:
-
     """Simulate curses color initialization on low-color terminals.
 
 
@@ -54,10 +43,7 @@ class TestInitPairClampingBehavior:
 
     """
 
-
-
     def _collect_init_pair_calls(self, draw_fn, colors_value):
-
         """Run a curses draw function with a mock stdscr and patched COLORS.
 
 
@@ -70,13 +56,9 @@ class TestInitPairClampingBehavior:
 
         real_init_pair = curses.init_pair
 
-
-
         def tracking_init_pair(pair, fg, bg):
 
             calls.append((pair, fg, bg))
-
-
 
         mock_stdscr = MagicMock()
 
@@ -84,31 +66,23 @@ class TestInitPairClampingBehavior:
 
         mock_stdscr.getch.return_value = 27  # ESC to exit
 
-
-
-        with patch("curses.COLORS", colors_value, create=True), \
-             patch("curses.init_pair", side_effect=tracking_init_pair), \
-             patch("curses.has_colors", return_value=True), \
-             patch("curses.start_color"), \
-             patch("curses.use_default_colors"), \
-             patch("curses.curs_set"):
-
+        with (
+            patch("curses.COLORS", colors_value, create=True),
+            patch("curses.init_pair", side_effect=tracking_init_pair),
+            patch("curses.has_colors", return_value=True),
+            patch("curses.start_color"),
+            patch("curses.use_default_colors"),
+            patch("curses.curs_set"),
+        ):
             try:
-
                 draw_fn(mock_stdscr)
 
             except (SystemExit, StopIteration, Exception):
-
                 pass  # draw functions loop until keypress
-
-
 
         return calls
 
-
-
     def test_8_color_terminal_no_color_exceeds_limit(self):
-
         """On an 8-color terminal (Docker), no init_pair fg color >= 8."""
 
         # Simulate the color init pattern from plugins_cmd.py
@@ -116,7 +90,6 @@ class TestInitPairClampingBehavior:
         def _simulated_color_init(stdscr):
 
             if curses.has_colors():
-
                 curses.start_color()
 
                 curses.use_default_colors()
@@ -129,74 +102,50 @@ class TestInitPairClampingBehavior:
 
                 curses.init_pair(4, 8 if curses.COLORS > 8 else curses.COLOR_WHITE, -1)
 
-
-
         calls = self._collect_init_pair_calls(_simulated_color_init, 8)
 
         for pair, fg, bg in calls:
-
             assert fg < 8, (
-
                 f"init_pair({pair}, {fg}, {bg}) uses color {fg} which "
-
                 f"does not exist on an 8-color terminal (valid: 0-7)"
-
             )
 
-
-
     def test_256_color_terminal_uses_color_8(self):
-
         """On a 256-color terminal, color 8 (dim gray) should be used."""
 
         def _simulated_color_init(stdscr):
 
             if curses.has_colors():
-
                 curses.start_color()
 
                 curses.use_default_colors()
 
                 curses.init_pair(4, 8 if curses.COLORS > 8 else curses.COLOR_WHITE, -1)
 
-
-
         calls = self._collect_init_pair_calls(_simulated_color_init, 256)
 
         assert any(fg == 8 for _, fg, _ in calls), (
-
             "On 256-color terminals, color 8 (dim gray) should be used"
-
         )
 
-
-
     def test_16_color_terminal_uses_color_8(self):
-
         """On a 16-color terminal, color 8 should be available."""
 
         def _simulated_color_init(stdscr):
 
             if curses.has_colors():
-
                 curses.start_color()
 
                 curses.use_default_colors()
 
                 curses.init_pair(4, 8 if curses.COLORS > 8 else curses.COLOR_WHITE, -1)
-
-
 
         calls = self._collect_init_pair_calls(_simulated_color_init, 16)
 
         assert any(fg == 8 for _, fg, _ in calls)
 
 
-
-
-
 class TestSourceCodeGuardrails:
-
     """Regression guardrails: raw color 8 must not reappear in source.
 
 
@@ -207,11 +156,7 @@ class TestSourceCodeGuardrails:
 
     """
 
-
-
-    _RAW_COLOR_8_PATTERN = re.compile(r'init_pair\(\d+,\s*8\s*,')
-
-
+    _RAW_COLOR_8_PATTERN = re.compile(r"init_pair\(\d+,\s*8\s*,")
 
     def test_no_raw_color_8_in_plugins_cmd(self):
 
@@ -219,13 +164,7 @@ class TestSourceCodeGuardrails:
 
         matches = self._RAW_COLOR_8_PATTERN.findall(source)
 
-        assert not matches, (
-
-            f"plugins_cmd.py contains unclamped color 8: {matches}"
-
-        )
-
-
+        assert not matches, f"plugins_cmd.py contains unclamped color 8: {matches}"
 
     def test_no_raw_color_8_in_main(self):
 
@@ -233,13 +172,7 @@ class TestSourceCodeGuardrails:
 
         matches = self._RAW_COLOR_8_PATTERN.findall(source)
 
-        assert not matches, (
-
-            f"main.py contains unclamped color 8: {matches}"
-
-        )
-
-
+        assert not matches, f"main.py contains unclamped color 8: {matches}"
 
     def test_no_raw_color_8_in_curses_ui(self):
 
@@ -247,9 +180,4 @@ class TestSourceCodeGuardrails:
 
         matches = self._RAW_COLOR_8_PATTERN.findall(source)
 
-        assert not matches, (
-
-            f"curses_ui.py contains unclamped color 8: {matches}"
-
-        )
-
+        assert not matches, f"curses_ui.py contains unclamped color 8: {matches}"

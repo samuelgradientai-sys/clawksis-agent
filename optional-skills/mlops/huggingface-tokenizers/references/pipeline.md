@@ -104,9 +104,9 @@ from tokenizers.normalizers import Sequence, NFD, Lowercase, StripAccents
 
 # BERT-style normalization
 tokenizer.normalizer = Sequence([
-    NFD(),           # Unicode decomposition
-    Lowercase(),     # Convert to lowercase
-    StripAccents()   # Remove accents
+    NFD(),  # Unicode decomposition
+    Lowercase(),  # Convert to lowercase
+    StripAccents(),  # Remove accents
 ])
 
 # Input: "Café au Lait"
@@ -123,10 +123,10 @@ from tokenizers.normalizers import BertNormalizer
 
 # All-in-one BERT normalization
 tokenizer.normalizer = BertNormalizer(
-    clean_text=True,        # Remove control characters
+    clean_text=True,  # Remove control characters
     handle_chinese_chars=True,  # Add spaces around Chinese
-    strip_accents=True,     # Remove accents
-    lowercase=True          # Lowercase
+    strip_accents=True,  # Remove accents
+    lowercase=True,  # Lowercase
 )
 ```
 
@@ -231,8 +231,8 @@ tokenizer.pre_tokenizer = BertPreTokenizer()
 from tokenizers.pre_tokenizers import Sequence, Whitespace, Punctuation
 
 tokenizer.pre_tokenizer = Sequence([
-    Whitespace(),     # Split on whitespace first
-    Punctuation()     # Then isolate punctuation
+    Whitespace(),  # Split on whitespace first
+    Punctuation(),  # Then isolate punctuation
 ])
 
 # Input: "Hello, world!"
@@ -261,12 +261,12 @@ Core tokenization algorithms.
 from tokenizers.models import BPE
 
 model = BPE(
-    vocab=None,           # Or provide pre-built vocab
-    merges=None,          # Or provide merge rules
-    unk_token="[UNK]",    # Unknown token
+    vocab=None,  # Or provide pre-built vocab
+    merges=None,  # Or provide merge rules
+    unk_token="[UNK]",  # Unknown token
     continuing_subword_prefix="",
     end_of_word_suffix="",
-    fuse_unk=False        # Keep unknown tokens separate
+    fuse_unk=False,  # Keep unknown tokens separate
 )
 
 tokenizer = Tokenizer(model)
@@ -288,7 +288,7 @@ model = WordPiece(
     vocab=None,
     unk_token="[UNK]",
     max_input_chars_per_word=100,  # Max word length
-    continuing_subword_prefix="##"  # BERT-style prefix
+    continuing_subword_prefix="##",  # BERT-style prefix
 )
 
 tokenizer = Tokenizer(model)
@@ -303,8 +303,8 @@ from tokenizers.models import Unigram
 
 model = Unigram(
     vocab=None,  # List of (token, score) tuples
-    unk_id=0,    # ID for unknown token
-    byte_fallback=False  # Fall back to bytes if no match
+    unk_id=0,  # ID for unknown token
+    byte_fallback=False,  # Fall back to bytes if no match
 )
 
 tokenizer = Tokenizer(model)
@@ -318,10 +318,7 @@ tokenizer = Tokenizer(model)
 from tokenizers.models import WordLevel
 
 # Simple word-to-ID mapping (no subwords)
-model = WordLevel(
-    vocab=None,
-    unk_token="[UNK]"
-)
+model = WordLevel(vocab=None, unk_token="[UNK]")
 
 tokenizer = Tokenizer(model)
 ```
@@ -393,7 +390,7 @@ tokenizer.post_processor = RobertaProcessing(
     sep=("</s>", 2),
     cls=("<s>", 0),
     add_prefix_space=True,  # Add space before first token
-    trim_offsets=True       # Trim leading space from offsets
+    trim_offsets=True,  # Trim leading space from offsets
 )
 ```
 
@@ -461,8 +458,8 @@ tokenizer.decoder = BPEDecoder(suffix="</w>")
 from tokenizers.decoders import Sequence, ByteLevel, Strip
 
 tokenizer.decoder = Sequence([
-    ByteLevel(),      # Decode byte-level first
-    Strip(' ', 1, 1)  # Strip leading/trailing spaces
+    ByteLevel(),  # Decode byte-level first
+    Strip(" ", 1, 1),  # Strip leading/trailing spaces
 ])
 ```
 
@@ -632,11 +629,13 @@ print(f"Tokens {token_start}:{token_end} = {encoding.tokens[token_start:token_en
 ```python
 from tokenizers import NormalizedString, Normalizer
 
+
 class CustomNormalizer:
     def normalize(self, normalized: NormalizedString):
         # Custom normalization logic
         normalized.lowercase()
         normalized.replace("  ", " ")  # Replace double spaces
+
 
 # Use custom normalizer
 tokenizer.normalizer = CustomNormalizer()
@@ -647,10 +646,12 @@ tokenizer.normalizer = CustomNormalizer()
 ```python
 from tokenizers import PreTokenizedString
 
+
 class CustomPreTokenizer:
     def pre_tokenize(self, pretok: PreTokenizedString):
         # Custom pre-tokenization logic
         pretok.split(lambda i, char: char.isspace())
+
 
 tokenizer.pre_tokenizer = CustomPreTokenizer()
 ```

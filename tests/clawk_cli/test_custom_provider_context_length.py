@@ -4,6 +4,7 @@ Covers the fix for #15779 — mid-session /model switch to a named custom
 provider must honor ``custom_providers[].models.<id>.context_length`` the
 same way startup already does.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -63,9 +64,7 @@ class TestGetCustomProviderContextLength:
             }
         ]
         assert (
-            get_custom_provider_context_length(
-                "m", "https://other.invalid/v1", custom
-            )
+            get_custom_provider_context_length("m", "https://other.invalid/v1", custom)
             is None
         )
 
@@ -118,8 +117,20 @@ class TestGetCustomProviderContextLength:
             ), f"value {bad!r} should be rejected"
 
     def test_empty_inputs_return_none(self):
-        assert get_custom_provider_context_length("", "http://x", [{"base_url": "http://x", "models": {"": {"context_length": 1}}}]) is None
-        assert get_custom_provider_context_length("m", "", [{"base_url": "", "models": {"m": {"context_length": 1}}}]) is None
+        assert (
+            get_custom_provider_context_length(
+                "",
+                "http://x",
+                [{"base_url": "http://x", "models": {"": {"context_length": 1}}}],
+            )
+            is None
+        )
+        assert (
+            get_custom_provider_context_length(
+                "m", "", [{"base_url": "", "models": {"m": {"context_length": 1}}}]
+            )
+            is None
+        )
         assert get_custom_provider_context_length("m", "http://x", None) is None
         assert get_custom_provider_context_length("m", "http://x", []) is None
 
@@ -152,6 +163,7 @@ class TestGetModelContextLengthHonorsOverride:
     def _mock_all_probes(self):
         """Context manager that disables every downstream resolution step."""
         from agent import model_metadata as _mm
+
         return [
             patch.object(_mm, "get_cached_context_length", return_value=None),
             patch.object(_mm, "fetch_endpoint_model_metadata", return_value={}),
@@ -162,6 +174,7 @@ class TestGetModelContextLengthHonorsOverride:
 
     def test_custom_providers_override_wins_over_default_fallback(self):
         from agent.model_metadata import get_model_context_length
+
         custom = [
             {
                 "base_url": "https://example.invalid/v1",
@@ -190,6 +203,7 @@ class TestGetModelContextLengthHonorsOverride:
         documented precedence and matches the long-standing step-0 behavior.
         """
         from agent.model_metadata import get_model_context_length
+
         custom = [
             {
                 "base_url": "https://example.invalid/v1",
@@ -209,7 +223,11 @@ class TestGetModelContextLengthHonorsOverride:
         """With custom_providers=None and all probes disabled, resolver
         returns DEFAULT_FALLBACK_CONTEXT (256K after the stepdown bump).
         """
-        from agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
+        from agent.model_metadata import (
+            get_model_context_length,
+            DEFAULT_FALLBACK_CONTEXT,
+        )
+
         patches = self._mock_all_probes()
         for p in patches:
             p.start()

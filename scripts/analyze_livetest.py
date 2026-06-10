@@ -58,9 +58,9 @@ def main():
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     scenarios = sorted({row["scenario"] for row in summary})
 
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     print(f"  Live test results: tool_search ENABLED vs DISABLED")
-    print(f"{'='*78}\n")
+    print(f"{'=' * 78}\n")
 
     fails = 0
     for sid in scenarios:
@@ -79,14 +79,20 @@ def main():
             called_under = [c["name"] for c in rec["underlying_tool_calls"]]
             called_set = set(called_under)
             missing = expected - called_set
-            extra = called_set - expected - {"read_file", "search_files", "terminal", "todo", "memory"}
+            extra = (
+                called_set
+                - expected
+                - {"read_file", "search_files", "terminal", "todo", "memory"}
+            )
 
             mark = "✓" if (expected.issubset(called_set) and not rec["error"]) else "✗"
             if mark == "✗":
                 fails += 1
 
-            print(f"│  {label} {mark}  bridges={len(rec['bridge_calls']):2}  underlying={len(rec['underlying_tool_calls']):2}  "
-                  f"iters={rec['n_iterations']:2}  elapsed={rec['elapsed_seconds']:5.1f}s  err={bool(rec['error'])}")
+            print(
+                f"│  {label} {mark}  bridges={len(rec['bridge_calls']):2}  underlying={len(rec['underlying_tool_calls']):2}  "
+                f"iters={rec['n_iterations']:2}  elapsed={rec['elapsed_seconds']:5.1f}s  err={bool(rec['error'])}"
+            )
             print(f"│    underlying: {fmt_tool_seq(rec['underlying_tool_calls'])}")
             if rec["bridge_calls"]:
                 print(f"│    bridges:    {fmt_bridge_seq(rec['bridge_calls'])}")
@@ -101,13 +107,15 @@ def main():
         di_underlying = len(di["underlying_tool_calls"])
         en_underlying = len(en["underlying_tool_calls"])
         overhead = en_bridges + en_underlying - di_underlying
-        print(f"│  Δ round-trip cost: enabled used {en_bridges + en_underlying} calls vs disabled {di_underlying}  →  +{overhead}")
+        print(
+            f"│  Δ round-trip cost: enabled used {en_bridges + en_underlying} calls vs disabled {di_underlying}  →  +{overhead}"
+        )
         print(f"│  Final (enabled):  {(en.get('final_response') or '')[:140]}")
         print(f"│  Final (disabled): {(di.get('final_response') or '')[:140]}")
         print(f"└──")
         print()
 
-    print(f"\nFails: {fails}/{2*len(scenarios)}")
+    print(f"\nFails: {fails}/{2 * len(scenarios)}")
 
 
 if __name__ == "__main__":

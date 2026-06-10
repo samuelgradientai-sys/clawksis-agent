@@ -30,6 +30,7 @@ These tests pin the contract:
     typescript-language-server via ``_maybe_lsp_diagnostics`` — the
     diagnostics show up on ``lsp_diagnostics``, not ``lint``.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -40,6 +41,7 @@ import pytest
 def _make_fops():
     from tools.environments.local import LocalEnvironment
     from tools.file_operations import ShellFileOperations
+
     return ShellFileOperations(LocalEnvironment())
 
 
@@ -56,13 +58,13 @@ def test_shell_linter_skipped_when_lsp_will_handle(ext, tmp_path):
     src.write_text("intentionally invalid content\n")
 
     def _exec_must_not_run(*args, **kwargs):  # pragma: no cover
-        raise AssertionError(
-            "shell linter was invoked despite LSP claiming the file"
-        )
+        raise AssertionError("shell linter was invoked despite LSP claiming the file")
 
-    with patch.object(fops, "_lsp_will_handle", return_value=True), \
-         patch.object(fops, "_exec", side_effect=_exec_must_not_run), \
-         patch.object(fops, "_has_command", return_value=True):
+    with (
+        patch.object(fops, "_lsp_will_handle", return_value=True),
+        patch.object(fops, "_exec", side_effect=_exec_must_not_run),
+        patch.object(fops, "_has_command", return_value=True),
+    ):
         result = fops._check_lint(str(src))
 
     assert result.skipped is True
@@ -81,9 +83,11 @@ def test_shell_linter_runs_when_lsp_inactive(ext, tmp_path):
     fake_result.exit_code = 0
     fake_result.stdout = ""
 
-    with patch.object(fops, "_lsp_will_handle", return_value=False), \
-         patch.object(fops, "_exec", return_value=fake_result) as exec_mock, \
-         patch.object(fops, "_has_command", return_value=True):
+    with (
+        patch.object(fops, "_lsp_will_handle", return_value=False),
+        patch.object(fops, "_exec", return_value=fake_result) as exec_mock,
+        patch.object(fops, "_has_command", return_value=True),
+    ):
         result = fops._check_lint(str(src))
 
     # _exec must have been called — proving the shell linter ran.
@@ -108,9 +112,11 @@ def test_lsp_does_not_skip_non_redundant_extensions(ext, tmp_path):
 
     # Even with LSP claiming the file, the shell linter must still run
     # for these extensions.
-    with patch.object(fops, "_lsp_will_handle", return_value=True), \
-         patch.object(fops, "_exec", return_value=fake_result) as exec_mock, \
-         patch.object(fops, "_has_command", return_value=True):
+    with (
+        patch.object(fops, "_lsp_will_handle", return_value=True),
+        patch.object(fops, "_exec", return_value=fake_result) as exec_mock,
+        patch.object(fops, "_has_command", return_value=True),
+    ):
         fops._check_lint(str(src))
 
     assert exec_mock.called, (
@@ -127,8 +133,10 @@ def test_lsp_will_handle_returns_false_when_service_is_none(tmp_path):
     src = tmp_path / "foo.ts"
     src.write_text("const x = 1\n")
 
-    with patch.object(fops, "_lsp_local_only", return_value=True), \
-         patch("agent.lsp.get_service", return_value=None):
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=True),
+        patch("agent.lsp.get_service", return_value=None),
+    ):
         assert fops._lsp_will_handle(str(src)) is False
 
 
@@ -141,8 +149,10 @@ def test_lsp_will_handle_returns_false_on_remote_backend(tmp_path):
     src = tmp_path / "foo.ts"
     src.write_text("const x = 1\n")
 
-    with patch.object(fops, "_lsp_local_only", return_value=False), \
-         patch("agent.lsp.get_service") as get_service_mock:
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=False),
+        patch("agent.lsp.get_service") as get_service_mock,
+    ):
         result = fops._lsp_will_handle(str(src))
 
     assert result is False
@@ -161,8 +171,10 @@ def test_lsp_will_handle_swallows_enabled_for_exception(tmp_path):
     fake_svc = MagicMock()
     fake_svc.enabled_for.side_effect = RuntimeError("server crashed")
 
-    with patch.object(fops, "_lsp_local_only", return_value=True), \
-         patch("agent.lsp.get_service", return_value=fake_svc):
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=True),
+        patch("agent.lsp.get_service", return_value=fake_svc),
+    ):
         assert fops._lsp_will_handle(str(src)) is False
 
 
@@ -198,8 +210,10 @@ def test_tsx_default_check_lint_returns_skipped(tmp_path):
     # Even with LSP claiming the file, no shell linter runs for .tsx
     # because there's no LINTERS entry — the ``ext not in LINTERS``
     # branch fires before the LSP short-circuit is consulted.
-    with patch.object(fops, "_lsp_will_handle", return_value=True), \
-         patch.object(fops, "_exec") as exec_mock:
+    with (
+        patch.object(fops, "_lsp_will_handle", return_value=True),
+        patch.object(fops, "_exec") as exec_mock,
+    ):
         result = fops._check_lint(str(src))
 
     assert result.skipped is True

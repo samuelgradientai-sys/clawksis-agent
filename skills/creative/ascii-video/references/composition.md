@@ -26,41 +26,38 @@ def blend_canvas(base, top, mode="normal", opacity=1.0):
 ```python
 BLEND_MODES = {
     # Basic arithmetic
-    "normal":       lambda a, b: b,
-    "add":          lambda a, b: np.clip(a + b, 0, 1),
-    "subtract":     lambda a, b: np.clip(a - b, 0, 1),
-    "multiply":     lambda a, b: a * b,
-    "screen":       lambda a, b: 1 - (1 - a) * (1 - b),
-
+    "normal": lambda a, b: b,
+    "add": lambda a, b: np.clip(a + b, 0, 1),
+    "subtract": lambda a, b: np.clip(a - b, 0, 1),
+    "multiply": lambda a, b: a * b,
+    "screen": lambda a, b: 1 - (1 - a) * (1 - b),
     # Contrast
-    "overlay":      lambda a, b: np.where(a < 0.5, 2*a*b, 1 - 2*(1-a)*(1-b)),
-    "softlight":    lambda a, b: (1 - 2*b)*a*a + 2*b*a,
-    "hardlight":    lambda a, b: np.where(b < 0.5, 2*a*b, 1 - 2*(1-a)*(1-b)),
-
+    "overlay": lambda a, b: np.where(a < 0.5, 2 * a * b, 1 - 2 * (1 - a) * (1 - b)),
+    "softlight": lambda a, b: (1 - 2 * b) * a * a + 2 * b * a,
+    "hardlight": lambda a, b: np.where(b < 0.5, 2 * a * b, 1 - 2 * (1 - a) * (1 - b)),
     # Difference
-    "difference":   lambda a, b: np.abs(a - b),
-    "exclusion":    lambda a, b: a + b - 2*a*b,
-
+    "difference": lambda a, b: np.abs(a - b),
+    "exclusion": lambda a, b: a + b - 2 * a * b,
     # Dodge / burn
-    "colordodge":   lambda a, b: np.clip(a / (1 - b + 1e-6), 0, 1),
-    "colorburn":    lambda a, b: np.clip(1 - (1 - a) / (b + 1e-6), 0, 1),
-
+    "colordodge": lambda a, b: np.clip(a / (1 - b + 1e-6), 0, 1),
+    "colorburn": lambda a, b: np.clip(1 - (1 - a) / (b + 1e-6), 0, 1),
     # Light
-    "linearlight":  lambda a, b: np.clip(a + 2*b - 1, 0, 1),
-    "vividlight":   lambda a, b: np.where(b < 0.5,
-                        np.clip(1 - (1-a)/(2*b + 1e-6), 0, 1),
-                        np.clip(a / (2*(1-b) + 1e-6), 0, 1)),
-    "pin_light":    lambda a, b: np.where(b < 0.5,
-                        np.minimum(a, 2*b), np.maximum(a, 2*b - 1)),
-    "hard_mix":     lambda a, b: np.where(a + b >= 1.0, 1.0, 0.0),
-
+    "linearlight": lambda a, b: np.clip(a + 2 * b - 1, 0, 1),
+    "vividlight": lambda a, b: np.where(
+        b < 0.5,
+        np.clip(1 - (1 - a) / (2 * b + 1e-6), 0, 1),
+        np.clip(a / (2 * (1 - b) + 1e-6), 0, 1),
+    ),
+    "pin_light": lambda a, b: np.where(
+        b < 0.5, np.minimum(a, 2 * b), np.maximum(a, 2 * b - 1)
+    ),
+    "hard_mix": lambda a, b: np.where(a + b >= 1.0, 1.0, 0.0),
     # Compare
-    "lighten":      lambda a, b: np.maximum(a, b),
-    "darken":       lambda a, b: np.minimum(a, b),
-
+    "lighten": lambda a, b: np.maximum(a, b),
+    "darken": lambda a, b: np.minimum(a, b),
     # Grain
     "grain_extract": lambda a, b: np.clip(a - b + 0.5, 0, 1),
-    "grain_merge":  lambda a, b: np.clip(a + b - 0.5, 0, 1),
+    "grain_merge": lambda a, b: np.clip(a + b - 0.5, 0, 1),
 }
 ```
 
@@ -145,7 +142,7 @@ def blend_canvas_linear(base, top, mode="normal", opacity=1.0):
 ```python
 def blend_many_linear(layers, modes, opacities):
     """Blend a stack of layers in linear light space.
-    
+
     Args:
         layers: list of uint8 (H,W,3) canvases
         modes: list of blend mode strings (len = len(layers) - 1)
@@ -157,9 +154,9 @@ def blend_many_linear(layers, modes, opacities):
     linear = [srgb_to_linear(l.astype(np.float32) / 255.0) for l in layers]
     result = linear[0]
     for i in range(1, len(linear)):
-        fn = BLEND_MODES.get(modes[i-1], BLEND_MODES["normal"])
+        fn = BLEND_MODES.get(modes[i - 1], BLEND_MODES["normal"])
         blended = fn(result, linear[i])
-        op = opacities[i-1]
+        op = opacities[i - 1]
         if op < 1.0:
             blended = result * (1 - op) + blended * op
         result = np.clip(blended, 0, 1)
@@ -238,19 +235,43 @@ def _render_vf(r, grid_key, val_fn, hue_fn, pal, f, t, S, sat=0.8, threshold=0.0
 def fx_psychedelic(r, f, t, S):
     """Three-layer multi-grid scene with beat-reactive kaleidoscope."""
     # Layer A: plasma on medium grid with rainbow hue
-    canvas_a = _render_vf(r, "md",
+    canvas_a = _render_vf(
+        r,
+        "md",
         lambda g, f, t, S: vf_plasma(g, f, t, S) * 1.3,
-        hf_angle(0.0), PAL_DENSE, f, t, S, sat=0.8)
+        hf_angle(0.0),
+        PAL_DENSE,
+        f,
+        t,
+        S,
+        sat=0.8,
+    )
 
     # Layer B: vortex on small grid with cycling hue
-    canvas_b = _render_vf(r, "sm",
+    canvas_b = _render_vf(
+        r,
+        "sm",
         lambda g, f, t, S: vf_vortex(g, f, t, S, twist=5.0) * 1.2,
-        hf_time_cycle(0.1), PAL_RUNE, f, t, S, sat=0.7)
+        hf_time_cycle(0.1),
+        PAL_RUNE,
+        f,
+        t,
+        S,
+        sat=0.7,
+    )
 
     # Layer C: rings on large grid with distance hue
-    canvas_c = _render_vf(r, "lg",
+    canvas_c = _render_vf(
+        r,
+        "lg",
         lambda g, f, t, S: vf_rings(g, f, t, S, n_base=8, spacing_base=3) * 1.4,
-        hf_distance(0.3, 0.02), PAL_BLOCKS, f, t, S, sat=0.9)
+        hf_distance(0.3, 0.02),
+        PAL_BLOCKS,
+        f,
+        t,
+        S,
+        sat=0.9,
+    )
 
     # Blend: A screened with B, then difference with C
     result = blend_canvas(canvas_a, canvas_b, "screen", 0.8)
@@ -297,7 +318,7 @@ def tonemap(canvas, target_mean=90, gamma=0.75, black_point=2, white_point=253):
     if hi - lo < 10:
         hi = max(hi, lo + 10)  # near-uniform frame fallback
     f = np.clip((f - lo) / (hi - lo), 0.0, 1.0)
-    np.power(f, gamma, out=f)          # in-place: avoids allocation
+    np.power(f, gamma, out=f)  # in-place: avoids allocation
     np.multiply(f, (white_point - black_point), out=f)
     np.add(f, black_point, out=f)
     return np.clip(f, 0, 255).astype(np.uint8)
@@ -358,10 +379,22 @@ Configure via the scene table:
 
 ```python
 SCENES = [
-    {"start": 9.17, "end": 11.25, "name": "fire", "gamma": 0.55,
-     "fx": fx_fire, "shaders": [("solarize", {"threshold": 200}), ...]},
-    {"start": 25.96, "end": 27.29, "name": "diamond", "gamma": 0.5,
-     "fx": fx_diamond, "shaders": [("bloom", {"thr": 90}), ...]},
+    {
+        "start": 9.17,
+        "end": 11.25,
+        "name": "fire",
+        "gamma": 0.55,
+        "fx": fx_fire,
+        "shaders": [("solarize", {"threshold": 200}), ...],
+    },
+    {
+        "start": 25.96,
+        "end": 27.29,
+        "name": "diamond",
+        "gamma": 0.5,
+        "fx": fx_diamond,
+        "shaders": [("bloom", {"thr": 90}), ...],
+    },
 ]
 ```
 
@@ -400,8 +433,16 @@ class FeedbackBuffer:
     def __init__(self):
         self.buf = None
 
-    def apply(self, canvas, decay=0.85, blend="screen", opacity=0.5,
-              transform=None, transform_amt=0.02, hue_shift=0.0):
+    def apply(
+        self,
+        canvas,
+        decay=0.85,
+        blend="screen",
+        opacity=0.5,
+        transform=None,
+        transform_amt=0.02,
+        hue_shift=0.0,
+    ):
         if self.buf is None:
             self.buf = canvas.astype(np.float32) / 255.0
             return canvas
@@ -418,9 +459,9 @@ class FeedbackBuffer:
             self.buf = self._hue_shift(self.buf, hue_shift)
 
         # Blend feedback into current frame
-        result = blend_canvas(canvas,
-                              np.clip(self.buf * 255, 0, 255).astype(np.uint8),
-                              blend, opacity)
+        result = blend_canvas(
+            canvas, np.clip(self.buf * 255, 0, 255).astype(np.uint8), blend, opacity
+        )
 
         # Update buffer with current frame
         self.buf = result.astype(np.float32) / 255.0
@@ -430,21 +471,30 @@ class FeedbackBuffer:
         h, w = buf.shape[:2]
         if transform == "zoom":
             # Zoom in: sample from slightly inside (creates expanding tunnel)
-            m = int(h * amt); n = int(w * amt)
+            m = int(h * amt)
+            n = int(w * amt)
             if m > 0 and n > 0:
-                cropped = buf[m:-m or None, n:-n or None]
+                cropped = buf[m : -m or None, n : -n or None]
                 # Resize back to full (nearest-neighbor for speed)
-                buf = np.array(Image.fromarray(
-                    np.clip(cropped * 255, 0, 255).astype(np.uint8)
-                ).resize((w, h), Image.NEAREST)).astype(np.float32) / 255.0
+                buf = (
+                    np.array(
+                        Image.fromarray(
+                            np.clip(cropped * 255, 0, 255).astype(np.uint8)
+                        ).resize((w, h), Image.NEAREST)
+                    ).astype(np.float32)
+                    / 255.0
+                )
         elif transform == "shrink":
             # Zoom out: pad edges, shrink center
-            m = int(h * amt); n = int(w * amt)
-            small = np.array(Image.fromarray(
-                np.clip(buf * 255, 0, 255).astype(np.uint8)
-            ).resize((w - 2*n, h - 2*m), Image.NEAREST))
+            m = int(h * amt)
+            n = int(w * amt)
+            small = np.array(
+                Image.fromarray(np.clip(buf * 255, 0, 255).astype(np.uint8)).resize(
+                    (w - 2 * n, h - 2 * m), Image.NEAREST
+                )
+            )
             new = np.zeros((h, w, 3), dtype=np.uint8)
-            new[m:m+small.shape[0], n:n+small.shape[1]] = small
+            new[m : m + small.shape[0], n : n + small.shape[1]] = small
             buf = new.astype(np.float32) / 255.0
         elif transform == "rotate_cw":
             # Small clockwise rotation via affine
@@ -486,26 +536,39 @@ class FeedbackBuffer:
         rgb = np.clip(buf * 255, 0, 255).astype(np.uint8)
         hsv = np.zeros_like(buf)
         # Simple approximate RGB->HSV->shift->RGB
-        r, g, b = buf[:,:,0], buf[:,:,1], buf[:,:,2]
+        r, g, b = buf[:, :, 0], buf[:, :, 1], buf[:, :, 2]
         mx = np.maximum(np.maximum(r, g), b)
         mn = np.minimum(np.minimum(r, g), b)
         delta = mx - mn + 1e-10
         # Hue
-        h = np.where(mx == r, ((g - b) / delta) % 6,
-            np.where(mx == g, (b - r) / delta + 2, (r - g) / delta + 4))
+        h = np.where(
+            mx == r,
+            ((g - b) / delta) % 6,
+            np.where(mx == g, (b - r) / delta + 2, (r - g) / delta + 4),
+        )
         h = (h / 6 + amount) % 1.0
         # Reconstruct with shifted hue (simplified)
         s = delta / (mx + 1e-10)
         v = mx
-        c = v * s; x = c * (1 - np.abs((h * 6) % 2 - 1)); m = v - c
-        ro = np.zeros_like(h); go = np.zeros_like(h); bo = np.zeros_like(h)
-        for lo, hi, rv, gv, bv in [(0,1,c,x,0),(1,2,x,c,0),(2,3,0,c,x),
-                                     (3,4,0,x,c),(4,5,x,0,c),(5,6,c,0,x)]:
-            mask = ((h*6) >= lo) & ((h*6) < hi)
-            ro[mask] = rv[mask] if not isinstance(rv, (int,float)) else rv
-            go[mask] = gv[mask] if not isinstance(gv, (int,float)) else gv
-            bo[mask] = bv[mask] if not isinstance(bv, (int,float)) else bv
-        return np.stack([ro+m, go+m, bo+m], axis=2)
+        c = v * s
+        x = c * (1 - np.abs((h * 6) % 2 - 1))
+        m = v - c
+        ro = np.zeros_like(h)
+        go = np.zeros_like(h)
+        bo = np.zeros_like(h)
+        for lo, hi, rv, gv, bv in [
+            (0, 1, c, x, 0),
+            (1, 2, x, c, 0),
+            (2, 3, 0, c, x),
+            (3, 4, 0, x, c),
+            (4, 5, x, 0, c),
+            (5, 6, c, 0, x),
+        ]:
+            mask = ((h * 6) >= lo) & ((h * 6) < hi)
+            ro[mask] = rv[mask] if not isinstance(rv, (int, float)) else rv
+            go[mask] = gv[mask] if not isinstance(gv, (int, float)) else gv
+            bo[mask] = bv[mask] if not isinstance(bv, (int, float)) else bv
+        return np.stack([ro + m, go + m, bo + m], axis=2)
 ```
 
 ### Feedback Presets
@@ -531,13 +594,14 @@ Masks are float32 arrays `(rows, cols)` or `(VH, VW)` in range [0, 1]. They cont
 def mask_circle(g, cx_frac=0.5, cy_frac=0.5, radius=0.3, feather=0.05):
     """Circular mask centered at (cx_frac, cy_frac) in normalized coords.
     feather: width of soft edge (0 = hard cutoff)."""
-    asp = g.cw / g.ch if hasattr(g, 'cw') else 1.0
-    dx = (g.cc / g.cols - cx_frac)
+    asp = g.cw / g.ch if hasattr(g, "cw") else 1.0
+    dx = g.cc / g.cols - cx_frac
     dy = (g.rr / g.rows - cy_frac) * asp
     d = np.sqrt(dx**2 + dy**2)
     if feather > 0:
         return np.clip(1.0 - (d - radius) / feather, 0, 1)
     return (d <= radius).astype(np.float32)
+
 
 def mask_rect(g, x0=0.2, y0=0.2, x1=0.8, y1=0.8, feather=0.03):
     """Rectangular mask. Coordinates in [0,1] normalized."""
@@ -548,24 +612,31 @@ def mask_rect(g, x0=0.2, y0=0.2, x1=0.8, y1=0.8, feather=0.03):
         return np.clip(1.0 - d / feather, 0, 1)
     return (d <= 0).astype(np.float32)
 
-def mask_ring(g, cx_frac=0.5, cy_frac=0.5, inner_r=0.15, outer_r=0.35,
-              feather=0.03):
+
+def mask_ring(g, cx_frac=0.5, cy_frac=0.5, inner_r=0.15, outer_r=0.35, feather=0.03):
     """Ring / annulus mask."""
     inner = mask_circle(g, cx_frac, cy_frac, inner_r, feather)
     outer = mask_circle(g, cx_frac, cy_frac, outer_r, feather)
     return outer - inner
 
+
 def mask_gradient_h(g, start=0.0, end=1.0):
     """Left-to-right gradient mask."""
-    return np.clip((g.cc / g.cols - start) / (end - start + 1e-10), 0, 1).astype(np.float32)
+    return np.clip((g.cc / g.cols - start) / (end - start + 1e-10), 0, 1).astype(
+        np.float32
+    )
+
 
 def mask_gradient_v(g, start=0.0, end=1.0):
     """Top-to-bottom gradient mask."""
-    return np.clip((g.rr / g.rows - start) / (end - start + 1e-10), 0, 1).astype(np.float32)
+    return np.clip((g.rr / g.rows - start) / (end - start + 1e-10), 0, 1).astype(
+        np.float32
+    )
+
 
 def mask_gradient_radial(g, cx_frac=0.5, cy_frac=0.5, inner=0.0, outer=0.5):
     """Radial gradient mask — bright at center, dark at edges."""
-    d = np.sqrt((g.cc / g.cols - cx_frac)**2 + (g.rr / g.rows - cy_frac)**2)
+    d = np.sqrt((g.cc / g.cols - cx_frac) ** 2 + (g.rr / g.rows - cy_frac) ** 2)
     return np.clip(1.0 - (d - inner) / (outer - inner + 1e-10), 0, 1)
 ```
 
@@ -580,6 +651,7 @@ def mask_from_vf(vf_result, threshold=0.5, feather=0.1):
     if feather > 0:
         return np.clip((vf_result - threshold + feather) / (2 * feather), 0, 1)
     return (vf_result > threshold).astype(np.float32)
+
 
 def mask_select(mask, vf_a, vf_b):
     """Spatial conditional: show vf_a where mask is 1, vf_b where mask is 0.
@@ -622,10 +694,11 @@ def mask_text(grid, text, row_frac=0.5, font=None, font_size=None):
     for c in range(grid.cols):
         px = c * grid.cw
         if px + grid.cw <= row_mask.shape[1]:
-            cell = row_mask[:, px:px + grid.cw]
+            cell = row_mask[:, px : px + grid.cw]
             if cell.mean() > 0.1:
                 mask[target_row, c] = cell.mean()
     return mask
+
 
 def mask_text_block(grid, lines, start_row_frac=0.3, font=None):
     """Multi-line text stencil. Returns full grid mask."""
@@ -642,8 +715,9 @@ def mask_text_block(grid, lines, start_row_frac=0.3, font=None):
 Masks that change over time for reveals, wipes, and morphing:
 
 ```python
-def mask_iris(g, t, t_start, t_end, cx_frac=0.5, cy_frac=0.5,
-              max_radius=0.7, ease_fn=None):
+def mask_iris(
+    g, t, t_start, t_end, cx_frac=0.5, cy_frac=0.5, max_radius=0.7, ease_fn=None
+):
     """Iris open/close: circle that grows from 0 to max_radius.
     ease_fn: easing function (default: ease_in_out_cubic from effects.md)."""
     if ease_fn is None:
@@ -652,6 +726,7 @@ def mask_iris(g, t, t_start, t_end, cx_frac=0.5, cy_frac=0.5,
     radius = ease_fn(progress) * max_radius
     return mask_circle(g, cx_frac, cy_frac, radius, feather=0.03)
 
+
 def mask_wipe_h(g, t, t_start, t_end, direction="right"):
     """Horizontal wipe reveal."""
     progress = np.clip((t - t_start) / (t_end - t_start), 0, 1)
@@ -659,12 +734,14 @@ def mask_wipe_h(g, t, t_start, t_end, direction="right"):
         progress = 1 - progress
     return mask_gradient_h(g, start=progress - 0.05, end=progress + 0.05)
 
+
 def mask_wipe_v(g, t, t_start, t_end, direction="down"):
     """Vertical wipe reveal."""
     progress = np.clip((t - t_start) / (t_end - t_start), 0, 1)
     if direction == "up":
         progress = 1 - progress
     return mask_gradient_v(g, start=progress - 0.05, end=progress + 0.05)
+
 
 def mask_dissolve(g, t, t_start, t_end, seed=42):
     """Random pixel dissolve — noise threshold sweeps from 0 to 1."""
@@ -681,13 +758,16 @@ def mask_union(a, b):
     """OR — visible where either mask is active."""
     return np.maximum(a, b)
 
+
 def mask_intersect(a, b):
     """AND — visible only where both masks are active."""
     return np.minimum(a, b)
 
+
 def mask_subtract(a, b):
     """A minus B — visible where A is active but B is not."""
     return np.clip(a - b, 0, 1)
+
 
 def mask_invert(m):
     """NOT — flip mask."""
@@ -706,14 +786,19 @@ def apply_mask_canvas(canvas, mask, bg_canvas=None):
     bg_canvas: what shows through where mask=0. None = black.
     """
     # Expand mask to pixel resolution
-    mask_px = np.repeat(np.repeat(mask, canvas.shape[0] // mask.shape[0] + 1, axis=0),
-                        canvas.shape[1] // mask.shape[1] + 1, axis=1)
-    mask_px = mask_px[:canvas.shape[0], :canvas.shape[1]]
+    mask_px = np.repeat(
+        np.repeat(mask, canvas.shape[0] // mask.shape[0] + 1, axis=0),
+        canvas.shape[1] // mask.shape[1] + 1,
+        axis=1,
+    )
+    mask_px = mask_px[: canvas.shape[0], : canvas.shape[1]]
 
     if bg_canvas is not None:
-        return np.clip(canvas * mask_px[:, :, None] +
-                       bg_canvas * (1 - mask_px[:, :, None]), 0, 255).astype(np.uint8)
+        return np.clip(
+            canvas * mask_px[:, :, None] + bg_canvas * (1 - mask_px[:, :, None]), 0, 255
+        ).astype(np.uint8)
     return np.clip(canvas * mask_px[:, :, None], 0, 255).astype(np.uint8)
+
 
 def apply_mask_vf(vf_a, vf_b, mask):
     """Apply mask at value-field level — blend two value fields spatially.
@@ -754,11 +839,12 @@ The technique: compute the bounding box of all text glyphs, create a gaussian-bl
 ```python
 from scipy.ndimage import gaussian_filter
 
+
 def apply_text_backdrop(canvas, glyphs, padding=80, darkness=0.75):
     """Darken the background behind text for readability.
-    
+
     Call AFTER rendering background, BEFORE rendering text.
-    
+
     Args:
         canvas: (VH, VW, 3) uint8 background
         glyphs: list of {"x": float, "y": float, ...} glyph positions
@@ -769,18 +855,18 @@ def apply_text_backdrop(canvas, glyphs, padding=80, darkness=0.75):
     """
     if not glyphs:
         return canvas
-    xs = [g['x'] for g in glyphs]
-    ys = [g['y'] for g in glyphs]
+    xs = [g["x"] for g in glyphs]
+    ys = [g["y"] for g in glyphs]
     x0 = max(0, int(min(xs)) - padding)
     y0 = max(0, int(min(ys)) - padding)
-    x1 = min(VW, int(max(xs)) + padding + 50)   # extra for char width
-    y1 = min(VH, int(max(ys)) + padding + 60)   # extra for char height
-    
+    x1 = min(VW, int(max(xs)) + padding + 50)  # extra for char width
+    y1 = min(VH, int(max(ys)) + padding + 60)  # extra for char height
+
     # Soft dark mask with gaussian blur for feathered edges
     mask = np.zeros((VH, VW), dtype=np.float32)
     mask[y0:y1, x0:x1] = 1.0
     mask = gaussian_filter(mask, sigma=padding * 0.6)
-    
+
     factor = 1.0 - mask * darkness
     return (canvas.astype(np.float32) * factor[:, :, np.newaxis]).astype(np.uint8)
 ```
@@ -882,11 +968,11 @@ await browser.close();
 
 ```python
 # In the renderer, map pixel positions to the canvas:
-for glyph in frame_data['glyphs']:
-    char, px, py = glyph['char'], glyph['x'], glyph['y']
-    alpha = glyph.get('alpha', 1.0)
+for glyph in frame_data["glyphs"]:
+    char, px, py = glyph["char"], glyph["x"], glyph["y"]
+    alpha = glyph.get("alpha", 1.0)
     # Render using PIL draw.text() at exact pixel position
-    draw.text((px, py), char, fill=(int(255*alpha),)*3, font=font)
+    draw.text((px, py), char, fill=(int(255 * alpha),) * 3, font=font)
 ```
 
 Obstacles from the JSON can also be rendered as glowing ASCII shapes (circles, rectangles) to visualize the reflow zones.

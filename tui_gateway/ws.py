@@ -92,6 +92,7 @@ class WSTransport:
 
         try:
             from agent.async_utils import safe_schedule_threadsafe
+
             fut = safe_schedule_threadsafe(self._safe_send(line), self._loop)
             if fut is None:
                 self._closed = True
@@ -102,7 +103,9 @@ class WSTransport:
             self._closed = True
             _log.warning(
                 "ws write failed peer=%s error_type=%s error=%s",
-                self._peer, type(exc).__name__, exc,
+                self._peer,
+                type(exc).__name__,
+                exc,
             )
             return False
 
@@ -120,7 +123,9 @@ class WSTransport:
             self._closed = True
             _log.warning(
                 "ws send failed peer=%s error_type=%s error=%s",
-                self._peer, type(exc).__name__, exc,
+                self._peer,
+                type(exc).__name__,
+                exc,
             )
 
     def close(self) -> None:
@@ -154,16 +159,14 @@ async def handle_ws(ws: Any) -> None:
 
         transport = WSTransport(ws, asyncio.get_running_loop(), peer=peer)
 
-        ready_ok = await transport.write_async(
-            {
-                "jsonrpc": "2.0",
-                "method": "event",
-                "params": {
-                    "type": "gateway.ready",
-                    "payload": {"skin": server.resolve_skin()},
-                },
-            }
-        )
+        ready_ok = await transport.write_async({
+            "jsonrpc": "2.0",
+            "method": "event",
+            "params": {
+                "type": "gateway.ready",
+                "payload": {"skin": server.resolve_skin()},
+            },
+        })
         if not ready_ok:
             disconnect_reason = "ready_send_failed"
             send_failures += 1
@@ -201,13 +204,11 @@ async def handle_ws(ws: Any) -> None:
                     exc,
                     line[:_WS_LOG_PAYLOAD_PREVIEW],
                 )
-                ok = await transport.write_async(
-                    {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32700, "message": "parse error"},
-                        "id": None,
-                    }
-                )
+                ok = await transport.write_async({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "parse error"},
+                    "id": None,
+                })
                 if not ok:
                     disconnect_reason = "send_failed_after_parse_error"
                     send_failures += 1
@@ -232,13 +233,11 @@ async def handle_ws(ws: Any) -> None:
                     req_id,
                     req_method,
                 )
-                ok = await transport.write_async(
-                    {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": "internal error"},
-                        "id": req_id if req_id is not None else None,
-                    }
-                )
+                ok = await transport.write_async({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32603, "message": "internal error"},
+                    "id": req_id if req_id is not None else None,
+                })
                 if not ok:
                     disconnect_reason = "send_failed_after_dispatch_crash"
                     send_failures += 1

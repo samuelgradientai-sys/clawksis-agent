@@ -21,6 +21,7 @@ requests with no recovery mechanism left.  Aborting mirrors how 401/403
 (also ``should_fallback=True``) already behave once their recovery paths
 have failed.
 """
+
 from __future__ import annotations
 
 
@@ -52,7 +53,8 @@ class TestBillingTriggersClientErrorAbort:
             or (
                 not classified_retryable
                 and not classified_should_compress
-                and classified_reason not in {
+                and classified_reason
+                not in {
                     FailoverReason.rate_limit,
                     FailoverReason.overloaded,
                     FailoverReason.context_overflow,
@@ -131,7 +133,7 @@ class TestSourceStillHasBillingExclusionRemoved:
         )
         idx = src.index(marker)
         # Window large enough to span the full predicate (~30 lines).
-        window = src[idx:idx + 2000]
+        window = src[idx : idx + 2000]
 
         assert "FailoverReason.rate_limit" in window, (
             "is_client_error exclusion set has changed shape — re-verify "

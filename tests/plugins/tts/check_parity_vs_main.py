@@ -172,15 +172,12 @@ print(json.dumps(shape))
 
 SCENARIOS: list[tuple[str, str, dict[str, str], str]] = [
     # (label, config.yaml body, scenario_env, plugin_register)
-
     # Scenario 1: unset tts.provider → both: Edge default
     ("unset-defaults-to-edge", "", {}, "no"),
-
     # Scenario 2: built-in name → both: that built-in
     ("explicit-edge", "tts:\n  provider: edge\n", {}, "no"),
     ("explicit-openai", "tts:\n  provider: openai\n", {}, "no"),
     ("explicit-elevenlabs", "tts:\n  provider: elevenlabs\n", {}, "no"),
-
     # Scenario 3: command-type provider → both: command dispatch
     (
         "command-provider",
@@ -188,28 +185,26 @@ SCENARIOS: list[tuple[str, str, dict[str, str], str]] = [
         {},
         "no",
     ),
-
     # Scenario 4: unknown name with NO plugin installed → both: fallback to Edge
     ("unknown-no-plugin", "tts:\n  provider: cartesia\n", {}, "no"),
-
     # Scenario 5: unknown name WITH plugin installed
     #   main: fallback_edge (no plugin hook exists)
     #   PR:   plugin (cartesia)
     # This is the ONLY acceptable diff in the harness.
     ("plugin-installed", "tts:\n  provider: cartesia\n", {}, "yes"),
-
     # Scenario 6: built-in name + plugin tries to shadow → both: built-in
     # The plugin registers under name "cartesia", not "edge", so this is
     # effectively the same as scenario 2 — but we exercise the with-plugin
     # path to ensure the built-in branch still takes priority.
     ("explicit-edge-with-plugin-registered", "tts:\n  provider: edge\n", {}, "yes"),
-
     # Scenario 7: mistral quarantine — both surface the explicit error
     ("mistral-quarantine", "tts:\n  provider: mistral\n", {}, "no"),
 ]
 
 
-def _run_scenario(repo_path: Path, label: str, config_yaml: str, env: dict, plugin_register: str) -> dict:
+def _run_scenario(
+    repo_path: Path, label: str, config_yaml: str, env: dict, plugin_register: str
+) -> dict:
     venv_python = repo_path / ".venv" / "bin" / "python"
     if not venv_python.exists():
         venv_python = MAIN_DIR / ".venv" / "bin" / "python"

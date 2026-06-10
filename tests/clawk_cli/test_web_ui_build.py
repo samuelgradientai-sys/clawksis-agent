@@ -12,7 +12,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from clawk_cli.main import _web_ui_build_needed, _build_web_ui, _run_npm_install_deterministic
+from clawk_cli.main import (
+    _web_ui_build_needed,
+    _build_web_ui,
+    _run_npm_install_deterministic,
+)
 
 
 def _touch(path: Path, offset: float = 0.0) -> None:
@@ -33,7 +37,6 @@ def _make_web_dir(tmp_path: Path) -> tuple[Path, Path]:
 
 
 class TestWebUIBuildNeeded:
-
     def test_returns_true_when_dist_missing(self, tmp_path):
         web_dir, _ = _make_web_dir(tmp_path)
         assert _web_ui_build_needed(web_dir) is True
@@ -98,13 +101,14 @@ class TestWebUIBuildNeeded:
 
 
 class TestBuildWebUISkipsWhenFresh:
-
     def test_skips_npm_when_dist_is_fresh(self, tmp_path):
         web_dir, dist_dir = _make_web_dir(tmp_path)
         _touch(dist_dir / ".vite" / "manifest.json")
 
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main.subprocess.run") as mock_run:
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main.subprocess.run") as mock_run,
+        ):
             result = _build_web_ui(web_dir)
 
         assert result is True
@@ -113,17 +117,25 @@ class TestBuildWebUISkipsWhenFresh:
     def test_runs_npm_when_dist_missing(self, tmp_path):
         web_dir, _ = _make_web_dir(tmp_path)
 
-        mock_cp = __import__("subprocess").CompletedProcess([], 0, stdout=b"", stderr=b"")
-        build_ok = __import__("subprocess").CompletedProcess([], 0, stdout="", stderr="")
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main.subprocess.run", return_value=mock_cp) as mock_run, \
-             patch("clawk_cli.main._run_with_idle_timeout", return_value=build_ok) as mock_idle:
+        mock_cp = __import__("subprocess").CompletedProcess(
+            [], 0, stdout=b"", stderr=b""
+        )
+        build_ok = __import__("subprocess").CompletedProcess(
+            [], 0, stdout="", stderr=""
+        )
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main.subprocess.run", return_value=mock_cp) as mock_run,
+            patch(
+                "clawk_cli.main._run_with_idle_timeout", return_value=build_ok
+            ) as mock_idle,
+        ):
             result = _build_web_ui(web_dir)
 
         assert result is True
         # npm install goes through subprocess.run; npm run build goes through
         # _run_with_idle_timeout (issue #33788).
-        assert mock_run.call_count == 1   # install only
+        assert mock_run.call_count == 1  # install only
         assert mock_idle.call_count == 1  # build only
 
     def test_npm_install_uses_utf8_replace_output_decoding(self, tmp_path):
@@ -149,11 +161,19 @@ class TestBuildWebUISkipsWhenFresh:
         """
         web_dir, _ = _make_web_dir(tmp_path)
 
-        install_cp = __import__("subprocess").CompletedProcess([], 0, stdout="", stderr="")
-        build_cp = __import__("subprocess").CompletedProcess([], 0, stdout="", stderr="")
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main.subprocess.run", return_value=install_cp), \
-             patch("clawk_cli.main._run_with_idle_timeout", return_value=build_cp) as mock_idle:
+        install_cp = __import__("subprocess").CompletedProcess(
+            [], 0, stdout="", stderr=""
+        )
+        build_cp = __import__("subprocess").CompletedProcess(
+            [], 0, stdout="", stderr=""
+        )
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main.subprocess.run", return_value=install_cp),
+            patch(
+                "clawk_cli.main._run_with_idle_timeout", return_value=build_cp
+            ) as mock_idle,
+        ):
             result = _build_web_ui(web_dir)
 
         assert result is True
@@ -175,11 +195,15 @@ class TestBuildWebUIRetryAndStaleFallback:
         # build attempt 1: fail; build attempt 2: success.
         build_fail = Subprocess.CompletedProcess([], 1, stdout="EPERM", stderr="")
         build_ok = Subprocess.CompletedProcess([], 0, stdout="", stderr="")
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main._time.sleep") as mock_sleep, \
-             patch("clawk_cli.main.subprocess.run", return_value=install_ok), \
-             patch("clawk_cli.main._run_with_idle_timeout",
-                   side_effect=[build_fail, build_ok]) as mock_idle:
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main._time.sleep") as mock_sleep,
+            patch("clawk_cli.main.subprocess.run", return_value=install_ok),
+            patch(
+                "clawk_cli.main._run_with_idle_timeout",
+                side_effect=[build_fail, build_ok],
+            ) as mock_idle,
+        ):
             result = _build_web_ui(web_dir)
 
         assert result is True
@@ -195,11 +219,15 @@ class TestBuildWebUIRetryAndStaleFallback:
         Subprocess = __import__("subprocess")
         install_ok = Subprocess.CompletedProcess([], 0, stdout="", stderr="")
         build_fail = Subprocess.CompletedProcess([], 1, stdout="vite ENOMEM", stderr="")
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main._time.sleep"), \
-             patch("clawk_cli.main.subprocess.run", return_value=install_ok), \
-             patch("clawk_cli.main._run_with_idle_timeout",
-                   side_effect=[build_fail, build_fail]):
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main._time.sleep"),
+            patch("clawk_cli.main.subprocess.run", return_value=install_ok),
+            patch(
+                "clawk_cli.main._run_with_idle_timeout",
+                side_effect=[build_fail, build_fail],
+            ),
+        ):
             result = _build_web_ui(web_dir, fatal=True)
 
         # MUST return True (serve stale) — issue #23817 — even with fatal=True,
@@ -215,11 +243,15 @@ class TestBuildWebUIRetryAndStaleFallback:
         Subprocess = __import__("subprocess")
         install_ok = Subprocess.CompletedProcess([], 0, stdout="", stderr="")
         build_fail = Subprocess.CompletedProcess([], 1, stdout="vite ENOMEM", stderr="")
-        with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-             patch("clawk_cli.main._time.sleep"), \
-             patch("clawk_cli.main.subprocess.run", return_value=install_ok), \
-             patch("clawk_cli.main._run_with_idle_timeout",
-                   side_effect=[build_fail, build_fail]):
+        with (
+            patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+            patch("clawk_cli.main._time.sleep"),
+            patch("clawk_cli.main.subprocess.run", return_value=install_ok),
+            patch(
+                "clawk_cli.main._run_with_idle_timeout",
+                side_effect=[build_fail, build_fail],
+            ),
+        ):
             result = _build_web_ui(web_dir, fatal=True)
 
         assert result is False

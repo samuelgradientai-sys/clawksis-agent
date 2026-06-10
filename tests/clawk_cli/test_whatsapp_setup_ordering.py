@@ -22,10 +22,7 @@ succeeds (creds.json exists).  Aborted setup leaves no enabled state.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import io
@@ -39,15 +36,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture
-
 def isolated_home(tmp_path, monkeypatch):
 
     home = tmp_path / "home"
@@ -63,15 +55,10 @@ def isolated_home(tmp_path, monkeypatch):
     # Ensure get_env_value cache doesn't carry stale state.
 
     for key in list(os.environ):
-
         if key.startswith("WHATSAPP_"):
-
             monkeypatch.delenv(key, raising=False)
 
     return clawk
-
-
-
 
 
 def _env_value(clawk_home: Path, key: str) -> str | None:
@@ -79,29 +66,21 @@ def _env_value(clawk_home: Path, key: str) -> str | None:
     env_file = clawk_home / ".env"
 
     if not env_file.exists():
-
         return None
 
     for line in env_file.read_text().splitlines():
-
         if "=" not in line:
-
             continue
 
         k, _, v = line.partition("=")
 
         if k.strip() == key:
-
             return v.strip().strip('"').strip("'")
 
     return None
 
 
-
-
-
 def test_aborted_setup_does_not_enable_whatsapp(isolated_home, monkeypatch):
-
     """User picks mode 1, then Ctrl+C's at the allowed-users prompt.
 
 
@@ -112,27 +91,19 @@ def test_aborted_setup_does_not_enable_whatsapp(isolated_home, monkeypatch):
 
     from clawk_cli.main import cmd_whatsapp
 
-
-
     # First input() = mode choice, second input() = allowed-users prompt
 
     # We raise KeyboardInterrupt on the second call to simulate abort.
 
     inputs = iter(["1"])
 
-
-
     def fake_input(_prompt=""):
 
         try:
-
             return next(inputs)
 
         except StopIteration:
-
             raise KeyboardInterrupt
-
-
 
     monkeypatch.setattr("builtins.input", fake_input)
 
@@ -142,36 +113,22 @@ def test_aborted_setup_does_not_enable_whatsapp(isolated_home, monkeypatch):
 
     # No node, no bridge script — we shouldn't reach those steps anyway.
 
-
-
     buf = io.StringIO()
 
     with redirect_stdout(buf):
-
         try:
-
             cmd_whatsapp(MagicMock())
 
         except KeyboardInterrupt:
-
             pass
 
-
-
     assert _env_value(isolated_home, "WHATSAPP_ENABLED") is None, (
-
         "Setup aborted before pairing — WHATSAPP_ENABLED must not be set. "
-
         f"Got .env: {(isolated_home / '.env').read_text() if (isolated_home / '.env').exists() else '(missing)'}"
-
     )
 
 
-
-
-
 def test_existing_pairing_skip_branch_enables_whatsapp(isolated_home, monkeypatch):
-
     """User runs ``clawk whatsapp`` with an existing paired session and
 
     chooses "no, keep my session" at the re-pair prompt.  The env var
@@ -183,8 +140,6 @@ def test_existing_pairing_skip_branch_enables_whatsapp(isolated_home, monkeypatc
     """
 
     from clawk_cli.main import cmd_whatsapp
-
-
 
     # Pre-create a paired session WITHOUT WHATSAPP_ENABLED in .env.
 
@@ -198,27 +153,19 @@ def test_existing_pairing_skip_branch_enables_whatsapp(isolated_home, monkeypatc
 
     monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "15551234567")
 
-
-
     # mode already set → skip mode prompt; users already set → skip update
 
     # prompt with "no"; pairing exists → "no, keep session" → return.
 
     inputs = iter(["n", "n"])
 
-
-
     def fake_input(_prompt=""):
 
         try:
-
             return next(inputs)
 
         except StopIteration:
-
             return "n"
-
-
 
     monkeypatch.setattr("builtins.input", fake_input)
 
@@ -233,11 +180,8 @@ def test_existing_pairing_skip_branch_enables_whatsapp(isolated_home, monkeypatc
     # succeed silently if reached).
 
     monkeypatch.setattr(
-
         "subprocess.run",
-
         lambda *_a, **_kw: MagicMock(returncode=0, stderr=""),
-
     )
 
     monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/npm")
@@ -257,24 +201,17 @@ def test_existing_pairing_skip_branch_enables_whatsapp(isolated_home, monkeypatc
     def _stub_exists(self):
 
         if self.name == "node_modules":
-
             return True
 
         return _orig_exists(self)
 
     monkeypatch.setattr(Path, "exists", _stub_exists)
 
-
-
     buf = io.StringIO()
 
     with redirect_stdout(buf):
-
         cmd_whatsapp(MagicMock())
-
-
 
     # The skip-rebar branch should have set the env var on its way out.
 
     assert _env_value(isolated_home, "WHATSAPP_ENABLED") == "true"
-

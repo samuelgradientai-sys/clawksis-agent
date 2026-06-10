@@ -93,10 +93,7 @@ class TestPartialTagsAcrossDeltas:
         """'<' arrives alone, 'think>' completes it on next delta."""
         s = StreamingThinkScrubber()
         # At stream start, last_emitted_ended_newline=True, so <think> at 0 is boundary
-        assert (
-            _drive(s, ["<", "think>reasoning</think>done"])
-            == "done"
-        )
+        assert _drive(s, ["<", "think>reasoning</think>done"]) == "done"
 
     def test_split_open_tag_not_at_boundary(self) -> None:
         """Mid-line split '<' + 'think>X</think>' is a closed pair.
@@ -112,18 +109,12 @@ class TestPartialTagsAcrossDeltas:
     def test_split_close_tag_held_back(self) -> None:
         """Close tag split across deltas still closes the block."""
         s = StreamingThinkScrubber()
-        assert (
-            _drive(s, ["<think>reasoning<", "/think>after"])
-            == "after"
-        )
+        assert _drive(s, ["<think>reasoning<", "/think>after"]) == "after"
 
     def test_split_close_tag_deep(self) -> None:
         """Close tag can be split anywhere."""
         s = StreamingThinkScrubber()
-        assert (
-            _drive(s, ["<think>reasoning</th", "ink>after"])
-            == "after"
-        )
+        assert _drive(s, ["<think>reasoning</th", "ink>after"]) == "after"
 
 
 class TestTheMiniMaxScenario:

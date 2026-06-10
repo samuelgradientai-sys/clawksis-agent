@@ -40,10 +40,7 @@ Live URL (after ``deploy-site.yml`` runs on merge to main):
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import json
@@ -55,21 +52,17 @@ import sys
 from datetime import datetime, timezone
 
 
-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.insert(0, REPO_ROOT)
 
 
-
 # Ensure CLAWK_HOME is set for imports that touch it at module level.
 
-os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawk"))
-
+os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis"))
 
 
 from clawk_cli.models import OPENROUTER_MODELS, _PROVIDER_MODELS  # noqa: E402
-
 
 
 OUTPUT_PATH = os.path.join(REPO_ROOT, "website", "static", "api", "model-catalog.json")
@@ -77,85 +70,40 @@ OUTPUT_PATH = os.path.join(REPO_ROOT, "website", "static", "api", "model-catalog
 CATALOG_VERSION = 1
 
 
-
-
-
 def build_catalog() -> dict:
 
     return {
-
         "version": CATALOG_VERSION,
-
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-
         "metadata": {
-
             "source": "clawksis-agent repo",
-
             "docs": "https://github.com/samuelgradientai-sys/clawksis-agent",
-
         },
-
         "providers": {
-
             "openrouter": {
-
                 "metadata": {
-
                     "display_name": "OpenRouter",
-
                     "note": (
-
                         "Descriptions drive picker badges. Live /api/v1/models "
-
                         "filters curated ids by tool-calling support and free pricing."
-
                     ),
-
                 },
-
                 "models": [
-
-                    {"id": mid, "description": desc}
-
-                    for mid, desc in OPENROUTER_MODELS
-
+                    {"id": mid, "description": desc} for mid, desc in OPENROUTER_MODELS
                 ],
-
             },
-
             "nous": {
-
                 "metadata": {
-
                     "display_name": "Nous Portal",
-
                     "note": (
-
                         "Free-tier gating is determined live via Portal pricing "
-
                         "(partition_nous_models_by_tier), not this manifest."
-
                     ),
-
                 },
-
-                "models": [
-
-                    {"id": mid}
-
-                    for mid in _PROVIDER_MODELS.get("nous", [])
-
-                ],
-
+                "models": [{"id": mid} for mid in _PROVIDER_MODELS.get("nous", [])],
             },
-
         },
-
     }
-
-
-
 
 
 def main() -> int:
@@ -165,26 +113,17 @@ def main() -> int:
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as fh:
-
         json.dump(catalog, fh, indent=2)
 
         fh.write("\n")
 
-
-
     print(f"Wrote {OUTPUT_PATH}")
 
     for provider, block in catalog["providers"].items():
-
         print(f"  {provider}: {len(block['models'])} models")
 
     return 0
 
 
-
-
-
 if __name__ == "__main__":
-
     sys.exit(main())
-

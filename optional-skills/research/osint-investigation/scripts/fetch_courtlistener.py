@@ -7,6 +7,7 @@ search; some endpoints require a token (free at courtlistener.com).
 
 Set COURTLISTENER_TOKEN to authenticate (raises rate limits).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,11 +36,11 @@ COLUMNS = [
 ]
 
 SEARCH_TYPES = {
-    "opinions": "o",       # Court opinions
-    "dockets": "r",        # PACER dockets (may require auth depending on coverage)
-    "oral": "oa",          # Oral arguments
-    "people": "p",         # Judges / people
-    "recap": "r",          # Same as dockets in v4
+    "opinions": "o",  # Court opinions
+    "dockets": "r",  # PACER dockets (may require auth depending on coverage)
+    "oral": "oa",  # Oral arguments
+    "people": "p",  # Judges / people
+    "recap": "r",  # Same as dockets in v4
 }
 
 
@@ -80,24 +81,28 @@ def fetch(
         for r in results:
             if len(rows) >= limit:
                 break
-            rows.append(
-                {
-                    "case_name": r.get("caseName", "") or r.get("case_name", "") or "",
-                    "court": r.get("court", "") or "",
-                    "court_id": r.get("court_id", "") or "",
-                    "date_filed": (r.get("dateFiled", "") or r.get("date_filed", "") or "")[:10],
-                    "docket_number": r.get("docketNumber", "") or r.get("docket_number", "") or "",
-                    "judge": r.get("judge", "") or "",
-                    "citation": "; ".join(r.get("citation", []) or []) if isinstance(r.get("citation"), list) else (r.get("citation") or ""),
-                    "result_type": search_type,
-                    "snippet": (r.get("snippet", "") or "").replace("\n", " ")[:500],
-                    "absolute_url": (
-                        f"https://www.courtlistener.com{r.get('absolute_url', '')}"
-                        if r.get("absolute_url", "").startswith("/")
-                        else r.get("absolute_url", "")
-                    ),
-                }
-            )
+            rows.append({
+                "case_name": r.get("caseName", "") or r.get("case_name", "") or "",
+                "court": r.get("court", "") or "",
+                "court_id": r.get("court_id", "") or "",
+                "date_filed": (r.get("dateFiled", "") or r.get("date_filed", "") or "")[
+                    :10
+                ],
+                "docket_number": r.get("docketNumber", "")
+                or r.get("docket_number", "")
+                or "",
+                "judge": r.get("judge", "") or "",
+                "citation": "; ".join(r.get("citation", []) or [])
+                if isinstance(r.get("citation"), list)
+                else (r.get("citation") or ""),
+                "result_type": search_type,
+                "snippet": (r.get("snippet", "") or "").replace("\n", " ")[:500],
+                "absolute_url": (
+                    f"https://www.courtlistener.com{r.get('absolute_url', '')}"
+                    if r.get("absolute_url", "").startswith("/")
+                    else r.get("absolute_url", "")
+                ),
+            })
         next_url = payload.get("next")
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -116,15 +121,21 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--query", required=True, help="Search query (party name, case name, keyword)")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--query", required=True, help="Search query (party name, case name, keyword)"
+    )
     p.add_argument(
         "--type",
         default="opinions",
         choices=list(SEARCH_TYPES.keys()),
         help="Search type (default: opinions)",
     )
-    p.add_argument("--court", help="Court ID filter (e.g. 'nysd' = SDNY, 'scotus' = Supreme Court)")
+    p.add_argument(
+        "--court", help="Court ID filter (e.g. 'nysd' = SDNY, 'scotus' = Supreme Court)"
+    )
     p.add_argument("--date-from", help="Filed-after date YYYY-MM-DD")
     p.add_argument("--date-to", help="Filed-before date YYYY-MM-DD")
     p.add_argument("--token", default=os.environ.get("COURTLISTENER_TOKEN"))

@@ -131,20 +131,26 @@ COMPUTER_USE_SCHEMA: Dict[str, Any] = {
                 "description": "Modifier keys held during the action.",
             },
             # ── drag ───────────────────────────────────────────────
-            "from_element": {"type": "integer",
-                              "description": "Source element index (drag)."},
-            "to_element": {"type": "integer",
-                            "description": "Target element index (drag)."},
+            "from_element": {
+                "type": "integer",
+                "description": "Source element index (drag).",
+            },
+            "to_element": {
+                "type": "integer",
+                "description": "Target element index (drag).",
+            },
             "from_coordinate": {
                 "type": "array",
                 "items": {"type": "integer"},
-                "minItems": 2, "maxItems": 2,
+                "minItems": 2,
+                "maxItems": 2,
                 "description": "Source [x,y] (drag; use when no element available).",
             },
             "to_coordinate": {
                 "type": "array",
                 "items": {"type": "integer"},
-                "minItems": 2, "maxItems": 2,
+                "minItems": 2,
+                "maxItems": 2,
                 "description": "Target [x,y] (drag; use when no element available).",
             },
             # ── scroll ─────────────────────────────────────────────

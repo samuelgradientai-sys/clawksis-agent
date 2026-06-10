@@ -17,17 +17,12 @@ Verifies:
 from __future__ import annotations
 
 
-
 import json
 
 import os
 
 
-
 import pytest
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -37,9 +32,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-
 def test_kanban_tools_hidden_without_env_var(monkeypatch, tmp_path):
-
     """Normal `clawk chat` sessions (no CLAWK_KANBAN_TASK) must have
 
     zero kanban_* tools in their schema."""
@@ -52,15 +45,11 @@ def test_kanban_tools_hidden_without_env_var(monkeypatch, tmp_path):
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     import tools.kanban_tools  # ensure registered
 
     from tools.registry import invalidate_check_fn_cache, registry
 
     from toolsets import resolve_toolset
-
-
 
     invalidate_check_fn_cache()
 
@@ -70,18 +59,10 @@ def test_kanban_tools_hidden_without_env_var(monkeypatch, tmp_path):
 
     kanban = {n for n in names if n and n.startswith("kanban_")}
 
-    assert kanban == set(), (
-
-        f"kanban tools leaked into normal chat schema: {kanban}"
-
-    )
-
-
-
+    assert kanban == set(), f"kanban tools leaked into normal chat schema: {kanban}"
 
 
 def test_kanban_tools_visible_with_env_var(monkeypatch, tmp_path):
-
     """Worker sessions get task lifecycle tools, not board-routing tools."""
 
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_fake")
@@ -92,15 +73,11 @@ def test_kanban_tools_visible_with_env_var(monkeypatch, tmp_path):
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     import tools.kanban_tools  # ensure registered
 
     from tools.registry import invalidate_check_fn_cache, registry
 
     from toolsets import resolve_toolset
-
-
 
     invalidate_check_fn_cache()
 
@@ -111,21 +88,19 @@ def test_kanban_tools_visible_with_env_var(monkeypatch, tmp_path):
     kanban = {n for n in names if n and n.startswith("kanban_")}
 
     expected = {
-
-        "kanban_show", "kanban_complete", "kanban_block", "kanban_heartbeat",
-
-        "kanban_comment", "kanban_create", "kanban_link",
-
+        "kanban_show",
+        "kanban_complete",
+        "kanban_block",
+        "kanban_heartbeat",
+        "kanban_comment",
+        "kanban_create",
+        "kanban_link",
     }
 
     assert kanban == expected, f"expected {expected}, got {kanban}"
 
 
-
-
-
 def test_kanban_worker_env_overrides_profile_toolset_filter(monkeypatch, tmp_path):
-
     """Dispatcher-spawned workers must get lifecycle tools even when the
 
     assignee profile restricts enabled toolsets and does not list kanban.
@@ -140,26 +115,19 @@ def test_kanban_worker_env_overrides_profile_toolset_filter(monkeypatch, tmp_pat
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     import tools.kanban_tools  # ensure registered
 
     from model_tools import _clear_tool_defs_cache, get_tool_definitions
 
     from tools.registry import invalidate_check_fn_cache
 
-
-
     invalidate_check_fn_cache()
 
     _clear_tool_defs_cache()
 
     schema = get_tool_definitions(
-
         enabled_toolsets=["terminal"],
-
         quiet_mode=True,
-
     )
 
     names = {s["function"].get("name") for s in schema if "function" in s}
@@ -173,11 +141,7 @@ def test_kanban_worker_env_overrides_profile_toolset_filter(monkeypatch, tmp_pat
     assert "kanban_list" not in names
 
 
-
-
-
 def test_worker_with_kanban_toolset_still_hides_board_routing(monkeypatch, tmp_path):
-
     """Task scope wins over profile config for board-routing tools.
 
 
@@ -200,15 +164,11 @@ def test_worker_with_kanban_toolset_still_hides_board_routing(monkeypatch, tmp_p
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     import tools.kanban_tools  # ensure registered
 
     from tools.registry import invalidate_check_fn_cache, registry
 
     from toolsets import resolve_toolset
-
-
 
     invalidate_check_fn_cache()
 
@@ -219,25 +179,15 @@ def test_worker_with_kanban_toolset_still_hides_board_routing(monkeypatch, tmp_p
     kanban = {n for n in names if n and n.startswith("kanban_")}
 
     assert {
-
         "kanban_list",
-
         "kanban_unblock",
-
     }.isdisjoint(kanban), (
-
         f"Board-routing tools leaked into worker schema: "
-
         f"{kanban & {'kanban_list', 'kanban_unblock'}}"
-
     )
 
 
-
-
-
 def test_kanban_tools_visible_with_toolset_config(monkeypatch, tmp_path):
-
     """Orchestrator profiles with toolsets: [kanban] see all kanban tools."""
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
@@ -250,15 +200,11 @@ def test_kanban_tools_visible_with_toolset_config(monkeypatch, tmp_path):
 
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-
-
     import tools.kanban_tools  # ensure registered
 
     from tools.registry import invalidate_check_fn_cache, registry
 
     from toolsets import resolve_toolset
-
-
 
     invalidate_check_fn_cache()
 
@@ -269,21 +215,18 @@ def test_kanban_tools_visible_with_toolset_config(monkeypatch, tmp_path):
     kanban = {n for n in names if n and n.startswith("kanban_")}
 
     expected = {
-
         "kanban_list",
-
-        "kanban_show", "kanban_complete", "kanban_block", "kanban_heartbeat",
-
-        "kanban_comment", "kanban_create", "kanban_link",
-
+        "kanban_show",
+        "kanban_complete",
+        "kanban_block",
+        "kanban_heartbeat",
+        "kanban_comment",
+        "kanban_create",
+        "kanban_link",
         "kanban_unblock",
-
     }
 
     assert kanban == expected, f"expected {expected}, got {kanban}"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +236,8 @@ def test_kanban_tools_visible_with_toolset_config(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
 @pytest.fixture
-
 def worker_env(monkeypatch, tmp_path):
-
     """Simulate being a worker: CLAWK_HOME isolated, CLAWK_KANBAN_TASK set
 
     after we've created the task."""
@@ -316,8 +256,6 @@ def worker_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
-
-
     from clawk_cli import kanban_db as kb
 
     kb._INITIALIZED_PATHS.clear()
@@ -327,21 +265,16 @@ def worker_env(monkeypatch, tmp_path):
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="worker-test", assignee="test-worker")
 
         kb.claim_task(conn, tid)
 
     finally:
-
         conn.close()
 
     monkeypatch.setenv("CLAWK_KANBAN_TASK", tid)
 
     return tid
-
-
-
 
 
 def test_show_defaults_to_env_task_id(worker_env):
@@ -363,11 +296,7 @@ def test_show_defaults_to_env_task_id(worker_env):
     assert "runs" in d
 
 
-
-
-
 def test_show_explicit_task_id(worker_env):
-
     """Peek at a different task than the one in env."""
 
     from clawk_cli import kanban_db as kb
@@ -375,11 +304,9 @@ def test_show_explicit_task_id(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="other task", assignee="peer")
 
     finally:
-
         conn.close()
 
     from tools import kanban_tools as kt
@@ -391,11 +318,7 @@ def test_show_explicit_task_id(worker_env):
     assert d["task"]["id"] == other
 
 
-
-
-
 def test_list_filters_tasks(monkeypatch, worker_env):
-
     """kanban_list gives orchestrators filtered board discovery."""
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
@@ -405,7 +328,6 @@ def test_list_filters_tasks(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         a = kb.create_task(conn, title="alpha", assignee="factory", priority=5)
 
         b = kb.create_task(conn, title="beta", assignee="reviewer")
@@ -413,10 +335,7 @@ def test_list_filters_tasks(monkeypatch, worker_env):
         c = kb.create_task(conn, title="gamma", assignee="factory", tenant="other")
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -436,24 +355,15 @@ def test_list_filters_tasks(monkeypatch, worker_env):
 
     assert b not in ids
 
-
-
     tenant_out = kt._handle_list({
-
         "assignee": "factory",
-
         "status": "ready",
-
         "tenant": "other",
-
     })
 
     tenant_ids = [t["id"] for t in json.loads(tenant_out)["tasks"]]
 
     assert tenant_ids == [c]
-
-
-
 
 
 def test_list_rejects_invalid_status(monkeypatch, worker_env):
@@ -467,9 +377,6 @@ def test_list_rejects_invalid_status(monkeypatch, worker_env):
     assert "status must be one of" in json.loads(out).get("error", "")
 
 
-
-
-
 def test_list_rejects_bad_limit(monkeypatch, worker_env):
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
@@ -481,9 +388,6 @@ def test_list_rejects_bad_limit(monkeypatch, worker_env):
     assert json.loads(kt._handle_list({"limit": 0})).get("error")
 
 
-
-
-
 def test_list_parses_include_archived_string_false(monkeypatch, worker_env):
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
@@ -493,7 +397,6 @@ def test_list_parses_include_archived_string_false(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         live = kb.create_task(conn, title="live task", assignee="factory")
 
         archived = kb.create_task(conn, title="archived task", assignee="factory")
@@ -501,19 +404,13 @@ def test_list_parses_include_archived_string_false(monkeypatch, worker_env):
         assert kb.archive_task(conn, archived)
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
     out = kt._handle_list({
-
         "assignee": "factory",
-
         "include_archived": "false",
-
     })
 
     ids = [t["id"] for t in json.loads(out)["tasks"]]
@@ -521,9 +418,6 @@ def test_list_parses_include_archived_string_false(monkeypatch, worker_env):
     assert live in ids
 
     assert archived not in ids
-
-
-
 
 
 def test_list_parses_include_archived_string_true(monkeypatch, worker_env):
@@ -535,7 +429,6 @@ def test_list_parses_include_archived_string_true(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         live = kb.create_task(conn, title="live task", assignee="factory")
 
         archived = kb.create_task(conn, title="archived task", assignee="factory")
@@ -543,19 +436,13 @@ def test_list_parses_include_archived_string_true(monkeypatch, worker_env):
         assert kb.archive_task(conn, archived)
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
     out = kt._handle_list({
-
         "assignee": "factory",
-
         "include_archived": "true",
-
     })
 
     ids = [t["id"] for t in json.loads(out)["tasks"]]
@@ -563,9 +450,6 @@ def test_list_parses_include_archived_string_true(monkeypatch, worker_env):
     assert live in ids
 
     assert archived in ids
-
-
-
 
 
 def test_list_rejects_bad_include_archived(monkeypatch, worker_env):
@@ -579,19 +463,13 @@ def test_list_rejects_bad_include_archived(monkeypatch, worker_env):
     assert "include_archived must be" in json.loads(out).get("error", "")
 
 
-
-
-
 def test_complete_happy_path(worker_env):
 
     from tools import kanban_tools as kt
 
     out = kt._handle_complete({
-
         "summary": "got the thing done",
-
         "metadata": {"files": 2},
-
     })
 
     d = json.loads(out)
@@ -607,7 +485,6 @@ def test_complete_happy_path(worker_env):
     conn = kb.connect()
 
     try:
-
         run = kb.latest_run(conn, worker_env)
 
         assert run.outcome == "completed"
@@ -617,50 +494,29 @@ def test_complete_happy_path(worker_env):
         assert run.metadata == {"files": 2}
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_metadata_round_trips_through_show(worker_env):
-
     """Structured completion metadata should be visible to downstream agents."""
 
     from tools import kanban_tools as kt
 
-
-
     handoff = {
-
         "changed_files": ["clawk_cli/kanban.py"],
-
         "verification": ["pytest tests/tools/test_kanban_tools.py -q"],
-
         "dependencies": [],
-
         "blocked_reason": None,
-
         "retry_notes": "none",
-
         "residual_risk": ["dashboard rendering not exercised"],
-
     }
 
-
-
     complete_out = kt._handle_complete({
-
         "summary": "finished with structured evidence",
-
         "metadata": handoff,
-
     })
 
     assert json.loads(complete_out)["ok"] is True
-
-
 
     show_out = kt._handle_show({"task_id": worker_env})
 
@@ -673,115 +529,74 @@ def test_complete_metadata_round_trips_through_show(worker_env):
     assert shown["runs"][-1]["metadata"] == handoff
 
 
-
-
-
 def test_complete_stamps_worker_session_id_from_env(monkeypatch, worker_env):
 
     from tools import kanban_tools as kt
-
-
 
     monkeypatch.setenv("CLAWK_SESSION_ID", "session-trusted")
 
     metadata = {"files": 2, "worker_session_id": "user-spoof"}
 
-
-
     out = kt._handle_complete({
-
         "summary": "done by scoped worker",
-
         "metadata": metadata,
-
     })
 
     assert json.loads(out)["ok"] is True
 
     assert metadata["worker_session_id"] == "user-spoof"
 
-
-
     from clawk_cli import kanban_db as kb
 
     conn = kb.connect()
 
     try:
-
         run = kb.latest_run(conn, worker_env)
 
         assert run.metadata == {
-
             "files": 2,
-
             "worker_session_id": "session-trusted",
-
         }
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_does_not_stamp_worker_session_id_without_scoped_task(
-
     monkeypatch, worker_env
-
 ):
 
     from tools import kanban_tools as kt
-
-
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
     monkeypatch.setenv("CLAWK_SESSION_ID", "session-trusted")
 
-
-
     out = kt._handle_complete({
-
         "task_id": worker_env,
-
         "summary": "done outside worker scope",
-
         "metadata": {"files": 2, "worker_session_id": "user-provided"},
-
     })
 
     assert json.loads(out)["ok"] is True
-
-
 
     from clawk_cli import kanban_db as kb
 
     conn = kb.connect()
 
     try:
-
         run = kb.latest_run(conn, worker_env)
 
         assert run.metadata == {
-
             "files": 2,
-
             "worker_session_id": "user-provided",
-
         }
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_with_result_only(worker_env):
-
     """`result` alone (without summary) is accepted for legacy compat."""
 
     from tools import kanban_tools as kt
@@ -793,11 +608,7 @@ def test_complete_with_result_only(worker_env):
     assert d["ok"] is True
 
 
-
-
-
 def test_complete_with_artifacts_lands_in_event_payload(worker_env):
-
     """``artifacts=[...]`` rides into the completed event payload so the
 
     gateway notifier can upload them as native attachments. See the
@@ -808,24 +619,16 @@ def test_complete_with_artifacts_lands_in_event_payload(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_complete({
-
         "summary": "rendered the chart",
-
         "artifacts": ["/tmp/q3-revenue.png", "/tmp/q3-report.pdf"],
-
     })
 
     assert json.loads(out)["ok"] is True
 
-
-
     conn = kb.connect()
 
     try:
-
         events = kb.list_events(conn, worker_env)
 
         # Find the completion event
@@ -837,11 +640,8 @@ def test_complete_with_artifacts_lands_in_event_payload(worker_env):
         payload = completed[0].payload or {}
 
         assert payload.get("artifacts") == [
-
             "/tmp/q3-revenue.png",
-
             "/tmp/q3-report.pdf",
-
         ]
 
         # And the artifacts also live on metadata for downstream workers
@@ -849,61 +649,40 @@ def test_complete_with_artifacts_lands_in_event_payload(worker_env):
         run = kb.latest_run(conn, worker_env)
 
         assert run.metadata.get("artifacts") == [
-
             "/tmp/q3-revenue.png",
-
             "/tmp/q3-report.pdf",
-
         ]
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_artifacts_accepts_single_string(worker_env):
-
     """A bare string is auto-promoted to a single-element list for convenience."""
 
     from clawk_cli import kanban_db as kb
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_complete({
-
         "summary": "one chart",
-
         "artifacts": "/tmp/chart.png",
-
     })
 
     assert json.loads(out)["ok"] is True
 
-
-
     conn = kb.connect()
 
     try:
-
         run = kb.latest_run(conn, worker_env)
 
         assert run.metadata.get("artifacts") == ["/tmp/chart.png"]
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_artifacts_merges_with_explicit_metadata_field(worker_env):
-
     """If the worker passes metadata.artifacts AND the top-level artifacts
 
     param, merge the two without duplicates."""
@@ -912,26 +691,17 @@ def test_complete_artifacts_merges_with_explicit_metadata_field(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_complete({
-
         "summary": "merged",
-
         "metadata": {"artifacts": ["/tmp/a.png"], "other": "fact"},
-
         "artifacts": ["/tmp/b.pdf", "/tmp/a.png"],
-
     })
 
     assert json.loads(out)["ok"] is True
 
-
-
     conn = kb.connect()
 
     try:
-
         run = kb.latest_run(conn, worker_env)
 
         # Order: existing entries first, then new ones, deduplicated.
@@ -941,33 +711,22 @@ def test_complete_artifacts_merges_with_explicit_metadata_field(worker_env):
         assert run.metadata.get("other") == "fact"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_rejects_non_list_artifacts(worker_env):
-
     """Non-list, non-string artifacts should be rejected with a clear error."""
 
     from tools import kanban_tools as kt
 
     out = kt._handle_complete({
-
         "summary": "bad shape",
-
         "artifacts": {"not": "a list"},
-
     })
 
     err = json.loads(out).get("error", "")
 
     assert "artifacts must be a list" in err
-
-
-
 
 
 def test_complete_rejects_no_handoff(worker_env):
@@ -979,9 +738,6 @@ def test_complete_rejects_no_handoff(worker_env):
     assert json.loads(out).get("error"), "should have errored"
 
 
-
-
-
 def test_complete_rejects_non_dict_metadata(worker_env):
 
     from tools import kanban_tools as kt
@@ -991,11 +747,7 @@ def test_complete_rejects_non_dict_metadata(worker_env):
     assert json.loads(out).get("error")
 
 
-
-
-
 def test_complete_phantom_card_message_advertises_retry(worker_env):
-
     """A phantom-card rejection must surface a tool_error that explicitly
 
     tells the worker the task is still in-flight and how to retry — the
@@ -1012,14 +764,9 @@ def test_complete_phantom_card_message_advertises_retry(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_complete({
-
         "summary": "oops claimed a phantom",
-
         "created_cards": ["t_phantomdeadbeef"],
-
     })
 
     err = json.loads(out).get("error", "")
@@ -1044,8 +791,6 @@ def test_complete_phantom_card_message_advertises_retry(worker_env):
 
     assert "created_cards=[]" in err
 
-
-
     # Critically: the task is genuinely still in-flight — the gate
 
     # rejection did not mutate state, so the worker's retry can land.
@@ -1053,19 +798,13 @@ def test_complete_phantom_card_message_advertises_retry(worker_env):
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, worker_env).status == "running"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_retry_with_empty_created_cards_succeeds(worker_env):
-
     """After a phantom rejection, retrying kanban_complete with
 
     created_cards=[] (the documented escape hatch) must complete the
@@ -1076,52 +815,38 @@ def test_complete_retry_with_empty_created_cards_succeeds(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     # Hit the gate first.
 
-    rejected = json.loads(kt._handle_complete({
-
-        "summary": "oops",
-
-        "created_cards": ["t_phantomdeadbeef"],
-
-    }))
+    rejected = json.loads(
+        kt._handle_complete({
+            "summary": "oops",
+            "created_cards": ["t_phantomdeadbeef"],
+        })
+    )
 
     assert rejected.get("error")
 
-
-
     # Retry with the escape hatch.
 
-    ok = json.loads(kt._handle_complete({
-
-        "summary": "retry without claims",
-
-        "created_cards": [],
-
-    }))
+    ok = json.loads(
+        kt._handle_complete({
+            "summary": "retry without claims",
+            "created_cards": [],
+        })
+    )
 
     assert ok.get("ok") is True
-
-
 
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, worker_env).status == "done"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_complete_retry_with_corrected_created_cards_succeeds(worker_env):
-
     """After a phantom rejection, retrying kanban_complete with a
 
     corrected created_cards list (phantom ids removed) must complete the
@@ -1132,66 +857,52 @@ def test_complete_retry_with_corrected_created_cards_succeeds(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     # Create a real child via the tool so it gets the worker-profile
 
     # attribution the gate trusts.
 
-    child = json.loads(kt._handle_create({
-
-        "title": "real child", "assignee": "peer",
-
-    }))
+    child = json.loads(
+        kt._handle_create({
+            "title": "real child",
+            "assignee": "peer",
+        })
+    )
 
     assert child["ok"]
 
     real_id = child["task_id"]
 
-
-
     # First attempt mixes real + phantom — gate rejects.
 
-    rejected = json.loads(kt._handle_complete({
-
-        "summary": "oops",
-
-        "created_cards": [real_id, "t_phantomdeadbeef"],
-
-    }))
+    rejected = json.loads(
+        kt._handle_complete({
+            "summary": "oops",
+            "created_cards": [real_id, "t_phantomdeadbeef"],
+        })
+    )
 
     assert rejected.get("error")
 
     assert "t_phantomdeadbeef" in rejected["error"]
 
-
-
     # Retry with corrected list.
 
-    ok = json.loads(kt._handle_complete({
-
-        "summary": "retry with corrected list",
-
-        "created_cards": [real_id],
-
-    }))
+    ok = json.loads(
+        kt._handle_complete({
+            "summary": "retry with corrected list",
+            "created_cards": [real_id],
+        })
+    )
 
     assert ok.get("ok") is True
-
-
 
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, worker_env).status == "done"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_block_happy_path(worker_env):
@@ -1209,15 +920,10 @@ def test_block_happy_path(worker_env):
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, worker_env).status == "blocked"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_block_rejects_empty_reason(worker_env):
@@ -1225,13 +931,9 @@ def test_block_rejects_empty_reason(worker_env):
     from tools import kanban_tools as kt
 
     for bad in ["", "   ", None]:
-
         out = kt._handle_block({"reason": bad})
 
         assert json.loads(out).get("error")
-
-
-
 
 
 def test_heartbeat_happy_path(worker_env):
@@ -1245,11 +947,7 @@ def test_heartbeat_happy_path(worker_env):
     assert d["ok"] is True
 
 
-
-
-
 def test_heartbeat_without_note(worker_env):
-
     """note is optional."""
 
     from tools import kanban_tools as kt
@@ -1261,11 +959,7 @@ def test_heartbeat_without_note(worker_env):
     assert d["ok"] is True
 
 
-
-
-
 def test_heartbeat_extends_claim_expires(worker_env):
-
     """The kanban_heartbeat tool MUST extend claim_expires, not just
 
     update last_heartbeat_at — otherwise long-running workers loop the
@@ -1290,8 +984,6 @@ def test_heartbeat_extends_claim_expires(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     # Rewind claim_expires into the past so any forward movement is
 
     # unambiguous (avoids time.sleep flakiness).
@@ -1299,52 +991,35 @@ def test_heartbeat_extends_claim_expires(worker_env):
     conn = kb.connect()
 
     try:
-
         conn.execute(
-
             "UPDATE tasks SET claim_expires = ? WHERE id = ?",
-
             (1, worker_env),
-
         )
 
         conn.commit()
 
         before = conn.execute(
-
             "SELECT claim_expires FROM tasks WHERE id = ?", (worker_env,)
-
         ).fetchone()["claim_expires"]
 
     finally:
-
         conn.close()
 
     assert before == 1
-
-
 
     out = kt._handle_heartbeat({"note": "still alive"})
 
     assert json.loads(out).get("ok") is True
 
-
-
     conn = kb.connect()
 
     try:
-
         after = conn.execute(
-
             "SELECT claim_expires FROM tasks WHERE id = ?", (worker_env,)
-
         ).fetchone()["claim_expires"]
 
     finally:
-
         conn.close()
-
-
 
     now = int(_time.time())
 
@@ -1355,23 +1030,14 @@ def test_heartbeat_extends_claim_expires(worker_env):
     # test stable against future TTL changes.
 
     assert after > before, (
-
         f"claim_expires did not advance ({before} -> {after}); workers "
-
         f"would be reclaimed at TTL despite heartbeating"
-
     )
 
     assert after >= now + (kb.DEFAULT_CLAIM_TTL_SECONDS // 2), (
-
         f"claim_expires={after} is suspiciously close to now={now}; "
-
         f"expected at least now + {kb.DEFAULT_CLAIM_TTL_SECONDS // 2}"
-
     )
-
-
-
 
 
 def test_comment_happy_path(worker_env):
@@ -1379,11 +1045,8 @@ def test_comment_happy_path(worker_env):
     from tools import kanban_tools as kt
 
     out = kt._handle_comment({
-
         "task_id": worker_env,
-
         "body": "hello thread",
-
     })
 
     d = json.loads(out)
@@ -1397,7 +1060,6 @@ def test_comment_happy_path(worker_env):
     conn = kb.connect()
 
     try:
-
         comments = kb.list_comments(conn, worker_env)
 
         assert len(comments) == 1
@@ -1409,11 +1071,7 @@ def test_comment_happy_path(worker_env):
         assert comments[0].body == "hello thread"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_comment_rejects_empty_body(worker_env):
@@ -1425,11 +1083,7 @@ def test_comment_rejects_empty_body(worker_env):
     assert json.loads(out).get("error")
 
 
-
-
-
 def test_comment_ignores_caller_supplied_author(worker_env):
-
     """``args["author"]`` is no longer honored — the author is always
 
     derived from ``CLAWK_PROFILE`` so a worker can't forge a comment
@@ -1447,9 +1101,9 @@ def test_comment_ignores_caller_supplied_author(worker_env):
     from tools import kanban_tools as kt
 
     out = kt._handle_comment({
-
-        "task_id": worker_env, "body": "hi", "author": "clawk-system",
-
+        "task_id": worker_env,
+        "body": "hi",
+        "author": "clawk-system",
     })
 
     assert json.loads(out)["ok"]
@@ -1459,7 +1113,6 @@ def test_comment_ignores_caller_supplied_author(worker_env):
     conn = kb.connect()
 
     try:
-
         comments = kb.list_comments(conn, worker_env)
 
         # Author comes from CLAWK_PROFILE in the fixture, not the
@@ -1469,15 +1122,10 @@ def test_comment_ignores_caller_supplied_author(worker_env):
         assert comments[0].author == "test-worker"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_comment_schema_omits_author_override():
-
     """The ``author`` property must not appear on KANBAN_COMMENT_SCHEMA;
 
     exposing it to the LLM would re-introduce the forgery surface this
@@ -1493,21 +1141,14 @@ def test_comment_schema_omits_author_override():
     assert "author" not in props
 
 
-
-
-
 def test_create_happy_path(worker_env):
 
     from tools import kanban_tools as kt
 
     out = kt._handle_create({
-
         "title": "child task",
-
         "assignee": "peer",
-
         "parents": [worker_env],
-
     })
 
     d = json.loads(out)
@@ -1523,7 +1164,6 @@ def test_create_happy_path(worker_env):
     conn = kb.connect()
 
     try:
-
         child = kb.get_task(conn, d["task_id"])
 
         assert child.title == "child task"
@@ -1531,15 +1171,10 @@ def test_create_happy_path(worker_env):
         assert child.assignee == "peer"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_inherits_worker_dir_workspace(monkeypatch, worker_env):
-
     """A worker scoped to a dir: task that spawns a child without a
 
     workspace arg inherits the dir, not scratch (so follow-up code-gen
@@ -1550,31 +1185,25 @@ def test_create_inherits_worker_dir_workspace(monkeypatch, worker_env):
 
     from clawk_cli import kanban_db as kb
 
-
-
     proj = "/home/teknium/myproject"
 
     conn = kb.connect()
 
     try:
-
         self_tid = kb.create_task(
-
-            conn, title="dir worker", assignee="test-worker",
-
-            workspace_kind="dir", workspace_path=proj,
-
+            conn,
+            title="dir worker",
+            assignee="test-worker",
+            workspace_kind="dir",
+            workspace_path=proj,
         )
 
         kb.claim_task(conn, self_tid)
 
     finally:
-
         conn.close()
 
     monkeypatch.setenv("CLAWK_KANBAN_TASK", self_tid)
-
-
 
     d = json.loads(kt._handle_create({"title": "follow-up", "assignee": "peer"}))
 
@@ -1583,7 +1212,6 @@ def test_create_inherits_worker_dir_workspace(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         child = kb.get_task(conn, d["task_id"])
 
         assert child.workspace_kind == "dir"
@@ -1591,73 +1219,56 @@ def test_create_inherits_worker_dir_workspace(monkeypatch, worker_env):
         assert child.workspace_path == proj
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_explicit_workspace_beats_inheritance(monkeypatch, worker_env):
-
     """An explicit workspace arg overrides worker-task inheritance."""
 
     from tools import kanban_tools as kt
 
     from clawk_cli import kanban_db as kb
 
-
-
     conn = kb.connect()
 
     try:
-
         self_tid = kb.create_task(
-
-            conn, title="dir worker", assignee="test-worker",
-
-            workspace_kind="dir", workspace_path="/home/teknium/proj",
-
+            conn,
+            title="dir worker",
+            assignee="test-worker",
+            workspace_kind="dir",
+            workspace_path="/home/teknium/proj",
         )
 
         kb.claim_task(conn, self_tid)
 
     finally:
-
         conn.close()
 
     monkeypatch.setenv("CLAWK_KANBAN_TASK", self_tid)
 
-
-
-    d = json.loads(kt._handle_create({
-
-        "title": "scratch child", "assignee": "peer",
-
-        "workspace_kind": "scratch",
-
-    }))
+    d = json.loads(
+        kt._handle_create({
+            "title": "scratch child",
+            "assignee": "peer",
+            "workspace_kind": "scratch",
+        })
+    )
 
     assert d["ok"] is True
 
     conn = kb.connect()
 
     try:
-
         child = kb.get_task(conn, d["task_id"])
 
         assert child.workspace_kind == "scratch"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_no_worker_task_stays_scratch(monkeypatch, worker_env):
-
     """Orchestrator/CLI callers (no CLAWK_KANBAN_TASK) still default to
 
     scratch — inheritance only applies to task-scoped workers."""
@@ -1665,8 +1276,6 @@ def test_create_no_worker_task_stays_scratch(monkeypatch, worker_env):
     from tools import kanban_tools as kt
 
     from clawk_cli import kanban_db as kb
-
-
 
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
@@ -1677,7 +1286,6 @@ def test_create_no_worker_task_stays_scratch(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         child = kb.get_task(conn, d["task_id"])
 
         assert child.workspace_kind == "scratch"
@@ -1685,15 +1293,10 @@ def test_create_no_worker_task_stays_scratch(monkeypatch, worker_env):
         assert child.workspace_path is None
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_stamps_session_id_from_env(monkeypatch, worker_env):
-
     """When the agent loop runs under ACP, the server propagates the
 
     originating chat session id via CLAWK_SESSION_ID. ``kanban_create``
@@ -1709,13 +1312,9 @@ def test_create_stamps_session_id_from_env(monkeypatch, worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "from chat",
-
         "assignee": "peer",
-
         "parents": [worker_env],
-
     })
 
     d = json.loads(out)
@@ -1725,21 +1324,15 @@ def test_create_stamps_session_id_from_env(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         new_task = kb.get_task(conn, d["task_id"])
 
         assert new_task.session_id == "acp-sess-abc"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_session_id_arg_overrides_env(monkeypatch, worker_env):
-
     """An explicit ``session_id`` arg from the model wins over the env
 
     propagation. Edge case but exercised: a tool call could carry a
@@ -1755,15 +1348,10 @@ def test_create_session_id_arg_overrides_env(monkeypatch, worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "explicit override",
-
         "assignee": "peer",
-
         "parents": [worker_env],
-
         "session_id": "explicit-arg",
-
     })
 
     d = json.loads(out)
@@ -1773,21 +1361,15 @@ def test_create_session_id_arg_overrides_env(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         new_task = kb.get_task(conn, d["task_id"])
 
         assert new_task.session_id == "explicit-arg"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_create_session_id_absent_when_env_unset(monkeypatch, worker_env):
-
     """No env var, no arg → session_id stays NULL. Important for backwards
 
     compatibility: pre-ACP-propagation hosts and CLI-driven creates must
@@ -1801,13 +1383,9 @@ def test_create_session_id_absent_when_env_unset(monkeypatch, worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "no session",
-
         "assignee": "peer",
-
         "parents": [worker_env],
-
     })
 
     d = json.loads(out)
@@ -1817,17 +1395,12 @@ def test_create_session_id_absent_when_env_unset(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         new_task = kb.get_task(conn, d["task_id"])
 
         assert new_task.session_id is None
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_create_rejects_no_title(worker_env):
@@ -1839,17 +1412,11 @@ def test_create_rejects_no_title(worker_env):
     assert json.loads(kt._handle_create({"title": "   ", "assignee": "x"})).get("error")
 
 
-
-
-
 def test_create_rejects_no_assignee(worker_env):
 
     from tools import kanban_tools as kt
 
     assert json.loads(kt._handle_create({"title": "t"})).get("error")
-
-
-
 
 
 def test_create_rejects_non_list_parents(worker_env):
@@ -1861,9 +1428,6 @@ def test_create_rejects_non_list_parents(worker_env):
     assert json.loads(out).get("error")
 
 
-
-
-
 def test_create_parses_triage_string_false(worker_env):
 
     from tools import kanban_tools as kt
@@ -1871,13 +1435,9 @@ def test_create_parses_triage_string_false(worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "not triage",
-
         "assignee": "peer",
-
         "triage": "false",
-
     })
 
     d = json.loads(out)
@@ -1887,17 +1447,12 @@ def test_create_parses_triage_string_false(worker_env):
     conn = kb.connect()
 
     try:
-
         task = kb.get_task(conn, d["task_id"])
 
         assert task.status == "ready"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_create_parses_triage_string_true(worker_env):
@@ -1907,13 +1462,9 @@ def test_create_parses_triage_string_true(worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "needs triage",
-
         "assignee": "peer",
-
         "triage": "true",
-
     })
 
     d = json.loads(out)
@@ -1923,17 +1474,12 @@ def test_create_parses_triage_string_true(worker_env):
     conn = kb.connect()
 
     try:
-
         task = kb.get_task(conn, d["task_id"])
 
         assert task.status == "triage"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_create_rejects_bad_triage(worker_env):
@@ -1941,41 +1487,29 @@ def test_create_rejects_bad_triage(worker_env):
     from tools import kanban_tools as kt
 
     out = kt._handle_create({
-
         "title": "bad triage",
-
         "assignee": "peer",
-
         "triage": "sometimes",
-
     })
 
     assert "triage must be" in json.loads(out).get("error", "")
 
 
-
-
-
 def test_create_accepts_string_parent(worker_env):
-
     """Convenience: a single parent id as string is coerced to [id]."""
 
     from tools import kanban_tools as kt
 
     out = kt._handle_create({
-
-        "title": "t", "assignee": "a", "parents": worker_env,
-
+        "title": "t",
+        "assignee": "a",
+        "parents": worker_env,
     })
 
     assert json.loads(out)["ok"]
 
 
-
-
-
 def test_create_accepts_skills_list(worker_env):
-
     """Tool writes the per-task skills through to the kernel."""
 
     from tools import kanban_tools as kt
@@ -1983,13 +1517,9 @@ def test_create_accepts_skills_list(worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "skilled",
-
         "assignee": "linguist",
-
         "skills": ["translation", "github-code-review"],
-
     })
 
     d = json.loads(out)
@@ -1997,17 +1527,12 @@ def test_create_accepts_skills_list(worker_env):
     assert d["ok"] is True
 
     with kb.connect() as conn:
-
         task = kb.get_task(conn, d["task_id"])
 
     assert task.skills == ["translation", "github-code-review"]
 
 
-
-
-
 def test_create_accepts_skills_string(worker_env):
-
     """Convenience: a single skill name as string is coerced to [name]."""
 
     from tools import kanban_tools as kt
@@ -2015,13 +1540,9 @@ def test_create_accepts_skills_string(worker_env):
     from clawk_cli import kanban_db as kb
 
     out = kt._handle_create({
-
         "title": "one-skill",
-
         "assignee": "a",
-
         "skills": "translation",
-
     })
 
     d = json.loads(out)
@@ -2029,31 +1550,23 @@ def test_create_accepts_skills_string(worker_env):
     assert d["ok"] is True
 
     with kb.connect() as conn:
-
         task = kb.get_task(conn, d["task_id"])
 
     assert task.skills == ["translation"]
 
 
-
-
-
 def test_create_rejects_non_list_skills(worker_env):
-
     """skills: 42 must be rejected, not silently dropped."""
 
     from tools import kanban_tools as kt
 
     out = kt._handle_create({
-
-        "title": "t", "assignee": "a", "skills": 42,
-
+        "title": "t",
+        "assignee": "a",
+        "skills": 42,
     })
 
     assert json.loads(out).get("error")
-
-
-
 
 
 def test_link_happy_path(worker_env):
@@ -2063,13 +1576,11 @@ def test_link_happy_path(worker_env):
     conn = kb.connect()
 
     try:
-
         a = kb.create_task(conn, title="A", assignee="x")
 
         b = kb.create_task(conn, title="B", assignee="x")
 
     finally:
-
         conn.close()
 
     from tools import kanban_tools as kt
@@ -2081,9 +1592,6 @@ def test_link_happy_path(worker_env):
     assert d["ok"] is True
 
 
-
-
-
 def test_link_rejects_self_reference(worker_env):
 
     from tools import kanban_tools as kt
@@ -2091,9 +1599,6 @@ def test_link_rejects_self_reference(worker_env):
     out = kt._handle_link({"parent_id": worker_env, "child_id": worker_env})
 
     assert json.loads(out).get("error")
-
-
-
 
 
 def test_link_rejects_missing_args(worker_env):
@@ -2105,11 +1610,7 @@ def test_link_rejects_missing_args(worker_env):
     assert json.loads(kt._handle_link({"child_id": "y"})).get("error")
 
 
-
-
-
 def test_link_rejects_cycle(worker_env):
-
     """A → B, then try to link B → A."""
 
     from clawk_cli import kanban_db as kb
@@ -2117,13 +1618,11 @@ def test_link_rejects_cycle(worker_env):
     conn = kb.connect()
 
     try:
-
         a = kb.create_task(conn, title="A", assignee="x")
 
         b = kb.create_task(conn, title="B", assignee="x", parents=[a])
 
     finally:
-
         conn.close()
 
     from tools import kanban_tools as kt
@@ -2131,9 +1630,6 @@ def test_link_rejects_cycle(worker_env):
     out = kt._handle_link({"parent_id": b, "child_id": a})
 
     assert json.loads(out).get("error")
-
-
-
 
 
 def test_unblock_happy_path(monkeypatch, worker_env):
@@ -2145,16 +1641,12 @@ def test_unblock_happy_path(monkeypatch, worker_env):
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="blocked", assignee="worker")
 
         kb.block_task(conn, tid, reason="waiting")
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2166,20 +1658,13 @@ def test_unblock_happy_path(monkeypatch, worker_env):
 
     assert d["status"] == "ready"
 
-
-
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, tid).status == "ready"
 
     finally:
-
         conn.close()
-
-
-
 
 
 def test_unblock_rejects_non_blocked_task(monkeypatch, worker_env):
@@ -2193,11 +1678,7 @@ def test_unblock_rejects_non_blocked_task(monkeypatch, worker_env):
     assert json.loads(out).get("error")
 
 
-
-
-
 def test_worker_lifecycle_through_tools(worker_env):
-
     """Drive the full claim -> heartbeat -> comment -> complete lifecycle
 
     exclusively through the tools, then verify the DB state matches what
@@ -2206,63 +1687,47 @@ def test_worker_lifecycle_through_tools(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     # 1. show — worker orientation
 
     show = json.loads(kt._handle_show({}))
 
     assert show["task"]["id"] == worker_env
 
-
-
     # 2. heartbeat during long op
 
     assert json.loads(kt._handle_heartbeat({"note": "warming up"}))["ok"]
 
-
-
     # 3. comment for a future peer
 
-    assert json.loads(kt._handle_comment({
-
-        "task_id": worker_env,
-
-        "body": "note: using stdlib sqlite3 bindings",
-
-    }))["ok"]
-
-
+    assert json.loads(
+        kt._handle_comment({
+            "task_id": worker_env,
+            "body": "note: using stdlib sqlite3 bindings",
+        })
+    )["ok"]
 
     # 4. spawn a child task for follow-up
 
-    child_out = json.loads(kt._handle_create({
-
-        "title": "write integration test",
-
-        "assignee": "qa",
-
-        "parents": [worker_env],
-
-    }))
+    child_out = json.loads(
+        kt._handle_create({
+            "title": "write integration test",
+            "assignee": "qa",
+            "parents": [worker_env],
+        })
+    )
 
     assert child_out["ok"]
 
-
-
     # 5. complete with structured handoff
 
-    comp = json.loads(kt._handle_complete({
-
-        "summary": "implemented + spawned QA follow-up",
-
-        "metadata": {"child_task": child_out["task_id"]},
-
-    }))
+    comp = json.loads(
+        kt._handle_complete({
+            "summary": "implemented + spawned QA follow-up",
+            "metadata": {"child_task": child_out["task_id"]},
+        })
+    )
 
     assert comp["ok"]
-
-
 
     # Verify final state
 
@@ -2271,7 +1736,6 @@ def test_worker_lifecycle_through_tools(worker_env):
     conn = kb.connect()
 
     try:
-
         parent = kb.get_task(conn, worker_env)
 
         assert parent.status == "done"
@@ -2291,9 +1755,7 @@ def test_worker_lifecycle_through_tools(worker_env):
         child = kb.get_task(conn, child_out["task_id"])
 
         assert child.status == "ready", (
-
             f"child should be ready after parent done, got {child.status}"
-
         )
 
         # Comment is visible
@@ -2307,11 +1769,7 @@ def test_worker_lifecycle_through_tools(worker_env):
         assert len(hb) == 1
 
     finally:
-
         conn.close()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2321,9 +1779,7 @@ def test_worker_lifecycle_through_tools(worker_env):
 # ---------------------------------------------------------------------------
 
 
-
 def test_kanban_guidance_not_in_normal_prompt(monkeypatch, tmp_path):
-
     """A normal chat session (no CLAWK_KANBAN_TASK) must NOT have
 
     KANBAN_GUIDANCE in its system prompt."""
@@ -2340,8 +1796,6 @@ def test_kanban_guidance_not_in_normal_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_P, "home", lambda: tmp_path)
 
-
-
     from tools.registry import invalidate_check_fn_cache
 
     from model_tools import _clear_tool_defs_cache
@@ -2350,22 +1804,14 @@ def test_kanban_guidance_not_in_normal_prompt(monkeypatch, tmp_path):
 
     _clear_tool_defs_cache()
 
-
-
     from run_agent import AIAgent
 
     a = AIAgent(
-
         api_key="test",
-
         base_url="https://openrouter.ai/api/v1",
-
         quiet_mode=True,
-
         skip_context_files=True,
-
         skip_memory=True,
-
     )
 
     prompt = a._build_system_prompt()
@@ -2375,11 +1821,7 @@ def test_kanban_guidance_not_in_normal_prompt(monkeypatch, tmp_path):
     assert "kanban_show()" not in prompt
 
 
-
-
-
 def test_kanban_guidance_in_worker_prompt(monkeypatch, tmp_path):
-
     """A worker session (CLAWK_KANBAN_TASK set) MUST have the full
 
     lifecycle guidance in its system prompt."""
@@ -2396,8 +1838,6 @@ def test_kanban_guidance_in_worker_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_P, "home", lambda: tmp_path)
 
-
-
     from tools.registry import invalidate_check_fn_cache
 
     from model_tools import _clear_tool_defs_cache
@@ -2406,22 +1846,14 @@ def test_kanban_guidance_in_worker_prompt(monkeypatch, tmp_path):
 
     _clear_tool_defs_cache()
 
-
-
     from run_agent import AIAgent
 
     a = AIAgent(
-
         api_key="test",
-
         base_url="https://openrouter.ai/api/v1",
-
         quiet_mode=True,
-
         skip_context_files=True,
-
         skip_memory=True,
-
     )
 
     prompt = a._build_system_prompt()
@@ -2445,11 +1877,7 @@ def test_kanban_guidance_in_worker_prompt(monkeypatch, tmp_path):
     assert "Do not shell out" in prompt or "tools — they work" in prompt
 
 
-
-
-
 def test_kanban_guidance_prompt_size_bounded(monkeypatch, tmp_path):
-
     """Sanity: the guidance block is under 4 KB so it doesn't blow
 
     up the cached prompt."""
@@ -2466,18 +1894,11 @@ def test_kanban_guidance_prompt_size_bounded(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_P, "home", lambda: tmp_path)
 
-
-
     from agent.prompt_builder import KANBAN_GUIDANCE
 
     assert 1_500 < len(KANBAN_GUIDANCE) < 4_096, (
-
         f"KANBAN_GUIDANCE is {len(KANBAN_GUIDANCE)} chars — too short (missing?) or too long"
-
     )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2511,11 +1932,7 @@ def test_kanban_guidance_prompt_size_bounded(monkeypatch, tmp_path):
 # tasks on behalf of the child.
 
 
-
-
-
 def test_worker_complete_rejects_foreign_task_id(worker_env):
-
     """A worker cannot complete a task that isn't its own (#19534)."""
 
     from clawk_cli import kanban_db as kb
@@ -2523,7 +1940,6 @@ def test_worker_complete_rejects_foreign_task_id(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="sibling")
 
         conn.execute("UPDATE tasks SET status='ready' WHERE id=?", (other,))
@@ -2531,10 +1947,7 @@ def test_worker_complete_rejects_foreign_task_id(worker_env):
         conn.commit()
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2546,26 +1959,18 @@ def test_worker_complete_rejects_foreign_task_id(worker_env):
 
     assert "refusing to mutate" in d.get("error", "")
 
-
-
     # Sibling task must be untouched.
 
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, other).status == "ready"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_worker_block_rejects_foreign_task_id(worker_env):
-
     """A worker cannot block a task that isn't its own (#19534)."""
 
     from clawk_cli import kanban_db as kb
@@ -2573,7 +1978,6 @@ def test_worker_block_rejects_foreign_task_id(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="sibling")
 
         conn.execute("UPDATE tasks SET status='ready' WHERE id=?", (other,))
@@ -2581,10 +1985,7 @@ def test_worker_block_rejects_foreign_task_id(worker_env):
         conn.commit()
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2594,24 +1995,16 @@ def test_worker_block_rejects_foreign_task_id(worker_env):
 
     assert "refusing to mutate" in d.get("error", "")
 
-
-
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, other).status == "ready"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_worker_heartbeat_rejects_foreign_task_id(worker_env):
-
     """A worker cannot heartbeat a task that isn't its own (#19534)."""
 
     from clawk_cli import kanban_db as kb
@@ -2619,7 +2012,6 @@ def test_worker_heartbeat_rejects_foreign_task_id(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="sibling")
 
         # Put sibling in running state so heartbeat would otherwise succeed.
@@ -2629,10 +2021,7 @@ def test_worker_heartbeat_rejects_foreign_task_id(worker_env):
         conn.commit()
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2643,11 +2032,7 @@ def test_worker_heartbeat_rejects_foreign_task_id(worker_env):
     assert "refusing to mutate" in d.get("error", "")
 
 
-
-
-
 def test_worker_can_comment_on_foreign_task(worker_env):
-
     """Cross-task commenting must remain unrestricted (#19713 policy).
 
 
@@ -2669,30 +2054,21 @@ def test_worker_can_comment_on_foreign_task(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="sibling")
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
     out = kt._handle_comment({
-
         "task_id": other,
-
         "body": "handoff: see prior findings before starting",
-
     })
 
     d = json.loads(out)
 
     assert d.get("ok") is True, f"cross-task comment must succeed: {d}"
-
-
 
     # The comment lands on the foreign task, attributed to the worker's
 
@@ -2701,7 +2077,6 @@ def test_worker_can_comment_on_foreign_task(worker_env):
     conn = kb.connect()
 
     try:
-
         comments = kb.list_comments(conn, other)
 
         assert len(comments) == 1
@@ -2711,15 +2086,10 @@ def test_worker_can_comment_on_foreign_task(worker_env):
         assert comments[0].body.startswith("handoff:")
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_worker_unblock_rejects_foreign_task_id(worker_env):
-
     """A worker cannot unblock any task — kanban_unblock is orchestrator-only.
 
 
@@ -2739,16 +2109,12 @@ def test_worker_unblock_rejects_foreign_task_id(worker_env):
     conn = kb.connect()
 
     try:
-
         other = kb.create_task(conn, title="blocked sibling", assignee="peer")
 
         kb.block_task(conn, other, reason="waiting")
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2759,29 +2125,19 @@ def test_worker_unblock_rejects_foreign_task_id(worker_env):
     err = d.get("error", "")
 
     assert "orchestrator-only" in err or "refusing to mutate" in err, (
-
         f"expected worker-rejection error, got {err}"
-
     )
-
-
 
     conn = kb.connect()
 
     try:
-
         assert kb.get_task(conn, other).status == "blocked"
 
     finally:
-
         conn.close()
 
 
-
-
-
 def test_worker_complete_own_task_still_works(worker_env):
-
     """The ownership check doesn't break the normal own-task happy path."""
 
     from tools import kanban_tools as kt
@@ -2795,18 +2151,12 @@ def test_worker_complete_own_task_still_works(worker_env):
     assert d.get("ok") is True and d.get("task_id") == worker_env
 
 
-
-
-
 def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
-
     """A retried worker cannot complete the task using an old run token."""
 
     from clawk_cli import kanban_db as kb
 
     import clawk_cli.kanban_db as _kb
-
-
 
     # detect_crashed_workers now gates each running task behind a
 
@@ -2822,12 +2172,9 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
 
     monkeypatch.setenv("CLAWK_KANBAN_CRASH_GRACE_SECONDS", "0")
 
-
-
     conn = kb.connect()
 
     try:
-
         run1 = kb.latest_run(conn, worker_env)
 
         kb._set_worker_pid(conn, worker_env, 98765)
@@ -2838,8 +2185,6 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
 
         assert kb.detect_crashed_workers(conn) == [worker_env]
 
-
-
         kb.claim_task(conn, worker_env)
 
         run2 = kb.latest_run(conn, worker_env)
@@ -2847,10 +2192,7 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
         assert run2.id != run1.id
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2862,12 +2204,9 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
 
     assert d.get("ok") is not True
 
-
-
     conn = kb.connect()
 
     try:
-
         task = kb.get_task(conn, worker_env)
 
         assert task.status == "running"
@@ -2875,10 +2214,7 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
         assert task.current_run_id == run2.id
 
     finally:
-
         conn.close()
-
-
 
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(run2.id))
 
@@ -2889,11 +2225,7 @@ def test_worker_complete_rejects_stale_run_id(worker_env, monkeypatch):
     assert d.get("ok") is True
 
 
-
-
-
 def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
-
     """Orchestrator profiles (no CLAWK_KANBAN_TASK) can still complete
 
     any task via explicit task_id. The check only applies to workers."""
@@ -2910,8 +2242,6 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_P, "home", lambda: tmp_path)
 
-
-
     from clawk_cli import kanban_db as kb
 
     kb._INITIALIZED_PATHS.clear()
@@ -2921,7 +2251,6 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
     conn = kb.connect()
 
     try:
-
         tid = kb.create_task(conn, title="child to close out")
 
         conn.execute("UPDATE tasks SET status='ready' WHERE id=?", (tid,))
@@ -2929,10 +2258,7 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
         conn.commit()
 
     finally:
-
         conn.close()
-
-
 
     from tools import kanban_tools as kt
 
@@ -2941,9 +2267,6 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
     d = json.loads(out)
 
     assert d.get("ok") is True and d.get("task_id") == tid
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2967,13 +2290,8 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
 # ``board`` preserves the legacy env-driven resolution.
 
 
-
-
-
 @pytest.fixture
-
 def multi_board_env(monkeypatch, tmp_path):
-
     """Isolated Clawksis home with two distinct kanban boards seeded.
 
 
@@ -3010,8 +2328,6 @@ def multi_board_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
-
-
     from clawk_cli import kanban_db as kb
 
     kb._INITIALIZED_PATHS.clear()
@@ -3021,15 +2337,9 @@ def multi_board_env(monkeypatch, tmp_path):
     conn = kb.connect()
 
     try:
-
-        seed_default = kb.create_task(
-
-            conn, title="seed-default", assignee="worker-d"
-
-        )
+        seed_default = kb.create_task(conn, title="seed-default", assignee="worker-d")
 
     finally:
-
         conn.close()
 
     # Alt board — explicit slug routes the connection to a separate DB
@@ -3037,35 +2347,20 @@ def multi_board_env(monkeypatch, tmp_path):
     conn = kb.connect(board="alt")
 
     try:
-
-        seed_alt = kb.create_task(
-
-            conn, title="seed-alt", assignee="worker-a"
-
-        )
+        seed_alt = kb.create_task(conn, title="seed-alt", assignee="worker-a")
 
     finally:
-
         conn.close()
 
     return {
-
         "default_seed": seed_default,
-
         "alt_seed": seed_alt,
-
         "default_db": kb.kanban_db_path(),
-
         "alt_db": kb.kanban_db_path(board="alt"),
-
     }
 
 
-
-
-
 def test_board_param_routes_create_to_alt_board(multi_board_env):
-
     """kanban_create with ``board="alt"`` must write into the alt board's DB,
 
     not the default one."""
@@ -3074,16 +2369,10 @@ def test_board_param_routes_create_to_alt_board(multi_board_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_create({
-
         "title": "alt-only",
-
         "assignee": "worker",
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
@@ -3092,31 +2381,21 @@ def test_board_param_routes_create_to_alt_board(multi_board_env):
 
     new_tid = d["task_id"]
 
-
-
     # Lands on alt board.
 
     with kb.connect(board="alt") as conn:
-
         assert kb.get_task(conn, new_tid).title == "alt-only"
 
     # Does NOT land on default board.
 
     with kb.connect() as conn:
-
         assert kb.get_task(conn, new_tid) is None
 
 
-
-
-
 def test_board_param_routes_list_to_alt_board(multi_board_env):
-
     """kanban_list filters by the board parameter, not env-active."""
 
     from tools import kanban_tools as kt
-
-
 
     # Default — sees seed-default, not seed-alt.
 
@@ -3127,8 +2406,6 @@ def test_board_param_routes_list_to_alt_board(multi_board_env):
     assert "seed-default" in default_titles
 
     assert "seed-alt" not in default_titles
-
-
 
     # Alt — sees seed-alt, not seed-default.
 
@@ -3141,11 +2418,7 @@ def test_board_param_routes_list_to_alt_board(multi_board_env):
     assert "seed-default" not in alt_titles
 
 
-
-
-
 def test_board_param_routes_show_to_alt_board(multi_board_env):
-
     """kanban_show reads from the board parameter, not env-active.
 
 
@@ -3160,8 +2433,6 @@ def test_board_param_routes_show_to_alt_board(multi_board_env):
 
     from tools import kanban_tools as kt
 
-
-
     alt_seed = multi_board_env["alt_seed"]
 
     # Without board override, the alt task is invisible.
@@ -3169,8 +2440,6 @@ def test_board_param_routes_show_to_alt_board(multi_board_env):
     bad = json.loads(kt._handle_show({"task_id": alt_seed}))
 
     assert "not found" in bad.get("error", "")
-
-
 
     # With board override, it's readable.
 
@@ -3181,11 +2450,7 @@ def test_board_param_routes_show_to_alt_board(multi_board_env):
     assert good["task"]["title"] == "seed-alt"
 
 
-
-
-
 def test_board_param_routes_assign_via_create_to_alt(multi_board_env):
-
     """Workflow test for the 'assign' UX — create with assignee on a
 
     specific board. (The CLI has a separate ``kanban assign`` verb; the
@@ -3196,16 +2461,10 @@ def test_board_param_routes_assign_via_create_to_alt(multi_board_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_create({
-
         "title": "alt-assigned",
-
         "assignee": "linguist",
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
@@ -3213,7 +2472,6 @@ def test_board_param_routes_assign_via_create_to_alt(multi_board_env):
     assert d["ok"] is True
 
     with kb.connect(board="alt") as conn:
-
         task = kb.get_task(conn, d["task_id"])
 
         assert task is not None
@@ -3221,39 +2479,26 @@ def test_board_param_routes_assign_via_create_to_alt(multi_board_env):
         assert task.assignee == "linguist"
 
 
-
-
-
 def test_board_param_routes_comment_to_alt_board(multi_board_env):
-
     """kanban_comment routes the insert to the alt board's DB."""
 
     from clawk_cli import kanban_db as kb
 
     from tools import kanban_tools as kt
 
-
-
     alt_seed = multi_board_env["alt_seed"]
 
     out = kt._handle_comment({
-
         "task_id": alt_seed,
-
         "body": "alt comment",
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
 
     assert d["ok"] is True
 
-
-
     with kb.connect(board="alt") as conn:
-
         comments = kb.list_comments(conn, alt_seed)
 
         assert len(comments) == 1
@@ -3263,15 +2508,10 @@ def test_board_param_routes_comment_to_alt_board(multi_board_env):
     # Default board does not have this task at all, so no rogue comment.
 
     with kb.connect() as conn:
-
         assert kb.get_task(conn, alt_seed) is None
 
 
-
-
-
 def test_board_param_routes_complete_to_alt_board(multi_board_env):
-
     """kanban_complete on the alt board closes the alt task, leaving
 
     the default seed untouched."""
@@ -3280,111 +2520,73 @@ def test_board_param_routes_complete_to_alt_board(multi_board_env):
 
     from tools import kanban_tools as kt
 
-
-
     alt_seed = multi_board_env["alt_seed"]
 
     # Make alt task running so complete is valid.
 
     with kb.connect(board="alt") as conn:
-
         kb.claim_task(conn, alt_seed)
 
-
-
     out = kt._handle_complete({
-
         "task_id": alt_seed,
-
         "summary": "alt close",
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
 
     assert d["ok"] is True
 
-
-
     with kb.connect(board="alt") as conn:
-
         assert kb.get_task(conn, alt_seed).status == "done"
 
     # Default seed is unchanged.
 
     with kb.connect() as conn:
-
         default_seed = multi_board_env["default_seed"]
 
         assert kb.get_task(conn, default_seed).status == "ready"
 
 
-
-
-
 def test_board_param_routes_block_to_alt_board(multi_board_env):
-
     """kanban_block targets the alt board's DB."""
 
     from clawk_cli import kanban_db as kb
 
     from tools import kanban_tools as kt
 
-
-
     alt_seed = multi_board_env["alt_seed"]
 
     with kb.connect(board="alt") as conn:
-
         kb.claim_task(conn, alt_seed)
 
-
-
     out = kt._handle_block({
-
         "task_id": alt_seed,
-
         "reason": "need input on alt board",
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
 
     assert d["ok"] is True
 
-
-
     with kb.connect(board="alt") as conn:
-
         assert kb.get_task(conn, alt_seed).status == "blocked"
 
 
-
-
-
 def test_board_param_routes_unblock_to_alt_board(multi_board_env):
-
     """kanban_unblock targets the alt board's DB."""
 
     from clawk_cli import kanban_db as kb
 
     from tools import kanban_tools as kt
 
-
-
     alt_seed = multi_board_env["alt_seed"]
 
     with kb.connect(board="alt") as conn:
-
         kb.block_task(conn, alt_seed, reason="waiting")
 
         assert kb.get_task(conn, alt_seed).status == "blocked"
-
-
 
     out = kt._handle_unblock({"task_id": alt_seed, "board": "alt"})
 
@@ -3394,18 +2596,11 @@ def test_board_param_routes_unblock_to_alt_board(multi_board_env):
 
     assert d["status"] == "ready"
 
-
-
     with kb.connect(board="alt") as conn:
-
         assert kb.get_task(conn, alt_seed).status == "ready"
 
 
-
-
-
 def test_board_param_routes_heartbeat_to_alt_board(monkeypatch, tmp_path):
-
     """kanban_heartbeat targets the alt board's DB. Worker-scoped, so we
 
     use the worker-env style fixture inline (pinning CLAWK_KANBAN_TASK
@@ -3428,8 +2623,6 @@ def test_board_param_routes_heartbeat_to_alt_board(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
-
-
     from clawk_cli import kanban_db as kb
 
     kb._INITIALIZED_PATHS.clear()
@@ -3437,14 +2630,11 @@ def test_board_param_routes_heartbeat_to_alt_board(monkeypatch, tmp_path):
     # Seed the alt board with a claimed task.
 
     with kb.connect(board="alt") as conn:
-
         tid = kb.create_task(conn, title="alt hb", assignee="alt-worker")
 
         kb.claim_task(conn, tid)
 
     monkeypatch.setenv("CLAWK_KANBAN_TASK", tid)
-
-
 
     from tools import kanban_tools as kt
 
@@ -3454,64 +2644,41 @@ def test_board_param_routes_heartbeat_to_alt_board(monkeypatch, tmp_path):
 
     assert d["ok"] is True
 
-
-
     # Heartbeat event landed in the alt DB.
 
     with kb.connect(board="alt") as conn:
-
         events = [e for e in kb.list_events(conn, tid) if e.kind == "heartbeat"]
 
         assert len(events) == 1
 
 
-
-
-
 def test_board_param_routes_link_to_alt_board(multi_board_env):
-
     """kanban_link operates on the alt board's DB."""
 
     from clawk_cli import kanban_db as kb
 
     from tools import kanban_tools as kt
 
-
-
     with kb.connect(board="alt") as conn:
-
         a = kb.create_task(conn, title="A-alt", assignee="x")
 
         b = kb.create_task(conn, title="B-alt", assignee="x")
 
-
-
     out = kt._handle_link({
-
         "parent_id": a,
-
         "child_id": b,
-
         "board": "alt",
-
     })
 
     d = json.loads(out)
 
     assert d["ok"] is True
 
-
-
     with kb.connect(board="alt") as conn:
-
         assert b in kb.child_ids(conn, a)
 
 
-
-
-
 def test_board_param_none_falls_back_to_env(worker_env):
-
     """When ``board`` is omitted or None, behaviour is unchanged from
 
     before this feature — calls land on whatever the env resolves to.
@@ -3522,23 +2689,17 @@ def test_board_param_none_falls_back_to_env(worker_env):
 
     from tools import kanban_tools as kt
 
-
-
     out = kt._handle_show({})  # no board, no task_id
 
     d = json.loads(out)
 
     assert d["task"]["id"] == worker_env
 
-
-
     out = kt._handle_show({"task_id": worker_env, "board": None})
 
     d = json.loads(out)
 
     assert d["task"]["id"] == worker_env
-
-
 
     # Sanity: the env-resolved path is the legacy default DB, NOT an
 
@@ -3549,18 +2710,12 @@ def test_board_param_none_falls_back_to_env(worker_env):
     assert kb.kanban_db_path() == kb.kanban_db_path(board="default")
 
 
-
-
-
 def test_board_param_rejects_invalid_slug(multi_board_env):
-
     """A board slug that fails ``_normalize_board_slug`` surfaces as a
 
     structured tool_error rather than a 500 / unhandled exception."""
 
     from tools import kanban_tools as kt
-
-
 
     out = kt._handle_list({"board": "Has Spaces"})
 
@@ -3569,11 +2724,7 @@ def test_board_param_rejects_invalid_slug(multi_board_env):
     assert "invalid board slug" in err, f"got {err!r}"
 
 
-
-
-
 def test_board_param_in_all_schemas():
-
     """All nine kanban_* tool schemas must expose an optional ``board``
 
     parameter. This pins the contract surfaced to the LLM — adding a
@@ -3582,47 +2733,27 @@ def test_board_param_in_all_schemas():
 
     from tools import kanban_tools as kt
 
-
-
     schemas = [
-
         kt.KANBAN_SHOW_SCHEMA,
-
         kt.KANBAN_LIST_SCHEMA,
-
         kt.KANBAN_COMPLETE_SCHEMA,
-
         kt.KANBAN_BLOCK_SCHEMA,
-
         kt.KANBAN_HEARTBEAT_SCHEMA,
-
         kt.KANBAN_COMMENT_SCHEMA,
-
         kt.KANBAN_CREATE_SCHEMA,
-
         kt.KANBAN_UNBLOCK_SCHEMA,
-
         kt.KANBAN_LINK_SCHEMA,
-
     ]
 
     for schema in schemas:
-
         props = schema["parameters"]["properties"]
 
-        assert "board" in props, (
-
-            f"{schema['name']} is missing the 'board' property"
-
-        )
+        assert "board" in props, f"{schema['name']} is missing the 'board' property"
 
         assert props["board"]["type"] == "string"
 
         # board is optional everywhere — never in required.
 
         assert "board" not in schema["parameters"].get("required", []), (
-
             f"{schema['name']} marks board as required; must be optional"
-
         )
-

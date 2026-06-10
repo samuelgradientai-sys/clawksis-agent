@@ -40,6 +40,7 @@ from typing import Any, Dict, Optional, Union
 
 # ── Message (assistant text) events ──────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class MessageChunk:
     """A delta of streamed assistant text.
@@ -49,6 +50,7 @@ class MessageChunk:
     Telegram DMs, edit-in-place elsewhere).  Reasoning/think-block content is
     filtered upstream and never arrives as a MessageChunk.
     """
+
     text: str
 
 
@@ -65,6 +67,7 @@ class MessageStop:
     the consumer finalizes the current bubble and prepares a new segment without
     treating the turn as done.
     """
+
     final: bool = False
 
 
@@ -76,10 +79,12 @@ class Commentary:
     call.  Unlike a MessageChunk this is already-complete text (not a delta); the
     consumer renders it as its own message so it reads as a distinct beat.
     """
+
     text: str
 
 
 # ── Tool-call events ─────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class ToolCallChunk:
@@ -91,6 +96,7 @@ class ToolCallChunk:
     don't show tool chrome).  Previously the agent's gateway callback baked the
     emoji + preview formatting in; that decision now belongs to the adapter.
     """
+
     tool_name: str
     preview: Optional[str] = None
     args: Optional[Dict[str, Any]] = None
@@ -110,6 +116,7 @@ class ToolCallFinished:
     long tool run).  No tool *output* travels here — output is the agent's
     concern and is persisted to history, not streamed as presentation.
     """
+
     tool_name: str
     duration: float = 0.0
     ok: bool = True
@@ -117,6 +124,7 @@ class ToolCallFinished:
 
 
 # ── Gateway control / lifecycle events ───────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class LongToolHint:
@@ -127,6 +135,7 @@ class LongToolHint:
     event so the *gateway* owns the "should I surface this here?" decision rather
     than the agent.
     """
+
     tool_name: str = ""
     duration: float = 0.0
 
@@ -140,6 +149,7 @@ class GatewayNotice:
     human-readable default the base class renders when an adapter has no
     platform-specific treatment.
     """
+
     kind: str
     text: str = ""
     extra: Dict[str, Any] = field(default_factory=dict)

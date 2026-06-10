@@ -78,10 +78,7 @@ lm += "Time: " + gen("time", regex=r"\d{2}:\d{2}")
 lm += "Time: " + gen("time_full", regex=r"\d{2}:\d{2}:\d{2}")
 
 # ISO 8601 datetime
-lm += "Timestamp: " + gen(
-    "timestamp",
-    regex=r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
-)
+lm += "Timestamp: " + gen("timestamp", regex=r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 # Year (YYYY)
 lm += "Year: " + gen("year", regex=r"(19|20)\d{2}")
@@ -89,7 +86,7 @@ lm += "Year: " + gen("year", regex=r"(19|20)\d{2}")
 # Month name
 lm += "Month: " + gen(
     "month",
-    regex=r"(January|February|March|April|May|June|July|August|September|October|November|December)"
+    regex=r"(January|February|March|April|May|June|July|August|September|October|November|December)",
 )
 ```
 
@@ -97,10 +94,7 @@ lm += "Month: " + gen(
 
 ```python
 # Email
-lm += "Email: " + gen(
-    "email",
-    regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-)
+lm += "Email: " + gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 
 # Phone (US format)
 lm += "Phone: " + gen("phone", regex=r"\d{3}-\d{3}-\d{4}")
@@ -117,7 +111,7 @@ lm += "Postal: " + gen("postal", regex=r"[A-Z]\d[A-Z] \d[A-Z]\d")
 # URL
 lm += "URL: " + gen(
     "url",
-    regex=r"https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=-]*)?"
+    regex=r"https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=-]*)?",
 )
 ```
 
@@ -143,20 +137,22 @@ lm += '"active": ' + gen("active", regex=r"(true|false)")
 lm += '"optional": ' + gen("optional", regex=r"(null|[0-9]+)")
 
 # Array of strings
-lm += '"tags": [' + gen(
-    "tags",
-    regex=r'"[a-z]+"(, "[a-z]+")*'
-) + ']'
+lm += '"tags": [' + gen("tags", regex=r'"[a-z]+"(, "[a-z]+")*') + "]"
 
 # Complete JSON object
-lm += """{
-    "name": """ + gen("name", regex=r'"[A-Za-z ]+"') + """,
-    "age": """ + gen("age", regex=r"[0-9]+") + """,
-    "email": """ + gen(
-        "email",
-        regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"'
-    ) + """
+lm += (
+    """{
+    "name": """
+    + gen("name", regex=r'"[A-Za-z ]+"')
+    + """,
+    "age": """
+    + gen("age", regex=r"[0-9]+")
+    + """,
+    "email": """
+    + gen("email", regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"')
+    + """
 }"""
+)
 ```
 
 #### Code Patterns
@@ -173,8 +169,7 @@ lm += "Color: #" + gen("color", regex=r"[0-9A-Fa-f]{6}")
 
 # UUID
 lm += "UUID: " + gen(
-    "uuid",
-    regex=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    "uuid", regex=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
 
 # Git commit hash (short)
@@ -186,7 +181,7 @@ lm += "Version: " + gen("version", regex=r"[0-9]+\.[0-9]+\.[0-9]+")
 # IP address (IPv4)
 lm += "IP: " + gen(
     "ip",
-    regex=r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+    regex=r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
 )
 ```
 
@@ -219,6 +214,7 @@ lm += "Rate: " + gen("rate", regex=r"[0-9]+\.[0-9]{1,2}%")
 ```python
 from guidance import models, gen, guidance
 
+
 @guidance
 def json_object(lm):
     """Generate valid JSON object."""
@@ -231,16 +227,18 @@ def json_object(lm):
     lm += '    "age": ' + gen("age", regex=r"[0-9]+") + ",\n"
 
     # Email field (required)
-    lm += '    "email": ' + gen(
-        "email",
-        regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"'
-    ) + ",\n"
+    lm += (
+        '    "email": '
+        + gen("email", regex=r'"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"')
+        + ",\n"
+    )
 
     # Active field (required, boolean)
     lm += '    "active": ' + gen("active", regex=r"(true|false)") + "\n"
 
     lm += "}"
     return lm
+
 
 lm = models.Anthropic("claude-sonnet-4-5-20250929")
 lm = json_object(lm)
@@ -309,10 +307,11 @@ def xml_document(lm):
     lm += "    <age>" + gen("age", regex=r"[0-9]+") + "</age>\n"
 
     # Email element
-    lm += "    <email>" + gen(
-        "email",
-        regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-    ) + "</email>\n"
+    lm += (
+        "    <email>"
+        + gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+        + "</email>\n"
+    )
 
     lm += "</person>"
     return lm
@@ -328,6 +327,7 @@ def csv_row(lm):
     lm += gen("age", regex=r"[0-9]+") + ","
     lm += gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
     return lm
+
 
 @guidance
 def csv_document(lm, rows=5):
@@ -437,8 +437,7 @@ lm += "Approved: " + select(["Yes", "No"], name="approved")
 
 # Multiple choice
 lm += "Answer: " + select(
-    ["A) Paris", "B) London", "C) Berlin", "D) Madrid"],
-    name="answer"
+    ["A) Paris", "B) London", "C) Berlin", "D) Madrid"], name="answer"
 )
 ```
 
@@ -446,6 +445,7 @@ lm += "Answer: " + select(
 
 ```python
 from guidance import models, select, gen, guidance
+
 
 @guidance
 def conditional_fields(lm):
@@ -473,7 +473,7 @@ def multiple_selections(lm):
     colors = ["red", "blue", "green", "yellow", "purple"]
 
     for i in range(3):
-        lm += f"{i+1}. " + select(colors, name=f"color_{i}") + "\n"
+        lm += f"{i + 1}. " + select(colors, name=f"color_{i}") + "\n"
 
     return lm
 ```
@@ -495,20 +495,23 @@ def user_form(lm):
     lm += "Age: " + gen("age", regex=r"[0-9]+", max_tokens=3) + "\n"
 
     # Email (validated format)
-    lm += "Email: " + gen(
-        "email",
-        regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        stop="\n"
-    ) + "\n"
+    lm += (
+        "Email: "
+        + gen(
+            "email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", stop="\n"
+        )
+        + "\n"
+    )
 
     # Phone (US format)
     lm += "Phone: " + gen("phone", regex=r"\d{3}-\d{3}-\d{4}") + "\n"
 
     # Account type (selection)
-    lm += "Account Type: " + select(
-        ["Standard", "Premium", "Enterprise"],
-        name="account_type"
-    ) + "\n"
+    lm += (
+        "Account Type: "
+        + select(["Standard", "Premium", "Enterprise"], name="account_type")
+        + "\n"
+    )
 
     # Active status (boolean)
     lm += "Active: " + select(["Yes", "No"], name="active") + "\n"
@@ -528,11 +531,9 @@ def extract_entities(lm, text):
     lm += "Person: " + gen("person", regex=r"[A-Za-z ]+", stop="\n") + "\n"
 
     # Organization (alphanumeric with spaces)
-    lm += "Organization: " + gen(
-        "organization",
-        regex=r"[A-Za-z0-9 ]+",
-        stop="\n"
-    ) + "\n"
+    lm += (
+        "Organization: " + gen("organization", regex=r"[A-Za-z0-9 ]+", stop="\n") + "\n"
+    )
 
     # Date (YYYY-MM-DD format)
     lm += "Date: " + gen("date", regex=r"\d{4}-\d{2}-\d{2}") + "\n"
@@ -631,6 +632,7 @@ def reusable_pattern(lm):
     """This grammar is compiled once and cached."""
     lm += gen("email", regex=r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
     return lm
+
 
 # First call: compiles grammar
 lm = reusable_pattern(lm)

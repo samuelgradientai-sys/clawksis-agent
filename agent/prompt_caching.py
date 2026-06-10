@@ -12,7 +12,9 @@ import copy
 from typing import Any, Dict, List
 
 
-def _apply_cache_marker(msg: dict, cache_marker: dict, native_anthropic: bool = False) -> None:
+def _apply_cache_marker(
+    msg: dict, cache_marker: dict, native_anthropic: bool = False
+) -> None:
     """Add cache_control to a single message, handling all format variations."""
     role = msg.get("role", "")
     content = msg.get("content")

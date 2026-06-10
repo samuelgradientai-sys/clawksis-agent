@@ -51,8 +51,8 @@ _MessageDeduplicator = _line._MessageDeduplicator
 # 1. Signature verification
 # ---------------------------------------------------------------------------
 
-class TestSignature:
 
+class TestSignature:
     def _sign(self, body: bytes, secret: str) -> str:
         digest = hmac.new(secret.encode(), body, hashlib.sha256).digest()
         return base64.b64encode(digest).decode()
@@ -86,20 +86,28 @@ class TestSignature:
 # 2. Chat-id / source resolution
 # ---------------------------------------------------------------------------
 
-class TestSourceResolution:
 
+class TestSourceResolution:
     def test_user_source(self):
         chat_id, ctype = _resolve_chat({"type": "user", "userId": "U123"})
         assert chat_id == "U123"
         assert ctype == "dm"
 
     def test_group_source(self):
-        chat_id, ctype = _resolve_chat({"type": "group", "groupId": "C456", "userId": "U123"})
+        chat_id, ctype = _resolve_chat({
+            "type": "group",
+            "groupId": "C456",
+            "userId": "U123",
+        })
         assert chat_id == "C456"
         assert ctype == "group"
 
     def test_room_source(self):
-        chat_id, ctype = _resolve_chat({"type": "room", "roomId": "R789", "userId": "U123"})
+        chat_id, ctype = _resolve_chat({
+            "type": "room",
+            "roomId": "R789",
+            "userId": "U123",
+        })
         assert chat_id == "R789"
         assert ctype == "room"
 
@@ -118,45 +126,61 @@ class TestSourceResolution:
 # 3. Three-allowlist gating
 # ---------------------------------------------------------------------------
 
-class TestAllowlist:
 
+class TestAllowlist:
     def test_allow_all_short_circuits(self):
         for src in [
             {"type": "user", "userId": "Ufoo"},
             {"type": "group", "groupId": "Cfoo"},
             {"type": "room", "roomId": "Rfoo"},
         ]:
-            assert _allowed_for_source(src, allow_all=True, user_ids=set(), group_ids=set(), room_ids=set())
+            assert _allowed_for_source(
+                src, allow_all=True, user_ids=set(), group_ids=set(), room_ids=set()
+            )
 
     def test_user_in_allowlist_passes(self):
         src = {"type": "user", "userId": "Uok"}
-        assert _allowed_for_source(src, allow_all=False, user_ids={"Uok"}, group_ids=set(), room_ids=set())
+        assert _allowed_for_source(
+            src, allow_all=False, user_ids={"Uok"}, group_ids=set(), room_ids=set()
+        )
 
     def test_user_not_in_allowlist_rejected(self):
         src = {"type": "user", "userId": "Uother"}
-        assert not _allowed_for_source(src, allow_all=False, user_ids={"Uok"}, group_ids=set(), room_ids=set())
+        assert not _allowed_for_source(
+            src, allow_all=False, user_ids={"Uok"}, group_ids=set(), room_ids=set()
+        )
 
     def test_group_uses_group_list_not_user_list(self):
         src = {"type": "group", "groupId": "Cok", "userId": "Uany"}
-        assert _allowed_for_source(src, allow_all=False, user_ids={"Uany"}, group_ids={"Cok"}, room_ids=set())
-        assert not _allowed_for_source(src, allow_all=False, user_ids={"Uany"}, group_ids=set(), room_ids=set())
+        assert _allowed_for_source(
+            src, allow_all=False, user_ids={"Uany"}, group_ids={"Cok"}, room_ids=set()
+        )
+        assert not _allowed_for_source(
+            src, allow_all=False, user_ids={"Uany"}, group_ids=set(), room_ids=set()
+        )
 
     def test_room_uses_room_list(self):
         src = {"type": "room", "roomId": "Rok"}
-        assert _allowed_for_source(src, allow_all=False, user_ids=set(), group_ids=set(), room_ids={"Rok"})
-        assert not _allowed_for_source(src, allow_all=False, user_ids=set(), group_ids=set(), room_ids=set())
+        assert _allowed_for_source(
+            src, allow_all=False, user_ids=set(), group_ids=set(), room_ids={"Rok"}
+        )
+        assert not _allowed_for_source(
+            src, allow_all=False, user_ids=set(), group_ids=set(), room_ids=set()
+        )
 
     def test_unknown_type_rejected(self):
         src = {"type": "weird"}
-        assert not _allowed_for_source(src, allow_all=False, user_ids=set(), group_ids=set(), room_ids=set())
+        assert not _allowed_for_source(
+            src, allow_all=False, user_ids=set(), group_ids=set(), room_ids=set()
+        )
 
 
 # ---------------------------------------------------------------------------
 # 4. Inbound dedup
 # ---------------------------------------------------------------------------
 
-class TestDedup:
 
+class TestDedup:
     def test_first_event_not_duplicate(self):
         d = _MessageDeduplicator()
         assert not d.is_duplicate("evt1")
@@ -186,8 +210,8 @@ class TestDedup:
 # 5. RequestCache state machine
 # ---------------------------------------------------------------------------
 
-class TestRequestCache:
 
+class TestRequestCache:
     def test_register_pending_is_pending(self):
         c = RequestCache()
         rid = c.register_pending("Uchat")
@@ -248,8 +272,8 @@ class TestRequestCache:
 # 6. Markdown stripping + chunking
 # ---------------------------------------------------------------------------
 
-class TestMarkdownAndChunking:
 
+class TestMarkdownAndChunking:
     def test_bold_stripped(self):
         assert strip_markdown_preserving_urls("**hello**") == "hello"
 
@@ -300,17 +324,21 @@ class TestMarkdownAndChunking:
 # 7. Send routing (reply -> push fallback, batching, system-bypass)
 # ---------------------------------------------------------------------------
 
-class TestSendRouting:
 
+class TestSendRouting:
     @pytest.fixture
     def adapter(self, monkeypatch):
         monkeypatch.delenv("LINE_CHANNEL_ACCESS_TOKEN", raising=False)
         monkeypatch.delenv("LINE_CHANNEL_SECRET", raising=False)
         from gateway.config import PlatformConfig
-        cfg = PlatformConfig(enabled=True, extra={
-            "channel_access_token": "tok",
-            "channel_secret": "sec",
-        })
+
+        cfg = PlatformConfig(
+            enabled=True,
+            extra={
+                "channel_access_token": "tok",
+                "channel_secret": "sec",
+            },
+        )
         ad = LineAdapter(cfg)
         ad._client = MagicMock()
         ad._client.reply = AsyncMock()
@@ -326,6 +354,7 @@ class TestSendRouting:
 
     def test_send_uses_reply_when_token_present(self, adapter):
         import time as _time
+
         adapter._reply_tokens["Uchat"] = ("rt-token", _time.time() + 30)
         result = asyncio.run(adapter.send("Uchat", "hello"))
         assert result.success
@@ -342,6 +371,7 @@ class TestSendRouting:
 
     def test_send_falls_back_to_push_when_reply_fails(self, adapter):
         import time as _time
+
         adapter._reply_tokens["Uchat"] = ("rt-token", _time.time() + 30)
         adapter._client.reply.side_effect = RuntimeError("expired")
         result = asyncio.run(adapter.send("Uchat", "hello"))
@@ -386,7 +416,11 @@ class TestSendRouting:
         assert result.success
         call_kwargs = adapter._client.push.call_args
         # call_args is (args, kwargs); for our send the messages are the 2nd positional
-        sent_messages = call_kwargs.args[1] if call_kwargs.args else call_kwargs.kwargs.get("messages")
+        sent_messages = (
+            call_kwargs.args[1]
+            if call_kwargs.args
+            else call_kwargs.kwargs.get("messages")
+        )
         # Without args, fall back to inspecting the call shape
         if sent_messages is None:
             # We invoked client.push(chat_id, messages) — check first batch
@@ -403,8 +437,8 @@ class TestSendRouting:
 # 8. Register() metadata + plugin entry points
 # ---------------------------------------------------------------------------
 
-class TestRegister:
 
+class TestRegister:
     class _FakeCtx:
         def __init__(self):
             self.kwargs = None
@@ -452,10 +486,14 @@ class TestRegister:
         ctx = self._FakeCtx()
         register(ctx)
         from gateway.config import PlatformConfig
-        cfg = PlatformConfig(enabled=True, extra={
-            "channel_access_token": "tok",
-            "channel_secret": "sec",
-        })
+
+        cfg = PlatformConfig(
+            enabled=True,
+            extra={
+                "channel_access_token": "tok",
+                "channel_secret": "sec",
+            },
+        )
         ad = ctx.kwargs["adapter_factory"](cfg)
         assert isinstance(ad, LineAdapter)
 
@@ -467,7 +505,6 @@ class TestRegister:
 
 
 class TestEnvEnablement:
-
     def test_returns_none_without_credentials(self, monkeypatch):
         monkeypatch.delenv("LINE_CHANNEL_ACCESS_TOKEN", raising=False)
         monkeypatch.delenv("LINE_CHANNEL_SECRET", raising=False)
@@ -493,10 +530,10 @@ class TestEnvEnablement:
 
 
 class TestStandaloneSend:
-
     def test_missing_token_returns_error(self, monkeypatch):
         monkeypatch.delenv("LINE_CHANNEL_ACCESS_TOKEN", raising=False)
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(enabled=True, extra={})
         result = asyncio.run(_standalone_send(cfg, "Uchat", "hi"))
         assert "error" in result
@@ -504,6 +541,7 @@ class TestStandaloneSend:
     def test_missing_chat_id_returns_error(self, monkeypatch):
         monkeypatch.setenv("LINE_CHANNEL_ACCESS_TOKEN", "tok")
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(enabled=True, extra={})
         result = asyncio.run(_standalone_send(cfg, "", "hi"))
         assert "error" in result
@@ -534,7 +572,6 @@ class TestStandaloneSend:
 
 
 class TestPostbackButtonShape:
-
     def test_template_buttons_structure(self):
         msg = build_postback_button_message("hi", "Tap me", "rid-1")
         assert msg["type"] == "template"
@@ -558,7 +595,6 @@ class TestPostbackButtonShape:
 
 
 class TestCheckRequirements:
-
     def test_rejects_without_token(self, monkeypatch):
         monkeypatch.delenv("LINE_CHANNEL_ACCESS_TOKEN", raising=False)
         monkeypatch.setenv("LINE_CHANNEL_SECRET", "s")
@@ -571,9 +607,9 @@ class TestCheckRequirements:
 
 
 class TestValidateConfig:
-
     def test_validates_from_extra(self):
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(
             enabled=True,
             extra={"channel_access_token": "t", "channel_secret": "s"},
@@ -584,16 +620,17 @@ class TestValidateConfig:
         monkeypatch.delenv("LINE_CHANNEL_ACCESS_TOKEN", raising=False)
         monkeypatch.delenv("LINE_CHANNEL_SECRET", raising=False)
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(enabled=True, extra={})
         assert not validate_config(cfg)
 
 
 class TestAdapterInit:
-
     def test_init_from_config_extra(self, monkeypatch):
         for k in ("LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET", "LINE_PORT"):
             monkeypatch.delenv(k, raising=False)
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(
             enabled=True,
             extra={
@@ -615,9 +652,14 @@ class TestAdapterInit:
         monkeypatch.setenv("LINE_CHANNEL_ACCESS_TOKEN", "env-tok")
         monkeypatch.setenv("LINE_PORT", "1234")
         from gateway.config import PlatformConfig
+
         cfg = PlatformConfig(
             enabled=True,
-            extra={"channel_access_token": "extra-tok", "channel_secret": "s", "port": 5555},
+            extra={
+                "channel_access_token": "extra-tok",
+                "channel_secret": "s",
+                "port": 5555,
+            },
         )
         ad = LineAdapter(cfg)
         assert ad.channel_access_token == "env-tok"
@@ -629,6 +671,7 @@ class TestAdapterInit:
         monkeypatch.setenv("LINE_ALLOWED_USERS", "U1, U2,U3")
         monkeypatch.setenv("LINE_ALLOWED_GROUPS", "C1")
         from gateway.config import PlatformConfig
+
         ad = LineAdapter(PlatformConfig(enabled=True))
         assert ad.allowed_users == {"U1", "U2", "U3"}
         assert ad.allowed_groups == {"C1"}
@@ -637,6 +680,7 @@ class TestAdapterInit:
         monkeypatch.setenv("LINE_CHANNEL_ACCESS_TOKEN", "t")
         monkeypatch.setenv("LINE_CHANNEL_SECRET", "s")
         from gateway.config import PlatformConfig
+
         ad = LineAdapter(PlatformConfig(enabled=True))
         assert asyncio.run(ad.get_chat_info("U123"))["type"] == "dm"
         assert asyncio.run(ad.get_chat_info("C123"))["type"] == "group"

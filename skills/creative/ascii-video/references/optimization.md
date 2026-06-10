@@ -14,10 +14,11 @@ import platform
 import shutil
 import os
 
+
 def detect_hardware():
     """Detect hardware capabilities and return render config."""
     cpu_count = multiprocessing.cpu_count()
-    
+
     # Leave 1-2 cores free for OS + ffmpeg encoding
     if cpu_count >= 16:
         workers = cpu_count - 2
@@ -27,12 +28,15 @@ def detect_hardware():
         workers = cpu_count - 1
     else:
         workers = max(1, cpu_count)
-    
+
     # Memory detection (platform-specific)
     try:
         if platform.system() == "Darwin":
             import subprocess
-            mem_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"]).strip())
+
+            mem_bytes = int(
+                subprocess.check_output(["sysctl", "-n", "hw.memsize"]).strip()
+            )
         elif platform.system() == "Linux":
             with open("/proc/meminfo") as f:
                 for line in f:
@@ -45,16 +49,16 @@ def detect_hardware():
         mem_bytes = 8 * 1024**3
 
     mem_gb = mem_bytes / (1024**3)
-    
+
     # Each worker uses ~50-150MB depending on grid sizes
     # Cap workers if memory is tight
     mem_per_worker_mb = 150
     max_workers_by_mem = int(mem_gb * 1024 * 0.6 / mem_per_worker_mb)  # use 60% of RAM
     workers = min(workers, max_workers_by_mem)
-    
+
     # ffmpeg availability and codec support
     has_ffmpeg = shutil.which("ffmpeg") is not None
-    
+
     return {
         "cpu_count": cpu_count,
         "workers": workers,
@@ -76,36 +80,84 @@ def quality_profile(hw, target_duration_s, user_preference="auto"):
     user_preference: "auto", "draft", "preview", "production", "max"
     """
     if user_preference == "draft":
-        return {"vw": 960, "vh": 540, "fps": 12, "crf": 28, "workers": min(4, hw["workers"]),
-                "grid_scale": 0.5, "shaders": "minimal", "particles_max": 200}
-    
+        return {
+            "vw": 960,
+            "vh": 540,
+            "fps": 12,
+            "crf": 28,
+            "workers": min(4, hw["workers"]),
+            "grid_scale": 0.5,
+            "shaders": "minimal",
+            "particles_max": 200,
+        }
+
     if user_preference == "preview":
-        return {"vw": 1280, "vh": 720, "fps": 15, "crf": 25, "workers": hw["workers"],
-                "grid_scale": 0.75, "shaders": "standard", "particles_max": 500}
-    
+        return {
+            "vw": 1280,
+            "vh": 720,
+            "fps": 15,
+            "crf": 25,
+            "workers": hw["workers"],
+            "grid_scale": 0.75,
+            "shaders": "standard",
+            "particles_max": 500,
+        }
+
     if user_preference == "max":
-        return {"vw": 3840, "vh": 2160, "fps": 30, "crf": 15, "workers": hw["workers"],
-                "grid_scale": 2.0, "shaders": "full", "particles_max": 3000}
-    
+        return {
+            "vw": 3840,
+            "vh": 2160,
+            "fps": 30,
+            "crf": 15,
+            "workers": hw["workers"],
+            "grid_scale": 2.0,
+            "shaders": "full",
+            "particles_max": 3000,
+        }
+
     # "production" or "auto"
     # Auto-detect: estimate render time, downgrade if it would take too long
     n_frames = int(target_duration_s * 24)
     est_seconds_per_frame = 0.18  # ~180ms at 1080p
     est_total_s = n_frames * est_seconds_per_frame / max(1, hw["workers"])
-    
+
     if hw["mem_gb"] < 4 or hw["cpu_count"] <= 2:
         # Low-end: 720p, 15fps
-        return {"vw": 1280, "vh": 720, "fps": 15, "crf": 23, "workers": hw["workers"],
-                "grid_scale": 0.75, "shaders": "standard", "particles_max": 500}
-    
+        return {
+            "vw": 1280,
+            "vh": 720,
+            "fps": 15,
+            "crf": 23,
+            "workers": hw["workers"],
+            "grid_scale": 0.75,
+            "shaders": "standard",
+            "particles_max": 500,
+        }
+
     if est_total_s > 3600:  # would take over an hour
         # Downgrade to 720p to speed up
-        return {"vw": 1280, "vh": 720, "fps": 24, "crf": 20, "workers": hw["workers"],
-                "grid_scale": 0.75, "shaders": "standard", "particles_max": 800}
-    
+        return {
+            "vw": 1280,
+            "vh": 720,
+            "fps": 24,
+            "crf": 20,
+            "workers": hw["workers"],
+            "grid_scale": 0.75,
+            "shaders": "standard",
+            "particles_max": 800,
+        }
+
     # Standard production: 1080p 24fps
-    return {"vw": 1920, "vh": 1080, "fps": 24, "crf": 20, "workers": hw["workers"],
-            "grid_scale": 1.0, "shaders": "full", "particles_max": 1200}
+    return {
+        "vw": 1920,
+        "vh": 1080,
+        "fps": 24,
+        "crf": 20,
+        "workers": hw["workers"],
+        "grid_scale": 1.0,
+        "shaders": "full",
+        "particles_max": 1200,
+    }
 
 
 def apply_quality_profile(profile):
@@ -124,12 +176,24 @@ def apply_quality_profile(profile):
 
 ```python
 parser = argparse.ArgumentParser()
-parser.add_argument("--quality", choices=["draft", "preview", "production", "max", "auto"],
-                    default="auto", help="Render quality preset")
-parser.add_argument("--aspect", choices=["landscape", "portrait", "square"],
-                    default="landscape", help="Aspect ratio preset")
-parser.add_argument("--workers", type=int, default=0, help="Override worker count (0=auto)")
-parser.add_argument("--resolution", type=str, default="", help="Override resolution e.g. 1280x720")
+parser.add_argument(
+    "--quality",
+    choices=["draft", "preview", "production", "max", "auto"],
+    default="auto",
+    help="Render quality preset",
+)
+parser.add_argument(
+    "--aspect",
+    choices=["landscape", "portrait", "square"],
+    default="landscape",
+    help="Aspect ratio preset",
+)
+parser.add_argument(
+    "--workers", type=int, default=0, help="Override worker count (0=auto)"
+)
+parser.add_argument(
+    "--resolution", type=str, default="", help="Override resolution e.g. 1280x720"
+)
 args = parser.parse_args()
 
 hw = detect_hardware()
@@ -140,8 +204,8 @@ profile = quality_profile(hw, target_duration, args.quality)
 # Apply aspect ratio preset (before manual resolution override)
 ASPECT_PRESETS = {
     "landscape": (1920, 1080),
-    "portrait":  (1080, 1920),
-    "square":    (1080, 1080),
+    "portrait": (1080, 1920),
+    "square": (1080, 1080),
 }
 if args.aspect != "landscape" and not args.resolution:
     profile["vw"], profile["vh"] = ASPECT_PRESETS[args.aspect]
@@ -152,8 +216,10 @@ if args.resolution:
 apply_quality_profile(profile)
 
 log(f"Hardware: {hw['cpu_count']} cores, {hw['mem_gb']:.1f}GB RAM, {hw['platform']}")
-log(f"Render:   {profile['vw']}x{profile['vh']} @{profile['fps']}fps, "
-    f"CRF {profile['crf']}, {profile['workers']} workers")
+log(
+    f"Render:   {profile['vw']}x{profile['vh']} @{profile['fps']}fps, "
+    f"CRF {profile['crf']}, {profile['workers']} workers"
+)
 ```
 
 ### Portrait Mode Considerations
@@ -185,7 +251,8 @@ Portrait (1080x1920) has the same pixel count as landscape 1080p, so performance
 def layout_text_portrait(text, max_chars_per_line=25, grid=None):
     """Break text into short lines for portrait display."""
     words = text.split()
-    lines = []; current = ""
+    lines = []
+    current = ""
     for w in words:
         if len(current) + len(w) + 1 > max_chars_per_line:
             lines.append(current.strip())
@@ -222,8 +289,9 @@ for c in all_characters:
 
 # At render time -- fast lookup
 bitmap = bitmaps[char]
-canvas[y:y+ch, x:x+cw] = np.maximum(canvas[y:y+ch, x:x+cw],
-                                      (bitmap[:,:,None] * color).astype(np.uint8))
+canvas[y : y + ch, x : x + cw] = np.maximum(
+    canvas[y : y + ch, x : x + cw], (bitmap[:, :, None] * color).astype(np.uint8)
+)
 ```
 
 Collect all characters from all palettes + overlay text into the init set. Lazy-init for any missed characters.
@@ -238,13 +306,10 @@ Use when: background layer uses a fixed character palette and only color/brightn
 
 ```python
 # In GridLayer.__init__:
-self._bg_row_idx = np.clip(
-    (np.arange(VH) - self.oy) // self.ch, 0, self.rows - 1
-)
-self._bg_col_idx = np.clip(
-    (np.arange(VW) - self.ox) // self.cw, 0, self.cols - 1
-)
+self._bg_row_idx = np.clip((np.arange(VH) - self.oy) // self.ch, 0, self.rows - 1)
+self._bg_col_idx = np.clip((np.arange(VW) - self.ox) // self.cw, 0, self.cols - 1)
 self._bg_textures = {}
+
 
 def make_bg_texture(self, palette):
     """Pre-render a static ASCII texture (grayscale float32) once."""
@@ -263,7 +328,7 @@ def make_bg_texture(self, palette):
                 if x + self.cw > VW:
                     break
                 bm = self.bm[rng.choice(ch_list)]
-                texture[y:y+self.ch, x:x+self.cw] = bm
+                texture[y : y + self.ch, x : x + self.cw] = bm
         self._bg_textures[palette] = texture
     return self._bg_textures[palette]
 ```
@@ -276,9 +341,9 @@ def render_bg(self, color_field, palette=PAL_CIRCUIT):
     color_field: (rows, cols, 3) uint8. Returns (VH, VW, 3) uint8."""
     texture = self.make_bg_texture(palette)
     # Expand cell colors to pixel coords via pre-computed index maps
-    color_px = color_field[
-        self._bg_row_idx[:, None], self._bg_col_idx[None, :]
-    ].astype(np.float32)
+    color_px = color_field[self._bg_row_idx[:, None], self._bg_col_idx[None, :]].astype(
+        np.float32
+    )
     return (texture[:, :, None] * color_px).astype(np.uint8)
 ```
 
@@ -302,11 +367,11 @@ Pre-compute all grid-relative coordinate arrays at init, not per-frame:
 
 ```python
 # These are O(rows*cols) and used in every effect
-self.rr = np.arange(rows)[:, None]    # row indices
-self.cc = np.arange(cols)[None, :]    # col indices
-self.dist = np.sqrt(dx**2 + dy**2)   # distance from center
-self.angle = np.arctan2(dy, dx)       # angle from center
-self.dist_n = ...                      # normalized distance
+self.rr = np.arange(rows)[:, None]  # row indices
+self.cc = np.arange(cols)[None, :]  # col indices
+self.dist = np.sqrt(dx**2 + dy**2)  # distance from center
+self.angle = np.arctan2(dy, dx)  # angle from center
+self.dist_n = ...  # normalized distance
 ```
 
 ## Vectorized Effect Patterns
@@ -372,8 +437,9 @@ for fi in range(n_cols):
     for dx in range(-1, 2):  # 3-wide columns
         c = fx_c + dx
         if 0 <= c < cols:
-            fire_val[fr, c] = np.maximum(fire_val[fr, c],
-                                          (1 - frac * 0.6) * (0.5 + rms * 0.5))
+            fire_val[fr, c] = np.maximum(
+                fire_val[fr, c], (1 - frac * 0.6) * (0.5 + rms * 0.5)
+            )
 # Now map fire_val to chars and colors in one vectorized pass
 ```
 
@@ -387,6 +453,7 @@ Use when: scene renders many rows of readable text strings. NOT suitable for spa
 
 ```python
 from PIL import Image, ImageDraw
+
 
 def render_text_layer(grid, rows_data, font):
     """Render dense text rows via PIL instead of per-cell bitmap blitting.
@@ -415,8 +482,8 @@ def render_text_layer(grid, rows_data, font):
 # Build ticker data (text + color per row)
 rows_data = []
 for row in range(n_tickers):
-    text = build_ticker_text(row, t)       # scrolling substring
-    color = hsv2rgb_scalar(hue, 0.85, bri) # (R, G, B) tuple
+    text = build_ticker_text(row, t)  # scrolling substring
+    color = hsv2rgb_scalar(hue, 0.85, bri)  # (R, G, B) tuple
     rows_data.append((row, text, color))
 
 # One PIL pass instead of thousands of bitmap blits
@@ -437,11 +504,19 @@ Use 4x downsample + manual box blur instead -- 84ms/frame (5x faster):
 ```python
 sm = canvas[::4, ::4].astype(np.float32)  # 4x downsample
 br = np.where(sm > threshold, sm, 0)
-for _ in range(3):                          # 3-pass manual box blur
-    p = np.pad(br, ((1,1),(1,1),(0,0)), mode='edge')
-    br = (p[:-2,:-2] + p[:-2,1:-1] + p[:-2,2:] +
-          p[1:-1,:-2] + p[1:-1,1:-1] + p[1:-1,2:] +
-          p[2:,:-2] + p[2:,1:-1] + p[2:,2:]) / 9.0
+for _ in range(3):  # 3-pass manual box blur
+    p = np.pad(br, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    br = (
+        p[:-2, :-2]
+        + p[:-2, 1:-1]
+        + p[:-2, 2:]
+        + p[1:-1, :-2]
+        + p[1:-1, 1:-1]
+        + p[1:-1, 2:]
+        + p[2:, :-2]
+        + p[2:, 1:-1]
+        + p[2:, 2:]
+    ) / 9.0
 bl = np.repeat(np.repeat(br, 4, axis=0), 4, axis=1)[:H, :W]
 ```
 
@@ -451,13 +526,17 @@ Distance field is resolution- and strength-dependent, never changes per frame:
 
 ```python
 _vig_cache = {}
+
+
 def sh_vignette(canvas, strength):
     key = (canvas.shape[0], canvas.shape[1], round(strength, 2))
     if key not in _vig_cache:
         Y = np.linspace(-1, 1, H)[:, None]
         X = np.linspace(-1, 1, W)[None, :]
-        _vig_cache[key] = np.clip(1.0 - np.sqrt(X**2+Y**2) * strength, 0.15, 1).astype(np.float32)
-    return np.clip(canvas * _vig_cache[key][:,:,None], 0, 255).astype(np.uint8)
+        _vig_cache[key] = np.clip(
+            1.0 - np.sqrt(X**2 + Y**2) * strength, 0.15, 1
+        ).astype(np.float32)
+    return np.clip(canvas * _vig_cache[key][:, :, None], 0, 255).astype(np.uint8)
 ```
 
 Same pattern for CRT barrel distortion (cache remap coordinates).
@@ -467,7 +546,7 @@ Same pattern for CRT barrel distortion (cache remap coordinates).
 Generate noise at half resolution, tile up:
 
 ```python
-noise = np.random.randint(-amt, amt+1, (H//2, W//2, 1), dtype=np.int16)
+noise = np.random.randint(-amt, amt + 1, (H // 2, W // 2, 1), dtype=np.int16)
 noise = np.repeat(np.repeat(noise, 2, axis=0), 2, axis=1)[:H, :W]
 ```
 
@@ -495,8 +574,10 @@ with multiprocessing.Pool(N_WORKERS) as pool:
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 with ProcessPoolExecutor(max_workers=N_WORKERS) as pool:
-    futures = {pool.submit(render_clip, seg, features, path): seg["id"]
-               for seg, path in clip_args}
+    futures = {
+        pool.submit(render_clip, seg, features, path): seg["id"]
+        for seg, path in clip_args
+    }
     for fut in as_completed(futures):
         clip_id = futures[fut]
         try:
@@ -524,7 +605,9 @@ pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
 # RIGHT -- stderr to file
 stderr_fh = open(err_path, "w")
-pipe = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_fh)
+pipe = subprocess.Popen(
+    cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_fh
+)
 # ... write all frames ...
 pipe.stdin.close()
 pipe.wait()
@@ -540,7 +623,17 @@ with open(concat_file, "w") as cf:
 
 cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_file]
 if audio_path:
-    cmd += ["-i", audio_path, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest"]
+    cmd += [
+        "-i",
+        audio_path,
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-shortest",
+    ]
 else:
     cmd += ["-c:v", "copy"]
 cmd.append(output_path)
@@ -583,8 +676,20 @@ After render, spot-check brightness at sample timestamps:
 
 ```python
 for t in [2, 30, 60, 120, 180]:
-    cmd = ["ffmpeg", "-ss", str(t), "-i", output_path,
-           "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    cmd = [
+        "ffmpeg",
+        "-ss",
+        str(t),
+        "-i",
+        output_path,
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+    ]
     r = subprocess.run(cmd, capture_output=True)
     arr = np.frombuffer(r.stdout, dtype=np.uint8)
     print(f"t={t}s  mean={arr.mean():.1f}  max={arr.max()}")
@@ -631,38 +736,39 @@ import glob
 import tempfile
 import shutil
 
+
 def cleanup_render_artifacts(segments_dir="segments", keep_final=True):
     """Remove intermediate files after successful render.
-    
+
     Call this AFTER verifying the final output exists and plays correctly.
-    
+
     Args:
         segments_dir: directory containing segment clips and concat list
         keep_final: if True, only delete intermediates (not the final output)
     """
     removed = []
-    
+
     # 1. Segment clips
     if os.path.isdir(segments_dir):
         shutil.rmtree(segments_dir)
         removed.append(f"directory: {segments_dir}")
-    
+
     # 2. Temporary WAV files
     for wav in glob.glob("*.wav"):
         if wav.startswith("tmp") or wav.startswith("extracted_"):
             os.remove(wav)
             removed.append(wav)
-    
+
     # 3. ffmpeg stderr logs
     for log in glob.glob("ffmpeg_*.log"):
         os.remove(log)
         removed.append(log)
-    
+
     # 4. Feature cache (optional — useful to keep for re-renders)
     # for cache in glob.glob("features_*.npz"):
     #     os.remove(cache)
     #     removed.append(cache)
-    
+
     print(f"Cleaned {len(removed)} artifacts: {removed}")
     return removed
 ```

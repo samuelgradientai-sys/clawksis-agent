@@ -29,13 +29,11 @@ class TestGraphCredentials:
         assert GraphCredentials.from_env({}, required=False) is None
 
     def test_from_env_builds_normalized_credentials(self):
-        creds = GraphCredentials.from_env(
-            {
-                "MSGRAPH_TENANT_ID": "tenant-123",
-                "MSGRAPH_CLIENT_ID": "client-456",
-                "MSGRAPH_CLIENT_SECRET": "secret-789",
-            }
-        )
+        creds = GraphCredentials.from_env({
+            "MSGRAPH_TENANT_ID": "tenant-123",
+            "MSGRAPH_CLIENT_ID": "client-456",
+            "MSGRAPH_CLIENT_SECRET": "secret-789",
+        })
         assert creds is not None
         assert creds.scope == DEFAULT_GRAPH_SCOPE
         assert creds.token_url.endswith("/tenant-123/oauth2/v2.0/token")

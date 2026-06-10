@@ -12,22 +12,14 @@ impossible to switch models on multi-model endpoints.
 
 """
 
-
-
 from unittest.mock import patch
-
 
 
 import pytest
 
 
-
-
-
 @pytest.fixture
-
 def config_home(tmp_path, monkeypatch):
-
     """Isolated CLAWK_HOME with a minimal config."""
 
     home = tmp_path / "clawk"
@@ -57,94 +49,64 @@ def config_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
 class TestCustomProviderModelSwitch:
-
     """Ensure _model_flow_named_custom always probes and shows menu."""
 
-
-
     def test_saved_model_still_probes_endpoint(self, config_home):
-
         """When a model is already saved, the function must still call
 
         fetch_api_models to probe the endpoint — not skip with early return."""
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         provider_info = {
-
             "name": "My vLLM",
-
             "base_url": "https://vllm.example.com/v1",
-
             "api_key": "sk-test",
-
             "model": "model-A",  # already saved
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["model-A", "model-B"]) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="2"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["model-A", "model-B"]
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="2"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         # fetch_api_models MUST be called even though model was saved
 
         mock_fetch.assert_called_once_with(
-
             "sk-test",
-
             "https://vllm.example.com/v1",
-
             timeout=8.0,
-
         )
 
-
-
     def test_can_switch_to_different_model(self, config_home):
-
         """User selects a different model than the saved one."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         provider_info = {
-
             "name": "My vLLM",
-
             "base_url": "https://vllm.example.com/v1",
-
             "api_key": "sk-test",
-
             "model": "model-A",
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["model-A", "model-B"]), \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="2"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["model-A", "model-B"]
+            ),
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="2"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         config = yaml.safe_load((config_home / "config.yaml").read_text()) or {}
 
@@ -154,41 +116,28 @@ class TestCustomProviderModelSwitch:
 
         assert model["default"] == "model-B"
 
-
-
     def test_probe_failure_falls_back_to_saved(self, config_home):
-
         """When endpoint probe fails and user presses Enter, saved model is used."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         provider_info = {
-
             "name": "My vLLM",
-
             "base_url": "https://vllm.example.com/v1",
-
             "api_key": "sk-test",
-
             "model": "model-A",
-
         }
-
-
 
         # fetch returns empty list (probe failed), user presses Enter (empty input)
 
-        with patch("clawk_cli.models.fetch_api_models", return_value=[]), \
-             patch("builtins.input", return_value=""), \
-             patch("builtins.print"):
-
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=[]),
+            patch("builtins.input", return_value=""),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         config = yaml.safe_load((config_home / "config.yaml").read_text()) or {}
 
@@ -198,40 +147,27 @@ class TestCustomProviderModelSwitch:
 
         assert model["default"] == "model-A"
 
-
-
     def test_no_saved_model_still_works(self, config_home):
-
         """First-time flow (no saved model) still works as before."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         provider_info = {
-
             "name": "My vLLM",
-
             "base_url": "https://vllm.example.com/v1",
-
             "api_key": "sk-test",
-
             # no "model" key
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["model-X"]), \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=["model-X"]),
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         config = yaml.safe_load((config_home / "config.yaml").read_text()) or {}
 
@@ -241,53 +177,36 @@ class TestCustomProviderModelSwitch:
 
         assert model["default"] == "model-X"
 
-
-
     def test_api_mode_set_from_provider_info(self, config_home):
-
         """When custom_providers entry has api_mode, it should be applied."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         provider_info = {
-
             "name": "Anthropic Proxy",
-
             "base_url": "https://proxy.example.com/anthropic",
-
             "api_key": "***",
-
             "model": "claude-3",
-
             "api_mode": "anthropic_messages",
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["claude-3"]) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["claude-3"]
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
 
-
-
         mock_fetch.assert_called_once_with(
-
             "***",
-
             "https://proxy.example.com/anthropic",
-
             timeout=8.0,
-
             api_mode="anthropic_messages",
-
         )
 
         config = yaml.safe_load((config_home / "config.yaml").read_text()) or {}
@@ -298,17 +217,12 @@ class TestCustomProviderModelSwitch:
 
         assert model.get("api_mode") == "anthropic_messages"
 
-
-
     def test_api_mode_cleared_when_not_specified(self, config_home):
-
         """When custom_providers entry has no api_mode, stale api_mode is removed."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
-
-
 
         # Pre-seed a stale api_mode in config
 
@@ -316,30 +230,20 @@ class TestCustomProviderModelSwitch:
 
         config_path.write_text(yaml.dump({"model": {"api_mode": "anthropic_messages"}}))
 
-
-
         provider_info = {
-
             "name": "My vLLM",
-
             "base_url": "https://vllm.example.com/v1",
-
             "api_key": "***",
-
             "model": "llama-3",
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["llama-3"]), \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=["llama-3"]),
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         config = yaml.safe_load((config_home / "config.yaml").read_text()) or {}
 
@@ -349,77 +253,52 @@ class TestCustomProviderModelSwitch:
 
         assert "api_mode" not in model, "Stale api_mode should be removed"
 
-
-
-    def test_env_template_api_key_is_preserved_in_model_config(self, config_home, monkeypatch):
-
+    def test_env_template_api_key_is_preserved_in_model_config(
+        self, config_home, monkeypatch
+    ):
         """Selecting an env-backed custom provider must not inline the secret."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "model:\n"
-
             "  default: old-model\n"
-
             "  provider: openrouter\n"
-
             "custom_providers:\n"
-
             "- name: Example Provider\n"
-
             "  base_url: https://api.example-provider.test/v1\n"
-
             "  api_key: ${EXAMPLE_PROVIDER_API_KEY}\n"
-
             "  model: qwen3.6-35b-fast\n"
-
         )
 
         monkeypatch.setenv("EXAMPLE_PROVIDER_API_KEY", "sk-live-example-provider")
 
-
-
         provider_info = {
-
             "name": "Example Provider",
-
             "base_url": "https://api.example-provider.test/v1",
-
             "api_key": "sk-live-example-provider",
-
             "api_key_ref": "${EXAMPLE_PROVIDER_API_KEY}",
-
             "model": "qwen3.6-35b-fast",
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
 
-
-
         mock_fetch.assert_called_once_with(
-
             "sk-live-example-provider",
-
             "https://api.example-provider.test/v1",
-
             timeout=8.0,
-
         )
 
         config = yaml.safe_load(config_path.read_text()) or {}
@@ -430,66 +309,46 @@ class TestCustomProviderModelSwitch:
 
         assert "sk-live-example-provider" not in config_path.read_text()
 
-
-
-    def test_key_env_custom_provider_persists_reference_not_secret(self, config_home, monkeypatch):
-
+    def test_key_env_custom_provider_persists_reference_not_secret(
+        self, config_home, monkeypatch
+    ):
         """key_env custom providers should also avoid writing plaintext keys."""
 
         import yaml
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "model:\n"
-
             "  default: old-model\n"
-
             "custom_providers:\n"
-
             "- name: Example Provider\n"
-
             "  base_url: https://api.example-provider.test/v1\n"
-
             "  key_env: EXAMPLE_PROVIDER_API_KEY\n"
-
             "  model: qwen3.6-35b-fast\n"
-
         )
 
         monkeypatch.setenv("EXAMPLE_PROVIDER_API_KEY", "sk-live-example-provider")
 
-
-
         provider_info = {
-
             "name": "Example Provider",
-
             "base_url": "https://api.example-provider.test/v1",
-
             "api_key": "",
-
             "key_env": "EXAMPLE_PROVIDER_API_KEY",
-
             "model": "qwen3.6-35b-fast",
-
         }
 
-
-
-        with patch("clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]), \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]
+            ),
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         config = yaml.safe_load(config_path.read_text()) or {}
 
@@ -499,14 +358,9 @@ class TestCustomProviderModelSwitch:
 
         assert "sk-live-example-provider" not in config_path.read_text()
 
-
-
     def test_env_ref_base_url_preserves_api_key_ref_through_picker(
-
         self, config_home, monkeypatch
-
     ):
-
         """Integration regression: when BOTH ``base_url`` and ``api_key`` use
 
         ``${VAR}`` templates (the Discord-reported NeuralWatt case), the picker
@@ -531,37 +385,23 @@ class TestCustomProviderModelSwitch:
 
         from clawk_cli.main import select_provider_and_model
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "model:\n"
-
             "  default: old-model\n"
-
             "  provider: openrouter\n"
-
             "custom_providers:\n"
-
             "- name: NeuralWatt\n"
-
             "  base_url: ${NEURALWATT_API_BASE}\n"
-
             "  api_key: ${NEURALWATT_API_KEY}\n"
-
             "  model: qwen3.6-35b-fast\n"
-
             "  models: []\n"
-
         )
 
         monkeypatch.setenv("NEURALWATT_API_BASE", "https://api.neuralwatt.com/v1")
 
         monkeypatch.setenv("NEURALWATT_API_KEY", "sk-live-neuralwatt-secret")
-
-
 
         # Exercise the real picker: select "custom:neuralwatt" from the
 
@@ -576,32 +416,25 @@ class TestCustomProviderModelSwitch:
         def _pick_neuralwatt(labels, default=0):
 
             for i, label in enumerate(labels):
-
                 if "NeuralWatt" in label:
-
                     return i
 
             raise AssertionError(
-
                 f"NeuralWatt entry missing from provider menu: {labels}"
-
             )
 
-
-
-        with patch("clawk_cli.main._prompt_provider_choice",
-
-                   side_effect=_pick_neuralwatt), \
-             patch("clawk_cli.models.fetch_api_models",
-
-                   return_value=["qwen3.6-35b-fast"]) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.main._prompt_provider_choice", side_effect=_pick_neuralwatt
+            ),
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             select_provider_and_model()
-
-
 
         # The live probe must still use the resolved secret.
 
@@ -610,8 +443,6 @@ class TestCustomProviderModelSwitch:
         probe_args, probe_kwargs = mock_fetch.call_args
 
         assert probe_args[0] == "sk-live-neuralwatt-secret"
-
-
 
         # But config.yaml must keep the env reference, not the plaintext secret.
 
@@ -625,14 +456,9 @@ class TestCustomProviderModelSwitch:
 
         assert "sk-live-neuralwatt-secret" not in saved
 
-
-
     def test_bare_custom_current_provider_matches_env_base_url_before_first_fallback(
-
         self, config_home, monkeypatch
-
     ):
-
         """`clawk model` must mark the custom provider matching model.base_url
 
         as current instead of falling back to the first saved custom provider.
@@ -653,46 +479,26 @@ class TestCustomProviderModelSwitch:
 
         from clawk_cli.main import select_provider_and_model
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "model:\n"
-
             "  default: kimi-k2.6-fast\n"
-
             "  provider: custom\n"
-
             "  base_url: ${NEURALWATT_API_BASE}\n"
-
             "  api_key: ${NEURALWATT_API_KEY}\n"
-
             "providers: {}\n"
-
             "custom_providers:\n"
-
             "- name: Cerebras.ai\n"
-
             "  base_url: ${CEREBRAS_API_BASE}\n"
-
             "  api_key: ${CEREBRAS_API_KEY}\n"
-
             "  model: qwen-3-235b-a22b-instruct-2507\n"
-
             "  models: []\n"
-
             "- name: NeuralWatt\n"
-
             "  base_url: ${NEURALWATT_API_BASE}\n"
-
             "  api_key: ${NEURALWATT_API_KEY}\n"
-
             "  model: kimi-k2.6-fast\n"
-
             "  models: []\n"
-
         )
 
         monkeypatch.setenv("CEREBRAS_API_BASE", "https://api.cerebras.ai/v1")
@@ -703,11 +509,7 @@ class TestCustomProviderModelSwitch:
 
         monkeypatch.setenv("NEURALWATT_API_KEY", "sk-live-neuralwatt-secret")
 
-
-
         captured: dict = {}
-
-
 
         def _capture_and_cancel(labels, default=0):
 
@@ -717,16 +519,14 @@ class TestCustomProviderModelSwitch:
 
             return len(labels) - 1  # Leave unchanged
 
-
-
-        with patch("clawk_cli.main._prompt_provider_choice",
-
-                   side_effect=_capture_and_cancel), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.main._prompt_provider_choice",
+                side_effect=_capture_and_cancel,
+            ),
+            patch("builtins.print"),
+        ):
             select_provider_and_model()
-
-
 
         labels = captured["labels"]
 
@@ -739,21 +539,12 @@ class TestCustomProviderModelSwitch:
         assert "Cerebras.ai" not in default_label
 
         assert not any(
-
-            "Cerebras.ai" in label and "currently active" in label
-
-            for label in labels
-
+            "Cerebras.ai" in label and "currently active" in label for label in labels
         )
 
-
-
     def test_named_custom_provider_selection_preserves_base_url_env_ref(
-
         self, config_home, monkeypatch
-
     ):
-
         """Selecting an env-backed custom provider should not expand its
 
         ``base_url`` template into ``model.base_url`` on disk."""
@@ -762,75 +553,52 @@ class TestCustomProviderModelSwitch:
 
         from clawk_cli.main import select_provider_and_model
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "model:\n"
-
             "  default: old-model\n"
-
             "  provider: openrouter\n"
-
             "custom_providers:\n"
-
             "- name: NeuralWatt\n"
-
             "  base_url: ${NEURALWATT_API_BASE}\n"
-
             "  api_key: ${NEURALWATT_API_KEY}\n"
-
             "  model: qwen3.6-35b-fast\n"
-
             "  models: []\n"
-
         )
 
         monkeypatch.setenv("NEURALWATT_API_BASE", "https://api.neuralwatt.com/v1")
 
         monkeypatch.setenv("NEURALWATT_API_KEY", "sk-live-neuralwatt-secret")
 
-
-
         def _pick_neuralwatt(labels, default=0):
 
             for i, label in enumerate(labels):
-
                 if "NeuralWatt" in label:
-
                     return i
 
             raise AssertionError(
-
                 f"NeuralWatt entry missing from provider menu: {labels}"
-
             )
 
-
-
-        with patch("clawk_cli.main._prompt_provider_choice",
-
-                   side_effect=_pick_neuralwatt), \
-             patch("clawk_cli.models.fetch_api_models",
-
-                   return_value=["qwen3.6-35b-fast"]) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.main._prompt_provider_choice", side_effect=_pick_neuralwatt
+            ),
+            patch(
+                "clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             select_provider_and_model()
-
-
 
         mock_fetch.assert_called_once()
 
         probe_args, _ = mock_fetch.call_args
 
         assert probe_args[1] == "https://api.neuralwatt.com/v1"
-
-
 
         saved = config_path.read_text()
 
@@ -844,14 +612,9 @@ class TestCustomProviderModelSwitch:
 
         assert "sk-live-neuralwatt-secret" not in saved
 
-
-
     def test_key_env_providers_dict_entry_does_not_add_api_key(
-
         self, config_home, monkeypatch
-
     ):
-
         """Regression for #15803: a ``providers:`` (keyed-schema) entry that
 
         relies on ``key_env`` must not gain an ``api_key`` field after the
@@ -878,76 +641,47 @@ class TestCustomProviderModelSwitch:
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "providers:\n"
-
             "  crs-henkee:\n"
-
             "    name: CRS Henkee\n"
-
             "    base_url: http://127.0.0.1:3000/api/v1\n"
-
             "    key_env: CLAWK_CRS_HENKEE_KEY\n"
-
             "    transport: anthropic_messages\n"
-
             "    model: claude-opus-4-7\n"
-
             "    default_model: claude-opus-4-7\n"
-
             "custom_providers: []\n"
-
         )
 
         monkeypatch.setenv("CLAWK_CRS_HENKEE_KEY", "cr_live_secret_xyz")
-
-
 
         # provider_info as built by _named_custom_provider_map for a
 
         # ``providers:`` entry that has key_env but no inline api_key.
 
         provider_info = {
-
             "name": "CRS Henkee",
-
             "base_url": "http://127.0.0.1:3000/api/v1",
-
             "api_key": "",
-
             "key_env": "CLAWK_CRS_HENKEE_KEY",
-
             "model": "claude-opus-4-7",
-
             "api_mode": "anthropic_messages",
-
             "provider_key": "crs-henkee",
-
             "api_key_ref": "",
-
         }
 
-
-
-        with patch(
-
-            "clawk_cli.models.fetch_api_models",
-
-            return_value=["claude-opus-4-7"],
-
-        ) as mock_fetch, \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["claude-opus-4-7"],
+            ) as mock_fetch,
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         # The /models probe must resolve the secret from the env var.
 
@@ -956,8 +690,6 @@ class TestCustomProviderModelSwitch:
         probe_args, _ = mock_fetch.call_args
 
         assert probe_args[0] == "cr_live_secret_xyz"
-
-
 
         # The providers entry must NOT gain an api_key field — neither the
 
@@ -970,16 +702,12 @@ class TestCustomProviderModelSwitch:
         entry = saved["providers"]["crs-henkee"]
 
         assert "api_key" not in entry, (
-
             f"providers.crs-henkee gained an api_key field: {entry.get('api_key')!r}"
-
         )
 
         assert entry["key_env"] == "CLAWK_CRS_HENKEE_KEY"
 
         assert entry["default_model"] == "claude-opus-4-7"
-
-
 
         # And the plaintext secret must never appear anywhere on disk.
 
@@ -989,14 +717,9 @@ class TestCustomProviderModelSwitch:
 
         assert "${CLAWK_CRS_HENKEE_KEY}" not in saved_text
 
-
-
     def test_key_env_providers_dict_preserves_existing_api_key(
-
         self, config_home, monkeypatch
-
     ):
-
         """A ``providers:`` entry that already has an inline ``api_key``
 
         template must keep it untouched. Only entries that never declared
@@ -1007,74 +730,44 @@ class TestCustomProviderModelSwitch:
 
         from clawk_cli.main import _model_flow_named_custom
 
-
-
         config_path = config_home / "config.yaml"
 
         config_path.write_text(
-
             "providers:\n"
-
             "  crs-henkee:\n"
-
             "    name: CRS Henkee\n"
-
             "    base_url: http://127.0.0.1:3000/api/v1\n"
-
             "    api_key: ${CLAWK_CRS_HENKEE_KEY}\n"
-
             "    key_env: CLAWK_CRS_HENKEE_KEY\n"
-
             "    transport: anthropic_messages\n"
-
             "    model: claude-opus-4-7\n"
-
             "    default_model: claude-opus-4-7\n"
-
             "custom_providers: []\n"
-
         )
 
         monkeypatch.setenv("CLAWK_CRS_HENKEE_KEY", "cr_live_secret_xyz")
 
-
-
         provider_info = {
-
             "name": "CRS Henkee",
-
             "base_url": "http://127.0.0.1:3000/api/v1",
-
             "api_key": "cr_live_secret_xyz",  # expanded by load_config
-
             "key_env": "CLAWK_CRS_HENKEE_KEY",
-
             "model": "claude-opus-4-7",
-
             "api_mode": "anthropic_messages",
-
             "provider_key": "crs-henkee",
-
             "api_key_ref": "${CLAWK_CRS_HENKEE_KEY}",  # raw template preserved
-
         }
 
-
-
-        with patch(
-
-            "clawk_cli.models.fetch_api_models",
-
-            return_value=["claude-opus-4-7"],
-
-        ), \
-             patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-             patch("builtins.input", return_value="1"), \
-             patch("builtins.print"):
-
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["claude-opus-4-7"],
+            ),
+            patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+            patch("builtins.input", return_value="1"),
+            patch("builtins.print"),
+        ):
             _model_flow_named_custom({}, provider_info)
-
-
 
         saved_text = config_path.read_text()
 
@@ -1089,4 +782,3 @@ class TestCustomProviderModelSwitch:
         assert entry["api_key"] == "${CLAWK_CRS_HENKEE_KEY}"
 
         assert "cr_live_secret_xyz" not in saved_text
-

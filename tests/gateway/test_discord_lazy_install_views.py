@@ -14,6 +14,7 @@ DISCORD_AVAILABLE=True.
 Fixes: lazy-install path NameError for ExecApprovalView, SlashConfirmView,
 UpdatePromptView, ModelPickerView, ClarifyChoiceView.
 """
+
 import importlib
 from unittest.mock import patch
 
@@ -46,7 +47,9 @@ class TestDefineDiscordViewClasses:
         dp._define_discord_view_classes()
 
         for name in _VIEW_NAMES:
-            assert hasattr(dp, name), f"{name} must be defined after _define_discord_view_classes()"
+            assert hasattr(dp, name), (
+                f"{name} must be defined after _define_discord_view_classes()"
+            )
             assert isinstance(getattr(dp, name), type), f"{name} must be a class"
 
     def test_check_discord_requirements_calls_define_on_lazy_install(self, monkeypatch):
@@ -72,7 +75,9 @@ class TestDefineDiscordViewClasses:
         with patch("tools.lazy_deps.ensure"):
             result = dp.check_discord_requirements()
 
-        assert result is True, "check_discord_requirements() should return True after lazy install"
+        assert result is True, (
+            "check_discord_requirements() should return True after lazy install"
+        )
         assert define_called[0], (
             "check_discord_requirements() must call _define_discord_view_classes() "
             "after a successful lazy install so view classes are not undefined"

@@ -5,6 +5,7 @@ Drives the service through ``snapshot_baseline`` →
 delta filter that ``tools/file_operations._check_lint_delta`` relies
 on.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,7 +25,9 @@ from agent.lsp.servers import (
 MOCK_SERVER = str(Path(__file__).parent / "_mock_lsp_server.py")
 
 
-def _install_mock_server(monkeypatch, script: str = "errors", server_id: str = "pyright"):
+def _install_mock_server(
+    monkeypatch, script: str = "errors", server_id: str = "pyright"
+):
     """Replace one registered server with a wrapper that spawns the mock.
 
     We reuse ``pyright`` so .py files route to it.  This keeps the

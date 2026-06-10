@@ -184,9 +184,18 @@ class TestTopLevelGuarantees:
     """The returned top-level schema is always a well-formed object."""
 
     def test_non_dict_input_returns_empty_object(self):
-        assert sanitize_moonshot_tool_parameters(None) == {"type": "object", "properties": {}}
-        assert sanitize_moonshot_tool_parameters("garbage") == {"type": "object", "properties": {}}
-        assert sanitize_moonshot_tool_parameters([]) == {"type": "object", "properties": {}}
+        assert sanitize_moonshot_tool_parameters(None) == {
+            "type": "object",
+            "properties": {},
+        }
+        assert sanitize_moonshot_tool_parameters("garbage") == {
+            "type": "object",
+            "properties": {},
+        }
+        assert sanitize_moonshot_tool_parameters([]) == {
+            "type": "object",
+            "properties": {},
+        }
 
     def test_non_object_top_level_coerced(self):
         params = {"type": "string"}
@@ -341,7 +350,15 @@ class TestEnumNullStripping:
             "properties": {
                 "datasource": {"type": "string"},
                 "db_type": {
-                    "enum": ["mysql", "mariadb", "postgresql", "sqlserver", "oracle", "", None],
+                    "enum": [
+                        "mysql",
+                        "mariadb",
+                        "postgresql",
+                        "sqlserver",
+                        "oracle",
+                        "",
+                        None,
+                    ],
                     "type": "string",
                     "nullable": True,
                     "default": None,
@@ -354,7 +371,13 @@ class TestEnumNullStripping:
         assert "nullable" not in db_type, "nullable keyword must be stripped"
         assert None not in db_type["enum"]
         assert "" not in db_type["enum"]
-        assert db_type["enum"] == ["mysql", "mariadb", "postgresql", "sqlserver", "oracle"]
+        assert db_type["enum"] == [
+            "mysql",
+            "mariadb",
+            "postgresql",
+            "sqlserver",
+            "oracle",
+        ]
         assert db_type["type"] == "string"
 
     def test_enum_on_object_type_not_stripped(self):
@@ -393,7 +416,10 @@ class TestEnumNullStripping:
         out = sanitize_moonshot_tool_parameters(params)
         db_type = out["properties"]["db_type"]
         assert "anyOf" not in db_type
-        assert "nullable" not in db_type, "nullable must be stripped after anyOf collapse"
+        assert "nullable" not in db_type, (
+            "nullable must be stripped after anyOf collapse"
+        )
         assert db_type["type"] == "string"
-        assert db_type["enum"] == ["mysql", "postgresql"], \
+        assert db_type["enum"] == ["mysql", "postgresql"], (
             "null/empty enum values must be stripped after anyOf collapse"
+        )

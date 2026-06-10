@@ -21,4 +21,8 @@ router = APIRouter()
 @router.get("/hello")
 async def hello():
     """Simple greeting endpoint to demonstrate plugin API routes."""
-    return {"message": "Hello from the example plugin!", "plugin": "example", "version": "1.0.0"}
+    return {
+        "message": "Hello from the example plugin!",
+        "plugin": "example",
+        "version": "1.0.0",
+    }

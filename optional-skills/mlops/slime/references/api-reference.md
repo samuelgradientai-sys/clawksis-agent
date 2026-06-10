@@ -29,28 +29,31 @@ The `Sample` object is the core data structure defined in `slime/utils/types.py`
 ```python
 from slime.utils.types import Sample
 
+
 @dataclass
 class Sample:
     # Core fields
-    group_index: Optional[int]              # Group index for batching
-    index: Optional[int]                    # Sample index
-    prompt: str | list[dict] = ""           # Input prompt or chat history
+    group_index: Optional[int]  # Group index for batching
+    index: Optional[int]  # Sample index
+    prompt: str | list[dict] = ""  # Input prompt or chat history
     tokens: list[int] = field(default_factory=list)  # Token IDs
-    response: str = ""                      # Generated response
-    response_length: int = 0                # Response length in tokens
-    label: Optional[str] = None             # Ground truth label
-    reward: Optional[float | dict] = None   # RL reward signal
-    loss_mask: Optional[list[int]] = None   # 1=compute loss, 0=mask
-    status: Status = Status.PENDING         # Sample status
+    response: str = ""  # Generated response
+    response_length: int = 0  # Response length in tokens
+    label: Optional[str] = None  # Ground truth label
+    reward: Optional[float | dict] = None  # RL reward signal
+    loss_mask: Optional[list[int]] = None  # 1=compute loss, 0=mask
+    status: Status = Status.PENDING  # Sample status
     metadata: dict = field(default_factory=dict)  # Custom data
 
     # Multimodal support
-    multimodal_inputs: Optional[Any] = None       # Raw multimodal data (images, videos)
-    multimodal_train_inputs: Optional[Any] = None # Processed multimodal data (pixel_values)
+    multimodal_inputs: Optional[Any] = None  # Raw multimodal data (images, videos)
+    multimodal_train_inputs: Optional[Any] = (
+        None  # Processed multimodal data (pixel_values)
+    )
 
     # Rollout tracking
     weight_versions: list[str] = field(default_factory=list)
-    rollout_log_probs: Optional[list[float]] = None    # Log probs from SGLang
+    rollout_log_probs: Optional[list[float]] = None  # Log probs from SGLang
     rollout_routed_experts: Optional[list[list[int]]] = None  # Expert routing (MoE)
 
     # Control fields
@@ -72,11 +75,11 @@ class Sample:
 
 ```python
 class Status(Enum):
-    PENDING = "pending"           # Not yet processed
-    COMPLETED = "completed"       # Successfully generated
-    TRUNCATED = "truncated"       # Hit max length
-    ABORTED = "aborted"           # Failed generation
-    FAILED = "failed"             # Generation failed
+    PENDING = "pending"  # Not yet processed
+    COMPLETED = "completed"  # Successfully generated
+    TRUNCATED = "truncated"  # Hit max length
+    ABORTED = "aborted"  # Failed generation
+    FAILED = "failed"  # Generation failed
 ```
 
 ## Configuration System
@@ -154,6 +157,7 @@ Defined in `slime/utils/arguments.py`:
 ```python
 from slime.data import RolloutDataSource
 
+
 class RolloutDataSource:
     def __init__(self, dataset, args):
         self.dataset = dataset
@@ -172,6 +176,7 @@ class RolloutDataSource:
 
 ```python
 from slime.data import RolloutDataSourceWithBuffer
+
 
 class RolloutDataSourceWithBuffer(RolloutDataSource):
     def __init__(self, dataset, args):
@@ -199,7 +204,10 @@ For multi-turn or tool-calling scenarios:
 # custom_generate.py
 from slime.data import Sample
 
-async def custom_generate(args, samples: list[Sample], evaluation: bool = False) -> list[Sample]:
+
+async def custom_generate(
+    args, samples: list[Sample], evaluation: bool = False
+) -> list[Sample]:
     """
     Custom generation function for multi-turn interactions.
 
@@ -212,9 +220,11 @@ async def custom_generate(args, samples: list[Sample], evaluation: bool = False)
         List of Sample objects with responses and rewards
     """
     for sample in samples:
-        conversation = sample.prompt if isinstance(sample.prompt, list) else [
-            {"role": "user", "content": sample.prompt}
-        ]
+        conversation = (
+            sample.prompt
+            if isinstance(sample.prompt, list)
+            else [{"role": "user", "content": sample.prompt}]
+        )
 
         for turn in range(args.max_turns):
             # Generate response
@@ -254,6 +264,7 @@ python train.py \
 # custom_rm.py
 from slime.data import Sample
 
+
 async def reward_func(args, sample: Sample, **kwargs) -> float:
     """
     Compute reward for a single sample.
@@ -272,6 +283,7 @@ async def reward_func(args, sample: Sample, **kwargs) -> float:
     if response.strip() == ground_truth.strip():
         return 1.0
     return 0.0
+
 
 # For batched processing (more efficient)
 async def batched_custom_rm(args, samples: list[Sample]) -> list[float]:

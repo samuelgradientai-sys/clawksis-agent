@@ -29,12 +29,20 @@ from clawk_cli.model_switch import switch_model
 
 # Live catalog opencode-go currently returns from /v1/models (snapshot).
 _OPENCODE_GO_LIVE = [
-    "minimax-m2.7", "minimax-m2.5",
-    "kimi-k2.6", "kimi-k2.5",
-    "glm-5.1", "glm-5",
-    "deepseek-v4-pro", "deepseek-v4-flash",
-    "qwen3.6-plus", "qwen3.5-plus",
-    "mimo-v2-pro", "mimo-v2-omni", "mimo-v2.5-pro", "mimo-v2.5",
+    "minimax-m2.7",
+    "minimax-m2.5",
+    "kimi-k2.6",
+    "kimi-k2.5",
+    "glm-5.1",
+    "glm-5",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "qwen3.6-plus",
+    "qwen3.5-plus",
+    "mimo-v2-pro",
+    "mimo-v2-omni",
+    "mimo-v2.5-pro",
+    "mimo-v2.5",
 ]
 
 
@@ -44,62 +52,68 @@ _OPENCODE_GO_LIVE = [
 
 
 def test_opencode_go_strips_deepseek_prefix():
-    assert normalize_model_for_provider(
-        "deepseek/deepseek-v4-flash", "opencode-go"
-    ) == "deepseek-v4-flash"
+    assert (
+        normalize_model_for_provider("deepseek/deepseek-v4-flash", "opencode-go")
+        == "deepseek-v4-flash"
+    )
 
 
 def test_opencode_go_strips_minimax_prefix():
-    assert normalize_model_for_provider(
-        "minimax/minimax-m2.7", "opencode-go"
-    ) == "minimax-m2.7"
+    assert (
+        normalize_model_for_provider("minimax/minimax-m2.7", "opencode-go")
+        == "minimax-m2.7"
+    )
 
 
 def test_opencode_go_strips_moonshotai_prefix():
     # Moonshot's aggregator vendor is `moonshotai/...` — a common copy-paste
     # from OpenRouter slugs.  opencode-go serves it bare as `kimi-k2.6`.
-    assert normalize_model_for_provider(
-        "moonshotai/kimi-k2.6", "opencode-go"
-    ) == "kimi-k2.6"
+    assert (
+        normalize_model_for_provider("moonshotai/kimi-k2.6", "opencode-go")
+        == "kimi-k2.6"
+    )
 
 
 def test_opencode_go_bare_name_unchanged():
-    assert normalize_model_for_provider(
-        "kimi-k2.6", "opencode-go"
-    ) == "kimi-k2.6"
+    assert normalize_model_for_provider("kimi-k2.6", "opencode-go") == "kimi-k2.6"
 
 
 def test_opencode_go_preserves_dot_versioning():
     # opencode-go uses dot-versioned IDs (`mimo-v2.5-pro`, not hyphen).
-    assert normalize_model_for_provider(
-        "xiaomi/mimo-v2.5-pro", "opencode-go"
-    ) == "mimo-v2.5-pro"
+    assert (
+        normalize_model_for_provider("xiaomi/mimo-v2.5-pro", "opencode-go")
+        == "mimo-v2.5-pro"
+    )
 
 
 def test_opencode_zen_still_hyphenates_claude():
     # Regression: opencode-zen's Claude hyphen conversion must still work.
-    assert normalize_model_for_provider(
-        "anthropic/claude-sonnet-4.6", "opencode-zen"
-    ) == "claude-sonnet-4-6"
+    assert (
+        normalize_model_for_provider("anthropic/claude-sonnet-4.6", "opencode-zen")
+        == "claude-sonnet-4-6"
+    )
 
 
 def test_opencode_zen_bare_claude_hyphenated():
-    assert normalize_model_for_provider(
-        "claude-sonnet-4.6", "opencode-zen"
-    ) == "claude-sonnet-4-6"
+    assert (
+        normalize_model_for_provider("claude-sonnet-4.6", "opencode-zen")
+        == "claude-sonnet-4-6"
+    )
 
 
 def test_opencode_zen_strips_arbitrary_vendor_prefix():
-    assert normalize_model_for_provider(
-        "minimax/minimax-m2.5-free", "opencode-zen"
-    ) == "minimax-m2.5-free"
+    assert (
+        normalize_model_for_provider("minimax/minimax-m2.5-free", "opencode-zen")
+        == "minimax-m2.5-free"
+    )
 
 
 def test_openrouter_still_prepends_vendor():
     # Regression: real aggregators must still get vendor/model format.
-    assert normalize_model_for_provider(
-        "claude-sonnet-4.6", "openrouter"
-    ) == "anthropic/claude-sonnet-4.6"
+    assert (
+        normalize_model_for_provider("claude-sonnet-4.6", "openrouter")
+        == "anthropic/claude-sonnet-4.6"
+    )
 
 
 # ---------------------------------------------------------------------------

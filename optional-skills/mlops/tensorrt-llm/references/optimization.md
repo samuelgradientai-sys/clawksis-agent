@@ -16,11 +16,7 @@ Comprehensive guide to optimizing LLM inference with TensorRT-LLM.
 from tensorrt_llm import LLM
 
 # Automatic FP8 quantization
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-70B",
-    dtype="fp8",
-    quantization="fp8"
-)
+llm = LLM(model="meta-llama/Meta-Llama-3-70B", dtype="fp8", quantization="fp8")
 ```
 
 **Performance** (Llama 3-70B on 8× H100):
@@ -38,18 +34,10 @@ llm = LLM(
 **Usage**:
 ```python
 # INT4 with AWQ calibration
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-405B",
-    dtype="int4_awq",
-    quantization="awq"
-)
+llm = LLM(model="meta-llama/Meta-Llama-3-405B", dtype="int4_awq", quantization="awq")
 
 # INT4 with GPTQ calibration
-llm = LLM(
-    model="meta-llama/Meta-Llama-3-405B",
-    dtype="int4_gptq",
-    quantization="gptq"
-)
+llm = LLM(model="meta-llama/Meta-Llama-3-405B", dtype="int4_gptq", quantization="gptq")
 ```
 
 **Trade-offs**:
@@ -91,7 +79,7 @@ trtllm-serve meta-llama/Meta-Llama-3-8B \
 llm = LLM(
     model="meta-llama/Meta-Llama-3-8B",
     kv_cache_free_gpu_mem_fraction=0.9,  # Use 90% GPU mem for cache
-    enable_prefix_caching=True            # Cache common prefixes
+    enable_prefix_caching=True,  # Cache common prefixes
 )
 ```
 
@@ -109,7 +97,7 @@ from tensorrt_llm import LLM
 llm = LLM(
     model="meta-llama/Meta-Llama-3-70B",
     speculative_model="meta-llama/Meta-Llama-3-8B",  # Draft model
-    num_speculative_tokens=5                          # Tokens to predict ahead
+    num_speculative_tokens=5,  # Tokens to predict ahead
 )
 
 # Same API, 2-3× faster
@@ -135,7 +123,7 @@ outputs = llm.generate(prompts)
 llm = LLM(
     model="meta-llama/Meta-Llama-3-8B",
     enable_cuda_graph=True,  # Default: True
-    cuda_graph_cache_size=2  # Cache 2 graph variants
+    cuda_graph_cache_size=2,  # Cache 2 graph variants
 )
 ```
 

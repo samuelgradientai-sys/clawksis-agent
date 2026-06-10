@@ -68,8 +68,11 @@ def test_compress_here_reappends_verbatim_tail(capsys):
     # Tail boundary keeps role alternation valid (tail starts on user).
     assert history[4]["role"] == "user"
     # No consecutive same-role user/assistant messages anywhere.
-    roles = [m["role"] for m in shell.conversation_history
-             if m["role"] in ("user", "assistant")]
+    roles = [
+        m["role"]
+        for m in shell.conversation_history
+        if m["role"] in ("user", "assistant")
+    ]
     assert all(roles[i] != roles[i + 1] for i in range(len(roles) - 1))
 
 

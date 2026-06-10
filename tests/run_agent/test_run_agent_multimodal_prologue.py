@@ -56,7 +56,10 @@ class TestSummarizeUserMessageForLog:
 
     def test_list_supports_slice_and_replace(self):
         """The whole point of this helper: its output must be a plain str."""
-        content = [{"type": "text", "text": "x" * 200}, {"type": "image_url", "image_url": {"url": "y"}}]
+        content = [
+            {"type": "text", "text": "x" * 200},
+            {"type": "image_url", "image_url": {"url": "y"}},
+        ]
         summary = _summarize_user_message_for_log(content)
         # These are the operations the run_conversation prologue performs.
         _ = summary[:80] + "..."
@@ -70,17 +73,23 @@ class TestChatContentToResponsesParts:
 
     def test_text_parts_become_input_text(self):
         content = [{"type": "text", "text": "hello"}]
-        assert _chat_content_to_responses_parts(content) == [{"type": "input_text", "text": "hello"}]
+        assert _chat_content_to_responses_parts(content) == [
+            {"type": "input_text", "text": "hello"}
+        ]
 
     def test_image_url_object_becomes_input_image(self):
-        content = [{"type": "image_url", "image_url": {"url": "https://x", "detail": "high"}}]
+        content = [
+            {"type": "image_url", "image_url": {"url": "https://x", "detail": "high"}}
+        ]
         assert _chat_content_to_responses_parts(content) == [
             {"type": "input_image", "image_url": "https://x", "detail": "high"},
         ]
 
     def test_bare_string_image_url(self):
         content = [{"type": "image_url", "image_url": "https://x"}]
-        assert _chat_content_to_responses_parts(content) == [{"type": "input_image", "image_url": "https://x"}]
+        assert _chat_content_to_responses_parts(content) == [
+            {"type": "input_image", "image_url": "https://x"}
+        ]
 
     def test_responses_format_passthrough(self):
         """Input already in Responses format should round-trip cleanly."""
@@ -97,7 +106,9 @@ class TestChatContentToResponsesParts:
         """Unknown types shouldn't crash — filtered silently at this level
         (the API server's normalizer rejects them earlier)."""
         content = [{"type": "text", "text": "ok"}, {"type": "audio", "x": "y"}]
-        assert _chat_content_to_responses_parts(content) == [{"type": "input_text", "text": "ok"}]
+        assert _chat_content_to_responses_parts(content) == [
+            {"type": "input_text", "text": "ok"}
+        ]
 
     def test_empty_url_image_skipped(self):
         content = [{"type": "image_url", "image_url": {"url": ""}}]

@@ -10,10 +10,10 @@ Lightning supports multiple distributed strategies with a single parameter chang
 
 ```python
 # Automatic DDP on all available GPUs
-trainer = L.Trainer(accelerator='gpu', devices=4, strategy='ddp')
+trainer = L.Trainer(accelerator="gpu", devices=4, strategy="ddp")
 
 # Or auto-detect
-trainer = L.Trainer(accelerator='gpu', devices='auto')
+trainer = L.Trainer(accelerator="gpu", devices="auto")
 ```
 
 **How DDP works**:
@@ -50,15 +50,15 @@ from lightning.pytorch.strategies import FSDPStrategy
 
 strategy = FSDPStrategy(
     sharding_strategy="FULL_SHARD",  # ZeRO-3 equivalent
-    activation_checkpointing=None,   # Or specify layer types
-    cpu_offload=False,               # CPU offload for memory
+    activation_checkpointing=None,  # Or specify layer types
+    cpu_offload=False,  # CPU offload for memory
 )
 
 trainer = L.Trainer(
-    accelerator='gpu',
+    accelerator="gpu",
     devices=8,
     strategy=strategy,
-    precision='bf16'  # Recommended with FSDP
+    precision="bf16",  # Recommended with FSDP
 )
 
 trainer.fit(model, train_loader)
@@ -83,13 +83,12 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 import functools
 
 auto_wrap_policy = functools.partial(
-    transformer_auto_wrap_policy,
-    transformer_layer_cls={GPT2Block}
+    transformer_auto_wrap_policy, transformer_layer_cls={GPT2Block}
 )
 
 strategy = FSDPStrategy(
     auto_wrap_policy=auto_wrap_policy,
-    activation_checkpointing_policy={GPT2Block}  # Checkpoint these blocks
+    activation_checkpointing_policy={GPT2Block},  # Checkpoint these blocks
 )
 ```
 
@@ -102,18 +101,13 @@ from lightning.pytorch.strategies import DeepSpeedStrategy
 
 # DeepSpeed ZeRO-3 with CPU offload
 strategy = DeepSpeedStrategy(
-    stage=3,                       # ZeRO-3
-    offload_optimizer=True,        # CPU offload optimizer
-    offload_parameters=True,       # CPU offload parameters
-    cpu_checkpointing=True,        # Checkpoint to CPU
+    stage=3,  # ZeRO-3
+    offload_optimizer=True,  # CPU offload optimizer
+    offload_parameters=True,  # CPU offload parameters
+    cpu_checkpointing=True,  # Checkpoint to CPU
 )
 
-trainer = L.Trainer(
-    accelerator='gpu',
-    devices=8,
-    strategy=strategy,
-    precision='bf16'
-)
+trainer = L.Trainer(accelerator="gpu", devices=8, strategy=strategy, precision="bf16")
 
 trainer.fit(model, train_loader)
 ```
@@ -148,7 +142,7 @@ trainer.fit(model, train_loader)
 
 **Use config file**:
 ```python
-strategy = DeepSpeedStrategy(config='deepspeed_config.json')
+strategy = DeepSpeedStrategy(config="deepspeed_config.json")
 trainer = L.Trainer(strategy=strategy)
 ```
 
@@ -159,9 +153,9 @@ trainer = L.Trainer(strategy=strategy)
 ```python
 # Use when DDP doesn't work (e.g., Windows, Jupyter)
 trainer = L.Trainer(
-    accelerator='gpu',
+    accelerator="gpu",
     devices=2,
-    strategy='ddp_spawn'  # Spawns new processes
+    strategy="ddp_spawn",  # Spawns new processes
 )
 ```
 
@@ -194,10 +188,10 @@ python train.py
 **Training script**:
 ```python
 trainer = L.Trainer(
-    accelerator='gpu',
-    devices=8,              # GPUs per node
-    num_nodes=2,            # Total nodes
-    strategy='ddp'
+    accelerator="gpu",
+    devices=8,  # GPUs per node
+    num_nodes=2,  # Total nodes
+    strategy="ddp",
 )
 
 trainer.fit(model, train_loader)
@@ -221,10 +215,10 @@ srun python train.py
 ```python
 # Lightning automatically reads SLURM environment variables
 trainer = L.Trainer(
-    accelerator='gpu',
+    accelerator="gpu",
     devices=8,
     num_nodes=4,  # From SBATCH --nodes
-    strategy='ddp'
+    strategy="ddp",
 )
 ```
 
@@ -236,9 +230,7 @@ import os
 
 # Lightning auto-detects Kubernetes
 trainer = L.Trainer(
-    accelerator='gpu',
-    devices=int(os.getenv('WORLD_SIZE', 1)),
-    strategy='ddp'
+    accelerator="gpu", devices=int(os.getenv("WORLD_SIZE", 1)), strategy="ddp"
 )
 ```
 
@@ -248,8 +240,8 @@ trainer = L.Trainer(
 
 ```python
 trainer = L.Trainer(
-    precision='bf16',  # Or 'bf16-mixed'
-    accelerator='gpu'
+    precision="bf16",  # Or 'bf16-mixed'
+    accelerator="gpu",
 )
 ```
 
@@ -262,8 +254,8 @@ trainer = L.Trainer(
 
 ```python
 trainer = L.Trainer(
-    precision='16-mixed',  # Or just '16'
-    accelerator='gpu'
+    precision="16-mixed",  # Or just '16'
+    accelerator="gpu",
 )
 ```
 
@@ -275,10 +267,7 @@ trainer = L.Trainer(
 # Requires transformer_engine
 # pip install transformer-engine[pytorch]
 
-trainer = L.Trainer(
-    precision='transformer-engine',
-    accelerator='gpu'
-)
+trainer = L.Trainer(precision="transformer-engine", accelerator="gpu")
 ```
 
 **Benefits**: 2× faster than BF16 on H100
@@ -290,7 +279,7 @@ trainer = L.Trainer(
 ```python
 trainer = L.Trainer(
     accumulate_grad_batches=4,  # Accumulate 4 batches
-    precision='bf16'
+    precision="bf16",
 )
 
 # Effective batch = batch_size × accumulate_grad_batches × num_gpus
@@ -302,9 +291,9 @@ trainer = L.Trainer(
 # Accumulate more early in training
 trainer = L.Trainer(
     accumulate_grad_batches={
-        0: 8,   # Epochs 0-4: accumulate 8
-        5: 4,   # Epochs 5-9: accumulate 4
-        10: 2   # Epochs 10+: accumulate 2
+        0: 8,  # Epochs 0-4: accumulate 8
+        5: 4,  # Epochs 5-9: accumulate 4
+        10: 2,  # Epochs 10+: accumulate 2
     }
 )
 ```
@@ -318,12 +307,10 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 # Only rank 0 saves by default
 checkpoint = ModelCheckpoint(
-    dirpath='checkpoints/',
-    filename='model-{epoch:02d}',
-    save_top_k=3
+    dirpath="checkpoints/", filename="model-{epoch:02d}", save_top_k=3
 )
 
-trainer = L.Trainer(callbacks=[checkpoint], strategy='ddp')
+trainer = L.Trainer(callbacks=[checkpoint], strategy="ddp")
 trainer.fit(model, train_loader)
 ```
 
@@ -336,7 +323,7 @@ class MyModel(L.LightningModule):
 
         # Save every 1000 steps (only rank 0)
         if batch_idx % 1000 == 0 and self.trainer.is_global_zero:
-            self.trainer.save_checkpoint(f'checkpoint_step_{batch_idx}.ckpt')
+            self.trainer.save_checkpoint(f"checkpoint_step_{batch_idx}.ckpt")
 
         return loss
 ```
@@ -345,11 +332,11 @@ class MyModel(L.LightningModule):
 
 ```python
 # Resume training
-trainer = L.Trainer(strategy='ddp')
-trainer.fit(model, train_loader, ckpt_path='checkpoints/last.ckpt')
+trainer = L.Trainer(strategy="ddp")
+trainer.fit(model, train_loader, ckpt_path="checkpoints/last.ckpt")
 
 # Load for inference
-model = MyModel.load_from_checkpoint('checkpoints/best.ckpt')
+model = MyModel.load_from_checkpoint("checkpoints/best.ckpt")
 model.eval()
 ```
 
@@ -370,9 +357,9 @@ model.eval()
 ```python
 # Model size guide
 if model_params < 1e9:  # <1B
-    strategy = 'ddp'
+    strategy = "ddp"
 elif model_params < 7e9:  # 1-7B
-    strategy = 'ddp' or DeepSpeedStrategy(stage=2)
+    strategy = "ddp" or DeepSpeedStrategy(stage=2)
 elif model_params < 70e9:  # 7-70B
     strategy = FSDPStrategy(sharding_strategy="FULL_SHARD")
 else:  # 70B+
@@ -409,7 +396,7 @@ train_loader = DataLoader(
     batch_size=32,
     num_workers=4,  # 4 workers per GPU
     pin_memory=True,
-    persistent_workers=True
+    persistent_workers=True,
 )
 
 # Lightning automatically wraps with DistributedSampler in DDP
@@ -456,7 +443,7 @@ ping <node-2-ip>
 ```python
 strategy = FSDPStrategy(
     sharding_strategy="FULL_SHARD",
-    cpu_offload=True  # Offload to CPU
+    cpu_offload=True,  # Offload to CPU
 )
 ```
 

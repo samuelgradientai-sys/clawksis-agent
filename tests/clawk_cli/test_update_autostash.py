@@ -7,17 +7,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
-
 import pytest
-
 
 
 from clawk_cli import config as clawk_config
 
 from clawk_cli import main as clawk_main
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -38,15 +33,12 @@ from clawk_cli import main as clawk_main
 
 # per-test changes.
 
+
 @pytest.fixture(autouse=True)
-
 def _patch_managed_uv(request):
-
     """Make managed_uv helpers follow shutil.which mocking in tests."""
 
     import shutil
-
-
 
     # resolve_uv delegates to shutil.which("uv") so that test patches
 
@@ -56,108 +48,85 @@ def _patch_managed_uv(request):
 
         return shutil.which("uv")
 
-
-
     def _fake_ensure_uv():
 
         path = shutil.which("uv")
 
         return (path, False)  # never freshly bootstrapped in tests
 
-
-
     def _fake_update_managed_uv():
 
         return None  # never actually self-update in tests
-
-
 
     def _fake_rebuild_venv(*args, **kwargs):
 
         return True  # no-op in tests
 
-
-
-    with patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv), \
-         patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv), \
-         patch("clawk_cli.managed_uv.update_managed_uv", side_effect=_fake_update_managed_uv), \
-         patch("clawk_cli.managed_uv.rebuild_venv", side_effect=_fake_rebuild_venv):
-
+    with (
+        patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv),
+        patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv),
+        patch(
+            "clawk_cli.managed_uv.update_managed_uv",
+            side_effect=_fake_update_managed_uv,
+        ),
+        patch("clawk_cli.managed_uv.rebuild_venv", side_effect=_fake_rebuild_venv),
+    ):
         yield
 
 
-
-def test_stash_local_changes_if_needed_returns_none_when_tree_clean(monkeypatch, tmp_path):
+def test_stash_local_changes_if_needed_returns_none_when_tree_clean(
+    monkeypatch, tmp_path
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[-2:] == ["status", "--porcelain"]:
-
             return SimpleNamespace(stdout="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     stash_ref = clawk_main._stash_local_changes_if_needed(["git"], tmp_path)
-
-
 
     assert stash_ref is None
 
     assert [cmd[-2:] for cmd, _ in calls] == [["status", "--porcelain"]]
 
 
-
-
-
-def test_stash_local_changes_if_needed_returns_specific_stash_commit(monkeypatch, tmp_path):
+def test_stash_local_changes_if_needed_returns_specific_stash_commit(
+    monkeypatch, tmp_path
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[-2:] == ["status", "--porcelain"]:
-
-            return SimpleNamespace(stdout=" M clawk_cli/main.py\n?? notes.txt\n", returncode=0)
+            return SimpleNamespace(
+                stdout=" M clawk_cli/main.py\n?? notes.txt\n", returncode=0
+            )
 
         if cmd[-2:] == ["ls-files", "--unmerged"]:
-
             return SimpleNamespace(stdout="", returncode=0)
 
         if cmd[1:4] == ["stash", "push", "--include-untracked"]:
-
             return SimpleNamespace(stdout="Saved working directory\n", returncode=0)
 
         if cmd[-3:] == ["rev-parse", "--verify", "refs/stash"]:
-
             return SimpleNamespace(stdout="abc123\n", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     stash_ref = clawk_main._stash_local_changes_if_needed(["git"], tmp_path)
-
-
 
     assert stash_ref == "abc123"
 
@@ -168,9 +137,6 @@ def test_stash_local_changes_if_needed_returns_specific_stash_commit(monkeypatch
     assert calls[3][0][-3:] == ["rev-parse", "--verify", "refs/stash"]
 
 
-
-
-
 def test_resolve_stash_selector_returns_matching_entry(monkeypatch, tmp_path):
 
     def fake_run(cmd, **kwargs):
@@ -178,66 +144,46 @@ def test_resolve_stash_selector_returns_matching_entry(monkeypatch, tmp_path):
         assert cmd == ["git", "stash", "list", "--format=%gd %H"]
 
         return SimpleNamespace(
-
             stdout="stash@{0} def456\nstash@{1} abc123\n",
-
             returncode=0,
-
         )
-
-
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    assert clawk_main._resolve_stash_selector(["git"], tmp_path, "abc123") == "stash@{1}"
-
-
-
-
-
+    assert (
+        clawk_main._resolve_stash_selector(["git"], tmp_path, "abc123") == "stash@{1}"
+    )
 
 
 def test_restore_stashed_changes_prompts_before_applying(monkeypatch, tmp_path, capsys):
 
     calls = []
 
-
-
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
             return SimpleNamespace(stdout="applied\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "list"]:
-
             return SimpleNamespace(stdout="stash@{1} abc123\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "drop"]:
-
             return SimpleNamespace(stdout="dropped\n", stderr="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
-
-
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
     monkeypatch.setattr("builtins.input", lambda: "")
 
-
-
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
-
-
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert restored is True
 
@@ -260,14 +206,11 @@ def test_restore_stashed_changes_prompts_before_applying(monkeypatch, tmp_path, 
     assert "git status" in out
 
 
-
-
-
-def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_can_skip_restore_and_keep_stash(
+    monkeypatch, tmp_path, capsys
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
@@ -275,17 +218,13 @@ def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tm
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
     monkeypatch.setattr("builtins.input", lambda: "n")
 
-
-
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
-
-
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert restored is False
 
@@ -300,46 +239,35 @@ def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tm
     assert "git stash apply abc123" in out
 
 
-
-
-
-def test_restore_stashed_changes_applies_without_prompt_when_disabled(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_applies_without_prompt_when_disabled(
+    monkeypatch, tmp_path, capsys
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
             return SimpleNamespace(stdout="applied\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "list"]:
-
             return SimpleNamespace(stdout="stash@{0} abc123\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "drop"]:
-
             return SimpleNamespace(stdout="dropped\n", stderr="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
-
-
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
 
@@ -354,16 +282,9 @@ def test_restore_stashed_changes_applies_without_prompt_when_disabled(monkeypatc
     assert "Restore local changes now?" not in capsys.readouterr().out
 
 
-
-
-
-
-
 def test_print_stash_cleanup_guidance_with_selector(capsys):
 
     clawk_main._print_stash_cleanup_guidance("abc123", "stash@{2}")
-
-
 
     out = capsys.readouterr().out
 
@@ -374,52 +295,49 @@ def test_print_stash_cleanup_guidance_with_selector(capsys):
     assert "git stash drop stash@{2}" in out
 
 
-
-
-
-
-
-def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved(
+    monkeypatch, tmp_path, capsys
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
             return SimpleNamespace(stdout="applied\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "list"]:
-
             return SimpleNamespace(stdout="stash@{0} def456\n", stderr="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
-
-
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
 
-    assert calls[0] == (["git", "stash", "apply", "abc123"], {"cwd": tmp_path, "capture_output": True, "text": True})
+    assert calls[0] == (
+        ["git", "stash", "apply", "abc123"],
+        {"cwd": tmp_path, "capture_output": True, "text": True},
+    )
 
-    assert calls[1] == (["git", "diff", "--name-only", "--diff-filter=U"], {"cwd": tmp_path, "capture_output": True, "text": True})
+    assert calls[1] == (
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        {"cwd": tmp_path, "capture_output": True, "text": True},
+    )
 
-    assert calls[2] == (["git", "stash", "list", "--format=%gd %H"], {"cwd": tmp_path, "capture_output": True, "text": True, "check": True})
+    assert calls[2] == (
+        ["git", "stash", "list", "--format=%gd %H"],
+        {"cwd": tmp_path, "capture_output": True, "text": True, "check": True},
+    )
 
     out = capsys.readouterr().out
 
@@ -434,48 +352,35 @@ def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved
     assert "Look for commit abc123" in out
 
 
-
-
-
-
-
-def test_restore_stashed_changes_keeps_going_when_drop_fails(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_keeps_going_when_drop_fails(
+    monkeypatch, tmp_path, capsys
+):
 
     calls = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
             return SimpleNamespace(stdout="applied\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "list"]:
-
             return SimpleNamespace(stdout="stash@{0} abc123\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["stash", "drop"]:
-
             return SimpleNamespace(stdout="", stderr="drop failed\n", returncode=1)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
-
-
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
 
@@ -494,11 +399,9 @@ def test_restore_stashed_changes_keeps_going_when_drop_fails(monkeypatch, tmp_pa
     assert "git stash drop stash@{0}" in out
 
 
-
-
-
-def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path, capsys):
-
+def test_restore_stashed_changes_always_resets_on_conflict(
+    monkeypatch, tmp_path, capsys
+):
     """Conflicts always auto-reset (no prompt) and return False, even interactively.
 
 
@@ -511,37 +414,32 @@ def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path
 
     calls = []
 
-
-
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
-            return SimpleNamespace(stdout="conflict output\n", stderr="conflict stderr\n", returncode=1)
+            return SimpleNamespace(
+                stdout="conflict output\n", stderr="conflict stderr\n", returncode=1
+            )
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
-            return SimpleNamespace(stdout="clawk_cli/main.py\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout="clawk_cli/main.py\n", stderr="", returncode=0
+            )
 
         if cmd[1:3] == ["reset", "--hard"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
-
-
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
     monkeypatch.setattr("builtins.input", lambda: "y")
 
-
-
-    result = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
-
-
+    result = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert result is False
 
@@ -562,46 +460,35 @@ def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path
     assert len(reset_calls) == 1
 
 
-
-
-
-def test_restore_stashed_changes_auto_resets_non_interactive(monkeypatch, tmp_path, capsys):
-
+def test_restore_stashed_changes_auto_resets_non_interactive(
+    monkeypatch, tmp_path, capsys
+):
     """Non-interactive mode auto-resets without prompting and returns False
 
     instead of sys.exit(1) so the update can continue (gateway /update path)."""
 
     calls = []
 
-
-
     def fake_run(cmd, **kwargs):
 
         calls.append((cmd, kwargs))
 
         if cmd[1:3] == ["stash", "apply"]:
-
             return SimpleNamespace(stdout="applied\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["diff", "--name-only"]:
-
             return SimpleNamespace(stdout="cli.py\n", stderr="", returncode=0)
 
         if cmd[1:3] == ["reset", "--hard"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    result = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
-
-
+    result = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert result is False
 
@@ -614,43 +501,30 @@ def test_restore_stashed_changes_auto_resets_non_interactive(monkeypatch, tmp_pa
     assert len(reset_calls) == 1
 
 
-
-
-
-def test_stash_local_changes_if_needed_raises_when_stash_ref_missing(monkeypatch, tmp_path):
+def test_stash_local_changes_if_needed_raises_when_stash_ref_missing(
+    monkeypatch, tmp_path
+):
 
     def fake_run(cmd, **kwargs):
 
         if cmd[-2:] == ["status", "--porcelain"]:
-
             return SimpleNamespace(stdout=" M clawk_cli/main.py\n", returncode=0)
 
         if cmd[-2:] == ["ls-files", "--unmerged"]:
-
             return SimpleNamespace(stdout="", returncode=0)
 
         if cmd[1:4] == ["stash", "push", "--include-untracked"]:
-
             return SimpleNamespace(stdout="Saved working directory\n", returncode=0)
 
         if cmd[-3:] == ["rev-parse", "--verify", "refs/stash"]:
-
             raise CalledProcessError(returncode=128, cmd=cmd)
 
         raise AssertionError(f"unexpected command: {cmd}")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     with pytest.raises(CalledProcessError):
-
         clawk_main._stash_local_changes_if_needed(["git"], Path(tmp_path))
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -660,85 +534,83 @@ def test_stash_local_changes_if_needed_raises_when_stash_ref_missing(monkeypatch
 # ---------------------------------------------------------------------------
 
 
-
 def _setup_update_mocks(monkeypatch, tmp_path):
-
     """Common setup for cmd_update tests."""
 
     (tmp_path / ".git").mkdir()
 
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
 
-    monkeypatch.setattr(clawk_main, "_stash_local_changes_if_needed", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        clawk_main, "_stash_local_changes_if_needed", lambda *a, **kw: None
+    )
 
     monkeypatch.setattr(clawk_main, "_restore_stashed_changes", lambda *a, **kw: True)
 
-    monkeypatch.setattr(clawk_config, "get_missing_env_vars", lambda required_only=True: [])
+    monkeypatch.setattr(
+        clawk_config, "get_missing_env_vars", lambda required_only=True: []
+    )
 
     monkeypatch.setattr(clawk_config, "get_missing_config_fields", lambda: [])
 
     monkeypatch.setattr(clawk_config, "check_config_version", lambda: (5, 5))
 
-    monkeypatch.setattr(clawk_config, "migrate_config", lambda **kw: {"env_added": [], "config_added": []})
+    monkeypatch.setattr(
+        clawk_config,
+        "migrate_config",
+        lambda **kw: {"env_added": [], "config_added": []},
+    )
 
     monkeypatch.setattr(clawk_main, "_refresh_active_lazy_features", lambda: None)
 
 
-
-
-
-def test_cmd_update_retries_optional_extras_individually_when_all_fails(monkeypatch, tmp_path, capsys):
-
+def test_cmd_update_retries_optional_extras_individually_when_all_fails(
+    monkeypatch, tmp_path, capsys
+):
     """When .[all] fails, update should keep base deps and retry extras individually."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     monkeypatch.setattr(clawk_main, "_is_termux_env", lambda env=None: False)
 
-    monkeypatch.setattr(clawk_main, "_load_installable_optional_extras", lambda group="all": ["matrix", "mcp"])
-
-
+    monkeypatch.setattr(
+        clawk_main,
+        "_load_installable_optional_extras",
+        lambda group="all": ["matrix", "mcp"],
+    )
 
     recorded = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         recorded.append(cmd)
 
         if cmd == ["git", "fetch", "origin"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd == ["git", "rev-parse", "--abbrev-ref", "HEAD"]:
-
             return SimpleNamespace(stdout="main\n", stderr="", returncode=0)
 
         if cmd == ["git", "rev-list", "HEAD..origin/main", "--count"]:
-
             return SimpleNamespace(stdout="1\n", stderr="", returncode=0)
 
         if cmd == ["git", "pull", "--ff-only", "origin", "main"]:
-
             return SimpleNamespace(stdout="Updating\n", stderr="", returncode=0)
 
         if cmd == ["/usr/bin/uv", "pip", "install", "-e", ".[all]"]:
-
             raise CalledProcessError(returncode=1, cmd=cmd)
 
         if cmd == ["/usr/bin/uv", "pip", "install", "-e", "."]:
-
             return SimpleNamespace(returncode=0)
 
         if cmd == ["/usr/bin/uv", "pip", "install", "-e", ".[matrix]"]:
-
             raise CalledProcessError(returncode=1, cmd=cmd)
 
         if cmd == ["/usr/bin/uv", "pip", "install", "-e", ".[mcp]"]:
-
             return SimpleNamespace(returncode=0)
 
         # Catch-all must include stdout/stderr so consumers that parse
@@ -749,31 +621,18 @@ def test_cmd_update_retries_optional_extras_individually_when_all_fails(monkeypa
 
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     install_cmds = [c for c in recorded if "pip" in c and "install" in c]
 
     assert install_cmds == [
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[all]"],
-
         ["/usr/bin/uv", "pip", "install", "-e", "."],
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[matrix]"],
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[mcp]"],
-
     ]
-
-
 
     out = capsys.readouterr().out
 
@@ -784,56 +643,40 @@ def test_cmd_update_retries_optional_extras_individually_when_all_fails(monkeypa
     assert "Skipped optional extras that still failed: matrix" in out
 
 
-
-
-
 def test_cmd_update_succeeds_with_extras(monkeypatch, tmp_path):
-
     """When .[all] succeeds, no fallback should be attempted."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     monkeypatch.setattr(clawk_main, "_is_termux_env", lambda env=None: False)
 
-
-
     recorded = []
-
-
 
     def fake_run(cmd, **kwargs):
 
         recorded.append(cmd)
 
         if cmd == ["git", "fetch", "origin"]:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if cmd == ["git", "rev-parse", "--abbrev-ref", "HEAD"]:
-
             return SimpleNamespace(stdout="main\n", stderr="", returncode=0)
 
         if cmd == ["git", "rev-list", "HEAD..origin/main", "--count"]:
-
             return SimpleNamespace(stdout="1\n", stderr="", returncode=0)
 
         if cmd == ["git", "pull", "--ff-only", "origin", "main"]:
-
             return SimpleNamespace(stdout="Updating\n", stderr="", returncode=0)
 
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     install_cmds = [c for c in recorded if "pip" in c and "install" in c]
 
@@ -842,26 +685,20 @@ def test_cmd_update_succeeds_with_extras(monkeypatch, tmp_path):
     assert ".[all]" in install_cmds[0]
 
 
-
-
-
 def test_cmd_update_aborts_when_fresh_managed_uv_rebuild_fails(monkeypatch, tmp_path):
-
     """A failed fresh managed-uv venv rebuild must not continue into pip install
 
     (guard adapted from #38511)."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     monkeypatch.setattr(clawk_main, "_is_termux_env", lambda env=None: False)
 
-
-
     recorded = []
-
-
 
     def fake_run(cmd, **kwargs):
 
@@ -876,108 +713,72 @@ def test_cmd_update_aborts_when_fresh_managed_uv_rebuild_fails(monkeypatch, tmp_
         # reaches the venv rebuild this test exercises.
 
         if isinstance(cmd, (list, tuple)) and cmd and cmd[0] == "git":
-
             if "rev-parse" in cmd:
-
                 return SimpleNamespace(stdout="main\n", stderr="", returncode=0)
 
             if "rev-list" in cmd:
-
                 return SimpleNamespace(stdout="1\n", stderr="", returncode=0)
 
             if "pull" in cmd:
-
                 return SimpleNamespace(stdout="Updating\n", stderr="", returncode=0)
 
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
-    with patch("clawk_cli.managed_uv.ensure_uv", return_value=("/usr/bin/uv", True)), \
-         patch("clawk_cli.managed_uv.rebuild_venv", return_value=False), \
-         pytest.raises(RuntimeError, match="venv rebuild failed"):
-
+    with (
+        patch("clawk_cli.managed_uv.ensure_uv", return_value=("/usr/bin/uv", True)),
+        patch("clawk_cli.managed_uv.rebuild_venv", return_value=False),
+        pytest.raises(RuntimeError, match="venv rebuild failed"),
+    ):
         clawk_main.cmd_update(SimpleNamespace())
-
-
 
     install_cmds = [c for c in recorded if "pip" in c and "install" in c]
 
     assert install_cmds == []
 
 
-
-
-
 def test_install_with_optional_fallback_honors_custom_group(monkeypatch):
-
     """Termux update path should target .[termux-all] when requested."""
 
     calls = []
 
     monkeypatch.setattr(
-
         clawk_main,
-
         "_load_installable_optional_extras",
-
         lambda group="all": ["termux", "mcp"] if group == "termux-all" else [],
-
     )
-
-
 
     def fake_run_with_heartbeat(cmd, **kwargs):
 
         calls.append(cmd)
 
         if cmd[-1] == ".[termux-all]":
-
             raise CalledProcessError(returncode=1, cmd=cmd)
 
         return None
 
-
-
-    monkeypatch.setattr(clawk_main, "_run_install_with_heartbeat", fake_run_with_heartbeat)
-
-
-
-    clawk_main._install_python_dependencies_with_optional_fallback(
-
-        ["/usr/bin/uv", "pip"],
-
-        group="termux-all",
-
+    monkeypatch.setattr(
+        clawk_main, "_run_install_with_heartbeat", fake_run_with_heartbeat
     )
 
-
+    clawk_main._install_python_dependencies_with_optional_fallback(
+        ["/usr/bin/uv", "pip"],
+        group="termux-all",
+    )
 
     assert calls == [
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[termux-all]"],
-
         ["/usr/bin/uv", "pip", "install", "-e", "."],
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[termux]"],
-
         ["/usr/bin/uv", "pip", "install", "-e", ".[mcp]"],
-
     ]
 
 
-
-
-
-def test_install_heartbeat_prints_when_dependency_install_is_silent(monkeypatch, capsys):
-
+def test_install_heartbeat_prints_when_dependency_install_is_silent(
+    monkeypatch, capsys
+):
     """Long quiet installs should emit periodic heartbeat lines."""
-
-
 
     def fake_run(cmd, **kwargs):
 
@@ -985,28 +786,16 @@ def test_install_heartbeat_prints_when_dependency_install_is_silent(monkeypatch,
 
         return SimpleNamespace(returncode=0)
 
-
-
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-
-
     clawk_main._run_install_with_heartbeat(
-
         ["uv", "pip", "install", "-e", "."],
-
         heartbeat_interval_seconds=1,
-
     )
-
-
 
     out = capsys.readouterr().out
 
     assert "still installing dependencies" in out
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1016,28 +805,17 @@ def test_install_heartbeat_prints_when_dependency_install_is_silent(monkeypatch,
 # ---------------------------------------------------------------------------
 
 
-
 def _make_update_side_effect(
-
     current_branch="main",
-
     commit_count="3",
-
     ff_only_fails=False,
-
     reset_fails=False,
-
     fetch_fails=False,
-
     fetch_stderr="",
-
 ):
-
     """Build a subprocess.run side_effect for cmd_update tests."""
 
     recorded = []
-
-
 
     def side_effect(cmd, **kwargs):
 
@@ -1046,78 +824,65 @@ def _make_update_side_effect(
         joined = " ".join(str(c) for c in cmd)
 
         if "fetch" in joined and "origin" in joined:
-
             if fetch_fails:
-
                 return SimpleNamespace(stdout="", stderr=fetch_stderr, returncode=128)
 
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if "rev-parse" in joined and "--abbrev-ref" in joined:
-
-            return SimpleNamespace(stdout=f"{current_branch}\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout=f"{current_branch}\n", stderr="", returncode=0
+            )
 
         if "checkout" in joined and "main" in joined:
-
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
         if "rev-list" in joined:
-
             return SimpleNamespace(stdout=f"{commit_count}\n", stderr="", returncode=0)
 
         if "--ff-only" in joined:
-
             if ff_only_fails:
-
                 return SimpleNamespace(
-
                     stdout="",
-
                     stderr="fatal: Not possible to fast-forward, aborting.\n",
-
                     returncode=128,
-
                 )
 
-            return SimpleNamespace(stdout="Updating abc..def\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout="Updating abc..def\n", stderr="", returncode=0
+            )
 
         if "reset" in joined and "--hard" in joined:
-
             if reset_fails:
+                return SimpleNamespace(
+                    stdout="", stderr="error: unable to write\n", returncode=1
+                )
 
-                return SimpleNamespace(stdout="", stderr="error: unable to write\n", returncode=1)
-
-            return SimpleNamespace(stdout="HEAD is now at abc123\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout="HEAD is now at abc123\n", stderr="", returncode=0
+            )
 
         return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-
 
     return side_effect, recorded
 
 
-
-
-
-def test_cmd_update_falls_back_to_reset_when_ff_only_fails(monkeypatch, tmp_path, capsys):
-
+def test_cmd_update_falls_back_to_reset_when_ff_only_fails(
+    monkeypatch, tmp_path, capsys
+):
     """When --ff-only fails (diverged history), update resets to origin/{branch}."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(ff_only_fails=True)
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     reset_calls = [c for c in recorded if "reset" in c and "--hard" in c]
 
@@ -1125,42 +890,29 @@ def test_cmd_update_falls_back_to_reset_when_ff_only_fails(monkeypatch, tmp_path
 
     assert reset_calls[0] == ["git", "reset", "--hard", "origin/main"]
 
-
-
     out = capsys.readouterr().out
 
     assert "Fast-forward not possible" in out
 
 
-
-
-
 def test_cmd_update_no_reset_when_ff_only_succeeds(monkeypatch, tmp_path):
-
     """When --ff-only succeeds, no reset is attempted."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect()
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     reset_calls = [c for c in recorded if "reset" in c and "--hard" in c]
 
     assert len(reset_calls) == 0
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1170,32 +922,24 @@ def test_cmd_update_no_reset_when_ff_only_succeeds(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
 def test_cmd_update_switches_to_main_from_feature_branch(monkeypatch, tmp_path, capsys):
-
     """When on a feature branch, update checks out main before pulling."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(current_branch="fix/something")
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     checkout_calls = [c for c in recorded if "checkout" in c and "main" in c]
 
     assert len(checkout_calls) == 1
-
-
 
     out = capsys.readouterr().out
 
@@ -1204,61 +948,47 @@ def test_cmd_update_switches_to_main_from_feature_branch(monkeypatch, tmp_path, 
     assert "switching to main" in out
 
 
-
-
-
 def test_cmd_update_switches_to_main_from_detached_head(monkeypatch, tmp_path, capsys):
-
     """When in detached HEAD state, update checks out main before pulling."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(current_branch="HEAD")
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     checkout_calls = [c for c in recorded if "checkout" in c and "main" in c]
 
     assert len(checkout_calls) == 1
-
-
 
     out = capsys.readouterr().out
 
     assert "detached HEAD" in out
 
 
-
-
-
-def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatch, tmp_path, capsys):
-
+def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(
+    monkeypatch, tmp_path, capsys
+):
     """When on a feature branch with no updates, stash is restored and branch switched back."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     # Enable stash so it returns a ref
 
     monkeypatch.setattr(
-
-        clawk_main, "_stash_local_changes_if_needed",
-
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: "abc123deadbeef",
-
     )
 
     # Force the stash path (not the managed-clone clean path) so this test
@@ -1272,34 +1002,23 @@ def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatc
     restore_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_restore_stashed_changes",
-
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
-
     )
 
-
-
     side_effect, recorded = _make_update_side_effect(
-
-        current_branch="fix/something", commit_count="0",
-
+        current_branch="fix/something",
+        commit_count="0",
     )
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     # Stash should have been restored
 
     assert len(restore_calls) == 1
-
-
 
     # Should have checked out back to the original branch
 
@@ -1307,46 +1026,32 @@ def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatc
 
     assert len(checkout_back) == 1
 
-
-
     out = capsys.readouterr().out
 
     assert "Already up to date" in out
 
 
-
-
-
 def test_cmd_update_no_checkout_when_already_on_main(monkeypatch, tmp_path):
-
     """When already on main, no checkout is needed."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
-
-
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect()
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     checkout_calls = [c for c in recorded if "checkout" in c]
 
     assert len(checkout_calls) == 0
 
 
-
-
-
 def test_cmd_update_managed_clone_cleans_instead_of_stashing(monkeypatch, tmp_path):
-
     """On a non-fork (managed) clone, working-tree dirt is discarded via
 
     _clean_managed_worktree, NOT preserved via stash/restore.
@@ -1365,59 +1070,47 @@ def test_cmd_update_managed_clone_cleans_instead_of_stashing(monkeypatch, tmp_pa
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     # Official origin → not a fork.
 
     monkeypatch.setattr(
-
-        clawk_main, "_get_origin_url",
-
+        clawk_main,
+        "_get_origin_url",
         lambda *a, **kw: "https://github.com/samuelgradientai-sys/clawksis-agent.git",
-
     )
 
     clean_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_clean_managed_worktree",
-
+        clawk_main,
+        "_clean_managed_worktree",
         lambda *a, **kw: clean_calls.append(1) or True,
-
     )
 
     stash_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_stash_local_changes_if_needed",
-
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: stash_calls.append(1) or "shouldnotbeused",
-
     )
 
     restore_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_restore_stashed_changes",
-
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
-
     )
-
-
 
     side_effect, _ = _make_update_side_effect(commit_count="0")
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     # Managed clean path used; stash path never touched.
 
@@ -1428,71 +1121,56 @@ def test_cmd_update_managed_clone_cleans_instead_of_stashing(monkeypatch, tmp_pa
     assert len(restore_calls) == 0
 
 
-
-
-
 def test_cmd_update_fork_still_uses_stash(monkeypatch, tmp_path):
-
     """A fork (non-official origin) keeps the stash machinery so the user's
 
     intentional local edits survive the update."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     monkeypatch.setattr(
-
-        clawk_main, "_get_origin_url",
-
+        clawk_main,
+        "_get_origin_url",
         lambda *a, **kw: "https://github.com/someuser/clawksis-agent.git",
-
     )
 
     clean_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_clean_managed_worktree",
-
+        clawk_main,
+        "_clean_managed_worktree",
         lambda *a, **kw: clean_calls.append(1) or True,
-
     )
 
     stash_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_stash_local_changes_if_needed",
-
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: stash_calls.append(1) or "abc123",
-
     )
 
     monkeypatch.setattr(clawk_main, "_restore_stashed_changes", lambda *a, **kw: True)
 
-    monkeypatch.setattr(clawk_main, "_sync_with_upstream_if_needed", lambda *a, **kw: None)
-
-
+    monkeypatch.setattr(
+        clawk_main, "_sync_with_upstream_if_needed", lambda *a, **kw: None
+    )
 
     side_effect, _ = _make_update_side_effect(commit_count="0")
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     clawk_main.cmd_update(SimpleNamespace())
-
-
 
     # Fork: stash path used, managed clean NOT used.
 
     assert len(stash_calls) == 1
 
     assert len(clean_calls) == 0
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1502,73 +1180,44 @@ def test_cmd_update_fork_still_uses_stash(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
 def test_cmd_update_network_error_shows_friendly_message(monkeypatch, tmp_path, capsys):
-
     """Network failures during fetch show a user-friendly message."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-
-
     side_effect, _ = _make_update_side_effect(
-
         fetch_fails=True,
-
         fetch_stderr="fatal: unable to access 'https://...': Could not resolve host: github.com",
-
     )
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     with pytest.raises(SystemExit, match="1"):
-
         clawk_main.cmd_update(SimpleNamespace())
-
-
 
     out = capsys.readouterr().out
 
     assert "Network error" in out
 
 
-
-
-
 def test_cmd_update_auth_error_shows_friendly_message(monkeypatch, tmp_path, capsys):
-
     """Auth failures during fetch show a user-friendly message."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
 
-
-
     side_effect, _ = _make_update_side_effect(
-
         fetch_fails=True,
-
         fetch_stderr="fatal: Authentication failed for 'https://...'",
-
     )
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     with pytest.raises(SystemExit, match="1"):
-
         clawk_main.cmd_update(SimpleNamespace())
-
-
 
     out = capsys.readouterr().out
 
     assert "Authentication failed" in out
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1578,9 +1227,7 @@ def test_cmd_update_auth_error_shows_friendly_message(monkeypatch, tmp_path, cap
 # ---------------------------------------------------------------------------
 
 
-
 def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, capsys):
-
     """When reset --hard fails, stash restore is skipped with a helpful message."""
 
     _setup_update_mocks(monkeypatch, tmp_path)
@@ -1588,11 +1235,9 @@ def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, 
     # Re-enable stash so it actually returns a ref
 
     monkeypatch.setattr(
-
-        clawk_main, "_stash_local_changes_if_needed",
-
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: "abc123deadbeef",
-
     )
 
     # Force the stash path so this test exercises the reset-failure handling
@@ -1604,34 +1249,22 @@ def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, 
     restore_calls = []
 
     monkeypatch.setattr(
-
-        clawk_main, "_restore_stashed_changes",
-
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
-
     )
-
-
 
     side_effect, _ = _make_update_side_effect(ff_only_fails=True, reset_fails=True)
 
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
-
-
     with pytest.raises(SystemExit, match="1"):
-
         clawk_main.cmd_update(SimpleNamespace())
-
-
 
     # Stash restore should NOT have been called
 
     assert len(restore_calls) == 0
 
-
-
     out = capsys.readouterr().out
 
     assert "preserved in stash" in out
-

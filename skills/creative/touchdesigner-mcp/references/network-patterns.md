@@ -128,7 +128,8 @@ AudioFileIn CHOP → Audio Device Out CHOP                                      
 ```python
 # Step 1: Audio chain
 # td_execute_python script:
-td_execute_python(code="""
+td_execute_python(
+    code="""
 root = op('/project1')
 audio = root.create(audiofileinCHOP, 'audio_in')
 audio.par.file = '/path/to/music.mp3'
@@ -154,11 +155,13 @@ chop2top.par.chop = resamp  # CHOP To TOP has NO input connectors — use par.ch
 aout = root.create(audiodeviceoutCHOP, 'audio_out')
 audio.outputConnectors[0].connect(aout.inputConnectors[0])
 result = 'audio chain ok'
-""")
+"""
+)
 
 # Step 2: Time driver (MUST be rgba32float — see pitfalls #6)
 # td_execute_python script:
-td_execute_python(code="""
+td_execute_python(
+    code="""
 root = op('/project1')
 td = root.create(constantTOP, 'time_driver')
 td.par.format = 'rgba32float'
@@ -168,11 +171,13 @@ td.par.resolutionh = 1
 td.par.colorr.expr = "absTime.seconds % 1000.0"
 td.par.colorg.expr = "int(absTime.seconds / 1000.0)"
 result = 'time ok'
-""")
+"""
+)
 
 # Step 3: GLSL shader (write to /tmp, load from file)
 # td_execute_python script:
-td_execute_python(code="""
+td_execute_python(
+    code="""
 root = op('/project1')
 glsl = root.create(glslTOP, 'audio_shader')
 glsl.par.outputresolution = 'custom'
@@ -187,11 +192,13 @@ glsl.par.pixeldat = sd
 op('/project1/time_driver').outputConnectors[0].connect(glsl.inputConnectors[0])
 op('/project1/spectrum_tex').outputConnectors[0].connect(glsl.inputConnectors[1])
 result = 'glsl ok'
-""")
+"""
+)
 
 # Step 4: Output + recorder
 # td_execute_python script:
-td_execute_python(code="""
+td_execute_python(
+    code="""
 root = op('/project1')
 out = root.create(nullTOP, 'output')
 op('/project1/audio_shader').outputConnectors[0].connect(out.inputConnectors[0])
@@ -202,7 +209,8 @@ rec.par.type = 'movie'
 rec.par.file = '/tmp/output.mov'
 rec.par.videocodec = 'mjpa'
 result = 'output ok'
-""")
+"""
+)
 ```
 
 **GLSL shader pattern (audio-reactive fractal):**
@@ -464,16 +472,16 @@ Record the output to a file. **H.264/H.265 require a Commercial license** — us
 
 ```python
 # Build via td_execute_python:
-root = op('/project1')
+root = op("/project1")
 
 # Always put a Null TOP before the recorder
-null_out = root.op('out')  # or create one
-rec = root.create(moviefileoutTOP, 'recorder')
+null_out = root.op("out")  # or create one
+rec = root.create(moviefileoutTOP, "recorder")
 null_out.outputConnectors[0].connect(rec.inputConnectors[0])
 
-rec.par.type = 'movie'
-rec.par.file = '/tmp/output.mov'
-rec.par.videocodec = 'mjpa'  # Motion JPEG — works on Non-Commercial
+rec.par.type = "movie"
+rec.par.file = "/tmp/output.mov"
+rec.par.videocodec = "mjpa"  # Motion JPEG — works on Non-Commercial
 
 # Start recording (par.record is a toggle — .record() method may not exist)
 rec.par.record = True
@@ -499,7 +507,7 @@ Export TD visuals for use in another tool (ffmpeg, Python, ASCII art, etc.). Thi
 
 ```python
 # Preferred: ProRes on macOS (lossless, Non-Commercial OK, ~55MB/s at 1280x720)
-rec.par.videocodec = 'prores'
+rec.par.videocodec = "prores"
 # Fallback for non-macOS: mjpa (Motion JPEG)
 # rec.par.videocodec = 'mjpa'
 rec.par.record = True
@@ -526,12 +534,12 @@ ffmpeg -y -i /tmp/output.mov -vf 'select=between(n\,0\,749)' -vsync vfr /tmp/fra
 from PIL import Image
 import os
 
-frames_dir = '/tmp/frames'
-output_dir = '/tmp/processed'
+frames_dir = "/tmp/frames"
+output_dir = "/tmp/processed"
 os.makedirs(output_dir, exist_ok=True)
 
 for fname in sorted(os.listdir(frames_dir)):
-    if not fname.endswith('.png'):
+    if not fname.endswith(".png"):
         continue
     img = Image.open(os.path.join(frames_dir, fname))
     # ... apply your processing ...
@@ -612,7 +620,8 @@ Constant TOP (rgba32float, time) → GLSL TOP (audio-reactive shader) → Null T
 
 ```python
 # td_execute_python script:
-td_execute_python(code="""
+td_execute_python(
+    code="""
 import os
 root = op('/project1')
 
@@ -669,7 +678,8 @@ audio_out = root.create(audiodeviceoutCHOP, 'audio_out')
 audio.outputConnectors[0].connect(audio_out.inputConnectors[0])
 
 result = 'network built'
-""")
+"""
+)
 ```
 
 **GLSL shader (reads spectrum from input 1 texture):**

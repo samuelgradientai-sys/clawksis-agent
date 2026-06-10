@@ -25,6 +25,7 @@ Run from the PR worktree:
 
     python tests/plugins/image_gen/check_parity_vs_main.py
 """
+
 from __future__ import annotations
 
 import json
@@ -43,7 +44,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # checkout if one exists.
 def _resolve_main_dir() -> Path:
     candidate = REPO_ROOT.parent.parent
-    if (candidate / "tools" / "image_generation_tool.py").exists() and candidate != REPO_ROOT:
+    if (
+        candidate / "tools" / "image_generation_tool.py"
+    ).exists() and candidate != REPO_ROOT:
         return candidate
     sibling = REPO_ROOT.parent / "clawksis-agent-main"
     if (sibling / "tools" / "image_generation_tool.py").exists():

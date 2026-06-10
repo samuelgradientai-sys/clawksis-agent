@@ -30,6 +30,7 @@ from gateway.platforms.webhook import WebhookAdapter, _INSECURE_NO_AUTH
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter(routes, **extra_kw) -> WebhookAdapter:
     extra = {"host": "127.0.0.1", "port": 0, "routes": routes}
     extra.update(extra_kw)
@@ -61,6 +62,7 @@ def _wire_mock_target(adapter: WebhookAdapter, platform_name: str = "telegram"):
 # Core behaviour: agent bypass
 # ===================================================================
 
+
 class TestDeliverOnlyBypassesAgent:
     """The whole point of the feature — handle_message must not be called."""
 
@@ -87,9 +89,7 @@ class TestDeliverOnlyBypassesAgent:
         adapter.handle_message = _capture
 
         app = _create_app(adapter)
-        body = json.dumps(
-            {"payload": {"user": "alice", "other": "bob"}}
-        ).encode()
+        body = json.dumps({"payload": {"user": "alice", "other": "bob"}}).encode()
 
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
@@ -180,8 +180,8 @@ class TestDeliverOnlyBypassesAgent:
 # HTTP status codes
 # ===================================================================
 
-class TestDeliverOnlyStatusCodes:
 
+class TestDeliverOnlyStatusCodes:
     @pytest.mark.asyncio
     async def test_delivery_failure_returns_502(self):
         """If the target adapter returns SendResult(success=False), 502."""
@@ -271,8 +271,8 @@ class TestDeliverOnlyStatusCodes:
 # Startup validation
 # ===================================================================
 
-class TestDeliverOnlyStartupValidation:
 
+class TestDeliverOnlyStartupValidation:
     @pytest.mark.asyncio
     async def test_deliver_only_with_log_deliver_rejected(self):
         """deliver_only=true + deliver=log is nonsense — reject at connect()."""
@@ -331,8 +331,8 @@ class TestDeliverOnlyStartupValidation:
 # Security + reliability invariants still hold
 # ===================================================================
 
-class TestDeliverOnlySecurityInvariants:
 
+class TestDeliverOnlySecurityInvariants:
     @pytest.mark.asyncio
     async def test_hmac_still_enforced(self):
         """deliver_only does NOT bypass HMAC validation."""
@@ -437,8 +437,8 @@ class TestDeliverOnlySecurityInvariants:
 # Unit: _direct_deliver dispatch
 # ===================================================================
 
-class TestDirectDeliverUnit:
 
+class TestDirectDeliverUnit:
     @pytest.mark.asyncio
     async def test_dispatches_to_cross_platform_for_messaging_targets(self):
         adapter = _make_adapter({})
@@ -449,15 +449,14 @@ class TestDirectDeliverUnit:
             {"deliver": "telegram", "deliver_extra": {"chat_id": "c-1"}},
         )
         assert result.success is True
-        mock_target.send.assert_awaited_once_with(
-            "c-1", "hello", metadata=None
-        )
+        mock_target.send.assert_awaited_once_with("c-1", "hello", metadata=None)
 
     @pytest.mark.asyncio
     async def test_dispatches_to_github_comment(self):
         adapter = _make_adapter({})
         with patch.object(
-            adapter, "_deliver_github_comment",
+            adapter,
+            "_deliver_github_comment",
             new=AsyncMock(return_value=SendResult(success=True)),
         ) as mock_gh:
             result = await adapter._direct_deliver(

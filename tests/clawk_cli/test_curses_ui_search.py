@@ -58,7 +58,11 @@ def test_active_search_allows_navigation_keys_to_reach_menu_loop():
 def test_active_search_consumes_query_editing_and_confirm_keys():
     search = _SearchState(active=True, query="op")
 
-    assert _handle_active_search_key(_FakeCurses, ord("u"), search) == (True, False, True)
+    assert _handle_active_search_key(_FakeCurses, ord("u"), search) == (
+        True,
+        False,
+        True,
+    )
     assert search.query == "opu"
 
     assert _handle_active_search_key(_FakeCurses, _FakeCurses.KEY_ENTER, search) == (

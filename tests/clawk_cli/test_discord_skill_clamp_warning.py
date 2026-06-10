@@ -12,6 +12,7 @@ This module pins the upgraded behavior: a WARNING log with both full
 cmd_keys + the clamped name, so whoever named the skills sees the
 collision and can rename one.
 """
+
 from __future__ import annotations
 
 import logging
@@ -52,9 +53,11 @@ def test_clamp_collision_emits_warning_naming_both_skills(
         },
     }
 
-    with caplog.at_level(logging.WARNING, logger="clawk_cli.commands"), (
-        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds)
-    ), patch("tools.skills_tool.SKILLS_DIR", skills_dir):
+    with (
+        caplog.at_level(logging.WARNING, logger="clawk_cli.commands"),
+        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+        patch("tools.skills_tool.SKILLS_DIR", skills_dir),
+    ):
         categories, uncategorized, hidden = discord_skill_commands_by_category(
             reserved_names=set(),
         )
@@ -68,7 +71,8 @@ def test_clamp_collision_emits_warning_naming_both_skills(
 
     # Exactly one warning, naming BOTH full cmd_keys and the clamped name.
     warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "clamp" in r.getMessage()
     ]
     assert len(warnings) == 1, (
@@ -108,9 +112,11 @@ def test_clamp_collision_with_reserved_name_emits_distinct_warning(
         },
     }
 
-    with caplog.at_level(logging.WARNING, logger="clawk_cli.commands"), (
-        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds)
-    ), patch("tools.skills_tool.SKILLS_DIR", skills_dir):
+    with (
+        caplog.at_level(logging.WARNING, logger="clawk_cli.commands"),
+        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+        patch("tools.skills_tool.SKILLS_DIR", skills_dir),
+    ):
         categories, uncategorized, hidden = discord_skill_commands_by_category(
             reserved_names={"help"},
         )
@@ -121,7 +127,8 @@ def test_clamp_collision_with_reserved_name_emits_distinct_warning(
     assert uncategorized == []
 
     warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "reserved" in r.getMessage()
     ]
     assert len(warnings) == 1, (
@@ -145,18 +152,22 @@ def test_no_collision_no_warning(tmp_path: Path, caplog) -> None:
 
     fake_cmds = {
         "/alpha": {
-            "name": "alpha", "description": "",
+            "name": "alpha",
+            "description": "",
             "skill_md_path": str(skills_dir / "creative" / "alpha" / "SKILL.md"),
         },
         "/bravo": {
-            "name": "bravo", "description": "",
+            "name": "bravo",
+            "description": "",
             "skill_md_path": str(skills_dir / "creative" / "bravo" / "SKILL.md"),
         },
     }
 
-    with caplog.at_level(logging.WARNING, logger="clawk_cli.commands"), (
-        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds)
-    ), patch("tools.skills_tool.SKILLS_DIR", skills_dir):
+    with (
+        caplog.at_level(logging.WARNING, logger="clawk_cli.commands"),
+        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+        patch("tools.skills_tool.SKILLS_DIR", skills_dir),
+    ):
         categories, uncategorized, hidden = discord_skill_commands_by_category(
             reserved_names=set(),
         )
@@ -164,7 +175,8 @@ def test_no_collision_no_warning(tmp_path: Path, caplog) -> None:
     assert hidden == 0
     assert {n for n, _d, _k in categories["creative"]} == {"alpha", "bravo"}
     clamp_warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING
         and ("clamp" in r.getMessage() or "reserved" in r.getMessage())
     ]
@@ -207,8 +219,10 @@ def test_long_skill_name_preserves_cmd_key_through_by_category(
         },
     }
 
-    with patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds), \
-         patch("tools.skills_tool.SKILLS_DIR", skills_dir):
+    with (
+        patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+        patch("tools.skills_tool.SKILLS_DIR", skills_dir),
+    ):
         categories, uncategorized, hidden = discord_skill_commands_by_category(
             reserved_names=set(),
         )
@@ -229,9 +243,7 @@ def test_long_skill_name_preserves_cmd_key_through_by_category(
     assert len(display_name) <= 32, (
         f"Display name should be clamped to 32 chars, got {len(display_name)}"
     )
-    assert key == cmd_key, (
-        f"cmd_key must be the original /{long_name}, got {key!r}"
-    )
+    assert key == cmd_key, f"cmd_key must be the original /{long_name}, got {key!r}"
 
     # Verify lookup works: clamped display name -> original cmd_key
     assert display_name in skill_lookup

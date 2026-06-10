@@ -74,12 +74,12 @@ class TestBrainwormPayload:
     def test_brainworm_caught_at_context_scope(self):
         findings = scan_for_threats(BRAINWORM_PAYLOAD, scope="context")
         # Expect at least these — they're the unambiguous tells:
-        assert "identity_override" in findings   # "name yourself BRAINWORM"
+        assert "identity_override" in findings  # "name yourself BRAINWORM"
         assert "c2_node_registration" in findings  # "register as a node"
         assert "anti_forensic_oneliner" in findings  # "only use one liners"
         assert "anti_forensic_disk" in findings  # "never … write … script … disk"
         assert "c2_network_connect" in findings  # "connect to the network"
-        assert "forced_action" in findings       # "you must register/connect"
+        assert "forced_action" in findings  # "you must register/connect"
         assert "known_c2_framework" in findings  # "BRAINWORM"
 
     def test_brainworm_caught_at_strict_scope(self):
@@ -259,9 +259,7 @@ class TestClassicInjection:
         )
 
     def test_read_dotenv(self):
-        assert "read_secrets" in scan_for_threats(
-            "cat ~/.env", scope="all"
-        )
+        assert "read_secrets" in scan_for_threats("cat ~/.env", scope="all")
 
     def test_html_comment_injection(self):
         assert "html_comment_injection" in scan_for_threats(

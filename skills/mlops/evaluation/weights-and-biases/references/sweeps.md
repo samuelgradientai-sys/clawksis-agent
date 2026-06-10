@@ -17,21 +17,15 @@ Complete guide to hyperparameter optimization with W&B Sweeps.
 
 ```python
 sweep_config = {
-    'method': 'bayes',  # Search strategy
-    'metric': {
-        'name': 'val/accuracy',
-        'goal': 'maximize'  # or 'minimize'
+    "method": "bayes",  # Search strategy
+    "metric": {
+        "name": "val/accuracy",
+        "goal": "maximize",  # or 'minimize'
     },
-    'parameters': {
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-1
-        },
-        'batch_size': {
-            'values': [16, 32, 64, 128]
-        }
-    }
+    "parameters": {
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
+        "batch_size": {"values": [16, 32, 64, 128]},
+    },
 }
 
 # Initialize sweep
@@ -43,61 +37,32 @@ sweep_id = wandb.sweep(sweep_config, project="my-project")
 ```python
 sweep_config = {
     # Required: Search method
-    'method': 'bayes',
-
+    "method": "bayes",
     # Required: Optimization metric
-    'metric': {
-        'name': 'val/f1_score',
-        'goal': 'maximize'
-    },
-
+    "metric": {"name": "val/f1_score", "goal": "maximize"},
     # Required: Parameters to search
-    'parameters': {
+    "parameters": {
         # Continuous parameter
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-1
-        },
-
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
         # Discrete values
-        'batch_size': {
-            'values': [16, 32, 64, 128]
-        },
-
+        "batch_size": {"values": [16, 32, 64, 128]},
         # Categorical
-        'optimizer': {
-            'values': ['adam', 'sgd', 'rmsprop', 'adamw']
-        },
-
+        "optimizer": {"values": ["adam", "sgd", "rmsprop", "adamw"]},
         # Uniform distribution
-        'dropout': {
-            'distribution': 'uniform',
-            'min': 0.1,
-            'max': 0.5
-        },
-
+        "dropout": {"distribution": "uniform", "min": 0.1, "max": 0.5},
         # Integer range
-        'num_layers': {
-            'distribution': 'int_uniform',
-            'min': 2,
-            'max': 10
-        },
-
+        "num_layers": {"distribution": "int_uniform", "min": 2, "max": 10},
         # Fixed value (constant across runs)
-        'epochs': {
-            'value': 50
-        }
+        "epochs": {"value": 50},
     },
-
     # Optional: Early termination
-    'early_terminate': {
-        'type': 'hyperband',
-        'min_iter': 5,
-        's': 2,
-        'eta': 3,
-        'max_iter': 27
-    }
+    "early_terminate": {
+        "type": "hyperband",
+        "min_iter": 5,
+        "s": 2,
+        "eta": 3,
+        "max_iter": 27,
+    },
 }
 ```
 
@@ -109,18 +74,12 @@ Exhaustively search all combinations.
 
 ```python
 sweep_config = {
-    'method': 'grid',
-    'parameters': {
-        'learning_rate': {
-            'values': [0.001, 0.01, 0.1]
-        },
-        'batch_size': {
-            'values': [16, 32, 64]
-        },
-        'optimizer': {
-            'values': ['adam', 'sgd']
-        }
-    }
+    "method": "grid",
+    "parameters": {
+        "learning_rate": {"values": [0.001, 0.01, 0.1]},
+        "batch_size": {"values": [16, 32, 64]},
+        "optimizer": {"values": ["adam", "sgd"]},
+    },
 }
 
 # Total runs: 3 × 3 × 2 = 18 runs
@@ -147,27 +106,13 @@ Randomly sample parameter combinations.
 
 ```python
 sweep_config = {
-    'method': 'random',
-    'parameters': {
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-1
-        },
-        'batch_size': {
-            'values': [16, 32, 64, 128, 256]
-        },
-        'dropout': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 0.5
-        },
-        'num_layers': {
-            'distribution': 'int_uniform',
-            'min': 2,
-            'max': 8
-        }
-    }
+    "method": "random",
+    "parameters": {
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
+        "batch_size": {"values": [16, 32, 64, 128, 256]},
+        "dropout": {"distribution": "uniform", "min": 0.0, "max": 0.5},
+        "num_layers": {"distribution": "int_uniform", "min": 2, "max": 8},
+    },
 }
 
 # Run 100 random trials
@@ -195,31 +140,14 @@ Learn from previous trials to sample promising regions.
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'metric': {
-        'name': 'val/loss',
-        'goal': 'minimize'
+    "method": "bayes",
+    "metric": {"name": "val/loss", "goal": "minimize"},
+    "parameters": {
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
+        "weight_decay": {"distribution": "log_uniform", "min": 1e-6, "max": 1e-2},
+        "dropout": {"distribution": "uniform", "min": 0.1, "max": 0.5},
+        "num_layers": {"values": [2, 3, 4, 5, 6]},
     },
-    'parameters': {
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-1
-        },
-        'weight_decay': {
-            'distribution': 'log_uniform',
-            'min': 1e-6,
-            'max': 1e-2
-        },
-        'dropout': {
-            'distribution': 'uniform',
-            'min': 0.1,
-            'max': 0.5
-        },
-        'num_layers': {
-            'values': [2, 3, 4, 5, 6]
-        }
-    }
 }
 ```
 
@@ -331,18 +259,17 @@ Stop underperforming runs early to save compute.
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'metric': {'name': 'val/accuracy', 'goal': 'maximize'},
-    'parameters': {...},
-
+    "method": "bayes",
+    "metric": {"name": "val/accuracy", "goal": "maximize"},
+    "parameters": {...},
     # Hyperband early termination
-    'early_terminate': {
-        'type': 'hyperband',
-        'min_iter': 3,      # Minimum iterations before termination
-        's': 2,             # Bracket count
-        'eta': 3,           # Downsampling rate
-        'max_iter': 27      # Maximum iterations
-    }
+    "early_terminate": {
+        "type": "hyperband",
+        "min_iter": 3,  # Minimum iterations before termination
+        "s": 2,  # Bracket count
+        "eta": 3,  # Downsampling rate
+        "max_iter": 27,  # Maximum iterations
+    },
 }
 ```
 
@@ -361,7 +288,7 @@ def train():
         loss = train_epoch()
         val_acc = validate()
 
-        wandb.log({'val/accuracy': val_acc, 'epoch': epoch})
+        wandb.log({"val/accuracy": val_acc, "epoch": epoch})
 
         # Custom early stopping
         if epoch > 5 and val_acc < 0.5:
@@ -389,7 +316,7 @@ def train():
     model = build_model(
         hidden_size=config.hidden_size,
         num_layers=config.num_layers,
-        dropout=config.dropout
+        dropout=config.dropout,
     )
 
     # Create optimizer
@@ -397,7 +324,7 @@ def train():
         model.parameters(),
         name=config.optimizer,
         lr=config.learning_rate,
-        weight_decay=config.weight_decay
+        weight_decay=config.weight_decay,
     )
 
     # Training loop
@@ -412,16 +339,16 @@ def train():
 
         # Log metrics
         wandb.log({
-            'train/loss': train_loss,
-            'train/accuracy': train_acc,
-            'val/loss': val_loss,
-            'val/accuracy': val_acc,
-            'epoch': epoch
+            "train/loss": train_loss,
+            "train/accuracy": train_acc,
+            "val/loss": val_loss,
+            "val/accuracy": val_acc,
+            "epoch": epoch,
         })
 
     # Log final model
-    torch.save(model.state_dict(), 'model.pth')
-    wandb.save('model.pth')
+    torch.save(model.state_dict(), "model.pth")
+    wandb.save("model.pth")
 
     # Finish run
     wandb.finish()
@@ -435,36 +362,30 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
 
+
 def train():
     run = wandb.init()
     config = wandb.config
 
     # Data
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.batch_size,
-        shuffle=True
-    )
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
 
     # Model
-    model = ResNet(
-        num_classes=config.num_classes,
-        dropout=config.dropout
-    ).to(device)
+    model = ResNet(num_classes=config.num_classes, dropout=config.dropout).to(device)
 
     # Optimizer
-    if config.optimizer == 'adam':
+    if config.optimizer == "adam":
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=config.learning_rate,
-            weight_decay=config.weight_decay
+            weight_decay=config.weight_decay,
         )
-    elif config.optimizer == 'sgd':
+    elif config.optimizer == "sgd":
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=config.learning_rate,
             momentum=config.momentum,
-            weight_decay=config.weight_decay
+            weight_decay=config.weight_decay,
         )
 
     # Scheduler
@@ -497,11 +418,11 @@ def train():
 
         # Log
         wandb.log({
-            'train/loss': train_loss / len(train_loader),
-            'val/loss': val_loss,
-            'val/accuracy': val_acc,
-            'learning_rate': scheduler.get_last_lr()[0],
-            'epoch': epoch
+            "train/loss": train_loss / len(train_loader),
+            "val/loss": val_loss,
+            "val/accuracy": val_acc,
+            "learning_rate": scheduler.get_last_lr()[0],
+            "epoch": epoch,
         })
 ```
 
@@ -533,18 +454,20 @@ wandb.agent(sweep_id, function=train, count=20)
 ```python
 import os
 
+
 def train():
     # Get available GPU
-    gpu_id = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
 
     run = wandb.init()
     config = wandb.config
 
     # Train on specific GPU
-    device = torch.device(f'cuda:{gpu_id}')
+    device = torch.device(f"cuda:{gpu_id}")
     model = model.to(device)
 
     # ... rest of training ...
+
 
 # Run agents on different GPUs
 # Terminal 1
@@ -563,33 +486,24 @@ def train():
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'metric': {'name': 'val/accuracy', 'goal': 'maximize'},
-    'parameters': {
-        'model': {
-            'parameters': {
-                'type': {
-                    'values': ['resnet', 'efficientnet']
-                },
-                'size': {
-                    'values': ['small', 'medium', 'large']
-                }
+    "method": "bayes",
+    "metric": {"name": "val/accuracy", "goal": "maximize"},
+    "parameters": {
+        "model": {
+            "parameters": {
+                "type": {"values": ["resnet", "efficientnet"]},
+                "size": {"values": ["small", "medium", "large"]},
             }
         },
-        'optimizer': {
-            'parameters': {
-                'type': {
-                    'values': ['adam', 'sgd']
-                },
-                'lr': {
-                    'distribution': 'log_uniform',
-                    'min': 1e-5,
-                    'max': 1e-1
-                }
+        "optimizer": {
+            "parameters": {
+                "type": {"values": ["adam", "sgd"]},
+                "lr": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
             }
-        }
-    }
+        },
+    },
 }
+
 
 # Access nested config
 def train():
@@ -604,39 +518,27 @@ def train():
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'parameters': {
-        'optimizer': {
-            'values': ['adam', 'sgd']
-        },
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-1
-        },
+    "method": "bayes",
+    "parameters": {
+        "optimizer": {"values": ["adam", "sgd"]},
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-1},
         # Only used if optimizer == 'sgd'
-        'momentum': {
-            'distribution': 'uniform',
-            'min': 0.5,
-            'max': 0.99
-        }
-    }
+        "momentum": {"distribution": "uniform", "min": 0.5, "max": 0.99},
+    },
 }
+
 
 def train():
     run = wandb.init()
     config = wandb.config
 
-    if config.optimizer == 'adam':
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=config.learning_rate
-        )
-    elif config.optimizer == 'sgd':
+    if config.optimizer == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    elif config.optimizer == "sgd":
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=config.learning_rate,
-            momentum=config.momentum  # Conditional parameter
+            momentum=config.momentum,  # Conditional parameter
         )
 ```
 
@@ -646,66 +548,27 @@ def train():
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'metric': {
-        'name': 'val/top1_accuracy',
-        'goal': 'maximize'
-    },
-    'parameters': {
+    "method": "bayes",
+    "metric": {"name": "val/top1_accuracy", "goal": "maximize"},
+    "parameters": {
         # Model
-        'architecture': {
-            'values': ['resnet50', 'resnet101', 'efficientnet_b0', 'efficientnet_b3']
+        "architecture": {
+            "values": ["resnet50", "resnet101", "efficientnet_b0", "efficientnet_b3"]
         },
-        'pretrained': {
-            'values': [True, False]
-        },
-
+        "pretrained": {"values": [True, False]},
         # Training
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-5,
-            'max': 1e-2
-        },
-        'batch_size': {
-            'values': [16, 32, 64, 128]
-        },
-        'optimizer': {
-            'values': ['adam', 'sgd', 'adamw']
-        },
-        'weight_decay': {
-            'distribution': 'log_uniform',
-            'min': 1e-6,
-            'max': 1e-2
-        },
-
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-5, "max": 1e-2},
+        "batch_size": {"values": [16, 32, 64, 128]},
+        "optimizer": {"values": ["adam", "sgd", "adamw"]},
+        "weight_decay": {"distribution": "log_uniform", "min": 1e-6, "max": 1e-2},
         # Regularization
-        'dropout': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 0.5
-        },
-        'label_smoothing': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 0.2
-        },
-
+        "dropout": {"distribution": "uniform", "min": 0.0, "max": 0.5},
+        "label_smoothing": {"distribution": "uniform", "min": 0.0, "max": 0.2},
         # Data augmentation
-        'mixup_alpha': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 1.0
-        },
-        'cutmix_alpha': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 1.0
-        }
+        "mixup_alpha": {"distribution": "uniform", "min": 0.0, "max": 1.0},
+        "cutmix_alpha": {"distribution": "uniform", "min": 0.0, "max": 1.0},
     },
-    'early_terminate': {
-        'type': 'hyperband',
-        'min_iter': 5
-    }
+    "early_terminate": {"type": "hyperband", "min_iter": 5},
 }
 ```
 
@@ -713,49 +576,23 @@ sweep_config = {
 
 ```python
 sweep_config = {
-    'method': 'bayes',
-    'metric': {'name': 'eval/f1', 'goal': 'maximize'},
-    'parameters': {
+    "method": "bayes",
+    "metric": {"name": "eval/f1", "goal": "maximize"},
+    "parameters": {
         # Model
-        'model_name': {
-            'values': ['bert-base-uncased', 'roberta-base', 'distilbert-base-uncased']
+        "model_name": {
+            "values": ["bert-base-uncased", "roberta-base", "distilbert-base-uncased"]
         },
-
         # Training
-        'learning_rate': {
-            'distribution': 'log_uniform',
-            'min': 1e-6,
-            'max': 1e-4
-        },
-        'per_device_train_batch_size': {
-            'values': [8, 16, 32]
-        },
-        'num_train_epochs': {
-            'values': [3, 4, 5]
-        },
-        'warmup_ratio': {
-            'distribution': 'uniform',
-            'min': 0.0,
-            'max': 0.1
-        },
-        'weight_decay': {
-            'distribution': 'log_uniform',
-            'min': 1e-4,
-            'max': 1e-1
-        },
-
+        "learning_rate": {"distribution": "log_uniform", "min": 1e-6, "max": 1e-4},
+        "per_device_train_batch_size": {"values": [8, 16, 32]},
+        "num_train_epochs": {"values": [3, 4, 5]},
+        "warmup_ratio": {"distribution": "uniform", "min": 0.0, "max": 0.1},
+        "weight_decay": {"distribution": "log_uniform", "min": 1e-4, "max": 1e-1},
         # Optimizer
-        'adam_beta1': {
-            'distribution': 'uniform',
-            'min': 0.8,
-            'max': 0.95
-        },
-        'adam_beta2': {
-            'distribution': 'uniform',
-            'min': 0.95,
-            'max': 0.999
-        }
-    }
+        "adam_beta1": {"distribution": "uniform", "min": 0.8, "max": 0.95},
+        "adam_beta2": {"distribution": "uniform", "min": 0.95, "max": 0.999},
+    },
 }
 ```
 
@@ -765,21 +602,18 @@ sweep_config = {
 
 ```python
 # Initial exploration: Random search, 20 runs
-sweep_config_v1 = {
-    'method': 'random',
-    'parameters': {...}
-}
+sweep_config_v1 = {"method": "random", "parameters": {...}}
 wandb.agent(sweep_id_v1, train, count=20)
 
 # Refined search: Bayes, narrow ranges
 sweep_config_v2 = {
-    'method': 'bayes',
-    'parameters': {
-        'learning_rate': {
-            'min': 5e-5,  # Narrowed from 1e-6 to 1e-4
-            'max': 1e-4
+    "method": "bayes",
+    "parameters": {
+        "learning_rate": {
+            "min": 5e-5,  # Narrowed from 1e-6 to 1e-4
+            "max": 1e-4,
         }
-    }
+    },
 }
 ```
 
@@ -818,8 +652,8 @@ def train():
 
     # Log system metrics
     wandb.log({
-        'system/gpu_memory_allocated': torch.cuda.memory_allocated(),
-        'system/gpu_memory_reserved': torch.cuda.memory_reserved()
+        "system/gpu_memory_allocated": torch.cuda.memory_allocated(),
+        "system/gpu_memory_reserved": torch.cuda.memory_reserved(),
     })
 ```
 
@@ -836,8 +670,8 @@ def train():
         if val_acc > best_acc:
             best_acc = val_acc
             # Save best checkpoint
-            torch.save(model.state_dict(), 'best_model.pth')
-            wandb.save('best_model.pth')
+            torch.save(model.state_dict(), "best_model.pth")
+            wandb.save("best_model.pth")
 ```
 
 ## Resources

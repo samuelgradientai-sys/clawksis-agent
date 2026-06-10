@@ -11,16 +11,12 @@ from sae_lens import SAE
 
 # From official releases
 sae, cfg_dict, sparsity = SAE.from_pretrained(
-    release="gpt2-small-res-jb",
-    sae_id="blocks.8.hook_resid_pre",
-    device="cuda"
+    release="gpt2-small-res-jb", sae_id="blocks.8.hook_resid_pre", device="cuda"
 )
 
 # From HuggingFace
 sae, cfg_dict, sparsity = SAE.from_pretrained(
-    release="username/repo-name",
-    sae_id="path/to/sae",
-    device="cuda"
+    release="username/repo-name", sae_id="path/to/sae", device="cuda"
 )
 
 # From local disk
@@ -94,9 +90,9 @@ Configuration class for SAE architecture and training context.
 ### Accessing Config
 
 ```python
-print(sae.cfg.d_in)      # 768 for GPT-2 small
-print(sae.cfg.d_sae)     # e.g., 24576 (32x expansion)
-print(sae.cfg.hook_name) # e.g., "blocks.8.hook_resid_pre"
+print(sae.cfg.d_in)  # 768 for GPT-2 small
+print(sae.cfg.d_sae)  # e.g., 24576 (32x expansion)
+print(sae.cfg.hook_name)  # e.g., "blocks.8.hook_resid_pre"
 ```
 
 ---
@@ -116,48 +112,39 @@ cfg = LanguageModelSAERunnerConfig(
     hook_name="blocks.8.hook_resid_pre",
     hook_layer=8,
     d_in=768,
-
     # SAE architecture
     architecture="standard",  # "standard", "gated", "jumprelu", "topk"
-    d_sae=768 * 8,           # Expansion factor
+    d_sae=768 * 8,  # Expansion factor
     activation_fn="relu",
-
     # Training hyperparameters
     lr=4e-4,
     l1_coefficient=8e-5,
     lp_norm=1.0,
     lr_scheduler_name="constant",
     lr_warm_up_steps=500,
-
     # Sparsity control
     l1_warm_up_steps=1000,
     use_ghost_grads=True,
     feature_sampling_window=1000,
     dead_feature_window=5000,
     dead_feature_threshold=1e-8,
-
     # Data
     dataset_path="monology/pile-uncopyrighted",
     streaming=True,
     context_size=128,
-
     # Batch sizes
     train_batch_size_tokens=4096,
     store_batch_size_prompts=16,
     n_batches_in_buffer=64,
-
     # Training duration
     training_tokens=100_000_000,
-
     # Logging
     log_to_wandb=True,
     wandb_project="sae-training",
     wandb_log_frequency=100,
-
     # Checkpointing
     checkpoint_path="checkpoints",
     n_checkpoints=5,
-
     # Hardware
     device="cuda",
     dtype="float32",

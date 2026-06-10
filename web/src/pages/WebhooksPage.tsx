@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Webhook, Plus, Trash2, X, Copy, Check } from "lucide-react";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
@@ -6,7 +12,11 @@ import { Select, SelectOption } from "@nous-research/ui/ui/components/select";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { H2 } from "@nous-research/ui/ui/components/typography/h2";
 import { api } from "@/lib/api";
-import type { WebhookRoute, WebhooksResponse } from "@/lib/api";
+import type {
+  MessagingPlatform,
+  WebhookRoute,
+  WebhooksResponse,
+} from "@/lib/api";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { useConfirmDelete } from "@nous-research/ui/hooks/use-confirm-delete";
@@ -62,6 +72,9 @@ export default function WebhooksPage() {
   const [deliver, setDeliver] = useState("log");
   const [deliverOnly, setDeliverOnly] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [skills, setSkills] = useState("");
+  const [deliverChatId, setDeliverChatId] = useState("");
+  const [platforms, setPlatforms] = useState<MessagingPlatform[]>([]);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedWebhook | null>(null);
 
@@ -87,7 +100,25 @@ export default function WebhooksPage() {
 
   useEffect(() => {
     loadWebhooks();
+    api
+      .getMessagingPlatforms()
+      .then((r) => setPlatforms(r.platforms))
+      .catch(() => {});
   }, [loadWebhooks]);
+
+  // Delivery targets: always "log" + GitHub, plus any messaging platform that
+  // actually has credentials configured — so we never offer a target that
+  // would fail silently at delivery time.
+  const deliverOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      { value: "log", label: "Log" },
+    ];
+    for (const p of platforms) {
+      if (p.configured) opts.push({ value: p.id, label: p.name });
+    }
+    opts.push({ value: "github_comment", label: "GitHub comment" });
+    return opts;
+  }, [platforms]);
 
   const resetForm = useCallback(() => {
     setName("");
@@ -96,6 +127,8 @@ export default function WebhooksPage() {
     setDeliver("log");
     setDeliverOnly(false);
     setPrompt("");
+    setSkills("");
+    setDeliverChatId("");
   }, []);
 
   const handleCreate = async () => {
@@ -109,6 +142,10 @@ export default function WebhooksPage() {
         .split(",")
         .map((e) => e.trim())
         .filter(Boolean);
+      const skillsList = skills
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       const res = await api.createWebhook({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -116,6 +153,11 @@ export default function WebhooksPage() {
         deliver,
         deliver_only: deliverOnly,
         prompt: prompt.trim() || undefined,
+        skills: skillsList.length ? skillsList : undefined,
+        deliver_chat_id:
+          deliver !== "log" && deliverChatId.trim()
+            ? deliverChatId.trim()
+            : undefined,
       });
       showToast("Created ✓", "success");
       setCreated({ url: res.url, secret: res.secret });
@@ -321,14 +363,11 @@ export default function WebhooksPage() {
                       value={deliver}
                       onValueChange={(v) => setDeliver(v)}
                     >
-                      <SelectOption value="log">Log</SelectOption>
-                      <SelectOption value="telegram">Telegram</SelectOption>
-                      <SelectOption value="discord">Discord</SelectOption>
-                      <SelectOption value="slack">Slack</SelectOption>
-                      <SelectOption value="email">Email</SelectOption>
-                      <SelectOption value="github_comment">
-                        GitHub comment
-                      </SelectOption>
+                      {deliverOptions.map((opt) => (
+                        <SelectOption key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectOption>
+                      ))}
                     </Select>
                   </div>
 
@@ -344,6 +383,30 @@ export default function WebhooksPage() {
                       Skip the agent, deliver payload directly
                     </label>
                   </div>
+                </div>
+
+                {deliver !== "log" && deliver !== "github_comment" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="webhook-chat-id">
+                      Chat / channel ID (optional)
+                    </Label>
+                    <Input
+                      id="webhook-chat-id"
+                      placeholder="Target a specific Telegram/Discord chat (blank = default)"
+                      value={deliverChatId}
+                      onChange={(e) => setDeliverChatId(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="webhook-skills">Skills (optional)</Label>
+                  <Input
+                    id="webhook-skills"
+                    placeholder="comma-separated skills to load when this webhook fires"
+                    value={skills}
+                    onChange={(e) => setSkills(e.target.value)}
+                  />
                 </div>
 
                 <div className="grid gap-2">

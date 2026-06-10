@@ -10,6 +10,7 @@ interrupting. The gateway runner must:
   3. When no agent is active → strip the slash prefix and let the normal
      prompt pipeline handle it as a regular user message.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

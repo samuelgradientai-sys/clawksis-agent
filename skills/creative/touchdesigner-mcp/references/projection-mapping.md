@@ -11,23 +11,25 @@ For HUD layouts and on-screen panel grids, see `layout-compositor.md`. For wiref
 The `windowCOMP` is how TD pushes pixels to a real display.
 
 ```python
-win = root.create(windowCOMP, 'output_window')
-win.par.winop = '/project1/final_out'   # path to the TOP being displayed
+win = root.create(windowCOMP, "output_window")
+win.par.winop = "/project1/final_out"  # path to the TOP being displayed
 win.par.winw = 1920
 win.par.winh = 1080
-win.par.winoffsetx = 0                  # screen-space offset
+win.par.winoffsetx = 0  # screen-space offset
 win.par.winoffsety = 0
-win.par.borders = False                 # no chrome
+win.par.borders = False  # no chrome
 win.par.alwaysontop = True
-win.par.cursor = False                  # hide cursor in fullscreen
-win.par.justify = 'fillaspect'          # 'fill' | 'fitaspect' | 'fillaspect' | 'native'
-win.par.winopen.pulse()                 # OPEN the window
+win.par.cursor = False  # hide cursor in fullscreen
+win.par.justify = "fillaspect"  # 'fill' | 'fitaspect' | 'fillaspect' | 'native'
+win.par.winopen.pulse()  # OPEN the window
 ```
 
 To target a specific physical display, set `par.location`:
 
 ```python
-win.par.location = 'secondary'          # 'primary' | 'secondary' | 'monitor1' | 'monitor2' | ...
+win.par.location = (
+    "secondary"  # 'primary' | 'secondary' | 'monitor1' | 'monitor2' | ...
+)
 ```
 
 Or set absolute coordinates using `winoffsetx/y` matched to your OS display layout.
@@ -41,10 +43,11 @@ Or set absolute coordinates using `winoffsetx/y` matched to your OS display layo
 For multi-projector or multi-display setups, create one `windowCOMP` per output, each pointing at a different TOP.
 
 ```python
-for i, screen_top in enumerate(['out_left', 'out_center', 'out_right']):
-    w = root.create(windowCOMP, f'win_{i}')
-    w.par.winop = f'/project1/{screen_top}'
-    w.par.winw = 1920; w.par.winh = 1080
+for i, screen_top in enumerate(["out_left", "out_center", "out_right"]):
+    w = root.create(windowCOMP, f"win_{i}")
+    w.par.winop = f"/project1/{screen_top}"
+    w.par.winw = 1920
+    w.par.winh = 1080
     w.par.winoffsetx = i * 1920
     w.par.winoffsety = 0
     w.par.borders = False
@@ -88,27 +91,29 @@ For non-flat surfaces (domes, columns, curved walls), use a subdivided mesh and 
 
 ```python
 # Subdivided grid in a geo
-geo = root.create(geometryCOMP, 'warp_geo')
-grid = geo.create(gridSOP, 'warp_grid')
-grid.par.rows = 32          # higher = smoother curve
+geo = root.create(geometryCOMP, "warp_geo")
+grid = geo.create(gridSOP, "warp_grid")
+grid.par.rows = 32  # higher = smoother curve
 grid.par.cols = 32
-grid.par.sizex = 2; grid.par.sizey = 2
+grid.par.sizex = 2
+grid.par.sizey = 2
 
 # Texture the source onto it
-mat = root.create(constMAT, 'warp_mat')      # use constMAT for unlit projection
-mat.par.maptop = '/project1/scene_out'        # source TOP
+mat = root.create(constMAT, "warp_mat")  # use constMAT for unlit projection
+mat.par.maptop = "/project1/scene_out"  # source TOP
 
 geo.par.material = mat.path
 
 # Render to a TOP that goes to the projector window
-cam = root.create(cameraCOMP, 'cam_proj')
+cam = root.create(cameraCOMP, "cam_proj")
 cam.par.tz = 4
 
-render = root.create(renderTOP, 'projection_out')
+render = root.create(renderTOP, "projection_out")
 render.par.camera = cam.path
 render.par.geometry = geo.path
-render.par.outputresolution = 'custom'
-render.par.resolutionw = 1920; render.par.resolutionh = 1080
+render.par.outputresolution = "custom"
+render.par.resolutionw = 1920
+render.par.resolutionh = 1080
 ```
 
 For per-vertex offsets, write a vertex GLSL on the constMAT (or use `glslMAT`) and read displacement values from a CHOP via uniform.
@@ -156,18 +161,20 @@ Useful test patterns for aligning projectors. Build a `switchTOP` selecting one 
 
 ```python
 # Solid white — for brightness/uniformity check
-white = root.create(constantTOP, 'cal_white')
-white.par.colorr = 1.0; white.par.colorg = 1.0; white.par.colorb = 1.0
+white = root.create(constantTOP, "cal_white")
+white.par.colorr = 1.0
+white.par.colorg = 1.0
+white.par.colorb = 1.0
 
 # Centered crosshair — for keystone alignment
-gridcross = root.create(textTOP, 'cal_cross')
-gridcross.par.text = '+'
+gridcross = root.create(textTOP, "cal_cross")
+gridcross.par.text = "+"
 gridcross.par.fontsizex = 200
 
 # Fine grid — for warp/mesh alignment (use rampTOP + math + threshold, or build via GLSL)
 # Color bars for projector color calibration
-bars = root.create(rampTOP, 'cal_bars')
-bars.par.type = 'horizontal'
+bars = root.create(rampTOP, "cal_bars")
+bars.par.type = "horizontal"
 ```
 
 Or use the bundled `testpatternTOP` if your TD version includes it.

@@ -38,6 +38,7 @@ def mod():
 # _source_url
 # --------------------------------------------------------------------------
 
+
 def test_source_url_prefers_explicit_detail_url(mod):
     extra = {"detail_url": "https://skills.sh/owner/repo/skill"}
     assert (
@@ -57,15 +58,22 @@ def test_source_url_prefers_browse_sh_source_url(mod):
 
 def test_source_url_synthesizes_github_tree_url(mod):
     url = mod._source_url("github", "anthropics/skills/skills/algorithmic-art", {})
-    assert url == "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art"
+    assert (
+        url == "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art"
+    )
 
 
 def test_source_url_synthesizes_github_root_when_no_subpath(mod):
-    assert mod._source_url("github", "owner/repo", {}) == "https://github.com/owner/repo"
+    assert (
+        mod._source_url("github", "owner/repo", {}) == "https://github.com/owner/repo"
+    )
 
 
 def test_source_url_synthesizes_clawhub(mod):
-    assert mod._source_url("clawhub", "go-music-skill", {}) == "https://clawhub.ai/skills/go-music-skill"
+    assert (
+        mod._source_url("clawhub", "go-music-skill", {})
+        == "https://clawhub.ai/skills/go-music-skill"
+    )
 
 
 def test_source_url_synthesizes_clawhub_strips_prefix(mod):
@@ -77,7 +85,10 @@ def test_source_url_synthesizes_clawhub_strips_prefix(mod):
 
 
 def test_source_url_synthesizes_lobehub(mod):
-    assert mod._source_url("lobehub", "lobehub/chinese-paper", {}) == "https://lobehub.com/agent/chinese-paper"
+    assert (
+        mod._source_url("lobehub", "lobehub/chinese-paper", {})
+        == "https://lobehub.com/agent/chinese-paper"
+    )
 
 
 def test_source_url_empty_for_unknown_source_without_identifier(mod):
@@ -87,6 +98,7 @@ def test_source_url_empty_for_unknown_source_without_identifier(mod):
 # --------------------------------------------------------------------------
 # _guess_category
 # --------------------------------------------------------------------------
+
 
 def test_guess_category_maps_known_tag(mod):
     assert mod._guess_category(["security"]) == "security"

@@ -104,6 +104,7 @@ def test_plugin_registers_valid_platform_entry(platform_name: str, clean_registr
     assert platform_name in ctx.registered_names
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None, f"{platform_name} did not register an entry"
     assert entry.name == platform_name
@@ -120,6 +121,7 @@ def test_platform_entry_has_required_fields(platform_name: str, clean_registry):
     module.register(ctx)
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None
 
@@ -146,6 +148,7 @@ def test_adapter_factory_produces_valid_adapter(platform_name: str, clean_regist
     module.register(ctx)
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None
 
@@ -170,6 +173,7 @@ def test_adapter_factory_produces_valid_adapter(platform_name: str, clean_regist
     # Should be a BasePlatformAdapter subclass if importable
     try:
         from gateway.platforms.base import BasePlatformAdapter
+
         assert isinstance(adapter, BasePlatformAdapter)
     except Exception:
         pytest.skip("BasePlatformAdapter not available for isinstance check")
@@ -183,11 +187,14 @@ def test_check_fn_returns_bool(platform_name: str, clean_registry):
     module.register(ctx)
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None
 
     result = entry.check_fn()
-    assert isinstance(result, bool), f"{platform_name}.check_fn() returned {type(result)}, expected bool"
+    assert isinstance(result, bool), (
+        f"{platform_name}.check_fn() returned {type(result)}, expected bool"
+    )
 
 
 @pytest.mark.parametrize("platform_name", _PLATFORM_NAMES)
@@ -198,6 +205,7 @@ def test_validate_config_if_present(platform_name: str, clean_registry):
     module.register(ctx)
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None
 
@@ -218,6 +226,7 @@ def test_is_connected_if_present(platform_name: str, clean_registry):
     module.register(ctx)
 
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_name)
     assert entry is not None
 

@@ -32,6 +32,11 @@ fi
 # wrong user's home directory when running under sudo -u <user>.  See #21269.
 export UV_NO_CONFIG=1
 
+# Suppress vanity postinstall banners (e.g. unicode-animations' UNICODE ASCII
+# art) that write to /dev/tty during `npm install`. Their postinstall scripts
+# self-skip when CI is set — keeps the install output clean.
+export CI=1
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -207,18 +212,13 @@ done
 # ============================================================================
 
 print_banner() {
-    local WINE='\033[38;5;124m'
-    local WINE2='\033[38;5;160m'
-    local WINE3='\033[38;5;88m'
-    local BOLD='\033[1m'
-    local NC_='\033[0m'
     echo ""
-    echo -e "${BOLD}${WINE2}  ██████â██â      █████â ██â    ██â██â  ██â███████â██â███████â${NC_}"
-    echo -e "${BOLD}${WINE2} ██ââââââ██â     ██âââ██â██â    ██â██â ██ââ██ââââââ██â██ââââââ${NC_}"
-    echo -e "${BOLD}${WINE}  ██â     ██â     ███████â██â █â ██â█████ââ ███████â██â███████â${NC_}"
-    echo -e "${BOLD}${WINE}  ██â     ██â     ██âââ██â██â███â██â██ââ██â âââââ██â██ââââââ██â${NC_}"
-    echo -e "${BOLD}${WINE3} â██████â███████â██â  ██ââ███â███ââ██â  ██â███████â██â███████â${NC_}"
-    echo -e "${BOLD}${WINE3}  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝${NC_}"
+    echo -e "${BOLD}[38;2;141;112;240m  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗${NC}"
+    echo -e "${BOLD}[38;2;124;98;226m ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝${NC}"
+    echo -e "${BOLD}[38;2;108;79;214m ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗${NC}"
+    echo -e "${BOLD}[38;2;92;66;190m ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╚════██║██║╚════██║${NC}"
+    echo -e "${BOLD}[38;2;74;52;150m ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║${NC}"
+    echo -e "${BOLD}[38;2;52;36;110m  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝${NC}"
     echo ""
 }
 
@@ -1673,27 +1673,10 @@ copy_config_templates() {
         log_info "~/.clawksis/config.yaml already exists, keeping it"
     fi
 
-    # Create SOUL.md if it doesn't exist (global persona file)
-    if [ ! -f "$CLAWK_HOME/SOUL.md" ]; then
-        cat > "$CLAWK_HOME/SOUL.md" << 'SOUL_EOF'
-# Clawksis Persona
-
-<!--
-This file defines the agent's personality and tone.
-The agent will embody whatever you write here.
-Edit this to customize how Clawksis communicates with you.
-
-Examples:
-  - "You are a warm, playful assistant who uses kaomoji occasionally."
-  - "You are a concise technical expert. No fluff, just facts."
-  - "You speak like a friendly coworker who happens to know everything."
-
-This file is loaded fresh each message -- no restart needed.
-Delete the contents (or this file) to use the default personality.
--->
-SOUL_EOF
-        log_success "Created ~/.clawksis/SOUL.md (edit to customize personality)"
-    fi
+    # SOUL.md (global persona) is intentionally NOT created here. It is seeded
+    # from the bundled persona in clawk_cli/default_soul.py (DEFAULT_SOUL_MD) by
+    # _ensure_default_soul_md() during config init, so the in-repo persona stays
+    # the single source of truth and ships with every install.
 
     log_success "Configuration directory ready: ~/.clawksis/"
 
@@ -1938,6 +1921,31 @@ install_node_deps() {
     restore_dirty_lockfiles "$INSTALL_DIR"
 }
 
+install_thirdparty_clis() {
+    # Optional third-party agent CLIs that Clawksis can drive as tools:
+    #   Claude Code (@anthropic-ai/claude-code) and Codex (@openai/codex).
+    # They let the agent delegate coding tasks using the user's OWN
+    # Claude/ChatGPT subscription (first-party billing). Always pull @latest.
+    # Best-effort: a failure here must NEVER block the Clawksis install.
+    if [ "${SKIP_THIRDPARTY_CLIS:-false}" = "true" ]; then
+        log_info "Skipping agent CLIs (SKIP_THIRDPARTY_CLIS=true)"
+        return 0
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+        log_warn "npm not available -- skipping Claude Code / Codex CLIs"
+        return 0
+    fi
+    local pkg
+    for pkg in "@anthropic-ai/claude-code@latest" "@openai/codex@latest"; do
+        if npm install -g "$pkg" --silent >/dev/null 2>&1; then
+            log_success "Installed/updated $pkg"
+        else
+            log_warn "Could not install $pkg (optional -- later: npm i -g ${pkg%@latest})"
+        fi
+    done
+}
+
+
 run_setup_wizard() {
     if [ "$RUN_SETUP" = false ]; then
         log_info "Skipping setup wizard (--skip-setup)"
@@ -1953,7 +1961,7 @@ run_setup_wizard() {
     # but opening fails with ENXIO, so the wizard would proceed and
     # then crash on `< /dev/tty` below.
     if ! (: </dev/tty) 2>/dev/null; then
-        log_info "Setup wizard skipped (no terminal available). Run 'clawk setup' after install."
+        log_info "Setup wizard skipped (no terminal available). Run 'clawk setup' (or 'clawk model') after install to choose your model."
         return 0
     fi
 
@@ -2581,6 +2589,9 @@ main() {
 
     progress_bar "Instalando dependencias Node (browser tools)..."
     install_node_deps
+
+    progress_bar "Instalando CLIs de agentes (Claude Code + Codex, ultimas versiones)..."
+    install_thirdparty_clis
 
     progress_bar "Enlazando el comando clawk..."
     setup_path

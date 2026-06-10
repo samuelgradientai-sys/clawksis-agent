@@ -11,7 +11,6 @@ from clawk_cli.profiles import export_profile, _DEFAULT_EXPORT_EXCLUDE_ROOT
 
 
 class TestCredentialExclusion:
-
     def test_auth_json_in_default_exclude_set(self):
         """auth.json must be in the default export exclusion set."""
         assert "auth.json" in _DEFAULT_EXPORT_EXCLUDE_ROOT
@@ -34,7 +33,9 @@ class TestCredentialExclusion:
         (profile_dir / "memories").mkdir()
         (profile_dir / "memories" / "MEMORY.md").write_text("# Memories\n")
 
-        monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: profiles_root)
+        monkeypatch.setattr(
+            "clawk_cli.profiles._get_profiles_root", lambda: profiles_root
+        )
         monkeypatch.setattr("clawk_cli.profiles.get_profile_dir", lambda n: profile_dir)
         monkeypatch.setattr("clawk_cli.profiles.validate_profile_name", lambda n: None)
 
@@ -47,5 +48,7 @@ class TestCredentialExclusion:
 
         assert any("config.yaml" in n for n in names), "config.yaml should be in export"
         assert any("SOUL.md" in n for n in names), "SOUL.md should be in export"
-        assert not any("auth.json" in n for n in names), "auth.json must NOT be in export"
+        assert not any("auth.json" in n for n in names), (
+            "auth.json must NOT be in export"
+        )
         assert not any(".env" in n for n in names), ".env must NOT be in export"

@@ -9,9 +9,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 
 vectorstore = Chroma.from_documents(
-    documents=docs,
-    embedding=OpenAIEmbeddings(),
-    persist_directory="./chroma_db"
+    documents=docs, embedding=OpenAIEmbeddings(), persist_directory="./chroma_db"
 )
 
 # Query

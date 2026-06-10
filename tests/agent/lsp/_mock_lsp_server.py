@@ -22,6 +22,7 @@ The script writes JSON-RPC framed messages to stdout and reads from
 stdin.  No third-party dependencies — uses only stdlib so it runs
 under whatever Python the test process picks up.
 """
+
 from __future__ import annotations
 
 import json
@@ -65,19 +66,20 @@ def main():
         if "id" in msg and msg.get("method") == "initialize":
             if script == "slow":
                 time.sleep(1.0)
-            write_message(
-                {
-                    "jsonrpc": "2.0",
-                    "id": msg["id"],
-                    "result": {
-                        "capabilities": {
-                            "textDocumentSync": 1,  # Full
-                            "diagnosticProvider": {"interFileDependencies": False, "workspaceDiagnostics": False},
+            write_message({
+                "jsonrpc": "2.0",
+                "id": msg["id"],
+                "result": {
+                    "capabilities": {
+                        "textDocumentSync": 1,  # Full
+                        "diagnosticProvider": {
+                            "interFileDependencies": False,
+                            "workspaceDiagnostics": False,
                         },
-                        "serverInfo": {"name": "mock-lsp", "version": "0.1"},
                     },
-                }
-            )
+                    "serverInfo": {"name": "mock-lsp", "version": "0.1"},
+                },
+            })
             if script == "crash":
                 return 0
             continue
@@ -110,28 +112,24 @@ def main():
                         "message": "synthetic error from mock-lsp",
                     }
                 ]
-            write_message(
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/publishDiagnostics",
-                    "params": {
-                        "uri": uri,
-                        "version": version,
-                        "diagnostics": diagnostics,
-                    },
-                }
-            )
+            write_message({
+                "jsonrpc": "2.0",
+                "method": "textDocument/publishDiagnostics",
+                "params": {
+                    "uri": uri,
+                    "version": version,
+                    "diagnostics": diagnostics,
+                },
+            })
             continue
 
         if msg.get("method") == "textDocument/diagnostic":
             # Pull endpoint — return empty.
-            write_message(
-                {
-                    "jsonrpc": "2.0",
-                    "id": msg["id"],
-                    "result": {"kind": "full", "items": []},
-                }
-            )
+            write_message({
+                "jsonrpc": "2.0",
+                "id": msg["id"],
+                "result": {"kind": "full", "items": []},
+            })
             continue
 
         if msg.get("method") == "textDocument/didSave":
@@ -146,13 +144,14 @@ def main():
 
         # Unknown request: respond with method-not-found.
         if "id" in msg:
-            write_message(
-                {
-                    "jsonrpc": "2.0",
-                    "id": msg["id"],
-                    "error": {"code": -32601, "message": f"method not found: {msg.get('method')}"},
-                }
-            )
+            write_message({
+                "jsonrpc": "2.0",
+                "id": msg["id"],
+                "error": {
+                    "code": -32601,
+                    "message": f"method not found: {msg.get('method')}",
+                },
+            })
 
 
 if __name__ == "__main__":

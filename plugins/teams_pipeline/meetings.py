@@ -28,11 +28,17 @@ class TeamsMeetingPermissionError(TeamsMeetingError):
 
 
 def _meeting_path(meeting_ref: TeamsMeetingRef | str) -> str:
-    meeting_id = meeting_ref.meeting_id if isinstance(meeting_ref, TeamsMeetingRef) else str(meeting_ref)
+    meeting_id = (
+        meeting_ref.meeting_id
+        if isinstance(meeting_ref, TeamsMeetingRef)
+        else str(meeting_ref)
+    )
     return f"/communications/onlineMeetings/{quote(meeting_id, safe='')}"
 
 
-def _wrap_graph_error(exc: MicrosoftGraphAPIError, *, missing_message: str) -> TeamsMeetingError:
+def _wrap_graph_error(
+    exc: MicrosoftGraphAPIError, *, missing_message: str
+) -> TeamsMeetingError:
     if exc.status_code in {401, 403}:
         return TeamsMeetingPermissionError(str(exc))
     if exc.status_code == 404:
@@ -62,7 +68,9 @@ def _parse_thread_id(payload: dict[str, Any]) -> str | None:
     return payload.get("threadId")
 
 
-def _normalize_meeting_ref(payload: dict[str, Any], *, tenant_id: str | None = None) -> TeamsMeetingRef:
+def _normalize_meeting_ref(
+    payload: dict[str, Any], *, tenant_id: str | None = None
+) -> TeamsMeetingRef:
     metadata = {
         key: payload.get(key)
         for key in ("subject", "startDateTime", "endDateTime", "createdDateTime")
@@ -95,7 +103,9 @@ def _normalize_artifact(
         or payload.get("recordingContentUrl")
         or payload.get("transcriptContentUrl")
     )
-    source_url = payload.get("webUrl") or payload.get("contentUrl") or default_source_url
+    source_url = (
+        payload.get("webUrl") or payload.get("contentUrl") or default_source_url
+    )
     return MeetingArtifact(
         artifact_type=artifact_type,  # type: ignore[arg-type]
         artifact_id=str(payload.get("id") or "").strip(),
@@ -104,7 +114,8 @@ def _normalize_artifact(
         source_url=source_url,
         download_url=download_url,
         created_at=payload.get("createdDateTime"),
-        available_at=payload.get("lastModifiedDateTime") or payload.get("meetingEndDateTime"),
+        available_at=payload.get("lastModifiedDateTime")
+        or payload.get("meetingEndDateTime"),
         size_bytes=payload.get("size"),
         metadata=metadata,
     )
@@ -122,13 +133,17 @@ def _transcript_sort_key(artifact: MeetingArtifact) -> tuple[int, int, str]:
     return (is_completed, has_download, timestamp)
 
 
-def _recording_download_path(meeting_ref: TeamsMeetingRef, artifact: MeetingArtifact) -> str:
+def _recording_download_path(
+    meeting_ref: TeamsMeetingRef, artifact: MeetingArtifact
+) -> str:
     if artifact.download_url:
         return artifact.download_url
     return f"{_meeting_path(meeting_ref)}/recordings/{quote(artifact.artifact_id, safe='')}/content"
 
 
-def _transcript_download_path(meeting_ref: TeamsMeetingRef, artifact: MeetingArtifact) -> str:
+def _transcript_download_path(
+    meeting_ref: TeamsMeetingRef, artifact: MeetingArtifact
+) -> str:
     if artifact.download_url:
         return artifact.download_url
     return f"{_meeting_path(meeting_ref)}/transcripts/{quote(artifact.artifact_id, safe='')}/content"
@@ -145,7 +160,9 @@ async def resolve_meeting_reference(
         try:
             payload = await client.get_json(_meeting_path(meeting_id))
         except MicrosoftGraphAPIError as exc:
-            raise _wrap_graph_error(exc, missing_message=f"Teams meeting not found: {meeting_id}") from exc
+            raise _wrap_graph_error(
+                exc, missing_message=f"Teams meeting not found: {meeting_id}"
+            ) from exc
         if not isinstance(payload, dict) or not payload.get("id"):
             raise TeamsMeetingNotFoundError(f"Teams meeting not found: {meeting_id}")
         return _normalize_meeting_ref(payload, tenant_id=tenant_id)
@@ -164,7 +181,9 @@ async def resolve_meeting_reference(
             ) from exc
         candidates = payload.get("value") if isinstance(payload, dict) else None
         if not isinstance(candidates, list) or not candidates:
-            raise TeamsMeetingNotFoundError(f"Teams meeting not found for join URL: {join_web_url}")
+            raise TeamsMeetingNotFoundError(
+                f"Teams meeting not found for join URL: {join_web_url}"
+            )
         return _normalize_meeting_ref(candidates[0], tenant_id=tenant_id)
 
     raise ValueError("Either meeting_id or join_web_url is required.")
@@ -175,17 +194,27 @@ async def list_transcript_artifacts(
     meeting_ref: TeamsMeetingRef,
 ) -> list[MeetingArtifact]:
     try:
-        payloads = await client.collect_paginated(f"{_meeting_path(meeting_ref)}/transcripts")
+        payloads = await client.collect_paginated(
+            f"{_meeting_path(meeting_ref)}/transcripts"
+        )
     except MicrosoftGraphAPIError as exc:
         raise _wrap_graph_error(
             exc,
             missing_message=f"No transcripts found for Teams meeting {meeting_ref.meeting_id}",
         ) from exc
-    return [_normalize_artifact("transcript", payload) for payload in payloads if isinstance(payload, dict)]
+    return [
+        _normalize_artifact("transcript", payload)
+        for payload in payloads
+        if isinstance(payload, dict)
+    ]
 
 
-def select_preferred_transcript(candidates: list[MeetingArtifact]) -> MeetingArtifact | None:
-    transcripts = [candidate for candidate in candidates if candidate.artifact_type == "transcript"]
+def select_preferred_transcript(
+    candidates: list[MeetingArtifact],
+) -> MeetingArtifact | None:
+    transcripts = [
+        candidate for candidate in candidates if candidate.artifact_type == "transcript"
+    ]
     if not transcripts:
         return None
     return sorted(transcripts, key=_transcript_sort_key, reverse=True)[0]
@@ -199,10 +228,14 @@ async def download_transcript_text(
     encoding: str = "utf-8",
 ) -> str:
     suffix = Path(transcript.display_name or "transcript.vtt").suffix or ".txt"
-    with tempfile.NamedTemporaryFile(prefix="teams-transcript-", suffix=suffix, delete=False) as handle:
+    with tempfile.NamedTemporaryFile(
+        prefix="teams-transcript-", suffix=suffix, delete=False
+    ) as handle:
         destination = Path(handle.name)
     try:
-        await client.download_to_file(_transcript_download_path(meeting_ref, transcript), destination)
+        await client.download_to_file(
+            _transcript_download_path(meeting_ref, transcript), destination
+        )
         text = destination.read_text(encoding=encoding).strip()
     except MicrosoftGraphAPIError as exc:
         raise _wrap_graph_error(
@@ -233,7 +266,9 @@ async def fetch_preferred_transcript_text(
     if transcript is None:
         return None, None
     try:
-        return transcript, await download_transcript_text(client, meeting_ref, transcript)
+        return transcript, await download_transcript_text(
+            client, meeting_ref, transcript
+        )
     except TeamsMeetingArtifactNotFoundError:
         return None, None
 
@@ -243,13 +278,19 @@ async def list_recording_artifacts(
     meeting_ref: TeamsMeetingRef,
 ) -> list[MeetingArtifact]:
     try:
-        payloads = await client.collect_paginated(f"{_meeting_path(meeting_ref)}/recordings")
+        payloads = await client.collect_paginated(
+            f"{_meeting_path(meeting_ref)}/recordings"
+        )
     except MicrosoftGraphAPIError as exc:
         raise _wrap_graph_error(
             exc,
             missing_message=f"No recordings found for Teams meeting {meeting_ref.meeting_id}",
         ) from exc
-    return [_normalize_artifact("recording", payload) for payload in payloads if isinstance(payload, dict)]
+    return [
+        _normalize_artifact("recording", payload)
+        for payload in payloads
+        if isinstance(payload, dict)
+    ]
 
 
 async def download_recording_artifact(
@@ -284,13 +325,17 @@ async def fetch_call_record_artifact(
     allow_permission_errors: bool = True,
 ) -> MeetingArtifact | None:
     try:
-        payload = await client.get_json(f"/communications/callRecords/{quote(call_record_id, safe='')}")
+        payload = await client.get_json(
+            f"/communications/callRecords/{quote(call_record_id, safe='')}"
+        )
     except MicrosoftGraphAPIError as exc:
         if exc.status_code in {401, 403} and allow_permission_errors:
             return None
         if exc.status_code == 404:
             return None
-        raise _wrap_graph_error(exc, missing_message=f"Call record not found: {call_record_id}") from exc
+        raise _wrap_graph_error(
+            exc, missing_message=f"Call record not found: {call_record_id}"
+        ) from exc
 
     if not isinstance(payload, dict) or not payload.get("id"):
         return None
@@ -323,7 +368,9 @@ async def enrich_meeting_with_call_record(
     call_record_id: str | None = None,
     allow_permission_errors: bool = True,
 ) -> MeetingArtifact | None:
-    resolved_call_record_id = call_record_id or meeting_ref.metadata.get("call_record_id")
+    resolved_call_record_id = call_record_id or meeting_ref.metadata.get(
+        "call_record_id"
+    )
     if not resolved_call_record_id:
         return None
     return await fetch_call_record_artifact(

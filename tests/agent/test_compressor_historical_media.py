@@ -134,9 +134,9 @@ class TestStripHistoricalMedia:
 
     def test_strips_older_user_image_keeps_newest(self):
         msgs = [
-            {"role": "user", "content": [TEXT, IMG_URL]},     # old — strip
+            {"role": "user", "content": [TEXT, IMG_URL]},  # old — strip
             {"role": "assistant", "content": "looked at it"},
-            {"role": "user", "content": [TEXT, INPUT_IMG]},   # newest — keep
+            {"role": "user", "content": [TEXT, INPUT_IMG]},  # newest — keep
         ]
         out = _strip_historical_media(msgs)
         assert out is not msgs  # new list
@@ -147,14 +147,16 @@ class TestStripHistoricalMedia:
 
     def test_strips_assistant_and_tool_images_before_anchor(self):
         msgs = [
-            {"role": "user", "content": [TEXT, IMG_URL]},          # old user
-            {"role": "assistant", "content": [TEXT, IMG_URL]},     # old assistant
+            {"role": "user", "content": [TEXT, IMG_URL]},  # old user
+            {"role": "assistant", "content": [TEXT, IMG_URL]},  # old assistant
             {"role": "tool", "content": [TEXT, IMG_URL], "tool_call_id": "t1"},
-            {"role": "user", "content": [TEXT, IMG_URL]},          # newest user — keep
+            {"role": "user", "content": [TEXT, IMG_URL]},  # newest user — keep
         ]
         out = _strip_historical_media(msgs)
         for i in range(3):
-            assert not _content_has_images(out[i]["content"]), f"msg {i} still has image"
+            assert not _content_has_images(out[i]["content"]), (
+                f"msg {i} still has image"
+            )
         assert _content_has_images(out[3]["content"])
 
     def test_text_only_newest_user_still_strips_older_images(self):
@@ -223,7 +225,9 @@ class TestCompressIntegration:
 
     @pytest.fixture
     def compressor(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100_000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100_000
+        ):
             c = ContextCompressor(
                 model="test/model",
                 threshold_percent=0.50,
@@ -238,13 +242,16 @@ class TestCompressIntegration:
         # protect_last_n=2 + a middle window of at least 3 with a summary.
         msgs = [
             {"role": "system", "content": "sys"},
-            {"role": "user", "content": [TEXT, IMG_URL]},           # old image-bearing user
+            {"role": "user", "content": [TEXT, IMG_URL]},  # old image-bearing user
             {"role": "assistant", "content": "looked at it"},
             {"role": "user", "content": "follow-up"},
             {"role": "assistant", "content": "ack"},
             {"role": "user", "content": "more"},
             {"role": "assistant", "content": "ok"},
-            {"role": "user", "content": [TEXT, IMG_URL]},           # newest image-bearing user (tail)
+            {
+                "role": "user",
+                "content": [TEXT, IMG_URL],
+            },  # newest image-bearing user (tail)
             {"role": "assistant", "content": "done"},
         ]
         # Bypass the real LLM summary — return a stub so compress() proceeds.
@@ -252,7 +259,11 @@ class TestCompressIntegration:
             out = compressor.compress(msgs, current_tokens=60_000)
 
         # Newest user turn with image should still have it (it's in the tail).
-        user_imgs = [m for m in out if m.get("role") == "user" and _content_has_images(m.get("content"))]
+        user_imgs = [
+            m
+            for m in out
+            if m.get("role") == "user" and _content_has_images(m.get("content"))
+        ]
         assert len(user_imgs) == 1, (
             "Expected exactly one user message with images after compression "
             f"(the newest one); got {len(user_imgs)}"

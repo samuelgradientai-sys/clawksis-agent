@@ -16,22 +16,13 @@ run silently.
 
 """
 
-
-
 from __future__ import annotations
-
-
-
 
 
 from clawk_cli.config import DEFAULT_CONFIG
 
 
-
-
-
 class TestMcpReloadConfirmDefault:
-
     def test_default_config_has_the_key(self):
 
         approvals = DEFAULT_CONFIG.get("approvals")
@@ -40,15 +31,11 @@ class TestMcpReloadConfirmDefault:
 
         assert "mcp_reload_confirm" in approvals
 
-
-
     def test_default_is_true(self):
 
         # New installs confirm by default — this is the safe behavior.
 
         assert DEFAULT_CONFIG["approvals"]["mcp_reload_confirm"] is True
-
-
 
     def test_shape_matches_other_approval_keys(self):
 
@@ -65,11 +52,7 @@ class TestMcpReloadConfirmDefault:
         assert isinstance(approvals.get("mcp_reload_confirm"), bool)
 
 
-
-
-
 class TestUserConfigMerge:
-
     """If a user has a pre-existing config without this key, load_config
 
     should fill it in from DEFAULT_CONFIG (deep merge preserves keys the
@@ -78,13 +61,9 @@ class TestUserConfigMerge:
 
     """
 
-
-
     def test_existing_user_config_without_key_gets_default(self, tmp_path, monkeypatch):
 
         import yaml
-
-
 
         # Simulate a legacy user config without the new key.
 
@@ -95,14 +74,10 @@ class TestUserConfigMerge:
         cfg_path = home / "config.yaml"
 
         legacy = {
-
             "approvals": {"mode": "manual", "timeout": 60, "cron_mode": "deny"},
-
         }
 
         cfg_path.write_text(yaml.safe_dump(legacy))
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -114,20 +89,15 @@ class TestUserConfigMerge:
 
         importlib.reload(cfg_mod)
 
-
-
         cfg = cfg_mod.load_config()
 
         assert cfg["approvals"]["mcp_reload_confirm"] is True
 
-
-
     def test_existing_user_config_with_false_key_survives_merge(
-
-        self, tmp_path, monkeypatch,
-
+        self,
+        tmp_path,
+        monkeypatch,
     ):
-
         """A user who has clicked "Always Approve" (key=false) must keep
 
         that setting across reloads — the default_true value must not win.
@@ -136,8 +106,6 @@ class TestUserConfigMerge:
 
         import yaml
 
-
-
         home = tmp_path / ".clawksis"
 
         home.mkdir()
@@ -145,24 +113,15 @@ class TestUserConfigMerge:
         cfg_path = home / "config.yaml"
 
         user_cfg = {
-
             "approvals": {
-
                 "mode": "manual",
-
                 "timeout": 60,
-
                 "cron_mode": "deny",
-
                 "mcp_reload_confirm": False,
-
             },
-
         }
 
         cfg_path.write_text(yaml.safe_dump(user_cfg))
-
-
 
         monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -172,9 +131,6 @@ class TestUserConfigMerge:
 
         importlib.reload(cfg_mod)
 
-
-
         cfg = cfg_mod.load_config()
 
         assert cfg["approvals"]["mcp_reload_confirm"] is False
-

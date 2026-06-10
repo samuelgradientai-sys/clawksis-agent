@@ -15,12 +15,15 @@ from extract_schema import (
 # Connection tracing
 # =============================================================================
 
+
 class TestConnectionTracing:
     def test_direct_link(self):
         wf = {
             "1": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
-            "2": {"class_type": "KSampler",
-                  "inputs": {"positive": ["1", 0], "negative": ["1", 0]}},
+            "2": {
+                "class_type": "KSampler",
+                "inputs": {"positive": ["1", 0], "negative": ["1", 0]},
+            },
         }
         assert trace_to_node(wf, ["1", 0]) == "1"
 
@@ -50,17 +53,34 @@ class TestPositiveNegativeDetection:
 
     def test_swapped_order(self):
         wf = {
-            "3": {"class_type": "KSampler",
-                  "inputs": {
-                      "positive": ["7", 0], "negative": ["6", 0],
-                      "model": ["4", 0], "latent_image": ["5", 0],
-                      "seed": 1, "steps": 20, "cfg": 7.5,
-                      "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
-                  }},
+            "3": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "positive": ["7", 0],
+                    "negative": ["6", 0],
+                    "model": ["4", 0],
+                    "latent_image": ["5", 0],
+                    "seed": 1,
+                    "steps": 20,
+                    "cfg": 7.5,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 1.0,
+                },
+            },
             "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "x"}},
-            "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
-            "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "ugly", "clip": ["4", 1]}},
-            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "beautiful", "clip": ["4", 1]}},
+            "5": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            },
+            "6": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "ugly", "clip": ["4", 1]},
+            },
+            "7": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "beautiful", "clip": ["4", 1]},
+            },
         }
         # Now 7 is the positive (despite higher node ID)
         assert find_positive_prompt_node(wf) == "7"
@@ -70,6 +90,7 @@ class TestPositiveNegativeDetection:
 # =============================================================================
 # Schema extraction
 # =============================================================================
+
 
 class TestExtractSchema:
     def test_basic_sd15(self, sd15_workflow):
@@ -123,26 +144,40 @@ class TestEmbeddingDeps:
     def test_extract_from_prompt(self):
         wf = {
             "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "x"}},
-            "5": {"class_type": "EmptyLatentImage",
-                  "inputs": {"width": 512, "height": 512, "batch_size": 1}},
-            "6": {"class_type": "CLIPTextEncode",
-                  "inputs": {
-                      "text": "a cat, embedding:goodvibes, embedding:art:1.2",
-                      "clip": ["1", 1]
-                  }},
-            "7": {"class_type": "CLIPTextEncode",
-                  "inputs": {
-                      "text": "ugly, embedding:badhands",
-                      "clip": ["1", 1]
-                  }},
-            "3": {"class_type": "KSampler",
-                  "inputs": {
-                      "positive": ["6", 0], "negative": ["7", 0],
-                      "model": ["1", 0], "latent_image": ["5", 0],
-                      "seed": 1, "steps": 20, "cfg": 7.5,
-                      "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
-                  }},
-            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["3", 0]}},
+            "5": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            },
+            "6": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": "a cat, embedding:goodvibes, embedding:art:1.2",
+                    "clip": ["1", 1],
+                },
+            },
+            "7": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "ugly, embedding:badhands", "clip": ["1", 1]},
+            },
+            "3": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "positive": ["6", 0],
+                    "negative": ["7", 0],
+                    "model": ["1", 0],
+                    "latent_image": ["5", 0],
+                    "seed": 1,
+                    "steps": 20,
+                    "cfg": 7.5,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 1.0,
+                },
+            },
+            "9": {
+                "class_type": "SaveImage",
+                "inputs": {"filename_prefix": "x", "images": ["3", 0]},
+            },
         }
         schema = extract_schema(wf)
         names = [d["embedding_name"] for d in schema["embedding_dependencies"]]
@@ -153,25 +188,52 @@ class TestDuplicateDeduplication:
     def test_two_ksamplers_get_unique_names(self):
         wf = {
             "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "x"}},
-            "5": {"class_type": "EmptyLatentImage",
-                  "inputs": {"width": 512, "height": 512, "batch_size": 1}},
-            "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a", "clip": ["1", 1]}},
-            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "b", "clip": ["1", 1]}},
-            "3": {"class_type": "KSampler",
-                  "inputs": {
-                      "positive": ["6", 0], "negative": ["7", 0],
-                      "model": ["1", 0], "latent_image": ["5", 0],
-                      "seed": 42, "steps": 20, "cfg": 7.5,
-                      "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
-                  }},
-            "4": {"class_type": "KSampler",
-                  "inputs": {
-                      "positive": ["6", 0], "negative": ["7", 0],
-                      "model": ["1", 0], "latent_image": ["5", 0],
-                      "seed": 99, "steps": 30, "cfg": 8.0,
-                      "sampler_name": "euler", "scheduler": "normal", "denoise": 0.6,
-                  }},
-            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["3", 0]}},
+            "5": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            },
+            "6": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "a", "clip": ["1", 1]},
+            },
+            "7": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "b", "clip": ["1", 1]},
+            },
+            "3": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "positive": ["6", 0],
+                    "negative": ["7", 0],
+                    "model": ["1", 0],
+                    "latent_image": ["5", 0],
+                    "seed": 42,
+                    "steps": 20,
+                    "cfg": 7.5,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 1.0,
+                },
+            },
+            "4": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "positive": ["6", 0],
+                    "negative": ["7", 0],
+                    "model": ["1", 0],
+                    "latent_image": ["5", 0],
+                    "seed": 99,
+                    "steps": 30,
+                    "cfg": 8.0,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 0.6,
+                },
+            },
+            "9": {
+                "class_type": "SaveImage",
+                "inputs": {"filename_prefix": "x", "images": ["3", 0]},
+            },
         }
         schema = extract_schema(wf)
         params = schema["parameters"]

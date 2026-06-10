@@ -17,6 +17,7 @@ The delta-filter contract spans three pieces:
 These tests exercise the contract at the unit level; the E2E case
 (real LSP server, real shift) is covered in test_service.py.
 """
+
 from __future__ import annotations
 
 from agent.lsp.client import _diagnostic_key
@@ -28,9 +29,15 @@ from agent.lsp.range_shift import (
 )
 
 
-def _diag(*, line: int, message: str = "Undefined variable",
-          severity: int = 1, code: str = "reportUndefinedVariable",
-          source: str = "Pyright", end_line: int | None = None) -> dict:
+def _diag(
+    *,
+    line: int,
+    message: str = "Undefined variable",
+    severity: int = 1,
+    code: str = "reportUndefinedVariable",
+    source: str = "Pyright",
+    end_line: int | None = None,
+) -> dict:
     if end_line is None:
         end_line = line
     return {
@@ -48,6 +55,7 @@ def _diag(*, line: int, message: str = "Undefined variable",
 # ----------------------------------------------------------------------
 # _diag_key: strict equality (with range)
 # ----------------------------------------------------------------------
+
 
 def test_diag_key_treats_shifted_diagnostics_as_distinct():
     """Two diagnostics with the same message but at different lines hash
@@ -103,6 +111,7 @@ def test_diag_key_matches_client_key_byte_for_byte():
 # ----------------------------------------------------------------------
 # build_line_shift
 # ----------------------------------------------------------------------
+
 
 def test_shift_identity_for_identical_content():
     shift = build_line_shift("a\nb\nc\n", "a\nb\nc\n")
@@ -168,6 +177,7 @@ def test_shift_handles_empty_post():
 # shift_diagnostic_range
 # ----------------------------------------------------------------------
 
+
 def test_shift_diag_remaps_start_and_end():
     pre = "a\nb\nc\nd\n"
     post = "X\na\nb\nc\nd\n"  # one line inserted at top
@@ -216,6 +226,7 @@ def test_shift_baseline_drops_deleted_and_remaps_rest():
 # ----------------------------------------------------------------------
 # End-to-end: simulate the delta-filter pipeline
 # ----------------------------------------------------------------------
+
 
 def test_pipeline_filters_shifted_baseline_under_strict_key():
     """The exact scenario the bug fix is for: an edit deletes lines,

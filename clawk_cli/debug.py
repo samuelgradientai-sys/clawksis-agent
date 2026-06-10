@@ -22,8 +22,6 @@ Currently supports:
 
 """
 
-
-
 import io
 
 import json
@@ -45,15 +43,12 @@ from pathlib import Path
 from typing import Optional
 
 
-
 from clawk_constants import get_clawk_home
 
 from utils import atomic_replace
 
 
-
 logger = logging.getLogger(__name__)
-
 
 
 # Banner prepended to upload-bound log content when redaction is enabled.
@@ -63,27 +58,16 @@ logger = logging.getLogger(__name__)
 # Kept short; the trailing newline guarantees the banner sits on its own line.
 
 _REDACTION_BANNER = (
-
     "[clawk debug share: log content redacted at upload time. "
-
     "run with --no-redact to disable]\n"
-
 )
-
 
 
 _EMAIL_ADDRESS_RE = re.compile(
-
     r"(?<![A-Za-z0-9._%+-])"
-
     r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
-
     r"(?![A-Za-z0-9._%+-])"
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -93,11 +77,9 @@ _EMAIL_ADDRESS_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 
-
 _PASTE_RS_URL = "https://paste.rs/"
 
 _DPASTE_COM_URL = "https://dpaste.com/api/"
-
 
 
 # Maximum bytes to read from a single log file for upload.
@@ -107,13 +89,9 @@ _DPASTE_COM_URL = "https://dpaste.com/api/"
 _MAX_LOG_BYTES = 512_000
 
 
-
 # Auto-delete pastes after this many seconds (6 hours).
 
 _AUTO_DELETE_SECONDS = 21600
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +101,7 @@ _AUTO_DELETE_SECONDS = 21600
 # ---------------------------------------------------------------------------
 
 
-
 def _pending_file() -> Path:
-
     """Path to ``~/.clawksis/pastes/pending.json``.
 
 
@@ -155,41 +131,29 @@ def _pending_file() -> Path:
     return get_clawk_home() / "pastes" / "pending.json"
 
 
-
-
-
 def _load_pending() -> list[dict]:
 
     path = _pending_file()
 
     if not path.exists():
-
         return []
 
     try:
-
         data = json.loads(path.read_text(encoding="utf-8"))
 
         if isinstance(data, list):
-
             # Filter to well-formed entries only
 
             return [
-
-                e for e in data
-
+                e
+                for e in data
                 if isinstance(e, dict) and "url" in e and "expire_at" in e
-
             ]
 
     except (OSError, ValueError, json.JSONDecodeError):
-
         pass
 
     return []
-
-
-
 
 
 def _save_pending(entries: list[dict]) -> None:
@@ -197,7 +161,6 @@ def _save_pending(entries: list[dict]) -> None:
     path = _pending_file()
 
     try:
-
         path.parent.mkdir(parents=True, exist_ok=True)
 
         tmp = path.with_suffix(".json.tmp")
@@ -207,7 +170,6 @@ def _save_pending(entries: list[dict]) -> None:
         atomic_replace(tmp, path)
 
     except OSError:
-
         # Non-fatal — worst case the user has to run ``clawk debug delete``
 
         # manually.
@@ -215,11 +177,7 @@ def _save_pending(entries: list[dict]) -> None:
         pass
 
 
-
-
-
 def _record_pending(urls: list[str], delay_seconds: int = _AUTO_DELETE_SECONDS) -> None:
-
     """Record *urls* for deletion at ``now + delay_seconds``.
 
 
@@ -233,10 +191,7 @@ def _record_pending(urls: list[str], delay_seconds: int = _AUTO_DELETE_SECONDS) 
     paste_rs_urls = [u for u in urls if _extract_paste_id(u)]
 
     if not paste_rs_urls:
-
         return
-
-
 
     entries = _load_pending()
 
@@ -247,7 +202,6 @@ def _record_pending(urls: list[str], delay_seconds: int = _AUTO_DELETE_SECONDS) 
     expire_at = time.time() + delay_seconds
 
     for u in paste_rs_urls:
-
         by_url[u] = max(expire_at, by_url.get(u, 0.0))
 
     merged = [{"url": u, "expire_at": ts} for u, ts in by_url.items()]
@@ -255,11 +209,7 @@ def _record_pending(urls: list[str], delay_seconds: int = _AUTO_DELETE_SECONDS) 
     _save_pending(merged)
 
 
-
-
-
 def _sweep_expired_pastes(now: Optional[float] = None) -> tuple[int, int]:
-
     """Synchronously DELETE any pending pastes whose ``expire_at`` has passed.
 
 
@@ -277,10 +227,7 @@ def _sweep_expired_pastes(now: Optional[float] = None) -> tuple[int, int]:
     entries = _load_pending()
 
     if not entries:
-
         return (0, 0)
-
-
 
     current = time.time() if now is None else now
 
@@ -288,84 +235,55 @@ def _sweep_expired_pastes(now: Optional[float] = None) -> tuple[int, int]:
 
     remaining: list[dict] = []
 
-
-
     for entry in entries:
-
         try:
-
             expire_at = float(entry.get("expire_at", 0))
 
         except (TypeError, ValueError):
-
             continue  # drop malformed entries
 
         if expire_at > current:
-
             remaining.append(entry)
 
             continue
 
-
-
         url = entry.get("url", "")
 
         try:
-
             if delete_paste(url):
-
                 deleted += 1
 
                 continue
 
         except Exception:
-
             # Network hiccup, 404 (already gone), etc. — drop the entry
 
             # after a grace period; don't retry forever.
 
             pass
 
-
-
         # Retain failed deletes for up to 24h past expiration, then give up.
 
         if expire_at + 86400 > current:
-
             remaining.append(entry)
 
         else:
-
             deleted += 1  # count as reaped (paste.rs will GC eventually)
 
-
-
     if deleted:
-
         _save_pending(remaining)
-
-
 
     return (deleted, len(remaining))
 
 
-
-
-
 def _best_effort_sweep_expired_pastes() -> None:
-
     """Attempt pending-paste cleanup without letting /debug fail offline."""
 
     try:
-
         _sweep_expired_pastes()
 
     except Exception:
-
         pass
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +291,6 @@ def _best_effort_sweep_expired_pastes() -> None:
 # Privacy / delete helpers
 
 # ---------------------------------------------------------------------------
-
 
 
 _PRIVACY_NOTICE = """\
@@ -398,27 +315,16 @@ Pastes auto-delete after 6 hours.
 """
 
 
-
 _GATEWAY_PRIVACY_NOTICE = (
-
     "⚠️ **Privacy notice:** This uploads system info + recent log tails "
-
     "(may contain conversation fragments) to a public paste service. "
-
     "Full logs are NOT included from the gateway — use `clawk debug share` "
-
     "from the CLI for full log uploads.\n"
-
     "Pastes auto-delete after 6 hours."
-
 )
 
 
-
-
-
 def _extract_paste_id(url: str) -> Optional[str]:
-
     """Extract the paste ID from a paste.rs or dpaste.com URL.
 
 
@@ -430,19 +336,13 @@ def _extract_paste_id(url: str) -> Optional[str]:
     url = url.strip().rstrip("/")
 
     for prefix in ("https://paste.rs/", "http://paste.rs/"):
-
         if url.startswith(prefix):
-
-            return url[len(prefix):]
+            return url[len(prefix) :]
 
     return None
 
 
-
-
-
 def delete_paste(url: str) -> bool:
-
     """Delete a paste from paste.rs.  Returns True on success.
 
 
@@ -456,35 +356,23 @@ def delete_paste(url: str) -> bool:
     paste_id = _extract_paste_id(url)
 
     if not paste_id:
-
         raise ValueError(
-
             f"Cannot delete: only paste.rs URLs are supported.  Got: {url}"
-
         )
-
-
 
     target = f"{_PASTE_RS_URL}{paste_id}"
 
     req = urllib.request.Request(
-
-        target, method="DELETE",
-
+        target,
+        method="DELETE",
         headers={"User-Agent": "clawksis-agent/debug-share"},
-
     )
 
     with urllib.request.urlopen(req, timeout=30) as resp:
-
         return 200 <= resp.status < 300
 
 
-
-
-
 def _schedule_auto_delete(urls: list[str], delay_seconds: int = _AUTO_DELETE_SECONDS):
-
     """Record *urls* for deletion ``delay_seconds`` from now.
 
 
@@ -514,11 +402,7 @@ def _schedule_auto_delete(urls: list[str], delay_seconds: int = _AUTO_DELETE_SEC
     _record_pending(urls, delay_seconds=delay_seconds)
 
 
-
-
-
 def _upload_paste_rs(content: str) -> str:
-
     """Upload to paste.rs.  Returns the paste URL.
 
 
@@ -530,35 +414,25 @@ def _upload_paste_rs(content: str) -> str:
     data = content.encode("utf-8")
 
     req = urllib.request.Request(
-
-        _PASTE_RS_URL, data=data, method="POST",
-
+        _PASTE_RS_URL,
+        data=data,
+        method="POST",
         headers={
-
             "Content-Type": "text/plain; charset=utf-8",
-
             "User-Agent": "clawksis-agent/debug-share",
-
         },
-
     )
 
     with urllib.request.urlopen(req, timeout=30) as resp:
-
         url = resp.read().decode("utf-8").strip()
 
     if not url.startswith("http"):
-
         raise ValueError(f"Unexpected response from paste.rs: {url[:200]}")
 
     return url
 
 
-
-
-
 def _upload_dpaste_com(content: str, expiry_days: int = 7) -> str:
-
     """Upload to dpaste.com.  Returns the paste URL.
 
 
@@ -569,68 +443,42 @@ def _upload_dpaste_com(content: str, expiry_days: int = 7) -> str:
 
     boundary = "----ClawksisDebugBoundary9f3c"
 
-
-
     def _field(name: str, value: str) -> str:
 
         return (
-
             f"--{boundary}\r\n"
-
             f'Content-Disposition: form-data; name="{name}"\r\n'
-
             f"\r\n"
-
             f"{value}\r\n"
-
         )
 
-
-
     body = (
-
         _field("content", content)
-
         + _field("syntax", "text")
-
         + _field("expiry_days", str(expiry_days))
-
         + f"--{boundary}--\r\n"
-
     ).encode("utf-8")
 
-
-
     req = urllib.request.Request(
-
-        _DPASTE_COM_URL, data=body, method="POST",
-
+        _DPASTE_COM_URL,
+        data=body,
+        method="POST",
         headers={
-
             "Content-Type": f"multipart/form-data; boundary={boundary}",
-
             "User-Agent": "clawksis-agent/debug-share",
-
         },
-
     )
 
     with urllib.request.urlopen(req, timeout=30) as resp:
-
         url = resp.read().decode("utf-8").strip()
 
     if not url.startswith("http"):
-
         raise ValueError(f"Unexpected response from dpaste.com: {url[:200]}")
 
     return url
 
 
-
-
-
 def upload_to_pastebin(content: str, expiry_days: int = 7) -> str:
-
     """Upload *content* to a paste service, trying paste.rs then dpaste.com.
 
 
@@ -641,40 +489,25 @@ def upload_to_pastebin(content: str, expiry_days: int = 7) -> str:
 
     errors: list[str] = []
 
-
-
     # Try paste.rs first (simple, fast)
 
     try:
-
         return _upload_paste_rs(content)
 
     except Exception as exc:
-
         errors.append(f"paste.rs: {exc}")
-
-
 
     # Fallback: dpaste.com (supports expiry)
 
     try:
-
         return _upload_dpaste_com(content, expiry_days=expiry_days)
 
     except Exception as exc:
-
         errors.append(f"dpaste.com: {exc}")
 
-
-
     raise RuntimeError(
-
         "Failed to upload to any paste service:\n  " + "\n  ".join(errors)
-
     )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -684,16 +517,9 @@ def upload_to_pastebin(content: str, expiry_days: int = 7) -> str:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @dataclass
-
 class LogSnapshot:
-
     """Single-read snapshot of a log file used by debug-share."""
-
-
 
     path: Optional[Path]
 
@@ -702,27 +528,17 @@ class LogSnapshot:
     full_text: Optional[str]
 
 
-
-
-
 def _primary_log_path(log_name: str) -> Optional[Path]:
-
     """Where *log_name* would live if present. Doesn't check existence."""
 
     from clawk_cli.logs import LOG_FILES
-
-
 
     filename = LOG_FILES.get(log_name)
 
     return (get_clawk_home() / "logs" / filename) if filename else None
 
 
-
-
-
 def _resolve_log_path(log_name: str) -> Optional[Path]:
-
     """Find the log file for *log_name*, falling back to the .1 rotation.
 
 
@@ -738,33 +554,20 @@ def _resolve_log_path(log_name: str) -> Optional[Path]:
     primary = _primary_log_path(log_name)
 
     if primary is None:
-
         return None
 
-
-
     if primary.exists() and primary.stat().st_size > 0:
-
         return primary
-
-
 
     rotated = primary.parent / f"{primary.name}.1"
 
     if rotated.exists() and rotated.stat().st_size > 0:
-
         return rotated
-
-
 
     return None
 
 
-
-
-
 def _redact_log_text(text: str) -> str:
-
     """Run ``redact_sensitive_text`` with ``force=True`` over upload-bound text.
 
 
@@ -782,35 +585,22 @@ def _redact_log_text(text: str) -> str:
     """
 
     if not text:
-
         return text
 
     from agent.redact import redact_sensitive_text
-
-
 
     text = redact_sensitive_text(text, force=True)
 
     return _EMAIL_ADDRESS_RE.sub("[REDACTED_EMAIL]", text)
 
 
-
-
-
 def _capture_log_snapshot(
-
     log_name: str,
-
     *,
-
     tail_lines: int,
-
     max_bytes: int = _MAX_LOG_BYTES,
-
     redact: bool = True,
-
 ) -> LogSnapshot:
-
     """Capture a log once and derive summary/full-log views from it.
 
 
@@ -838,37 +628,27 @@ def _capture_log_snapshot(
     log_path = _resolve_log_path(log_name)
 
     if log_path is None:
-
         primary = _primary_log_path(log_name)
 
         tail = "(file empty)" if primary and primary.exists() else "(file not found)"
 
         return LogSnapshot(path=None, tail_text=tail, full_text=None)
 
-
-
     try:
-
         size = log_path.stat().st_size
 
         if size == 0:
-
             # race: file was truncated between _resolve_log_path and stat
 
             return LogSnapshot(path=log_path, tail_text="(file empty)", full_text=None)
 
-
-
         with open(log_path, "rb") as f:
-
             if size <= max_bytes:
-
                 raw = f.read()
 
                 truncated = False
 
             else:
-
                 # Read from the end until we have enough bytes for the
 
                 # standalone upload and enough newline context to render the
@@ -885,10 +665,11 @@ def _capture_log_snapshot(
 
                 newline_count = 0
 
-
-
-                while pos > 0 and (total < max_bytes or newline_count <= tail_lines + 1) and total < max_bytes * 2:
-
+                while (
+                    pos > 0
+                    and (total < max_bytes or newline_count <= tail_lines + 1)
+                    and total < max_bytes * 2
+                ):
                     read_size = min(chunk_size, pos)
 
                     pos -= read_size
@@ -905,18 +686,13 @@ def _capture_log_snapshot(
 
                     chunk_size = min(chunk_size * 2, 65536)
 
-
-
                 raw = b"".join(chunks)
 
                 truncated = pos > 0
 
-
-
         full_raw = raw
 
         if truncated and len(full_raw) > max_bytes:
-
             cut = len(full_raw) - max_bytes
 
             # Check whether the cut lands exactly on a line boundary.  If the
@@ -932,49 +708,35 @@ def _capture_log_snapshot(
             full_raw = full_raw[cut:]
 
             if not on_boundary and b"\n" in full_raw:
-
                 full_raw = full_raw.split(b"\n", 1)[1]
-
-
 
         all_text = raw.decode("utf-8", errors="replace")
 
-        tail_text = "".join(all_text.splitlines(keepends=True)[-tail_lines:]).rstrip("\n")
-
-
+        tail_text = "".join(all_text.splitlines(keepends=True)[-tail_lines:]).rstrip(
+            "\n"
+        )
 
         full_text = full_raw.decode("utf-8", errors="replace")
 
         if truncated:
-
             full_text = f"[... truncated — showing last ~{max_bytes // 1024}KB ...]\n{full_text}"
 
-
-
         if redact:
-
             tail_text = _redact_log_text(tail_text)
 
             full_text = _redact_log_text(full_text)
 
-
-
         return LogSnapshot(path=log_path, tail_text=tail_text, full_text=full_text)
 
     except Exception as exc:
-
-        return LogSnapshot(path=log_path, tail_text=f"(error reading: {exc})", full_text=None)
-
-
-
+        return LogSnapshot(
+            path=log_path, tail_text=f"(error reading: {exc})", full_text=None
+        )
 
 
 def _capture_default_log_snapshots(
-
     log_lines: int, *, redact: bool = True
-
 ) -> dict[str, LogSnapshot]:
-
     """Capture all logs used by debug-share exactly once.
 
 
@@ -988,35 +750,17 @@ def _capture_default_log_snapshots(
     errors_lines = min(log_lines, 100)
 
     return {
-
-        "agent": _capture_log_snapshot(
-
-            "agent", tail_lines=log_lines, redact=redact
-
-        ),
-
+        "agent": _capture_log_snapshot("agent", tail_lines=log_lines, redact=redact),
         "errors": _capture_log_snapshot(
-
             "errors", tail_lines=errors_lines, redact=redact
-
         ),
-
         "gateway": _capture_log_snapshot(
-
             "gateway", tail_lines=errors_lines, redact=redact
-
         ),
-
         "desktop": _capture_log_snapshot(
-
             "desktop", tail_lines=errors_lines, redact=redact
-
         ),
-
     }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1026,57 +770,36 @@ def _capture_default_log_snapshots(
 # ---------------------------------------------------------------------------
 
 
-
 def _capture_dump() -> str:
-
     """Run ``clawk dump`` and return its stdout as a string."""
 
     from clawk_cli.dump import run_dump
 
-
-
     class _FakeArgs:
-
         show_keys = False
-
-
 
     old_stdout = sys.stdout
 
     sys.stdout = capture = io.StringIO()
 
     try:
-
         run_dump(_FakeArgs())
 
     except SystemExit:
-
         pass
 
     finally:
-
         sys.stdout = old_stdout
-
-
 
     return capture.getvalue()
 
 
-
-
-
 def collect_debug_report(
-
     *,
-
     log_lines: int = 200,
-
     dump_text: str = "",
-
     log_snapshots: Optional[dict[str, LogSnapshot]] = None,
-
 ) -> str:
-
     """Build the summary debug report: system dump + log tails.
 
 
@@ -1103,21 +826,13 @@ def collect_debug_report(
 
     buf = io.StringIO()
 
-
-
     if not dump_text:
-
         dump_text = _capture_dump()
 
     buf.write(dump_text)
 
-
-
     if log_snapshots is None:
-
         log_snapshots = _capture_default_log_snapshots(log_lines)
-
-
 
     # ── Recent log tails (summary only) ──────────────────────────────────
 
@@ -1129,8 +844,6 @@ def collect_debug_report(
 
     buf.write("\n\n")
 
-
-
     errors_lines = min(log_lines, 100)
 
     buf.write(f"--- errors.log (last {errors_lines} lines) ---\n")
@@ -1139,15 +852,11 @@ def collect_debug_report(
 
     buf.write("\n\n")
 
-
-
     buf.write(f"--- gateway.log (last {errors_lines} lines) ---\n")
 
     buf.write(log_snapshots["gateway"].tail_text)
 
     buf.write("\n\n")
-
-
 
     buf.write(f"--- desktop.log (last {errors_lines} lines) ---\n")
 
@@ -1155,12 +864,7 @@ def collect_debug_report(
 
     buf.write("\n")
 
-
-
     return buf.getvalue()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1170,11 +874,8 @@ def collect_debug_report(
 # ---------------------------------------------------------------------------
 
 
-
 @dataclass
-
 class DebugShareResult:
-
     """Structured outcome of a ``debug share`` upload.
 
 
@@ -1187,8 +888,6 @@ class DebugShareResult:
 
     """
 
-
-
     urls: dict  # label -> paste URL (e.g. {"Report": "...", "agent.log": "..."})
 
     failures: list  # human-readable "label: error" strings for optional uploads
@@ -1200,21 +899,12 @@ class DebugShareResult:
     report: str = ""  # the summary report text (kept for local fallback)
 
 
-
-
-
 def build_debug_share(
-
     *,
-
     log_lines: int = 200,
-
     expiry: int = 7,
-
     redact: bool = True,
-
 ) -> DebugShareResult:
-
     """Collect the debug report + full logs, upload each, return the URLs.
 
 
@@ -1239,8 +929,6 @@ def build_debug_share(
 
     _best_effort_sweep_expired_pastes()
 
-
-
     # Capture dump once — prepended to every paste for context.
 
     # The dump is already redacted at extract time via dump.py:_redact;
@@ -1253,26 +941,15 @@ def build_debug_share(
 
     log_snapshots = _capture_default_log_snapshots(log_lines, redact=redact)
 
-
-
     if redact:
-
         logger.info(
-
             "clawk debug share: applied force-mode redaction to log snapshots before upload"
-
         )
 
-
-
     report = collect_debug_report(
-
         log_lines=log_lines,
-
         dump_text=dump_text,
-
         log_snapshots=log_snapshots,
-
     )
 
     agent_log = log_snapshots["agent"].full_text
@@ -1281,110 +958,71 @@ def build_debug_share(
 
     desktop_log = log_snapshots["desktop"].full_text
 
-
-
     # Prepend dump header to each full log so every paste is self-contained.
 
     if agent_log:
-
         agent_log = dump_text + "\n\n--- full agent.log ---\n" + agent_log
 
     if gateway_log:
-
         gateway_log = dump_text + "\n\n--- full gateway.log ---\n" + gateway_log
 
     if desktop_log:
-
         desktop_log = dump_text + "\n\n--- full desktop.log ---\n" + desktop_log
-
-
 
     # Visible banner so reviewers reading the public paste know redaction
 
     # was applied at upload time. Banner is omitted under --no-redact.
 
     if redact:
-
         report = _REDACTION_BANNER + report
 
         if agent_log:
-
             agent_log = _REDACTION_BANNER + agent_log
 
         if gateway_log:
-
             gateway_log = _REDACTION_BANNER + gateway_log
 
         if desktop_log:
-
             desktop_log = _REDACTION_BANNER + desktop_log
-
-
 
     urls: dict[str, str] = {}
 
     failures: list[str] = []
 
-
-
     # 1. Summary report (required — raises on failure so callers can fall back)
 
     urls["Report"] = upload_to_pastebin(report, expiry_days=expiry)
 
-
-
     # 2-4. Full logs (optional — failures are collected, not raised)
 
     for label, content in (
-
         ("agent.log", agent_log),
-
         ("gateway.log", gateway_log),
-
         ("desktop.log", desktop_log),
-
     ):
-
         if not content:
-
             continue
 
         try:
-
             urls[label] = upload_to_pastebin(content, expiry_days=expiry)
 
         except Exception as exc:
-
             failures.append(f"{label}: {exc}")
-
-
 
     # Schedule auto-deletion after 6 hours.
 
     _schedule_auto_delete(list(urls.values()))
 
-
-
     return DebugShareResult(
-
         urls=urls,
-
         failures=failures,
-
         redacted=redact,
-
         auto_delete_seconds=_AUTO_DELETE_SECONDS,
-
         report=report,
-
     )
 
 
-
-
-
 def run_debug_share(args):
-
     """Collect debug report + full logs, upload each, print URLs."""
 
     log_lines = getattr(args, "lines", 200)
@@ -1395,10 +1033,7 @@ def run_debug_share(args):
 
     redact = not getattr(args, "no_redact", False)
 
-
-
     if local_only:
-
         # Local-only path never uploads — render the report to stdout and bail
 
         # before any network I/O. Mirrors the upload path's collection logic.
@@ -1412,13 +1047,9 @@ def run_debug_share(args):
         log_snapshots = _capture_default_log_snapshots(log_lines, redact=redact)
 
         report = collect_debug_report(
-
             log_lines=log_lines,
-
             dump_text=dump_text,
-
             log_snapshots=log_snapshots,
-
         )
 
         agent_log = log_snapshots["agent"].full_text
@@ -1428,47 +1059,34 @@ def run_debug_share(args):
         desktop_log = log_snapshots["desktop"].full_text
 
         if agent_log:
-
             agent_log = dump_text + "\n\n--- full agent.log ---\n" + agent_log
 
         if gateway_log:
-
             gateway_log = dump_text + "\n\n--- full gateway.log ---\n" + gateway_log
 
         if desktop_log:
-
             desktop_log = dump_text + "\n\n--- full desktop.log ---\n" + desktop_log
 
         if redact:
-
             report = _REDACTION_BANNER + report
 
             if agent_log:
-
                 agent_log = _REDACTION_BANNER + agent_log
 
             if gateway_log:
-
                 gateway_log = _REDACTION_BANNER + gateway_log
 
             if desktop_log:
-
                 desktop_log = _REDACTION_BANNER + desktop_log
 
         print(report)
 
         for title, body in (
-
             ("FULL agent.log", agent_log),
-
             ("FULL gateway.log", gateway_log),
-
             ("FULL desktop.log", desktop_log),
-
         ):
-
             if body:
-
                 print(f"\n\n{'=' * 60}")
 
                 print(title)
@@ -1479,37 +1097,25 @@ def run_debug_share(args):
 
         return
 
-
-
     print(_PRIVACY_NOTICE)
 
     print("Collecting debug report...")
 
     print("Uploading...")
 
-
-
     try:
-
         result = build_debug_share(
-
             log_lines=log_lines,
-
             expiry=expiry,
-
             redact=redact,
-
         )
 
     except RuntimeError as exc:
-
         print(f"\nUpload failed: {exc}", file=sys.stderr)
 
         print("\nRun `clawk debug share --local` to print the report instead.\n")
 
         sys.exit(1)
-
-
 
     # Print results
 
@@ -1518,79 +1124,52 @@ def run_debug_share(args):
     print(f"\nDebug report uploaded:")
 
     for label, url in result.urls.items():
-
         print(f"  {label:<{label_width}}  {url}")
 
-
-
     if result.failures:
-
         print(f"\n  (failed to upload: {', '.join(result.failures)})")
-
-
 
     hours = result.auto_delete_seconds // 3600
 
     print(f"\n⏱  Pastes will auto-delete in {hours} hours.")
 
-
-
     # Manual delete fallback
 
     print(f"To delete now:  clawk debug delete <url>")
 
-
-
     print(f"\nShare these links with the Clawksis team for support.")
 
 
-
-
-
 def run_debug_delete(args):
-
     """Delete one or more paste URLs uploaded by /debug."""
 
     urls = getattr(args, "urls", [])
 
     if not urls:
-
         print("Usage: clawk debug delete <url> [<url> ...]")
 
         print("  Deletes paste.rs pastes uploaded by 'clawk debug share'.")
 
         return
 
-
-
     for url in urls:
-
         try:
-
             ok = delete_paste(url)
 
             if ok:
-
                 print(f"  ✓ Deleted: {url}")
 
             else:
-
                 print(f"  ✗ Failed to delete: {url} (unexpected response)")
 
         except ValueError as exc:
-
             print(f"  ✗ {exc}")
 
         except Exception as exc:
-
             print(f"  ✗ Could not delete {url}: {exc}")
 
 
-
-
-
 def run_debug(args):
-
     """Route debug subcommands."""
 
     # Opportunistic sweep of expired pastes on every ``clawk debug`` call.
@@ -1604,27 +1183,20 @@ def run_debug(args):
     # reliable even when offline.
 
     try:
-
         _sweep_expired_pastes()
 
     except Exception:
-
         pass
-
-
 
     subcmd = getattr(args, "debug_command", None)
 
     if subcmd == "share":
-
         run_debug_share(args)
 
     elif subcmd == "delete":
-
         run_debug_delete(args)
 
     else:
-
         # Default: show help
 
         print("Usage: clawk debug <command>")
@@ -1654,4 +1226,3 @@ def run_debug(args):
         print("Options (delete):")
 
         print("  <url> ...    One or more paste URLs to delete")
-

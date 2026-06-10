@@ -6,6 +6,7 @@ therefore never cleared:
   - ContextCompressor._previous_summary
   - AIAgent._user_turn_count
 """
+
 import sys
 import types
 from pathlib import Path

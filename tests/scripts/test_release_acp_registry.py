@@ -81,9 +81,7 @@ def test_update_acp_registry_versions_is_silent_when_manifest_missing(
     module._update_acp_registry_versions("0.14.0")
 
 
-def test_update_version_files_bumps_manifest_alongside_pyproject(
-    monkeypatch, tmp_path
-):
+def test_update_version_files_bumps_manifest_alongside_pyproject(monkeypatch, tmp_path):
     """End-to-end: update_version_files() is the function release.py actually
     calls, so it must drive the manifest bump too."""
     _write_manifest(tmp_path, "0.13.0")

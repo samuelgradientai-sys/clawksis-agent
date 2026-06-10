@@ -102,7 +102,9 @@ def test_generate_xai_tts_sends_auto_speech_tags_when_enabled(tmp_path, monkeypa
     assert captured["url"] == "https://api.x.ai/v1/tts"
     assert captured["json"]["voice_id"] == "ara"
     assert captured["json"]["language"] == "fr"
-    assert captured["json"]["text"] == "Bonjour Monsieur Talbot. [pause] Ceci est un test."
+    assert (
+        captured["json"]["text"] == "Bonjour Monsieur Talbot. [pause] Ceci est un test."
+    )
 
 
 def test_generate_xai_tts_leaves_text_plain_by_default(tmp_path, monkeypatch):

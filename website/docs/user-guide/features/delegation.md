@@ -14,7 +14,7 @@ The `delegate_task` tool spawns child AIAgent instances with isolated context, r
 delegate_task(
     goal="Debug why tests fail",
     context="Error: assertion in test_foo.py line 42",
-    toolsets=["terminal", "file"]
+    toolsets=["terminal", "file"],
 )
 ```
 
@@ -23,11 +23,13 @@ delegate_task(
 Up to 3 concurrent subagents by default (configurable, no hard ceiling):
 
 ```python
-delegate_task(tasks=[
-    {"goal": "Research topic A", "toolsets": ["web"]},
-    {"goal": "Research topic B", "toolsets": ["web"]},
-    {"goal": "Fix the build", "toolsets": ["terminal", "file"]}
-])
+delegate_task(
+    tasks=[
+        {"goal": "Research topic A", "toolsets": ["web"]},
+        {"goal": "Research topic B", "toolsets": ["web"]},
+        {"goal": "Fix the build", "toolsets": ["terminal", "file"]},
+    ]
+)
 ```
 
 ## How Subagent Context Works
@@ -49,7 +51,7 @@ delegate_task(
     'NoneType' object has no attribute 'get'.
     The function process_request() receives a dict from parse_body(),
     but parse_body() returns None when Content-Type is missing.
-    The project is at /home/user/myproject and uses Python 3.11."""
+    The project is at /home/user/myproject and uses Python 3.11.""",
 )
 ```
 
@@ -62,23 +64,25 @@ The subagent receives a focused system prompt built from your goal and context, 
 Research multiple topics simultaneously and collect summaries:
 
 ```python
-delegate_task(tasks=[
-    {
-        "goal": "Research the current state of WebAssembly in 2025",
-        "context": "Focus on: browser support, non-browser runtimes, language support",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research the current state of RISC-V adoption in 2025",
-        "context": "Focus on: server chips, embedded systems, software ecosystem",
-        "toolsets": ["web"]
-    },
-    {
-        "goal": "Research quantum computing progress in 2025",
-        "context": "Focus on: error correction breakthroughs, practical applications, key players",
-        "toolsets": ["web"]
-    }
-])
+delegate_task(
+    tasks=[
+        {
+            "goal": "Research the current state of WebAssembly in 2025",
+            "context": "Focus on: browser support, non-browser runtimes, language support",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research the current state of RISC-V adoption in 2025",
+            "context": "Focus on: server chips, embedded systems, software ecosystem",
+            "toolsets": ["web"],
+        },
+        {
+            "goal": "Research quantum computing progress in 2025",
+            "context": "Focus on: error correction breakthroughs, practical applications, key players",
+            "toolsets": ["web"],
+        },
+    ]
+)
 ```
 
 ### Code Review + Fix
@@ -93,7 +97,7 @@ delegate_task(
     The project uses Flask, PyJWT, and bcrypt.
     Focus on: SQL injection, JWT validation, password handling, session management.
     Fix any issues found and run the test suite (pytest tests/auth/).""",
-    toolsets=["terminal", "file"]
+    toolsets=["terminal", "file"],
 )
 ```
 
@@ -113,7 +117,7 @@ delegate_task(
     - Other prints -> logger.info(...)
     Don't change print() in test files or CLI output.
     Run pytest after to verify nothing broke.""",
-    toolsets=["terminal", "file"]
+    toolsets=["terminal", "file"],
 )
 ```
 
@@ -169,7 +173,7 @@ Each subagent has an iteration limit (default: 50) that controls how many tool-c
 delegate_task(
     goal="Quick file check",
     context="Check if /etc/nginx/nginx.conf exists and print its first 10 lines",
-    max_iterations=10  # Simple task, don't need many turns
+    max_iterations=10,  # Simple task, don't need many turns
 )
 ```
 

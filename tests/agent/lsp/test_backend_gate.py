@@ -6,6 +6,7 @@ the file_operations layer must skip both ``snapshot_baseline`` and
 ``get_diagnostics_sync`` calls — falling back to the in-process
 syntax check exactly as if LSP were disabled.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -77,6 +78,7 @@ def test_maybe_lsp_diagnostics_returns_empty_for_non_local(monkeypatch):
         def enabled_for(self, path):
             called.append(("enabled_for", path))
             return True
+
         def get_diagnostics_sync(self, path, **kw):
             called.append(("get_diagnostics_sync", path))
             return [{"severity": 1, "message": "should not see this"}]

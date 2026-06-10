@@ -5,6 +5,7 @@ and the scroll shape (user-supplied anchor). Returns a window of messages
 around the anchor plus before/after counts so callers can detect session
 boundaries.
 """
+
 import pytest
 
 from clawk_state import SessionDB

@@ -29,27 +29,40 @@ import hashlib
 import sys
 
 EVIDENCE_TYPES = [
-    "git",           # Local git repository data (commits, reflog, fsck)
-    "gh_api",        # GitHub REST API responses
-    "gh_archive",    # GitHub Archive / BigQuery query results
-    "web_archive",   # Wayback Machine snapshots
-    "ioc",           # Indicator of Compromise (SHA, domain, IP, package name, etc.)
-    "analysis",      # Derived analysis / cross-source correlation result
-    "manual",        # Manually noted observation
-    "vendor_report", # External security vendor report excerpt
+    "git",  # Local git repository data (commits, reflog, fsck)
+    "gh_api",  # GitHub REST API responses
+    "gh_archive",  # GitHub Archive / BigQuery query results
+    "web_archive",  # Wayback Machine snapshots
+    "ioc",  # Indicator of Compromise (SHA, domain, IP, package name, etc.)
+    "analysis",  # Derived analysis / cross-source correlation result
+    "manual",  # Manually noted observation
+    "vendor_report",  # External security vendor report excerpt
 ]
 
 VERIFICATION_STATES = ["unverified", "single_source", "multi_source_verified"]
 
 IOC_TYPES = [
-    "COMMIT_SHA", "FILE_PATH", "API_KEY", "SECRET", "IP_ADDRESS",
-    "DOMAIN", "PACKAGE_NAME", "ACTOR_USERNAME", "MALICIOUS_URL",
-    "WORKFLOW_FILE", "BRANCH_NAME", "TAG_NAME", "RELEASE_NAME", "OTHER",
+    "COMMIT_SHA",
+    "FILE_PATH",
+    "API_KEY",
+    "SECRET",
+    "IP_ADDRESS",
+    "DOMAIN",
+    "PACKAGE_NAME",
+    "ACTOR_USERNAME",
+    "MALICIOUS_URL",
+    "WORKFLOW_FILE",
+    "BRANCH_NAME",
+    "TAG_NAME",
+    "RELEASE_NAME",
+    "OTHER",
 ]
 
 
 def _now_iso():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds") + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds") + "Z"
+    )
 
 
 def _sha256(content: str) -> str:
@@ -75,8 +88,13 @@ class EvidenceStore:
                 with open(filepath, "r", encoding="utf-8") as f:
                     self.data = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
-                print(f"Error loading evidence store '{filepath}': {e}", file=sys.stderr)
-                print("Hint: The file might be corrupted. Check for manual edits or syntax errors.", file=sys.stderr)
+                print(
+                    f"Error loading evidence store '{filepath}': {e}", file=sys.stderr
+                )
+                print(
+                    "Hint: The file might be corrupted. Check for manual edits or syntax errors.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
 
     def _save(self):
@@ -150,7 +168,8 @@ class EvidenceStore:
         """Search for keyword in content, source, actor, or url."""
         keyword_lower = keyword.lower()
         return [
-            e for e in self.data["evidence"]
+            e
+            for e in self.data["evidence"]
             if keyword_lower in (e.get("content", "") or "").lower()
             or keyword_lower in (e.get("source", "") or "").lower()
             or keyword_lower in (e.get("actor", "") or "").lower()
@@ -172,8 +191,8 @@ class EvidenceStore:
             url = e.get("url") or ""
             url_display = f"[link]({url})" if url else ""
             lines.append(
-                f"| {e['id']} | {e.get('type','')} | {e.get('source','')} "
-                f"| {e.get('actor') or ''} | {e.get('verification','')} "
+                f"| {e['id']} | {e.get('type', '')} | {e.get('source', '')} "
+                f"| {e.get('actor') or ''} | {e.get('verification', '')} "
                 f"| {e.get('event_timestamp') or ''} | {url_display} |"
             )
         lines.append("")
@@ -183,8 +202,8 @@ class EvidenceStore:
         lines.append("|-------------|--------|-----------|--------|")
         for c in self.data["chain_of_custody"]:
             lines.append(
-                f"| {c.get('evidence_id','')} | {c.get('action','')} "
-                f"| {c.get('timestamp','')} | {c.get('source','')} |"
+                f"| {c.get('evidence_id', '')} | {c.get('action', '')} "
+                f"| {c.get('timestamp', '')} | {c.get('source', '')} |"
             )
         return "\n".join(lines)
 
@@ -212,30 +231,56 @@ def main():
         description="OSS Forensics Evidence Store Manager v2.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--store", default="evidence.json", help="Path to evidence JSON file (default: evidence.json)")
+    parser.add_argument(
+        "--store",
+        default="evidence.json",
+        help="Path to evidence JSON file (default: evidence.json)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     # --- add ---
     add_p = subparsers.add_parser("add", help="Add a new evidence entry")
-    add_p.add_argument("--source", required=True, help="Where this evidence came from (e.g. 'git fsck', 'GH API /commits')")
-    add_p.add_argument("--content", required=True, help="The evidence content (commit SHA, API response excerpt, etc.)")
-    add_p.add_argument("--type", required=True, choices=EVIDENCE_TYPES, dest="evidence_type", help="Evidence type")
+    add_p.add_argument(
+        "--source",
+        required=True,
+        help="Where this evidence came from (e.g. 'git fsck', 'GH API /commits')",
+    )
+    add_p.add_argument(
+        "--content",
+        required=True,
+        help="The evidence content (commit SHA, API response excerpt, etc.)",
+    )
+    add_p.add_argument(
+        "--type",
+        required=True,
+        choices=EVIDENCE_TYPES,
+        dest="evidence_type",
+        help="Evidence type",
+    )
     add_p.add_argument("--actor", help="GitHub handle or email of associated actor")
     add_p.add_argument("--url", help="URL to original source")
     add_p.add_argument("--timestamp", help="When the event occurred (ISO 8601)")
-    add_p.add_argument("--ioc-type", choices=IOC_TYPES, help="IOC subtype (for --type ioc)")
-    add_p.add_argument("--verification", choices=VERIFICATION_STATES, default="unverified")
+    add_p.add_argument(
+        "--ioc-type", choices=IOC_TYPES, help="IOC subtype (for --type ioc)"
+    )
+    add_p.add_argument(
+        "--verification", choices=VERIFICATION_STATES, default="unverified"
+    )
     add_p.add_argument("--notes", help="Additional investigator notes")
     add_p.add_argument("--quiet", action="store_true", help="Suppress success message")
 
     # --- list ---
     list_p = subparsers.add_parser("list", help="List all evidence entries")
-    list_p.add_argument("--type", dest="filter_type", choices=EVIDENCE_TYPES, help="Filter by type")
+    list_p.add_argument(
+        "--type", dest="filter_type", choices=EVIDENCE_TYPES, help="Filter by type"
+    )
     list_p.add_argument("--actor", dest="filter_actor", help="Filter by actor")
 
     # --- verify ---
-    subparsers.add_parser("verify", help="Verify SHA-256 integrity of all evidence content")
+    subparsers.add_parser(
+        "verify", help="Verify SHA-256 integrity of all evidence content"
+    )
 
     # --- query ---
     query_p = subparsers.add_parser("query", help="Search evidence by keyword")
@@ -280,16 +325,22 @@ def main():
         for e in items:
             actor_str = f" | actor: {e['actor']}" if e.get("actor") else ""
             url_str = f" | {e['url']}" if e.get("url") else ""
-            print(f"[{e['id']}] {e['type']:12s} | {e['verification']:20s} | {e['source']}{actor_str}{url_str}")
+            print(
+                f"[{e['id']}] {e['type']:12s} | {e['verification']:20s} | {e['source']}{actor_str}{url_str}"
+            )
 
     elif args.command == "verify":
         issues = store.verify_integrity()
         if not issues:
-            print(f"✓ All {len(store.data['evidence'])} evidence entries passed SHA-256 integrity check.")
+            print(
+                f"✓ All {len(store.data['evidence'])} evidence entries passed SHA-256 integrity check."
+            )
         else:
             print(f"✗ {len(issues)} integrity issue(s) detected:")
             for i in issues:
-                print(f"  [{i['id']}] stored={i['stored_sha256'][:16]}... computed={i['computed_sha256'][:16]}...")
+                print(
+                    f"  [{i['id']}] stored={i['stored_sha256'][:16]}... computed={i['computed_sha256'][:16]}..."
+                )
             sys.exit(1)
 
     elif args.command == "query":

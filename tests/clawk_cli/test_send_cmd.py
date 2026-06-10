@@ -10,10 +10,7 @@ no network I/O or gateway is required.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import io
@@ -21,15 +18,10 @@ import io
 import json
 
 
-
 import pytest
 
 
-
 from clawk_cli import send_cmd
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -39,16 +31,10 @@ from clawk_cli import send_cmd
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _parse(argv):
-
     """Build the top-level parser and return the parsed args for ``argv``."""
 
     import argparse
-
-
 
     parser = argparse.ArgumentParser(prog="clawk")
 
@@ -59,22 +45,14 @@ def _parse(argv):
     return parser.parse_args(["send", *argv])
 
 
-
-
-
 class _FakeTool:
-
     """Replacement for ``tools.send_message_tool.send_message_tool``."""
-
-
 
     def __init__(self, payload):
 
         self.payload = payload
 
         self.calls = []
-
-
 
     def __call__(self, args, **_kw):
 
@@ -83,24 +61,15 @@ class _FakeTool:
         return json.dumps(self.payload)
 
 
-
-
-
 @pytest.fixture
-
 def fake_tool(monkeypatch):
-
     """Install a fake send_message_tool and return the stub for inspection."""
 
     import sys
 
     import types
 
-
-
     fake = _FakeTool({"success": True, "message_id": "m123"})
-
-
 
     mod = types.ModuleType("tools.send_message_tool")
 
@@ -117,9 +86,6 @@ def fake_tool(monkeypatch):
     return fake
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Happy path
@@ -127,31 +93,22 @@ def fake_tool(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_positional_message_success(fake_tool, capsys):
 
     args = _parse(["--to", "telegram", "hello world"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
 
     assert fake_tool.calls == [
-
         {"action": "send", "target": "telegram", "message": "hello world"}
-
     ]
 
     out = capsys.readouterr()
 
     assert "sent" in out.out or out.out == ""  # "sent" is the default success banner
-
-
-
 
 
 def test_stdin_message(fake_tool, monkeypatch, capsys):
@@ -167,7 +124,6 @@ def test_stdin_message(fake_tool, monkeypatch, capsys):
     args = _parse(["--to", "discord:#ops"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -175,9 +131,6 @@ def test_stdin_message(fake_tool, monkeypatch, capsys):
     assert fake_tool.calls[0]["message"] == "piped body\n"
 
     assert fake_tool.calls[0]["target"] == "discord:#ops"
-
-
-
 
 
 def test_file_message(fake_tool, tmp_path):
@@ -189,15 +142,11 @@ def test_file_message(fake_tool, tmp_path):
     args = _parse(["--to", "slack:#eng", "--file", str(body)])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
 
     assert fake_tool.calls[0]["message"] == "from a file\n"
-
-
-
 
 
 def test_file_dash_means_stdin(fake_tool, monkeypatch):
@@ -207,7 +156,6 @@ def test_file_dash_means_stdin(fake_tool, monkeypatch):
     args = _parse(["--to", "telegram", "--file", "-"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -215,15 +163,11 @@ def test_file_dash_means_stdin(fake_tool, monkeypatch):
     assert fake_tool.calls[0]["message"] == "dash body"
 
 
-
-
-
 def test_subject_prepends_header(fake_tool):
 
     args = _parse(["--to", "telegram", "--subject", "[CI]", "body text"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -231,15 +175,11 @@ def test_subject_prepends_header(fake_tool):
     assert fake_tool.calls[0]["message"] == "[CI]\n\nbody text"
 
 
-
-
-
 def test_json_mode_emits_payload(fake_tool, capsys):
 
     args = _parse(["--to", "telegram", "--json", "hi"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -253,15 +193,11 @@ def test_json_mode_emits_payload(fake_tool, capsys):
     assert payload.get("message_id") == "m123"
 
 
-
-
-
 def test_quiet_suppresses_stdout(fake_tool, capsys):
 
     args = _parse(["--to", "telegram", "--quiet", "shh"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -271,17 +207,11 @@ def test_quiet_suppresses_stdout(fake_tool, capsys):
     assert out.out == ""
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Error paths
 
 # ---------------------------------------------------------------------------
-
-
-
 
 
 def test_missing_target(fake_tool, capsys, monkeypatch):
@@ -293,7 +223,6 @@ def test_missing_target(fake_tool, capsys, monkeypatch):
     args = _parse(["hello"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 2
@@ -303,9 +232,6 @@ def test_missing_target(fake_tool, capsys, monkeypatch):
     assert "--to" in err
 
 
-
-
-
 def test_missing_message(fake_tool, capsys, monkeypatch):
 
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -313,7 +239,6 @@ def test_missing_message(fake_tool, capsys, monkeypatch):
     args = _parse(["--to", "telegram"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 2
@@ -323,9 +248,6 @@ def test_missing_message(fake_tool, capsys, monkeypatch):
     assert "no message" in err.lower()
 
 
-
-
-
 def test_file_not_found_is_usage_error(fake_tool, capsys, monkeypatch):
 
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -333,7 +255,6 @@ def test_file_not_found_is_usage_error(fake_tool, capsys, monkeypatch):
     args = _parse(["--to", "telegram", "--file", "/nonexistent/does-not-exist.txt"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 2
@@ -341,9 +262,6 @@ def test_file_not_found_is_usage_error(fake_tool, capsys, monkeypatch):
     err = capsys.readouterr().err
 
     assert "cannot read" in err.lower()
-
-
-
 
 
 def test_file_decode_error_is_usage_error(fake_tool, capsys, monkeypatch, tmp_path):
@@ -354,12 +272,9 @@ def test_file_decode_error_is_usage_error(fake_tool, capsys, monkeypatch, tmp_pa
 
     bad.write_bytes(b"\xff\xfe\x00")
 
-
-
     args = _parse(["--to", "telegram", "--file", str(bad)])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 2
@@ -369,37 +284,25 @@ def test_file_decode_error_is_usage_error(fake_tool, capsys, monkeypatch, tmp_pa
     assert "cannot read" in err.lower()
 
 
-
-
-
 def test_tool_error_returns_failure_exit(monkeypatch, capsys):
 
     import sys as _sys
 
     import types as _types
 
-
-
     fake_mod = _types.ModuleType("tools.send_message_tool")
-
-
 
     def _bad_tool(args, **_kw):
 
         return json.dumps({"error": "platform blew up"})
 
-
-
     fake_mod.send_message_tool = _bad_tool
 
     monkeypatch.setitem(_sys.modules, "tools.send_message_tool", fake_mod)
 
-
-
     args = _parse(["--to", "telegram", "nope"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 1
@@ -409,39 +312,28 @@ def test_tool_error_returns_failure_exit(monkeypatch, capsys):
     assert "platform blew up" in err
 
 
-
-
-
 def test_skipped_result_is_success(monkeypatch):
 
     import sys as _sys
 
     import types as _types
 
-
-
     fake_mod = _types.ModuleType("tools.send_message_tool")
 
-    fake_mod.send_message_tool = lambda args, **_kw: json.dumps(
-
-        {"success": True, "skipped": True, "reason": "duplicate"}
-
-    )
+    fake_mod.send_message_tool = lambda args, **_kw: json.dumps({
+        "success": True,
+        "skipped": True,
+        "reason": "duplicate",
+    })
 
     monkeypatch.setitem(_sys.modules, "tools.send_message_tool", fake_mod)
-
-
 
     args = _parse(["--to", "telegram", "dup"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -451,35 +343,27 @@ def test_skipped_result_is_success(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_list_human_output(monkeypatch, capsys):
 
     import sys as _sys
 
     import types as _types
 
-
-
     fake_dir = _types.ModuleType("gateway.channel_directory")
 
-    fake_dir.format_directory_for_display = lambda: "Available messaging targets:\n\nTelegram:\n  telegram:-100123\n"
+    fake_dir.format_directory_for_display = lambda: (
+        "Available messaging targets:\n\nTelegram:\n  telegram:-100123\n"
+    )
 
     fake_dir.load_directory = lambda: {
-
         "platforms": {"telegram": [{"id": "-100123", "name": "Test Group"}]}
-
     }
 
     monkeypatch.setitem(_sys.modules, "gateway.channel_directory", fake_dir)
 
-
-
     args = _parse(["--list"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -489,35 +373,25 @@ def test_list_human_output(monkeypatch, capsys):
     assert "Telegram" in out
 
 
-
-
-
 def test_list_json(monkeypatch, capsys):
 
     import sys as _sys
 
     import types as _types
 
-
-
     fake_dir = _types.ModuleType("gateway.channel_directory")
 
     fake_dir.format_directory_for_display = lambda: "(ignored in json mode)"
 
     fake_dir.load_directory = lambda: {
-
         "platforms": {"telegram": [{"id": "-100123", "name": "Test Group"}]}
-
     }
 
     monkeypatch.setitem(_sys.modules, "gateway.channel_directory", fake_dir)
 
-
-
     args = _parse(["--list", "--json"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -529,36 +403,26 @@ def test_list_json(monkeypatch, capsys):
     assert payload["platforms"]["telegram"][0]["name"] == "Test Group"
 
 
-
-
-
 def test_list_filter_platform(monkeypatch, capsys):
 
     import sys as _sys
 
     import types as _types
 
-
-
     fake_dir = _types.ModuleType("gateway.channel_directory")
 
-    fake_dir.format_directory_for_display = lambda: "(should not be called when filter set)"
+    fake_dir.format_directory_for_display = lambda: (
+        "(should not be called when filter set)"
+    )
 
     fake_dir.load_directory = lambda: {
-
         "platforms": {
-
             "telegram": [{"id": "-100123", "name": "TG Chat"}],
-
             "discord": [{"id": "555", "name": "bot-home"}],
-
         }
-
     }
 
     monkeypatch.setitem(_sys.modules, "gateway.channel_directory", fake_dir)
-
-
 
     # When --list is set, argparse puts the optional bareword in the
 
@@ -567,7 +431,6 @@ def test_list_filter_platform(monkeypatch, capsys):
     args = _parse(["--list", "telegram"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 0
@@ -579,16 +442,11 @@ def test_list_filter_platform(monkeypatch, capsys):
     assert "discord" not in out.lower()
 
 
-
-
-
 def test_list_unknown_platform_fails(monkeypatch, capsys):
 
     import sys as _sys
 
     import types as _types
-
-
 
     fake_dir = _types.ModuleType("gateway.channel_directory")
 
@@ -598,12 +456,9 @@ def test_list_unknown_platform_fails(monkeypatch, capsys):
 
     monkeypatch.setitem(_sys.modules, "gateway.channel_directory", fake_dir)
 
-
-
     args = _parse(["--list", "pigeon-post"])
 
     with pytest.raises(SystemExit) as exc:
-
         send_cmd.cmd_send(args)
 
     assert exc.value.code == 1
@@ -613,9 +468,6 @@ def test_list_unknown_platform_fails(monkeypatch, capsys):
     assert "pigeon-post" in err
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Parser registration contract
@@ -623,16 +475,10 @@ def test_list_unknown_platform_fails(monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_register_send_subparser_is_reusable():
-
     """Sanity check: the registrar returns a parser and wires ``cmd_send``."""
 
     import argparse
-
-
 
     parser = argparse.ArgumentParser()
 
@@ -651,9 +497,6 @@ def test_register_send_subparser_is_reusable():
     assert args.message == "hi"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Env loader
@@ -661,11 +504,7 @@ def test_register_send_subparser_is_reusable():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_load_clawk_env_bridges_config_yaml_scalars(tmp_path, monkeypatch):
-
     """Top-level config.yaml scalars should be bridged into os.environ.
 
 
@@ -684,8 +523,6 @@ def test_load_clawk_env_bridges_config_yaml_scalars(tmp_path, monkeypatch):
 
     import os
 
-
-
     clawk_home = tmp_path / ".clawksis"
 
     clawk_home.mkdir()
@@ -693,12 +530,8 @@ def test_load_clawk_env_bridges_config_yaml_scalars(tmp_path, monkeypatch):
     (clawk_home / ".env").write_text("SOME_TOKEN=abc123\n")
 
     (clawk_home / "config.yaml").write_text(
-
         "TELEGRAM_HOME_CHANNEL: '5550001111'\nnested:\n  ignored: true\n"
-
     )
-
-
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -706,39 +539,25 @@ def test_load_clawk_env_bridges_config_yaml_scalars(tmp_path, monkeypatch):
 
     monkeypatch.delenv("SOME_TOKEN", raising=False)
 
-
-
     # Force get_clawk_home() to re-resolve under the patched env.
 
     from importlib import reload
-
-
 
     import clawk_cli.config as _hc_config
 
     reload(_hc_config)
 
-
-
     send_cmd._load_clawk_env()
-
-
 
     assert os.environ.get("SOME_TOKEN") == "abc123"
 
     assert os.environ.get("TELEGRAM_HOME_CHANNEL") == "5550001111"
 
 
-
-
-
 def test_load_clawk_env_does_not_override_existing(tmp_path, monkeypatch):
-
     """Existing env vars must not be clobbered by config.yaml values."""
 
     import os
-
-
 
     clawk_home = tmp_path / ".clawksis"
 
@@ -746,13 +565,9 @@ def test_load_clawk_env_does_not_override_existing(tmp_path, monkeypatch):
 
     (clawk_home / "config.yaml").write_text("TELEGRAM_HOME_CHANNEL: yaml_value\n")
 
-
-
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     monkeypatch.setenv("TELEGRAM_HOME_CHANNEL", "env_value")
-
-
 
     from importlib import reload
 
@@ -760,20 +575,12 @@ def test_load_clawk_env_does_not_override_existing(tmp_path, monkeypatch):
 
     reload(_hc_config)
 
-
-
     send_cmd._load_clawk_env()
-
-
 
     assert os.environ.get("TELEGRAM_HOME_CHANNEL") == "env_value"
 
 
-
-
-
 def test_load_clawk_env_handles_missing_files(tmp_path, monkeypatch):
-
     """No .env or config.yaml should be a silent no-op, not an exception."""
 
     clawk_home = tmp_path / ".clawksis"
@@ -782,17 +589,12 @@ def test_load_clawk_env_handles_missing_files(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-
-
     from importlib import reload
 
     import clawk_cli.config as _hc_config
 
     reload(_hc_config)
 
-
-
     # Should not raise.
 
     send_cmd._load_clawk_env()
-

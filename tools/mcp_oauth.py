@@ -64,8 +64,6 @@ Configuration in config.yaml::
 
 """
 
-
-
 import asyncio
 
 import json
@@ -101,9 +99,7 @@ from urllib.parse import parse_qs, urlparse
 from clawk_constants import secure_parent_dir
 
 
-
 logger = logging.getLogger(__name__)
-
 
 
 # ---------------------------------------------------------------------------
@@ -113,45 +109,29 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-
-_OAUTH_AVAILABLE=False
+_OAUTH_AVAILABLE = False
 
 try:
-
     from mcp.client.auth import OAuthClientProvider
 
     from mcp.shared.auth import (
-
         OAuthClientInformationFull,
-
         OAuthClientMetadata,
-
         OAuthMetadata,
-
         OAuthToken,
-
     )
 
-
-
-    _OAUTH_AVAILABLE=True
+    _OAUTH_AVAILABLE = True
 
 except ImportError:
-
     logger.debug("MCP OAuth types not available -- OAuth MCP auth disabled")
 
 
-
 try:
-
     from pydantic import AnyUrl
 
 except ImportError:
-
     AnyUrl = None  # type: ignore[assignment, misc]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -161,15 +141,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class OAuthNonInteractiveError(RuntimeError):
-
     """Raised when OAuth requires browser interaction in a non-interactive env."""
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +152,6 @@ class OAuthNonInteractiveError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-
 # Port used by the most recent build_oauth_auth() call.  Exposed so that
 
 # tests can verify the callback server and the redirect_uri share a port.
@@ -187,13 +159,9 @@ class OAuthNonInteractiveError(RuntimeError):
 _oauth_port: int | None = None
 
 
-
-
-
 # Skip tokens accepted at the paste prompt — exit OAuth without auth.
 
 _SKIP_TOKENS = frozenset({"skip", "cancel", "s", "n", "no", "q", "quit"})
-
 
 
 # Sentinel value written to result["error"] when the user skipped via stdin.
@@ -207,9 +175,6 @@ _SKIP_TOKENS = frozenset({"skip", "cancel", "s", "n", "no", "q", "quit"})
 _USER_SKIPPED_SENTINEL = "__clawk_user_skipped__"
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Helpers
@@ -217,11 +182,7 @@ _USER_SKIPPED_SENTINEL = "__clawk_user_skipped__"
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _get_token_dir() -> Path:
-
     """Return the directory for MCP OAuth token files.
 
 
@@ -233,123 +194,85 @@ def _get_token_dir() -> Path:
     """
 
     try:
-
         from clawk_constants import get_clawk_home
 
         base = Path(get_clawk_home())
 
     except ImportError:
-
-        base = Path(os.environ.get("CLAWK_HOME", str(Path.home() / ".clawk")))
+        base = Path(os.environ.get("CLAWK_HOME", str(Path.home() / ".clawksis")))
 
     return base / "mcp-tokens"
 
 
-
-
-
 def _safe_filename(name: str) -> str:
-
     """Sanitize a server name for use as a filename (no path separators)."""
 
     return re.sub(r"[^\w\-]", "_", name).strip("_")[:128] or "default"
 
 
-
-
-
 def _find_free_port() -> int:
-
     """Find an available TCP port on localhost."""
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-
         s.bind(("127.0.0.1", 0))
 
         return s.getsockname()[1]
 
 
-
-
-
 def _is_interactive() -> bool:
-
     """Return True if we can reasonably expect to interact with a user."""
 
     try:
-
         return sys.stdin.isatty()
 
     except (AttributeError, ValueError):
-
         return False
 
 
-
-
-
 def _can_open_browser() -> bool:
-
     """Return True if opening a browser is likely to work."""
 
     # Explicit SSH session → no local display
 
     if os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY"):
-
         return False
 
     # macOS and Windows usually have a display
 
     if os.name == "nt":
-
         return True
 
     try:
-
         if os.uname().sysname == "Darwin":
-
             return True
 
     except AttributeError:
-
         pass
 
     # Linux/other posix: need DISPLAY or WAYLAND_DISPLAY
 
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-
         return True
 
     return False
 
 
-
-
-
 def _read_json(path: Path) -> dict | None:
-
     """Read a JSON file, returning None if it doesn't exist or is invalid."""
 
     if not path.exists():
-
         return None
 
     try:
-
         return json.loads(path.read_text(encoding="utf-8"))
 
     except (json.JSONDecodeError, OSError) as exc:
-
         logger.warning("Failed to read %s: %s", path, exc)
 
         return None
 
 
-
-
-
 def _write_json(path: Path, data: dict) -> None:
-
     """Write a dict as JSON with restricted permissions (0o600).
 
 
@@ -385,19 +308,13 @@ def _write_json(path: Path, data: dict) -> None:
     tmp = path.with_suffix(f".tmp.{os.getpid()}.{secrets.token_hex(4)}")
 
     try:
-
         fd = os.open(
-
             str(tmp),
-
             os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-
             stat.S_IRUSR | stat.S_IWUSR,
-
         )
 
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-
             json.dump(data, fh, indent=2, default=str)
 
             fh.flush()
@@ -407,19 +324,13 @@ def _write_json(path: Path, data: dict) -> None:
         os.replace(tmp, path)
 
     except OSError:
-
         try:
-
             tmp.unlink(missing_ok=True)
 
         except OSError:
-
             pass
 
         raise
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -429,11 +340,7 @@ def _write_json(path: Path, data: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class ClawksisTokenStorage:
-
     """Persist OAuth tokens and client registration to JSON files.
 
 
@@ -450,42 +357,29 @@ class ClawksisTokenStorage:
 
     """
 
-
-
     def __init__(self, server_name: str):
 
         self._server_name = _safe_filename(server_name)
-
-
 
     def _tokens_path(self) -> Path:
 
         return _get_token_dir() / f"{self._server_name}.json"
 
-
-
     def _client_info_path(self) -> Path:
 
         return _get_token_dir() / f"{self._server_name}.client.json"
-
-
 
     def _meta_path(self) -> Path:
 
         return _get_token_dir() / f"{self._server_name}.meta.json"
 
-
-
     # -- tokens ------------------------------------------------------------
-
-
 
     async def get_tokens(self) -> "OAuthToken | None":
 
         data = _read_json(self._tokens_path())
 
         if data is None:
-
             return None
 
         # Clawksis records an absolute wall-clock ``expires_at`` alongside the
@@ -521,42 +415,33 @@ class ClawksisTokenStorage:
         absolute_expiry = data.pop("expires_at", None)
 
         if absolute_expiry is not None:
-
             data["expires_in"] = int(max(absolute_expiry - time.time(), 0))
 
         elif data.get("expires_in") is not None:
-
             try:
-
                 file_mtime = self._tokens_path().stat().st_mtime
 
             except OSError:
-
                 file_mtime = None
 
             if file_mtime is not None:
-
                 try:
-
                     implied_expiry = file_mtime + int(data["expires_in"])
 
                     data["expires_in"] = int(max(implied_expiry - time.time(), 0))
 
                 except (TypeError, ValueError):
-
                     pass
 
         try:
-
             return OAuthToken.model_validate(data)
 
         except (ValueError, TypeError, KeyError) as exc:
-
-            logger.warning("Corrupt tokens at %s -- ignoring: %s", self._tokens_path(), exc)
+            logger.warning(
+                "Corrupt tokens at %s -- ignoring: %s", self._tokens_path(), exc
+            )
 
             return None
-
-
 
     async def set_tokens(self, tokens: "OAuthToken") -> None:
 
@@ -579,13 +464,10 @@ class ClawksisTokenStorage:
         expires_in = payload.get("expires_in")
 
         if expires_in is not None:
-
             try:
-
                 payload["expires_at"] = time.time() + int(expires_in)
 
             except (TypeError, ValueError):
-
                 # Mock tokens or unusual shapes: skip the expires_at write
 
                 # rather than fail persistence.
@@ -596,39 +478,35 @@ class ClawksisTokenStorage:
 
         logger.debug("OAuth tokens saved for %s", self._server_name)
 
-
-
     # -- client info -------------------------------------------------------
-
-
 
     async def get_client_info(self) -> "OAuthClientInformationFull | None":
 
         data = _read_json(self._client_info_path())
 
         if data is None:
-
             return None
 
         try:
-
             return OAuthClientInformationFull.model_validate(data)
 
         except (ValueError, TypeError, KeyError) as exc:
-
-            logger.warning("Corrupt client info at %s -- ignoring: %s", self._client_info_path(), exc)
+            logger.warning(
+                "Corrupt client info at %s -- ignoring: %s",
+                self._client_info_path(),
+                exc,
+            )
 
             return None
 
-
-
     async def set_client_info(self, client_info: "OAuthClientInformationFull") -> None:
 
-        _write_json(self._client_info_path(), client_info.model_dump(mode="json", exclude_none=True))
+        _write_json(
+            self._client_info_path(),
+            client_info.model_dump(mode="json", exclude_none=True),
+        )
 
         logger.debug("OAuth client info saved for %s", self._server_name)
-
-
 
     # -- oauth server metadata --------------------------------------------
 
@@ -644,58 +522,43 @@ class ClawksisTokenStorage:
 
     # forces a full browser re-authorization.
 
-
-
     def save_oauth_metadata(self, metadata: "OAuthMetadata") -> None:
 
-        _write_json(self._meta_path(), metadata.model_dump(exclude_none=True, mode="json"))
+        _write_json(
+            self._meta_path(), metadata.model_dump(exclude_none=True, mode="json")
+        )
 
         logger.debug("OAuth metadata saved for %s", self._server_name)
-
-
 
     def load_oauth_metadata(self) -> "OAuthMetadata | None":
 
         data = _read_json(self._meta_path())
 
         if data is None:
-
             return None
 
         try:
-
             return OAuthMetadata.model_validate(data)
 
         except (ValueError, TypeError, KeyError) as exc:
-
-            logger.warning("Corrupt OAuth metadata at %s -- ignoring: %s", self._meta_path(), exc)
+            logger.warning(
+                "Corrupt OAuth metadata at %s -- ignoring: %s", self._meta_path(), exc
+            )
 
             return None
 
-
-
     # -- cleanup -----------------------------------------------------------
 
-
-
     def remove(self) -> None:
-
         """Delete all stored OAuth state for this server."""
 
         for p in (self._tokens_path(), self._client_info_path(), self._meta_path()):
-
             p.unlink(missing_ok=True)
 
-
-
     def has_cached_tokens(self) -> bool:
-
         """Return True if we have tokens on disk (may be expired)."""
 
         return self._tokens_path().exists()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -705,11 +568,7 @@ class ClawksisTokenStorage:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _make_callback_handler() -> tuple[type, dict]:
-
     """Create a per-flow callback HTTP handler class with its own result dict.
 
 
@@ -726,10 +585,7 @@ def _make_callback_handler() -> tuple[type, dict]:
 
     result: dict[str, Any] = {"auth_code": None, "state": None, "error": None}
 
-
-
     class _Handler(BaseHTTPRequestHandler):
-
         def do_GET(self) -> None:  # noqa: N802
 
             params = parse_qs(urlparse(self.path).query)
@@ -740,28 +596,22 @@ def _make_callback_handler() -> tuple[type, dict]:
 
             error = params.get("error", [None])[0]
 
-
-
             result["auth_code"] = code
 
             result["state"] = state
 
             result["error"] = error
 
-
-
             body = (
-
-                "<html><body><h2>Authorization Successful</h2>"
-
-                "<p>You can close this tab and return to Clawksis.</p></body></html>"
-
-            ) if code else (
-
-                "<html><body><h2>Authorization Failed</h2>"
-
-                f"<p>Error: {error or 'unknown'}</p></body></html>"
-
+                (
+                    "<html><body><h2>Authorization Successful</h2>"
+                    "<p>You can close this tab and return to Clawksis.</p></body></html>"
+                )
+                if code
+                else (
+                    "<html><body><h2>Authorization Failed</h2>"
+                    f"<p>Error: {error or 'unknown'}</p></body></html>"
+                )
             )
 
             self.send_response(200)
@@ -772,18 +622,11 @@ def _make_callback_handler() -> tuple[type, dict]:
 
             self.wfile.write(body.encode())
 
-
-
         def log_message(self, fmt: str, *args: Any) -> None:
 
             logger.debug("OAuth callback: %s", fmt % args)
 
-
-
     return _Handler, result
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -793,11 +636,7 @@ def _make_callback_handler() -> tuple[type, dict]:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 async def _redirect_handler(authorization_url: str) -> None:
-
     """Show the authorization URL to the user.
 
 
@@ -809,18 +648,12 @@ async def _redirect_handler(authorization_url: str) -> None:
     """
 
     msg = (
-
         f"\n  MCP OAuth: authorization required.\n"
-
         f"  Open this URL in your browser:\n\n"
-
         f"    {authorization_url}\n"
-
     )
 
     print(msg, file=sys.stderr)
-
-
 
     # On a remote SSH session the OAuth provider redirects to
 
@@ -835,71 +668,51 @@ async def _redirect_handler(authorization_url: str) -> None:
     # port forward so the redirect tunnels through.
 
     if _oauth_port and (os.getenv("SSH_CLIENT") or os.getenv("SSH_TTY")):
-
         print(
-
             f"  Remote session detected. After you authorize, the provider redirects to\n"
-
             f"    http://127.0.0.1:{_oauth_port}/callback\n"
-
             f"  which only the listener on THIS machine can receive. Two options:\n"
-
             f"\n"
-
             f"    1. Easiest — when your browser shows a connection error after\n"
-
             f"       authorizing, copy the full URL from the address bar and paste\n"
-
             f"       it at the prompt below. The pasted ``code=...&state=...`` is\n"
-
             f"       enough to complete the flow.\n"
-
             f"\n"
-
             f"    2. Or forward the port first in a separate terminal:\n"
-
             f"         ssh -N -L {_oauth_port}:127.0.0.1:{_oauth_port} <user>@<this-host>\n"
-
             f"       then open the URL above and let it redirect normally.\n"
-
             f"\n"
-
             f"  See: https://github.com/samuelgradientai-sys/clawksis-agent",
-
             file=sys.stderr,
-
         )
 
-
-
     if _can_open_browser():
-
         try:
-
             opened = webbrowser.open(authorization_url)
 
             if opened:
-
                 print("  (Browser opened automatically.)\n", file=sys.stderr)
 
             else:
-
-                print("  (Could not open browser — please open the URL manually.)\n", file=sys.stderr)
+                print(
+                    "  (Could not open browser — please open the URL manually.)\n",
+                    file=sys.stderr,
+                )
 
         except Exception:
-
-            print("  (Could not open browser — please open the URL manually.)\n", file=sys.stderr)
+            print(
+                "  (Could not open browser — please open the URL manually.)\n",
+                file=sys.stderr,
+            )
 
     else:
-
-        print("  (Headless environment detected — open the URL manually.)\n", file=sys.stderr)
-
-
-
+        print(
+            "  (Headless environment detected — open the URL manually.)\n",
+            file=sys.stderr,
+        )
 
 
 async def _wait_for_callback() -> tuple[str, str | None]:
-
     """Wait for the OAuth callback to arrive on the local callback server.
 
 
@@ -939,16 +752,10 @@ async def _wait_for_callback() -> tuple[str, str | None]:
     """
 
     if _oauth_port is None:
-
         raise RuntimeError(
-
             "OAuth callback port not set — build_oauth_auth must be called "
-
             "before _wait_for_oauth_callback"
-
         )
-
-
 
     # The callback server is already running (started in build_oauth_auth).
 
@@ -956,35 +763,24 @@ async def _wait_for_callback() -> tuple[str, str | None]:
 
     handler_cls, result = _make_callback_handler()
 
-
-
     # Start a temporary server on the known port
 
     try:
-
         server = HTTPServer(("127.0.0.1", _oauth_port), handler_cls)
 
     except OSError:
-
         # Port already in use — the server from build_oauth_auth is running.
 
         # Fall back to polling the server started by build_oauth_auth.
 
         raise OAuthNonInteractiveError(
-
             "OAuth callback timed out — could not bind callback port. "
-
             "Complete the authorization in a browser first, then retry."
-
         )
-
-
 
     server_thread = threading.Thread(target=server.handle_request, daemon=True)
 
     server_thread.start()
-
-
 
     # Optional paste-fallback thread: only on interactive TTYs. Reads one
 
@@ -997,30 +793,19 @@ async def _wait_for_callback() -> tuple[str, str | None]:
     paste_thread: threading.Thread | None = None
 
     if _is_interactive():
-
         print(
-
             "\n  Or paste the redirect URL here (or the ``?code=...&state=...`` "
-
             "portion) and press Enter. Type ``skip`` + Enter to continue "
-
             "without this server:",
-
             file=sys.stderr,
-
             flush=True,
-
         )
 
         paste_thread = threading.Thread(
-
             target=_paste_callback_reader, args=(result,), daemon=True
-
         )
 
         paste_thread.start()
-
-
 
     timeout = 300.0
 
@@ -1029,11 +814,8 @@ async def _wait_for_callback() -> tuple[str, str | None]:
     elapsed = 0.0
 
     try:
-
         while elapsed < timeout:
-
             if result["auth_code"] is not None or result["error"] is not None:
-
                 break
 
             await asyncio.sleep(poll_interval)
@@ -1041,39 +823,24 @@ async def _wait_for_callback() -> tuple[str, str | None]:
             elapsed += poll_interval
 
     finally:
-
         server.server_close()
 
-
-
     if result["error"] == _USER_SKIPPED_SENTINEL:
-
         raise OAuthNonInteractiveError("user_skipped")
 
     if result["error"]:
-
         raise RuntimeError(f"OAuth authorization failed: {result['error']}")
 
     if result["auth_code"] is None:
-
         raise OAuthNonInteractiveError(
-
             "OAuth callback timed out — no authorization code received. "
-
             "Ensure you completed the browser authorization flow."
-
         )
-
-
 
     return result["auth_code"], result["state"]
 
 
-
-
-
 def _paste_callback_reader(result: dict) -> None:
-
     """Read one line from stdin, parse it as an OAuth redirect, write to result.
 
 
@@ -1103,32 +870,23 @@ def _paste_callback_reader(result: dict) -> None:
     """
 
     try:
-
         line = sys.stdin.readline()
 
     except (KeyboardInterrupt, OSError, ValueError):
-
         return
 
     if not line:
-
         return  # EOF
 
     line = line.strip()
 
     if not line:
-
         return
-
-
 
     # Skip if HTTP listener already won.
 
     if result.get("auth_code") is not None or result.get("error") is not None:
-
         return
-
-
 
     # Skip token: user explicitly opted out of authorization. Mark the
 
@@ -1139,62 +897,42 @@ def _paste_callback_reader(result: dict) -> None:
     # non-fatal "skip this server and continue startup" path).
 
     if line.lower() in _SKIP_TOKENS:
-
         if result.get("auth_code") is not None or result.get("error") is not None:
-
             return
 
         result["error"] = _USER_SKIPPED_SENTINEL
 
         print(
-
             "  OAuth skipped. Run `clawk mcp login <server>` later to "
-
             "authenticate, or set ``enabled: false`` on that server in "
-
             "config.yaml to disable persistently.",
-
             file=sys.stderr,
-
         )
 
         return
-
-
 
     # Strip a leading "?" if user pasted just a query string.
 
     query = line
 
     if "?" in line:
-
         # Either a full URL or "?code=...". Take everything after the first "?".
 
         query = line.split("?", 1)[1]
 
     if query.startswith("?"):
-
         query = query[1:]
 
-
-
     try:
-
         params = parse_qs(query)
 
     except (ValueError, TypeError):
-
         print(
-
             "  Could not parse pasted input as an OAuth redirect — ignoring.",
-
             file=sys.stderr,
-
         )
 
         return
-
-
 
     code = params.get("code", [None])[0]
 
@@ -1202,29 +940,18 @@ def _paste_callback_reader(result: dict) -> None:
 
     error = params.get("error", [None])[0]
 
-
-
     if not code and not error:
-
         print(
-
             "  Pasted input did not contain ``code=`` or ``error=`` — ignoring.",
-
             file=sys.stderr,
-
         )
 
         return
 
-
-
     # One more race-check before writing.
 
     if result.get("auth_code") is not None or result.get("error") is not None:
-
         return
-
-
 
     result["auth_code"] = code
 
@@ -1233,11 +960,7 @@ def _paste_callback_reader(result: dict) -> None:
     result["error"] = error
 
     if code:
-
         print("  Got authorization code from paste — completing flow.", file=sys.stderr)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1247,11 +970,7 @@ def _paste_callback_reader(result: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def remove_oauth_tokens(server_name: str) -> None:
-
     """Delete stored OAuth tokens and client info for a server."""
 
     storage = ClawksisTokenStorage(server_name)
@@ -1259,9 +978,6 @@ def remove_oauth_tokens(server_name: str) -> None:
     storage.remove()
 
     logger.info("OAuth tokens removed for '%s'", server_name)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1279,11 +995,7 @@ def remove_oauth_tokens(server_name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _configure_callback_port(cfg: dict) -> int:
-
     """Pick or validate the OAuth callback port.
 
 
@@ -1321,11 +1033,7 @@ def _configure_callback_port(cfg: dict) -> int:
     return port
 
 
-
-
-
 def _build_client_metadata(cfg: dict) -> "OAuthClientMetadata":
-
     """Build OAuthClientMetadata from the oauth config dict.
 
 
@@ -1339,11 +1047,8 @@ def _build_client_metadata(cfg: dict) -> "OAuthClientMetadata":
     port = cfg.get("_resolved_port")
 
     if port is None:
-
         raise ValueError(
-
             "_configure_callback_port() must be called before _build_client_metadata()"
-
         )
 
     client_name = cfg.get("client_name", "Clawksis")
@@ -1352,110 +1057,73 @@ def _build_client_metadata(cfg: dict) -> "OAuthClientMetadata":
 
     redirect_uri = f"http://127.0.0.1:{port}/callback"
 
-
-
     metadata_kwargs: dict[str, Any] = {
-
         "client_name": client_name,
-
         "redirect_uris": [AnyUrl(redirect_uri)],
-
         "grant_types": ["authorization_code", "refresh_token"],
-
         "response_types": ["code"],
-
         "token_endpoint_auth_method": "none",
-
     }
 
     if scope:
-
         metadata_kwargs["scope"] = scope
 
     if cfg.get("client_secret"):
-
         metadata_kwargs["token_endpoint_auth_method"] = "client_secret_post"
-
-
 
     return OAuthClientMetadata.model_validate(metadata_kwargs)
 
 
-
-
-
 def _maybe_preregister_client(
-
     storage: "ClawksisTokenStorage",
-
     cfg: dict,
-
     client_metadata: "OAuthClientMetadata",
-
 ) -> None:
-
     """If cfg has a pre-registered client_id, persist it to storage."""
 
     client_id = cfg.get("client_id")
 
     if not client_id:
-
         return
 
     port = cfg["_resolved_port"]
 
     redirect_uri = f"http://127.0.0.1:{port}/callback"
 
-
-
     info_dict: dict[str, Any] = {
-
         "client_id": client_id,
-
         "redirect_uris": [redirect_uri],
-
         "grant_types": client_metadata.grant_types,
-
         "response_types": client_metadata.response_types,
-
         "token_endpoint_auth_method": client_metadata.token_endpoint_auth_method,
-
     }
 
     if cfg.get("client_secret"):
-
         info_dict["client_secret"] = cfg["client_secret"]
 
     if cfg.get("client_name"):
-
         info_dict["client_name"] = cfg["client_name"]
 
     if cfg.get("scope"):
-
         info_dict["scope"] = cfg["scope"]
-
-
 
     client_info = OAuthClientInformationFull.model_validate(info_dict)
 
-    _write_json(storage._client_info_path(), client_info.model_dump(mode="json", exclude_none=True))
+    _write_json(
+        storage._client_info_path(),
+        client_info.model_dump(mode="json", exclude_none=True),
+    )
 
-    logger.debug("Pre-registered client_id=%s for '%s'", client_id, storage._server_name)
-
-
-
+    logger.debug(
+        "Pre-registered client_id=%s for '%s'", client_id, storage._server_name
+    )
 
 
 def build_oauth_auth(
-
     server_name: str,
-
     server_url: str,
-
     oauth_config: dict | None = None,
-
 ) -> "OAuthClientProvider | None":
-
     """Build an ``httpx.Auth``-compatible OAuth handler for an MCP server.
 
 
@@ -1487,44 +1155,26 @@ def build_oauth_auth(
     """
 
     if not _OAUTH_AVAILABLE:
-
         logger.warning(
-
             "MCP OAuth requested for '%s' but SDK auth types are not available. "
-
             "Install with: pip install 'mcp>=1.26.0'",
-
             server_name,
-
         )
 
         return None
-
-
 
     cfg = dict(oauth_config or {})  # copy — we mutate _resolved_port
 
     storage = ClawksisTokenStorage(server_name)
 
-
-
     if not _is_interactive() and not storage.has_cached_tokens():
-
         logger.warning(
-
             "MCP OAuth for '%s': non-interactive environment and no cached tokens "
-
             "found. The OAuth flow requires browser authorization. Run "
-
             "interactively first to complete the initial authorization, then "
-
             "cached tokens will be reused.",
-
             server_name,
-
         )
-
-
 
     _configure_callback_port(cfg)
 
@@ -1532,21 +1182,11 @@ def build_oauth_auth(
 
     _maybe_preregister_client(storage, cfg, client_metadata)
 
-
-
     return OAuthClientProvider(
-
         server_url=server_url,
-
         client_metadata=client_metadata,
-
         storage=storage,
-
         redirect_handler=_redirect_handler,
-
         callback_handler=_wait_for_callback,
-
         timeout=float(cfg.get("timeout", 300)),
-
     )
-

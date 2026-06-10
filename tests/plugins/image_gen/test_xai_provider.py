@@ -132,7 +132,9 @@ class TestGenerate:
         }
 
         with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp):
-            with patch("plugins.image_gen.xai.save_b64_image", return_value="/tmp/test.png"):
+            with patch(
+                "plugins.image_gen.xai.save_b64_image", return_value="/tmp/test.png"
+            ):
                 provider = XAIImageGenProvider()
                 result = provider.generate(prompt="A cat playing piano")
 
@@ -159,11 +161,15 @@ class TestGenerate:
             "data": [{"url": "https://imgen.x.ai/xai-tmp-imgen-test.jpeg"}],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp), \
-             patch(
-                 "plugins.image_gen.xai.save_url_image",
-                 return_value=Path("/tmp/xai_grok-imagine-image_20260524_000000_deadbeef.jpg"),
-             ) as mock_save_url:
+        with (
+            patch("plugins.image_gen.xai.requests.post", return_value=mock_resp),
+            patch(
+                "plugins.image_gen.xai.save_url_image",
+                return_value=Path(
+                    "/tmp/xai_grok-imagine-image_20260524_000000_deadbeef.jpg"
+                ),
+            ) as mock_save_url,
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="A cat playing piano")
 
@@ -199,11 +205,13 @@ class TestGenerate:
             "data": [{"url": "https://imgen.x.ai/xai-tmp-imgen-already-404.jpeg"}],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp), \
-             patch(
-                 "plugins.image_gen.xai.save_url_image",
-                 side_effect=req_lib.HTTPError("404 from CDN"),
-             ):
+        with (
+            patch("plugins.image_gen.xai.requests.post", return_value=mock_resp),
+            patch(
+                "plugins.image_gen.xai.save_url_image",
+                side_effect=req_lib.HTTPError("404 from CDN"),
+            ),
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="A cat playing piano")
 
@@ -235,7 +243,9 @@ class TestGenerate:
 
         response = req_lib.Response()
         response.status_code = 401
-        response._content = json.dumps({"error": {"message": "Invalid API key"}}).encode()
+        response._content = json.dumps({
+            "error": {"message": "Invalid API key"}
+        }).encode()
         response.headers["Content-Type"] = "application/json"
 
         response.raise_for_status = MagicMock(
@@ -255,7 +265,9 @@ class TestGenerate:
 
         from plugins.image_gen.xai import XAIImageGenProvider
 
-        with patch("plugins.image_gen.xai.requests.post", side_effect=req_lib.Timeout()):
+        with patch(
+            "plugins.image_gen.xai.requests.post", side_effect=req_lib.Timeout()
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="test")
 
@@ -287,7 +299,9 @@ class TestGenerate:
             "data": [{"url": "https://xai.image/test.png"}],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post:
+        with patch(
+            "plugins.image_gen.xai.requests.post", return_value=mock_resp
+        ) as mock_post:
             provider = XAIImageGenProvider()
             provider.generate(prompt="test")
 
@@ -309,11 +323,15 @@ class TestGenerate:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"data": [{"url": "https://xai.image/test.png"}]}
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post:
+        with patch(
+            "plugins.image_gen.xai.requests.post", return_value=mock_resp
+        ) as mock_post:
             provider = XAIImageGenProvider()
             provider.generate(prompt="test")
 
-        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get(
+            "json"
+        )
         assert payload["resolution"] in {"1k", "2k"}, (
             f"resolution must be the literal '1k' or '2k', got {payload['resolution']!r}"
         )

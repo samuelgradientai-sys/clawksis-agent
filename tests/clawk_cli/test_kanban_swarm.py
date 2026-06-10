@@ -1,4 +1,3 @@
-
 from clawk_cli import kanban_db as kb
 from clawk_cli.kanban_swarm import (
     SwarmWorkerSpec,
@@ -15,8 +14,14 @@ def test_create_swarm_builds_parallel_workers_verifier_and_synthesizer(tmp_path)
             conn,
             goal="Map the target market and produce a decision memo.",
             workers=[
-                SwarmWorkerSpec(profile="researcher-a", title="Market scan", body="Find competitors"),
-                SwarmWorkerSpec(profile="researcher-b", title="Customer scan", body="Find customer pains"),
+                SwarmWorkerSpec(
+                    profile="researcher-a", title="Market scan", body="Find competitors"
+                ),
+                SwarmWorkerSpec(
+                    profile="researcher-b",
+                    title="Customer scan",
+                    body="Find customer pains",
+                ),
             ],
             verifier_assignee="reviewer",
             synthesizer_assignee="writer",
@@ -48,7 +53,11 @@ def test_swarm_blackboard_merges_structured_updates(tmp_path):
         created = create_swarm(
             conn,
             goal="Collect evidence.",
-            workers=[SwarmWorkerSpec(profile="researcher", title="Evidence", body="Find proof")],
+            workers=[
+                SwarmWorkerSpec(
+                    profile="researcher", title="Evidence", body="Find proof"
+                )
+            ],
             verifier_assignee="reviewer",
             synthesizer_assignee="writer",
         )

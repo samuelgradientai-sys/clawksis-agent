@@ -1,4 +1,5 @@
 """Tests that on_session_finalize and on_session_reset plugin hooks fire in the gateway."""
+
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -117,8 +118,11 @@ async def test_finalize_before_reset(mock_invoke_hook):
 
     await runner._handle_reset_command(_make_event("/new"))
 
-    calls = [c for c in mock_invoke_hook.call_args_list
-             if c[0][0] in {"on_session_finalize", "on_session_reset"}]
+    calls = [
+        c
+        for c in mock_invoke_hook.call_args_list
+        if c[0][0] in {"on_session_finalize", "on_session_reset"}
+    ]
     hook_names = [c[0][0] for c in calls]
     assert hook_names == ["on_session_finalize", "on_session_reset"]
 
@@ -154,13 +158,14 @@ async def test_shutdown_fires_finalize_for_active_agents(mock_invoke_hook):
     agent2.session_id = "sess-b"
     runner._running_agents = {"key-a": agent1, "key-b": agent2}
 
-    with patch("gateway.status.remove_pid_file"), \
-         patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     finalize_calls = [
-        c for c in mock_invoke_hook.call_args_list
-        if c[0][0] == "on_session_finalize"
+        c for c in mock_invoke_hook.call_args_list if c[0][0] == "on_session_finalize"
     ]
     session_ids = {c[1]["session_id"] for c in finalize_calls}
     assert session_ids == {"sess-a", "sess-b"}
@@ -245,7 +250,8 @@ async def test_idle_expiry_fires_finalize_hook(mock_invoke_hook):
 
     # Look for the finalize call targeting the expired session.
     finalize_calls = [
-        c for c in mock_invoke_hook.call_args_list
+        c
+        for c in mock_invoke_hook.call_args_list
         if c[0] and c[0][0] == "on_session_finalize"
     ]
     session_ids = {c[1].get("session_id") for c in finalize_calls}

@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import torchaudio
 
+
 def prepare_dataset(audio_dir, output_dir, metadata_file):
     """
     Prepare dataset for MusicGen fine-tuning.
@@ -52,7 +53,7 @@ def prepare_dataset(audio_dir, output_dir, metadata_file):
         processed.append({
             "path": str(output_path.relative_to(output_dir)),
             "description": item["description"],
-            "duration": wav.shape[1] / 32000
+            "duration": wav.shape[1] / 32000,
         })
 
     # Save processed metadata
@@ -119,7 +120,7 @@ from audiocraft.models import MusicGen
 import torch
 
 # Load base model
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 
 # Get the language model component
 lm = model.lm
@@ -130,7 +131,7 @@ lora_config = LoraConfig(
     lora_alpha=16,
     target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],
     lora_dropout=0.05,
-    bias="none"
+    bias="none",
 )
 
 # Apply LoRA
@@ -147,7 +148,7 @@ import torch
 import torch.nn as nn
 from audiocraft.models import MusicGen
 
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 
 # Wrap LM with DataParallel
 if torch.cuda.device_count() > 1:
@@ -162,14 +163,16 @@ model.to("cuda")
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+
 def setup(rank, world_size):
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
+
 def train(rank, world_size):
     setup(rank, world_size)
 
-    model = MusicGen.get_pretrained('facebook/musicgen-small')
+    model = MusicGen.get_pretrained("facebook/musicgen-small")
     model.lm = model.lm.to(rank)
     model.lm = DDP(model.lm, device_ids=[rank])
 
@@ -187,6 +190,7 @@ def train(rank, world_size):
 from audiocraft.modules.conditioners import BaseConditioner
 import torch
 
+
 class CustomConditioner(BaseConditioner):
     """Custom conditioner for additional control signals."""
 
@@ -200,6 +204,7 @@ class CustomConditioner(BaseConditioner):
     def tokenize(self, x):
         # Tokenize input for conditioning
         return x
+
 
 # Use with MusicGen
 from audiocraft.models.builders import get_lm_model
@@ -215,10 +220,11 @@ from audiocraft.models import MusicGen
 from audiocraft.modules.codebooks_patterns import DelayedPatternProvider
 import torch
 
-model = MusicGen.get_pretrained('facebook/musicgen-melody')
+model = MusicGen.get_pretrained("facebook/musicgen-melody")
 
 # Access chroma extractor
-chroma_extractor = model.lm.condition_provider.conditioners.get('chroma')
+chroma_extractor = model.lm.condition_provider.conditioners.get("chroma")
+
 
 # Manual chroma extraction
 def extract_chroma(audio, sr):
@@ -229,6 +235,7 @@ def extract_chroma(audio, sr):
     chroma = librosa.feature.chroma_cqt(y=audio.numpy(), sr=sr)
 
     return torch.from_numpy(chroma).float()
+
 
 # Use extracted chroma for conditioning
 chroma = extract_chroma(melody_audio, sample_rate)
@@ -243,7 +250,7 @@ from audiocraft.models import CompressionModel
 import torch
 
 # Load EnCodec
-encodec = CompressionModel.get_pretrained('facebook/encodec_32khz')
+encodec = CompressionModel.get_pretrained("facebook/encodec_32khz")
 
 # Access codec parameters
 print(f"Sample rate: {encodec.sample_rate}")
@@ -267,7 +274,8 @@ decoded = encodec.decode(encoded[0])
 import torch
 from audiocraft.models import CompressionModel
 
-encodec = CompressionModel.get_pretrained('facebook/encodec_32khz')
+encodec = CompressionModel.get_pretrained("facebook/encodec_32khz")
+
 
 def encode_streaming(audio_stream, chunk_size=32000):
     """Encode audio in streaming fashion."""
@@ -283,6 +291,7 @@ def encode_streaming(audio_stream, chunk_size=32000):
             all_codes.append(codes)
 
     return torch.cat(all_codes, dim=-1)
+
 
 def decode_streaming(codes_stream, output_stream):
     """Decode codes in streaming fashion."""
@@ -300,7 +309,7 @@ def decode_streaming(codes_stream, output_stream):
 from audiocraft.models import MusicGen, MultiBandDiffusion
 
 # Load MusicGen
-model = MusicGen.get_pretrained('facebook/musicgen-medium')
+model = MusicGen.get_pretrained("facebook/musicgen-medium")
 
 # Load MultiBand Diffusion
 mbd = MultiBandDiffusion.get_mbd_musicgen()
@@ -342,11 +351,13 @@ app = FastAPI()
 # Load model at startup
 model = None
 
+
 @app.on_event("startup")
 async def load_model():
     global model
-    model = MusicGen.get_pretrained('facebook/musicgen-small')
+    model = MusicGen.get_pretrained("facebook/musicgen-small")
     model.set_generation_params(duration=10)
+
 
 class GenerateRequest(BaseModel):
     prompt: str
@@ -354,10 +365,12 @@ class GenerateRequest(BaseModel):
     temperature: float = 1.0
     cfg_coef: float = 3.0
 
+
 class GenerateResponse(BaseModel):
     audio_base64: str
     sample_rate: int
     duration: float
+
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: GenerateRequest):
@@ -368,7 +381,7 @@ async def generate(request: GenerateRequest):
         model.set_generation_params(
             duration=min(request.duration, 30),
             temperature=request.temperature,
-            cfg_coef=request.cfg_coef
+            cfg_coef=request.cfg_coef,
         )
 
         with torch.no_grad():
@@ -382,17 +395,17 @@ async def generate(request: GenerateRequest):
         audio_base64 = base64.b64encode(buffer.read()).decode()
 
         return GenerateResponse(
-            audio_base64=audio_base64,
-            sample_rate=32000,
-            duration=wav.shape[-1] / 32000
+            audio_base64=audio_base64, sample_rate=32000, duration=wav.shape[-1] / 32000
         )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": model is not None}
+
 
 # Run: uvicorn server:app --host 0.0.0.0 --port 8000
 ```
@@ -405,8 +418,9 @@ from concurrent.futures import ThreadPoolExecutor
 import torch
 from audiocraft.models import MusicGen
 
+
 class MusicGenService:
-    def __init__(self, model_name='facebook/musicgen-small', max_workers=2):
+    def __init__(self, model_name="facebook/musicgen-small", max_workers=2):
         self.model = MusicGen.get_pretrained(model_name)
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.lock = asyncio.Lock()
@@ -429,8 +443,10 @@ class MusicGenService:
         tasks = [self.generate_async(p, duration) for p in prompts]
         return await asyncio.gather(*tasks)
 
+
 # Usage
 service = MusicGenService()
+
 
 async def main():
     prompts = ["jazz piano", "rock guitar", "electronic beats"]
@@ -449,13 +465,14 @@ import torchaudio
 from audiocraft.models import MusicGen
 import tempfile
 
+
 class MusicGeneratorTool(BaseTool):
     name = "music_generator"
     description = "Generate music from a text description. Input should be a detailed description of the music style, mood, and instruments."
 
     def __init__(self):
         super().__init__()
-        self.model = MusicGen.get_pretrained('facebook/musicgen-small')
+        self.model = MusicGen.get_pretrained("facebook/musicgen-small")
         self.model.set_generation_params(duration=15)
 
     def _run(self, description: str) -> str:
@@ -481,20 +498,19 @@ from audiocraft.models import MusicGen
 
 models = {}
 
+
 def load_model(model_size):
     if model_size not in models:
         model_name = f"facebook/musicgen-{model_size}"
         models[model_size] = MusicGen.get_pretrained(model_name)
     return models[model_size]
 
+
 def generate(prompt, duration, temperature, cfg_coef, top_k, model_size):
     model = load_model(model_size)
 
     model.set_generation_params(
-        duration=duration,
-        temperature=temperature,
-        cfg_coef=cfg_coef,
-        top_k=top_k
+        duration=duration, temperature=temperature, cfg_coef=cfg_coef, top_k=top_k
     )
 
     with torch.no_grad():
@@ -505,6 +521,7 @@ def generate(prompt, duration, temperature, cfg_coef, top_k, model_size):
     torchaudio.save(path, wav[0].cpu(), sample_rate=32000)
     return path
 
+
 demo = gr.Interface(
     fn=generate,
     inputs=[
@@ -513,11 +530,11 @@ demo = gr.Interface(
         gr.Slider(0.1, 2.0, value=1.0, label="Temperature"),
         gr.Slider(0.5, 10.0, value=3.0, label="CFG Coefficient"),
         gr.Slider(50, 500, value=250, step=50, label="Top-K"),
-        gr.Dropdown(["small", "medium", "large"], value="small", label="Model Size")
+        gr.Dropdown(["small", "medium", "large"], value="small", label="Model Size"),
     ],
     outputs=gr.Audio(label="Generated Music"),
     title="MusicGen Advanced",
-    allow_flagging="never"
+    allow_flagging="never",
 )
 
 demo.launch(share=True)
@@ -533,13 +550,14 @@ import torchaudio
 import torchaudio.transforms as T
 import numpy as np
 
+
 class AudioPostProcessor:
     def __init__(self, sample_rate=32000):
         self.sample_rate = sample_rate
 
     def normalize(self, audio, target_db=-14.0):
         """Normalize audio to target loudness."""
-        rms = torch.sqrt(torch.mean(audio ** 2))
+        rms = torch.sqrt(torch.mean(audio**2))
         target_rms = 10 ** (target_db / 20)
         gain = target_rms / (rms + 1e-8)
         return audio * gain
@@ -569,7 +587,7 @@ class AudioPostProcessor:
         audio = torch.nn.functional.conv1d(
             audio.unsqueeze(0),
             impulse.unsqueeze(0).unsqueeze(0),
-            padding=len(impulse) // 2
+            padding=len(impulse) // 2,
         ).squeeze(0)
 
         return audio
@@ -580,10 +598,11 @@ class AudioPostProcessor:
         audio = self.fade_in_out(audio)
         return audio
 
+
 # Usage with MusicGen
 from audiocraft.models import MusicGen
 
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 model.set_generation_params(duration=10)
 
 wav = model.generate(["chill ambient music"])
@@ -602,6 +621,7 @@ import torch
 from audiocraft.metrics import CLAPTextConsistencyMetric
 from audiocraft.data.audio import audio_read
 
+
 def evaluate_generation(audio_path, text_prompt):
     """Evaluate generated audio quality."""
     # Load audio
@@ -611,10 +631,8 @@ def evaluate_generation(audio_path, text_prompt):
     clap_metric = CLAPTextConsistencyMetric()
     clap_score = clap_metric.compute(wav, [text_prompt])
 
-    return {
-        "clap_score": clap_score,
-        "duration": wav.shape[-1] / sr
-    }
+    return {"clap_score": clap_score, "duration": wav.shape[-1] / sr}
+
 
 # Batch evaluation
 def evaluate_batch(generations):
@@ -627,10 +645,7 @@ def evaluate_batch(generations):
 
     # Aggregate
     avg_clap = sum(r["clap_score"] for r in results) / len(results)
-    return {
-        "individual": results,
-        "average_clap": avg_clap
-    }
+    return {"individual": results, "average_clap": avg_clap}
 ```
 
 ## Model Comparison
@@ -652,15 +667,11 @@ def evaluate_batch(generations):
 good_prompts = [
     "upbeat electronic dance music with synthesizer leads and punchy drums at 128 bpm",
     "melancholic piano ballad with strings, slow tempo, emotional and cinematic",
-    "funky disco groove with slap bass, brass section, and rhythmic guitar"
+    "funky disco groove with slap bass, brass section, and rhythmic guitar",
 ]
 
 # Bad prompts - too vague
-bad_prompts = [
-    "nice music",
-    "song",
-    "good beat"
-]
+bad_prompts = ["nice music", "song", "good beat"]
 
 # Structure: [mood] [genre] with [instruments] at [tempo/style]
 ```

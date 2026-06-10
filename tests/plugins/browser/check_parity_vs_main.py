@@ -16,6 +16,7 @@ Run from the PR worktree:
     cd ~/.clawksis/clawksis-agent/.worktrees/browser-providers-plugin
     python tests/plugins/browser/check_parity_vs_main.py
 """
+
 from __future__ import annotations
 
 import json

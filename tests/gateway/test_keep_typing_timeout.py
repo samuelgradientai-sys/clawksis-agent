@@ -130,8 +130,7 @@ class TestKeepTypingTimeoutPerTick:
         await asyncio.wait_for(task, timeout=1.0)
 
         assert len(completed) >= 2, (
-            f"expected multiple completed send_typing calls, got "
-            f"{len(completed)}"
+            f"expected multiple completed send_typing calls, got {len(completed)}"
         )
         assert all(c == "456" for c in completed)
 
@@ -195,6 +194,4 @@ class TestKeepTypingTimeoutPerTick:
         stop_event.set()
         await asyncio.wait_for(task, timeout=1.0)
 
-        assert calls == [], (
-            f"send_typing was called on a paused chat: {calls}"
-        )
+        assert calls == [], f"send_typing was called on a paused chat: {calls}"

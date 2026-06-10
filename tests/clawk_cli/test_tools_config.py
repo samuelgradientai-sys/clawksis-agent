@@ -1,63 +1,37 @@
 """Tests for clawk_cli.tools_config platform tool persistence."""
 
-
-
 from types import SimpleNamespace
 
 from unittest.mock import patch
 
 
-
 import pytest
-
 
 
 from clawk_cli.nous_account import NousPortalAccountInfo
 
 from clawk_cli.tools_config import (
-
     _DEFAULT_OFF_TOOLSETS,
-
     _apply_toolset_change,
-
     _checklist_toolset_keys,
-
     _configure_provider,
-
     _reconfigure_provider,
-
     _get_platform_tools,
-
     _platform_toolset_summary,
-
     _reconfigure_tool,
-
     _run_post_setup,
-
     _save_platform_tools,
-
     _toolset_has_keys,
-
     _toolset_needs_configuration_prompt,
-
     CONFIGURABLE_TOOLSETS,
-
     TOOL_CATEGORIES,
-
     gui_toolset_label,
-
     _visible_providers,
-
     tools_command,
-
 )
 
 
-
-
-
 def test_agent_disabled_toolsets_suppresses_across_platforms():
-
     """agent.disabled_toolsets in config.yaml should remove those toolsets
 
     from the enabled set, regardless of platform defaults or explicit config.
@@ -65,29 +39,19 @@ def test_agent_disabled_toolsets_suppresses_across_platforms():
     """
 
     config = {
-
         "agent": {"disabled_toolsets": ["memory"]},
-
     }
-
-
 
     cli_enabled = _get_platform_tools(config, "cli")
 
     discord_enabled = _get_platform_tools(config, "discord")
-
-
 
     assert "memory" not in cli_enabled
 
     assert "memory" not in discord_enabled
 
 
-
-
-
 def test_agent_disabled_toolsets_with_explicit_platform_config():
-
     """agent.disabled_toolsets should still suppress even when the platform
 
     has an explicit toolset list that includes the disabled toolset.
@@ -95,18 +59,11 @@ def test_agent_disabled_toolsets_with_explicit_platform_config():
     """
 
     config = {
-
         "agent": {"disabled_toolsets": ["memory"]},
-
         "platform_toolsets": {"cli": ["web", "terminal", "memory"]},
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     assert "memory" not in enabled
 
@@ -115,11 +72,7 @@ def test_agent_disabled_toolsets_with_explicit_platform_config():
     assert "terminal" in enabled
 
 
-
-
-
 def test_agent_disabled_toolsets_empty_list_is_noop():
-
     """Empty or missing disabled_toolsets should not change behavior."""
 
     config_empty = {"agent": {"disabled_toolsets": []}}
@@ -128,11 +81,7 @@ def test_agent_disabled_toolsets_empty_list_is_noop():
 
     config_missing = {}
 
-
-
     default = _get_platform_tools({}, "cli")
-
-
 
     assert _get_platform_tools(config_empty, "cli") == default
 
@@ -141,25 +90,15 @@ def test_agent_disabled_toolsets_empty_list_is_noop():
     assert _get_platform_tools(config_missing, "cli") == default
 
 
-
-
-
 def test_get_platform_tools_uses_default_when_platform_not_configured():
 
     config = {}
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     assert enabled
 
     assert enabled.isdisjoint(_DEFAULT_OFF_TOOLSETS)
-
-
-
 
 
 def test_gui_toolset_label_strips_leading_emoji():
@@ -173,15 +112,9 @@ def test_gui_toolset_label_strips_leading_emoji():
     assert gui_toolset_label("Terminal & Processes") == "Terminal & Processes"
 
 
-
-
-
 def test_configurable_toolsets_include_messaging():
 
     assert any(ts_key == "messaging" for ts_key, _, _ in CONFIGURABLE_TOOLSETS)
-
-
-
 
 
 def test_configurable_toolsets_include_context_engine():
@@ -189,24 +122,14 @@ def test_configurable_toolsets_include_context_engine():
     assert any(ts_key == "context_engine" for ts_key, _, _ in CONFIGURABLE_TOOLSETS)
 
 
-
-
-
 def test_get_platform_tools_active_context_engine_is_enabled_for_explicit_config():
 
     config = {
-
         "context": {"engine": "lcm"},
-
         "platform_toolsets": {"cli": ["web", "terminal"]},
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
-
-
 
     assert "context_engine" in enabled
 
@@ -215,91 +138,54 @@ def test_get_platform_tools_active_context_engine_is_enabled_for_explicit_config
     assert "terminal" in enabled
 
 
-
-
-
 def test_get_platform_tools_context_engine_not_added_for_default_compressor():
 
     config = {
-
         "context": {"engine": "compressor"},
-
         "platform_toolsets": {"cli": ["web", "terminal"]},
-
     }
-
-
 
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
 
-
-
     assert "context_engine" not in enabled
-
-
-
 
 
 def test_get_platform_tools_context_engine_respects_explicit_empty_selection():
 
     config = {
-
         "context": {"engine": "lcm"},
-
         "platform_toolsets": {"cli": []},
-
     }
-
-
 
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
 
-
-
     assert "context_engine" not in enabled
-
-
-
 
 
 def test_get_platform_tools_default_telegram_includes_messaging():
 
     enabled = _get_platform_tools({}, "telegram")
 
-
-
     assert "messaging" in enabled
-
-
-
 
 
 def test_get_platform_tools_default_whatsapp_includes_web():
 
     enabled = _get_platform_tools({}, "whatsapp")
 
-
-
     assert "web" in enabled
-
-
-
 
 
 def test_get_platform_tools_homeassistant_platform_keeps_homeassistant_toolset():
 
     enabled = _get_platform_tools({}, "homeassistant")
 
-
-
     assert "homeassistant" in enabled
 
 
-
-
-
-def test_get_platform_tools_homeassistant_toolset_enabled_for_cron_when_hass_token_set(monkeypatch):
-
+def test_get_platform_tools_homeassistant_toolset_enabled_for_cron_when_hass_token_set(
+    monkeypatch,
+):
     """HA toolset is runtime-gated by check_fn (requires HASS_TOKEN).
 
 
@@ -320,8 +206,6 @@ def test_get_platform_tools_homeassistant_toolset_enabled_for_cron_when_hass_tok
 
     monkeypatch.setenv("HASS_TOKEN", "fake-test-token")
 
-
-
     cron_enabled = _get_platform_tools({}, "cron")
 
     assert "homeassistant" in cron_enabled
@@ -330,36 +214,26 @@ def test_get_platform_tools_homeassistant_toolset_enabled_for_cron_when_hass_tok
 
     assert "moa" not in cron_enabled
 
-
-
     cli_enabled = _get_platform_tools({}, "cli")
 
     assert "homeassistant" in cli_enabled
 
 
-
-
-
-def test_get_platform_tools_homeassistant_toolset_off_for_cron_when_hass_token_missing(monkeypatch):
-
+def test_get_platform_tools_homeassistant_toolset_off_for_cron_when_hass_token_missing(
+    monkeypatch,
+):
     """Without HASS_TOKEN, HA stays off by default — preserves #14798's behavior
 
     for users who never configured HA."""
 
     monkeypatch.delenv("HASS_TOKEN", raising=False)
 
-
-
     cron_enabled = _get_platform_tools({}, "cron")
 
     assert "homeassistant" not in cron_enabled
 
 
-
-
-
 def test_get_platform_tools_x_search_auto_enabled_when_xai_oauth_present(monkeypatch):
-
     """x_search toolset auto-enables across platforms when xAI Grok OAuth
 
     tokens are present, mirroring the HASS_TOKEN → homeassistant rule.
@@ -378,44 +252,27 @@ def test_get_platform_tools_x_search_auto_enabled_when_xai_oauth_present(monkeyp
 
     monkeypatch.delenv("XAI_API_KEY", raising=False)
 
-    monkeypatch.setattr(
-
-        "clawk_cli.tools_config._xai_credentials_present", lambda: True
-
-    )
-
-
+    monkeypatch.setattr("clawk_cli.tools_config._xai_credentials_present", lambda: True)
 
     for plat in ("cli", "cron", "telegram"):
-
         enabled = _get_platform_tools({}, plat)
 
         assert "x_search" in enabled, f"x_search missing for {plat}"
 
 
-
-
-
 def test_get_platform_tools_x_search_auto_enabled_when_xai_api_key_present(monkeypatch):
-
     """x_search toolset auto-enables when XAI_API_KEY is set, even without
 
     OAuth tokens — the API-key path is a supported credential source."""
 
     monkeypatch.setenv("XAI_API_KEY", "fake-xai-key")
 
-
-
     cli_enabled = _get_platform_tools({}, "cli")
 
     assert "x_search" in cli_enabled
 
 
-
-
-
 def test_get_platform_tools_x_search_off_when_no_xai_credentials(monkeypatch):
-
     """Without any xAI credentials, x_search stays off — preserves the
 
     "don't ship the schema to users who can't use it" default."""
@@ -423,23 +280,15 @@ def test_get_platform_tools_x_search_off_when_no_xai_credentials(monkeypatch):
     monkeypatch.delenv("XAI_API_KEY", raising=False)
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._xai_credentials_present", lambda: False
-
     )
-
-
 
     cli_enabled = _get_platform_tools({}, "cli")
 
     assert "x_search" not in cli_enabled
 
 
-
-
-
 def test_get_platform_tools_x_search_respects_explicit_config(monkeypatch):
-
     """Once the user has saved an explicit toolset list via `clawk tools`,
 
     that list is authoritative — x_search auto-enable does NOT fire even
@@ -448,13 +297,7 @@ def test_get_platform_tools_x_search_respects_explicit_config(monkeypatch):
 
     monkeypatch.delenv("XAI_API_KEY", raising=False)
 
-    monkeypatch.setattr(
-
-        "clawk_cli.tools_config._xai_credentials_present", lambda: True
-
-    )
-
-
+    monkeypatch.setattr("clawk_cli.tools_config._xai_credentials_present", lambda: True)
 
     # User explicitly opted into spotify but not x_search via `clawk tools`.
 
@@ -467,11 +310,7 @@ def test_get_platform_tools_x_search_respects_explicit_config(monkeypatch):
     assert "spotify" in enabled
 
 
-
-
-
 def test_get_platform_tools_expands_composite_when_mixed_with_configurable():
-
     """``[clawk-cli, spotify]`` (composite + configurable) must keep the full
 
     ``clawk-cli`` toolset alongside the explicit Spotify opt-in. The
@@ -482,18 +321,22 @@ def test_get_platform_tools_expands_composite_when_mixed_with_configurable():
 
     config = {"platform_toolsets": {"cli": ["clawk-cli", "spotify"]}}
 
-
-
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
-
-
 
     # Native tools must reappear.
 
-    for ts in ("terminal", "file", "web", "browser", "memory", "delegation",
-
-               "code_execution", "todo", "session_search", "skills"):
-
+    for ts in (
+        "terminal",
+        "file",
+        "web",
+        "browser",
+        "memory",
+        "delegation",
+        "code_execution",
+        "todo",
+        "session_search",
+        "skills",
+    ):
         assert ts in enabled, f"{ts} should be enabled when clawk-cli is listed"
 
     # User explicitly opted into Spotify — must survive _DEFAULT_OFF_TOOLSETS subtraction.
@@ -501,11 +344,7 @@ def test_get_platform_tools_expands_composite_when_mixed_with_configurable():
     assert "spotify" in enabled
 
 
-
-
-
 def test_get_platform_tools_composite_only_unchanged():
-
     """Composite-only config (no configurable in list) must still take the
 
     else-branch path and produce the full toolset — guards against the new
@@ -513,27 +352,17 @@ def test_get_platform_tools_composite_only_unchanged():
     code accidentally hijacking the composite-only case."""
 
     composite_only = _get_platform_tools(
-
         {"platform_toolsets": {"cli": ["clawk-cli"]}},
-
         "cli",
-
         include_default_mcp_servers=False,
-
     )
 
     default = _get_platform_tools({}, "cli", include_default_mcp_servers=False)
 
-
-
     assert composite_only == default
 
 
-
-
-
 def test_get_platform_tools_configurable_only_no_expansion():
-
     """Configurable-only list (no composite) must not pull in unrelated
 
     toolsets — guards against the expansion firing when ``composite_tools``
@@ -542,11 +371,7 @@ def test_get_platform_tools_configurable_only_no_expansion():
 
     config = {"platform_toolsets": {"cli": ["terminal", "file"]}}
 
-
-
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
-
-
 
     assert "terminal" in enabled
 
@@ -557,11 +382,7 @@ def test_get_platform_tools_configurable_only_no_expansion():
     assert "web" not in enabled
 
 
-
-
-
 def test_get_platform_tools_mixed_does_not_resurrect_default_off():
-
     """Expansion must subtract _DEFAULT_OFF_TOOLSETS from the implicit
 
     pull-in. Without this, ``clawk-cli`` expansion would re-enable
@@ -570,11 +391,7 @@ def test_get_platform_tools_mixed_does_not_resurrect_default_off():
 
     config = {"platform_toolsets": {"cli": ["clawk-cli", "terminal"]}}
 
-
-
     enabled = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
-
-
 
     assert "terminal" in enabled
 
@@ -583,18 +400,11 @@ def test_get_platform_tools_mixed_does_not_resurrect_default_off():
     assert "rl" not in enabled
 
 
-
-
-
 def test_get_platform_tools_preserves_explicit_empty_selection():
 
     config = {"platform_toolsets": {"cli": []}}
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     # An explicit empty list disables every CONFIGURABLE toolset (web,
 
@@ -617,11 +427,7 @@ def test_get_platform_tools_preserves_explicit_empty_selection():
     assert enabled.isdisjoint(configurable)
 
 
-
-
-
 def test_apply_toolset_change_from_default_does_not_enable_default_off_toolsets():
-
     """Disabling one default toolset on a fresh config must not persist
 
     default-off toolsets as explicitly enabled.
@@ -630,13 +436,8 @@ def test_apply_toolset_change_from_default_does_not_enable_default_off_toolsets(
 
     config = {}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _apply_toolset_change(config, "cli", ["memory"], "disable")
-
-
 
     saved = set(config["platform_toolsets"]["cli"])
 
@@ -647,20 +448,12 @@ def test_apply_toolset_change_from_default_does_not_enable_default_off_toolsets(
     assert saved.isdisjoint(_DEFAULT_OFF_TOOLSETS)
 
 
-
-
-
 def test_apply_toolset_change_can_enable_default_off_toolset_from_default():
 
     config = {}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _apply_toolset_change(config, "cli", ["homeassistant"], "enable")
-
-
 
     saved = set(config["platform_toolsets"]["cli"])
 
@@ -669,11 +462,7 @@ def test_apply_toolset_change_can_enable_default_off_toolset_from_default():
     assert "terminal" in saved
 
 
-
-
-
 def test_get_platform_tools_handles_null_platform_toolsets():
-
     """YAML `platform_toolsets:` with no value parses as None — the old
 
     ``config.get("platform_toolsets", {})`` pattern would then crash with
@@ -684,59 +473,37 @@ def test_get_platform_tools_handles_null_platform_toolsets():
 
     config = {"platform_toolsets": None}
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     # Falls through to defaults instead of raising
 
     assert enabled
 
 
-
-
-
 def test_platform_toolset_summary_uses_explicit_platform_list():
 
     config = {}
 
-
-
     summary = _platform_toolset_summary(config, platforms=["cli"])
-
-
 
     assert set(summary.keys()) == {"cli"}
 
     assert summary["cli"] == _get_platform_tools(config, "cli")
 
 
-
-
-
 def test_get_platform_tools_includes_enabled_mcp_servers_by_default():
 
     config = {
-
         "mcp_servers": {
-
             "exa": {"url": "https://mcp.exa.ai/mcp"},
-
-            "web-search-prime": {"url": "https://api.z.ai/api/mcp/web_search_prime/mcp"},
-
+            "web-search-prime": {
+                "url": "https://api.z.ai/api/mcp/web_search_prime/mcp"
+            },
             "disabled-server": {"url": "https://example.com/mcp", "enabled": False},
-
         }
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     assert "exa" in enabled
 
@@ -745,30 +512,19 @@ def test_get_platform_tools_includes_enabled_mcp_servers_by_default():
     assert "disabled-server" not in enabled
 
 
-
-
-
 def test_get_platform_tools_keeps_enabled_mcp_servers_with_explicit_builtin_selection():
 
     config = {
-
         "platform_toolsets": {"cli": ["web", "memory"]},
-
         "mcp_servers": {
-
             "exa": {"url": "https://mcp.exa.ai/mcp"},
-
-            "web-search-prime": {"url": "https://api.z.ai/api/mcp/web_search_prime/mcp"},
-
+            "web-search-prime": {
+                "url": "https://api.z.ai/api/mcp/web_search_prime/mcp"
+            },
         },
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     assert "web" in enabled
 
@@ -779,32 +535,20 @@ def test_get_platform_tools_keeps_enabled_mcp_servers_with_explicit_builtin_sele
     assert "web-search-prime" in enabled
 
 
-
-
-
 def test_get_platform_tools_no_mcp_sentinel_excludes_all_mcp_servers():
-
     """The 'no_mcp' sentinel in platform_toolsets excludes all MCP servers."""
 
     config = {
-
         "platform_toolsets": {"cli": ["web", "terminal", "no_mcp"]},
-
         "mcp_servers": {
-
             "exa": {"url": "https://mcp.exa.ai/mcp"},
-
-            "web-search-prime": {"url": "https://api.z.ai/api/mcp/web_search_prime/mcp"},
-
+            "web-search-prime": {
+                "url": "https://api.z.ai/api/mcp/web_search_prime/mcp"
+            },
         },
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     assert "web" in enabled
 
@@ -817,38 +561,23 @@ def test_get_platform_tools_no_mcp_sentinel_excludes_all_mcp_servers():
     assert "no_mcp" not in enabled
 
 
-
-
-
 def test_get_platform_tools_no_mcp_sentinel_does_not_affect_other_platforms():
-
     """The 'no_mcp' sentinel only affects the platform it's configured on."""
 
     config = {
-
         "platform_toolsets": {
-
             "api_server": ["web", "terminal", "no_mcp"],
-
         },
-
         "mcp_servers": {
-
             "exa": {"url": "https://mcp.exa.ai/mcp"},
-
         },
-
     }
-
-
 
     # api_server should exclude MCP
 
     api_enabled = _get_platform_tools(config, "api_server")
 
     assert "exa" not in api_enabled
-
-
 
     # cli (not configured with no_mcp) should include MCP
 
@@ -857,17 +586,12 @@ def test_get_platform_tools_no_mcp_sentinel_does_not_affect_other_platforms():
     assert "exa" in cli_enabled
 
 
-
-
-
 def test_toolset_has_keys_for_vision_accepts_codex_auth(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     (tmp_path / "auth.json").write_text(
-
         '{"active_provider":"openai-codex","providers":{"openai-codex":{"tokens":{"access_token": "codex-...oken","refresh_token": "codex-...oken"}}}}'
-
     )
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -876,26 +600,15 @@ def test_toolset_has_keys_for_vision_accepts_codex_auth(tmp_path, monkeypatch):
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-
-
     monkeypatch.setattr(
-
         "agent.auxiliary_client.resolve_vision_provider_client",
-
         lambda: ("openai-codex", object(), "gpt-4.1"),
-
     )
-
-
 
     assert _toolset_has_keys("vision") is True
 
 
-
-
-
 def test_save_platform_tools_preserves_mcp_server_names():
-
     """Ensure MCP server names are preserved when saving platform tools.
 
 
@@ -905,30 +618,17 @@ def test_save_platform_tools_preserves_mcp_server_names():
     """
 
     config = {
-
         "platform_toolsets": {
-
             "cli": ["web", "terminal", "time", "github", "custom-mcp-server"]
-
         }
-
     }
-
-
 
     new_selection = {"web", "browser"}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", new_selection)
 
-
-
     saved_toolsets = config["platform_toolsets"]["cli"]
-
-
 
     assert "time" in saved_toolsets
 
@@ -943,22 +643,13 @@ def test_save_platform_tools_preserves_mcp_server_names():
     assert "terminal" not in saved_toolsets
 
 
-
-
-
 def test_save_platform_tools_handles_empty_existing_config():
-
     """Saving platform tools works when no existing config exists."""
 
     config = {}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "telegram", {"web", "terminal"})
-
-
 
     saved_toolsets = config["platform_toolsets"]["telegram"]
 
@@ -967,41 +658,20 @@ def test_save_platform_tools_handles_empty_existing_config():
     assert "terminal" in saved_toolsets
 
 
-
-
-
 def test_save_platform_tools_handles_invalid_existing_config():
-
     """Saving platform tools works when existing config is not a list."""
 
-    config = {
-
-        "platform_toolsets": {
-
-            "cli": "invalid-string-value"
-
-        }
-
-    }
-
-
+    config = {"platform_toolsets": {"cli": "invalid-string-value"}}
 
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", {"web"})
-
-
 
     saved_toolsets = config["platform_toolsets"]["cli"]
 
     assert "web" in saved_toolsets
 
 
-
-
-
 def test_save_platform_tools_does_not_preserve_platform_default_toolsets():
-
     """Platform default toolsets (clawk-cli, clawk-telegram, etc.) must NOT
 
     be preserved across saves.
@@ -1029,56 +699,54 @@ def test_save_platform_tools_does_not_preserve_platform_default_toolsets():
     """
 
     config = {
-
         "platform_toolsets": {
-
             "cli": [
-
-                "browser", "clarify", "code_execution", "cronjob",
-
-                "delegation", "file", "clawk-cli",  # <-- the culprit
-
-                "memory", "session_search", "skills", "terminal",
-
-                "todo", "tts", "vision", "web",
-
+                "browser",
+                "clarify",
+                "code_execution",
+                "cronjob",
+                "delegation",
+                "file",
+                "clawk-cli",  # <-- the culprit
+                "memory",
+                "session_search",
+                "skills",
+                "terminal",
+                "todo",
+                "tts",
+                "vision",
+                "web",
             ]
-
         }
-
     }
-
-
 
     # User unchecks image_gen, homeassistant, moa — keeps the rest
 
     new_selection = {
-
-        "browser", "clarify", "code_execution", "cronjob",
-
-        "delegation", "file", "memory", "session_search",
-
-        "skills", "terminal", "todo", "tts", "vision", "web",
-
+        "browser",
+        "clarify",
+        "code_execution",
+        "cronjob",
+        "delegation",
+        "file",
+        "memory",
+        "session_search",
+        "skills",
+        "terminal",
+        "todo",
+        "tts",
+        "vision",
+        "web",
     }
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", new_selection)
 
-
-
     saved = config["platform_toolsets"]["cli"]
-
-
 
     # clawk-cli must NOT survive — it's a platform default, not an MCP server
 
     assert "clawk-cli" not in saved
-
-
 
     # The individual toolset keys the user selected must be present
 
@@ -1087,8 +755,6 @@ def test_save_platform_tools_does_not_preserve_platform_default_toolsets():
     assert "terminal" in saved
 
     assert "browser" in saved
-
-
 
     # Tools the user unchecked must NOT be present
 
@@ -1099,38 +765,25 @@ def test_save_platform_tools_does_not_preserve_platform_default_toolsets():
     assert "moa" not in saved
 
 
-
-
-
 def test_save_platform_tools_does_not_preserve_clawk_telegram():
-
     """Same bug for Telegram — clawk-telegram must not be preserved."""
 
     config = {
-
         "platform_toolsets": {
-
             "telegram": [
-
-                "browser", "file", "clawk-telegram", "terminal", "web",
-
+                "browser",
+                "file",
+                "clawk-telegram",
+                "terminal",
+                "web",
             ]
-
         }
-
     }
-
-
 
     new_selection = {"browser", "file", "terminal", "web"}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "telegram", new_selection)
-
-
 
     saved = config["platform_toolsets"]["telegram"]
 
@@ -1139,44 +792,29 @@ def test_save_platform_tools_does_not_preserve_clawk_telegram():
     assert "web" in saved
 
 
-
-
-
 def test_save_platform_tools_still_preserves_mcp_with_platform_default_present():
-
     """MCP server names must still be preserved even when platform defaults
 
     are being stripped out."""
 
     config = {
-
         "platform_toolsets": {
-
             "cli": [
-
-                "web", "terminal", "clawk-cli", "my-mcp-server", "github-tools",
-
+                "web",
+                "terminal",
+                "clawk-cli",
+                "my-mcp-server",
+                "github-tools",
             ]
-
         }
-
     }
-
-
 
     new_selection = {"web", "browser"}
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", new_selection)
 
-
-
     saved = config["platform_toolsets"]["cli"]
-
-
 
     # MCP servers preserved
 
@@ -1184,13 +822,9 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
 
     assert "github-tools" in saved
 
-
-
     # Platform default stripped
 
     assert "clawk-cli" not in saved
-
-
 
     # User selections present
 
@@ -1198,45 +832,26 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
 
     assert "browser" in saved
 
-
-
     # Deselected configurable toolset removed
 
     assert "terminal" not in saved
-
-
-
 
 
 def test_visible_providers_include_nous_subscription_when_logged_in(monkeypatch):
 
     config = {"model": {"provider": "nous"}}
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.get_nous_portal_account_info",
-
         lambda: NousPortalAccountInfo(
-
             logged_in=True,
-
             source="jwt",
-
             fresh=False,
-
             paid_service_access=True,
-
         ),
-
     )
 
-
-
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
-
-
 
     # The managed Nous row is listed (not necessarily first — "Local Browser"
 
@@ -1251,11 +866,7 @@ def test_visible_providers_include_nous_subscription_when_logged_in(monkeypatch)
     assert providers[0]["name"] == "Local Browser"
 
 
-
-
-
 def test_visible_providers_show_nous_subscription_when_logged_out(monkeypatch):
-
     """Nous-managed Tool Gateway rows are always listed, even logged out.
 
 
@@ -1268,40 +879,24 @@ def test_visible_providers_show_nous_subscription_when_logged_out(monkeypatch):
 
     config = {"model": {"provider": "openrouter"}}
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.get_nous_portal_account_info",
-
         lambda: NousPortalAccountInfo(
-
             logged_in=False,
-
             source="none",
-
             fresh=False,
-
             paid_service_access=None,
-
         ),
-
     )
 
-
-
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
-
-
 
     assert any(p["name"].startswith("Nous Subscription") for p in providers)
 
 
-
-
-
-def test_visible_providers_show_nous_subscription_when_paid_access_is_false(monkeypatch):
-
+def test_visible_providers_show_nous_subscription_when_paid_access_is_false(
+    monkeypatch,
+):
     """Logged-in-but-unpaid users still see the managed rows.
 
 
@@ -1314,91 +909,52 @@ def test_visible_providers_show_nous_subscription_when_paid_access_is_false(monk
 
     config = {"model": {"provider": "nous"}}
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.get_nous_portal_account_info",
-
         lambda: NousPortalAccountInfo(
-
-                logged_in=True,
-
-                source="jwt",
-
-                fresh=False,
-
-                paid_service_access=False,
-
-            ),
-
+            logged_in=True,
+            source="jwt",
+            fresh=False,
+            paid_service_access=False,
+        ),
     )
 
-
-
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
-
-
 
     assert any(p["name"].startswith("Nous Subscription") for p in providers)
 
 
-
-
-
-def test_visible_providers_force_fresh_shows_nous_subscription_after_upgrade(monkeypatch):
+def test_visible_providers_force_fresh_shows_nous_subscription_after_upgrade(
+    monkeypatch,
+):
 
     calls = []
-
-
 
     def fake_subscription_features(config, *, force_fresh=False):
 
         calls.append(("features", force_fresh))
 
         return SimpleNamespace(
-
             nous_auth_present=True,
-
             account_info=NousPortalAccountInfo(
-
                 logged_in=True,
-
                 source="account_api" if force_fresh else "jwt",
-
                 fresh=force_fresh,
-
                 paid_service_access=True if force_fresh else False,
-
             ),
-
             features={},
-
         )
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.tools_config.get_nous_subscription_features",
-
         fake_subscription_features,
-
     )
-
-
 
     providers = _visible_providers(
-
         TOOL_CATEGORIES["browser"],
-
         {"model": {"provider": "nous"}},
-
         force_fresh=True,
-
     )
-
-
 
     # The managed Nous row reappears after the entitlement upgrade. It is no
 
@@ -1409,37 +965,24 @@ def test_visible_providers_force_fresh_shows_nous_subscription_after_upgrade(mon
     assert ("features", True) in calls
 
 
-
-
-
 def test_local_browser_provider_is_saved_explicitly(monkeypatch):
 
     config = {}
 
     local_provider = next(
-
         provider
-
         for provider in TOOL_CATEGORIES["browser"]["providers"]
-
         if provider.get("browser_provider") == "local"
-
     )
 
     monkeypatch.setattr("clawk_cli.tools_config._run_post_setup", lambda key: None)
 
     _configure_provider(local_provider, config)
 
-
-
     assert config["browser"]["cloud_provider"] == "local"
 
 
-
-
-
 def test_fresh_install_browser_default_is_free_local_not_paid_nous():
-
     """On a fresh install the browser picker must default to the free local
 
     backend, never the paid Nous Subscription gateway.
@@ -1456,8 +999,6 @@ def test_fresh_install_browser_default_is_free_local_not_paid_nous():
 
     from clawk_cli.tools_config import _detect_active_provider_index
 
-
-
     providers = TOOL_CATEGORIES["browser"]["providers"]
 
     assert providers[0]["name"] == "Local Browser"
@@ -1469,16 +1010,10 @@ def test_fresh_install_browser_default_is_free_local_not_paid_nous():
     assert _detect_active_provider_index(providers, {}) == 0
 
 
-
-
-
 def test_fresh_install_tts_default_is_free_edge_not_paid_nous():
-
     """TTS picker defaults to the free Edge backend on a fresh install."""
 
     from clawk_cli.tools_config import _detect_active_provider_index
-
-
 
     providers = TOOL_CATEGORIES["tts"]["providers"]
 
@@ -1489,9 +1024,6 @@ def test_fresh_install_tts_default_is_free_edge_not_paid_nous():
     assert _detect_active_provider_index(providers, {}) == 0
 
 
-
-
-
 def test_reconfigure_lists_enabled_web_without_existing_provider_config(monkeypatch):
 
     config = {"platform_toolsets": {"cli": ["web"]}}
@@ -1500,17 +1032,10 @@ def test_reconfigure_lists_enabled_web_without_existing_provider_config(monkeypa
 
     configured = []
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._toolset_has_keys",
-
         lambda ts_key, config=None, **kwargs: False,
-
     )
-
-
 
     def fake_prompt_choice(question, choices, default=0):
 
@@ -1518,82 +1043,51 @@ def test_reconfigure_lists_enabled_web_without_existing_provider_config(monkeypa
 
         return 0
 
-
-
     monkeypatch.setattr("clawk_cli.tools_config._prompt_choice", fake_prompt_choice)
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._configure_tool_category_for_reconfig",
-
         lambda ts_key, cat, config, **kwargs: configured.append(ts_key),
-
     )
 
     monkeypatch.setattr("clawk_cli.tools_config.save_config", lambda config: None)
 
-
-
     _reconfigure_tool(config)
-
-
 
     assert any("Web Search" in choice for choice in seen["choices"])
 
     assert configured == ["web"]
 
 
-
-
-
 def test_first_install_nous_auto_configures_managed_defaults(monkeypatch):
 
-    monkeypatch.setattr("clawk_cli.nous_subscription.managed_nous_tools_enabled", lambda: True)
+    monkeypatch.setattr(
+        "clawk_cli.nous_subscription.managed_nous_tools_enabled", lambda: True
+    )
 
     config = {
-
         "model": {"provider": "nous"},
-
         "platform_toolsets": {"cli": []},
-
     }
 
     for env_var in (
-
         "VOICE_TOOLS_OPENAI_KEY",
-
         "OPENAI_API_KEY",
-
         "ELEVENLABS_API_KEY",
-
         "FIRECRAWL_API_KEY",
-
         "FIRECRAWL_API_URL",
-
         "TAVILY_API_KEY",
-
         "PARALLEL_API_KEY",
-
         "BROWSERBASE_API_KEY",
-
         "BROWSERBASE_PROJECT_ID",
-
         "BROWSER_USE_API_KEY",
-
         "FAL_KEY",
-
     ):
-
         monkeypatch.delenv(env_var, raising=False)
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._prompt_toolset_checklist",
-
         lambda *args, **kwargs: {"web", "image_gen", "tts", "browser"},
-
     )
 
     monkeypatch.setattr("clawk_cli.tools_config.save_config", lambda config: None)
@@ -1607,48 +1101,28 @@ def test_first_install_nous_auto_configures_managed_defaults(monkeypatch):
     # set by the first as "explicit" and skips them.
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._get_enabled_platforms",
-
         lambda: ["cli"],
-
     )
 
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.get_nous_portal_account_info",
-
         lambda *args, **kwargs: NousPortalAccountInfo(
-
             logged_in=True,
-
             source="jwt",
-
             fresh=False,
-
             paid_service_access=True,
-
         ),
-
     )
-
-
 
     configured = []
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._configure_toolset",
-
         lambda ts_key, config: configured.append(ts_key),
-
     )
 
-
-
     tools_command(first_install=True, config=config)
-
-
 
     assert config["web"]["backend"] == "firecrawl"
 
@@ -1661,11 +1135,7 @@ def test_first_install_nous_auto_configures_managed_defaults(monkeypatch):
     assert configured == []
 
 
-
-
-
 def test_first_install_nous_auto_configures_video_gen(monkeypatch):
-
     """When a Nous subscriber checks video_gen in the toolset checklist,
 
     apply_nous_managed_defaults must write video_gen.provider and
@@ -1676,99 +1146,60 @@ def test_first_install_nous_auto_configures_video_gen(monkeypatch):
 
     auto-configured but no config was actually written."""
 
-    monkeypatch.setattr("clawk_cli.nous_subscription.managed_nous_tools_enabled", lambda: True)
+    monkeypatch.setattr(
+        "clawk_cli.nous_subscription.managed_nous_tools_enabled", lambda: True
+    )
 
     config = {
-
         "model": {"provider": "nous"},
-
         "platform_toolsets": {"cli": []},
-
     }
 
     for env_var in (
-
         "VOICE_TOOLS_OPENAI_KEY",
-
         "OPENAI_API_KEY",
-
         "ELEVENLABS_API_KEY",
-
         "FIRECRAWL_API_KEY",
-
         "FIRECRAWL_API_URL",
-
         "TAVILY_API_KEY",
-
         "PARALLEL_API_KEY",
-
         "BROWSERBASE_API_KEY",
-
         "BROWSERBASE_PROJECT_ID",
-
         "BROWSER_USE_API_KEY",
-
         "FAL_KEY",
-
     ):
-
         monkeypatch.delenv(env_var, raising=False)
 
-
-
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._prompt_toolset_checklist",
-
         lambda *args, **kwargs: {"video_gen"},
-
     )
 
     monkeypatch.setattr("clawk_cli.tools_config.save_config", lambda config: None)
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._get_enabled_platforms",
-
         lambda: ["cli"],
-
     )
 
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.get_nous_portal_account_info",
-
         lambda *args, **kwargs: NousPortalAccountInfo(
-
             logged_in=True,
-
             source="jwt",
-
             fresh=False,
-
             paid_service_access=True,
-
         ),
-
     )
-
-
 
     configured = []
 
     monkeypatch.setattr(
-
         "clawk_cli.tools_config._configure_toolset",
-
         lambda ts_key, config: configured.append(ts_key),
-
     )
 
-
-
     tools_command(first_install=True, config=config)
-
-
 
     assert config["video_gen"]["provider"] == "fal"
 
@@ -1779,52 +1210,33 @@ def test_first_install_nous_auto_configures_video_gen(monkeypatch):
     assert "video_gen" not in configured
 
 
-
 # ── Platform / toolset consistency ────────────────────────────────────────────
 
 
-
-
-
 class TestPlatformToolsetConsistency:
-
     """Every platform in tools_config.PLATFORMS must have a matching toolset."""
 
-
-
     def test_all_platforms_have_toolset_definitions(self):
-
         """Each platform's default_toolset must exist in TOOLSETS."""
 
         from clawk_cli.tools_config import PLATFORMS
 
         from toolsets import TOOLSETS
 
-
-
         for platform, meta in PLATFORMS.items():
-
             ts_name = meta["default_toolset"]
 
             assert ts_name in TOOLSETS, (
-
                 f"Platform {platform!r} references toolset {ts_name!r} "
-
                 f"which is not defined in toolsets.py"
-
             )
 
-
-
     def test_gateway_toolset_includes_all_messaging_platforms(self):
-
         """clawk-gateway includes list should cover all messaging platforms."""
 
         from clawk_cli.tools_config import PLATFORMS
 
         from toolsets import TOOLSETS
-
-
 
         gateway_includes = set(TOOLSETS["clawk-gateway"]["includes"])
 
@@ -1833,55 +1245,36 @@ class TestPlatformToolsetConsistency:
         non_messaging = {"cli", "api_server", "cron"}
 
         for platform, meta in PLATFORMS.items():
-
             if platform in non_messaging:
-
                 continue
 
             ts_name = meta["default_toolset"]
 
             assert ts_name in gateway_includes, (
-
                 f"Platform {platform!r} toolset {ts_name!r} missing from "
-
                 f"clawk-gateway includes"
-
             )
 
-
-
     def test_skills_config_covers_tools_config_platforms(self):
-
         """skills_config.PLATFORMS should have entries for all gateway platforms."""
 
         from clawk_cli.tools_config import PLATFORMS as TOOLS_PLATFORMS
 
         from clawk_cli.skills_config import PLATFORMS as SKILLS_PLATFORMS
 
-
-
         non_messaging = {"api_server"}
 
         for platform in TOOLS_PLATFORMS:
-
             if platform in non_messaging:
-
                 continue
 
             assert platform in SKILLS_PLATFORMS, (
-
                 f"Platform {platform!r} in tools_config but missing from "
-
                 f"skills_config PLATFORMS"
-
             )
 
 
-
-
-
 def test_numeric_mcp_server_name_does_not_crash_sorted():
-
     """YAML parses bare numeric keys (e.g. ``12306:``) as int.
 
 
@@ -1897,63 +1290,39 @@ def test_numeric_mcp_server_name_does_not_crash_sorted():
     """
 
     config = {
-
         "platform_toolsets": {"cli": ["web", 12306]},
-
         "mcp_servers": {
-
             12306: {"url": "https://example.com/mcp"},
-
             "normal-server": {"url": "https://example.com/mcp2"},
-
         },
-
     }
 
-
-
     enabled = _get_platform_tools(config, "cli")
-
-
 
     # All names must be str — no int leaking through
 
     assert all(isinstance(name, str) for name in enabled), (
-
         f"Non-string toolset names found: {enabled}"
-
     )
 
     assert "12306" in enabled
-
-
 
     # sorted() must not raise TypeError
 
     sorted(enabled)
 
 
-
-
-
 # ─── Imagegen Backend Picker Wiring ────────────────────────────────────────
-
 
 
 def test_toolset_has_keys_treats_no_key_providers_as_configured():
 
     config = {}
 
-
-
     assert _toolset_has_keys("computer_use", config) is True
 
 
-
-
-
 def test_computer_use_needs_configuration_when_cua_driver_post_setup_pending():
-
     """No-key providers can still need setup when their post_setup is unsatisfied.
 
 
@@ -1965,132 +1334,94 @@ def test_computer_use_needs_configuration_when_cua_driver_post_setup_pending():
     """
 
     with patch("shutil.which", return_value=None):
-
         assert _toolset_needs_configuration_prompt("computer_use", {}) is True
 
 
-
-
-
 def test_computer_use_skips_configuration_when_cua_driver_already_installed():
-
     """Installed post_setup dependencies should keep returning-user toggles no-op."""
 
     def fake_which(name: str):
 
         return "/usr/local/bin/cua-driver" if name == "cua-driver" else None
 
-
-
     with patch("shutil.which", side_effect=fake_which):
-
         assert _toolset_needs_configuration_prompt("computer_use", {}) is False
 
 
-
-
-
 def test_computer_use_respects_custom_cua_driver_command():
-
     """The setup gate should match runtime's CLAWK_CUA_DRIVER_CMD override."""
 
     def fake_which(name: str):
 
         return "/opt/bin/custom-cua" if name == "custom-cua" else None
 
-
-
-    with patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}), \
-         patch("shutil.which", side_effect=fake_which):
-
+    with (
+        patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}),
+        patch("shutil.which", side_effect=fake_which),
+    ):
         assert _toolset_needs_configuration_prompt("computer_use", {}) is False
 
 
-
-
-
 def test_computer_use_blank_custom_driver_command_falls_back_to_default():
-
     """Blank overrides should not make the setup gate look for an empty command."""
 
     def fake_which(name: str):
 
         return "/usr/local/bin/cua-driver" if name == "cua-driver" else None
 
-
-
-    with patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "   "}), \
-         patch("shutil.which", side_effect=fake_which):
-
+    with (
+        patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "   "}),
+        patch("shutil.which", side_effect=fake_which),
+    ):
         assert _toolset_needs_configuration_prompt("computer_use", {}) is False
 
 
-
-
-
 def test_computer_use_post_setup_respects_custom_driver_command_when_installed():
-
     """post_setup already-installed checks should version-probe the override."""
 
     def fake_which(name: str):
 
         return "/opt/bin/custom-cua" if name == "custom-cua" else None
 
-
-
-    with patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}), \
-         patch("platform.system", return_value="Darwin"), \
-         patch("shutil.which", side_effect=fake_which), \
-         patch("subprocess.run") as run:
-
+    with (
+        patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}),
+        patch("platform.system", return_value="Darwin"),
+        patch("shutil.which", side_effect=fake_which),
+        patch("subprocess.run") as run,
+    ):
         run.return_value.stdout = "custom 1.2.3\n"
 
-
-
         _run_post_setup("cua_driver")
-
-
 
     run.assert_called_once()
 
     assert run.call_args.args[0] == ["custom-cua", "--version"]
 
 
-
-
-
 def test_computer_use_post_setup_missing_override_does_not_accept_default_binary():
-
     """A default cua-driver binary must not satisfy a missing runtime override."""
 
     seen = []
-
-
 
     def fake_which(name: str):
 
         seen.append(name)
 
         if name == "cua-driver":
-
             return "/usr/local/bin/cua-driver"
 
         if name == "curl":
-
             return None
 
         return None
 
-
-
-    with patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}), \
-         patch("platform.system", return_value="Darwin"), \
-         patch("shutil.which", side_effect=fake_which), \
-         patch("subprocess.run") as run:
-
+    with (
+        patch.dict("os.environ", {"CLAWK_CUA_DRIVER_CMD": "custom-cua"}),
+        patch("platform.system", return_value="Darwin"),
+        patch("shutil.which", side_effect=fake_which),
+        patch("subprocess.run") as run,
+    ):
         _run_post_setup("cua_driver")
-
-
 
     run.assert_not_called()
 
@@ -2099,14 +1430,8 @@ def test_computer_use_post_setup_missing_override_does_not_accept_default_binary
     assert "curl" in seen
 
 
-
-
-
 class TestImagegenBackendRegistry:
-
     """IMAGEGEN_BACKENDS tags drive the model picker flow in tools_config."""
-
-
 
     def test_fal_backend_registered(self):
 
@@ -2114,10 +1439,7 @@ class TestImagegenBackendRegistry:
 
         assert "fal" in IMAGEGEN_BACKENDS
 
-
-
     def test_fal_catalog_loads_lazily(self):
-
         """catalog_fn should defer import to avoid import cycles."""
 
         from clawk_cli.tools_config import IMAGEGEN_BACKENDS
@@ -2130,10 +1452,7 @@ class TestImagegenBackendRegistry:
 
         assert "fal-ai/flux-2-pro" in catalog
 
-
-
     def test_image_gen_providers_tagged_with_fal_backend(self):
-
         """Both Nous Subscription and FAL.ai providers must carry the
 
         imagegen_backend tag so _configure_provider fires the picker."""
@@ -2143,24 +1462,15 @@ class TestImagegenBackendRegistry:
         providers = TOOL_CATEGORIES["image_gen"]["providers"]
 
         for p in providers:
-
             assert p.get("imagegen_backend") == "fal", (
-
                 f"{p['name']} missing imagegen_backend tag"
-
             )
 
 
-
-
-
 class TestImagegenModelPicker:
-
     """_configure_imagegen_model writes selection to config and respects
 
     curses fallback semantics (returns default when stdin isn't a TTY)."""
-
-
 
     def test_picker_writes_chosen_model_to_config(self):
 
@@ -2171,7 +1481,6 @@ class TestImagegenModelPicker:
         # Force _prompt_choice to pick index 1 (second-in-ordered-list).
 
         with patch("clawk_cli.tools_config._prompt_choice", return_value=1):
-
             _configure_imagegen_model("fal", config)
 
         # ordered[0] == current (default klein), ordered[1] == first non-default
@@ -2180,20 +1489,14 @@ class TestImagegenModelPicker:
 
         assert config["image_gen"]["model"].startswith("fal-ai/")
 
-
-
     def test_picker_with_gpt_image_does_not_prompt_quality(self):
-
         """GPT-Image quality is pinned to medium in the tool's defaults —
 
         no follow-up prompt, no config write for quality_setting."""
 
         from clawk_cli.tools_config import (
-
             _configure_imagegen_model,
-
             IMAGEGEN_BACKENDS,
-
         )
 
         catalog, default_model = IMAGEGEN_BACKENDS["fal"]["catalog_fn"]()
@@ -2203,8 +1506,6 @@ class TestImagegenModelPicker:
         ordered = [default_model] + [m for m in model_ids if m != default_model]
 
         gpt_idx = ordered.index("fal-ai/gpt-image-1.5")
-
-
 
         # Only ONE picker call is expected (for model) — not two (model + quality).
 
@@ -2216,27 +1517,18 @@ class TestImagegenModelPicker:
 
             return gpt_idx
 
-
-
         config = {}
 
         with patch("clawk_cli.tools_config._prompt_choice", side_effect=fake_prompt):
-
             _configure_imagegen_model("fal", config)
 
-
-
         assert call_count["n"] == 1, (
-
             f"Expected 1 picker call (model only), got {call_count['n']}"
-
         )
 
         assert config["image_gen"]["model"] == "fal-ai/gpt-image-1.5"
 
         assert "quality_setting" not in config["image_gen"]
-
-
 
     def test_picker_no_op_for_unknown_backend(self):
 
@@ -2248,10 +1540,7 @@ class TestImagegenModelPicker:
 
         assert config == {}  # untouched
 
-
-
     def test_picker_repairs_corrupt_config_section(self):
-
         """When image_gen is a non-dict (user-edit YAML), the picker should
 
         replace it with a fresh dict rather than crash."""
@@ -2261,7 +1550,6 @@ class TestImagegenModelPicker:
         config = {"image_gen": "some-garbage-string"}
 
         with patch("clawk_cli.tools_config._prompt_choice", return_value=0):
-
             _configure_imagegen_model("fal", config)
 
         assert isinstance(config["image_gen"], dict)
@@ -2269,34 +1557,17 @@ class TestImagegenModelPicker:
         assert config["image_gen"]["model"] == "fal-ai/flux-2/klein/9b"
 
 
-
-
-
 def test_save_platform_tools_normalizes_numeric_entries():
-
     """YAML may parse bare numeric toolset names as int. They should be
 
     normalized to str so they survive the save round-trip.
 
     """
 
-    config = {
-
-        "platform_toolsets": {
-
-            "cli": ["web", "terminal", 12306, "custom-mcp"]
-
-        }
-
-    }
-
-
+    config = {"platform_toolsets": {"cli": ["web", "terminal", 12306, "custom-mcp"]}}
 
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", {"web", "browser"})
-
-
 
     saved = config["platform_toolsets"]["cli"]
 
@@ -2305,11 +1576,7 @@ def test_save_platform_tools_normalizes_numeric_entries():
     assert 12306 not in saved
 
 
-
-
-
 def test_save_platform_tools_clears_no_mcp_sentinel():
-
     """`clawk tools` has no UI for no_mcp, so saving from the picker clears
 
     the sentinel unconditionally — otherwise a user who once set no_mcp by
@@ -2318,34 +1585,17 @@ def test_save_platform_tools_clears_no_mcp_sentinel():
 
     """
 
-    config = {
-
-        "platform_toolsets": {
-
-            "cli": ["web", "terminal", "no_mcp"]
-
-        }
-
-    }
-
-
+    config = {"platform_toolsets": {"cli": ["web", "terminal", "no_mcp"]}}
 
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", {"web", "browser"})
-
-
 
     saved = config["platform_toolsets"]["cli"]
 
     assert "no_mcp" not in saved
 
 
-
-
-
 def test_save_platform_tools_preserves_mcp_server_names():
-
     """Non-sentinel passthrough entries (MCP server names) must still survive
 
     the save — we only clear `no_mcp`, not every non-configurable entry.
@@ -2353,22 +1603,11 @@ def test_save_platform_tools_preserves_mcp_server_names():
     """
 
     config = {
-
-        "platform_toolsets": {
-
-            "cli": ["web", "terminal", "custom-mcp", "another-mcp"]
-
-        }
-
+        "platform_toolsets": {"cli": ["web", "terminal", "custom-mcp", "another-mcp"]}
     }
 
-
-
     with patch("clawk_cli.tools_config.save_config"):
-
         _save_platform_tools(config, "cli", {"web", "browser"})
-
-
 
     saved = config["platform_toolsets"]["cli"]
 
@@ -2377,11 +1616,7 @@ def test_save_platform_tools_preserves_mcp_server_names():
     assert "another-mcp" in saved
 
 
-
-
-
 def test_get_platform_tools_recovers_non_configurable_toolsets_from_composite():
-
     """Non-configurable toolsets whose tools are in the composite but not in
 
     CONFIGURABLE_TOOLSETS should still appear in the result.
@@ -2394,47 +1629,35 @@ def test_get_platform_tools_recovers_non_configurable_toolsets_from_composite():
 
     from unittest.mock import patch as mock_patch
 
-
-
     fake_toolsets = dict(TOOLSETS)
 
     fake_toolsets["_test_platform_tool"] = {
-
         "description": "test",
-
         "tools": ["_test_special_tool"],
-
         "includes": [],
-
     }
 
     fake_toolsets["clawk-_test_platform"] = {
-
         "description": "test composite",
-
-        "tools": ["web_search", "web_extract", "terminal", "process", "_test_special_tool"],
-
+        "tools": [
+            "web_search",
+            "web_extract",
+            "terminal",
+            "process",
+            "_test_special_tool",
+        ],
         "includes": [],
-
     }
-
-
 
     test_platforms = {
-
         "_test_platform": {"label": "Test", "default_toolset": "clawk-_test_platform"},
-
     }
 
-
-
-    with mock_patch("clawk_cli.tools_config.PLATFORMS", {**PLATFORMS, **test_platforms}):
-
+    with mock_patch(
+        "clawk_cli.tools_config.PLATFORMS", {**PLATFORMS, **test_platforms}
+    ):
         with mock_patch("toolsets.TOOLSETS", fake_toolsets):
-
             enabled = _get_platform_tools({}, "_test_platform")
-
-
 
     assert "_test_platform_tool" in enabled
 
@@ -2443,11 +1666,7 @@ def test_get_platform_tools_recovers_non_configurable_toolsets_from_composite():
     assert "terminal" in enabled
 
 
-
-
-
 def test_get_platform_tools_second_pass_skips_fully_claimed_toolsets():
-
     """Toolsets whose tools are fully covered by configurable keys should NOT
 
     be added by the second pass (prevents 'search', 'clawk-acp' noise).
@@ -2456,16 +1675,10 @@ def test_get_platform_tools_second_pass_skips_fully_claimed_toolsets():
 
     enabled = _get_platform_tools({}, "cli")
 
-
-
     assert "search" not in enabled
 
 
-
-
-
 def test_get_platform_tools_discord_both_off_by_default():
-
     """Both `discord` and `discord_admin` are opt-in via `clawk tools`,
 
     even on the Discord platform itself.  Users shouldn't auto-inherit 19
@@ -2479,9 +1692,6 @@ def test_get_platform_tools_discord_both_off_by_default():
     assert "discord_admin" not in enabled
 
 
-
-
-
 def test_discord_toolsets_in_configurable_toolsets():
 
     keys = {ts_key for ts_key, _, _ in CONFIGURABLE_TOOLSETS}
@@ -2491,9 +1701,6 @@ def test_discord_toolsets_in_configurable_toolsets():
     assert "discord_admin" in keys
 
 
-
-
-
 def test_discord_toolsets_in_default_off():
 
     assert "discord" in _DEFAULT_OFF_TOOLSETS
@@ -2501,11 +1708,7 @@ def test_discord_toolsets_in_default_off():
     assert "discord_admin" in _DEFAULT_OFF_TOOLSETS
 
 
-
-
-
 def test_discord_toolsets_not_available_on_other_platforms():
-
     """Platform-scoping: discord / discord_admin should not appear on CLI,
 
     Telegram, etc. — not even as an opt-in."""
@@ -2513,17 +1716,12 @@ def test_discord_toolsets_not_available_on_other_platforms():
     from clawk_cli.tools_config import _toolset_allowed_for_platform
 
     for plat in ["cli", "telegram", "slack", "whatsapp", "signal"]:
-
         assert not _toolset_allowed_for_platform("discord", plat), (
-
             f"`discord` toolset leaked onto {plat}"
-
         )
 
         assert not _toolset_allowed_for_platform("discord_admin", plat), (
-
             f"`discord_admin` toolset leaked onto {plat}"
-
         )
 
     assert _toolset_allowed_for_platform("discord", "discord")
@@ -2531,11 +1729,7 @@ def test_discord_toolsets_not_available_on_other_platforms():
     assert _toolset_allowed_for_platform("discord_admin", "discord")
 
 
-
-
-
 def test_discord_toolsets_user_enabled_are_honored():
-
     """When the user opts in via `clawk tools`, the toolset appears."""
 
     config = {"platform_toolsets": {"discord": ["web", "terminal", "discord"]}}
@@ -2547,11 +1741,7 @@ def test_discord_toolsets_user_enabled_are_honored():
     assert "discord_admin" not in enabled
 
 
-
-
-
 def test_save_platform_tools_strips_restricted_toolsets():
-
     """Hand-edited or all-platforms checklist with `discord` selected for
 
     Telegram must be stripped at save time."""
@@ -2560,7 +1750,9 @@ def test_save_platform_tools_strips_restricted_toolsets():
 
     config = {}
 
-    _save_platform_tools(config, "telegram", {"web", "terminal", "discord", "discord_admin"})
+    _save_platform_tools(
+        config, "telegram", {"web", "terminal", "discord", "discord_admin"}
+    )
 
     saved = config["platform_toolsets"]["telegram"]
 
@@ -2573,9 +1765,6 @@ def test_save_platform_tools_strips_restricted_toolsets():
     assert "terminal" in saved
 
 
-
-
-
 def test_get_platform_tools_feishu_includes_doc_and_drive():
 
     enabled = _get_platform_tools({}, "feishu")
@@ -2585,13 +1774,9 @@ def test_get_platform_tools_feishu_includes_doc_and_drive():
     assert "feishu_drive" in enabled
 
 
-
-
-
 def test_get_platform_tools_feishu_tools_not_on_other_platforms():
 
     for plat in ["cli", "telegram", "discord"]:
-
         enabled = _get_platform_tools({}, plat)
 
         assert "feishu_doc" not in enabled, f"feishu_doc leaked onto {plat}"
@@ -2599,11 +1784,7 @@ def test_get_platform_tools_feishu_tools_not_on_other_platforms():
         assert "feishu_drive" not in enabled, f"feishu_drive leaked onto {plat}"
 
 
-
-
-
 def test_get_effective_configurable_toolsets_dedupes_bundled_plugins():
-
     """Bundled plugins (plugins/spotify) share their toolset key with the
 
     built-in CONFIGURABLE_TOOLSETS entry. The effective list must not list
@@ -2616,18 +1797,13 @@ def test_get_effective_configurable_toolsets_dedupes_bundled_plugins():
 
     from clawk_cli.tools_config import _get_effective_configurable_toolsets
 
-
-
     all_ts = _get_effective_configurable_toolsets()
 
     keys = [ts_key for ts_key, _, _ in all_ts]
 
     assert len(keys) == len(set(keys)), (
-
         f"duplicate toolset keys in effective list: "
-
         f"{[k for k in keys if keys.count(k) > 1]}"
-
     )
 
     # Spotify specifically — the bug that motivated the dedupe.
@@ -2641,41 +1817,61 @@ def test_get_effective_configurable_toolsets_dedupes_bundled_plugins():
     assert spotify_rows[0][1] == "🎵 Spotify"
 
 
-
-
-
-@pytest.mark.parametrize("provider,config_key,expected", [
-
-    # managed provider → use_gateway True
-
-    ({"name": "T", "tts_provider": "elevenlabs", "managed_nous_feature": "tts", "env_vars": []}, "tts", True),
-
-    ({"name": "B", "browser_provider": "browserbase", "managed_nous_feature": "browser", "env_vars": []}, "browser", True),
-
-    ({"name": "W", "web_backend": "tavily", "managed_nous_feature": "web", "env_vars": []}, "web", True),
-
-    # self-hosted provider → use_gateway False
-
-    ({"name": "T", "tts_provider": "elevenlabs", "env_vars": []}, "tts", False),
-
-    ({"name": "B", "browser_provider": "browserbase", "env_vars": []}, "browser", False),
-
-    ({"name": "W", "web_backend": "tavily", "env_vars": []}, "web", False),
-
-])
-
-def test_reconfigure_provider_syncs_use_gateway(monkeypatch, provider, config_key, expected):
+@pytest.mark.parametrize(
+    "provider,config_key,expected",
+    [
+        # managed provider → use_gateway True
+        (
+            {
+                "name": "T",
+                "tts_provider": "elevenlabs",
+                "managed_nous_feature": "tts",
+                "env_vars": [],
+            },
+            "tts",
+            True,
+        ),
+        (
+            {
+                "name": "B",
+                "browser_provider": "browserbase",
+                "managed_nous_feature": "browser",
+                "env_vars": [],
+            },
+            "browser",
+            True,
+        ),
+        (
+            {
+                "name": "W",
+                "web_backend": "tavily",
+                "managed_nous_feature": "web",
+                "env_vars": [],
+            },
+            "web",
+            True,
+        ),
+        # self-hosted provider → use_gateway False
+        ({"name": "T", "tts_provider": "elevenlabs", "env_vars": []}, "tts", False),
+        (
+            {"name": "B", "browser_provider": "browserbase", "env_vars": []},
+            "browser",
+            False,
+        ),
+        ({"name": "W", "web_backend": "tavily", "env_vars": []}, "web", False),
+    ],
+)
+def test_reconfigure_provider_syncs_use_gateway(
+    monkeypatch, provider, config_key, expected
+):
 
     # Managed providers run the inline Portal entitlement gate; treat the user
 
     # as already entitled so the test exercises the use_gateway sync.
 
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.ensure_nous_portal_access",
-
         lambda **kwargs: True,
-
     )
 
     config = {}
@@ -2685,44 +1881,41 @@ def test_reconfigure_provider_syncs_use_gateway(monkeypatch, provider, config_ke
     assert config[config_key]["use_gateway"] is expected
 
 
-
-
-
 def test_reconfigure_browser_provider_overwrites_stale_use_gateway():
 
     # Switching from managed (use_gateway=True) to self-hosted must clear the stale flag.
 
     config = {"browser": {"cloud_provider": "managed-browser", "use_gateway": True}}
 
-    provider = {"name": "Browserbase", "browser_provider": "browserbase", "env_vars": []}
+    provider = {
+        "name": "Browserbase",
+        "browser_provider": "browserbase",
+        "env_vars": [],
+    }
 
     _reconfigure_provider(provider, config)
 
     assert config["browser"]["use_gateway"] is False
 
 
-
-
-
-@pytest.mark.parametrize("provider_name,post_setup_key", [
-
-    ("Camofox", "camofox"),
-
-])
-
+@pytest.mark.parametrize(
+    "provider_name,post_setup_key",
+    [
+        ("Camofox", "camofox"),
+    ],
+)
 def test_reconfigure_provider_runs_post_setup_for_env_var_providers(
-
     monkeypatch, provider_name, post_setup_key
-
 ):
-
     """_reconfigure_provider() must call _run_post_setup() for providers that have
 
     both env_vars and post_setup — parity with _configure_provider() line 2286."""
 
     called = []
 
-    monkeypatch.setattr("clawk_cli.tools_config._run_post_setup", lambda key: called.append(key))
+    monkeypatch.setattr(
+        "clawk_cli.tools_config._run_post_setup", lambda key: called.append(key)
+    )
 
     monkeypatch.setattr("clawk_cli.tools_config.get_env_value", lambda k: None)
 
@@ -2730,26 +1923,13 @@ def test_reconfigure_provider_runs_post_setup_for_env_var_providers(
 
     monkeypatch.setattr("clawk_cli.tools_config.save_env_value", lambda k, v: None)
 
-
-
     provider = next(
-
-        p
-
-        for p in TOOL_CATEGORIES["browser"]["providers"]
-
-        if p["name"] == provider_name
-
+        p for p in TOOL_CATEGORIES["browser"]["providers"] if p["name"] == provider_name
     )
 
     _reconfigure_provider(provider, {})
 
-
-
     assert called == [post_setup_key]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2759,96 +1939,58 @@ def test_reconfigure_provider_runs_post_setup_for_env_var_providers(
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_configure_managed_provider_blocks_when_not_entitled(monkeypatch):
-
     """Selecting a Nous-managed backend without paid access writes no config."""
 
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.ensure_nous_portal_access",
-
         lambda **kwargs: False,
-
     )
 
     provider = {
-
         "name": "Nous Subscription (Firecrawl)",
-
         "web_backend": "firecrawl",
-
         "managed_nous_feature": "web",
-
         "env_vars": [],
-
     }
 
     config = {}
 
-
-
     _configure_provider(provider, config)
-
-
 
     # No use_gateway / backend written — the gate returned before any mutation.
 
     assert "web" not in config
 
 
-
-
-
 def test_configure_managed_provider_enables_when_entitled(monkeypatch):
-
     """Once entitled, selecting the managed backend sets use_gateway=True."""
 
     monkeypatch.setattr(
-
         "clawk_cli.nous_subscription.ensure_nous_portal_access",
-
         lambda **kwargs: True,
-
     )
 
     provider = {
-
         "name": "Nous Subscription (Firecrawl)",
-
         "web_backend": "firecrawl",
-
         "managed_nous_feature": "web",
-
         "env_vars": [],
-
     }
 
     config = {}
 
-
-
     _configure_provider(provider, config)
-
-
 
     assert config["web"]["backend"] == "firecrawl"
 
     assert config["web"]["use_gateway"] is True
 
 
-
-
-
 def test_configure_non_managed_provider_skips_portal_gate(monkeypatch):
-
     """A self-hosted provider must never trigger the Nous Portal login gate."""
 
     called = {"gate": False}
-
-
 
     def _boom(**kwargs):
 
@@ -2856,23 +1998,13 @@ def test_configure_non_managed_provider_skips_portal_gate(monkeypatch):
 
         return False
 
-
-
-    monkeypatch.setattr(
-
-        "clawk_cli.nous_subscription.ensure_nous_portal_access", _boom
-
-    )
+    monkeypatch.setattr("clawk_cli.nous_subscription.ensure_nous_portal_access", _boom)
 
     provider = {"name": "Tavily", "web_backend": "tavily", "env_vars": []}
 
     config = {}
 
-
-
     _configure_provider(provider, config)
-
-
 
     assert called["gate"] is False
 
@@ -2881,103 +2013,65 @@ def test_configure_non_managed_provider_skips_portal_gate(monkeypatch):
     assert config["web"]["use_gateway"] is False
 
 
-
-
-
 def test_apply_provider_selection_web_sets_backend():
-
     """Selecting a web provider persists the backend without prompting for keys."""
 
     from clawk_cli.tools_config import apply_provider_selection
 
-
-
     config = {}
 
     apply_provider_selection("web", "Firecrawl Self-Hosted", config)
-
-
 
     assert config["web"]["backend"] == "firecrawl"
 
     assert config["web"]["use_gateway"] is False
 
 
-
-
-
 def test_apply_provider_selection_tts_sets_provider():
-
     """Selecting a TTS provider persists tts.provider."""
 
     from clawk_cli.tools_config import apply_provider_selection
 
-
-
     config = {}
 
     apply_provider_selection("tts", "Microsoft Edge TTS", config)
-
-
 
     assert config["tts"]["provider"] == "edge"
 
     assert config["tts"]["use_gateway"] is False
 
 
-
-
-
 def test_apply_provider_selection_unknown_provider_raises_keyerror():
 
     from clawk_cli.tools_config import apply_provider_selection
 
-
-
     with pytest.raises(KeyError):
-
         apply_provider_selection("web", "No Such Provider", {})
-
-
-
 
 
 def test_apply_provider_selection_unknown_toolset_raises_keyerror():
 
     from clawk_cli.tools_config import apply_provider_selection
 
-
-
     with pytest.raises(KeyError):
-
         apply_provider_selection("not_a_toolset", "whatever", {})
 
 
-
-
-
 def test_apply_provider_selection_does_not_prompt_or_post_setup(monkeypatch):
-
     """The non-interactive selection must not invoke prompts or post-setup hooks."""
 
     from clawk_cli import tools_config
 
-
-
     monkeypatch.setattr(
-
-        tools_config, "_run_post_setup",
-
+        tools_config,
+        "_run_post_setup",
         lambda *a, **k: pytest.fail("post-setup must not run on provider selection"),
-
     )
 
     monkeypatch.setattr(
-
-        tools_config, "_prompt",
-
+        tools_config,
+        "_prompt",
         lambda *a, **k: pytest.fail("env prompting must not run on provider selection"),
-
     )
 
     config = {}
@@ -2987,25 +2081,17 @@ def test_apply_provider_selection_does_not_prompt_or_post_setup(monkeypatch):
     assert config["tts"]["provider"] == "edge"
 
 
-
-
-
 # ── Checklist diff scope: non-configurable toolsets (kanban) must not be
 
 #    reported as added/removed by `clawk tools` ──────────────────────────
 
 
-
-
-
 def test_checklist_toolset_keys_excludes_kanban():
-
     """``kanban`` is check_fn-gated and never appears in the checklist, so it
 
     must not be in the checklist's offered universe for any platform."""
 
     for plat in ("cli", "telegram", "discord"):
-
         keys = _checklist_toolset_keys(plat)
 
         assert "kanban" not in keys
@@ -3015,11 +2101,7 @@ def test_checklist_toolset_keys_excludes_kanban():
         assert "web" in keys
 
 
-
-
-
 def test_kanban_not_reported_as_removed_in_diff():
-
     """Reproduces the false-signal bug: `clawk tools` printed ``- kanban``
 
     when saving a platform that resolves kanban as enabled, even though the
@@ -3042,8 +2124,6 @@ def test_kanban_not_reported_as_removed_in_diff():
 
     assert "kanban" in current  # resolved as enabled at read time
 
-
-
     # The checklist can only return configurable keys it was shown; kanban
 
     # is never one of them.
@@ -3051,8 +2131,6 @@ def test_kanban_not_reported_as_removed_in_diff():
     universe = _checklist_toolset_keys("telegram")
 
     new_enabled = {t for t in current if t != "kanban"}
-
-
 
     # Unscoped (old, buggy) diff would surface kanban.
 
@@ -3063,11 +2141,7 @@ def test_kanban_not_reported_as_removed_in_diff():
     assert ((current - new_enabled) & universe) == set()
 
 
-
-
-
 def test_real_configurable_changes_still_reported_in_diff():
-
     """Scoping the diff to the checklist universe must NOT swallow genuine
 
     add/remove of configurable toolsets."""
@@ -3078,23 +2152,14 @@ def test_real_configurable_changes_still_reported_in_diff():
 
     universe = _checklist_toolset_keys("cli")
 
-
-
     # User unticks 'terminal' (configurable) — must still report as removed.
 
     new_enabled = {t for t in current if t not in ("kanban", "terminal")}
 
     assert ((current - new_enabled) & universe) == {"terminal"}
 
-
-
     # User adds 'vision' (configurable) — must still report as added.
 
     new_enabled2 = (current - {"kanban"}) | {"vision"}
 
     assert ((new_enabled2 - current) & universe) == {"vision"}
-
-
-
-
-

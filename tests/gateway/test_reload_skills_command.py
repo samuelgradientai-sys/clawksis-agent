@@ -84,6 +84,7 @@ def _make_runner():
     # Use the real _session_key_for_source binding so the key matches what
     # the agent-loop consumer will look up later.
     from gateway.run import GatewayRunner as _GR
+
     runner._session_key_for_source = _GR._session_key_for_source.__get__(runner, _GR)
     return runner
 
@@ -105,6 +106,7 @@ async def test_reload_skills_handler_queues_note_on_diff(monkeypatch):
     }
 
     import agent.skill_commands as skill_commands_mod
+
     monkeypatch.setattr(skill_commands_mod, "reload_skills", lambda: fake_result)
 
     runner = _make_runner()

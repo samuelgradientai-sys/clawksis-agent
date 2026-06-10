@@ -1032,23 +1032,37 @@ wget -qO- https://raw.githubusercontent.com/unslothai/unsloth/main/unsloth/_auto
 Or, run the below manually in a Python REPL:
 
 ```python
-try: import torch
-except: raise ImportError('Install torch via `pip install torch`')
+try:
+    import torch
+except:
+    raise ImportError("Install torch via `pip install torch`")
 from packaging.version import Version as V
+
 v = V(torch.__version__)
 cuda = str(torch.version.cuda)
 is_ampere = torch.cuda.get_device_capability()[0] >= 8
-if cuda != "12.1" and cuda != "11.8" and cuda != "12.4": raise RuntimeError(f"CUDA = {cuda} not supported!")
-if   v <= V('2.1.0'): raise RuntimeError(f"Torch = {v} too old!")
-elif v <= V('2.1.1'): x = 'cu{}{}-torch211'
-elif v <= V('2.1.2'): x = 'cu{}{}-torch212'
-elif v  < V('2.3.0'): x = 'cu{}{}-torch220'
-elif v  < V('2.4.0'): x = 'cu{}{}-torch230'
-elif v  < V('2.5.0'): x = 'cu{}{}-torch240'
-elif v  < V('2.6.0'): x = 'cu{}{}-torch250'
-else: raise RuntimeError(f"Torch = {v} too new!")
+if cuda != "12.1" and cuda != "11.8" and cuda != "12.4":
+    raise RuntimeError(f"CUDA = {cuda} not supported!")
+if v <= V("2.1.0"):
+    raise RuntimeError(f"Torch = {v} too old!")
+elif v <= V("2.1.1"):
+    x = "cu{}{}-torch211"
+elif v <= V("2.1.2"):
+    x = "cu{}{}-torch212"
+elif v < V("2.3.0"):
+    x = "cu{}{}-torch220"
+elif v < V("2.4.0"):
+    x = "cu{}{}-torch230"
+elif v < V("2.5.0"):
+    x = "cu{}{}-torch240"
+elif v < V("2.6.0"):
+    x = "cu{}{}-torch250"
+else:
+    raise RuntimeError(f"Torch = {v} too new!")
 x = x.format(cuda.replace(".", ""), "-ampere" if is_ampere else "")
-print(f'pip install --upgrade pip && pip install "unsloth[{x}] @ git+https://github.com/unslothai/unsloth.git"')
+print(
+    f'pip install --upgrade pip && pip install "unsloth[{x}] @ git+https://github.com/unslothai/unsloth.git"'
+)
 ```
 
 
@@ -1676,58 +1690,65 @@ from unsloth import FastLanguageModel, FastModel
 import torch
 from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
-max_seq_length = 2048 # Supports RoPE Scaling internally, so choose any!
+
+max_seq_length = 2048  # Supports RoPE Scaling internally, so choose any!
 # Get LAION dataset
 url = "https://huggingface.co/datasets/laion/OIG/resolve/main/unified_chip2.jsonl"
-dataset = load_dataset("json", data_files = {"train" : url}, split = "train")
+dataset = load_dataset("json", data_files={"train": url}, split="train")
 
 # 4bit pre quantized models we support for 4x faster downloading + no OOMs.
 fourbit_models = [
-    "unsloth/gpt-oss-20b-unsloth-bnb-4bit", #or choose any model
-
-] # More models at https://huggingface.co/unsloth
+    "unsloth/gpt-oss-20b-unsloth-bnb-4bit",  # or choose any model
+]  # More models at https://huggingface.co/unsloth
 
 model, tokenizer = FastModel.from_pretrained(
-    model_name = "unsloth/gpt-oss-20b",
-    max_seq_length = 2048, # Choose any for long context!
-    load_in_4bit = True,  # 4-bit quantization. False = 16-bit LoRA.
-    load_in_8bit = False, # 8-bit quantization
-    load_in_16bit = False, # [NEW!] 16-bit LoRA
-    full_finetuning = False, # Use for full fine-tuning.
+    model_name="unsloth/gpt-oss-20b",
+    max_seq_length=2048,  # Choose any for long context!
+    load_in_4bit=True,  # 4-bit quantization. False = 16-bit LoRA.
+    load_in_8bit=False,  # 8-bit quantization
+    load_in_16bit=False,  # [NEW!] 16-bit LoRA
+    full_finetuning=False,  # Use for full fine-tuning.
     # token = "hf_...", # use one if using gated models
 )
 
 # Do model patching and add fast LoRA weights
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    max_seq_length = max_seq_length,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    max_seq_length=max_seq_length,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
 )
 
 trainer = SFTTrainer(
-    model = model,
-    train_dataset = dataset,
-    tokenizer = tokenizer,
-    args = SFTConfig(
-        max_seq_length = max_seq_length,
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 10,
-        max_steps = 60,
-        logging_steps = 1,
-        output_dir = "outputs",
-        optim = "adamw_8bit",
-        seed = 3407,
+    model=model,
+    train_dataset=dataset,
+    tokenizer=tokenizer,
+    args=SFTConfig(
+        max_seq_length=max_seq_length,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=10,
+        max_steps=60,
+        logging_steps=1,
+        output_dir="outputs",
+        optim="adamw_8bit",
+        seed=3407,
     ),
 )
 trainer.train()
@@ -2381,12 +2402,14 @@ To format the dataset, all vision finetuning tasks should be formatted as follow
 
 ```python
 [
-{ "role": "user",
-  "content": [{"type": "text",  "text": instruction}, {"type": "image", "image": image} ]
-},
-{ "role": "assistant",
-  "content": [{"type": "text",  "text": answer} ]
-},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image", "image": image},
+        ],
+    },
+    {"role": "assistant", "content": [{"type": "text", "text": answer}]},
 ]
 ```
 
@@ -2769,10 +2792,11 @@ For Gemma 2, 3, 3n models, you define the parts as follows:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
+
 trainer = train_on_responses_only(
     trainer,
-    instruction_part = "<start_of_turn>user\n",
-    response_part = "<start_of_turn>model\n",
+    instruction_part="<start_of_turn>user\n",
+    response_part="<start_of_turn>model\n",
 )
 ```
 
@@ -3390,17 +3414,17 @@ Since we got bad answers, RL will influence the model to try NOT to output bad a
 **NEW!** We now support [**GSPO**](https://docs.unsloth.ai/get-started/reinforcement-learning-rl-guide/gspo-reinforcement-learning) and most other new GRPO techniques. You can play with the following arguments in GRPOConfig to enable:
 
 ```python
-epsilon=0.2,
-epsilon_high=0.28, # one sided
-delta=1.5 # two sided
+epsilon = (0.2,)
+epsilon_high = (0.28,)  # one sided
+delta = 1.5  # two sided
 
-loss_type='gspo',
+loss_type = ("gspo",)
 # or:
-loss_type='grpo',
+loss_type = ("grpo",)
 # or:
-loss_type='dr_grpo',
+loss_type = ("dr_grpo",)
 
-mask_truncated_completions=True,
+mask_truncated_completions = (True,)
 ```
 
 {% endhint %}
@@ -3752,19 +3776,19 @@ The **GRPOConfig** defines key hyperparameters for training:
 **NEW!** We now support DAPO, Dr. GRPO and most other new GRPO techniques. You can play with the following arguments in GRPOConfig to enable:
 
 ```python
-epsilon=0.2,
-epsilon_high=0.28, # one sided
-delta=1.5 # two sided
+epsilon = (0.2,)
+epsilon_high = (0.28,)  # one sided
+delta = 1.5  # two sided
 
-loss_type='bnpo',
+loss_type = ("bnpo",)
 # or:
-loss_type='grpo',
+loss_type = ("grpo",)
 # or:
-loss_type='dr_grpo',
+loss_type = ("dr_grpo",)
 # or:
-loss_type='dapo',
+loss_type = ("dapo",)
 
-mask_truncated_completions=True,
+mask_truncated_completions = (True,)
 ```
 
 {% endhint %}
@@ -3822,7 +3846,10 @@ To share your model, we’ll push it to the Hugging Face Hub using the `push_to_
 ```python
 # Push to Hugging Face Hub (requires a token)
 model.push_to_hub_merged(
-    "your-username/model-name", tokenizer, save_method="merged_16bit", token="your-token"
+    "your-username/model-name",
+    tokenizer,
+    save_method="merged_16bit",
+    token="your-token",
 )
 ```
 
@@ -4108,17 +4135,19 @@ To enable **Unsloth's Standby** feature, set the environment variable `UNSLOTH_V
 
 ```python
 import os
+
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 
 from unsloth import FastLanguageModel
 import torch
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/Qwen3-8B-Base",
-    max_seq_length = 2048, # Can increase for longer reasoning traces
-    load_in_4bit = False, # False for LoRA 16bit
-    fast_inference = True,
-    max_lora_rank = 32, # Larger rank = smarter, but slower
-    gpu_memory_utilization = 0.95,
+    model_name="unsloth/Qwen3-8B-Base",
+    max_seq_length=2048,  # Can increase for longer reasoning traces
+    load_in_4bit=False,  # False for LoRA 16bit
+    fast_inference=True,
+    max_lora_rank=32,  # Larger rank = smarter, but slower
+    gpu_memory_utilization=0.95,
 )
 ```
 
@@ -4183,6 +4212,7 @@ To enable this, simply add the below to all RL / GRPO training runs before any U
 
 ```python
 import os
+
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 ```
 
@@ -4468,58 +4498,67 @@ We're also in 🤗Hugging Face's official docs! We're on the [SFT docs](https://
 ```python
 python
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Optional set GPU device ID
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Optional set GPU device ID
 
 from unsloth import FastLanguageModel, PatchDPOTrainer
 from unsloth import is_bfloat16_supported
+
 PatchDPOTrainer()
 import torch
 from transformers import TrainingArguments
 from trl import DPOTrainer
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/zephyr-sft-bnb-4bit",
-    max_seq_length = max_seq_length,
-    dtype = None,
-    load_in_4bit = True,
+    model_name="unsloth/zephyr-sft-bnb-4bit",
+    max_seq_length=max_seq_length,
+    dtype=None,
+    load_in_4bit=True,
 )
 
 # Do model patching and add fast LoRA weights
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 64,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 64,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=64,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=64,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    max_seq_length = max_seq_length,
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    max_seq_length=max_seq_length,
 )
 
 dpo_trainer = DPOTrainer(
-    model = model,
-    ref_model = None,
-    args = TrainingArguments(
-        per_device_train_batch_size = 4,
-        gradient_accumulation_steps = 8,
-        warmup_ratio = 0.1,
-        num_train_epochs = 3,
-        fp16 = not is_bfloat16_supported(),
-        bf16 = is_bfloat16_supported(),
-        logging_steps = 1,
-        optim = "adamw_8bit",
-        seed = 42,
-        output_dir = "outputs",
+    model=model,
+    ref_model=None,
+    args=TrainingArguments(
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=8,
+        warmup_ratio=0.1,
+        num_train_epochs=3,
+        fp16=not is_bfloat16_supported(),
+        bf16=is_bfloat16_supported(),
+        logging_steps=1,
+        optim="adamw_8bit",
+        seed=42,
+        output_dir="outputs",
     ),
-    beta = 0.1,
-    train_dataset = YOUR_DATASET_HERE,
+    beta=0.1,
+    train_dataset=YOUR_DATASET_HERE,
     # eval_dataset = YOUR_DATASET_HERE,
-    tokenizer = tokenizer,
-    max_length = 1024,
-    max_prompt_length = 512,
+    tokenizer=tokenizer,
+    max_length=1024,
+    max_prompt_length=512,
 )
 dpo_trainer.train()
 ```
@@ -4577,7 +4616,7 @@ llm = LLM(
     model="unsloth/DeepSeek-OCR",
     enable_prefix_caching=False,
     mm_processor_cache_gb=0,
-    logits_processors=[NGramPerReqLogitsProcessor]
+    logits_processors=[NGramPerReqLogitsProcessor],
 )
 
 # Prepare batched input with your image file
@@ -4586,14 +4625,8 @@ image_2 = Image.open("path/to/your/image_2.png").convert("RGB")
 prompt = "<image>\nFree OCR."
 
 model_input = [
-    {
-        "prompt": prompt,
-        "multi_modal_data": {"image": image_1}
-    },
-    {
-        "prompt": prompt,
-        "multi_modal_data": {"image": image_2}
-    }
+    {"prompt": prompt, "multi_modal_data": {"image": image_1}},
+    {"prompt": prompt, "multi_modal_data": {"image": image_2}},
 ]
 
 sampling_param = SamplingParams(
@@ -4629,23 +4662,35 @@ from unsloth import FastVisionModel
 import torch
 from transformers import AutoModel
 import os
-os.environ["UNSLOTH_WARN_UNINITIALIZED"] = '0'
+
+os.environ["UNSLOTH_WARN_UNINITIALIZED"] = "0"
 
 from huggingface_hub import snapshot_download
-snapshot_download("unsloth/DeepSeek-OCR", local_dir = "deepseek_ocr")
+
+snapshot_download("unsloth/DeepSeek-OCR", local_dir="deepseek_ocr")
 model, tokenizer = FastVisionModel.from_pretrained(
     "./deepseek_ocr",
-    load_in_4bit = False, # Use 4bit to reduce memory use. False for 16bit LoRA.
-    auto_model = AutoModel,
-    trust_remote_code = True,
-    unsloth_force_compile = True,
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for long context
+    load_in_4bit=False,  # Use 4bit to reduce memory use. False for 16bit LoRA.
+    auto_model=AutoModel,
+    trust_remote_code=True,
+    unsloth_force_compile=True,
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for long context
 )
 
 prompt = "<image>\nFree OCR. "
-image_file = 'your_image.jpg'
-output_path = 'your/output/dir'
-res = model.infer(tokenizer, prompt=prompt, image_file=image_file, output_path = output_path, base_size = 1024, image_size = 640, crop_mode=True, save_results = True, test_compress = False)
+image_file = "your_image.jpg"
+output_path = "your/output/dir"
+res = model.infer(
+    tokenizer,
+    prompt=prompt,
+    image_file=image_file,
+    output_path=output_path,
+    base_size=1024,
+    image_size=640,
+    crop_mode=True,
+    save_results=True,
+    test_compress=False,
+)
 ```
 
 {% endcode %}
@@ -4950,13 +4995,13 @@ You can only use `fast_inference` for VLMs supported by vLLM. Some models, like 
 {% endhint %}
 
 ```python
-os.environ['UNSLOTH_VLLM_STANDBY'] = '1' # To enable memory efficient GRPO with vLLM
+os.environ["UNSLOTH_VLLM_STANDBY"] = "1"  # To enable memory efficient GRPO with vLLM
 model, tokenizer = FastVisionModel.from_pretrained(
-    model_name = "Qwen/Qwen2.5-VL-7B-Instruct",
-    max_seq_length = 16384, #Must be this large to fit image in context
-    load_in_4bit = True, # False for LoRA 16bit
-    fast_inference = True, # Enable vLLM fast inference
-    gpu_memory_utilization = 0.8, # Reduce if out of memory
+    model_name="Qwen/Qwen2.5-VL-7B-Instruct",
+    max_seq_length=16384,  # Must be this large to fit image in context
+    load_in_4bit=True,  # False for LoRA 16bit
+    fast_inference=True,  # Enable vLLM fast inference
+    gpu_memory_utilization=0.8,  # Reduce if out of memory
 )
 ```
 
@@ -4967,16 +5012,14 @@ However you CAN train the vision layers as well if you use inference via transfo
 # Add LoRA adapter to the model for parameter efficient fine tuning
 model = FastVisionModel.get_peft_model(
     model,
-
-    finetune_vision_layers     = False,# fast_inference doesn't support finetune_vision_layers yet :(
-    finetune_language_layers   = True, # False if not finetuning language layers
-    finetune_attention_modules = True, # False if not finetuning attention layers
-    finetune_mlp_modules       = True, # False if not finetuning MLP layers
-
-    r = lora_rank, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    lora_alpha = lora_rank*2, # *2 speeds up training
-    use_gradient_checkpointing = "unsloth", # Reduces memory usage
-    random_state = 3407,
+    finetune_vision_layers=False,  # fast_inference doesn't support finetune_vision_layers yet :(
+    finetune_language_layers=True,  # False if not finetuning language layers
+    finetune_attention_modules=True,  # False if not finetuning attention layers
+    finetune_mlp_modules=True,  # False if not finetuning MLP layers
+    r=lora_rank,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    lora_alpha=lora_rank * 2,  # *2 speeds up training
+    use_gradient_checkpointing="unsloth",  # Reduces memory usage
+    random_state=3407,
 )
 ```
 
@@ -5018,10 +5061,11 @@ Forcing `<|assistant|>` during generation will reduce the occurrences of these g
 To penalize `addCriterion` and gibberish outputs, we edited the reward function to penalize too much of `addCriterion` and newlines.
 
 ```python
-def formatting_reward_func(completions,**kwargs):
+def formatting_reward_func(completions, **kwargs):
     import re
-    thinking_pattern = f'{REASONING_START}(.*?){REASONING_END}'
-    answer_pattern = f'{SOLUTION_START}(.*?){SOLUTION_END}'
+
+    thinking_pattern = f"{REASONING_START}(.*?){REASONING_END}"
+    answer_pattern = f"{SOLUTION_START}(.*?){SOLUTION_END}"
 
     scores = []
     for completion in completions:
@@ -5038,7 +5082,7 @@ def formatting_reward_func(completions,**kwargs):
         # Penalize on excessive addCriterion and newlines
         if len(completion) != 0:
             removal = completion.replace("addCriterion", "").replace("\n", "")
-            if (len(completion)-len(removal))/len(completion) >= 0.5:
+            if (len(completion) - len(removal)) / len(completion) >= 0.5:
                 score -= 2.0
 
         scores.append(score)
@@ -5329,26 +5373,31 @@ Load the 20B model in 4‑bit QLoRA for memory efficiency, then wrap it with a L
 from unsloth import FastLanguageModel
 import torch
 
-max_seq_length = 768        # Increase if your task needs longer outputs
-lora_rank      = 4          # Higher rank → better but more VRAM/compute
+max_seq_length = 768  # Increase if your task needs longer outputs
+lora_rank = 4  # Higher rank → better but more VRAM/compute
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name        = "unsloth/gpt-oss-20b",  # or unsloth/gpt-oss-20b-BF16 on H100
-    max_seq_length    = max_seq_length,
-    load_in_4bit      = True,                    # False for 16‑bit
-    offload_embedding = True,                    # saves ~1GB VRAM
+    model_name="unsloth/gpt-oss-20b",  # or unsloth/gpt-oss-20b-BF16 on H100
+    max_seq_length=max_seq_length,
+    load_in_4bit=True,  # False for 16‑bit
+    offload_embedding=True,  # saves ~1GB VRAM
 )
 
 model = FastLanguageModel.get_peft_model(
     model,
-    r = lora_rank,
-    target_modules = [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
+    r=lora_rank,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
     ],
-    lora_alpha = lora_rank * 2,
-    use_gradient_checkpointing = "unsloth",     # big memory saver
-    random_state = 3407,
+    lora_alpha=lora_rank * 2,
+    use_gradient_checkpointing="unsloth",  # big memory saver
+    random_state=3407,
 )
 ```
 
@@ -5371,7 +5420,10 @@ You can quickly smoke‑test with a trivial policy:
 def always_move_left(board):
     return "W"
 
-steps, outcome = execute_strategy(always_move_left, GameBoard(size=8, seed=42, target=2048, probability_fours=0.10))
+
+steps, outcome = execute_strategy(
+    always_move_left, GameBoard(size=8, seed=42, target=2048, probability_fours=0.10)
+)
 ```
 
 {% endstep %}
@@ -5386,6 +5438,7 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import check_python_modules
+
   ok, info = check_python_modules("""
   def strategy(board):
       import math
@@ -5408,6 +5461,7 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import create_locked_down_function
+
   function = """
   def add(a, b):
       def adder(a):
@@ -5420,6 +5474,8 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import execute_with_time_limit
+
+
   @execute_with_time_limit(2)
   def execute_strategy(strategy, game):
       # loop until game ends or timeout
@@ -5482,7 +5538,7 @@ You can replace this dataset with real prompts for your own RL task.
            second = text.find("```", first)
            fx = text[first:second].strip()
            fx = fx.removeprefix("python\n")
-           fx = fx[fx.find("def"):]
+           fx = fx[fx.find("def") :]
            if fx.startswith("def strategy(board):"):
                return fx
        return None
@@ -5491,6 +5547,7 @@ You can replace this dataset with real prompts for your own RL task.
 
    ```python
    from unsloth import create_locked_down_function, check_python_modules
+
 
    def function_works(completions, **kwargs):
        scores = []
@@ -5533,6 +5590,7 @@ You can replace this dataset with real prompts for your own RL task.
 
    PRINTER = 0  # occasionally print for debugging
 
+
    def strategy_succeeds(completions, **kwargs):
        global PRINTER
        scores = []
@@ -5559,11 +5617,11 @@ You can replace this dataset with real prompts for your own RL task.
                if state == "success":
                    scores.append(20.0)
                else:
-                   scores.append(2.0)   # worked but didn’t reach 2048
+                   scores.append(2.0)  # worked but didn’t reach 2048
            except TimeoutError:
-               scores.append(-1.0)      # timed out
+               scores.append(-1.0)  # timed out
            except Exception:
-               scores.append(-3.0)      # crashed
+               scores.append(-3.0)  # crashed
        return scores
    ```
 
@@ -5578,7 +5636,7 @@ We will use the **GRPOTrainer**. Set the prompt/completion lengths, then build a
 ```python
 from trl import GRPOConfig, GRPOTrainer
 
-max_prompt_length     = maximum_length + 1
+max_prompt_length = maximum_length + 1
 max_completion_length = max_seq_length - max_prompt_length
 
 training_args = GRPOConfig(
@@ -5590,11 +5648,11 @@ training_args = GRPOConfig(
     optim="adamw_8bit",
     logging_steps=1,
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=1,    # bump to 4 for smoother reward signals
-    num_generations=2,                # lower if you OOM
+    gradient_accumulation_steps=1,  # bump to 4 for smoother reward signals
+    num_generations=2,  # lower if you OOM
     max_prompt_length=max_prompt_length,
     max_completion_length=max_completion_length,
-    max_steps=1000,                   # or set num_train_epochs=1
+    max_steps=1000,  # or set num_train_epochs=1
     save_steps=100,
     report_to="none",
     output_dir="outputs",
@@ -5662,14 +5720,18 @@ _ = model.generate(
   ```python
   model.save_pretrained_merged("finetuned_model", tokenizer, save_method="mxfp4")
   # or push
-  model.push_to_hub_merged("<org_or_user>/<repo>", tokenizer, token="<hf_token>", save_method="mxfp4")
+  model.push_to_hub_merged(
+      "<org_or_user>/<repo>", tokenizer, token="<hf_token>", save_method="mxfp4"
+  )
   ```
 * **Merge & save 16‑bit**
 
   ```python
   model.save_pretrained_merged("finetuned_model", tokenizer, save_method="merged_16bit")
   # or push
-  model.push_to_hub_merged("<org_or_user>/<repo>", tokenizer, token="<hf_token>", save_method="merged_16bit")
+  model.push_to_hub_merged(
+      "<org_or_user>/<repo>", tokenizer, token="<hf_token>", save_method="merged_16bit"
+  )
   ```
 
 {% endstep %}
@@ -6097,12 +6159,14 @@ The relationship between the two images is that the logo (image 1) is a digital 
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id   = "unsloth/Qwen3-VL-8B-Instruct-GGUF", # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
-    local_dir = "unsloth/Qwen3-VL-8B-Instruct-GGUF", # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Qwen3-VL-8B-Instruct-GGUF",  # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
+    local_dir="unsloth/Qwen3-VL-8B-Instruct-GGUF",  # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -6151,12 +6215,14 @@ For Qwen3-VL-235B-A22B, we will use llama.cpp for optimized inference and a plet
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
+
    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
-       local_dir = "unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
-       allow_patterns = ["*UD-Q2_K_XL*"],
+       repo_id="unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
+       local_dir="unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
+       allow_patterns=["*UD-Q2_K_XL*"],
    )
    ```
 
@@ -6305,12 +6371,32 @@ We also made some functions to directly allow you to use OpenAI's Harmony librar
 
 ```python
 messages = [
-    {"role" : "user", "content" : "What is 1+1?"},
-    {"role" : "assistant", "content" : "2"},
-    {"role": "user",  "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30."},
-    {"role": "assistant",  "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.", "thinking" : ""},
-    {"role": "assistant", "content": "", "tool_calls": [{"name": "get_current_temperature", "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}'}]},
-    {"role": "tool", "name": "get_current_temperature", "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}'},
+    {"role": "user", "content": "What is 1+1?"},
+    {"role": "assistant", "content": "2"},
+    {
+        "role": "user",
+        "content": "What's the temperature in San Francisco now? How about tomorrow? Today's date is 2024-09-30.",
+    },
+    {
+        "role": "assistant",
+        "content": "User asks: 'What is the weather in San Francisco?' We need to use get_current_temperature tool.",
+        "thinking": "",
+    },
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "name": "get_current_temperature",
+                "arguments": '{"location": "San Francisco, California, United States", "unit": "celsius"}',
+            }
+        ],
+    },
+    {
+        "role": "tool",
+        "name": "get_current_temperature",
+        "content": '{"temperature": 19.9, "location": "San Francisco, California, United States", "unit": "celsius"}',
+    },
 ]
 ```
 
@@ -6447,12 +6533,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/gpt-oss-20b-GGUF",
-    local_dir = "unsloth/gpt-oss-20b-GGUF",
-    allow_patterns = ["*F16*"],
+    repo_id="unsloth/gpt-oss-20b-GGUF",
+    local_dir="unsloth/gpt-oss-20b-GGUF",
+    allow_patterns=["*F16*"],
 )
 ```
 
@@ -6512,12 +6600,16 @@ If you want a **full precision unquantized version**, use our  `F16` versions!
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+       "0"  # Can sometimes rate limit, so set to 0 to disable
+   )
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/gpt-oss-120b-GGUF",
-       local_dir = "unsloth/gpt-oss-120b-GGUF",
-       allow_patterns = ["*F16*"],
+       repo_id="unsloth/gpt-oss-120b-GGUF",
+       local_dir="unsloth/gpt-oss-120b-GGUF",
+       allow_patterns=["*F16*"],
    )
    ```
 
@@ -6721,10 +6813,10 @@ Example:
 
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
@@ -6732,8 +6824,12 @@ To format the dataset, we apply a customized version of the gpt-oss prompt:
 
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 Let's inspect the dataset by printing the first example:
@@ -6804,7 +6900,9 @@ model.save_pretrained_merged(save_directory, tokenizer, save_method="mxfp4)
 If you prefer to merge the model and push to the hugging-face hub directly:
 
 ```python
-model.push_to_hub_merged(repo_name, tokenizer=tokenizer, token= hf_token, save_method="mxfp4")
+model.push_to_hub_merged(
+    repo_name, tokenizer=tokenizer, token=hf_token, save_method="mxfp4"
+)
 ```
 
 ### :sparkles: Saving to Llama.cpp
@@ -6923,17 +7021,24 @@ This step adds LoRA adapters for parameter-efficient fine-tuning. Only about 1% 
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
+    r=8,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_dropout=0,  # Supports any, but = 0 is optimized
+    bias="none",  # Supports any, but = "none" is optimized
     # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
+    use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
 )
 ```
 
@@ -6950,8 +7055,17 @@ This is the same dataset referenced in OpenAI's fine-tuning cookbook. The goal o
 ```python
 def formatting_prompts_func(examples):
     convos = examples["messages"]
-    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
-    return { "text" : texts, }
+    texts = [
+        tokenizer.apply_chat_template(
+            convo, tokenize=False, add_generation_prompt=False
+        )
+        for convo in convos
+    ]
+    return {
+        "text": texts,
+    }
+
+
 pass
 
 from datasets import load_dataset
@@ -6966,10 +7080,10 @@ Example:
 
 ```python
 tokenizer.apply_chat_template(
-    text, 
-    tokenize = False, 
-    add_generation_prompt = False,
-    reasoning_effort = "medium",
+    text,
+    tokenize=False,
+    add_generation_prompt=False,
+    reasoning_effort="medium",
 )
 ```
 
@@ -6977,8 +7091,12 @@ To format the dataset, we apply a customized version of the gpt-oss prompt:
 
 ```python
 from unsloth.chat_templates import standardize_sharegpt
+
 dataset = standardize_sharegpt(dataset)
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 Let's inspect the dataset by printing the first example:
@@ -7008,24 +7126,25 @@ In this example, we train for 60 steps to speed up the process. For a full train
 
 ```python
 from trl import SFTConfig, SFTTrainer
+
 trainer = SFTTrainer(
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = dataset,
-    args = SFTConfig(
-        per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 5,
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=dataset,
+    args=SFTConfig(
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
         # num_train_epochs = 1, # Set this for 1 full training run.
-        max_steps = 30,
-        learning_rate = 2e-4,
-        logging_steps = 1,
-        optim = "adamw_8bit",
-        weight_decay = 0.01,
-        lr_scheduler_type = "linear",
-        seed = 3407,
-        output_dir = "outputs",
-        report_to = "none", # Use this for WandB etc
+        max_steps=30,
+        learning_rate=2e-4,
+        logging_steps=1,
+        optim="adamw_8bit",
+        weight_decay=0.01,
+        lr_scheduler_type="linear",
+        seed=3407,
+        output_dir="outputs",
+        report_to="none",  # Use this for WandB etc
     ),
 )
 ```
@@ -7045,18 +7164,22 @@ In this example, we test the model's ability to reason in French by adding a spe
 
 ```python
 messages = [
-    {"role": "system", "content": "reasoning language: French\n\nYou are a helpful assistant that can solve mathematical problems."},
+    {
+        "role": "system",
+        "content": "reasoning language: French\n\nYou are a helpful assistant that can solve mathematical problems.",
+    },
     {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
 ]
 inputs = tokenizer.apply_chat_template(
     messages,
-    add_generation_prompt = True,
-    return_tensors = "pt",
-    return_dict = True,
-    reasoning_effort = "medium",
+    add_generation_prompt=True,
+    return_tensors="pt",
+    return_dict=True,
+    reasoning_effort="medium",
 ).to(model.device)
 from transformers import TextStreamer
-_ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(tokenizer))
+
+_ = model.generate(**inputs, max_new_tokens=2048, streamer=TextStreamer(tokenizer))
 ```
 
 This should produce an output similar to:
@@ -7083,7 +7206,7 @@ model.save_pretrained_merged(save_directory, tokenizer)
 If you prefer to merge the model and push to the hugging-face hub directly:
 
 ```python
-model.push_to_hub_merged(repo_name, tokenizer=tokenizer, token= hf_token)
+model.push_to_hub_merged(repo_name, tokenizer=tokenizer, token=hf_token)
 ```
 
 ### :sparkles: Saving to Llama.cpp
@@ -7227,7 +7350,7 @@ By using some visualization utilities from [Flex Attention's Github repo](https:
 ```python
 def sliding_window_causal(b, h, q_idx, kv_idx):
     causal_mask = q_idx >= kv_idx
-    window_mask = q_idx - kv_idx <= SLIDING_WINDOW 
+    window_mask = q_idx - kv_idx <= SLIDING_WINDOW
     return causal_mask & window_mask
 ```
 
@@ -7264,8 +7387,8 @@ And we see only the last 3 tokens (not 3+1) are attended to! This means instead 
 ```python
 def sliding_window_causal(b, h, q_idx, kv_idx):
     causal_mask = q_idx >= kv_idx
-    window_mask = q_idx - kv_idx <= SLIDING_WINDOW # Default Flex Attention
-    window_mask = q_idx - kv_idx <  SLIDING_WINDOW # GPT-OSS version
+    window_mask = q_idx - kv_idx <= SLIDING_WINDOW  # Default Flex Attention
+    window_mask = q_idx - kv_idx < SLIDING_WINDOW  # GPT-OSS version
     return causal_mask & window_mask
 ```
 
@@ -7326,7 +7449,9 @@ model.save_pretrained_merged(save_directory, tokenizer, save_method="mxfp4")
 If you prefer to merge the model and push to the hugging-face hub, use:
 
 ```python
-model.push_to_hub_merged(repo_name, tokenizer=tokenizer, token=hf_token, save_method="mxfp4")
+model.push_to_hub_merged(
+    repo_name, tokenizer=tokenizer, token=hf_token, save_method="mxfp4"
+)
 ```
 
 To run inference on the merged model, you can use vLLM and Llama.cpp among others. OpenAI recommends these [inference settings](https://docs.unsloth.ai/models/gpt-oss-how-to-run-and-fine-tune/..#recommended-settings) for both models: `temperature=1.0`, `top_p=1.0`, `top_k=0`
@@ -7419,12 +7544,12 @@ We also added support for directly fine-tuning of gpt-oss models by implementing
 
 ```python
 model, tokenizer = FastLanguageModel.from_pretrained(
-    # model_name = "unsloth/gpt-oss-20b-BF16", 
-    model_name = "unsloth/gpt-oss-20b",
-    dtype = dtype, # None for auto detection
-    max_seq_length = max_seq_length, # Choose any for long context!
-    load_in_4bit = True,  # 4 bit quantization to reduce memory
-    full_finetuning = False, # [NEW!] We have full finetuning now!
+    # model_name = "unsloth/gpt-oss-20b-BF16",
+    model_name="unsloth/gpt-oss-20b",
+    dtype=dtype,  # None for auto detection
+    max_seq_length=max_seq_length,  # Choose any for long context!
+    load_in_4bit=True,  # 4 bit quantization to reduce memory
+    full_finetuning=False,  # [NEW!] We have full finetuning now!
     # token = "hf_...", # use one if using gated models
 )
 ```
@@ -7506,7 +7631,9 @@ def eager_attention_forward(
         causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
         attn_weights = attn_weights + causal_mask
 
-    sinks = module.sinks.reshape(1, -1, 1, 1).expand(query.shape[0], -1, query.shape[-2], -1)
+    sinks = module.sinks.reshape(1, -1, 1, 1).expand(
+        query.shape[0], -1, query.shape[-2], -1
+    )
     combined_logits = torch.cat([attn_weights, sinks], dim=-1)
 
     # This was not in the original implementation and slightly affect results; it prevents overflow in BF16/FP16
@@ -7676,12 +7803,16 @@ Download the model via (after installing `pip install huggingface_hub hf_transfe
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+    "0"  # Can sometimes rate limit, so set to 0 to disable
+)
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/GLM-4.6-GGUF",
-    local_dir = "unsloth/GLM-4.6-GGUF",
-    allow_patterns = ["*UD-Q2_K_XL*"], # Dynamic 2bit Use "*UD-TQ1_0*" for Dynamic 1bit
+    repo_id="unsloth/GLM-4.6-GGUF",
+    local_dir="unsloth/GLM-4.6-GGUF",
+    allow_patterns=["*UD-Q2_K_XL*"],  # Dynamic 2bit Use "*UD-TQ1_0*" for Dynamic 1bit
 )
 ```
 
@@ -7739,13 +7870,16 @@ Then use OpenAI's Python library after `pip install openai` :
 ```python
 from openai import OpenAI
 import json
+
 openai_client = OpenAI(
-    base_url = "http://127.0.0.1:8001/v1",
-    api_key = "sk-no-key-required",
+    base_url="http://127.0.0.1:8001/v1",
+    api_key="sk-no-key-required",
 )
 completion = openai_client.chat.completions.create(
-    model = "unsloth/GLM-4.6",
-    messages = [{"role": "user", "content": "What is 2+2?"},],
+    model="unsloth/GLM-4.6",
+    messages=[
+        {"role": "user", "content": "What is 2+2?"},
+    ],
 )
 print(completion.choices[0].message.content)
 ```
@@ -7875,12 +8009,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/granite-4.0-h-small-GGUF",
-    local_dir = "unsloth/granite-4.0-h-small-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"], # For Q4_K_M
+    repo_id="unsloth/granite-4.0-h-small-GGUF",
+    local_dir="unsloth/granite-4.0-h-small-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],  # For Q4_K_M
 )
 ```
 
@@ -8153,12 +8289,16 @@ Download the model via (after installing `pip install huggingface_hub hf_transfe
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+    "0"  # Can sometimes rate limit, so set to 0 to disable
+)
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/DeepSeek-V3.1-Terminus-GGUF",
-    local_dir = "unsloth/DeepSeek-V3.1-Terminus-GGUF",
-    allow_patterns = ["*UD-Q2_K_XL*"], # Dynamic 2bit Use "*UD-TQ1_0*" for Dynamic 1bit
+    repo_id="unsloth/DeepSeek-V3.1-Terminus-GGUF",
+    local_dir="unsloth/DeepSeek-V3.1-Terminus-GGUF",
+    allow_patterns=["*UD-Q2_K_XL*"],  # Dynamic 2bit Use "*UD-TQ1_0*" for Dynamic 1bit
 )
 ```
 
@@ -8192,10 +8332,11 @@ Get the 1bit version (170GB) if you don't have enough combined RAM and VRAM:
 
 ```python
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/DeepSeek-V3.1-Terminus-GGUF",
-    local_dir = "unsloth/DeepSeek-V3.1-Terminus-GGUF",
-    allow_patterns = ["*UD-TQ1_0*"], # Use "*UD-Q2_K_XL*" for Dynamic 2bit
+    repo_id="unsloth/DeepSeek-V3.1-Terminus-GGUF",
+    local_dir="unsloth/DeepSeek-V3.1-Terminus-GGUF",
+    allow_patterns=["*UD-TQ1_0*"],  # Use "*UD-Q2_K_XL*" for Dynamic 2bit
 )
 ```
 
@@ -8229,13 +8370,16 @@ Then use OpenAI's Python library after `pip install openai` :
 ```python
 from openai import OpenAI
 import json
+
 openai_client = OpenAI(
-    base_url = "http://127.0.0.1:8001/v1",
-    api_key = "sk-no-key-required",
+    base_url="http://127.0.0.1:8001/v1",
+    api_key="sk-no-key-required",
 )
 completion = openai_client.chat.completions.create(
-    model = "unsloth/DeepSeek-V3.1-Terminus",
-    messages = [{"role": "user", "content": "What is 2+2?"},],
+    model="unsloth/DeepSeek-V3.1-Terminus",
+    messages=[
+        {"role": "user", "content": "What is 2+2?"},
+    ],
 )
 print(completion.choices[0].message.content)
 ```
@@ -8418,12 +8562,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
-    local_dir = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    local_dir="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -8482,12 +8628,16 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+       "0"  # Can sometimes rate limit, so set to 0 to disable
+   )
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
-       local_dir = "unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
-       allow_patterns = ["*UD-Q2_K_XL*"],
+       repo_id="unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
+       local_dir="unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
+       allow_patterns=["*UD-Q2_K_XL*"],
    )
    ```
 
@@ -8578,7 +8728,7 @@ def get_current_temperature(location: str, unit: str = "celsius"):
         the temperature, the location, and the unit in a dict
     """
     return {
-        "temperature": 26.1, # PRE_CONFIGURED -> you change this!
+        "temperature": 26.1,  # PRE_CONFIGURED -> you change this!
         "location": location,
         "unit": unit,
     }
@@ -8592,17 +8742,37 @@ Then use the tokenizer to create the entire prompt:
 
 ```python
 from transformers import AutoTokenizer
+
 tokenizer = AutoTokenizer.from_pretrained("unsloth/Qwen3-Coder-480B-A35B-Instruct")
 
 messages = [
-    {'role': 'user', 'content': "What's the temperature in San Francisco now? How about tomorrow?"},
-    {'content': "", 'role': 'assistant', 'function_call': None, 'tool_calls': [
-        {'id': 'ID', 'function': {'arguments': {"location": "San Francisco, CA, USA"}, 'name': 'get_current_temperature'}, 'type': 'function'},
-    ]},
-    {'role': 'tool', 'content': '{"temperature": 26.1, "location": "San Francisco, CA, USA", "unit": "celsius"}', 'tool_call_id': 'ID'},
+    {
+        "role": "user",
+        "content": "What's the temperature in San Francisco now? How about tomorrow?",
+    },
+    {
+        "content": "",
+        "role": "assistant",
+        "function_call": None,
+        "tool_calls": [
+            {
+                "id": "ID",
+                "function": {
+                    "arguments": {"location": "San Francisco, CA, USA"},
+                    "name": "get_current_temperature",
+                },
+                "type": "function",
+            },
+        ],
+    },
+    {
+        "role": "tool",
+        "content": '{"temperature": 26.1, "location": "San Francisco, CA, USA", "unit": "celsius"}',
+        "tool_call_id": "ID",
+    },
 ]
 
-prompt = tokenizer.apply_chat_template(messages, tokenize = False)
+prompt = tokenizer.apply_chat_template(messages, tokenize=False)
 ```
 
 {% endcode %}
@@ -8740,12 +8910,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/gemma-3-27b-it-GGUF",
-    local_dir = "unsloth/gemma-3-27b-it-GGUF",
-    allow_patterns = ["*Q4_K_XL*", "mmproj-BF16.gguf"], # For Q4_K_M
+    repo_id="unsloth/gemma-3-27b-it-GGUF",
+    local_dir="unsloth/gemma-3-27b-it-GGUF",
+    allow_patterns=["*Q4_K_XL*", "mmproj-BF16.gguf"],  # For Q4_K_M
 )
 ```
 
@@ -8964,12 +9136,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/gemma-3n-E4B-it-GGUF",
-    local_dir = "unsloth/gemma-3n-E4B-it-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*", "mmproj-BF16.gguf"], # For Q4_K_XL
+    repo_id="unsloth/gemma-3n-E4B-it-GGUF",
+    local_dir="unsloth/gemma-3n-E4B-it-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*", "mmproj-BF16.gguf"],  # For Q4_K_XL
 )
 ```
 
@@ -9030,10 +9204,10 @@ Our free Gemma 3n Colab notebooks default to fine-tuning text layers. If you wan
 ```python
 model = FastVisionModel.get_peft_model(
     model,
-    finetune_vision_layers     = False, # False if not finetuning vision layers
-    finetune_language_layers   = True,  # False if not finetuning language layers
-    finetune_attention_modules = True,  # False if not finetuning attention layers
-    finetune_mlp_modules       = True,  # False if not finetuning MLP layers
+    finetune_vision_layers=False,  # False if not finetuning vision layers
+    finetune_language_layers=True,  # False if not finetuning language layers
+    finetune_attention_modules=True,  # False if not finetuning attention layers
+    finetune_mlp_modules=True,  # False if not finetuning MLP layers
 )
 ```
 
@@ -9244,7 +9418,7 @@ text = tokenizer.apply_chat_template(
     messages,
     tokenize=False,
     add_generation_prompt=True,
-    enable_thinking=True  # Default is True
+    enable_thinking=True,  # Default is True
 )
 ```
 
@@ -9261,7 +9435,7 @@ text = tokenizer.apply_chat_template(
     messages,
     tokenize=False,
     add_generation_prompt=True,
-    enable_thinking=False  # Disables thinking mode
+    enable_thinking=False,  # Disables thinking mode
 )
 ```
 
@@ -9312,12 +9486,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Qwen3-14B-GGUF",
-    local_dir = "unsloth/Qwen3-14B-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Qwen3-14B-GGUF",
+    local_dir="unsloth/Qwen3-14B-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -9356,12 +9532,14 @@ For Qwen3-235B-A22B, we will specifically use Llama.cpp for optimized inference 
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
+
    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/Qwen3-235B-A22B-GGUF",
-       local_dir = "unsloth/Qwen3-235B-A22B-GGUF",
-       allow_patterns = ["*UD-Q2_K_XL*"],
+       repo_id="unsloth/Qwen3-235B-A22B-GGUF",
+       local_dir="unsloth/Qwen3-235B-A22B-GGUF",
+       allow_patterns=["*UD-Q2_K_XL*"],
    )
    ```
 
@@ -9425,12 +9603,13 @@ If you're fine-tuning the MOE models, please use `FastModel` and not `FastLangua
 ```python
 from unsloth import FastModel
 import torch
+
 model, tokenizer = FastModel.from_pretrained(
-    model_name = "unsloth/Qwen3-30B-A3B",
-    max_seq_length = 2048, # Choose any for long context!
-    load_in_4bit = True,  # 4 bit quantization to reduce memory
-    load_in_8bit = False, # [NEW!] A bit more accurate, uses 2x memory
-    full_finetuning = False, # [NEW!] We have full finetuning now!
+    model_name="unsloth/Qwen3-30B-A3B",
+    max_seq_length=2048,  # Choose any for long context!
+    load_in_4bit=True,  # 4 bit quantization to reduce memory
+    load_in_8bit=False,  # [NEW!] A bit more accurate, uses 2x memory
+    full_finetuning=False,  # [NEW!] We have full finetuning now!
     # token = "hf_...", # use one if using gated models
 )
 ```
@@ -9590,12 +9769,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
-    local_dir = "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+    local_dir="unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -9658,12 +9839,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
-    local_dir = "unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
+    local_dir="unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -9727,12 +9910,16 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+       "0"  # Can sometimes rate limit, so set to 0 to disable
+   )
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
-       local_dir = "unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
-       allow_patterns = ["*UD-Q2_K_XL*"],
+       repo_id="unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
+       local_dir="unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
+       allow_patterns=["*UD-Q2_K_XL*"],
    )
    ```
 
@@ -9821,12 +10008,16 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+   os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+       "0"  # Can sometimes rate limit, so set to 0 to disable
+   )
    from huggingface_hub import snapshot_download
+
    snapshot_download(
-       repo_id = "unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
-       local_dir = "unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
-       allow_patterns = ["*UD-Q2_K_XL*"],
+       repo_id="unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
+       local_dir="unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
+       allow_patterns=["*UD-Q2_K_XL*"],
    )
    ```
 
@@ -9908,12 +10099,13 @@ If you're fine-tuning the MOE models, please use `FastModel` and not `FastLangua
 ```python
 from unsloth import FastModel
 import torch
+
 model, tokenizer = FastModel.from_pretrained(
-    model_name = "unsloth/Qwen3-30B-A3B-Instruct-2507",
-    max_seq_length = 2048, # Choose any for long context!
-    load_in_4bit = True,  # 4 bit quantization to reduce memory
-    load_in_8bit = False, # [NEW!] A bit more accurate, uses 2x memory
-    full_finetuning = False, # [NEW!] We have full finetuning now!
+    model_name="unsloth/Qwen3-30B-A3B-Instruct-2507",
+    max_seq_length=2048,  # Choose any for long context!
+    load_in_4bit=True,  # 4 bit quantization to reduce memory
+    load_in_8bit=False,  # [NEW!] A bit more accurate, uses 2x memory
+    full_finetuning=False,  # [NEW!] We have full finetuning now!
     # token = "hf_...", # use one if using gated models
 )
 ```
@@ -10117,12 +10309,18 @@ export LLAMA_CACHE="unsloth/DeepSeek-R1-0528-GGUF"
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+    "0"  # Can sometimes rate limit, so set to 0 to disable
+)
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/DeepSeek-R1-0528-GGUF",
-    local_dir = "unsloth/DeepSeek-R1-0528-GGUF",
-    allow_patterns = ["*UD-IQ1_S*"], # Dynamic 1bit (168GB) Use "*UD-Q2_K_XL*" for Dynamic 2bit (251GB)
+    repo_id="unsloth/DeepSeek-R1-0528-GGUF",
+    local_dir="unsloth/DeepSeek-R1-0528-GGUF",
+    allow_patterns=[
+        "*UD-IQ1_S*"
+    ],  # Dynamic 1bit (168GB) Use "*UD-Q2_K_XL*" for Dynamic 2bit (251GB)
 )
 ```
 
@@ -10277,9 +10475,9 @@ Mistral has their own vibe checking prompts which can be used to evaluate Magist
 ```py
 prompt_1 = 'How many "r" are in strawberry?'
 
-prompt_2 = 'John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?'
+prompt_2 = "John is one of 4 children. The first sister is 4 years old. Next year, the second sister will be twice as old as the first sister. The third sister is two years older than the second sister. The third sister is half the ago of her older brother. How old is John?"
 
-prompt_3 = '9.11 and 9.8, which is greater?'
+prompt_3 = "9.11 and 9.8, which is greater?"
 ```
 
 **Medium** - *Should most of the time be correct*
@@ -10356,12 +10554,14 @@ In llama.cpp, please use `--jinja` to enable the system prompt!
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Magistral-Small-2509-GGUF",
-    local_dir = "unsloth/Magistral-Small-2509-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"], # For UD-Q4_K_XL
+    repo_id="unsloth/Magistral-Small-2509-GGUF",
+    local_dir="unsloth/Magistral-Small-2509-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],  # For UD-Q4_K_XL
 )
 ```
 
@@ -11668,12 +11868,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
-    local_dir = "unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
-    allow_patterns = ["*IQ2_XXS*"],
+    repo_id="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
+    local_dir="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
+    allow_patterns=["*IQ2_XXS*"],
 )
 ```
 
@@ -11715,12 +11917,14 @@ For Llama 4 Maverick - it's best to have 2 RTX 4090s (2 x 24GB)
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
-    local_dir = "unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
-    allow_patterns = ["*IQ1_S*"],
+    repo_id="unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
+    local_dir="unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
+    allow_patterns=["*IQ1_S*"],
 )
 ```
 
@@ -11902,12 +12106,18 @@ export LLAMA_CACHE="unsloth/Kimi-K2-Instruct-GGUF"
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+    "0"  # Can sometimes rate limit, so set to 0 to disable
+)
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Kimi-K2-Instruct-GGUF",
-    local_dir = "unsloth/Kimi-K2-Instruct-GGUF",
-    allow_patterns = ["*UD-TQ1_0*"], # Dynamic 1bit (281GB) Use "*UD-Q2_K_XL*" for Dynamic 2bit (381GB)
+    repo_id="unsloth/Kimi-K2-Instruct-GGUF",
+    local_dir="unsloth/Kimi-K2-Instruct-GGUF",
+    allow_patterns=[
+        "*UD-TQ1_0*"
+    ],  # Dynamic 1bit (281GB) Use "*UD-Q2_K_XL*" for Dynamic 2bit (381GB)
 )
 ```
 
@@ -11955,18 +12165,16 @@ wget https://huggingface.co/unsloth/Kimi-K2-Instruct/raw/main/chat_template.jinj
 The Kimi K2 tokenizer was interesting to play around with - <mark style="background-color:green;">**it's mostly similar in action to GPT-4o's tokenizer**</mark>! We first see in the [tokenization\_kimi.py](https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/tokenization_kimi.py) file the following regular expression (regex) that Kimi K2 uses:
 
 ```python
-pat_str = "|".join(
-    [
-        r"""[\p{Han}]+""",
-        r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]*[\p{Ll}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
-        r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]+[\p{Ll}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
-        r"""\p{N}{1,3}""",
-        r""" ?[^\s\p{L}\p{N}]+[\r\n]*""",
-        r"""\s*[\r\n]+""",
-        r"""\s+(?!\S)""",
-        r"""\s+""",
-    ]
-)
+pat_str = "|".join([
+    r"""[\p{Han}]+""",
+    r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]*[\p{Ll}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
+    r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]+[\p{Ll}\p{Lm}\p{Lo}\p{M}&&[^\p{Han}]]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
+    r"""\p{N}{1,3}""",
+    r""" ?[^\s\p{L}\p{N}]+[\r\n]*""",
+    r"""\s*[\r\n]+""",
+    r"""\s+(?!\S)""",
+    r"""\s+""",
+])
 ```
 
 After careful inspection, we find Kimi K2 is nearly identical to GPT-4o's tokenizer regex which can be found in [llama.cpp's source code](https://github.com/ggml-org/llama.cpp/blob/55c509daf51d25bfaee9c8b8ce6abff103d4473b/src/llama-vocab.cpp#L400).
@@ -12115,12 +12323,16 @@ Download the model via (after installing `pip install huggingface_hub hf_transfe
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0" # Can sometimes rate limit, so set to 0 to disable
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
+    "0"  # Can sometimes rate limit, so set to 0 to disable
+)
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/grok-2-GGUF",
-    local_dir = "unsloth/grok-2-GGUF",
-    allow_patterns = ["*UD-Q3_K_XL*"], # Dynamic 3bit
+    repo_id="unsloth/grok-2-GGUF",
+    local_dir="unsloth/grok-2-GGUF",
+    allow_patterns=["*UD-Q3_K_XL*"],  # Dynamic 3bit
 )
 ```
 
@@ -12289,12 +12501,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Devstral-Small-2507-GGUF",
-    local_dir = "unsloth/Devstral-Small-2507-GGUF",
-    allow_patterns = ["*Q4_K_XL*", "*mmproj-F16*"], # For Q4_K_XL
+    repo_id="unsloth/Devstral-Small-2507-GGUF",
+    local_dir="unsloth/Devstral-Small-2507-GGUF",
+    allow_patterns=["*Q4_K_XL*", "*mmproj-F16*"],  # For Q4_K_XL
 )
 ```
 
@@ -12435,12 +12649,16 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/DeepSeek-V3-0324-GGUF-UD",
-    local_dir = "unsloth/DeepSeek-V3-0324-GGUF-UD",
-    allow_patterns = ["*UD-Q2_K_XL*"], # Dynamic 2.7bit (230GB) Use "*UD-IQ_S*" for Dynamic 1.78bit (151GB)
+    repo_id="unsloth/DeepSeek-V3-0324-GGUF-UD",
+    local_dir="unsloth/DeepSeek-V3-0324-GGUF-UD",
+    allow_patterns=[
+        "*UD-Q2_K_XL*"
+    ],  # Dynamic 2.7bit (230GB) Use "*UD-IQ_S*" for Dynamic 1.78bit (151GB)
 )
 ```
 
@@ -12550,11 +12768,28 @@ BOUNCE_FACTOR = 0.8
 ROTATION_SPEED = 360 / 5  # degrees per second
 SPIN_FRICTION = 0.98
 BALL_COLORS = [
-    "#f8b862", "#f6ad49", "#f39800", "#f08300", "#ec6d51",
-    "#ee7948", "#ed6d3d", "#ec6800", "#ec6800", "#ee7800",
-    "#eb6238", "#ea5506", "#ea5506", "#eb6101", "#e49e61",
-    "#e45e32", "#e17b34", "#dd7a56", "#db8449", "#d66a35"
+    "#f8b862",
+    "#f6ad49",
+    "#f39800",
+    "#f08300",
+    "#ec6d51",
+    "#ee7948",
+    "#ed6d3d",
+    "#ec6800",
+    "#ec6800",
+    "#ee7800",
+    "#eb6238",
+    "#ea5506",
+    "#ea5506",
+    "#eb6101",
+    "#e49e61",
+    "#e45e32",
+    "#e17b34",
+    "#dd7a56",
+    "#db8449",
+    "#d66a35",
 ]
+
 
 @dataclass
 class Ball:
@@ -12566,12 +12801,14 @@ class Ball:
     spin: float = 0.0
     color: str = "#000000"
 
+
 @dataclass
 class Wall:
     x1: float
     y1: float
     x2: float
     y2: float
+
 
 class BouncingBalls:
     def __init__(self, root):
@@ -12582,13 +12819,13 @@ class BouncingBalls:
         self.walls: List[Wall] = []
         self.heptagon_angle = 0
         self.last_time = 0
-        
+
         self.setup_balls()
         self.setup_heptagon()
-        
+
         self.root.after(16, self.update)
         self.root.bind("<space>", self.reset_balls)
-    
+
     def setup_balls(self):
         for i in range(20):
             ball = Ball(
@@ -12596,31 +12833,31 @@ class BouncingBalls:
                 y=400,
                 vx=np.random.uniform(-5, 5),
                 vy=np.random.uniform(-5, 5),
-                number=i+1,
-                color=BALL_COLORS[i]
+                number=i + 1,
+                color=BALL_COLORS[i],
             )
             self.balls.append(ball)
-    
+
     def setup_heptagon(self):
         # Create initial heptagon walls
         self.update_heptagon_walls(0)
-    
+
     def update_heptagon_walls(self, angle):
         self.walls = []
         center_x, center_y = 400, 400
         angle_rad = math.radians(angle)
-        
+
         for i in range(7):
             angle1 = angle_rad + 2 * math.pi * i / 7
             angle2 = angle_rad + 2 * math.pi * (i + 1) / 7
-            
+
             x1 = center_x + HEPTAGON_RADIUS * math.cos(angle1)
             y1 = center_y + HEPTAGON_RADIUS * math.sin(angle1)
             x2 = center_x + HEPTAGON_RADIUS * math.cos(angle2)
             y2 = center_y + HEPTAGON_RADIUS * math.sin(angle2)
-            
+
             self.walls.append(Wall(x1, y1, x2, y2))
-    
+
     def reset_balls(self, event=None):
         for ball in self.balls:
             ball.x = 400
@@ -12628,166 +12865,171 @@ class BouncingBalls:
             ball.vx = np.random.uniform(-5, 5)
             ball.vy = np.random.uniform(-5, 5)
             ball.spin = np.random.uniform(-5, 5)
-    
+
     def update(self):
         current_time = self.root.after_idle(self.root.after, 16, self.update)
         if self.last_time == 0:
             self.last_time = current_time
             return
-        
+
         # Calculate delta time (approximate)
         dt = 0.016  # Assuming ~60 FPS
-        
+
         # Update heptagon rotation
         self.heptagon_angle += ROTATION_SPEED * dt
         self.update_heptagon_walls(self.heptagon_angle)
-        
+
         # Update balls
         for ball in self.balls:
             # Apply gravity
             ball.vy += GRAVITY
-            
+
             # Apply friction
             ball.vx *= FRICTION
             ball.vy *= FRICTION
             ball.spin *= SPIN_FRICTION
-            
+
             # Move ball
             ball.x += ball.vx
             ball.y += ball.vy
-            
+
             # Check collisions with walls
             self.check_wall_collisions(ball)
-            
+
             # Check collisions with other balls
             for other in self.balls:
                 if other.number != ball.number:
                     self.check_ball_collision(ball, other)
-        
+
         # Draw everything
         self.draw()
-    
+
     def check_wall_collisions(self, ball):
         for wall in self.walls:
             # Find closest point on wall segment to ball
             closest = self.closest_point_on_segment(
                 wall.x1, wall.y1, wall.x2, wall.y2, ball.x, ball.y
             )
-            
+
             # Calculate distance to wall
             dx = ball.x - closest[0]
             dy = ball.y - closest[1]
-            distance = math.sqrt(dx*dx + dy*dy)
-            
+            distance = math.sqrt(dx * dx + dy * dy)
+
             if distance < BALL_RADIUS:
                 # Collision detected
                 # Calculate normal vector
                 nx = dx / distance
                 ny = dy / distance
-                
+
                 # Calculate relative velocity along normal
                 v_rel = ball.vx * nx + ball.vy * ny
-                
+
                 if v_rel < 0:  # Moving toward the wall
                     # Calculate impulse
                     j = -(1 + BOUNCE_FACTOR) * v_rel
-                    
+
                     # Apply impulse
                     ball.vx += j * nx
                     ball.vy += j * ny
-                    
+
                     # Add some spin based on collision
                     ball.spin += (ball.vx * ny - ball.vy * nx) * 0.1
-                    
+
                     # Move ball out of collision
                     penetration = BALL_RADIUS - distance
                     ball.x += penetration * nx
                     ball.y += penetration * ny
-    
+
     def check_ball_collision(self, ball1, ball2):
         dx = ball2.x - ball1.x
         dy = ball2.y - ball1.y
-        distance = math.sqrt(dx*dx + dy*dy)
-        
+        distance = math.sqrt(dx * dx + dy * dy)
+
         if distance < 2 * BALL_RADIUS:
             # Collision detected
             nx = dx / distance
             ny = dy / distance
-            
+
             # Calculate relative velocity
             v_rel_x = ball2.vx - ball1.vx
             v_rel_y = ball2.vy - ball1.vy
             v_rel = v_rel_x * nx + v_rel_y * ny
-            
+
             if v_rel < 0:  # Moving toward each other
                 # Calculate impulse
                 j = -(1 + BOUNCE_FACTOR) * v_rel / 2
-                
+
                 # Apply impulses
                 ball1.vx -= j * nx
                 ball1.vy -= j * ny
                 ball2.vx += j * nx
                 ball2.vy += j * ny
-                
+
                 # Add spin based on collision
                 ball1.spin += (ball1.vx * ny - ball1.vy * nx) * 0.05
                 ball2.spin += (ball2.vx * ny - ball2.vy * nx) * 0.05
-                
+
                 # Move balls apart
                 penetration = 2 * BALL_RADIUS - distance
                 ball1.x -= penetration * nx * 0.5
                 ball1.y -= penetration * ny * 0.5
                 ball2.x += penetration * nx * 0.5
                 ball2.y += penetration * ny * 0.5
-    
+
     @staticmethod
     def closest_point_on_segment(x1, y1, x2, y2, x, y):
         # Vector from point to segment start
         dx = x - x1
         dy = y - y1
-        
+
         # Segment vector
         sx = x2 - x1
         sy = y2 - y1
-        
+
         # Projection of point onto segment
         dot = dx * sx + dy * sy
         len_sq = sx * sx + sy * sy
         param = dot / len_sq if len_sq != 0 else -1
-        
+
         if param < 0:
             return x1, y1
         elif param > 1:
             return x2, y2
         else:
             return x1 + param * sx, y1 + param * sy
-    
+
     def draw(self):
         self.canvas.delete("all")
-        
+
         # Draw heptagon
         points = []
         for wall in self.walls:
             points.extend([wall.x1, wall.y1])
         self.canvas.create_polygon(points, fill="", outline="black", width=2)
-        
+
         # Draw balls
         for ball in self.balls:
             # Draw ball
             self.canvas.create_oval(
-                ball.x - BALL_RADIUS, ball.y - BALL_RADIUS,
-                ball.x + BALL_RADIUS, ball.y + BALL_RADIUS,
-                fill=ball.color, outline="black"
+                ball.x - BALL_RADIUS,
+                ball.y - BALL_RADIUS,
+                ball.x + BALL_RADIUS,
+                ball.y + BALL_RADIUS,
+                fill=ball.color,
+                outline="black",
             )
-            
+
             # Draw number with rotation based on spin
             angle = ball.spin * 10  # Scale spin for visual effect
             self.canvas.create_text(
-                ball.x, ball.y,
+                ball.x,
+                ball.y,
                 text=str(ball.number),
                 font=("Arial", 12, "bold"),
-                angle=angle
+                angle=angle,
             )
+
 
 if __name__ == "__main__":
     root = tk.Tk()
@@ -12822,11 +13064,28 @@ SPIN_DECAY = 0.99
 
 # Colors for the balls
 BALL_COLORS = [
-    "#f8b862", "#f6ad49", "#f39800", "#f08300", "#ec6d51",
-    "#ee7948", "#ed6d3d", "#ec6800", "#ec6800", "#ee7800",
-    "#eb6238", "#ea5506", "#ea5506", "#eb6101", "#e49e61",
-    "#e45e32", "#e17b34", "#dd7a56", "#db8449", "#d66a35"
+    "#f8b862",
+    "#f6ad49",
+    "#f39800",
+    "#f08300",
+    "#ec6d51",
+    "#ee7948",
+    "#ed6d3d",
+    "#ec6800",
+    "#ec6800",
+    "#ee7800",
+    "#eb6238",
+    "#ea5506",
+    "#ea5506",
+    "#eb6101",
+    "#e49e61",
+    "#e45e32",
+    "#e17b34",
+    "#dd7a56",
+    "#db8449",
+    "#d66a35",
 ]
+
 
 @dataclass
 class Ball:
@@ -12839,6 +13098,7 @@ class Ball:
     number: int
     spin: float = 0.0
 
+
 @dataclass
 class Heptagon:
     center_x: float
@@ -12846,72 +13106,75 @@ class Heptagon:
     radius: float
     angle: float = 0.0
 
+
 class BouncingBalls:
     def __init__(self, root):
         self.root = root
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg="white")
         self.canvas.pack()
-        
-        self.heptagon = Heptagon(WIDTH//2, HEIGHT//2, HEPTAGON_RADIUS)
+
+        self.heptagon = Heptagon(WIDTH // 2, HEIGHT // 2, HEPTAGON_RADIUS)
         self.balls = []
         self.setup_balls()
-        
+
         self.root.after(0, self.update)
         self.root.mainloop()
-    
+
     def setup_balls(self):
-        center_x, center_y = WIDTH//2, HEIGHT//2
+        center_x, center_y = WIDTH // 2, HEIGHT // 2
         for i in range(20):
-            self.balls.append(Ball(
-                x=center_x,
-                y=center_y,
-                vx=0,
-                vy=0,
-                radius=BALL_RADIUS,
-                color=BALL_COLORS[i],
-                number=i+1,
-                spin=0
-            ))
-    
+            self.balls.append(
+                Ball(
+                    x=center_x,
+                    y=center_y,
+                    vx=0,
+                    vy=0,
+                    radius=BALL_RADIUS,
+                    color=BALL_COLORS[i],
+                    number=i + 1,
+                    spin=0,
+                )
+            )
+
     def update(self):
         self.canvas.delete("all")
-        
+
         # Update heptagon angle
         self.heptagon.angle += ROTATION_SPEED / 60  # Assuming 60 FPS
-        
+
         # Draw heptagon
         self.draw_heptagon()
-        
+
         # Update and draw balls
         for ball in self.balls:
             # Apply gravity
             ball.vy += GRAVITY
-            
+
             # Update position
             ball.x += ball.vx
             ball.y += ball.vy
-            
+
             # Apply friction
             ball.vx *= FRICTION
             ball.vy *= FRICTION
-            
+
             # Apply spin decay
             ball.spin *= SPIN_DECAY
-            
+
             # Check collision with heptagon walls
             self.check_heptagon_collision(ball)
-            
+
             # Check collision with other balls
             for other in self.balls:
                 if other != ball:
                     if self.check_ball_collision(ball, other):
                         self.resolve_ball_collision(ball, other)
-            
+
             # Draw the ball
             self.draw_ball(ball)
-        
+
         self.root.after(16, self.update)  # ~60 FPS
-    
+
     def draw_heptagon(self):
         center_x, center_y = self.heptagon.center_x, self.heptagon.center_y
         points = []
@@ -12920,14 +13183,23 @@ class BouncingBalls:
             x = center_x + self.heptagon.radius * math.cos(angle)
             y = center_y + self.heptagon.radius * math.sin(angle)
             points.append((x, y))
-        
+
         # Draw heptagon
         self.canvas.create_polygon(
-            [points[0], points[1], points[2], points[3], 
-             points[4], points[5], points[6]],
-            outline="black", fill="", width=2
+            [
+                points[0],
+                points[1],
+                points[2],
+                points[3],
+                points[4],
+                points[5],
+                points[6],
+            ],
+            outline="black",
+            fill="",
+            width=2,
         )
-    
+
     def draw_ball(self, ball):
         self.canvas.create_oval(
             ball.x - ball.radius,
@@ -12935,78 +13207,75 @@ class BouncingBalls:
             ball.x + ball.radius,
             ball.y + ball.radius,
             fill=ball.color,
-            outline="black"
+            outline="black",
         )
-        
+
         # Draw the number
-        self.canvas.create_text(
-            ball.x, ball.y,
-            text=str(ball.number),
-            fill="black"
-        )
-    
+        self.canvas.create_text(ball.x, ball.y, text=str(ball.number), fill="black")
+
     def check_heptagon_collision(self, ball):
-        center_x, center_y = WIDTH//2, HEIGHT//2
-        
+        center_x, center_y = WIDTH // 2, HEIGHT // 2
+
         # Check distance from center
         dx = ball.x - center_x
         dy = ball.y - center_y
         dist = math.sqrt(dx**2 + dy**2)
-        
+
         if dist + ball.radius > self.heptagon.radius:
             # Find the normal vector from center to ball
             angle = math.atan2(dy, dx)
             normal_x = math.cos(angle)
             normal_y = math.sin(angle)
-            
+
             # Move ball back inside heptagon
             overlap = (dist + ball.radius) - self.heptagon.radius
             ball.x -= overlap * normal_x
             ball.y -= overlap * normal_y
-            
+
             # Reflect velocity
             dot_product = ball.vx * normal_x + ball.vy * normal_y
             ball.vx -= 2 * dot_product * normal_x * ELASTICITY
             ball.vy -= 2 * dot_product * normal_y * ELASTICITY
-    
+
     def check_ball_collision(self, ball1, ball2):
         dx = ball2.x - ball1.x
         dy = ball2.y - ball1.y
         distance = math.sqrt(dx**2 + dy**2)
         return distance < (ball1.radius + ball2.radius)
-    
+
     def resolve_ball_collision(self, ball1, ball2):
         dx = ball2.x - ball1.x
         dy = ball2.y - ball1.y
         distance = math.sqrt(dx**2 + dy**2)
-        
+
         # Normal vector
         nx = dx / distance
         ny = dy / distance
-        
+
         # Relative velocity
         dvx = ball2.vx - ball1.vx
         dvy = ball2.vy - ball1.vy
-        
+
         # Calculate impulse
         impulse = 2 * (dvx * nx + dvy * ny) / 2
         impulse *= ELASTICITY
-        
+
         # Apply impulse
         ball1.vx -= impulse * nx
         ball1.vy -= impulse * ny
         ball2.vx += impulse * nx
         ball2.vy += impulse * ny
-        
+
         # Separate the balls to prevent sticking
         overlap = (ball1.radius + ball2.radius) - distance
         ball1.x -= overlap * nx / 2
         ball1.y -= overlap * ny / 2
         ball2.x += overlap * nx / 2
         ball2.y += overlap * ny / 2
-    
+
     def run(self):
         self.root.mainloop()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
@@ -13041,11 +13310,28 @@ SPIN_FRICTION = 0.98
 
 # Colors for the balls
 BALL_COLORS = [
-    '#f8b862', '#f6ad49', '#f39800', '#f08300', '#ec6d51',
-    '#ee7948', '#ed6d3d', '#ec6800', '#ec6800', '#ee7800',
-    '#eb6238', '#ea5506', '#ea5506', '#eb6101', '#e49e61',
-    '#e45e32', '#e17b34', '#dd7a56', '#db8449', '#d66a35'
+    "#f8b862",
+    "#f6ad49",
+    "#f39800",
+    "#f08300",
+    "#ec6d51",
+    "#ee7948",
+    "#ed6d3d",
+    "#ec6800",
+    "#ec6800",
+    "#ee7800",
+    "#eb6238",
+    "#ea5506",
+    "#ea5506",
+    "#eb6101",
+    "#e49e61",
+    "#e45e32",
+    "#e17b34",
+    "#dd7a56",
+    "#db8449",
+    "#d66a35",
 ]
+
 
 @dataclass
 class Ball:
@@ -13066,57 +13352,58 @@ class Ball:
         self.vy *= FRICTION
         self.spin *= SPIN_FRICTION
 
-    def collide_with_ball(self, other: 'Ball'):
+    def collide_with_ball(self, other: "Ball"):
         dx = other.x - self.x
         dy = other.y - self.y
         distance = math.hypot(dx, dy)
-        
+
         if distance < self.radius + other.radius:
             # Calculate collision normal
             nx = dx / distance
             ny = dy / distance
-            
+
             # Calculate relative velocity
             dvx = other.vx - self.vx
             dvy = other.vy - self.vy
-            
+
             # Calculate impulse
-            impulse = 2 * (dvx * nx + dvy * ny) / (1/self.radius + 1/other.radius)
-            
+            impulse = 2 * (dvx * nx + dvy * ny) / (1 / self.radius + 1 / other.radius)
+
             # Apply impulse
             self.vx += impulse * nx / self.radius
             self.vy += impulse * ny / self.radius
             other.vx -= impulse * nx / other.radius
             other.vy -= impulse * ny / other.radius
-            
+
             # Separate balls to prevent sticking
             overlap = (self.radius + other.radius - distance) / 2
             self.x -= overlap * nx
             self.y -= overlap * ny
             other.x += overlap * nx
             other.y += overlap * ny
-            
+
             # Transfer some spin
             transfer = impulse * 0.01
             self.spin -= transfer
             other.spin += transfer
 
+
 class HeptagonBounceSimulator:
     def __init__(self, root):
         self.root = root
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='white')
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg="white")
         self.canvas.pack()
-        
+
         self.balls = self.create_balls()
         self.heptagon_angle = 0
         self.last_time = 0
         self.running = True
-        
-        self.root.bind('<space>', self.toggle_pause)
-        self.root.bind('<Escape>', lambda e: root.destroy())
-        
+
+        self.root.bind("<space>", self.toggle_pause)
+        self.root.bind("<Escape>", lambda e: root.destroy())
+
         self.last_time = self.root.after(0, self.update)
-    
+
     def create_balls(self) -> List[Ball]:
         balls = []
         for i in range(20):
@@ -13125,24 +13412,26 @@ class HeptagonBounceSimulator:
             speed = np.random.uniform(0.5, 2)
             vx = math.cos(angle) * speed
             vy = math.sin(angle) * speed
-            
-            balls.append(Ball(
-                x=CENTER_X,
-                y=CENTER_Y,
-                vx=vx,
-                vy=vy,
-                radius=BALL_RADIUS,
-                color=BALL_COLORS[i],
-                number=i+1,
-                spin=np.random.uniform(-2, 2)
-            ))
+
+            balls.append(
+                Ball(
+                    x=CENTER_X,
+                    y=CENTER_Y,
+                    vx=vx,
+                    vy=vy,
+                    radius=BALL_RADIUS,
+                    color=BALL_COLORS[i],
+                    number=i + 1,
+                    spin=np.random.uniform(-2, 2),
+                )
+            )
         return balls
-    
+
     def toggle_pause(self, event):
         self.running = not self.running
         if self.running:
             self.last_time = self.root.after(0, self.update)
-    
+
     def get_heptagon_vertices(self) -> List[Tuple[float, float]]:
         vertices = []
         for i in range(7):
@@ -13151,38 +13440,38 @@ class HeptagonBounceSimulator:
             y = CENTER_Y + HEPTAGON_RADIUS * math.sin(angle)
             vertices.append((x, y))
         return vertices
-    
+
     def check_ball_heptagon_collision(self, ball: Ball):
         vertices = self.get_heptagon_vertices()
-        closest_dist = float('inf')
+        closest_dist = float("inf")
         closest_normal = (0, 0)
         closest_edge = None
-        
+
         # Check collision with each edge of the heptagon
         for i in range(len(vertices)):
             p1 = vertices[i]
             p2 = vertices[(i + 1) % len(vertices)]
-            
+
             # Vector from p1 to p2
             edge_x = p2[0] - p1[0]
             edge_y = p2[1] - p1[1]
             edge_length = math.hypot(edge_x, edge_y)
-            
+
             # Normalize edge vector
             edge_x /= edge_length
             edge_y /= edge_length
-            
+
             # Normal vector (perpendicular to edge, pointing inward)
             nx = -edge_y
             ny = edge_x
-            
+
             # Vector from p1 to ball
             ball_to_p1_x = ball.x - p1[0]
             ball_to_p1_y = ball.y - p1[1]
-            
+
             # Project ball onto edge normal
             projection = ball_to_p1_x * nx + ball_to_p1_y * ny
-            
+
             # If projection is negative, ball is outside the heptagon
             if projection < ball.radius:
                 # Find closest point on edge to ball
@@ -13190,87 +13479,94 @@ class HeptagonBounceSimulator:
                 edge_proj = max(0, min(edge_length, edge_proj))
                 closest_x = p1[0] + edge_proj * edge_x
                 closest_y = p1[1] + edge_proj * edge_y
-                
+
                 # Distance from ball to closest point on edge
                 dist = math.hypot(ball.x - closest_x, ball.y - closest_y)
-                
+
                 if dist < closest_dist:
                     closest_dist = dist
                     closest_normal = (nx, ny)
                     closest_edge = (p1, p2)
-        
+
         if closest_dist < ball.radius:
             # Calculate bounce response
             dot_product = ball.vx * closest_normal[0] + ball.vy * closest_normal[1]
-            
+
             # Apply bounce with elasticity
             ball.vx -= (1 + ELASTICITY) * dot_product * closest_normal[0]
             ball.vy -= (1 + ELASTICITY) * dot_product * closest_normal[1]
-            
+
             # Add some spin based on impact
-            edge_vec = (closest_edge[1][0] - closest_edge[0][0], 
-                        closest_edge[1][1] - closest_edge[0][1])
+            edge_vec = (
+                closest_edge[1][0] - closest_edge[0][0],
+                closest_edge[1][1] - closest_edge[0][1],
+            )
             edge_length = math.hypot(edge_vec[0], edge_vec[1])
             if edge_length > 0:
-                edge_vec = (edge_vec[0]/edge_length, edge_vec[1]/edge_length)
+                edge_vec = (edge_vec[0] / edge_length, edge_vec[1] / edge_length)
                 # Cross product of velocity and edge direction
                 spin_effect = (ball.vx * edge_vec[1] - ball.vy * edge_vec[0]) * 0.1
                 ball.spin += spin_effect
-            
+
             # Move ball outside the heptagon to prevent sticking
             penetration = ball.radius - closest_dist
             ball.x += penetration * closest_normal[0]
             ball.y += penetration * closest_normal[1]
-    
+
     def update(self):
         if not self.running:
             return
-        
+
         # Clear canvas
-        self.canvas.delete('all')
-        
+        self.canvas.delete("all")
+
         # Update heptagon rotation
         self.heptagon_angle += ROTATION_SPEED / 60  # Assuming ~60 FPS
-        
+
         # Draw heptagon
         vertices = self.get_heptagon_vertices()
-        self.canvas.create_polygon(vertices, outline='black', fill='', width=2)
-        
+        self.canvas.create_polygon(vertices, outline="black", fill="", width=2)
+
         # Update and draw balls
         for i, ball in enumerate(self.balls):
             # Move ball
             ball.move()
-            
+
             # Check collisions with heptagon
             self.check_ball_heptagon_collision(ball)
-            
+
             # Draw ball
             self.canvas.create_oval(
-                ball.x - ball.radius, ball.y - ball.radius,
-                ball.x + ball.radius, ball.y + ball.radius,
-                fill=ball.color, outline='black'
+                ball.x - ball.radius,
+                ball.y - ball.radius,
+                ball.x + ball.radius,
+                ball.y + ball.radius,
+                fill=ball.color,
+                outline="black",
             )
-            
+
             # Draw number with rotation based on spin
             angle = ball.spin * 10  # Scale spin for visible rotation
             self.canvas.create_text(
-                ball.x, ball.y,
+                ball.x,
+                ball.y,
                 text=str(ball.number),
-                font=('Arial', 10, 'bold'),
-                angle=angle
+                font=("Arial", 10, "bold"),
+                angle=angle,
             )
-        
+
         # Check ball-ball collisions
         for i in range(len(self.balls)):
             for j in range(i + 1, len(self.balls)):
                 self.balls[i].collide_with_ball(self.balls[j])
-        
+
         # Schedule next update
         self.last_time = self.root.after(16, self.update)  # ~60 FPS
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     root = tk.Tk()
-    root.title('Bouncing Balls in a Spinning Heptagon')
+    root.title("Bouncing Balls in a Spinning Heptagon")
     simulator = HeptagonBounceSimulator(root)
     root.mainloop()
 ```
@@ -13325,10 +13621,11 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 # os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-  repo_id = "unsloth/DeepSeek-R1-GGUF",
-  local_dir = "DeepSeek-R1-GGUF",
-  allow_patterns = ["*UD-IQ1_S*"], # Select quant type UD-IQ1_S for 1.58bit
+    repo_id="unsloth/DeepSeek-R1-GGUF",
+    local_dir="DeepSeek-R1-GGUF",
+    allow_patterns=["*UD-IQ1_S*"],  # Select quant type UD-IQ1_S for 1.58bit
 )
 ```
 
@@ -13683,12 +13980,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/QwQ-32B-GGUF",
-    local_dir = "unsloth-QwQ-32B-GGUF",
-    allow_patterns = ["*Q4_K_M*"], # For Q4_K_M
+    repo_id="unsloth/QwQ-32B-GGUF",
+    local_dir="unsloth-QwQ-32B-GGUF",
+    allow_patterns=["*Q4_K_M*"],  # For Q4_K_M
 )
 ```
 
@@ -13807,33 +14106,46 @@ LAND_HEIGHT = 50
 PIPE_WIDTH = 50
 PIPE_GAP = 150
 
+
 class Bird:
     def __init__(self):
         self.x = WIDTH // 2
         self.y = HEIGHT // 2
         self.velocity = 0
-        self.shape = random.choice(['square', 'circle', 'triangle'])
-        self.color = (random.randint(0, 100), random.randint(0, 100), random.randint(0, 100))
-        self.rect = pygame.Rect(self.x - BIRD_SIZE//2, self.y - BIRD_SIZE//2, BIRD_SIZE, BIRD_SIZE)
-    
+        self.shape = random.choice(["square", "circle", "triangle"])
+        self.color = (
+            random.randint(0, 100),
+            random.randint(0, 100),
+            random.randint(0, 100),
+        )
+        self.rect = pygame.Rect(
+            self.x - BIRD_SIZE // 2, self.y - BIRD_SIZE // 2, BIRD_SIZE, BIRD_SIZE
+        )
+
     def update(self):
         self.velocity += GRAVITY
         self.y += self.velocity
-        self.rect.y = self.y - BIRD_SIZE//2
-        self.rect.x = self.x - BIRD_SIZE//2  # Keep x centered
-    
+        self.rect.y = self.y - BIRD_SIZE // 2
+        self.rect.x = self.x - BIRD_SIZE // 2  # Keep x centered
+
     def draw(self):
-        if self.shape == 'square':
+        if self.shape == "square":
             pygame.draw.rect(screen, self.color, self.rect)
-        elif self.shape == 'circle':
-            pygame.draw.circle(screen, self.color, (self.rect.centerx, self.rect.centery), BIRD_SIZE//2)
-        elif self.shape == 'triangle':
+        elif self.shape == "circle":
+            pygame.draw.circle(
+                screen,
+                self.color,
+                (self.rect.centerx, self.rect.centery),
+                BIRD_SIZE // 2,
+            )
+        elif self.shape == "triangle":
             points = [
                 (self.rect.centerx, self.rect.top),
                 (self.rect.left, self.rect.bottom),
-                (self.rect.right, self.rect.bottom)
+                (self.rect.right, self.rect.bottom),
             ]
             pygame.draw.polygon(screen, self.color, points)
+
 
 def spawn_pipe():
     pipe_x = WIDTH
@@ -13844,11 +14156,12 @@ def spawn_pipe():
     rect_bottom = pygame.Rect(pipe_x, bottom_y, PIPE_WIDTH, bottom_height)
     color = random.choice(pipe_colors)
     return {
-        'rect_top': rect_top,
-        'rect_bottom': rect_bottom,
-        'color': color,
-        'scored': False
+        "rect_top": rect_top,
+        "rect_bottom": rect_bottom,
+        "color": color,
+        "scored": False,
     }
+
 
 def main():
     best_score = 0
@@ -13879,10 +14192,18 @@ def main():
                         current_score = 0
                         if first_time:
                             # First restart after initial game over
-                            background_color = (random.randint(200, 255), random.randint(200, 255), random.randint(200, 255))
+                            background_color = (
+                                random.randint(200, 255),
+                                random.randint(200, 255),
+                                random.randint(200, 255),
+                            )
                             first_time = False
                         else:
-                            background_color = (random.randint(200, 255), random.randint(200, 255), random.randint(200, 255))
+                            background_color = (
+                                random.randint(200, 255),
+                                random.randint(200, 255),
+                                random.randint(200, 255),
+                            )
                         land_color = random.choice(land_colors)
                         game_over = False
                     else:
@@ -13896,21 +14217,21 @@ def main():
             # Move pipes left
             remove_pipes = []
             for pipe in pipes:
-                pipe['rect_top'].x -= PIPE_SPEED
-                pipe['rect_bottom'].x -= PIPE_SPEED
+                pipe["rect_top"].x -= PIPE_SPEED
+                pipe["rect_bottom"].x -= PIPE_SPEED
                 # Check if bird passed the pipe
-                if not pipe['scored'] and bird.rect.x > pipe['rect_top'].right:
+                if not pipe["scored"] and bird.rect.x > pipe["rect_top"].right:
                     current_score += 1
-                    pipe['scored'] = True
+                    pipe["scored"] = True
                 # Check if pipe is offscreen
-                if pipe['rect_top'].right < 0:
+                if pipe["rect_top"].right < 0:
                     remove_pipes.append(pipe)
             # Remove offscreen pipes
             for p in remove_pipes:
                 pipes.remove(p)
 
             # Spawn new pipe if needed
-            if not pipes or pipes[-1]['rect_top'].x < WIDTH - 200:
+            if not pipes or pipes[-1]["rect_top"].x < WIDTH - 200:
                 pipes.append(spawn_pipe())
 
             # Check collisions
@@ -13918,7 +14239,9 @@ def main():
             bird_rect = bird.rect
             # Check pipes
             for pipe in pipes:
-                if bird_rect.colliderect(pipe['rect_top']) or bird_rect.colliderect(pipe['rect_bottom']):
+                if bird_rect.colliderect(pipe["rect_top"]) or bird_rect.colliderect(
+                    pipe["rect_bottom"]
+                ):
                     game_over = True
                     break
             # Check land and top
@@ -13933,27 +14256,30 @@ def main():
         screen.fill(background_color)
         # Draw pipes
         for pipe in pipes:
-            pygame.draw.rect(screen, pipe['color'], pipe['rect_top'])
-            pygame.draw.rect(screen, pipe['color'], pipe['rect_bottom'])
+            pygame.draw.rect(screen, pipe["color"], pipe["rect_top"])
+            pygame.draw.rect(screen, pipe["color"], pipe["rect_bottom"])
         # Draw land
-        pygame.draw.rect(screen, land_color, (0, HEIGHT - LAND_HEIGHT, WIDTH, LAND_HEIGHT))
+        pygame.draw.rect(
+            screen, land_color, (0, HEIGHT - LAND_HEIGHT, WIDTH, LAND_HEIGHT)
+        )
         # Draw bird
         bird.draw()
         # Draw score
         font = pygame.font.SysFont(None, 36)
-        score_text = font.render(f'Score: {current_score}', True, (0, 0, 0))
+        score_text = font.render(f"Score: {current_score}", True, (0, 0, 0))
         screen.blit(score_text, (WIDTH - 150, 10))
         # Game over screen
         if game_over:
-            over_text = font.render('Game Over!', True, (255, 0, 0))
-            best_text = font.render(f'Best: {best_score}', True, (255, 0, 0))
-            restart_text = font.render('Press SPACE to restart', True, (255, 0, 0))
-            screen.blit(over_text, (WIDTH//2 - 70, HEIGHT//2 - 30))
-            screen.blit(best_text, (WIDTH//2 - 50, HEIGHT//2 + 10))
-            screen.blit(restart_text, (WIDTH//2 - 100, HEIGHT//2 + 50))
-        
+            over_text = font.render("Game Over!", True, (255, 0, 0))
+            best_text = font.render(f"Best: {best_score}", True, (255, 0, 0))
+            restart_text = font.render("Press SPACE to restart", True, (255, 0, 0))
+            screen.blit(over_text, (WIDTH // 2 - 70, HEIGHT // 2 - 30))
+            screen.blit(best_text, (WIDTH // 2 - 50, HEIGHT // 2 + 10))
+            screen.blit(restart_text, (WIDTH // 2 - 100, HEIGHT // 2 + 50))
+
         pygame.display.flip()
         clock.tick(60)
+
 
 if __name__ == "__main__":
     main()
@@ -14013,12 +14339,14 @@ YELLOW = (252, 228, 6)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
+
 def random_light_color():
     return (
         random.randint(180, 230),
         random.randint(190, 300),
-        random.randint(250, 255)
+        random.randint(250, 255),
     )
+
 
 def reset_game():
     global bird_x, bird_y
@@ -14031,7 +14359,7 @@ def reset_game():
     bird_y = HEIGHT // 2
     bird_vel = -5  # Initial upward thrust
 
-    pipes.clear() ### <<< NameError: name 'pipes' is not defined. Did you forget to import 'pipes'?
+    pipes.clear()  ### <<< NameError: name 'pipes' is not defined. Did you forget to import 'pipes'?
 ```
 
 {% endcode %}
@@ -14304,12 +14632,14 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Phi-4-mini-reasoning-GGUF",
-    local_dir = "unsloth/Phi-4-mini-reasoning-GGUF",
-    allow_patterns = ["*UD-Q4_K_XL*"],
+    repo_id="unsloth/Phi-4-mini-reasoning-GGUF",
+    local_dir="unsloth/Phi-4-mini-reasoning-GGUF",
+    allow_patterns=["*UD-Q4_K_XL*"],
 )
 ```
 
@@ -14355,16 +14685,16 @@ Saving models to 16bit for GGUF so you can use it for Ollama, Jan AI, Open WebUI
 To save to GGUF, use the below to save locally:
 
 ```python
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q4_k_m")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "q8_0")
-model.save_pretrained_gguf("directory", tokenizer, quantization_method = "f16")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q4_k_m")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="q8_0")
+model.save_pretrained_gguf("directory", tokenizer, quantization_method="f16")
 ```
 
 To push to Hugging Face hub:
 
 ```python
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q4_k_m")
-model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method = "q8_0")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q4_k_m")
+model.push_to_hub_gguf("hf_username/directory", tokenizer, quantization_method="q8_0")
 ```
 
 All supported quantization options for `quantization_method` are listed below:
@@ -14372,33 +14702,32 @@ All supported quantization options for `quantization_method` are listed below:
 ```python
 # https://github.com/ggerganov/llama.cpp/blob/master/examples/quantize/quantize.cpp#L19
 # From https://mlabonne.github.io/blog/posts/Quantize_Llama_2_models_using_ggml.html
-ALLOWED_QUANTS = \
-{
-    "not_quantized"  : "Recommended. Fast conversion. Slow inference, big files.",
-    "fast_quantized" : "Recommended. Fast conversion. OK inference, OK file size.",
-    "quantized"      : "Recommended. Slow conversion. Fast inference, small files.",
-    "f32"     : "Not recommended. Retains 100% accuracy, but super slow and memory hungry.",
-    "f16"     : "Fastest conversion + retains 100% accuracy. Slow and memory hungry.",
-    "q8_0"    : "Fast conversion. High resource use, but generally acceptable.",
-    "q4_k_m"  : "Recommended. Uses Q6_K for half of the attention.wv and feed_forward.w2 tensors, else Q4_K",
-    "q5_k_m"  : "Recommended. Uses Q6_K for half of the attention.wv and feed_forward.w2 tensors, else Q5_K",
-    "q2_k"    : "Uses Q4_K for the attention.vw and feed_forward.w2 tensors, Q2_K for the other tensors.",
-    "q3_k_l"  : "Uses Q5_K for the attention.wv, attention.wo, and feed_forward.w2 tensors, else Q3_K",
-    "q3_k_m"  : "Uses Q4_K for the attention.wv, attention.wo, and feed_forward.w2 tensors, else Q3_K",
-    "q3_k_s"  : "Uses Q3_K for all tensors",
-    "q4_0"    : "Original quant method, 4-bit.",
-    "q4_1"    : "Higher accuracy than q4_0 but not as high as q5_0. However has quicker inference than q5 models.",
-    "q4_k_s"  : "Uses Q4_K for all tensors",
-    "q4_k"    : "alias for q4_k_m",
-    "q5_k"    : "alias for q5_k_m",
-    "q5_0"    : "Higher accuracy, higher resource usage and slower inference.",
-    "q5_1"    : "Even higher accuracy, resource usage and slower inference.",
-    "q5_k_s"  : "Uses Q5_K for all tensors",
-    "q6_k"    : "Uses Q8_K for all tensors",
-    "iq2_xxs" : "2.06 bpw quantization",
-    "iq2_xs"  : "2.31 bpw quantization",
-    "iq3_xxs" : "3.06 bpw quantization",
-    "q3_k_xs" : "3-bit extra small quantization",
+ALLOWED_QUANTS = {
+    "not_quantized": "Recommended. Fast conversion. Slow inference, big files.",
+    "fast_quantized": "Recommended. Fast conversion. OK inference, OK file size.",
+    "quantized": "Recommended. Slow conversion. Fast inference, small files.",
+    "f32": "Not recommended. Retains 100% accuracy, but super slow and memory hungry.",
+    "f16": "Fastest conversion + retains 100% accuracy. Slow and memory hungry.",
+    "q8_0": "Fast conversion. High resource use, but generally acceptable.",
+    "q4_k_m": "Recommended. Uses Q6_K for half of the attention.wv and feed_forward.w2 tensors, else Q4_K",
+    "q5_k_m": "Recommended. Uses Q6_K for half of the attention.wv and feed_forward.w2 tensors, else Q5_K",
+    "q2_k": "Uses Q4_K for the attention.vw and feed_forward.w2 tensors, Q2_K for the other tensors.",
+    "q3_k_l": "Uses Q5_K for the attention.wv, attention.wo, and feed_forward.w2 tensors, else Q3_K",
+    "q3_k_m": "Uses Q4_K for the attention.wv, attention.wo, and feed_forward.w2 tensors, else Q3_K",
+    "q3_k_s": "Uses Q3_K for all tensors",
+    "q4_0": "Original quant method, 4-bit.",
+    "q4_1": "Higher accuracy than q4_0 but not as high as q5_0. However has quicker inference than q5 models.",
+    "q4_k_s": "Uses Q4_K for all tensors",
+    "q4_k": "alias for q4_k_m",
+    "q5_k": "alias for q5_k_m",
+    "q5_0": "Higher accuracy, higher resource usage and slower inference.",
+    "q5_1": "Even higher accuracy, resource usage and slower inference.",
+    "q5_k_s": "Uses Q5_K for all tensors",
+    "q6_k": "Uses Q8_K for all tensors",
+    "iq2_xxs": "2.06 bpw quantization",
+    "iq2_xs": "2.31 bpw quantization",
+    "iq3_xxs": "3.06 bpw quantization",
+    "q3_k_xs": "3-bit extra small quantization",
 }
 ```
 
@@ -14408,7 +14737,11 @@ ALLOWED_QUANTS = \
 First save your model to 16bit:
 
 ```python
-model.save_pretrained_merged("merged_model", tokenizer, save_method = "merged_16bit",)
+model.save_pretrained_merged(
+    "merged_model",
+    tokenizer,
+    save_method="merged_16bit",
+)
 ```
 
 Then use the terminal and do:
@@ -14455,7 +14788,11 @@ The default is `model.save_pretrained(..., maximum_memory_usage = 0.75)`. Reduce
 First save your model to 16bit via:
 
 ```python
-model.save_pretrained_merged("merged_model", tokenizer, save_method = "merged_16bit",)
+model.save_pretrained_merged(
+    "merged_model",
+    tokenizer,
+    save_method="merged_16bit",
+)
 ```
 
 Compile llama.cpp from source like below:
@@ -14574,15 +14911,15 @@ Saving models to 16bit for vLLM deployment and serving
 To save to 16bit for vLLM, use:
 
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_16bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_16bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_16bit", token="")
 ```
 
 To merge to 4bit to load on HuggingFace, first call `merged_4bit`. Then use `merged_4bit_forced` if you are certain you want to merge to 4bit. I highly discourage you, unless you know what you are going to do with the 4bit model (ie for DPO training for eg or for HuggingFace's online inference engine)
 
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_4bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_4bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_4bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_4bit", token="")
 ```
 
 To save just the LoRA adapters, either use:
@@ -14595,8 +14932,8 @@ tokenizer.save_pretrained("tokenizer")
 Or just use our builtin function to do that:
 
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "lora")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "lora", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="lora")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="lora", token="")
 ```
 
 ### :computer:Installing vLLM
@@ -14643,8 +14980,8 @@ Saving models to 16bit for SGLang for deployment and serving
 To save to 16bit for SGLang, use:
 
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "merged_16bit", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="merged_16bit")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="merged_16bit", token="")
 ```
 
 To save just the LoRA adapters, either use:
@@ -14657,8 +14994,8 @@ tokenizer.save_pretrained("tokenizer")
 Or just use our builtin function to do that:
 
 ```python
-model.save_pretrained_merged("model", tokenizer, save_method = "lora")
-model.push_to_hub_merged("hf/model", tokenizer, save_method = "lora", token = "")
+model.save_pretrained_merged("model", tokenizer, save_method="lora")
+model.push_to_hub_merged("hf/model", tokenizer, save_method="lora", token="")
 ```
 
 ### :computer:Installing SGLang
@@ -14733,6 +15070,7 @@ Sometimes when you execute a cell [this error](https://github.com/googlecolab/co
 
 ```python
 import locale
+
 locale.getpreferredencoding = lambda: "UTF-8"
 ```
 
@@ -14925,7 +15263,7 @@ from unsloth import FastModel
 model_name = "unsloth/orpheus-3b-0.1-pretrained"
 model, tokenizer = FastModel.from_pretrained(
     model_name,
-    load_in_4bit=False  # use 4-bit precision (QLoRA)
+    load_in_4bit=False,  # use 4-bit precision (QLoRA)
 )
 ```
 
@@ -14988,6 +15326,7 @@ Orpheus supports tags like `<laugh>`, `<chuckle>`, `<sigh>`, `<cough>`, `<sniffl
 
   ```python
   from datasets import Audio
+
   dataset = load_dataset("csv", data_files="mydata.csv", split="train")
   dataset = dataset.cast_column("filename", Audio(sampling_rate=24000))
   ```
@@ -15013,19 +15352,23 @@ In all our  TTS notebooks, we enable LoRA (16-bit) training and disable QLoRA (4
 ```python
 from unsloth import FastLanguageModel
 import torch
-dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
-load_in_4bit = False # Use 4bit quantization to reduce memory usage. Can be False.
+
+dtype = (
+    None  # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
+)
+load_in_4bit = False  # Use 4bit quantization to reduce memory usage. Can be False.
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/orpheus-3b-0.1-ft",
-    max_seq_length= 2048, # Choose any for long context!
-    dtype = dtype,
-    load_in_4bit = load_in_4bit,
-    #token = "hf_...", # use one if using gated models like meta-llama/Llama-2-7b-hf
+    model_name="unsloth/orpheus-3b-0.1-ft",
+    max_seq_length=2048,  # Choose any for long context!
+    dtype=dtype,
+    load_in_4bit=load_in_4bit,
+    # token = "hf_...", # use one if using gated models like meta-llama/Llama-2-7b-hf
 )
 
 from datasets import load_dataset
-dataset = load_dataset("MrDragonFox/Elise", split = "train")
+
+dataset = load_dataset("MrDragonFox/Elise", split="train")
 ```
 
 {% hint style="info" %}
@@ -15050,6 +15393,7 @@ def preprocess_function(example):
     # For simplicity, use the same input as labels (the model will learn to output the sequence given itself).
     return {"input_ids": input_ids, "labels": input_ids}
 
+
 train_data = dataset.map(preprocess_function, remove_columns=dataset.column_names)
 ```
 
@@ -15064,28 +15408,28 @@ Let's assume Unsloth provides a way to feed audio directly (for example, by sett
 **Step 3: Set up training arguments and Trainer**
 
 ```python
-from transformers import TrainingArguments,Trainer,DataCollatorForSeq2Seq
+from transformers import TrainingArguments, Trainer, DataCollatorForSeq2Seq
 from unsloth import is_bfloat16_supported
 
 trainer = Trainer(
-    model = model,
-    train_dataset = dataset,
-    args = TrainingArguments(
-        per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 5,
+    model=model,
+    train_dataset=dataset,
+    args=TrainingArguments(
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
         # num_train_epochs = 1, # Set this for 1 full training run.
-        max_steps = 60,
-        learning_rate = 2e-4,
-        fp16 = not is_bfloat16_supported(),
-        bf16 = is_bfloat16_supported(),
-        logging_steps = 1,
-        optim = "adamw_8bit",
-        weight_decay = 0.01,
-        lr_scheduler_type = "linear",
-        seed = 3407,
-        output_dir = "outputs",
-        report_to = "none", # Use this for WandB etc
+        max_steps=60,
+        learning_rate=2e-4,
+        fp16=not is_bfloat16_supported(),
+        bf16=is_bfloat16_supported(),
+        logging_steps=1,
+        optim="adamw_8bit",
+        weight_decay=0.01,
+        lr_scheduler_type="linear",
+        seed=3407,
+        output_dir="outputs",
+        report_to="none",  # Use this for WandB etc
     ),
 )
 ```
@@ -15297,12 +15641,14 @@ Then download out new dynamic v 2.0 quant for Scout:
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
+
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    repo_id = "unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
-    local_dir = "unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
-    allow_patterns = ["*IQ2_XXS*"],
+    repo_id="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
+    local_dir="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
+    allow_patterns=["*IQ2_XXS*"],
 )
 ```
 
@@ -15357,19 +15703,18 @@ To finetune vision models, we now allow you to select which parts of the mode to
 ```python
 model = FastVisionModel.get_peft_model(
     model,
-    finetune_vision_layers     = True, # False if not finetuning vision layers
-    finetune_language_layers   = True, # False if not finetuning language layers
-    finetune_attention_modules = True, # False if not finetuning attention layers
-    finetune_mlp_modules       = True, # False if not finetuning MLP layers
-
-    r = 16,                           # The larger, the higher the accuracy, but might overfit
-    lora_alpha = 16,                  # Recommended alpha == r at least
-    lora_dropout = 0,
-    bias = "none",
-    random_state = 3407,
-    use_rslora = False,               # We support rank stabilized LoRA
-    loftq_config = None,               # And LoftQ
-    target_modules = "all-linear",    # Optional now! Can specify a list if needed
+    finetune_vision_layers=True,  # False if not finetuning vision layers
+    finetune_language_layers=True,  # False if not finetuning language layers
+    finetune_attention_modules=True,  # False if not finetuning attention layers
+    finetune_mlp_modules=True,  # False if not finetuning MLP layers
+    r=16,  # The larger, the higher the accuracy, but might overfit
+    lora_alpha=16,  # Recommended alpha == r at least
+    lora_dropout=0,
+    bias="none",
+    random_state=3407,
+    use_rslora=False,  # We support rank stabilized LoRA
+    loftq_config=None,  # And LoftQ
+    target_modules="all-linear",  # Optional now! Can specify a list if needed
     modules_to_save=[
         "lm_head",
         "embed_tokens",
@@ -15400,12 +15745,14 @@ To format the dataset, all vision finetuning tasks should be formatted as follow
 
 ```python
 [
-{ "role": "user",
-  "content": [{"type": "text",  "text": instruction}, {"type": "image", "image": image} ]
-},
-{ "role": "assistant",
-  "content": [{"type": "text",  "text": answer} ]
-},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image", "image": image},
+        ],
+    },
+    {"role": "assistant", "content": [{"type": "text", "text": answer}]},
 ]
 ```
 
@@ -15909,10 +16256,11 @@ However, we know that the process can be complex and requires manual setup. We�
 
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
     "unsloth/Llama-3.3-70B-Instruct",
-    load_in_4bit = True,
-    device_map = "balanced",
+    load_in_4bit=True,
+    device_map="balanced",
 )
 ```
 
@@ -15946,7 +16294,7 @@ trainer = SFTTrainer(
 Then in the trainer do:
 
 ```python
-trainer_stats = trainer.train(resume_from_checkpoint = True)
+trainer_stats = trainer.train(resume_from_checkpoint=True)
 ```
 
 Which will start from the latest checkpoint and continue training.
@@ -15993,25 +16341,26 @@ As usual, set up your trainer and your evaluation dataset. The below is used to 
 
 ```python
 from trl import SFTConfig, SFTTrainer
+
 trainer = SFTTrainer(
-    args = SFTConfig(
-        fp16_full_eval = True,
-        per_device_eval_batch_size = 2,
-        eval_accumulation_steps = 4,
-        output_dir = "training_checkpoints", # location of saved checkpoints for early stopping
-        save_strategy = "steps",             # save model every N steps
-        save_steps = 10,                     # how many steps until we save the model
-        save_total_limit = 3,                # keep ony 3 saved checkpoints to save disk space
-        eval_strategy = "steps",             # evaluate every N steps
-        eval_steps = 10,                     # how many steps until we do evaluation
-        load_best_model_at_end = True,       # MUST USE for early stopping
-        metric_for_best_model = "eval_loss", # metric we want to early stop on
-        greater_is_better = False,           # the lower the eval loss, the better
+    args=SFTConfig(
+        fp16_full_eval=True,
+        per_device_eval_batch_size=2,
+        eval_accumulation_steps=4,
+        output_dir="training_checkpoints",  # location of saved checkpoints for early stopping
+        save_strategy="steps",  # save model every N steps
+        save_steps=10,  # how many steps until we save the model
+        save_total_limit=3,  # keep ony 3 saved checkpoints to save disk space
+        eval_strategy="steps",  # evaluate every N steps
+        eval_steps=10,  # how many steps until we do evaluation
+        load_best_model_at_end=True,  # MUST USE for early stopping
+        metric_for_best_model="eval_loss",  # metric we want to early stop on
+        greater_is_better=False,  # the lower the eval loss, the better
     ),
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = new_dataset["train"],
-    eval_dataset = new_dataset["test"],
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=new_dataset["train"],
+    eval_dataset=new_dataset["test"],
 )
 ```
 
@@ -16019,12 +16368,13 @@ We then add the callback which can also be customized:
 
 ```python
 from transformers import EarlyStoppingCallback
+
 early_stopping_callback = EarlyStoppingCallback(
-    early_stopping_patience = 3,     # How many steps we will wait if the eval loss doesn't decrease
-                                     # For example the loss might increase, but decrease after 3 steps
-    early_stopping_threshold = 0.0,  # Can set higher - sets how much loss should decrease by until
-                                     # we consider early stopping. For eg 0.01 means if loss was
-                                     # 0.02 then 0.01, we consider to early stop the run.
+    early_stopping_patience=3,  # How many steps we will wait if the eval loss doesn't decrease
+    # For example the loss might increase, but decrease after 3 steps
+    early_stopping_threshold=0.0,  # Can set higher - sets how much loss should decrease by until
+    # we consider early stopping. For eg 0.01 means if loss was
+    # 0.02 then 0.01, we consider to early stop the run.
 )
 trainer.add_callback(early_stopping_callback)
 ```
@@ -16069,7 +16419,11 @@ The default is `model.save_pretrained(..., maximum_memory_usage = 0.75)`. Reduce
 First save your model to 16bit via:
 
 ```python
-model.save_pretrained_merged("merged_model", tokenizer, save_method = "merged_16bit",)
+model.save_pretrained_merged(
+    "merged_model",
+    tokenizer,
+    save_method="merged_16bit",
+)
 ```
 
 Compile llama.cpp from source like below:
@@ -16114,13 +16468,13 @@ To set up evaluation in your training run, you first have to split your dataset 
 
 ```python
 new_dataset = dataset.train_test_split(
-    test_size = 0.01, # 1% for test size can also be an integer for # of rows
-    shuffle = True, # Should always set to True!
-    seed = 3407,
+    test_size=0.01,  # 1% for test size can also be an integer for # of rows
+    shuffle=True,  # Should always set to True!
+    seed=3407,
 )
 
-train_dataset = new_dataset["train"] # Dataset for training
-eval_dataset = new_dataset["test"] # Dataset for evaluation
+train_dataset = new_dataset["train"]  # Dataset for training
+eval_dataset = new_dataset["test"]  # Dataset for evaluation
 ```
 
 Then, we can set the training arguments to enable evaluation. Reminder evaluation can be very very slow especially if you set `eval_steps = 1`  which means you are evaluating every single step. If you are, try reducing the eval\_dataset size to say 100 rows or something.
@@ -16176,25 +16530,26 @@ As usual, set up your trainer and your evaluation dataset. The below is used to 
 
 ```python
 from trl import SFTConfig, SFTTrainer
+
 trainer = SFTTrainer(
-    args = SFTConfig(
-        fp16_full_eval = True,
-        per_device_eval_batch_size = 2,
-        eval_accumulation_steps = 4,
-        output_dir = "training_checkpoints", # location of saved checkpoints for early stopping
-        save_strategy = "steps",             # save model every N steps
-        save_steps = 10,                     # how many steps until we save the model
-        save_total_limit = 3,                # keep ony 3 saved checkpoints to save disk space
-        eval_strategy = "steps",             # evaluate every N steps
-        eval_steps = 10,                     # how many steps until we do evaluation
-        load_best_model_at_end = True,       # MUST USE for early stopping
-        metric_for_best_model = "eval_loss", # metric we want to early stop on
-        greater_is_better = False,           # the lower the eval loss, the better
+    args=SFTConfig(
+        fp16_full_eval=True,
+        per_device_eval_batch_size=2,
+        eval_accumulation_steps=4,
+        output_dir="training_checkpoints",  # location of saved checkpoints for early stopping
+        save_strategy="steps",  # save model every N steps
+        save_steps=10,  # how many steps until we save the model
+        save_total_limit=3,  # keep ony 3 saved checkpoints to save disk space
+        eval_strategy="steps",  # evaluate every N steps
+        eval_steps=10,  # how many steps until we do evaluation
+        load_best_model_at_end=True,  # MUST USE for early stopping
+        metric_for_best_model="eval_loss",  # metric we want to early stop on
+        greater_is_better=False,  # the lower the eval loss, the better
     ),
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = new_dataset["train"],
-    eval_dataset = new_dataset["test"],
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=new_dataset["train"],
+    eval_dataset=new_dataset["test"],
 )
 ```
 
@@ -16202,12 +16557,13 @@ We then add the callback which can also be customized:
 
 ```python
 from transformers import EarlyStoppingCallback
+
 early_stopping_callback = EarlyStoppingCallback(
-    early_stopping_patience = 3,     # How many steps we will wait if the eval loss doesn't decrease
-                                     # For example the loss might increase, but decrease after 3 steps
-    early_stopping_threshold = 0.0,  # Can set higher - sets how much loss should decrease by until
-                                     # we consider early stopping. For eg 0.01 means if loss was
-                                     # 0.02 then 0.01, we consider to early stop the run.
+    early_stopping_patience=3,  # How many steps we will wait if the eval loss doesn't decrease
+    # For example the loss might increase, but decrease after 3 steps
+    early_stopping_threshold=0.0,  # Can set higher - sets how much loss should decrease by until
+    # we consider early stopping. For eg 0.01 means if loss was
+    # 0.02 then 0.01, we consider to early stop the run.
 )
 trainer.add_callback(early_stopping_callback)
 ```
@@ -16222,6 +16578,7 @@ Simply use `UNSLOTH_STABLE_DOWNLOADS=1` before any Unsloth import.
 
 ```python
 import os
+
 os.environ["UNSLOTH_STABLE_DOWNLOADS"] = "1"
 
 from unsloth import FastLanguageModel
@@ -16233,6 +16590,7 @@ Restart and run all, but place this at the start before any Unsloth import. Also
 
 ```python
 import os
+
 os.environ["UNSLOTH_COMPILE_DISABLE"] = "1"
 os.environ["UNSLOTH_DISABLE_FAST_GENERATION"] = "1"
 ```
@@ -16245,10 +16603,11 @@ For Llama 3.1, 3.2, 3.3 type models, please use the below:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
+
 trainer = train_on_responses_only(
     trainer,
-    instruction_part = "<|start_header_id|>user<|end_header_id|>\n\n",
-    response_part = "<|start_header_id|>assistant<|end_header_id|>\n\n",
+    instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
+    response_part="<|start_header_id|>assistant<|end_header_id|>\n\n",
 )
 ```
 
@@ -16256,10 +16615,11 @@ For Gemma 2, 3. 3n models, use the below:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
+
 trainer = train_on_responses_only(
     trainer,
-    instruction_part = "<start_of_turn>user\n",
-    response_part = "<start_of_turn>model\n",
+    instruction_part="<start_of_turn>user\n",
+    response_part="<start_of_turn>model\n",
 )
 ```
 
@@ -16283,6 +16643,7 @@ In a new cell, run the below:
 
 ```python
 import locale
+
 locale.getpreferredencoding = lambda: "UTF-8"
 ```
 
@@ -16467,20 +16828,39 @@ from unsloth.chat_templates import get_chat_template
 
 tokenizer = get_chat_template(
     tokenizer,
-    chat_template = "chatml", # Supports zephyr, chatml, mistral, llama, alpaca, vicuna, vicuna_old, unsloth
-    mapping = {"role" : "from", "content" : "value", "user" : "human", "assistant" : "gpt"}, # ShareGPT style
-    map_eos_token = True, # Maps <|im_end|> to </s> instead
+    chat_template="chatml",  # Supports zephyr, chatml, mistral, llama, alpaca, vicuna, vicuna_old, unsloth
+    mapping={
+        "role": "from",
+        "content": "value",
+        "user": "human",
+        "assistant": "gpt",
+    },  # ShareGPT style
+    map_eos_token=True,  # Maps <|im_end|> to </s> instead
 )
+
 
 def formatting_prompts_func(examples):
     convos = examples["conversations"]
-    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
-    return { "text" : texts, }
+    texts = [
+        tokenizer.apply_chat_template(
+            convo, tokenize=False, add_generation_prompt=False
+        )
+        for convo in convos
+    ]
+    return {
+        "text": texts,
+    }
+
+
 pass
 
 from datasets import load_dataset
-dataset = load_dataset("philschmid/guanaco-sharegpt-style", split = "train")
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+
+dataset = load_dataset("philschmid/guanaco-sharegpt-style", split="train")
+dataset = dataset.map(
+    formatting_prompts_func,
+    batched=True,
+)
 ```
 
 You can also make your own custom chat templates! For example our internal chat template we use is below. You must pass in a `tuple` of `(custom_template, eos_token)` where the `eos_token` must be used inside the template.
@@ -16562,20 +16942,27 @@ QAT in Unsloth can additionally be combined with LoRA fine-tuning to enable the 
 
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/Qwen3-4B-Instruct-2507",
-    max_seq_length = 2048,
-    load_in_16bit = True,
+    model_name="unsloth/Qwen3-4B-Instruct-2507",
+    max_seq_length=2048,
+    load_in_16bit=True,
 )
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 32,
-    
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=32,
     # We support fp8-int4, fp8-fp8, int8-int4, int4
-    qat_scheme = "int4",
+    qat_scheme="int4",
 )
 ```
 
@@ -16590,7 +16977,8 @@ After fine-tuning in Unsloth, you can call `model.save_pretrained_torchao` to sa
 ```python
 from torchao.quantization import quantize_
 from torchao.quantization.qat import QATConfig
-quantize_(model, QATConfig(step = "convert"))
+
+quantize_(model, QATConfig(step="convert"))
 ```
 
 {% endcode %}
@@ -16602,22 +16990,27 @@ And now we can select which QAT style you want:
 ```python
 # Use the exact same config as QAT (convenient function)
 model.save_pretrained_torchao(
-    model, "tokenizer", 
-    torchao_config = model._torchao_config.base_config,
+    model,
+    "tokenizer",
+    torchao_config=model._torchao_config.base_config,
 )
 
 # Int4 QAT
 from torchao.quantization import Int4WeightOnlyConfig
+
 model.save_pretrained_torchao(
-    model, "tokenizer",
-    torchao_config = Int4WeightOnlyConfig(),
+    model,
+    "tokenizer",
+    torchao_config=Int4WeightOnlyConfig(),
 )
 
 # Int8 QAT
 from torchao.quantization import Int8DynamicActivationInt8WeightConfig
+
 model.save_pretrained_torchao(
-    model, "tokenizer",
-    torchao_config = Int8DynamicActivationInt8WeightConfig(),
+    model,
+    "tokenizer",
+    torchao_config=Int8DynamicActivationInt8WeightConfig(),
 )
 ```
 
@@ -16635,8 +17028,9 @@ You can also call `model.save_pretrained_torchao` directly without doing any QAT
 # Float8
 from torchao.quantization import PerRow
 from torchao.quantization import Float8DynamicActivationFloat8WeightConfig
-torchao_config = Float8DynamicActivationFloat8WeightConfig(granularity = PerRow())
-model.save_pretrained_torchao(torchao_config = torchao_config)
+
+torchao_config = Float8DynamicActivationFloat8WeightConfig(granularity=PerRow())
+model.save_pretrained_torchao(torchao_config=torchao_config)
 ```
 
 {% endcode %}
@@ -16687,7 +17081,7 @@ Another possibility is maybe the model uploads we uploaded are corrupted, but un
 ```python
 model, tokenizer = FastVisionModel.from_pretrained(
     "Qwen/Qwen2-VL-7B-Instruct",
-    use_exact_model_name = True,
+    use_exact_model_name=True,
 )
 ```
 
@@ -16715,11 +17109,12 @@ If you saved a LoRA adapter through Unsloth, you can also continue training usin
 
 ```python
 from unsloth import FastLanguageModel
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "LORA_MODEL_NAME",
-    max_seq_length = max_seq_length,
-    dtype = dtype,
-    load_in_4bit = load_in_4bit,
+    model_name="LORA_MODEL_NAME",
+    max_seq_length=max_seq_length,
+    dtype=dtype,
+    load_in_4bit=load_in_4bit,
 )
 trainer = Trainer(...)
 trainer.train()
@@ -16732,11 +17127,19 @@ Add `lm_head` and `embed_tokens`. For Colab, sometimes you will go out of memory
 ```python
 model = FastLanguageModel.get_peft_model(
     model,
-    r = 16,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",
-                      "lm_head", "embed_tokens",],
-    lora_alpha = 16,
+    r=16,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+        "lm_head",
+        "embed_tokens",
+    ],
+    lora_alpha=16,
 )
 ```
 

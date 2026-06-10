@@ -17,7 +17,7 @@ categories = [
     "a photo of a cat",
     "a photo of a bird",
     "a photo of a car",
-    "a photo of a person"
+    "a photo of a person",
 ]
 
 # Prepare image
@@ -80,7 +80,7 @@ categories = [
     "not safe for work content",
     "violent or graphic content",
     "hate speech or offensive content",
-    "spam or misleading content"
+    "spam or misleading content",
 ]
 
 text = clip.tokenize(categories)
@@ -108,7 +108,7 @@ captions = [
     "A beautiful sunset over the ocean",
     "A cute dog playing in the park",
     "A modern city skyline at night",
-    "A delicious pizza with toppings"
+    "A delicious pizza with toppings",
 ]
 
 # Encode captions
@@ -146,7 +146,7 @@ questions = [
     "a photo taken indoors",
     "a photo taken outdoors",
     "a photo taken during daytime",
-    "a photo taken at night"
+    "a photo taken at night",
 ]
 
 text = clip.tokenize(questions)
@@ -179,6 +179,7 @@ def compute_similarity(img1_path, img2_path):
         similarity = (feat1 @ feat2.T).item()
 
     return similarity
+
 
 # Check for duplicates
 threshold = 0.95

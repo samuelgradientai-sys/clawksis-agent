@@ -1,4 +1,5 @@
 """Tests for the ranked fuzzy scorer used by the searchable curses pickers."""
+
 from clawk_cli.curses_ui import (
     _SearchState,
     _filter_indices,
@@ -38,14 +39,16 @@ def test_scorer_matches_typescript_reference():
     for (label, query), expected in cases.items():
         score = _fuzzy_score(label, query)
         assert score is not None
-        assert round(score, 2) == expected, f"{label!r}/{query!r}: {score} != {expected}"
+        assert round(score, 2) == expected, (
+            f"{label!r}/{query!r}: {score} != {expected}"
+        )
 
 
 def test_is_boundary_camelcase_and_separators():
-    assert _is_boundary("gpt-4o", 0) is True       # start
-    assert _is_boundary("gpt-4o", 4) is True        # after '-'
-    assert _is_boundary("gpt-4o", 2) is False       # mid-word
-    assert _is_boundary("GptO", 3) is True          # lower->upper transition
+    assert _is_boundary("gpt-4o", 0) is True  # start
+    assert _is_boundary("gpt-4o", 4) is True  # after '-'
+    assert _is_boundary("gpt-4o", 2) is False  # mid-word
+    assert _is_boundary("GptO", 3) is True  # lower->upper transition
 
 
 def test_token_score_takes_orig_and_lower():
@@ -109,7 +112,9 @@ def test_filter_indices_ranks_best_first():
     assert [models[i] for i in _filter_indices(models, "son4")] == ["claude-sonnet-4"]
 
     # Multi-token AND.
-    assert [models[i] for i in _filter_indices(models, "clad snnt")] == ["claude-sonnet-4"]
+    assert [models[i] for i in _filter_indices(models, "clad snnt")] == [
+        "claude-sonnet-4"
+    ]
 
     # No match drops everything.
     assert _filter_indices(models, "zzz") == []

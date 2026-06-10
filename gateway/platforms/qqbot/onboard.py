@@ -187,7 +187,9 @@ def qr_register(timeout_seconds: int = 600) -> Optional[dict]:
         # ── Poll loop ──
         while time.monotonic() < deadline:
             try:
-                status, app_id, encrypted_secret, user_openid = _poll_bind_result(task_id)
+                status, app_id, encrypted_secret, user_openid = _poll_bind_result(
+                    task_id
+                )
             except Exception:
                 time.sleep(ONBOARD_POLL_INTERVAL)
                 continue
@@ -206,9 +208,14 @@ def qr_register(timeout_seconds: int = 600) -> Optional[dict]:
 
             if status == BindStatus.EXPIRED:
                 if refresh_count >= _MAX_REFRESHES:
-                    logger.warning("[QQBot onboard] QR code expired %d times — giving up", _MAX_REFRESHES)
+                    logger.warning(
+                        "[QQBot onboard] QR code expired %d times — giving up",
+                        _MAX_REFRESHES,
+                    )
                     return None
-                print(f"\n  QR code expired, refreshing... ({refresh_count + 1}/{_MAX_REFRESHES})")
+                print(
+                    f"\n  QR code expired, refreshing... ({refresh_count + 1}/{_MAX_REFRESHES})"
+                )
                 break  # next for-loop iteration creates a new task
 
             time.sleep(ONBOARD_POLL_INTERVAL)

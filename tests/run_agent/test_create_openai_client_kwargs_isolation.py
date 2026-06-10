@@ -10,6 +10,7 @@ on every retry. That PR has since been reverted, but the underlying issue
 tweak inside this function is likely. This test pins the contract that the
 function must treat its input dict as read-only.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent

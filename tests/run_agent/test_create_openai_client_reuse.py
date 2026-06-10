@@ -16,6 +16,7 @@ with ``APIConnectionError('Connection error.')`` whose cause was
 That is the exact scenario this test reproduces at object level without a
 network, so it runs in CI on every PR.
 """
+
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -98,7 +99,9 @@ def test_second_create_does_not_wrap_closed_transport_from_first():
             agent._client_kwargs, reason="rebuild", shared=True
         )
 
-    assert len(constructed) == 2, f"expected 2 OpenAI constructions, got {len(constructed)}"
+    assert len(constructed) == 2, (
+        f"expected 2 OpenAI constructions, got {len(constructed)}"
+    )
     assert constructed[0] is client_a
     assert constructed[1] is client_b
 

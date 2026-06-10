@@ -13,10 +13,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 # ---------------------------------------------------------------------------
 # Test: _flush_messages_to_session_db only writes new messages
 # ---------------------------------------------------------------------------
+
 
 class TestFlushDeduplication:
     """Verify _flush_messages_to_session_db tracks what it already wrote."""
@@ -25,6 +25,7 @@ class TestFlushDeduplication:
         """Create a minimal AIAgent with a real session DB."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
@@ -67,7 +68,9 @@ class TestFlushDeduplication:
             agent._flush_messages_to_session_db(messages, conversation_history)
 
             rows = db.get_messages(agent.session_id)
-            assert len(rows) == 2, f"Expected still 2 messages after second flush, got {len(rows)}"
+            assert len(rows) == 2, (
+                f"Expected still 2 messages after second flush, got {len(rows)}"
+            )
 
     def test_flush_writes_incrementally(self):
         """Messages added between flushes are written exactly once."""
@@ -121,7 +124,9 @@ class TestFlushDeduplication:
                 agent._persist_session(messages, conversation_history)
 
             rows = db.get_messages(agent.session_id)
-            assert len(rows) == 4, f"Expected 4 messages, got {len(rows)} (duplication bug!)"
+            assert len(rows) == 4, (
+                f"Expected 4 messages, got {len(rows)} (duplication bug!)"
+            )
 
     def test_flush_reset_after_compression(self):
         """After compression creates a new session, flush index resets."""
@@ -165,6 +170,7 @@ class TestFlushDeduplication:
 # ---------------------------------------------------------------------------
 # Test: append_to_transcript skip_db parameter
 # ---------------------------------------------------------------------------
+
 
 class TestAppendToTranscriptSkipDb:
     """Verify skip_db=True skips the SQLite write."""
@@ -224,6 +230,7 @@ class TestAppendToTranscriptSkipDb:
 # Test: _last_flushed_db_idx initialization
 # ---------------------------------------------------------------------------
 
+
 class TestFlushIdxInit:
     """Verify _last_flushed_db_idx is properly initialized."""
 
@@ -231,6 +238,7 @@ class TestFlushIdxInit:
         """Agent starts with _last_flushed_db_idx = 0."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
@@ -245,6 +253,7 @@ class TestFlushIdxInit:
         """Without session_db, flush is a no-op and doesn't crash."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",

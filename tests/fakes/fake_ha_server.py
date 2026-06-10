@@ -217,7 +217,8 @@ class FakeHAServer:
             while not ws.closed:
                 try:
                     event_data = await asyncio.wait_for(
-                        self._event_queue.get(), timeout=0.1,
+                        self._event_queue.get(),
+                        timeout=0.1,
                     )
                     await ws.send_json({
                         "id": sub_id,

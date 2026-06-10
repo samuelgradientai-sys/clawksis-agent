@@ -23,6 +23,7 @@ These tests pin:
 - primary-client wiring at both entry points in ``run_agent.py``
 - aux-client wiring at both entry points in ``agent/auxiliary_client.py``
 """
+
 from __future__ import annotations
 
 import base64
@@ -30,15 +31,17 @@ import json
 from unittest.mock import MagicMock, patch
 
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_codex_jwt(account_id: str = "acct-test-123") -> str:
     """Build a syntactically valid Codex-style JWT with the account_id claim."""
+
     def b64url(data: bytes) -> str:
         return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
     header = b64url(b'{"alg":"RS256","typ":"JWT"}')
     claims = {
         "sub": "user-xyz",
@@ -57,20 +60,24 @@ def _make_codex_jwt(account_id: str = "acct-test-123") -> str:
 # _codex_cloudflare_headers — the shared helper
 # ---------------------------------------------------------------------------
 
+
 class TestCodexCloudflareHeaders:
     def test_originator_is_codex_cli_rs(self):
         """Cloudflare whitelists codex_cli_rs — any other value is 403'd."""
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         headers = _codex_cloudflare_headers(_make_codex_jwt())
         assert headers["originator"] == "codex_cli_rs"
 
     def test_user_agent_advertises_codex_cli_rs(self):
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         headers = _codex_cloudflare_headers(_make_codex_jwt())
         assert headers["User-Agent"].startswith("codex_cli_rs/")
 
     def test_account_id_extracted_from_jwt(self):
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         headers = _codex_cloudflare_headers(_make_codex_jwt("acct-abc-999"))
         # Canonical casing — matches codex-rs auth.rs
         assert headers["ChatGPT-Account-ID"] == "acct-abc-999"
@@ -78,6 +85,7 @@ class TestCodexCloudflareHeaders:
     def test_canonical_header_casing(self):
         """Upstream codex-rs uses PascalCase with trailing -ID. Match exactly."""
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         headers = _codex_cloudflare_headers(_make_codex_jwt())
         assert "ChatGPT-Account-ID" in headers
         # The lowercase/titlecase variants MUST NOT be used — pin to be explicit
@@ -86,6 +94,7 @@ class TestCodexCloudflareHeaders:
 
     def test_malformed_token_drops_account_id_without_raising(self):
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         for bad in ["not-a-jwt", "", "only.one", "  ", "...."]:
             headers = _codex_cloudflare_headers(bad)
             # Still returns base headers — never raises
@@ -94,6 +103,7 @@ class TestCodexCloudflareHeaders:
 
     def test_non_string_token_handled(self):
         from agent.auxiliary_client import _codex_cloudflare_headers
+
         headers = _codex_cloudflare_headers(None)  # type: ignore[arg-type]
         assert headers["originator"] == "codex_cli_rs"
         assert "ChatGPT-Account-ID" not in headers
@@ -105,6 +115,7 @@ class TestCodexCloudflareHeaders:
 
         def b64url(data: bytes) -> str:
             return _b64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
         payload = b64url(_json.dumps({"sub": "user-xyz", "exp": 9999999999}).encode())
         token = f"{b64url(b'{}')}.{payload}.{b64url(b'sig')}"
         headers = _codex_cloudflare_headers(token)
@@ -116,9 +127,11 @@ class TestCodexCloudflareHeaders:
 # Primary chat client wiring (run_agent.AIAgent)
 # ---------------------------------------------------------------------------
 
+
 class TestPrimaryClientWiring:
     def test_init_wires_codex_headers_for_chatgpt_base_url(self):
         from run_agent import AIAgent
+
         token = _make_codex_jwt("acct-primary-init")
         with patch("run_agent.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
@@ -139,6 +152,7 @@ class TestPrimaryClientWiring:
     def test_apply_client_headers_on_base_url_change(self):
         """Credential-rotation / base-url change path must also emit codex headers."""
         from run_agent import AIAgent
+
         token = _make_codex_jwt("acct-rotation")
         with patch("run_agent.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
@@ -164,6 +178,7 @@ class TestPrimaryClientWiring:
     def test_apply_client_headers_clears_codex_headers_off_chatgpt(self):
         """Switching AWAY from chatgpt.com must drop the codex headers."""
         from run_agent import AIAgent
+
         token = _make_codex_jwt()
         with patch("run_agent.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
@@ -178,14 +193,13 @@ class TestPrimaryClientWiring:
             )
             # Sanity: headers are set initially
             assert "originator" in (agent._client_kwargs.get("default_headers") or {})
-            agent._apply_client_headers_for_base_url(
-                "https://api.anthropic.com"
-            )
+            agent._apply_client_headers_for_base_url("https://api.anthropic.com")
             # default_headers should be popped for anthropic base
             assert "default_headers" not in agent._client_kwargs
 
     def test_openrouter_base_url_does_not_get_codex_headers(self):
         from run_agent import AIAgent
+
         with patch("run_agent.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
             AIAgent(
@@ -205,22 +219,26 @@ class TestPrimaryClientWiring:
 # Auxiliary client wiring (agent.auxiliary_client)
 # ---------------------------------------------------------------------------
 
+
 class TestAuxiliaryClientWiring:
     def test_build_codex_client_passes_codex_headers(self, monkeypatch):
         """_build_codex_client builds the OpenAI client used for compression /
         vision / title generation when routed through Codex. Must emit codex
         headers."""
         from agent import auxiliary_client
+
         token = _make_codex_jwt("acct-aux-try-codex")
 
         # Force _select_pool_entry to return "no pool" so we fall through to
         # _read_codex_access_token.
         monkeypatch.setattr(
-            auxiliary_client, "_select_pool_entry",
+            auxiliary_client,
+            "_select_pool_entry",
             lambda provider: (False, None),
         )
         monkeypatch.setattr(
-            auxiliary_client, "_read_codex_access_token",
+            auxiliary_client,
+            "_read_codex_access_token",
             lambda: token,
         )
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
@@ -236,15 +254,19 @@ class TestAuxiliaryClientWiring:
         """The ``raw_codex=True`` branch (used by the main agent loop for direct
         responses.stream() access) must also emit codex headers."""
         from agent import auxiliary_client
+
         token = _make_codex_jwt("acct-aux-raw-codex")
         monkeypatch.setattr(
-            auxiliary_client, "_read_codex_access_token",
+            auxiliary_client,
+            "_read_codex_access_token",
             lambda: token,
         )
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
             client, model = auxiliary_client.resolve_provider_client(
-                "openai-codex", model="gpt-5.4", raw_codex=True,
+                "openai-codex",
+                model="gpt-5.4",
+                raw_codex=True,
             )
             assert client is not None
             headers = mock_openai.call_args.kwargs.get("default_headers") or {}

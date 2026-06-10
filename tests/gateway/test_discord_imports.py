@@ -16,7 +16,9 @@ class TestDiscordImportSafety:
 
         # Purge the cached module so the import below actually re-runs the
         # module body with discord.py simulated-missing.
-        monkeypatch.delitem(sys.modules, "plugins.platforms.discord.adapter", raising=False)
+        monkeypatch.delitem(
+            sys.modules, "plugins.platforms.discord.adapter", raising=False
+        )
         monkeypatch.delitem(sys.modules, "plugins.platforms.discord", raising=False)
         monkeypatch.setattr(builtins, "__import__", fake_import)
 

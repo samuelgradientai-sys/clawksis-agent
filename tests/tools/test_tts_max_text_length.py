@@ -29,13 +29,20 @@ class TestResolveMaxTextLength:
         assert _resolve_max_text_length("minimax", {}) == 10000
 
     def test_mistral_default(self):
-        assert _resolve_max_text_length("mistral", {}) == PROVIDER_MAX_TEXT_LENGTH["mistral"]
+        assert (
+            _resolve_max_text_length("mistral", {})
+            == PROVIDER_MAX_TEXT_LENGTH["mistral"]
+        )
 
     def test_gemini_default(self):
-        assert _resolve_max_text_length("gemini", {}) == PROVIDER_MAX_TEXT_LENGTH["gemini"]
+        assert (
+            _resolve_max_text_length("gemini", {}) == PROVIDER_MAX_TEXT_LENGTH["gemini"]
+        )
 
     def test_unknown_provider_falls_back(self):
-        assert _resolve_max_text_length("does-not-exist", {}) == FALLBACK_MAX_TEXT_LENGTH
+        assert (
+            _resolve_max_text_length("does-not-exist", {}) == FALLBACK_MAX_TEXT_LENGTH
+        )
 
     def test_empty_provider_falls_back(self):
         assert _resolve_max_text_length("", {}) == FALLBACK_MAX_TEXT_LENGTH
@@ -93,7 +100,10 @@ class TestResolveMaxTextLength:
 
     def test_elevenlabs_unknown_model_falls_back_to_provider_default(self):
         cfg = {"elevenlabs": {"model_id": "eleven_experimental_xyz"}}
-        assert _resolve_max_text_length("elevenlabs", cfg) == PROVIDER_MAX_TEXT_LENGTH["elevenlabs"]
+        assert (
+            _resolve_max_text_length("elevenlabs", cfg)
+            == PROVIDER_MAX_TEXT_LENGTH["elevenlabs"]
+        )
 
     def test_elevenlabs_override_beats_model_lookup(self):
         cfg = {"elevenlabs": {"model_id": "eleven_flash_v2_5", "max_text_length": 1000}}
@@ -110,8 +120,17 @@ class TestResolveMaxTextLength:
     # --- Sanity: the table covers every provider listed in the schema ---
 
     def test_all_documented_providers_have_defaults(self):
-        expected = {"edge", "openai", "xai", "minimax", "mistral",
-                    "gemini", "elevenlabs", "neutts", "kittentts"}
+        expected = {
+            "edge",
+            "openai",
+            "xai",
+            "minimax",
+            "mistral",
+            "gemini",
+            "elevenlabs",
+            "neutts",
+            "kittentts",
+        }
         assert expected.issubset(PROVIDER_MAX_TEXT_LENGTH.keys())
 
 
@@ -121,6 +140,7 @@ class TestTextToSpeechToolTruncation:
 
     def test_openai_truncates_at_4096_not_4000(self, tmp_path, monkeypatch, caplog):
         import logging
+
         caplog.set_level(logging.WARNING, logger="tools.tts_tool")
 
         # 5000 chars -- over OpenAI's 4096 limit but under xAI's 15k
@@ -134,10 +154,12 @@ class TestTextToSpeechToolTruncation:
             return out
 
         monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "openai"})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config", lambda: {"provider": "openai"}
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -159,10 +181,12 @@ class TestTextToSpeechToolTruncation:
             return out
 
         monkeypatch.setattr("tools.tts_tool._generate_xai_tts", fake_xai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "xai"})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config", lambda: {"provider": "xai"}
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -182,11 +206,13 @@ class TestTextToSpeechToolTruncation:
             return out
 
         monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "openai",
-                                     "openai": {"max_text_length": 100}})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config",
+            lambda: {"provider": "openai", "openai": {"max_text_length": 100}},
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 

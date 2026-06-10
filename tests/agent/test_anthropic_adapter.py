@@ -124,18 +124,26 @@ class TestBuildAnthropicClient:
             assert "context-1m-2025-08-07" in betas
 
     def test_azure_anthropic_endpoint_detection_is_host_and_path_scoped(self):
-        assert _is_azure_anthropic_endpoint(
-            "https://example.services.ai.azure.com/models/anthropic"
-        ) is True
-        assert _is_azure_anthropic_endpoint(
-            "https://example.services.ai.azure.us/anthropic"
-        ) is True
-        assert _is_azure_anthropic_endpoint(
-            "https://example.openai.azure.com/openai/v1"
-        ) is False
-        assert _is_azure_anthropic_endpoint(
-            "https://management.azure.com/anthropic"
-        ) is False
+        assert (
+            _is_azure_anthropic_endpoint(
+                "https://example.services.ai.azure.com/models/anthropic"
+            )
+            is True
+        )
+        assert (
+            _is_azure_anthropic_endpoint(
+                "https://example.services.ai.azure.us/anthropic"
+            )
+            is True
+        )
+        assert (
+            _is_azure_anthropic_endpoint("https://example.openai.azure.com/openai/v1")
+            is False
+        )
+        assert (
+            _is_azure_anthropic_endpoint("https://management.azure.com/anthropic")
+            is False
+        )
 
     def test_bedrock_client_keeps_context_1m_beta(self):
         with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
@@ -204,13 +212,15 @@ class TestReadClaudeCodeCredentials:
     def test_reads_valid_credentials(self, tmp_path, monkeypatch):
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "sk-ant-oat01-token",
-                "refreshToken": "sk-ant-oat01-refresh",
-                "expiresAt": int(time.time() * 1000) + 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "sk-ant-oat01-token",
+                    "refreshToken": "sk-ant-oat01-refresh",
+                    "expiresAt": int(time.time() * 1000) + 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
         creds = read_claude_code_credentials()
         assert creds is not None
@@ -218,7 +228,9 @@ class TestReadClaudeCodeCredentials:
         assert creds["refreshToken"] == "sk-ant-oat01-refresh"
         assert creds["source"] == "claude_code_credentials_file"
 
-    def test_ignores_primary_api_key_for_native_anthropic_resolution(self, tmp_path, monkeypatch):
+    def test_ignores_primary_api_key_for_native_anthropic_resolution(
+        self, tmp_path, monkeypatch
+    ):
         claude_json = tmp_path / ".claude.json"
         claude_json.write_text(json.dumps({"primaryApiKey": "sk-ant-api03-primary"}))
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
@@ -240,9 +252,9 @@ class TestReadClaudeCodeCredentials:
     def test_returns_none_for_empty_access_token(self, tmp_path, monkeypatch):
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {"accessToken": "", "refreshToken": "x"}
-        }))
+        cred_file.write_text(
+            json.dumps({"claudeAiOauth": {"accessToken": "", "refreshToken": "x"}})
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert read_claude_code_credentials() is None
 
@@ -269,16 +281,22 @@ class TestResolveAnthropicToken:
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "sk-ant-oat01-mytoken"
 
-    def test_does_not_resolve_primary_api_key_as_native_anthropic_token(self, monkeypatch, tmp_path):
+    def test_does_not_resolve_primary_api_key_as_native_anthropic_token(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        (tmp_path / ".claude.json").write_text(json.dumps({"primaryApiKey": "sk-ant-api03-primary"}))
+        (tmp_path / ".claude.json").write_text(
+            json.dumps({"primaryApiKey": "sk-ant-api03-primary"})
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() is None
 
-    def test_falls_back_to_api_key_when_no_oauth_sources_exist(self, monkeypatch, tmp_path):
+    def test_falls_back_to_api_key_when_no_oauth_sources_exist(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-mykey")
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
@@ -312,39 +330,49 @@ class TestResolveAnthropicToken:
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "cc-auto-token",
-                "refreshToken": "refresh",
-                "expiresAt": int(time.time() * 1000) + 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "cc-auto-token",
+                    "refreshToken": "refresh",
+                    "expiresAt": int(time.time() * 1000) + 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "cc-auto-token"
 
-    def test_prefers_refreshable_claude_code_credentials_over_static_anthropic_token(self, monkeypatch, tmp_path):
+    def test_prefers_refreshable_claude_code_credentials_over_static_anthropic_token(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-static-token")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "cc-auto-token",
-                "refreshToken": "refresh-token",
-                "expiresAt": int(time.time() * 1000) + 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "cc-auto-token",
+                    "refreshToken": "refresh-token",
+                    "expiresAt": int(time.time() * 1000) + 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() == "cc-auto-token"
 
-    def test_keeps_static_anthropic_token_when_only_non_refreshable_claude_key_exists(self, monkeypatch, tmp_path):
+    def test_keeps_static_anthropic_token_when_only_non_refreshable_claude_key_exists(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-static-token")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         claude_json = tmp_path / ".claude.json"
-        claude_json.write_text(json.dumps({"primaryApiKey": "sk-ant-api03-managed-key"}))
+        claude_json.write_text(
+            json.dumps({"primaryApiKey": "sk-ant-api03-managed-key"})
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() == "sk-ant-oat01-static-token"
@@ -372,9 +400,9 @@ class TestRefreshOauthToken:
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_ctx = MagicMock()
-            mock_ctx.__enter__ = MagicMock(return_value=MagicMock(
-                read=MagicMock(return_value=mock_response)
-            ))
+            mock_ctx.__enter__ = MagicMock(
+                return_value=MagicMock(read=MagicMock(return_value=mock_response))
+            )
             mock_ctx.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_ctx
 
@@ -421,7 +449,9 @@ class TestWriteClaudeCodeCredentials:
         assert data["otherField"] == "keep-me"
         assert data["claudeAiOauth"]["accessToken"] == "new-tok"
 
-    @pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows")
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows"
+    )
     def test_credentials_file_created_with_0o600(self, tmp_path, monkeypatch):
         """Refreshed Claude Code credentials must land on disk at 0o600.
 
@@ -431,13 +461,16 @@ class TestWriteClaudeCodeCredentials:
         the fix shipped in #19673 (google_oauth) and #21148 (mcp_oauth).
         """
         import stat as _stat
+
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
         _write_claude_code_credentials("tok", "ref", 12345)
 
         cred_file = tmp_path / ".claude" / ".credentials.json"
         assert cred_file.exists()
         mode = _stat.S_IMODE(cred_file.stat().st_mode)
-        assert mode == 0o600, f"creds file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
+        assert mode == 0o600, (
+            f"creds file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
+        )
 
 
 class TestResolveWithRefresh:
@@ -450,38 +483,50 @@ class TestResolveWithRefresh:
         # Set up expired creds with a refresh token
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "expired-tok",
-                "refreshToken": "valid-refresh",
-                "expiresAt": int(time.time() * 1000) - 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "expired-tok",
+                    "refreshToken": "valid-refresh",
+                    "expiresAt": int(time.time() * 1000) - 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         # Mock refresh to succeed
-        with patch("agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
+        with patch(
+            "agent.anthropic_adapter._refresh_oauth_token",
+            return_value="refreshed-token",
+        ):
             result = resolve_anthropic_token()
 
         assert result == "refreshed-token"
 
-    def test_static_env_oauth_token_does_not_block_refreshable_claude_creds(self, monkeypatch, tmp_path):
+    def test_static_env_oauth_token_does_not_block_refreshable_claude_creds(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-expired-env-token")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
 
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "expired-claude-creds-token",
-                "refreshToken": "valid-refresh",
-                "expiresAt": int(time.time() * 1000) - 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "expired-claude-creds-token",
+                    "refreshToken": "valid-refresh",
+                    "expiresAt": int(time.time() * 1000) - 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
-        with patch("agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
+        with patch(
+            "agent.anthropic_adapter._refresh_oauth_token",
+            return_value="refreshed-token",
+        ):
             result = resolve_anthropic_token()
 
         assert result == "refreshed-token"
@@ -502,13 +547,15 @@ class TestRunOauthSetupToken:
         # Pre-create credential files that will be found after subprocess
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
-        cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "from-cred-file",
-                "refreshToken": "refresh",
-                "expiresAt": int(time.time() * 1000) + 3600_000,
-            }
-        }))
+        cred_file.write_text(
+            json.dumps({
+                "claudeAiOauth": {
+                    "accessToken": "from-cred-file",
+                    "refreshToken": "refresh",
+                    "expiresAt": int(time.time() * 1000) + 3600_000,
+                }
+            })
+        )
         monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         with patch("subprocess.run") as mock_run:
@@ -565,27 +612,45 @@ class TestRunOauthSetupToken:
 
 class TestNormalizeModelName:
     def test_strips_anthropic_prefix(self):
-        assert normalize_model_name("anthropic/claude-sonnet-4-20250514") == "claude-sonnet-4-20250514"
+        assert (
+            normalize_model_name("anthropic/claude-sonnet-4-20250514")
+            == "claude-sonnet-4-20250514"
+        )
 
     def test_leaves_bare_name(self):
-        assert normalize_model_name("claude-sonnet-4-20250514") == "claude-sonnet-4-20250514"
+        assert (
+            normalize_model_name("claude-sonnet-4-20250514")
+            == "claude-sonnet-4-20250514"
+        )
 
     def test_converts_dots_to_hyphens(self):
         """OpenRouter uses dots (4.6), Anthropic uses hyphens (4-6)."""
         assert normalize_model_name("anthropic/claude-opus-4.6") == "claude-opus-4-6"
-        assert normalize_model_name("anthropic/claude-sonnet-4.5") == "claude-sonnet-4-5"
+        assert (
+            normalize_model_name("anthropic/claude-sonnet-4.5") == "claude-sonnet-4-5"
+        )
         assert normalize_model_name("claude-opus-4.6") == "claude-opus-4-6"
 
     def test_already_hyphenated_unchanged(self):
         """Names already in Anthropic format should pass through."""
         assert normalize_model_name("claude-opus-4-6") == "claude-opus-4-6"
-        assert normalize_model_name("claude-opus-4-5-20251101") == "claude-opus-4-5-20251101"
+        assert (
+            normalize_model_name("claude-opus-4-5-20251101")
+            == "claude-opus-4-5-20251101"
+        )
 
     def test_preserve_dots_for_alibaba_dashscope(self):
         """Alibaba/DashScope use dots in model names (e.g. qwen3.5-plus). Fixes #1739."""
-        assert normalize_model_name("qwen3.5-plus", preserve_dots=True) == "qwen3.5-plus"
-        assert normalize_model_name("anthropic/qwen3.5-plus", preserve_dots=True) == "qwen3.5-plus"
-        assert normalize_model_name("qwen3.5-flash", preserve_dots=True) == "qwen3.5-flash"
+        assert (
+            normalize_model_name("qwen3.5-plus", preserve_dots=True) == "qwen3.5-plus"
+        )
+        assert (
+            normalize_model_name("anthropic/qwen3.5-plus", preserve_dots=True)
+            == "qwen3.5-plus"
+        )
+        assert (
+            normalize_model_name("qwen3.5-flash", preserve_dots=True) == "qwen3.5-flash"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -672,7 +737,10 @@ class TestConvertMessages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Can you see this?"},
-                    {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/cat.png"},
+                    },
                 ],
             }
         ]
@@ -684,7 +752,10 @@ class TestConvertMessages:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Can you see this?"},
-                    {"type": "image", "source": {"type": "url", "url": "https://example.com/cat.png"}},
+                    {
+                        "type": "image",
+                        "source": {"type": "url", "url": "https://example.com/cat.png"},
+                    },
                 ],
             }
         ]
@@ -749,7 +820,10 @@ class TestConvertMessages:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "tc_1", "function": {"name": "test_tool", "arguments": "{}"}},
+                    {
+                        "id": "tc_1",
+                        "function": {"name": "test_tool", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_1", "content": "result data"},
@@ -814,10 +888,9 @@ class TestConvertMessages:
         # tc_gone has no matching tool_use — its tool_result should be stripped
         for m in result:
             if m["role"] == "user" and isinstance(m["content"], list):
-                assert all(
-                    b.get("type") != "tool_result"
-                    for b in m["content"]
-                ), "Orphaned tool_result should have been stripped"
+                assert all(b.get("type") != "tool_result" for b in m["content"]), (
+                    "Orphaned tool_result should have been stripped"
+                )
 
     def test_strips_orphaned_tool_result_preserves_valid(self):
         """Orphaned tool_results are stripped while valid ones survive."""
@@ -826,7 +899,10 @@ class TestConvertMessages:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "tc_valid", "function": {"name": "search", "arguments": "{}"}},
+                    {
+                        "id": "tc_valid",
+                        "function": {"name": "search", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_valid", "content": "good result"},
@@ -845,7 +921,11 @@ class TestConvertMessages:
             {
                 "role": "system",
                 "content": [
-                    {"type": "text", "text": "System prompt", "cache_control": {"type": "ephemeral"}},
+                    {
+                        "type": "text",
+                        "text": "System prompt",
+                        "cache_control": {"type": "ephemeral"},
+                    },
                 ],
             },
             {"role": "user", "content": "Hi"},
@@ -869,17 +949,23 @@ class TestConvertMessages:
         assert assistant_blocks[0]["cache_control"] == {"type": "ephemeral"}
 
     def test_tool_cache_control_is_preserved_on_tool_result_block(self):
-        messages = apply_anthropic_cache_control([
-            {"role": "system", "content": "System prompt"},
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {"id": "tc_1", "function": {"name": "test_tool", "arguments": "{}"}},
-                ],
-            },
-            {"role": "tool", "tool_call_id": "tc_1", "content": "result"},
-        ], native_anthropic=True)
+        messages = apply_anthropic_cache_control(
+            [
+                {"role": "system", "content": "System prompt"},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "function": {"name": "test_tool", "arguments": "{}"},
+                        },
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "tc_1", "content": "result"},
+            ],
+            native_anthropic=True,
+        )
 
         _, result = convert_messages_to_anthropic(messages)
         user_msg = [m for m in result if m["role"] == "user"][0]
@@ -896,7 +982,10 @@ class TestConvertMessages:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "tc_1", "function": {"name": "test_tool", "arguments": "{}"}},
+                    {
+                        "id": "tc_1",
+                        "function": {"name": "test_tool", "arguments": "{}"},
+                    },
                 ],
                 "reasoning_details": [
                     {
@@ -910,10 +999,14 @@ class TestConvertMessages:
         ]
 
         _, result = convert_messages_to_anthropic(messages)
-        assistant_blocks = next(msg for msg in result if msg["role"] == "assistant")["content"]
+        assistant_blocks = next(msg for msg in result if msg["role"] == "assistant")[
+            "content"
+        ]
 
         assert assistant_blocks[0]["type"] == "thinking"
-        assert assistant_blocks[0]["thinking"] == "Need to inspect the tool result first."
+        assert (
+            assistant_blocks[0]["thinking"] == "Need to inspect the tool result first."
+        )
         assert assistant_blocks[0]["signature"] == "sig_123"
         assert assistant_blocks[1]["type"] == "tool_use"
 
@@ -975,7 +1068,10 @@ class TestConvertMessages:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "tc_1", "function": {"name": "skill_view", "arguments": "{}"}},
+                    {
+                        "id": "tc_1",
+                        "function": {"name": "skill_view", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_1", "content": "result"},
@@ -986,7 +1082,10 @@ class TestConvertMessages:
         assistant_turn = next(msg for msg in result if msg["role"] == "assistant")
         assistant_blocks = assistant_turn["content"]
 
-        assert all(not (b.get("type") == "text" and b.get("text") == "") for b in assistant_blocks)
+        assert all(
+            not (b.get("type") == "text" and b.get("text") == "")
+            for b in assistant_blocks
+        )
         assert any(b.get("type") == "tool_use" for b in assistant_blocks)
 
     def test_empty_user_message_string_gets_placeholder(self):
@@ -1024,7 +1123,13 @@ class TestConvertMessages:
     def test_user_message_with_empty_text_blocks_gets_placeholder(self):
         """User message with only empty text blocks should get placeholder."""
         messages = [
-            {"role": "user", "content": [{"type": "text", "text": ""}, {"type": "text", "text": "  "}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": ""},
+                    {"type": "text", "text": "  "},
+                ],
+            },
         ]
         _, result = convert_messages_to_anthropic(messages)
         assert result[0]["role"] == "user"
@@ -1188,6 +1293,7 @@ class TestBuildAnthropicKwargs:
         # params through its signature, we exercise the strip behavior by
         # calling the internal predicate directly.
         from agent.anthropic_adapter import _forbids_sampling_params
+
         assert _forbids_sampling_params("claude-opus-4-8") is True
         assert _forbids_sampling_params("claude-opus-4-8-fast") is True
         assert _forbids_sampling_params("claude-opus-4-7") is True
@@ -1204,6 +1310,7 @@ class TestBuildAnthropicKwargs:
         False for both opus-4-8 and opus-4-8-fast.
         """
         from agent.anthropic_adapter import _supports_fast_mode
+
         assert _supports_fast_mode("claude-opus-4-6") is True
         assert _supports_fast_mode("anthropic/claude-opus-4-6") is True
         assert _supports_fast_mode("claude-opus-4-7") is False
@@ -1359,35 +1466,43 @@ class TestBuildAnthropicKwargs:
 class TestGetAnthropicMaxOutput:
     def test_opus_4_6(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-opus-4-6") == 128_000
 
     def test_opus_4_6_variant(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-opus-4-6:1m:fast") == 128_000
 
     def test_sonnet_4_6(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-sonnet-4-6") == 64_000
 
     def test_sonnet_4_date_stamped(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-sonnet-4-20250514") == 64_000
 
     def test_claude_3_5_sonnet(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-3-5-sonnet-20241022") == 8_192
 
     def test_claude_3_opus(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-3-opus-20240229") == 4_096
 
     def test_unknown_future_model(self):
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         assert _get_anthropic_max_output("claude-ultra-5-20260101") == 128_000
 
     def test_longest_prefix_wins(self):
         """'claude-3-5-sonnet' should match before 'claude-3-5'."""
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         # claude-3-5-sonnet (8192) should win over a hypothetical shorter match
         assert _get_anthropic_max_output("claude-3-5-sonnet-20241022") == 8_192
 
@@ -1460,7 +1575,9 @@ class TestNormalizeResponse:
 
     def test_text_response(self):
         block = SimpleNamespace(type="text", text="Hello world")
-        nr = get_transport("anthropic_messages").normalize_response(self._make_response([block]))
+        nr = get_transport("anthropic_messages").normalize_response(
+            self._make_response([block])
+        )
         assert nr.content == "Hello world"
         assert nr.finish_reason == "stop"
         assert nr.tool_calls is None
@@ -1489,10 +1606,14 @@ class TestNormalizeResponse:
             SimpleNamespace(type="thinking", thinking="Let me reason about this..."),
             SimpleNamespace(type="text", text="The answer is 42."),
         ]
-        nr = get_transport("anthropic_messages").normalize_response(self._make_response(blocks))
+        nr = get_transport("anthropic_messages").normalize_response(
+            self._make_response(blocks)
+        )
         assert nr.content == "The answer is 42."
         assert nr.reasoning == "Let me reason about this..."
-        assert nr.provider_data["reasoning_details"] == [{"type": "thinking", "thinking": "Let me reason about this..."}]
+        assert nr.provider_data["reasoning_details"] == [
+            {"type": "thinking", "thinking": "Let me reason about this..."}
+        ]
 
     def test_thinking_response_preserves_signature(self):
         blocks = [
@@ -1503,9 +1624,16 @@ class TestNormalizeResponse:
                 redacted=False,
             ),
         ]
-        nr = get_transport("anthropic_messages").normalize_response(self._make_response(blocks))
-        assert nr.provider_data["reasoning_details"][0]["signature"] == "opaque_signature"
-        assert nr.provider_data["reasoning_details"][0]["thinking"] == "Let me reason about this..."
+        nr = get_transport("anthropic_messages").normalize_response(
+            self._make_response(blocks)
+        )
+        assert (
+            nr.provider_data["reasoning_details"][0]["signature"] == "opaque_signature"
+        )
+        assert (
+            nr.provider_data["reasoning_details"][0]["thinking"]
+            == "Let me reason about this..."
+        )
 
     def test_stop_reason_mapping(self):
         block = SimpleNamespace(type="text", text="x")
@@ -1595,7 +1723,11 @@ class TestThinkingBlockSignatureManagement:
                     {"id": "tc_1", "function": {"name": "tool1", "arguments": "{}"}},
                 ],
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Old reasoning.", "signature": "sig_old"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Old reasoning.",
+                        "signature": "sig_old",
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_1", "content": "result 1"},
@@ -1606,7 +1738,11 @@ class TestThinkingBlockSignatureManagement:
                     {"id": "tc_2", "function": {"name": "tool2", "arguments": "{}"}},
                 ],
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Latest reasoning.", "signature": "sig_new"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Latest reasoning.",
+                        "signature": "sig_new",
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_2", "content": "result 2"},
@@ -1637,7 +1773,11 @@ class TestThinkingBlockSignatureManagement:
                 "role": "assistant",
                 "content": "The answer is 42.",
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Deep thought.", "signature": "sig_valid"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Deep thought.",
+                        "signature": "sig_valid",
+                    },
                 ],
             },
         ]
@@ -1734,14 +1874,22 @@ class TestThinkingBlockSignatureManagement:
                 "role": "assistant",
                 "content": "First response.",
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "First thought.", "signature": "sig_1"},
+                    {
+                        "type": "thinking",
+                        "thinking": "First thought.",
+                        "signature": "sig_1",
+                    },
                 ],
             },
             {
                 "role": "assistant",
                 "content": "Second response.",
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Second thought.", "signature": "sig_2"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Second thought.",
+                        "signature": "sig_2",
+                    },
                 ],
             },
         ]
@@ -1821,7 +1969,8 @@ class TestThinkingBlockSignatureManagement:
 
         # Last one: thinking preserved
         last_thinking = [
-            b for b in assistants[2]["content"]
+            b
+            for b in assistants[2]["content"]
             if isinstance(b, dict) and b.get("type") == "thinking"
         ]
         assert len(last_thinking) == 1
@@ -1846,11 +1995,21 @@ class TestThinkingBlockSignatureManagement:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "tc_kept", "function": {"name": "tool_a", "arguments": "{}"}},
-                    {"id": "tc_orphan", "function": {"name": "tool_b", "arguments": "{}"}},
+                    {
+                        "id": "tc_kept",
+                        "function": {"name": "tool_a", "arguments": "{}"},
+                    },
+                    {
+                        "id": "tc_orphan",
+                        "function": {"name": "tool_b", "arguments": "{}"},
+                    },
                 ],
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Plan: call A and B.", "signature": "sig_dead"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Plan: call A and B.",
+                        "signature": "sig_dead",
+                    },
                 ],
             },
             # Only one of the two parallel tool_use blocks got a result back.
@@ -1888,7 +2047,11 @@ class TestThinkingBlockSignatureManagement:
                     {"id": "tc_1", "function": {"name": "tool_a", "arguments": "{}"}},
                 ],
                 "reasoning_details": [
-                    {"type": "thinking", "thinking": "Valid plan.", "signature": "sig_live"},
+                    {
+                        "type": "thinking",
+                        "thinking": "Valid plan.",
+                        "signature": "sig_live",
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "tc_1", "content": "result A"},
@@ -1952,7 +2115,6 @@ class TestToolChoice:
         assert kwargs["tool_choice"] == {"type": "tool", "name": "search"}
 
 
-
 # ---------------------------------------------------------------------------
 # max_tokens resolver — openclaw/openclaw#66664 port
 # ---------------------------------------------------------------------------
@@ -2010,9 +2172,7 @@ class TestResolveMessagesMaxTokens:
     """Integration tests for the full Messages resolver."""
 
     def test_positive_requested_wins(self):
-        assert _resolve_anthropic_messages_max_tokens(
-            8192, "claude-opus-4-6"
-        ) == 8192
+        assert _resolve_anthropic_messages_max_tokens(8192, "claude-opus-4-6") == 8192
 
     def test_zero_falls_back_to_model_default(self):
         # Should use _get_anthropic_max_output(model), not crash
@@ -2029,9 +2189,7 @@ class TestResolveMessagesMaxTokens:
         assert result > 0
 
     def test_fractional_positive_floored(self):
-        assert _resolve_anthropic_messages_max_tokens(
-            8192.5, "claude-opus-4-6"
-        ) == 8192
+        assert _resolve_anthropic_messages_max_tokens(8192.5, "claude-opus-4-6") == 8192
 
     def test_sub_one_float_falls_back(self):
         # 0.5 floors to 0 -> not positive -> falls back to model ceiling
@@ -2043,6 +2201,7 @@ class TestResolveMessagesMaxTokens:
 # ---------------------------------------------------------------------------
 # convert_tools_to_anthropic — tool dedup at API boundary
 # ---------------------------------------------------------------------------
+
 
 class TestConvertToolsToAnthropicDedup:
     """convert_tools_to_anthropic must deduplicate tool names.
@@ -2080,9 +2239,7 @@ class TestConvertToolsToAnthropicDedup:
         ]
         result = convert_tools_to_anthropic(tools)
         names = [t["name"] for t in result]
-        assert len(names) == len(set(names)), (
-            f"Duplicate tool names found: {names}"
-        )
+        assert len(names) == len(set(names)), f"Duplicate tool names found: {names}"
         assert len(result) == 3  # lcm_grep, lcm_describe, lcm_expand
 
     def test_empty_tools_returns_empty(self):

@@ -9,19 +9,19 @@ An animation is a Python object that computes intermediate visual states of a mo
 ## Creation Animations
 
 ```python
-self.play(Create(circle))          # traces outline
-self.play(Write(equation))         # simulates handwriting (for Text/MathTex)
-self.play(FadeIn(group))           # opacity 0 -> 1
-self.play(GrowFromCenter(dot))     # scale 0 -> 1 from center
+self.play(Create(circle))  # traces outline
+self.play(Write(equation))  # simulates handwriting (for Text/MathTex)
+self.play(FadeIn(group))  # opacity 0 -> 1
+self.play(GrowFromCenter(dot))  # scale 0 -> 1 from center
 self.play(DrawBorderThenFill(sq))  # outline first, then fill
 ```
 
 ## Removal Animations
 
 ```python
-self.play(FadeOut(mobject))         # opacity 1 -> 0
-self.play(Uncreate(circle))        # reverse of Create
-self.play(ShrinkToCenter(group))   # scale 1 -> 0
+self.play(FadeOut(mobject))  # opacity 1 -> 0
+self.play(Uncreate(circle))  # reverse of Create
+self.play(ShrinkToCenter(group))  # scale 1 -> 0
 ```
 
 ## Transform Animations
@@ -53,10 +53,10 @@ self.play(circle.animate.shift(RIGHT * 2).scale(0.5))  # chain multiple
 ## Additional Creation Animations
 
 ```python
-self.play(GrowFromPoint(circle, LEFT * 3))     # scale 0 -> 1 from a specific point
-self.play(GrowFromEdge(rect, DOWN))             # grow from one edge
-self.play(SpinInFromNothing(square))            # scale up while rotating (default PI/2)
-self.play(GrowArrow(arrow))                     # grows arrow from start to tip
+self.play(GrowFromPoint(circle, LEFT * 3))  # scale 0 -> 1 from a specific point
+self.play(GrowFromEdge(rect, DOWN))  # grow from one edge
+self.play(SpinInFromNothing(square))  # scale up while rotating (default PI/2)
+self.play(GrowArrow(arrow))  # grows arrow from start to tip
 ```
 
 ## Movement Animations
@@ -78,20 +78,20 @@ self.play(Rotating(gear, angle=TAU, run_time=4, rate_func=linear))
 ## Emphasis Animations
 
 ```python
-self.play(Indicate(mobject))             # brief yellow flash + scale
-self.play(Circumscribe(mobject))         # draw rectangle around it
-self.play(Flash(point))                  # radial flash
-self.play(Wiggle(mobject))               # shake side to side
+self.play(Indicate(mobject))  # brief yellow flash + scale
+self.play(Circumscribe(mobject))  # draw rectangle around it
+self.play(Flash(point))  # radial flash
+self.play(Wiggle(mobject))  # shake side to side
 ```
 
 ## Rate Functions
 
 ```python
-self.play(FadeIn(mob), rate_func=smooth)          # default: ease in/out
-self.play(FadeIn(mob), rate_func=linear)           # constant speed
-self.play(FadeIn(mob), rate_func=rush_into)        # start slow, end fast
-self.play(FadeIn(mob), rate_func=rush_from)        # start fast, end slow
-self.play(FadeIn(mob), rate_func=there_and_back)   # animate then reverse
+self.play(FadeIn(mob), rate_func=smooth)  # default: ease in/out
+self.play(FadeIn(mob), rate_func=linear)  # constant speed
+self.play(FadeIn(mob), rate_func=rush_into)  # start slow, end fast
+self.play(FadeIn(mob), rate_func=rush_from)  # start fast, end slow
+self.play(FadeIn(mob), rate_func=there_and_back)  # animate then reverse
 ```
 
 ## Composition
@@ -227,10 +227,10 @@ Compress any rate function into a time window within an animation. Enables overl
 
 ```python
 self.play(
-    FadeIn(a, rate_func=squish_rate_func(smooth, 0, 0.5)),    # 0% to 50%
-    FadeIn(b, rate_func=squish_rate_func(smooth, 0.25, 0.75)), # 25% to 75%
+    FadeIn(a, rate_func=squish_rate_func(smooth, 0, 0.5)),  # 0% to 50%
+    FadeIn(b, rate_func=squish_rate_func(smooth, 0.25, 0.75)),  # 25% to 75%
     FadeIn(c, rate_func=squish_rate_func(smooth, 0.5, 1.0)),  # 50% to 100%
-    run_time=2
+    run_time=2,
 )
 ```
 
@@ -240,11 +240,19 @@ More precise than `LaggedStart` when you need exact overlap control.
 
 ```python
 from manim import (
-    smooth, linear, rush_into, rush_from,
-    there_and_back, there_and_back_with_pause,
-    running_start, double_smooth, wiggle,
-    lingering, exponential_decay, not_quite_there,
-    squish_rate_func
+    smooth,
+    linear,
+    rush_into,
+    rush_from,
+    there_and_back,
+    there_and_back_with_pause,
+    running_start,
+    double_smooth,
+    wiggle,
+    lingering,
+    exponential_decay,
+    not_quite_there,
+    squish_rate_func,
 )
 
 # running_start: pulls back before going forward (anticipation)

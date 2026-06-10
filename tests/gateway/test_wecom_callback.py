@@ -24,7 +24,12 @@ def _app(name="test-app", corp_id="ww1234567890", agent_id="1000002"):
 def _config(apps=None):
     return PlatformConfig(
         enabled=True,
-        extra={"mode": "callback", "host": "127.0.0.1", "port": 0, "apps": apps or [_app()]},
+        extra={
+            "mode": "callback",
+            "host": "127.0.0.1",
+            "port": 0,
+            "apps": apps or [_app()],
+        },
     )
 
 
@@ -33,7 +38,9 @@ class TestWecomCrypto:
         app = _app()
         crypt = WXBizMsgCrypt(app["token"], app["encoding_aes_key"], app["corp_id"])
         encrypted_xml = crypt.encrypt(
-            "<xml><Content>hello</Content></xml>", nonce="nonce123", timestamp="123456",
+            "<xml><Content>hello</Content></xml>",
+            nonce="nonce123",
+            timestamp="123456",
         )
         root = ET.fromstring(encrypted_xml)
         decrypted = crypt.decrypt(
@@ -50,6 +57,7 @@ class TestWecomCrypto:
         encrypted_xml = crypt.encrypt("<xml/>", nonce="n", timestamp="1")
         root = ET.fromstring(encrypted_xml)
         from gateway.platforms.wecom_crypto import SignatureError
+
         with pytest.raises(SignatureError):
             crypt.decrypt("bad-sig", "1", "n", root.findtext("Encrypt", default=""))
 
@@ -95,7 +103,9 @@ class TestWecomCallbackRouting:
         adapter = WecomCallbackAdapter(_config())
         assert adapter._user_app_key("corpA", "alice") == "corpA:alice"
         assert adapter._user_app_key("corpB", "alice") == "corpB:alice"
-        assert adapter._user_app_key("corpA", "alice") != adapter._user_app_key("corpB", "alice")
+        assert adapter._user_app_key("corpA", "alice") != adapter._user_app_key(
+            "corpB", "alice"
+        )
 
     @pytest.mark.asyncio
     async def test_send_selects_correct_app_for_scoped_chat_id(self):
@@ -158,7 +168,10 @@ class TestWecomCallbackSendTokenRefresh:
     async def test_send_retries_with_fresh_token_on_errcode_40001(self):
         """errcode=40001 must evict the cached token, refresh, and retry once."""
         adapter = WecomCallbackAdapter(_config())
-        adapter._access_tokens["test-app"] = {"token": "stale", "expires_at": 9999999999}
+        adapter._access_tokens["test-app"] = {
+            "token": "stale",
+            "expires_at": 9999999999,
+        }
         adapter._user_app_map["ww1234567890:alice"] = "test-app"
 
         responses = [
@@ -174,12 +187,18 @@ class TestWecomCallbackSendTokenRefresh:
                 class R:
                     def json(inner):
                         return responses[len(post_calls) - 1]
+
                 return R()
 
             async def get(self, url, params=None, **kw):
                 class R:
                     def json(inner):
-                        return {"errcode": 0, "access_token": "fresh", "expires_in": 7200}
+                        return {
+                            "errcode": 0,
+                            "access_token": "fresh",
+                            "expires_in": 7200,
+                        }
+
                 return R()
 
         adapter._http_client = FakeClient()
@@ -195,7 +214,10 @@ class TestWecomCallbackSendTokenRefresh:
     async def test_send_retries_with_fresh_token_on_errcode_42001(self):
         """errcode=42001 (token expired) must also trigger the refresh-retry path."""
         adapter = WecomCallbackAdapter(_config())
-        adapter._access_tokens["test-app"] = {"token": "expired", "expires_at": 9999999999}
+        adapter._access_tokens["test-app"] = {
+            "token": "expired",
+            "expires_at": 9999999999,
+        }
 
         responses = [
             {"errcode": 42001, "errmsg": "access_token expired"},
@@ -210,12 +232,18 @@ class TestWecomCallbackSendTokenRefresh:
                 class R:
                     def json(inner):
                         return responses[len(post_calls) - 1]
+
                 return R()
 
             async def get(self, url, params=None, **kw):
                 class R:
                     def json(inner):
-                        return {"errcode": 0, "access_token": "renewed", "expires_in": 7200}
+                        return {
+                            "errcode": 0,
+                            "access_token": "renewed",
+                            "expires_in": 7200,
+                        }
+
                 return R()
 
         adapter._http_client = FakeClient()
@@ -239,6 +267,7 @@ class TestWecomCallbackSendTokenRefresh:
                 class R:
                     def json(inner):
                         return {"errcode": 60020, "errmsg": "not allow to access"}
+
                 return R()
 
         adapter._http_client = FakeClient()
@@ -262,12 +291,18 @@ class TestWecomCallbackSendTokenRefresh:
                 class R:
                     def json(inner):
                         return {"errcode": 42001, "errmsg": "access_token expired"}
+
                 return R()
 
             async def get(self, url, params=None, **kw):
                 class R:
                     def json(inner):
-                        return {"errcode": 0, "access_token": "bad2", "expires_in": 7200}
+                        return {
+                            "errcode": 0,
+                            "access_token": "bad2",
+                            "expires_in": 7200,
+                        }
+
                 return R()
 
         adapter._http_client = FakeClient()

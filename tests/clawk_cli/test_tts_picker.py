@@ -55,8 +55,11 @@ class TestPluginTTSProviders:
                     "badge": "paid",
                     "tag": "Ultra-low-latency streaming",
                     "env_vars": [
-                        {"key": "CARTESIA_API_KEY", "prompt": "Cartesia API key",
-                         "url": "https://play.cartesia.ai/console"},
+                        {
+                            "key": "CARTESIA_API_KEY",
+                            "prompt": "Cartesia API key",
+                            "url": "https://play.cartesia.ai/console",
+                        },
                     ],
                 },
             )
@@ -99,6 +102,7 @@ class TestPluginTTSProviders:
 
         class _NoName:
             display_name = "Bogus"
+
             def get_setup_schema(self):
                 return {"name": "Bogus"}
 

@@ -10,6 +10,7 @@ Before the #13383 fix, this class of failure fell through as a plain
 tool error with no recovery path, so every subsequent call on the
 affected MCP server failed until the gateway was manually restarted.
 """
+
 import json
 import threading
 from unittest.mock import MagicMock
@@ -25,6 +26,7 @@ import pytest
 def test_is_session_expired_detects_invalid_or_expired_session():
     """Reporter's exact wpcom-mcp error message (#13383)."""
     from tools.mcp_tool import _is_session_expired_error
+
     exc = RuntimeError("Invalid params: Invalid or expired session")
     assert _is_session_expired_error(exc) is True
 
@@ -33,6 +35,7 @@ def test_is_session_expired_detects_expired_session_variant():
     """Generic ``session expired`` / ``expired session`` phrasings used
     by other SDK servers."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("Session expired")) is True
     assert _is_session_expired_error(RuntimeError("expired session: abc")) is True
 
@@ -41,6 +44,7 @@ def test_is_session_expired_detects_session_not_found():
     """Server-side GC produces ``session not found`` / ``unknown session``
     on some implementations."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("session not found")) is True
     assert _is_session_expired_error(RuntimeError("Unknown session: abc123")) is True
 
@@ -56,17 +60,26 @@ def test_is_session_expired_detects_stale_pipe_and_closed_transport_variants():
     """Stdio/AnyIO stale-pipe failures usually surface as closed-resource
     or broken-pipe text, not an HTTP session-expired JSON-RPC error."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("ClosedResourceError")) is True
-    assert _is_session_expired_error(RuntimeError("closed resource in MCP child")) is True
+    assert (
+        _is_session_expired_error(RuntimeError("closed resource in MCP child")) is True
+    )
     assert _is_session_expired_error(RuntimeError("transport is closed")) is True
-    assert _is_session_expired_error(RuntimeError("Broken pipe while writing request")) is True
-    assert _is_session_expired_error(RuntimeError("End of file from MCP server")) is True
+    assert (
+        _is_session_expired_error(RuntimeError("Broken pipe while writing request"))
+        is True
+    )
+    assert (
+        _is_session_expired_error(RuntimeError("End of file from MCP server")) is True
+    )
 
 
 def test_is_session_expired_is_case_insensitive():
     """Match uses lower-cased comparison so servers that emit the
     message in different cases (SDK formatter quirks) still trigger."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("INVALID OR EXPIRED SESSION")) is True
     assert _is_session_expired_error(RuntimeError("Session Expired")) is True
 
@@ -75,6 +88,7 @@ def test_is_session_expired_rejects_unrelated_errors():
     """Narrow scope: only the specific session-expired markers trigger.
     A regular RuntimeError / ValueError does not."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("Tool failed to execute")) is False
     assert _is_session_expired_error(ValueError("Missing parameter")) is False
     assert _is_session_expired_error(Exception("Connection refused")) is False
@@ -86,13 +100,18 @@ def test_is_session_expired_rejects_interrupted_error():
     """InterruptedError is the user-cancel signal — must never route
     through the session-reconnect path."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(InterruptedError()) is False
-    assert _is_session_expired_error(InterruptedError("Invalid or expired session")) is False
+    assert (
+        _is_session_expired_error(InterruptedError("Invalid or expired session"))
+        is False
+    )
 
 
 def test_is_session_expired_rejects_empty_message():
     """Bare exceptions with no message shouldn't match."""
     from tools.mcp_tool import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("")) is False
     assert _is_session_expired_error(Exception()) is False
 
@@ -261,6 +280,7 @@ def test_session_expired_handler_returns_none_without_server_record():
     """If the server has been torn down / isn't in _servers, fall
     through cleanly — nothing to reconnect to."""
     from tools.mcp_tool import _handle_session_expired_and_retry
+
     out = _handle_session_expired_and_retry(
         "does-not-exist",
         RuntimeError("Invalid or expired session"),
@@ -311,10 +331,30 @@ def test_session_expired_handler_returns_none_when_retry_also_fails(
 @pytest.mark.parametrize(
     "handler_factory, handler_kwargs, session_method, op_label",
     [
-        ("_make_list_resources_handler", {"tool_timeout": 10.0}, "list_resources", "list_resources"),
-        ("_make_read_resource_handler", {"tool_timeout": 10.0}, "read_resource", "read_resource"),
-        ("_make_list_prompts_handler", {"tool_timeout": 10.0}, "list_prompts", "list_prompts"),
-        ("_make_get_prompt_handler", {"tool_timeout": 10.0}, "get_prompt", "get_prompt"),
+        (
+            "_make_list_resources_handler",
+            {"tool_timeout": 10.0},
+            "list_resources",
+            "list_resources",
+        ),
+        (
+            "_make_read_resource_handler",
+            {"tool_timeout": 10.0},
+            "read_resource",
+            "read_resource",
+        ),
+        (
+            "_make_list_prompts_handler",
+            {"tool_timeout": 10.0},
+            "list_prompts",
+            "list_prompts",
+        ),
+        (
+            "_make_get_prompt_handler",
+            {"tool_timeout": 10.0},
+            "get_prompt",
+            "get_prompt",
+        ),
     ],
 )
 def test_non_tool_handlers_also_reconnect_on_session_expired(
@@ -368,9 +408,7 @@ def test_non_tool_handlers_also_reconnect_on_session_expired(
         assert reconnect_flag.is_set(), (
             f"{op_label}: reconnect should fire for session-expired"
         )
-        assert call_count["n"] == 2, (
-            f"{op_label}: expected 1 original + 1 retry"
-        )
+        assert call_count["n"] == 2, f"{op_label}: expected 1 original + 1 retry"
     finally:
         mcp_tool._servers.pop(f"srv-{op_label}", None)
         mcp_tool._server_error_counts.pop(f"srv-{op_label}", None)

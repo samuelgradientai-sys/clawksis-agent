@@ -263,6 +263,7 @@ For custom API endpoints, subclass `TemplateAPI`:
 from lm_eval.models.api_models import TemplateAPI
 import requests
 
+
 class MyCustomAPI(TemplateAPI):
     """Custom API model."""
 
@@ -272,11 +273,7 @@ class MyCustomAPI(TemplateAPI):
 
     def _create_payload(self, messages, gen_kwargs):
         """Create API request payload."""
-        return {
-            "messages": messages,
-            "api_key": self.api_key,
-            **gen_kwargs
-        }
+        return {"messages": messages, "api_key": self.api_key, **gen_kwargs}
 
     def parse_generations(self, response):
         """Parse generation response."""
@@ -297,16 +294,10 @@ class MyCustomAPI(TemplateAPI):
 from lm_eval import evaluator
 from my_api import MyCustomAPI
 
-model = MyCustomAPI(
-    base_url="https://api.example.com/v1",
-    api_key="your-key"
-)
+model = MyCustomAPI(base_url="https://api.example.com/v1", api_key="your-key")
 
 results = evaluator.simple_evaluate(
-    model=model,
-    tasks=["mmlu", "gsm8k"],
-    num_fewshot=5,
-    batch_size="auto"
+    model=model, tasks=["mmlu", "gsm8k"], num_fewshot=5, batch_size="auto"
 )
 ```
 

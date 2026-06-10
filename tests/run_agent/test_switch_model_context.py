@@ -49,7 +49,12 @@ def test_switch_model_clears_previous_config_context_length(mock_ctx_len):
     assert agent.context_compressor.context_length == 32_768  # From config override
 
     # Switch model
-    agent.switch_model("new-model", "openrouter", api_key="sk-new", base_url="https://openrouter.ai/api/v1")
+    agent.switch_model(
+        "new-model",
+        "openrouter",
+        api_key="sk-new",
+        base_url="https://openrouter.ai/api/v1",
+    )
 
     # Verify the old config override is not passed to the new model.
     mock_ctx_len.assert_called_once()
@@ -65,9 +70,16 @@ def test_switch_model_without_config_context_length():
     """When switching models without config override, config_context_length should be None."""
     agent = _make_agent_with_compressor(config_context_length=None)
 
-    with patch("agent.model_metadata.get_model_context_length", return_value=128_000) as mock_ctx_len:
+    with patch(
+        "agent.model_metadata.get_model_context_length", return_value=128_000
+    ) as mock_ctx_len:
         # Switch model
-        agent.switch_model("new-model", "openrouter", api_key="sk-new", base_url="https://openrouter.ai/api/v1")
+        agent.switch_model(
+            "new-model",
+            "openrouter",
+            api_key="sk-new",
+            base_url="https://openrouter.ai/api/v1",
+        )
 
         # Verify get_model_context_length was called with None
         mock_ctx_len.assert_called_once()

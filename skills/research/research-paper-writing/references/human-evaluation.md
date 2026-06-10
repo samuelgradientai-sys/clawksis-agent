@@ -66,6 +66,7 @@ Comprehensive guide for designing, running, and reporting human evaluations in M
 from scipy import stats
 import numpy as np
 
+
 def sample_size_pairwise(effect_size=0.10, alpha=0.05, power=0.80):
     """
     Estimate sample size for pairwise comparison (sign test).
@@ -75,8 +76,11 @@ def sample_size_pairwise(effect_size=0.10, alpha=0.05, power=0.80):
     # Normal approximation to binomial
     z_alpha = stats.norm.ppf(1 - alpha / 2)
     z_beta = stats.norm.ppf(power)
-    n = ((z_alpha * np.sqrt(0.25) + z_beta * np.sqrt(p_expected * (1 - p_expected))) ** 2) / (effect_size ** 2)
+    n = (
+        (z_alpha * np.sqrt(0.25) + z_beta * np.sqrt(p_expected * (1 - p_expected))) ** 2
+    ) / (effect_size**2)
     return int(np.ceil(n))
+
 
 print(f"Sample size for 10% effect: {sample_size_pairwise(0.10)}")  # ~200
 print(f"Sample size for 15% effect: {sample_size_pairwise(0.15)}")  # ~90
@@ -190,7 +194,7 @@ attention_checks = {
     "instructed_response": "For this item, please select 'Strongly Agree' regardless of content.",
     "obvious_quality": "Rate this clearly ungrammatical text: 'The cat dog house green yesterday.'",  # Should get lowest score
     "gold_standard": "Items where expert consensus exists (pre-annotated by authors)",
-    "trap_question": "What color is the sky on a clear day? (embedded in annotation interface)"
+    "trap_question": "What color is the sky on a clear day? (embedded in annotation interface)",
 }
 
 # Recommended: 10-15% of total items should be checks
@@ -216,26 +220,30 @@ Qualification Task Design:
 def monitor_quality(annotations):
     """Check for annotation quality issues during collection."""
     issues = []
-    
+
     # 1. Check for straight-lining (same answer for everything)
-    for annotator_id, items in annotations.groupby('annotator'):
-        if items['rating'].nunique() <= 1:
+    for annotator_id, items in annotations.groupby("annotator"):
+        if items["rating"].nunique() <= 1:
             issues.append(f"Annotator {annotator_id}: straight-lining detected")
-    
+
     # 2. Check time per item (too fast = not reading)
-    median_time = annotations['time_seconds'].median()
-    fast_annotators = annotations.groupby('annotator')['time_seconds'].median()
+    median_time = annotations["time_seconds"].median()
+    fast_annotators = annotations.groupby("annotator")["time_seconds"].median()
     for ann_id, time in fast_annotators.items():
         if time < median_time * 0.3:
-            issues.append(f"Annotator {ann_id}: suspiciously fast ({time:.0f}s vs median {median_time:.0f}s)")
-    
+            issues.append(
+                f"Annotator {ann_id}: suspiciously fast ({time:.0f}s vs median {median_time:.0f}s)"
+            )
+
     # 3. Check attention check performance
-    checks = annotations[annotations['is_attention_check']]
-    for ann_id, items in checks.groupby('annotator'):
-        accuracy = (items['rating'] == items['gold_rating']).mean()
+    checks = annotations[annotations["is_attention_check"]]
+    for ann_id, items in checks.groupby("annotator"):
+        accuracy = (items["rating"] == items["gold_rating"]).mean()
         if accuracy < 0.80:
-            issues.append(f"Annotator {ann_id}: failing attention checks ({accuracy:.0%})")
-    
+            issues.append(
+                f"Annotator {ann_id}: failing attention checks ({accuracy:.0%})"
+            )
+
     return issues
 ```
 
@@ -274,33 +282,36 @@ import numpy as np
 from sklearn.metrics import cohen_kappa_score
 import krippendorff  # pip install krippendorff
 
+
 def compute_agreement(annotations_matrix):
     """
     annotations_matrix: shape (n_items, n_annotators)
     Values: ratings (int or float). Use np.nan for missing.
     """
     results = {}
-    
+
     # Krippendorff's alpha (handles missing data, any number of annotators)
-    results['krippendorff_alpha'] = krippendorff.alpha(
+    results["krippendorff_alpha"] = krippendorff.alpha(
         annotations_matrix.T,  # krippendorff expects (annotators, items)
-        level_of_measurement='ordinal'  # or 'nominal', 'interval', 'ratio'
+        level_of_measurement="ordinal",  # or 'nominal', 'interval', 'ratio'
     )
-    
+
     # Pairwise Cohen's kappa (for 2 annotators at a time)
     n_annotators = annotations_matrix.shape[1]
     kappas = []
     for i in range(n_annotators):
         for j in range(i + 1, n_annotators):
-            mask = ~np.isnan(annotations_matrix[:, i]) & ~np.isnan(annotations_matrix[:, j])
+            mask = ~np.isnan(annotations_matrix[:, i]) & ~np.isnan(
+                annotations_matrix[:, j]
+            )
             if mask.sum() > 0:
                 k = cohen_kappa_score(
                     annotations_matrix[mask, i].astype(int),
-                    annotations_matrix[mask, j].astype(int)
+                    annotations_matrix[mask, j].astype(int),
                 )
                 kappas.append(k)
-    results['mean_pairwise_kappa'] = np.mean(kappas) if kappas else None
-    
+    results["mean_pairwise_kappa"] = np.mean(kappas) if kappas else None
+
     # Raw percent agreement
     agree_count = 0
     total_count = 0
@@ -311,8 +322,10 @@ def compute_agreement(annotations_matrix):
             if len(set(ratings.astype(int))) == 1:
                 agree_count += 1
             total_count += 1
-    results['percent_agreement'] = agree_count / total_count if total_count > 0 else None
-    
+    results["percent_agreement"] = (
+        agree_count / total_count if total_count > 0 else None
+    )
+
     return results
 ```
 
@@ -325,6 +338,7 @@ def compute_agreement(annotations_matrix):
 ```python
 from scipy import stats
 
+
 def analyze_pairwise(wins_a, wins_b, ties=0):
     """
     Analyze pairwise comparison results.
@@ -333,10 +347,10 @@ def analyze_pairwise(wins_a, wins_b, ties=0):
     ties: number of ties (excluded from sign test)
     """
     n = wins_a + wins_b  # exclude ties
-    
+
     # Sign test (exact binomial)
-    p_value = stats.binom_test(wins_a, n, 0.5, alternative='two-sided')
-    
+    p_value = stats.binom_test(wins_a, n, 0.5, alternative="two-sided")
+
     # Win rate with 95% CI (Wilson score interval)
     win_rate = wins_a / n if n > 0 else 0.5
     z = 1.96
@@ -345,15 +359,15 @@ def analyze_pairwise(wins_a, wins_b, ties=0):
     margin = z * np.sqrt((win_rate * (1 - win_rate) + z**2 / (4 * n)) / n) / denominator
     ci_lower = center - margin
     ci_upper = center + margin
-    
+
     return {
-        'win_rate_a': win_rate,
-        'win_rate_b': 1 - win_rate,
-        'p_value': p_value,
-        'ci_95': (ci_lower, ci_upper),
-        'significant': p_value < 0.05,
-        'n_comparisons': n,
-        'ties': ties,
+        "win_rate_a": win_rate,
+        "win_rate_b": 1 - win_rate,
+        "p_value": p_value,
+        "ci_95": (ci_lower, ci_upper),
+        "significant": p_value < 0.05,
+        "n_comparisons": n,
+        "ties": ties,
     }
 ```
 
@@ -363,21 +377,21 @@ def analyze_pairwise(wins_a, wins_b, ties=0):
 def analyze_likert(ratings_a, ratings_b):
     """Compare Likert ratings between two systems (paired)."""
     # Wilcoxon signed-rank test (non-parametric, paired)
-    stat, p_value = stats.wilcoxon(ratings_a, ratings_b, alternative='two-sided')
-    
+    stat, p_value = stats.wilcoxon(ratings_a, ratings_b, alternative="two-sided")
+
     # Effect size (rank-biserial correlation)
     n = len(ratings_a)
     r = 1 - (2 * stat) / (n * (n + 1))
-    
+
     return {
-        'mean_a': np.mean(ratings_a),
-        'mean_b': np.mean(ratings_b),
-        'std_a': np.std(ratings_a),
-        'std_b': np.std(ratings_b),
-        'wilcoxon_stat': stat,
-        'p_value': p_value,
-        'effect_size_r': r,
-        'significant': p_value < 0.05,
+        "mean_a": np.mean(ratings_a),
+        "mean_b": np.mean(ratings_b),
+        "std_a": np.std(ratings_a),
+        "std_b": np.std(ratings_b),
+        "wilcoxon_stat": stat,
+        "p_value": p_value,
+        "effect_size_r": r,
+        "significant": p_value < 0.05,
     }
 ```
 
@@ -390,7 +404,7 @@ from statsmodels.stats.multitest import multipletests
 
 # After computing p-values for all pairs
 p_values = [0.03, 0.001, 0.08, 0.04, 0.15, 0.002]
-rejected, corrected_p, _, _ = multipletests(p_values, method='holm')
+rejected, corrected_p, _, _ = multipletests(p_values, method="holm")
 # Use corrected p-values in your paper
 ```
 

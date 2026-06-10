@@ -18,8 +18,6 @@ Verifies that:
 
 """
 
-
-
 import os
 
 from datetime import datetime
@@ -27,17 +25,11 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture
-
 def session_db(tmp_path):
-
     """Create a real SessionDB for testing."""
 
     os.environ["CLAWK_HOME"] = str(tmp_path / ".clawksis")
@@ -53,20 +45,13 @@ def session_db(tmp_path):
     db.close()
 
 
-
-
-
 @pytest.fixture
-
 def cli_instance(tmp_path, session_db):
-
     """Create a minimal ClawksisCLI-like object for testing _handle_branch_command."""
 
     # We'll mock the CLI enough to test the branch logic without full init
 
     from unittest.mock import MagicMock
-
-
 
     cli = MagicMock()
 
@@ -89,60 +74,36 @@ def cli_instance(tmp_path, session_db):
     cli.agent = None
 
     cli.conversation_history = [
-
         {"role": "user", "content": "Hello, can you help me?"},
-
         {"role": "assistant", "content": "Of course! How can I help?"},
-
         {"role": "user", "content": "Write a Python function to sort a list."},
-
         {"role": "assistant", "content": "def sort_list(lst): return sorted(lst)"},
-
     ]
-
-
 
     # Create the original session in the DB
 
     session_db.create_session(
-
         session_id=cli.session_id,
-
         source="cli",
-
         model=cli.model,
-
     )
 
     session_db.set_session_title(cli.session_id, "My Coding Session")
 
-
-
     return cli
 
 
-
-
-
 class TestBranchCommandCLI:
-
     """Test the /branch command logic for the CLI."""
 
-
-
     def test_branch_creates_new_session(self, cli_instance, session_db):
-
         """Branching should create a new session in the DB."""
 
         from cli import ClawksisCLI
 
-
-
         # Call the real method on the mock, using the real implementation
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         # Verify a new session was created
 
@@ -152,149 +113,95 @@ class TestBranchCommandCLI:
 
         assert new_session is not None
 
-
-
     def test_branch_copies_history(self, cli_instance, session_db):
-
         """Branching should copy all messages to the new session."""
 
         from cli import ClawksisCLI
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         messages = session_db.get_messages_as_conversation(cli_instance.session_id)
 
         assert len(messages) == 4  # All 4 messages copied
 
-
-
     def test_branch_preserves_parent_link(self, cli_instance, session_db):
-
         """The new session should reference the original as parent."""
 
         from cli import ClawksisCLI
 
         original_id = cli_instance.session_id
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         new_session = session_db.get_session(cli_instance.session_id)
 
         assert new_session["parent_session_id"] == original_id
 
-
-
     def test_branch_ends_original_session(self, cli_instance, session_db):
-
         """The original session should be marked as ended with 'branched' reason."""
 
         from cli import ClawksisCLI
 
         original_id = cli_instance.session_id
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         original = session_db.get_session(original_id)
 
         assert original["end_reason"] == "branched"
 
-
-
     def test_branch_with_custom_name(self, cli_instance, session_db):
-
         """Custom branch name should be used as the title."""
 
         from cli import ClawksisCLI
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch refactor approach")
-
-
 
         title = session_db.get_session_title(cli_instance.session_id)
 
         assert title == "refactor approach"
 
-
-
     def test_branch_auto_title_lineage(self, cli_instance, session_db):
-
         """Without a name, branch should auto-generate a title from the parent's title."""
 
         from cli import ClawksisCLI
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         title = session_db.get_session_title(cli_instance.session_id)
 
         assert title == "My Coding Session #2"
 
-
-
     def test_branch_empty_conversation(self, cli_instance, session_db):
-
         """Branching with no history should show an error."""
 
         from cli import ClawksisCLI
 
         cli_instance.conversation_history = []
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         # session_id should not have changed
 
         assert cli_instance.session_id == "20260403_120000_abc123"
 
-
-
     def test_branch_no_session_db(self, cli_instance):
-
         """Branching without a session DB should show an error."""
 
         from cli import ClawksisCLI
 
         cli_instance._session_db = None
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         # session_id should not have changed
 
         assert cli_instance.session_id == "20260403_120000_abc123"
 
-
-
     def test_branch_syncs_agent(self, cli_instance, session_db):
-
         """If an agent is active, branch should sync it to the new session."""
 
         from cli import ClawksisCLI
-
-
 
         agent = MagicMock()
 
@@ -302,11 +209,7 @@ class TestBranchCommandCLI:
 
         cli_instance.agent = agent
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         # Agent should have been updated
 
@@ -316,33 +219,23 @@ class TestBranchCommandCLI:
 
         assert agent._last_flushed_db_idx == 4  # len(conversation_history)
 
-
-
     def test_branch_sets_resumed_flag(self, cli_instance, session_db):
-
         """Branch should set _resumed=True to prevent auto-title generation."""
 
         from cli import ClawksisCLI
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         assert cli_instance._resumed is True
 
-
-
-    def test_branch_rotates_clawk_session_id_env_and_context(self, cli_instance, session_db):
-
+    def test_branch_rotates_clawk_session_id_env_and_context(
+        self, cli_instance, session_db
+    ):
         """Branching must update process-local session-id readers too."""
 
         from cli import ClawksisCLI
 
         from gateway.session_context import _UNSET, _VAR_MAP, get_session_env
-
-
 
         old_session_id = cli_instance.session_id
 
@@ -350,13 +243,8 @@ class TestBranchCommandCLI:
 
         _VAR_MAP["CLAWK_SESSION_ID"].set(old_session_id)
 
-
-
         try:
-
             ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
             assert cli_instance.session_id != old_session_id
 
@@ -365,15 +253,11 @@ class TestBranchCommandCLI:
             assert get_session_env("CLAWK_SESSION_ID") == cli_instance.session_id
 
         finally:
-
             os.environ.pop("CLAWK_SESSION_ID", None)
 
             _VAR_MAP["CLAWK_SESSION_ID"].set(_UNSET)
 
-
-
     def test_branch_fires_on_session_switch_hook(self, cli_instance, session_db):
-
         """The /branch command must notify memory providers of the rotation.
 
 
@@ -385,8 +269,6 @@ class TestBranchCommandCLI:
         """
 
         from cli import ClawksisCLI
-
-
 
         # Wire a real-ish agent object with a MagicMock memory_manager
 
@@ -400,11 +282,7 @@ class TestBranchCommandCLI:
 
         original_id = cli_instance.session_id
 
-
-
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-
-
 
         # Hook must have been called exactly once with the new session_id,
 
@@ -424,10 +302,7 @@ class TestBranchCommandCLI:
 
         assert kwargs["reason"] == "branch"
 
-
-
     def test_fork_alias(self):
-
         """The /fork alias should resolve to 'branch'."""
 
         from clawk_cli.commands import resolve_command
@@ -439,17 +314,10 @@ class TestBranchCommandCLI:
         assert result.name == "branch"
 
 
-
-
-
 class TestBranchCommandDef:
-
     """Test the CommandDef registration for /branch."""
 
-
-
     def test_branch_in_registry(self):
-
         """The branch command should be in the command registry."""
 
         from clawk_cli.commands import COMMAND_REGISTRY
@@ -458,10 +326,7 @@ class TestBranchCommandDef:
 
         assert "branch" in names
 
-
-
     def test_branch_has_fork_alias(self):
-
         """The branch command should have 'fork' as an alias."""
 
         from clawk_cli.commands import COMMAND_REGISTRY
@@ -470,10 +335,7 @@ class TestBranchCommandDef:
 
         assert "fork" in branch.aliases
 
-
-
     def test_branch_in_session_category(self):
-
         """The branch command should be in the Session category."""
 
         from clawk_cli.commands import COMMAND_REGISTRY
@@ -481,4 +343,3 @@ class TestBranchCommandDef:
         branch = next(c for c in COMMAND_REGISTRY if c.name == "branch")
 
         assert branch.category == "Session"
-

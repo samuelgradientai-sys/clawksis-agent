@@ -10,8 +10,6 @@ are made.
 
 """
 
-
-
 import ast
 
 import inspect
@@ -35,11 +33,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-
 import pytest
 
 from agent.codex_responses_adapter import _normalize_codex_response
-
 
 
 import run_agent
@@ -51,9 +47,6 @@ from agent.error_classifier import FailoverReason
 from agent.prompt_builder import DEFAULT_AGENT_IDENTITY
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Fixtures
@@ -61,37 +54,20 @@ from agent.prompt_builder import DEFAULT_AGENT_IDENTITY
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _make_tool_defs(*names: str) -> list:
-
     """Build minimal tool definition list accepted by AIAgent.__init__."""
 
     return [
-
         {
-
             "type": "function",
-
             "function": {
-
                 "name": n,
-
                 "description": f"{n} tool",
-
                 "parameters": {"type": "object", "properties": {}},
-
             },
-
         }
-
         for n in names
-
     ]
-
-
-
 
 
 def test_is_destructive_command_treats_cp_as_mutating():
@@ -99,93 +75,53 @@ def test_is_destructive_command_treats_cp_as_mutating():
     assert run_agent._is_destructive_command("cp .env.local .env") is True
 
 
-
-
-
 def test_is_destructive_command_treats_install_as_mutating():
 
     assert run_agent._is_destructive_command("install template.env .env") is True
 
 
-
-
-
 @pytest.fixture()
-
 def agent():
-
     """Minimal AIAgent with mocked OpenAI client and tool loading."""
 
     with (
-
         patch(
-
             "run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")
-
         ),
-
         patch("run_agent.check_toolset_requirements", return_value={}),
-
         patch("run_agent.OpenAI"),
-
     ):
-
         a = AIAgent(
-
             api_key="test-key-1234567890",
-
             base_url="https://openrouter.ai/api/v1",
-
             quiet_mode=True,
-
             skip_context_files=True,
-
             skip_memory=True,
-
         )
 
         a.client = MagicMock()
 
         return a
-
-
-
 
 
 @pytest.fixture()
-
 def agent_with_memory_tool():
-
     """Agent whose valid_tool_names includes 'memory'."""
 
     with (
-
         patch(
-
             "run_agent.get_tool_definitions",
-
             return_value=_make_tool_defs("web_search", "memory"),
-
         ),
-
         patch("run_agent.check_toolset_requirements", return_value={}),
-
         patch("run_agent.OpenAI"),
-
     ):
-
         a = AIAgent(
-
             api_key="test-k...7890",
-
             base_url="https://openrouter.ai/api/v1",
-
             quiet_mode=True,
-
             skip_context_files=True,
-
             skip_memory=True,
-
         )
 
         a.client = MagicMock()
@@ -193,11 +129,7 @@ def agent_with_memory_tool():
         return a
 
 
-
-
-
 def test_aiagent_reuses_existing_errors_log_handler():
-
     """Repeated AIAgent init should not accumulate duplicate errors.log handlers."""
 
     root_logger = logging.getLogger()
@@ -206,190 +138,108 @@ def test_aiagent_reuses_existing_errors_log_handler():
 
     error_log_path = (run_agent._clawk_home / "logs" / "errors.log").resolve()
 
-
-
     try:
-
         for handler in list(root_logger.handlers):
-
             root_logger.removeHandler(handler)
-
-
 
         error_log_path.parent.mkdir(parents=True, exist_ok=True)
 
         preexisting_handler = RotatingFileHandler(
-
             error_log_path,
-
             maxBytes=2 * 1024 * 1024,
-
             backupCount=2,
-
         )
 
         root_logger.addHandler(preexisting_handler)
 
-
-
         with (
-
             patch(
-
                 "run_agent.get_tool_definitions",
-
                 return_value=_make_tool_defs("web_search"),
-
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             AIAgent(
-
                 api_key="test-k...7890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             AIAgent(
-
                 api_key="test-k...7890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
-
-
 
         matching_handlers = [
-
-            handler for handler in root_logger.handlers
-
+            handler
+            for handler in root_logger.handlers
             if isinstance(handler, RotatingFileHandler)
-
             and error_log_path == Path(handler.baseFilename).resolve()
-
         ]
 
         assert len(matching_handlers) == 1
 
     finally:
-
         for handler in list(root_logger.handlers):
-
             root_logger.removeHandler(handler)
 
             if handler not in original_handlers:
-
                 handler.close()
 
         for handler in original_handlers:
-
             root_logger.addHandler(handler)
 
 
-
-
-
 class TestProviderModelNormalization:
-
     def test_aiagent_strips_matching_native_provider_prefix(self):
 
         with (
-
             patch(
-
-                "run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")
-
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             agent = AIAgent(
-
                 model="zai/glm-5.1",
-
                 provider="zai",
-
                 base_url="https://api.z.ai/api/paas/v4",
-
                 api_key="test-key-1234567890",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
-
-
         assert agent.model == "glm-5.1"
-
-
 
     def test_aiagent_keeps_aggregator_vendor_slug(self):
 
         with (
-
             patch(
-
-                "run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")
-
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             agent = AIAgent(
-
                 model="anthropic/claude-sonnet-4.6",
-
                 provider="openrouter",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 api_key="test-key-1234567890",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
-
-
         assert agent.model == "anthropic/claude-sonnet-4.6"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -399,95 +249,56 @@ class TestProviderModelNormalization:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _mock_assistant_msg(
-
     content="Hello",
-
     tool_calls=None,
-
     reasoning=None,
-
     reasoning_content=None,
-
     reasoning_details=None,
-
 ):
-
     """Return a SimpleNamespace mimicking an OpenAI ChatCompletionMessage."""
 
     msg = SimpleNamespace(content=content, tool_calls=tool_calls)
 
     if reasoning is not None:
-
         msg.reasoning = reasoning
 
     if reasoning_content is not None:
-
         msg.reasoning_content = reasoning_content
 
     if reasoning_details is not None:
-
         msg.reasoning_details = reasoning_details
 
     return msg
 
 
-
-
-
 def _mock_tool_call(name="web_search", arguments="{}", call_id=None):
-
     """Return a SimpleNamespace mimicking a tool call object."""
 
     return SimpleNamespace(
-
         id=call_id or f"call_{uuid.uuid4().hex[:8]}",
-
         type="function",
-
         function=SimpleNamespace(name=name, arguments=arguments),
-
     )
 
 
-
-
-
 def _mock_response(
-
     content="Hello",
-
     finish_reason="stop",
-
     tool_calls=None,
-
     reasoning=None,
-
     reasoning_content=None,
-
     reasoning_details=None,
-
     usage=None,
-
 ):
-
     """Return a SimpleNamespace mimicking an OpenAI ChatCompletion response."""
 
     msg = _mock_assistant_msg(
-
         content=content,
-
         tool_calls=tool_calls,
-
         reasoning=reasoning,
-
         reasoning_content=reasoning_content,
-
         reasoning_details=reasoning_details,
-
     )
 
     choice = SimpleNamespace(message=msg, finish_reason=finish_reason)
@@ -495,17 +306,12 @@ def _mock_response(
     resp = SimpleNamespace(choices=[choice], model="test/model")
 
     if usage:
-
         resp.usage = SimpleNamespace(**usage)
 
     else:
-
         resp.usage = None
 
     return resp
-
-
-
 
 
 # ===================================================================
@@ -515,62 +321,39 @@ def _mock_response(
 # ===================================================================
 
 
-
-
-
 class TestHasContentAfterThinkBlock:
-
     def test_none_returns_false(self, agent):
 
         assert agent._has_content_after_think_block(None) is False
-
-
 
     def test_empty_returns_false(self, agent):
 
         assert agent._has_content_after_think_block("") is False
 
-
-
     def test_only_think_block_returns_false(self, agent):
 
         assert agent._has_content_after_think_block("<think>reasoning</think>") is False
 
-
-
     def test_content_after_think_returns_true(self, agent):
 
         assert (
-
             agent._has_content_after_think_block("<think>r</think> actual answer")
-
             is True
-
         )
-
-
 
     def test_no_think_block_returns_true(self, agent):
 
         assert agent._has_content_after_think_block("just normal content") is True
 
 
-
-
-
 class TestStripThinkBlocks:
-
     def test_none_returns_empty(self, agent):
 
         assert agent._strip_think_blocks(None) == ""
 
-
-
     def test_no_blocks_unchanged(self, agent):
 
         assert agent._strip_think_blocks("hello world") == "hello world"
-
-
 
     def test_single_block_removed(self, agent):
 
@@ -579,8 +362,6 @@ class TestStripThinkBlocks:
         assert "reasoning" not in result
 
         assert "answer" in result
-
-
 
     def test_multiline_block_removed(self, agent):
 
@@ -592,8 +373,6 @@ class TestStripThinkBlocks:
 
         assert "visible" in result
 
-
-
     def test_orphaned_closing_think_tag(self, agent):
 
         result = agent._strip_think_blocks("some reasoning</think>actual answer")
@@ -601,8 +380,6 @@ class TestStripThinkBlocks:
         assert "</think>" not in result
 
         assert "actual answer" in result
-
-
 
     def test_orphaned_closing_thinking_tag(self, agent):
 
@@ -612,15 +389,11 @@ class TestStripThinkBlocks:
 
         assert "answer" in result
 
-
-
     def test_orphaned_opening_think_tag(self, agent):
 
         result = agent._strip_think_blocks("<think>orphaned reasoning without close")
 
         assert "<think>" not in result
-
-
 
     def test_mixed_orphaned_and_paired_tags(self, agent):
 
@@ -634,13 +407,12 @@ class TestStripThinkBlocks:
 
         assert "visible" in result
 
-
-
     def test_thought_block_removed(self, agent):
-
         """Gemma 4 uses <thought> tags for inline reasoning."""
 
-        result = agent._strip_think_blocks("<thought>internal reasoning</thought> answer")
+        result = agent._strip_think_blocks(
+            "<thought>internal reasoning</thought> answer"
+        )
 
         assert "internal reasoning" not in result
 
@@ -648,15 +420,11 @@ class TestStripThinkBlocks:
 
         assert "answer" in result
 
-
-
     def test_orphaned_thought_tag(self, agent):
 
         result = agent._strip_think_blocks("<thought>orphaned reasoning without close")
 
         assert "<thought>" not in result
-
-
 
     # ─── Unterminated-block coverage (#8878, #9568, #10408) ──────────────
 
@@ -668,10 +436,7 @@ class TestStripThinkBlocks:
 
     # everything from that tag to end-of-string is stripped.
 
-
-
     def test_unterminated_think_block_content_stripped(self, agent):
-
         """Content after unterminated <think> is fully stripped."""
 
         result = agent._strip_think_blocks("<think>orphaned reasoning without close")
@@ -680,10 +445,7 @@ class TestStripThinkBlocks:
 
         assert result.strip() == ""
 
-
-
     def test_unterminated_thought_block_content_stripped(self, agent):
-
         """Gemma-style <thought> with no close is fully stripped."""
 
         result = agent._strip_think_blocks("<thought>orphaned reasoning without close")
@@ -692,42 +454,29 @@ class TestStripThinkBlocks:
 
         assert result.strip() == ""
 
-
-
     def test_unterminated_multiline_block_stripped(self, agent):
-
         """Multi-line unterminated blocks are stripped in full."""
 
         result = agent._strip_think_blocks(
-
             "<think>\nmulti\nline\nreasoning\nthat never closes"
-
         )
 
         assert "multi" not in result
 
         assert "never closes" not in result
 
-
-
     def test_unterminated_block_after_answer_preserves_prefix(self, agent):
-
         """Visible answer before a line-starting unterminated tag is kept."""
 
         result = agent._strip_think_blocks(
-
             "Answer is 42.\n<think>actually let me reconsider"
-
         )
 
         assert "Answer is 42." in result
 
         assert "reconsider" not in result
 
-
-
     def test_inline_think_mention_in_prose_not_over_stripped(self, agent):
-
         """Mid-line `<think>` mentioned in prose must not swallow the rest
 
         of the content (the block-boundary check prevents this)."""
@@ -742,10 +491,7 @@ class TestStripThinkBlocks:
 
         assert "Use the" in result
 
-
-
     def test_mixed_case_closed_pair_stripped(self, agent):
-
         """Mixed-case variants <THINK>…</THINK>, <Thinking>…</Thinking> are
 
         handled by case-insensitive closed-pair regex, so the trailing
@@ -764,8 +510,6 @@ class TestStripThinkBlocks:
 
         assert "final" in result
 
-
-
     # ─── Tool-call XML block stripping (openclaw/openclaw#67318) ─────────
 
     # Some open models (notably Gemma variants via OpenRouter) emit
@@ -775,8 +519,6 @@ class TestStripThinkBlocks:
     # structured `tool_calls` field. Left unstripped, raw XML leaks to
 
     # gateway users (Discord/Telegram/Matrix) and the CLI.
-
-
 
     def test_tool_call_block_stripped(self, agent):
 
@@ -790,8 +532,6 @@ class TestStripThinkBlocks:
 
         assert "done" in result
 
-
-
     def test_function_calls_block_stripped(self, agent):
 
         text = '<function_calls>[{"name":"x"}]</function_calls>after'
@@ -802,20 +542,13 @@ class TestStripThinkBlocks:
 
         assert "after" in result
 
-
-
     def test_gemma_function_name_block_stripped(self, agent):
-
         """Gemma-style: <function name="read"><parameter>...</parameter></function>."""
 
         text = (
-
-            'Let me check the file.\n'
-
+            "Let me check the file.\n"
             '<function name="read_file"><parameter name="path">/tmp/x.md</parameter></function>\n'
-
-            'Here is the result.'
-
+            "Here is the result."
         )
 
         result = agent._strip_think_blocks(text)
@@ -828,22 +561,14 @@ class TestStripThinkBlocks:
 
         assert "Here is the result." in result
 
-
-
     def test_gemma_function_multiline_payload_stripped(self, agent):
 
         text = (
-
-            'Reading now.\n'
-
+            "Reading now.\n"
             '<function name="read_file">\n'
-
             '  <parameter name="path">/etc/passwd</parameter>\n'
-
-            '</function>\n'
-
-            'Done.'
-
+            "</function>\n"
+            "Done."
         )
 
         result = agent._strip_think_blocks(text)
@@ -854,10 +579,7 @@ class TestStripThinkBlocks:
 
         assert "Done." in result
 
-
-
     def test_function_mention_in_prose_preserved(self, agent):
-
         """'Use <function> in JavaScript.' — no name attr, not at block boundary
 
         in a way that suggests tool call. Must survive."""
@@ -870,10 +592,7 @@ class TestStripThinkBlocks:
 
         assert "declarations for hoisting" in result
 
-
-
     def test_function_with_attr_in_middle_of_sentence_preserved(self, agent):
-
         """Docs example: 'Use <function name="x">...</function> in docs.'
 
         The sentence-middle position without a preceding punctuation block
@@ -890,8 +609,6 @@ class TestStripThinkBlocks:
 
         assert "inline" in result
 
-
-
     def test_stray_function_close_tag_removed(self, agent):
 
         text = "answer</function> trailing"
@@ -904,10 +621,7 @@ class TestStripThinkBlocks:
 
         assert "trailing" in result
 
-
-
     def test_dangling_function_open_tag_preserved(self, agent):
-
         """A streamed-but-truncated <function name="..."> block with no close
 
         is intentionally NOT stripped (OpenClaw's asymmetry). The tail of a
@@ -920,11 +634,11 @@ class TestStripThinkBlocks:
 
         assert "Checking:" in result
 
-
-
     def test_mixed_reasoning_and_tool_call_both_stripped(self, agent):
 
-        text = '<think>let me plan</think><tool_call>{"name":"x"}</tool_call>final answer'
+        text = (
+            '<think>let me plan</think><tool_call>{"name":"x"}</tool_call>final answer'
+        )
 
         result = agent._strip_think_blocks(text)
 
@@ -935,18 +649,12 @@ class TestStripThinkBlocks:
         assert "final answer" in result
 
 
-
-
-
 class TestExtractReasoning:
-
     def test_reasoning_field(self, agent):
 
         msg = _mock_assistant_msg(reasoning="thinking hard")
 
         assert agent._extract_reasoning(msg) == "thinking hard"
-
-
 
     def test_reasoning_content_field(self, agent):
 
@@ -954,19 +662,13 @@ class TestExtractReasoning:
 
         assert agent._extract_reasoning(msg) == "deep thought"
 
-
-
     def test_reasoning_details_array(self, agent):
 
         msg = _mock_assistant_msg(
-
             reasoning_details=[{"summary": "step-by-step analysis"}],
-
         )
 
         assert "step-by-step analysis" in agent._extract_reasoning(msg)
-
-
 
     def test_no_reasoning_returns_none(self, agent):
 
@@ -974,16 +676,11 @@ class TestExtractReasoning:
 
         assert agent._extract_reasoning(msg) is None
 
-
-
     def test_combined_reasoning(self, agent):
 
         msg = _mock_assistant_msg(
-
             reasoning="part1",
-
             reasoning_content="part2",
-
         )
 
         result = agent._extract_reasoning(msg)
@@ -992,56 +689,35 @@ class TestExtractReasoning:
 
         assert "part2" in result
 
-
-
     def test_deduplication(self, agent):
 
         msg = _mock_assistant_msg(
-
             reasoning="same text",
-
             reasoning_content="same text",
-
         )
 
         result = agent._extract_reasoning(msg)
 
         assert result == "same text"
 
-
-
     @pytest.mark.parametrize(
-
         ("content", "expected"),
-
         [
-
             ("<think>thinking hard</think>", "thinking hard"),
-
             ("<thinking>step by step</thinking>", "step by step"),
-
             (
-
                 "<REASONING_SCRATCHPAD>scratch analysis</REASONING_SCRATCHPAD>",
-
                 "scratch analysis",
-
             ),
-
         ],
-
     )
-
     def test_inline_reasoning_blocks_fallback(self, agent, content, expected):
 
         msg = _mock_assistant_msg(content=content)
 
         assert agent._extract_reasoning(msg) == expected
 
-
-
     def test_content_list_thinking_blocks_extracted(self, agent):
-
         """DeepSeek V4 Pro returns content as a typed-block list (issue #21944).
 
 
@@ -1053,55 +729,35 @@ class TestExtractReasoning:
         """
 
         msg = _mock_assistant_msg(
-
             content=[
-
                 {"type": "thinking", "thinking": "deep analysis here"},
-
                 {"type": "output", "text": "final answer"},
-
             ]
-
         )
 
         result = agent._extract_reasoning(msg)
 
         assert result == "deep analysis here"
 
-
-
     def test_content_list_non_thinking_blocks_ignored(self, agent):
-
         """Non-thinking blocks in a content list must not be treated as reasoning."""
 
         msg = _mock_assistant_msg(
-
             content=[
-
                 {"type": "text", "text": "just a regular response"},
-
             ]
-
         )
 
         assert agent._extract_reasoning(msg) is None
 
-
-
     def test_content_list_thinking_prefers_structured_field(self, agent):
-
         """Structured ``reasoning`` field wins over content-list thinking blocks."""
 
         msg = _mock_assistant_msg(
-
             reasoning="from structured field",
-
             content=[
-
                 {"type": "thinking", "thinking": "from content list"},
-
             ],
-
         )
 
         result = agent._extract_reasoning(msg)
@@ -1111,11 +767,7 @@ class TestExtractReasoning:
         assert result == "from structured field"
 
 
-
-
-
 class TestSessionJsonSnapshotOptIn:
-
     """Regression: per-session JSON snapshot writer is opt-in via config.
 
 
@@ -1132,19 +784,13 @@ class TestSessionJsonSnapshotOptIn:
 
     """
 
-
-
     def test_session_json_disabled_by_default(self, agent):
 
         # Default config: writer is gated off.
 
         assert getattr(agent, "_session_json_enabled", False) is False, (
-
             "sessions.write_json_snapshots must default to False"
-
         )
-
-
 
     def test_save_session_log_noops_when_disabled(self, agent, tmp_path):
 
@@ -1164,8 +810,6 @@ class TestSessionJsonSnapshotOptIn:
 
         assert list(tmp_path.glob("session_*.json")) == []
 
-
-
     def test_save_session_log_writes_when_enabled(self, agent, tmp_path):
 
         # Opt-in path: with the flag on and a session_id, the writer must
@@ -1183,12 +827,8 @@ class TestSessionJsonSnapshotOptIn:
         expected = tmp_path / f"session_{agent.session_id}.json"
 
         assert expected.exists(), (
-
             "Opt-in writer must produce session_{sid}.json under logs_dir"
-
         )
-
-
 
     def test_logs_dir_retained_for_request_dumps(self, agent):
 
@@ -1203,19 +843,11 @@ class TestSessionJsonSnapshotOptIn:
         assert hasattr(agent, "logs_dir")
 
 
-
-
-
 class TestSaveSessionLogRedactsSecrets:
-
     """Regression: session_*.json must not contain plaintext credentials (#19798, #19845)."""
 
-
-
     @pytest.fixture(autouse=True)
-
     def _ensure_redaction_enabled(self, monkeypatch):
-
         """Force redaction on regardless of host CLAWK_REDACT_SECRETS state.
 
         The hermetic conftest blanks the env var; the module-level
@@ -1228,8 +860,6 @@ class TestSaveSessionLogRedactsSecrets:
 
         monkeypatch.setattr("agent.redact._REDACT_ENABLED", True)
 
-
-
     def test_redacts_api_key_in_tool_content(self, agent, tmp_path):
 
         agent._session_json_enabled = True
@@ -1237,28 +867,20 @@ class TestSaveSessionLogRedactsSecrets:
         agent.logs_dir = tmp_path
 
         messages = [
-
             {"role": "user", "content": "Hello"},
-
             {
-
                 "role": "tool",
-
                 "content": "Response: Authorization: Bearer sk-proj-abc123def456ghi789jkl012mno",
-
             },
-
         ]
 
         agent._save_session_log(messages)
 
-
-
-        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(encoding="utf-8")
+        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(
+            encoding="utf-8"
+        )
 
         assert "sk-proj-abc123def456ghi789jkl012mno" not in snapshot
-
-
 
     def test_redacts_api_key_in_user_message(self, agent, tmp_path):
 
@@ -1267,20 +889,19 @@ class TestSaveSessionLogRedactsSecrets:
         agent.logs_dir = tmp_path
 
         messages = [
-
-            {"role": "user", "content": "My key is sk-ant-api03-abc123def456ghi789jkl012mno please use it"},
-
+            {
+                "role": "user",
+                "content": "My key is sk-ant-api03-abc123def456ghi789jkl012mno please use it",
+            },
         ]
 
         agent._save_session_log(messages)
 
-
-
-        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(encoding="utf-8")
+        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(
+            encoding="utf-8"
+        )
 
         assert "sk-ant-api03-abc123def456ghi789jkl012mno" not in snapshot
-
-
 
     def test_redacts_system_prompt_credentials(self, agent, tmp_path):
 
@@ -1288,20 +909,19 @@ class TestSaveSessionLogRedactsSecrets:
 
         agent.logs_dir = tmp_path
 
-        agent._cached_system_prompt = "Use key sk-proj-realkey1234567890123456 for API calls"
+        agent._cached_system_prompt = (
+            "Use key sk-proj-realkey1234567890123456 for API calls"
+        )
 
         agent._save_session_log([{"role": "user", "content": "test"}])
 
-
-
-        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(encoding="utf-8")
+        snapshot = (tmp_path / f"session_{agent.session_id}.json").read_text(
+            encoding="utf-8"
+        )
 
         assert "sk-proj-realkey1234567890123456" not in snapshot
 
-
-
     def test_redacts_list_type_multimodal_content(self, agent, tmp_path):
-
         """OpenAI/Anthropic multimodal shape: content = list of {type, text|image_url} parts."""
 
         agent._session_json_enabled = True
@@ -1309,28 +929,23 @@ class TestSaveSessionLogRedactsSecrets:
         agent.logs_dir = tmp_path
 
         messages = [
-
             {
-
                 "role": "user",
-
                 "content": [
-
                     {"type": "text", "text": "Key: gsk_abc123def456ghi789jkl012mno"},
-
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
                 ],
-
             },
-
         ]
 
         agent._save_session_log(messages)
 
-
-
-        snapshot_text = (tmp_path / f"session_{agent.session_id}.json").read_text(encoding="utf-8")
+        snapshot_text = (tmp_path / f"session_{agent.session_id}.json").read_text(
+            encoding="utf-8"
+        )
 
         snapshot = json.loads(snapshot_text)
 
@@ -1343,16 +958,10 @@ class TestSaveSessionLogRedactsSecrets:
         assert parts[1]["image_url"]["url"].startswith("data:image")
 
 
-
-
-
 class TestGetMessagesUpToLastAssistant:
-
     def test_empty_list(self, agent):
 
         assert agent._get_messages_up_to_last_assistant([]) == []
-
-
 
     def test_no_assistant_returns_copy(self, agent):
 
@@ -1364,16 +973,11 @@ class TestGetMessagesUpToLastAssistant:
 
         assert result is not msgs  # should be a copy
 
-
-
     def test_single_assistant(self, agent):
 
         msgs = [
-
             {"role": "user", "content": "hi"},
-
             {"role": "assistant", "content": "hello"},
-
         ]
 
         result = agent._get_messages_up_to_last_assistant(msgs)
@@ -1382,20 +986,13 @@ class TestGetMessagesUpToLastAssistant:
 
         assert result[0]["role"] == "user"
 
-
-
     def test_multiple_assistants_returns_up_to_last(self, agent):
 
         msgs = [
-
             {"role": "user", "content": "q1"},
-
             {"role": "assistant", "content": "a1"},
-
             {"role": "user", "content": "q2"},
-
             {"role": "assistant", "content": "a2"},
-
         ]
 
         result = agent._get_messages_up_to_last_assistant(msgs)
@@ -1404,18 +1001,12 @@ class TestGetMessagesUpToLastAssistant:
 
         assert result[-1]["content"] == "q2"
 
-
-
     def test_assistant_then_tool_messages(self, agent):
 
         msgs = [
-
             {"role": "user", "content": "do something"},
-
             {"role": "assistant", "content": "ok", "tool_calls": [{"id": "1"}]},
-
             {"role": "tool", "content": "result", "tool_call_id": "1"},
-
         ]
 
         # Last assistant is at index 1, so result = msgs[:1]
@@ -1427,22 +1018,14 @@ class TestGetMessagesUpToLastAssistant:
         assert result[0]["role"] == "user"
 
 
-
-
-
 class TestMaskApiKey:
-
     def test_none_returns_none(self, agent):
 
         assert agent._mask_api_key_for_logs(None) is None
 
-
-
     def test_short_key_returns_stars(self, agent):
 
         assert agent._mask_api_key_for_logs("short") == "***"
-
-
 
     def test_long_key_masked(self, agent):
 
@@ -1457,9 +1040,6 @@ class TestMaskApiKey:
         assert "..." in result
 
 
-
-
-
 # ===================================================================
 
 # Group 2: State / Structure Methods
@@ -1467,501 +1047,287 @@ class TestMaskApiKey:
 # ===================================================================
 
 
-
-
-
 class TestInit:
-
     def test_anthropic_base_url_accepted(self):
-
         """Anthropic base URLs should route to native Anthropic client."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("agent.anthropic_adapter._anthropic_sdk") as mock_anthropic,
-
         ):
-
             agent = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://api.anthropic.com/v1/",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert agent.api_mode == "anthropic_messages"
 
             mock_anthropic.Anthropic.assert_called_once()
 
-
-
     def test_prompt_caching_claude_openrouter(self):
-
         """Claude model via OpenRouter should enable prompt caching."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 model="anthropic/claude-sonnet-4-20250514",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._use_prompt_caching is True
 
-
-
     def test_prompt_caching_non_claude(self):
-
         """Non-Claude model should disable prompt caching."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 model="openai/gpt-4o",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._use_prompt_caching is False
 
-
-
     def test_prompt_caching_non_openrouter(self):
-
         """Custom base_url (not OpenRouter) should disable prompt caching."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 model="anthropic/claude-sonnet-4-20250514",
-
                 base_url="http://localhost:8080/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._use_prompt_caching is False
 
-
-
     def test_prompt_caching_native_anthropic(self):
-
         """Native Anthropic provider should enable prompt caching."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("agent.anthropic_adapter._anthropic_sdk"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://api.anthropic.com/v1/",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a.api_mode == "anthropic_messages"
 
             assert a._use_prompt_caching is True
 
-
-
     def test_prompt_caching_cache_ttl_defaults_without_config(self):
-
         """cache_ttl stays 5m when prompt_caching is absent from config."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch("clawk_cli.config.load_config", return_value={}),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 model="anthropic/claude-sonnet-4-20250514",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._cache_ttl == "5m"
 
-
-
     def test_prompt_caching_cache_ttl_custom_1h(self):
-
         """prompt_caching.cache_ttl 1h is applied when present in config."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"prompt_caching": {"cache_ttl": "1h"}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 model="anthropic/claude-sonnet-4-20250514",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._cache_ttl == "1h"
 
-
-
     def test_model_max_tokens_from_config(self):
-
         """model.max_tokens config populates the chat-completions request cap."""
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("terminal")),
-
-            patch("run_agent.check_toolset_requirements", return_value={}),
-
-            patch("run_agent.OpenAI"),
-
             patch(
-
-                "clawk_cli.config.load_config",
-
-                return_value={"model": {"max_tokens": 4096}},
-
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("terminal"),
             ),
-
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI"),
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={"model": {"max_tokens": 4096}},
+            ),
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 provider="custom",
-
                 model="claude-opus-4-6-thinking",
-
                 base_url="http://proxy.example/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
-
-
             kwargs = a._build_api_kwargs([{"role": "user", "content": "Hi"}])
-
-
 
         assert a.max_tokens == 4096
 
         assert kwargs["max_tokens"] == 4096
 
-
-
     def test_constructor_max_tokens_wins_over_config(self):
-
         """Explicit constructor max_tokens keeps programmatic callers stable."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"model": {"max_tokens": 4096}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 provider="custom",
-
                 model="claude-opus-4-6-thinking",
-
                 base_url="http://proxy.example/v1",
-
                 max_tokens=8192,
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
-
-
 
         assert a.max_tokens == 8192
 
-
-
     def test_prompt_caching_cache_ttl_invalid_falls_back(self):
-
         """Non-Anthropic TTL values keep default 5m without raising."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"prompt_caching": {"cache_ttl": "30m"}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-k...7890",
-
                 model="anthropic/claude-sonnet-4-20250514",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a._cache_ttl == "5m"
 
-
-
     def test_valid_tool_names_populated(self):
-
         """valid_tool_names should contain names from loaded tools."""
 
         tools = _make_tool_defs("web_search", "terminal")
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=tools),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             assert a.valid_tool_names == {"web_search", "terminal"}
 
-
-
     def test_session_id_auto_generated(self):
-
         """Session ID should be auto-generated in YYYYMMDD_HHMMSS_<hex6> format."""
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             # Format: YYYYMMDD_HHMMSS_<6 hex chars>
 
             assert re.match(r"^\d{8}_\d{6}_[0-9a-f]{6}$", a.session_id), (
-
                 f"session_id doesn't match expected format: {a.session_id}"
-
             )
 
 
-
-
-
 class TestInterrupt:
-
     def test_interrupt_sets_flag(self, agent):
 
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt()
 
             assert agent._interrupt_requested is True
 
-
-
     def test_interrupt_with_message(self, agent):
 
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt("new question")
 
             assert agent._interrupt_message == "new question"
 
-
-
     def test_clear_interrupt(self, agent):
 
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt("msg")
 
             agent.clear_interrupt()
@@ -1970,171 +1336,111 @@ class TestInterrupt:
 
             assert agent._interrupt_message is None
 
-
-
     def test_is_interrupted_property(self, agent):
 
         assert agent.is_interrupted is False
 
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt()
 
             assert agent.is_interrupted is True
 
 
-
-
-
 class TestHydrateTodoStore:
-
     def test_no_todo_in_history(self, agent):
 
         history = [
-
             {"role": "user", "content": "hello"},
-
             {"role": "assistant", "content": "hi"},
-
         ]
 
         with patch("run_agent._set_interrupt"):
-
             agent._hydrate_todo_store(history)
 
         assert not agent._todo_store.has_items()
-
-
 
     def test_recovers_from_history(self, agent):
 
         todos = [{"id": "1", "content": "do thing", "status": "pending"}]
 
         history = [
-
             {"role": "user", "content": "plan"},
-
             {"role": "assistant", "content": "ok"},
-
             {
-
                 "role": "tool",
-
                 "content": json.dumps({"todos": todos}),
-
                 "tool_call_id": "c1",
-
             },
-
         ]
 
         with patch("run_agent._set_interrupt"):
-
             agent._hydrate_todo_store(history)
 
         assert agent._todo_store.has_items()
 
-
-
     def test_skips_non_todo_tools(self, agent):
 
         history = [
-
             {
-
                 "role": "tool",
-
                 "content": '{"result": "search done"}',
-
                 "tool_call_id": "c1",
-
             },
-
         ]
 
         with patch("run_agent._set_interrupt"):
-
             agent._hydrate_todo_store(history)
 
         assert not agent._todo_store.has_items()
-
-
 
     def test_invalid_json_skipped(self, agent):
 
         history = [
-
             {
-
                 "role": "tool",
-
                 "content": 'not valid json "todos" oops',
-
                 "tool_call_id": "c1",
-
             },
-
         ]
 
         with patch("run_agent._set_interrupt"):
-
             agent._hydrate_todo_store(history)
 
         assert not agent._todo_store.has_items()
 
 
-
-
-
 class TestBuildSystemPrompt:
-
     def test_always_has_identity(self, agent):
 
         prompt = agent._build_system_prompt()
 
         assert DEFAULT_AGENT_IDENTITY in prompt
 
-
-
     def test_can_use_soul_identity_even_when_context_files_are_skipped(self):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("terminal")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("terminal"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch("run_agent.load_soul_md", return_value="SOUL IDENTITY"),
-
         ):
-
             agent = AIAgent(
-
                 api_key="test-k...7890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 load_soul_identity=True,
-
                 skip_memory=True,
-
             )
 
             prompt = agent._build_system_prompt()
 
-
-
         assert "SOUL IDENTITY" in prompt
 
         assert DEFAULT_AGENT_IDENTITY not in prompt
-
-
 
     def test_includes_system_message(self, agent):
 
@@ -2142,31 +1448,21 @@ class TestBuildSystemPrompt:
 
         assert "Custom instruction" in prompt
 
-
-
     def test_memory_guidance_when_memory_tool_loaded(self, agent_with_memory_tool):
 
         from agent.prompt_builder import MEMORY_GUIDANCE
-
-
 
         prompt = agent_with_memory_tool._build_system_prompt()
 
         assert MEMORY_GUIDANCE in prompt
 
-
-
     def test_no_memory_guidance_without_tool(self, agent):
 
         from agent.prompt_builder import MEMORY_GUIDANCE
 
-
-
         prompt = agent._build_system_prompt()
 
         assert MEMORY_GUIDANCE not in prompt
-
-
 
     def test_includes_datetime(self, agent):
 
@@ -2176,10 +1472,7 @@ class TestBuildSystemPrompt:
 
         assert "Conversation started:" in prompt
 
-
-
     def test_datetime_is_date_only_not_minute_precision(self, agent):
-
         """Timestamp must be date-only (no HH:MM) so the system prompt
 
         stays byte-stable for the full day. Minute precision invalidates
@@ -2193,15 +1486,11 @@ class TestBuildSystemPrompt:
         # Find the line and strip it for inspection
 
         for line in prompt.splitlines():
-
             if line.startswith("Conversation started:"):
-
                 # Must NOT contain AM/PM indicator (minute precision had %I:%M %p)
 
                 assert " AM" not in line and " PM" not in line, (
-
                     f"Timestamp line has time-of-day, breaks daily cache stability: {line!r}"
-
                 )
 
                 # Must NOT contain a colon followed by two digits (HH:MM pattern)
@@ -2209,86 +1498,64 @@ class TestBuildSystemPrompt:
                 import re as _re
 
                 assert not _re.search(r":\d{2}", line), (
-
                     f"Timestamp line has HH:MM, breaks daily cache stability: {line!r}"
-
                 )
 
                 break
 
         else:
-
             assert False, "Expected a 'Conversation started:' line in the system prompt"
-
-
 
     def test_includes_nous_subscription_prompt(self, agent, monkeypatch):
 
-        monkeypatch.setattr(run_agent, "build_nous_subscription_prompt", lambda tool_names: "NOUS SUBSCRIPTION BLOCK")
+        monkeypatch.setattr(
+            run_agent,
+            "build_nous_subscription_prompt",
+            lambda tool_names: "NOUS SUBSCRIPTION BLOCK",
+        )
 
         prompt = agent._build_system_prompt()
 
         assert "NOUS SUBSCRIPTION BLOCK" in prompt
 
-
-
     def test_skills_prompt_derives_available_toolsets_from_loaded_tools(self):
 
-        tools = _make_tool_defs("web_search", "skills_list", "skill_view", "skill_manage")
+        tools = _make_tool_defs(
+            "web_search", "skills_list", "skill_view", "skill_manage"
+        )
 
         toolset_map = {
-
             "web_search": "web",
-
             "skills_list": "skills",
-
             "skill_view": "skills",
-
             "skill_manage": "skills",
-
         }
 
-
-
         with (
-
             patch("run_agent.get_tool_definitions", return_value=tools),
-
             patch(
-
                 "run_agent.check_toolset_requirements",
-
                 side_effect=AssertionError("should not re-check toolset requirements"),
-
             ),
-
-            patch("run_agent.get_toolset_for_tool", create=True, side_effect=toolset_map.get),
-
-            patch("run_agent.build_skills_system_prompt", return_value="SKILLS_PROMPT") as mock_skills,
-
+            patch(
+                "run_agent.get_toolset_for_tool",
+                create=True,
+                side_effect=toolset_map.get,
+            ),
+            patch(
+                "run_agent.build_skills_system_prompt", return_value="SKILLS_PROMPT"
+            ) as mock_skills,
             patch("run_agent.OpenAI"),
-
         ):
-
             agent = AIAgent(
-
                 api_key="test-k...7890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
-
-
             prompt = agent._build_system_prompt()
-
-
 
         assert "SKILLS_PROMPT" in prompt
 
@@ -2297,64 +1564,36 @@ class TestBuildSystemPrompt:
         assert mock_skills.call_args.kwargs["available_toolsets"] == {"web", "skills"}
 
 
-
-
-
 class TestToolUseEnforcementConfig:
-
     """Tests for the agent.tool_use_enforcement config option."""
 
-
-
     def _make_agent(self, model="openai/gpt-4.1", tool_use_enforcement="auto"):
-
         """Create an agent with tools and a specific enforcement config."""
 
         with (
-
             patch(
-
                 "run_agent.get_tool_definitions",
-
                 return_value=_make_tool_defs("terminal", "web_search"),
-
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"agent": {"tool_use_enforcement": tool_use_enforcement}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 model=model,
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             a.client = MagicMock()
 
             return a
-
-
 
     def test_auto_injects_for_gpt(self):
 
@@ -2366,8 +1605,6 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_auto_injects_for_codex(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
@@ -2378,22 +1615,19 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_auto_skips_for_claude(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
-        agent = self._make_agent(model="anthropic/claude-sonnet-4", tool_use_enforcement="auto")
+        agent = self._make_agent(
+            model="anthropic/claude-sonnet-4", tool_use_enforcement="auto"
+        )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
 
-
-
     def test_auto_injects_for_grok(self):
-
         """xAI Grok / xai-oauth models hit the same enforcement path as GPT."""
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
@@ -2404,10 +1638,7 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_auto_injects_for_qwen(self):
-
         """Qwen models default to chatty/hallucinatory tool use without enforcement."""
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
@@ -2418,24 +1649,20 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_auto_injects_for_deepseek(self):
-
         """DeepSeek models default to chatty/hallucinatory tool use without enforcement."""
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
-        agent = self._make_agent(model="deepseek/deepseek-r1", tool_use_enforcement="auto")
+        agent = self._make_agent(
+            model="deepseek/deepseek-r1", tool_use_enforcement="auto"
+        )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_auto_injects_execution_guidance_for_grok(self):
-
         """Grok also gets OPENAI_MODEL_EXECUTION_GUIDANCE (verification,
 
         mandatory_tool_use, act_dont_ask). Same failure modes as GPT in
@@ -2454,10 +1681,7 @@ class TestToolUseEnforcementConfig:
 
         assert OPENAI_MODEL_EXECUTION_GUIDANCE in prompt
 
-
-
     def test_auto_injects_execution_guidance_for_xai_oauth_model(self):
-
         """xai-oauth bare model names (no slash) also match the grok pattern."""
 
         from agent.prompt_builder import OPENAI_MODEL_EXECUTION_GUIDANCE
@@ -2468,61 +1692,54 @@ class TestToolUseEnforcementConfig:
 
         assert OPENAI_MODEL_EXECUTION_GUIDANCE in prompt
 
-
-
     def test_auto_does_not_inject_execution_guidance_for_claude(self):
-
         """Sanity: execution guidance stays off for non-targeted families."""
 
         from agent.prompt_builder import OPENAI_MODEL_EXECUTION_GUIDANCE
 
         agent = self._make_agent(
-
             model="anthropic/claude-sonnet-4", tool_use_enforcement="auto"
-
         )
 
         prompt = agent._build_system_prompt()
 
         assert OPENAI_MODEL_EXECUTION_GUIDANCE not in prompt
 
-
-
     def test_true_forces_for_all_models(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
-        agent = self._make_agent(model="anthropic/claude-sonnet-4", tool_use_enforcement=True)
+        agent = self._make_agent(
+            model="anthropic/claude-sonnet-4", tool_use_enforcement=True
+        )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
-
-
 
     def test_string_true_forces_for_all_models(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
-        agent = self._make_agent(model="anthropic/claude-sonnet-4", tool_use_enforcement="true")
+        agent = self._make_agent(
+            model="anthropic/claude-sonnet-4", tool_use_enforcement="true"
+        )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
-
-
 
     def test_always_forces_for_all_models(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
-        agent = self._make_agent(model="deepseek/deepseek-r1", tool_use_enforcement="always")
+        agent = self._make_agent(
+            model="deepseek/deepseek-r1", tool_use_enforcement="always"
+        )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
-
-
 
     def test_false_disables_for_gpt(self):
 
@@ -2534,8 +1751,6 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
 
-
-
     def test_string_false_disables(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
@@ -2546,100 +1761,66 @@ class TestToolUseEnforcementConfig:
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
 
-
-
     def test_custom_list_matches(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
         agent = self._make_agent(
-
             model="deepseek/deepseek-r1",
-
             tool_use_enforcement=["deepseek", "gemini"],
-
         )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
-
-
 
     def test_custom_list_no_match(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
         agent = self._make_agent(
-
             model="anthropic/claude-sonnet-4",
-
             tool_use_enforcement=["deepseek", "gemini"],
-
         )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
 
-
-
     def test_custom_list_case_insensitive(self):
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
         agent = self._make_agent(
-
             model="openai/GPT-4.1",
-
             tool_use_enforcement=["GPT", "Codex"],
-
         )
 
         prompt = agent._build_system_prompt()
 
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-
-
     def test_no_tools_never_injects(self):
-
         """Even with enforcement=true, no injection when agent has no tools."""
 
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"agent": {"tool_use_enforcement": True}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
                 enabled_toolsets=[],
-
             )
 
             a.client = MagicMock()
@@ -2649,11 +1830,7 @@ class TestToolUseEnforcementConfig:
             assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
 
 
-
-
-
 class TestTaskCompletionGuidance:
-
     """Tests for the universal task-completion / no-fabrication guidance
 
     (config.yaml ``agent.task_completion_guidance``).
@@ -2666,64 +1843,43 @@ class TestTaskCompletionGuidance:
 
     output when blocked) and should appear for every model by default."""
 
-
-
-    def _make_agent(self, model="anthropic/claude-opus-4.8",
-
-                    task_completion_guidance=True, **extra_cfg):
+    def _make_agent(
+        self,
+        model="anthropic/claude-opus-4.8",
+        task_completion_guidance=True,
+        **extra_cfg,
+    ):
 
         agent_cfg = {"task_completion_guidance": task_completion_guidance}
 
         agent_cfg.update(extra_cfg)
 
         with (
-
             patch(
-
                 "run_agent.get_tool_definitions",
-
                 return_value=_make_tool_defs("terminal", "web_search"),
-
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"agent": agent_cfg},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 model=model,
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             a.client = MagicMock()
 
             return a
 
-
-
     def test_default_injects_for_claude(self):
-
         """The block must reach Claude by default — that's the
 
         primary motivating model family."""
@@ -2736,10 +1892,7 @@ class TestTaskCompletionGuidance:
 
         assert TASK_COMPLETION_GUIDANCE in prompt
 
-
-
     def test_default_injects_for_deepseek(self):
-
         """And for DeepSeek — the other model that failed the Sarasota
 
         real-estate task by fabricating output."""
@@ -2752,10 +1905,7 @@ class TestTaskCompletionGuidance:
 
         assert TASK_COMPLETION_GUIDANCE in prompt
 
-
-
     def test_default_injects_for_gpt(self):
-
         """Also reaches model families that already get enforcement —
 
         it's additive, not exclusive."""
@@ -2768,26 +1918,19 @@ class TestTaskCompletionGuidance:
 
         assert TASK_COMPLETION_GUIDANCE in prompt
 
-
-
     def test_false_disables(self):
 
         from agent.prompt_builder import TASK_COMPLETION_GUIDANCE
 
         agent = self._make_agent(
-
             model="anthropic/claude-opus-4.8", task_completion_guidance=False
-
         )
 
         prompt = agent._build_system_prompt()
 
         assert TASK_COMPLETION_GUIDANCE not in prompt
 
-
-
     def test_no_tools_no_injection(self):
-
         """Same gate as tool_use_enforcement — no tools means no guidance.
 
         The guidance refers to ``tool calls`` and ``tool output``; without
@@ -2797,37 +1940,21 @@ class TestTaskCompletionGuidance:
         from agent.prompt_builder import TASK_COMPLETION_GUIDANCE
 
         with (
-
             patch("run_agent.get_tool_definitions", return_value=[]),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"agent": {"task_completion_guidance": True}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
                 enabled_toolsets=[],
-
             )
 
             a.client = MagicMock()
@@ -2835,11 +1962,7 @@ class TestTaskCompletionGuidance:
             assert TASK_COMPLETION_GUIDANCE not in a._build_system_prompt()
 
 
-
-
-
 class TestEnvironmentProbeIntegration:
-
     """Tests for the local Python toolchain probe wiring (config.yaml
 
     ``agent.environment_probe``).  The probe itself is unit-tested in
@@ -2848,69 +1971,43 @@ class TestEnvironmentProbeIntegration:
 
     system prompt when enabled and stays out when disabled."""
 
-
-
-    def _make_agent(self, model="anthropic/claude-opus-4.8",
-
-                    environment_probe=True):
+    def _make_agent(self, model="anthropic/claude-opus-4.8", environment_probe=True):
 
         with (
-
             patch(
-
                 "run_agent.get_tool_definitions",
-
                 return_value=_make_tool_defs("terminal"),
-
             ),
-
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("run_agent.OpenAI"),
-
             patch(
-
                 "clawk_cli.config.load_config",
-
                 return_value={"agent": {"environment_probe": environment_probe}},
-
             ),
-
         ):
-
             a = AIAgent(
-
                 model=model,
-
                 api_key="test-key-1234567890",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             a.client = MagicMock()
 
             return a
 
-
-
     def test_probe_appears_when_problem_detected(self, monkeypatch):
-
         """When the probe finds something off, the line lands in the prompt."""
 
         from tools import env_probe
 
         env_probe._reset_cache_for_tests()
 
-        monkeypatch.setattr(env_probe, "_python_version_of",
-
-                            lambda b: {"python3": "3.11.15"}.get(b))
+        monkeypatch.setattr(
+            env_probe, "_python_version_of", lambda b: {"python3": "3.11.15"}.get(b)
+        )
 
         monkeypatch.setattr(env_probe, "_has_pip_module", lambda b: False)
 
@@ -2918,11 +2015,11 @@ class TestEnvironmentProbeIntegration:
 
         monkeypatch.setattr(env_probe, "_pip_python_version", lambda: "3.12")
 
-        monkeypatch.setattr(env_probe.shutil, "which",
-
-                            lambda name: None if name == "uv" else "/usr/bin/" + name)
-
-
+        monkeypatch.setattr(
+            env_probe.shutil,
+            "which",
+            lambda name: None if name == "uv" else "/usr/bin/" + name,
+        )
 
         agent = self._make_agent(environment_probe=True)
 
@@ -2932,19 +2029,18 @@ class TestEnvironmentProbeIntegration:
 
         assert "3.11.15" in prompt
 
-
-
     def test_probe_silent_on_clean_env(self, monkeypatch):
-
         """Clean environment → probe emits nothing → no line in prompt."""
 
         from tools import env_probe
 
         env_probe._reset_cache_for_tests()
 
-        monkeypatch.setattr(env_probe, "_python_version_of",
-
-                            lambda b: "3.13.3" if b == "python3" else None)
+        monkeypatch.setattr(
+            env_probe,
+            "_python_version_of",
+            lambda b: "3.13.3" if b == "python3" else None,
+        )
 
         monkeypatch.setattr(env_probe, "_has_pip_module", lambda b: True)
 
@@ -2954,27 +2050,22 @@ class TestEnvironmentProbeIntegration:
 
         monkeypatch.setattr(env_probe.shutil, "which", lambda name: None)
 
-
-
         agent = self._make_agent(environment_probe=True)
 
         prompt = agent._build_system_prompt()
 
         assert "Python toolchain:" not in prompt
 
-
-
     def test_probe_disabled_by_config(self, monkeypatch):
-
         """Even with detectable problems, the probe stays out when disabled."""
 
         from tools import env_probe
 
         env_probe._reset_cache_for_tests()
 
-        monkeypatch.setattr(env_probe, "_python_version_of",
-
-                            lambda b: {"python3": "3.11.15"}.get(b))
+        monkeypatch.setattr(
+            env_probe, "_python_version_of", lambda b: {"python3": "3.11.15"}.get(b)
+        )
 
         monkeypatch.setattr(env_probe, "_has_pip_module", lambda b: False)
 
@@ -2984,8 +2075,6 @@ class TestEnvironmentProbeIntegration:
 
         monkeypatch.setattr(env_probe.shutil, "which", lambda name: None)
 
-
-
         agent = self._make_agent(environment_probe=False)
 
         prompt = agent._build_system_prompt()
@@ -2993,11 +2082,7 @@ class TestEnvironmentProbeIntegration:
         assert "Python toolchain:" not in prompt
 
 
-
-
-
 class TestInvalidateSystemPrompt:
-
     def test_clears_cache(self, agent):
 
         agent._cached_system_prompt = "cached value"
@@ -3005,8 +2090,6 @@ class TestInvalidateSystemPrompt:
         agent._invalidate_system_prompt()
 
         assert agent._cached_system_prompt is None
-
-
 
     def test_reloads_memory_store(self, agent):
 
@@ -3021,11 +2104,7 @@ class TestInvalidateSystemPrompt:
         mock_store.load_from_disk.assert_called_once()
 
 
-
-
-
 class TestBuildApiKwargs:
-
     def test_basic_kwargs(self, agent):
 
         messages = [{"role": "user", "content": "hi"}]
@@ -3038,10 +2117,7 @@ class TestBuildApiKwargs:
 
         assert kwargs["timeout"] == 1800.0
 
-
-
     def test_public_moonshot_kimi_k2_5_omits_temperature(self, agent):
-
         """Kimi models should NOT have client-side temperature overrides.
 
 
@@ -3058,15 +2134,9 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
 
-
-
         assert "temperature" not in kwargs
-
-
 
     def test_public_moonshot_cn_kimi_k2_5_omits_temperature(self, agent):
 
@@ -3078,15 +2148,9 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
 
-
-
         assert "temperature" not in kwargs
-
-
 
     def test_kimi_coding_endpoint_omits_temperature(self, agent):
 
@@ -3100,18 +2164,11 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert "temperature" not in kwargs
 
-
-
     def test_kimi_coding_endpoint_sends_max_tokens_and_reasoning(self, agent):
-
         """Kimi endpoint should send max_tokens=32000 and reasoning_effort as
 
         top-level params, matching Kimi CLI's default behavior."""
@@ -3126,20 +2183,13 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["max_tokens"] == 32000
 
         assert kwargs["reasoning_effort"] == "medium"
 
-
-
     def test_kimi_coding_endpoint_respects_custom_effort(self, agent):
-
         """reasoning_effort should reflect reasoning_config.effort when set."""
 
         agent.provider = "kimi-coding"
@@ -3154,18 +2204,11 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["reasoning_effort"] == "high"
 
-
-
     def test_kimi_coding_endpoint_sends_thinking_extra_body(self, agent):
-
         """Kimi endpoint should send extra_body.thinking={"type":"enabled"}
 
         to activate reasoning mode, mirroring Kimi CLI's with_thinking()."""
@@ -3180,18 +2223,11 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
 
-
-
     def test_kimi_coding_endpoint_disables_thinking(self, agent):
-
         """When reasoning_config.enabled=False, thinking should be disabled
 
         and reasoning_effort should be omitted entirely — mirroring Kimi
@@ -3210,20 +2246,13 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["extra_body"]["thinking"] == {"type": "disabled"}
 
         assert "reasoning_effort" not in kwargs
 
-
-
     def test_moonshot_endpoint_sends_max_tokens_and_reasoning(self, agent):
-
         """api.moonshot.ai should get the same Kimi-compatible params."""
 
         agent.provider = "kimi-coding"
@@ -3236,11 +2265,7 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["max_tokens"] == 32000
 
@@ -3248,10 +2273,7 @@ class TestBuildApiKwargs:
 
         assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
 
-
-
     def test_moonshot_cn_endpoint_sends_max_tokens_and_reasoning(self, agent):
-
         """api.moonshot.cn (China endpoint) should get the same params."""
 
         agent.provider = "kimi-coding-cn"
@@ -3264,19 +2286,13 @@ class TestBuildApiKwargs:
 
         messages = [{"role": "user", "content": "hi"}]
 
-
-
         kwargs = agent._build_api_kwargs(messages)
-
-
 
         assert kwargs["max_tokens"] == 32000
 
         assert kwargs["reasoning_effort"] == "medium"
 
         assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
-
-
 
     def test_provider_preferences_injected(self, agent):
 
@@ -3292,10 +2308,7 @@ class TestBuildApiKwargs:
 
         assert kwargs["extra_body"]["provider"]["only"] == ["Anthropic"]
 
-
-
     def test_reasoning_config_default_openrouter(self, agent):
-
         """Default reasoning config for OpenRouter should be medium."""
 
         agent.provider = "openrouter"
@@ -3314,8 +2327,6 @@ class TestBuildApiKwargs:
 
         assert reasoning["effort"] == "medium"
 
-
-
     def test_reasoning_config_custom(self, agent):
 
         agent.provider = "openrouter"
@@ -3332,8 +2343,6 @@ class TestBuildApiKwargs:
 
         assert kwargs["extra_body"]["reasoning"] == {"enabled": False}
 
-
-
     def test_reasoning_not_sent_for_unsupported_openrouter_model(self, agent):
 
         agent.base_url = "https://openrouter.ai/api/v1"
@@ -3345,8 +2354,6 @@ class TestBuildApiKwargs:
         kwargs = agent._build_api_kwargs(messages)
 
         assert "reasoning" not in kwargs.get("extra_body", {})
-
-
 
     def test_reasoning_sent_for_supported_openrouter_model(self, agent):
 
@@ -3362,8 +2369,6 @@ class TestBuildApiKwargs:
 
         assert kwargs["extra_body"]["reasoning"]["effort"] == "medium"
 
-
-
     def test_reasoning_sent_for_nous_route(self, agent):
 
         agent.provider = "nous"
@@ -3378,18 +2383,13 @@ class TestBuildApiKwargs:
 
         assert kwargs["extra_body"]["reasoning"]["effort"] == "medium"
 
-
-
     def test_reasoning_sent_for_copilot_gpt5(self, agent):
-
         """Copilot/GitHub Models: GPT-5 reasoning goes in extra_body.reasoning."""
 
         from agent.transports import get_transport
 
         from providers import get_provider_profile
 
-
-
         transport = get_transport("chat_completions")
 
         profile = get_provider_profile("copilot")
@@ -3397,33 +2397,22 @@ class TestBuildApiKwargs:
         msgs = [{"role": "user", "content": "hi"}]
 
         kwargs = transport.build_kwargs(
-
             model="gpt-5.4",
-
             messages=msgs,
-
             tools=None,
-
             supports_reasoning=True,
-
             provider_profile=profile,
-
         )
 
         assert kwargs["extra_body"]["reasoning"] == {"effort": "medium"}
 
-
-
     def test_reasoning_xhigh_normalized_for_copilot(self, agent):
-
         """xhigh effort should normalize to high for Copilot GitHub Models."""
 
         from agent.transports import get_transport
 
         from providers import get_provider_profile
 
-
-
         transport = get_transport("chat_completions")
 
         profile = get_provider_profile("copilot")
@@ -3431,24 +2420,15 @@ class TestBuildApiKwargs:
         msgs = [{"role": "user", "content": "hi"}]
 
         kwargs = transport.build_kwargs(
-
             model="gpt-5.4",
-
             messages=msgs,
-
             tools=None,
-
             supports_reasoning=True,
-
             reasoning_config={"enabled": True, "effort": "xhigh"},
-
             provider_profile=profile,
-
         )
 
         assert kwargs["extra_body"]["reasoning"] == {"effort": "high"}
-
-
 
     def test_reasoning_omitted_for_non_reasoning_copilot_model(self, agent):
 
@@ -3462,8 +2442,6 @@ class TestBuildApiKwargs:
 
         assert "reasoning" not in kwargs.get("extra_body", {})
 
-
-
     def test_max_tokens_injected(self, agent):
 
         agent.max_tokens = 4096
@@ -3473,10 +2451,6 @@ class TestBuildApiKwargs:
         kwargs = agent._build_api_kwargs(messages)
 
         assert kwargs["max_tokens"] == 4096
-
-
-
-
 
     def test_qwen_portal_formats_messages_and_metadata(self, agent):
 
@@ -3489,13 +2463,9 @@ class TestBuildApiKwargs:
         agent.session_id = "sess-123"
 
         messages = [
-
             {"role": "system", "content": "You are helpful"},
-
             {"role": "assistant", "content": "Got it"},
-
             {"role": "user", "content": "hi"},
-
         ]
 
         kwargs = agent._build_api_kwargs(messages)
@@ -3506,11 +2476,11 @@ class TestBuildApiKwargs:
 
         assert isinstance(kwargs["messages"][0]["content"], list)
 
-        assert kwargs["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+        assert kwargs["messages"][0]["content"][0]["cache_control"] == {
+            "type": "ephemeral"
+        }
 
         assert kwargs["messages"][2]["content"][0]["text"] == "hi"
-
-
 
     def test_qwen_portal_normalizes_bare_string_content_parts(self, agent):
 
@@ -3521,11 +2491,8 @@ class TestBuildApiKwargs:
         agent._base_url_lower = agent.base_url.lower()
 
         messages = [
-
             {"role": "system", "content": [{"type": "text", "text": "system"}]},
-
             {"role": "user", "content": ["hello", {"type": "text", "text": "world"}]},
-
         ]
 
         kwargs = agent._build_api_kwargs(messages)
@@ -3535,8 +2502,6 @@ class TestBuildApiKwargs:
         assert user_content[0] == {"type": "text", "text": "hello"}
 
         assert user_content[1] == {"type": "text", "text": "world"}
-
-
 
     def test_qwen_portal_no_system_message(self, agent):
 
@@ -3556,10 +2521,7 @@ class TestBuildApiKwargs:
 
         assert "cache_control" not in kwargs["messages"][0]["content"][0]
 
-
-
     def test_qwen_portal_sends_explicit_max_tokens(self, agent):
-
         """When the user explicitly sets max_tokens, it should be sent to Qwen Portal."""
 
         agent.base_url = "https://portal.qwen.ai/v1"
@@ -3568,16 +2530,16 @@ class TestBuildApiKwargs:
 
         agent.max_tokens = 4096
 
-        messages = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "hi"},
+        ]
 
         kwargs = agent._build_api_kwargs(messages)
 
         assert kwargs["max_tokens"] == 4096
 
-
-
     def test_qwen_portal_default_max_tokens(self, agent):
-
         """When max_tokens is None, Qwen Portal gets a default of 65536
 
         to prevent reasoning models from exhausting their output budget."""
@@ -3590,16 +2552,16 @@ class TestBuildApiKwargs:
 
         agent.max_tokens = None
 
-        messages = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "hi"},
+        ]
 
         kwargs = agent._build_api_kwargs(messages)
 
         assert kwargs["max_tokens"] == 65536
 
-
-
     def test_ollama_think_false_on_effort_none(self, agent):
-
         """Custom (Ollama) provider with effort=none should inject think=false."""
 
         agent.provider = "custom"
@@ -3616,10 +2578,7 @@ class TestBuildApiKwargs:
 
         assert kwargs.get("extra_body", {}).get("think") is False
 
-
-
     def test_ollama_think_false_on_enabled_false(self, agent):
-
         """Custom (Ollama) provider with enabled=false should inject think=false."""
 
         agent.provider = "custom"
@@ -3636,10 +2595,7 @@ class TestBuildApiKwargs:
 
         assert kwargs.get("extra_body", {}).get("think") is False
 
-
-
     def test_ollama_no_think_param_when_reasoning_enabled(self, agent):
-
         """Custom provider with reasoning enabled should NOT inject think=false."""
 
         agent.provider = "custom"
@@ -3656,10 +2612,7 @@ class TestBuildApiKwargs:
 
         assert kwargs.get("extra_body", {}).get("think") is None
 
-
-
     def test_non_custom_provider_unaffected(self, agent):
-
         """OpenRouter provider with effort=none should NOT inject think=false."""
 
         agent.provider = "openrouter"
@@ -3675,13 +2628,7 @@ class TestBuildApiKwargs:
         assert kwargs.get("extra_body", {}).get("think") is None
 
 
-
-
-
-
-
 class TestBuildAssistantMessage:
-
     def test_basic_message(self, agent):
 
         msg = _mock_assistant_msg(content="Hello!")
@@ -3694,8 +2641,6 @@ class TestBuildAssistantMessage:
 
         assert result["finish_reason"] == "stop"
 
-
-
     def test_with_reasoning(self, agent):
 
         msg = _mock_assistant_msg(content="answer", reasoning="thinking")
@@ -3704,25 +2649,17 @@ class TestBuildAssistantMessage:
 
         assert result["reasoning"] == "thinking"
 
-
-
     def test_reasoning_content_preserved_separately(self, agent):
 
         msg = _mock_assistant_msg(
-
             content="answer",
-
             reasoning="summary",
-
             reasoning_content="provider scratchpad",
-
         )
 
         result = agent._build_assistant_message(msg, "stop")
 
         assert result["reasoning_content"] == "provider scratchpad"
-
-
 
     def test_with_tool_calls(self, agent):
 
@@ -3736,8 +2673,6 @@ class TestBuildAssistantMessage:
 
         assert result["tool_calls"][0]["function"]["name"] == "web_search"
 
-
-
     def test_with_reasoning_details(self, agent):
 
         details = [{"type": "reasoning.summary", "text": "step1", "signature": "sig1"}]
@@ -3750,8 +2685,6 @@ class TestBuildAssistantMessage:
 
         assert result["reasoning_details"][0]["text"] == "step1"
 
-
-
     def test_empty_content(self, agent):
 
         msg = _mock_assistant_msg(content=None)
@@ -3760,10 +2693,7 @@ class TestBuildAssistantMessage:
 
         assert result["content"] == ""
 
-
-
     def test_streaming_only_reasoning_promoted_to_reasoning_content(self, agent):
-
         """Refs #16844 / #16884. Streaming-only providers (glm, MiniMax,
 
         gpt-5.x via aigw, Anthropic via openai-compat shims) accumulate
@@ -3806,20 +2736,13 @@ class TestBuildAssistantMessage:
 
         assert not hasattr(msg, "reasoning_content")
 
-
-
         result = agent._build_assistant_message(msg, "stop")
-
-
 
         assert result["reasoning"] == "hidden thinking"
 
         assert result["reasoning_content"] == "hidden thinking"
 
-
-
     def test_sdk_reasoning_content_still_wins_over_fallback(self, agent):
-
         """Additive fallback must not override SDK-supplied reasoning_content.
 
 
@@ -3833,23 +2756,16 @@ class TestBuildAssistantMessage:
         """
 
         msg = _mock_assistant_msg(
-
             content="answer",
-
             reasoning="summary only",
-
             reasoning_content="structured provider scratchpad",
-
         )
 
         result = agent._build_assistant_message(msg, "stop")
 
         assert result["reasoning_content"] == "structured provider scratchpad"
 
-
-
     def test_no_reasoning_text_leaves_field_absent(self, agent):
-
         """Non-thinking turns with no reasoning leave reasoning_content absent.
 
 
@@ -3872,18 +2788,13 @@ class TestBuildAssistantMessage:
 
         assert "reasoning_content" not in result
 
-
-
     def test_tool_call_extra_content_preserved(self, agent):
-
         """Gemini thinking models attach extra_content with thought_signature
 
         to tool calls. This must be preserved so subsequent API calls include it."""
 
         tc = _mock_tool_call(
-
             name="get_weather", arguments='{"city":"NYC"}', call_id="c2"
-
         )
 
         tc.extra_content = {"google": {"thought_signature": "abc123"}}
@@ -3893,15 +2804,10 @@ class TestBuildAssistantMessage:
         result = agent._build_assistant_message(msg, "tool_calls")
 
         assert result["tool_calls"][0]["extra_content"] == {
-
             "google": {"thought_signature": "abc123"}
-
         }
 
-
-
     def test_tool_call_without_extra_content(self, agent):
-
         """Standard tool calls (no thinking model) should not have extra_content."""
 
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c3")
@@ -3912,10 +2818,7 @@ class TestBuildAssistantMessage:
 
         assert "extra_content" not in result["tool_calls"][0]
 
-
-
     def test_think_blocks_stripped_from_content(self, agent):
-
         """Inline <think> blocks are stripped from stored content (#8878, #9568).
 
 
@@ -3931,9 +2834,7 @@ class TestBuildAssistantMessage:
         """
 
         msg = _mock_assistant_msg(
-
             content="<think>internal reasoning</think>The actual answer."
-
         )
 
         result = agent._build_assistant_message(msg, "stop")
@@ -3948,10 +2849,7 @@ class TestBuildAssistantMessage:
 
         assert result["reasoning"] == "internal reasoning"
 
-
-
     def test_think_blocks_stripped_preserves_normal_content(self, agent):
-
         """Content without reasoning tags passes through unchanged."""
 
         msg = _mock_assistant_msg(content="No thinking here.")
@@ -3960,10 +2858,7 @@ class TestBuildAssistantMessage:
 
         assert result["content"] == "No thinking here."
 
-
-
     def test_memory_context_in_stored_content_is_preserved(self, agent):
-
         """`_build_assistant_message` must not silently mutate model output
 
         containing literal <memory-context> markers — that's legitimate text
@@ -3973,19 +2868,12 @@ class TestBuildAssistantMessage:
         leak prevention is handled by StreamingContextScrubber upstream."""
 
         original = (
-
             "<memory-context>\n"
-
             "[System note: The following is recalled memory context, NOT new user input. Treat as informational background data.]\n\n"
-
             "## Honcho Context\n"
-
             "stale memory\n"
-
             "</memory-context>\n\n"
-
             "Visible answer"
-
         )
 
         msg = _mock_assistant_msg(content=original)
@@ -3996,18 +2884,13 @@ class TestBuildAssistantMessage:
 
         assert "Visible answer" in result["content"]
 
-
-
     def test_unterminated_think_block_stripped(self, agent):
-
         """Unterminated <think> block (MiniMax / NIM dropped close tag) is
 
         fully stripped from stored content."""
 
         msg = _mock_assistant_msg(
-
             content="<think>reasoning that never closes on this NIM endpoint"
-
         )
 
         result = agent._build_assistant_message(msg, "stop")
@@ -4019,18 +2902,12 @@ class TestBuildAssistantMessage:
         assert result["content"] == ""
 
 
-
-
-
 class TestFormatToolsForSystemMessage:
-
     def test_no_tools_returns_empty_array(self, agent):
 
         agent.tools = []
 
         assert agent._format_tools_for_system_message() == "[]"
-
-
 
     def test_formats_single_tool(self, agent):
 
@@ -4043,8 +2920,6 @@ class TestFormatToolsForSystemMessage:
         assert len(parsed) == 1
 
         assert parsed[0]["name"] == "web_search"
-
-
 
     def test_formats_multiple_tools(self, agent):
 
@@ -4061,9 +2936,6 @@ class TestFormatToolsForSystemMessage:
         assert names == {"web_search", "terminal", "read_file"}
 
 
-
-
-
 # ===================================================================
 
 # Group 3: Conversation Loop Pieces (OpenAI mock)
@@ -4071,11 +2943,7 @@ class TestFormatToolsForSystemMessage:
 # ===================================================================
 
 
-
-
-
 class TestExecuteToolCalls:
-
     def test_single_tool_executed(self, agent):
 
         tc = _mock_tool_call(name="web_search", arguments='{"q":"test"}', call_id="c1")
@@ -4085,11 +2953,8 @@ class TestExecuteToolCalls:
         messages = []
 
         with patch(
-
             "run_agent.handle_function_call", return_value="search result"
-
         ) as mock_hfc:
-
             agent._execute_tool_calls(mock_msg, messages, "task-1")
 
             # enabled_tools passes the agent's own valid_tool_names
@@ -4106,9 +2971,9 @@ class TestExecuteToolCalls:
 
         assert "search result" in messages[0]["content"]
 
-
-
-    def test_keyboard_interrupt_emits_cancelled_post_tool_hook(self, agent, monkeypatch):
+    def test_keyboard_interrupt_emits_cancelled_post_tool_hook(
+        self, agent, monkeypatch
+    ):
 
         tc = _mock_tool_call(name="web_search", arguments='{"q":"test"}', call_id="c1")
 
@@ -4124,35 +2989,22 @@ class TestExecuteToolCalls:
 
         agent._current_api_request_id = "api-1"
 
-
-
         def _capture_hook(hook_name, **kwargs):
 
             hook_calls.append((hook_name, kwargs))
 
             return []
 
-
-
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", _capture_hook)
 
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
 
-
-
         with (
-
             patch("run_agent.handle_function_call", side_effect=KeyboardInterrupt),
-
             patch("run_agent._set_interrupt"),
-
             pytest.raises(KeyboardInterrupt),
-
         ):
-
             agent._execute_tool_calls_sequential(mock_msg, messages, "task-1")
-
-
 
         post_calls = [kwargs for name, kwargs in hook_calls if name == "post_tool_call"]
 
@@ -4174,8 +3026,6 @@ class TestExecuteToolCalls:
 
         assert json.loads(post_calls[0]["result"])["status"] == "cancelled"
 
-
-
     def test_interrupt_skips_remaining(self, agent):
 
         tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
@@ -4186,13 +3036,8 @@ class TestExecuteToolCalls:
 
         messages = []
 
-
-
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt()
-
-
 
         agent._execute_tool_calls(mock_msg, messages, "task-1")
 
@@ -4201,21 +3046,14 @@ class TestExecuteToolCalls:
         assert len(messages) == 2
 
         assert (
-
             "cancelled" in messages[0]["content"].lower()
-
             or "interrupted" in messages[0]["content"].lower()
-
         )
-
-
 
     def test_invalid_json_args_defaults_empty(self, agent):
 
         tc = _mock_tool_call(
-
             name="web_search", arguments="not valid json", call_id="c1"
-
         )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc])
@@ -4223,7 +3061,6 @@ class TestExecuteToolCalls:
         messages = []
 
         with patch("run_agent.handle_function_call", return_value="ok") as mock_hfc:
-
             agent._execute_tool_calls(mock_msg, messages, "task-1")
 
             # Invalid JSON args should fall back to empty dict
@@ -4240,8 +3077,6 @@ class TestExecuteToolCalls:
 
         assert messages[0]["tool_call_id"] == "c1"
 
-
-
     def test_result_truncation_over_100k(self, agent, tmp_path, monkeypatch):
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
@@ -4257,16 +3092,16 @@ class TestExecuteToolCalls:
         big_result = "x" * 150_000
 
         with patch("run_agent.handle_function_call", return_value=big_result):
-
             agent._execute_tool_calls(mock_msg, messages, "task-1")
 
         # Content should be replaced with persisted-output or truncation
 
         assert len(messages[0]["content"]) < 150_000
 
-        assert ("Truncated" in messages[0]["content"] or "<persisted-output>" in messages[0]["content"])
-
-
+        assert (
+            "Truncated" in messages[0]["content"]
+            or "<persisted-output>" in messages[0]["content"]
+        )
 
     def test_quiet_tool_output_suppressed_when_progress_callback_present(self, agent):
 
@@ -4278,22 +3113,17 @@ class TestExecuteToolCalls:
 
         agent.tool_progress_callback = lambda *args, **kwargs: None
 
-
-
-        with patch("run_agent.handle_function_call", return_value="search result"), \
-             patch.object(agent, "_safe_print") as mock_print:
-
+        with (
+            patch("run_agent.handle_function_call", return_value="search result"),
+            patch.object(agent, "_safe_print") as mock_print,
+        ):
             agent._execute_tool_calls(mock_msg, messages, "task-1")
-
-
 
         mock_print.assert_not_called()
 
         assert len(messages) == 1
 
         assert messages[0]["role"] == "tool"
-
-
 
     def test_quiet_tool_output_prints_without_progress_callback(self, agent):
 
@@ -4307,14 +3137,11 @@ class TestExecuteToolCalls:
 
         agent.tool_progress_callback = None
 
-
-
-        with patch("run_agent.handle_function_call", return_value="search result"), \
-             patch.object(agent, "_safe_print") as mock_print:
-
+        with (
+            patch("run_agent.handle_function_call", return_value="search result"),
+            patch.object(agent, "_safe_print") as mock_print,
+        ):
             agent._execute_tool_calls(mock_msg, messages, "task-1")
-
-
 
         mock_print.assert_called_once()
 
@@ -4324,9 +3151,9 @@ class TestExecuteToolCalls:
 
         assert messages[0]["role"] == "tool"
 
-
-
-    def test_quiet_tool_output_suppressed_without_progress_callback_for_non_cli_agent(self, agent):
+    def test_quiet_tool_output_suppressed_without_progress_callback_for_non_cli_agent(
+        self, agent
+    ):
 
         tc = _mock_tool_call(name="web_search", arguments='{"q":"test"}', call_id="c1")
 
@@ -4338,14 +3165,11 @@ class TestExecuteToolCalls:
 
         agent.tool_progress_callback = None
 
-
-
-        with patch("run_agent.handle_function_call", return_value="search result"), \
-             patch.object(agent, "_safe_print") as mock_print:
-
+        with (
+            patch("run_agent.handle_function_call", return_value="search result"),
+            patch.object(agent, "_safe_print") as mock_print,
+        ):
             agent._execute_tool_calls(mock_msg, messages, "task-1")
-
-
 
         mock_print.assert_not_called()
 
@@ -4353,55 +3177,38 @@ class TestExecuteToolCalls:
 
         assert messages[0]["role"] == "tool"
 
-
-
     def test_vprint_suppressed_in_parseable_quiet_mode(self, agent):
 
         agent.suppress_status_output = True
 
-
-
         with patch.object(agent, "_safe_print") as mock_print:
-
             agent._vprint("status line", force=True)
 
             agent._vprint("normal line")
 
-
-
         mock_print.assert_not_called()
 
-
-
-    def test_run_conversation_suppresses_retry_noise_in_parseable_quiet_mode(self, agent):
+    def test_run_conversation_suppresses_retry_noise_in_parseable_quiet_mode(
+        self, agent
+    ):
 
         class _RateLimitError(Exception):
-
             status_code = 429
-
-
 
             def __str__(self):
 
                 return "Error code: 429 - Rate limit exceeded."
 
-
-
         responses = [_RateLimitError(), _mock_response(content="Recovered")]
-
-
 
         def _fake_api_call(api_kwargs):
 
             result = responses.pop(0)
 
             if isinstance(result, Exception):
-
                 raise result
 
             return result
-
-
 
         agent.suppress_status_output = True
 
@@ -4411,19 +3218,12 @@ class TestExecuteToolCalls:
 
         agent._save_trajectory = lambda *args, **kwargs: None
 
-
-
         captured = io.StringIO()
 
         agent._print_fn = lambda *args, **kw: print(*args, file=captured, **kw)
 
-
-
         with patch("run_agent.time.sleep", return_value=None):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
@@ -4436,17 +3236,10 @@ class TestExecuteToolCalls:
         assert "Rate limit reached" not in output
 
 
-
-
-
 class TestConcurrentToolExecution:
-
     """Tests for _execute_tool_calls_concurrent and dispatch logic."""
 
-
-
     def test_single_tool_uses_sequential_path(self, agent):
-
         """Single tool call should use sequential path, not concurrent."""
 
         tc = _mock_tool_call(name="web_search", arguments='{"q":"test"}', call_id="c1")
@@ -4456,135 +3249,114 @@ class TestConcurrentToolExecution:
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
-
-
 
     def test_clarify_forces_sequential(self, agent):
-
         """Batch containing clarify should use sequential path."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="clarify", arguments='{"question":"ok?"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="clarify", arguments='{"question":"ok?"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
 
-
-
     def test_multiple_tools_uses_concurrent_path(self, agent):
-
         """Multiple read-only tools should use concurrent path."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="read_file", arguments='{"path":"x.py"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="read_file", arguments='{"path":"x.py"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_con.assert_called_once()
 
                 mock_seq.assert_not_called()
 
-
-
     def test_terminal_batch_forces_sequential(self, agent):
-
         """Stateful tools should not share the concurrent execution path."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="terminal", arguments='{"command":"pwd"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="terminal", arguments='{"command":"pwd"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
-
-
 
     def test_write_batch_forces_sequential(self, agent):
-
         """File mutations should stay ordered within a turn."""
 
-        tc1 = _mock_tool_call(name="read_file", arguments='{"path":"x.py"}', call_id="c1")
+        tc1 = _mock_tool_call(
+            name="read_file", arguments='{"path":"x.py"}', call_id="c1"
+        )
 
-        tc2 = _mock_tool_call(name="write_file", arguments='{"path":"x.py","content":"print(1)"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"x.py","content":"print(1)"}',
+            call_id="c2",
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
 
-
-
     def test_disjoint_write_batch_uses_concurrent_path(self, agent):
-
         """Independent file writes should still run concurrently."""
 
         tc1 = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"src/a.py","content":"print(1)"}',
-
             call_id="c1",
-
         )
 
         tc2 = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"src/b.py","content":"print(2)"}',
-
             call_id="c2",
-
         )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
@@ -4592,39 +3364,26 @@ class TestConcurrentToolExecution:
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_con.assert_called_once()
 
                 mock_seq.assert_not_called()
 
-
-
     def test_overlapping_write_batch_forces_sequential(self, agent):
-
         """Writes to the same file must stay ordered."""
 
         tc1 = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"src/a.py","content":"print(1)"}',
-
             call_id="c1",
-
         )
 
         tc2 = _mock_tool_call(
-
             name="patch",
-
             arguments='{"path":"src/a.py","old_string":"1","new_string":"2"}',
-
             call_id="c2",
-
         )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
@@ -4632,22 +3391,17 @@ class TestConcurrentToolExecution:
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
 
-
-
     def test_malformed_json_args_forces_sequential(self, agent):
-
         """Unparseable tool arguments should fall back to sequential."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
         tc2 = _mock_tool_call(name="web_search", arguments="NOT JSON {{{", call_id="c2")
 
@@ -4656,60 +3410,52 @@ class TestConcurrentToolExecution:
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
 
-
-
     def test_non_dict_args_forces_sequential(self, agent):
-
         """Tool arguments that parse to a non-dict type should fall back to sequential."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="web_search", arguments='"just a string"', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="web_search", arguments='"just a string"', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
         with patch.object(agent, "_execute_tool_calls_sequential") as mock_seq:
-
             with patch.object(agent, "_execute_tool_calls_concurrent") as mock_con:
-
                 agent._execute_tool_calls(mock_msg, messages, "task-1")
 
                 mock_seq.assert_called_once()
 
                 mock_con.assert_not_called()
 
-
-
     def test_concurrent_executes_all_tools(self, agent):
-
         """Concurrent path should execute all tools and append results in order."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{"q":"alpha"}', call_id="c1")
+        tc1 = _mock_tool_call(
+            name="web_search", arguments='{"q":"alpha"}', call_id="c1"
+        )
 
         tc2 = _mock_tool_call(name="web_search", arguments='{"q":"beta"}', call_id="c2")
 
-        tc3 = _mock_tool_call(name="web_search", arguments='{"q":"gamma"}', call_id="c3")
+        tc3 = _mock_tool_call(
+            name="web_search", arguments='{"q":"gamma"}', call_id="c3"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2, tc3])
 
         messages = []
 
-
-
         call_log = []
-
-
 
         def fake_handle(name, args, task_id, **kwargs):
 
@@ -4717,13 +3463,8 @@ class TestConcurrentToolExecution:
 
             return json.dumps({"result": args.get("q", "")})
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         assert len(messages) == 3
 
@@ -4747,15 +3488,10 @@ class TestConcurrentToolExecution:
 
         assert "gamma" in messages[2]["content"]
 
-
-
     def test_concurrent_preserves_order_despite_timing(self, agent):
-
         """Even if tools finish in different order, messages should be in original order."""
 
         import time as _time
-
-
 
         tc1 = _mock_tool_call(name="web_search", arguments='{"q":"slow"}', call_id="c1")
 
@@ -4765,25 +3501,17 @@ class TestConcurrentToolExecution:
 
         messages = []
 
-
-
         def fake_handle(name, args, task_id, **kwargs):
 
             q = args.get("q", "")
 
             if q == "slow":
-
                 _time.sleep(0.1)  # Slow tool
 
             return f"result_{q}"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         assert messages[0]["tool_call_id"] == "c1"
 
@@ -4793,21 +3521,16 @@ class TestConcurrentToolExecution:
 
         assert "result_fast" in messages[1]["content"]
 
-
-
     def test_concurrent_handles_tool_error(self, agent):
-
         """If one tool raises, others should still complete."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="web_search", arguments='{}', call_id="c2")
+        tc2 = _mock_tool_call(name="web_search", arguments="{}", call_id="c2")
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
-
-
 
         call_count = [0]
 
@@ -4816,18 +3539,12 @@ class TestConcurrentToolExecution:
             call_count[0] += 1
 
             if call_count[0] == 1:
-
                 raise RuntimeError("boom")
 
             return "success"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         assert len(messages) == 2
 
@@ -4839,49 +3556,44 @@ class TestConcurrentToolExecution:
 
         assert "success" in messages[1]["content"]
 
-
-
     def test_concurrent_interrupt_before_start(self, agent):
-
         """If interrupt is requested before concurrent execution, all tools are skipped."""
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="read_file", arguments='{}', call_id="c2")
+        tc2 = _mock_tool_call(name="read_file", arguments="{}", call_id="c2")
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
-
-
         with patch("run_agent._set_interrupt"):
-
             agent.interrupt()
-
-
 
         agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
 
         assert len(messages) == 2
 
-        assert "cancelled" in messages[0]["content"].lower() or "skipped" in messages[0]["content"].lower()
+        assert (
+            "cancelled" in messages[0]["content"].lower()
+            or "skipped" in messages[0]["content"].lower()
+        )
 
-        assert "cancelled" in messages[1]["content"].lower() or "skipped" in messages[1]["content"].lower()
-
-
+        assert (
+            "cancelled" in messages[1]["content"].lower()
+            or "skipped" in messages[1]["content"].lower()
+        )
 
     def test_concurrent_truncates_large_results(self, agent, tmp_path, monkeypatch):
-
         """Concurrent path should save oversized results to file."""
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
         (tmp_path / ".clawksis").mkdir()
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{}', call_id="c1")
+        tc1 = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
-        tc2 = _mock_tool_call(name="web_search", arguments='{}', call_id="c2")
+        tc2 = _mock_tool_call(name="web_search", arguments="{}", call_id="c2")
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
@@ -4889,61 +3601,43 @@ class TestConcurrentToolExecution:
 
         big_result = "x" * 150_000
 
-
-
         with patch("run_agent.handle_function_call", return_value=big_result):
-
             agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         assert len(messages) == 2
 
         for m in messages:
-
             assert len(m["content"]) < 150_000
 
-            assert ("Truncated" in m["content"] or "<persisted-output>" in m["content"])
-
-
+            assert "Truncated" in m["content"] or "<persisted-output>" in m["content"]
 
     def test_invoke_tool_dispatches_to_handle_function_call(self, agent):
-
         """_invoke_tool should route regular tools through handle_function_call."""
 
         with patch("run_agent.handle_function_call", return_value="result") as mock_hfc:
-
             result = agent._invoke_tool("web_search", {"q": "test"}, "task-1")
 
             mock_hfc.assert_called_once_with(
-
-                "web_search", {"q": "test"}, "task-1",
-
+                "web_search",
+                {"q": "test"},
+                "task-1",
                 tool_call_id=None,
-
                 session_id=agent.session_id,
-
                 turn_id="",
-
                 api_request_id="",
-
                 enabled_tools=list(agent.valid_tool_names),
-
                 skip_pre_tool_call_hook=True,
-
                 enabled_toolsets=agent.enabled_toolsets,
-
                 disabled_toolsets=agent.disabled_toolsets,
-
             )
 
             assert result == "result"
 
-
-
     def test_sequential_tool_callbacks_fire_in_order(self, agent):
 
-        tool_call = _mock_tool_call(name="web_search", arguments='{"query":"hello"}', call_id="c1")
+        tool_call = _mock_tool_call(
+            name="web_search", arguments='{"query":"hello"}', call_id="c1"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tool_call])
 
@@ -4953,29 +3647,39 @@ class TestConcurrentToolExecution:
 
         completes = []
 
-        agent.tool_start_callback = lambda tool_call_id, function_name, function_args: starts.append((tool_call_id, function_name, function_args))
+        agent.tool_start_callback = lambda tool_call_id, function_name, function_args: (
+            starts.append((tool_call_id, function_name, function_args))
+        )
 
-        agent.tool_complete_callback = lambda tool_call_id, function_name, function_args, function_result: completes.append((tool_call_id, function_name, function_args, function_result))
-
-
+        agent.tool_complete_callback = (
+            lambda tool_call_id, function_name, function_args, function_result: (
+                completes.append((
+                    tool_call_id,
+                    function_name,
+                    function_args,
+                    function_result,
+                ))
+            )
+        )
 
         with patch("run_agent.handle_function_call", return_value='{"success": true}'):
-
             agent._execute_tool_calls_sequential(mock_msg, messages, "task-1")
-
-
 
         assert starts == [("c1", "web_search", {"query": "hello"})]
 
-        assert completes == [("c1", "web_search", {"query": "hello"}, '{"success": true}')]
-
-
+        assert completes == [
+            ("c1", "web_search", {"query": "hello"}, '{"success": true}')
+        ]
 
     def test_concurrent_tool_callbacks_fire_for_each_tool(self, agent):
 
-        tc1 = _mock_tool_call(name="web_search", arguments='{"query":"one"}', call_id="c1")
+        tc1 = _mock_tool_call(
+            name="web_search", arguments='{"query":"one"}', call_id="c1"
+        )
 
-        tc2 = _mock_tool_call(name="web_search", arguments='{"query":"two"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="web_search", arguments='{"query":"two"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
@@ -4985,24 +3689,29 @@ class TestConcurrentToolExecution:
 
         completes = []
 
-        agent.tool_start_callback = lambda tool_call_id, function_name, function_args: starts.append((tool_call_id, function_name, function_args))
+        agent.tool_start_callback = lambda tool_call_id, function_name, function_args: (
+            starts.append((tool_call_id, function_name, function_args))
+        )
 
-        agent.tool_complete_callback = lambda tool_call_id, function_name, function_args, function_result: completes.append((tool_call_id, function_name, function_args, function_result))
+        agent.tool_complete_callback = (
+            lambda tool_call_id, function_name, function_args, function_result: (
+                completes.append((
+                    tool_call_id,
+                    function_name,
+                    function_args,
+                    function_result,
+                ))
+            )
+        )
 
-
-
-        with patch("run_agent.handle_function_call", side_effect=['{"id":1}', '{"id":2}']):
-
+        with patch(
+            "run_agent.handle_function_call", side_effect=['{"id":1}', '{"id":2}']
+        ):
             agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
 
-
-
         assert starts == [
-
             ("c1", "web_search", {"query": "one"}),
-
             ("c2", "web_search", {"query": "two"}),
-
         ]
 
         assert len(completes) == 2
@@ -5011,53 +3720,43 @@ class TestConcurrentToolExecution:
 
         assert {entry[3] for entry in completes} == {'{"id":1}', '{"id":2}'}
 
-
-
     def test_invoke_tool_handles_agent_level_tools(self, agent):
-
         """_invoke_tool should handle todo tool directly."""
 
-        with patch("tools.todo_tool.todo_tool", return_value='{"ok":true}') as mock_todo:
-
+        with patch(
+            "tools.todo_tool.todo_tool", return_value='{"ok":true}'
+        ) as mock_todo:
             result = agent._invoke_tool("todo", {"todos": []}, "task-1")
 
             mock_todo.assert_called_once()
 
         assert "ok" in result
 
-
-
-    def test_invoke_tool_agent_level_tool_emits_terminal_post_tool_hook(self, agent, monkeypatch):
-
+    def test_invoke_tool_agent_level_tool_emits_terminal_post_tool_hook(
+        self, agent, monkeypatch
+    ):
         """Agent-owned tool paths should close observer tool spans."""
 
         hook_calls = []
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: None,
-
         )
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.invoke_hook",
-
             lambda hook_name, **kwargs: hook_calls.append((hook_name, kwargs)) or [],
-
         )
 
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
 
-
-
-        with patch("tools.todo_tool.todo_tool", return_value='{"ok":true}') as mock_todo:
-
-            result = agent._invoke_tool("todo", {"todos": []}, "task-1", tool_call_id="todo-1")
-
-
+        with patch(
+            "tools.todo_tool.todo_tool", return_value='{"ok":true}'
+        ) as mock_todo:
+            result = agent._invoke_tool(
+                "todo", {"todos": []}, "task-1", tool_call_id="todo-1"
+            )
 
         mock_todo.assert_called_once()
 
@@ -5075,99 +3774,76 @@ class TestConcurrentToolExecution:
 
         assert isinstance(post_call[1]["duration_ms"], int)
 
-
-
-    def test_invoke_tool_blocked_returns_error_and_skips_execution(self, agent, monkeypatch):
-
+    def test_invoke_tool_blocked_returns_error_and_skips_execution(
+        self, agent, monkeypatch
+    ):
         """_invoke_tool should return error JSON when a plugin blocks the tool."""
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked by test policy",
-
         )
 
-        with patch("tools.todo_tool.todo_tool", side_effect=AssertionError("should not run")) as mock_todo:
-
+        with patch(
+            "tools.todo_tool.todo_tool", side_effect=AssertionError("should not run")
+        ) as mock_todo:
             result = agent._invoke_tool("todo", {"todos": []}, "task-1")
-
-
 
         assert json.loads(result) == {"error": "Blocked by test policy"}
 
         mock_todo.assert_not_called()
 
-
-
     def test_invoke_tool_blocked_skips_handle_function_call(self, agent, monkeypatch):
-
         """Blocked registry tools should not reach handle_function_call."""
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked",
-
         )
 
-        with patch("run_agent.handle_function_call", side_effect=AssertionError("should not run")):
-
+        with patch(
+            "run_agent.handle_function_call",
+            side_effect=AssertionError("should not run"),
+        ):
             result = agent._invoke_tool("web_search", {"q": "test"}, "task-1")
-
-
 
         assert json.loads(result) == {"error": "Blocked"}
 
-
-
-    def test_sequential_blocked_tool_skips_checkpoints_and_callbacks(self, agent, monkeypatch):
-
+    def test_sequential_blocked_tool_skips_checkpoints_and_callbacks(
+        self, agent, monkeypatch
+    ):
         """Sequential path: blocked tool should not trigger checkpoints or start callbacks."""
 
-        tool_call = _mock_tool_call(name="write_file",
-
-                                    arguments='{"path":"test.txt","content":"hello"}',
-
-                                    call_id="c1")
+        tool_call = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"test.txt","content":"hello"}',
+            call_id="c1",
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tool_call])
 
         messages = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked by policy",
-
         )
 
         agent._checkpoint_mgr.enabled = True
 
         agent._checkpoint_mgr.ensure_checkpoint = MagicMock(
-
             side_effect=AssertionError("checkpoint should not run")
-
         )
-
-
 
         starts = []
 
         agent.tool_start_callback = lambda *a: starts.append(a)
 
-
-
-        with patch("run_agent.handle_function_call", side_effect=AssertionError("should not run")):
-
+        with patch(
+            "run_agent.handle_function_call",
+            side_effect=AssertionError("should not run"),
+        ):
             agent._execute_tool_calls_sequential(mock_msg, messages, "task-1")
-
-
 
         agent._checkpoint_mgr.ensure_checkpoint.assert_not_called()
 
@@ -5179,17 +3855,16 @@ class TestConcurrentToolExecution:
 
         assert json.loads(messages[0]["content"]) == {"error": "Blocked by policy"}
 
-
-
-    def test_sequential_blocked_tool_emits_terminal_post_tool_hook(self, agent, monkeypatch):
-
+    def test_sequential_blocked_tool_emits_terminal_post_tool_hook(
+        self, agent, monkeypatch
+    ):
         """Blocked pre_tool_call decisions still terminate observer tool spans."""
 
-        tool_call = _mock_tool_call(name="write_file",
-
-                                    arguments='{"path":"test.txt","content":"hello"}',
-
-                                    call_id="c1")
+        tool_call = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"test.txt","content":"hello"}',
+            call_id="c1",
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tool_call])
 
@@ -5197,33 +3872,23 @@ class TestConcurrentToolExecution:
 
         hook_calls = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked by policy",
-
         )
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.invoke_hook",
-
             lambda hook_name, **kwargs: hook_calls.append((hook_name, kwargs)) or [],
-
         )
 
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
 
-
-
-        with patch("run_agent.handle_function_call", side_effect=AssertionError("should not run")):
-
+        with patch(
+            "run_agent.handle_function_call",
+            side_effect=AssertionError("should not run"),
+        ):
             agent._execute_tool_calls_sequential(mock_msg, messages, "task-1")
-
-
 
         post_call = next(call for call in hook_calls if call[0] == "post_tool_call")
 
@@ -5237,13 +3902,14 @@ class TestConcurrentToolExecution:
 
         assert post_call[1]["error_message"] == "Blocked by policy"
 
-
-
-    def test_sequential_agent_level_tool_emits_terminal_post_tool_hook(self, agent, monkeypatch):
-
+    def test_sequential_agent_level_tool_emits_terminal_post_tool_hook(
+        self, agent, monkeypatch
+    ):
         """Sequential built-in tool paths should also close observer tool spans."""
 
-        tool_call = _mock_tool_call(name="todo", arguments='{"todos":[]}', call_id="todo-1")
+        tool_call = _mock_tool_call(
+            name="todo", arguments='{"todos":[]}', call_id="todo-1"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tool_call])
 
@@ -5251,33 +3917,22 @@ class TestConcurrentToolExecution:
 
         hook_calls = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: None,
-
         )
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.invoke_hook",
-
             lambda hook_name, **kwargs: hook_calls.append((hook_name, kwargs)) or [],
-
         )
 
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
 
-
-
-        with patch("tools.todo_tool.todo_tool", return_value='{"ok":true}') as mock_todo:
-
+        with patch(
+            "tools.todo_tool.todo_tool", return_value='{"ok":true}'
+        ) as mock_todo:
             agent._execute_tool_calls_sequential(mock_msg, messages, "task-1")
-
-
 
         mock_todo.assert_called_once()
 
@@ -5291,253 +3946,181 @@ class TestConcurrentToolExecution:
 
         assert post_call[1]["status"] == "ok"
 
-
-
-    def test_agent_runtime_post_hook_ownership_predicate_covers_agent_tools(self, agent):
-
+    def test_agent_runtime_post_hook_ownership_predicate_covers_agent_tools(
+        self, agent
+    ):
         """Sequential and concurrent agent-level paths share post-hook ownership."""
 
         from agent.agent_runtime_helpers import agent_runtime_owns_post_tool_hook
 
-
-
-        for tool_name in ("todo", "session_search", "memory", "clarify", "delegate_task"):
-
+        for tool_name in (
+            "todo",
+            "session_search",
+            "memory",
+            "clarify",
+            "delegate_task",
+        ):
             assert agent_runtime_owns_post_tool_hook(agent, tool_name) is True
-
-
 
         agent._context_engine_tool_names = {"context_query"}
 
         assert agent_runtime_owns_post_tool_hook(agent, "context_query") is True
 
-
-
-        agent._memory_manager = SimpleNamespace(has_tool=lambda name: name == "memory_extra")
+        agent._memory_manager = SimpleNamespace(
+            has_tool=lambda name: name == "memory_extra"
+        )
 
         assert agent_runtime_owns_post_tool_hook(agent, "memory_extra") is True
 
         assert agent_runtime_owns_post_tool_hook(agent, "web_search") is False
 
-
-
     def test_blocked_memory_tool_does_not_reset_counter(self, agent, monkeypatch):
-
         """Blocked memory tool should not reset the nudge counter."""
 
         agent._turns_since_memory = 5
 
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked",
-
         )
 
-        with patch("tools.memory_tool.memory_tool", side_effect=AssertionError("should not run")):
-
+        with patch(
+            "tools.memory_tool.memory_tool",
+            side_effect=AssertionError("should not run"),
+        ):
             result = agent._invoke_tool(
-
-                "memory", {"action": "add", "target": "memory", "content": "x"}, "task-1",
-
+                "memory",
+                {"action": "add", "target": "memory", "content": "x"},
+                "task-1",
             )
-
-
 
         assert json.loads(result) == {"error": "Blocked"}
 
         assert agent._turns_since_memory == 5
 
-
-
     def test_concurrent_blocked_write_skips_checkpoint(self, agent, monkeypatch):
-
         """Concurrent path: blocked write_file should not trigger checkpoint."""
 
-        tc1 = _mock_tool_call(name="write_file",
+        tc1 = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"test.txt","content":"hello"}',
+            call_id="c1",
+        )
 
-                              arguments='{"path":"test.txt","content":"hello"}',
-
-                              call_id="c1")
-
-        tc2 = _mock_tool_call(name="read_file",
-
-                              arguments='{"path":"other.py"}',
-
-                              call_id="c2")
+        tc2 = _mock_tool_call(
+            name="read_file", arguments='{"path":"other.py"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked" if args[0] == "write_file" else None,
-
         )
 
-
-
         agent._checkpoint_mgr.enabled = True
-
-
 
         def fake_handle(name, args, task_id, **kwargs):
 
             return f"result_{name}"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             with patch.object(agent._checkpoint_mgr, "ensure_checkpoint") as cp_mock:
-
                 agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
 
-
-
         cp_mock.assert_not_called()
-
-
 
     def test_concurrent_blocked_patch_skips_checkpoint(self, agent, monkeypatch):
-
         """Concurrent path: blocked patch should not trigger checkpoint."""
 
-        tc1 = _mock_tool_call(name="patch",
+        tc1 = _mock_tool_call(
+            name="patch", arguments='{"path":"f.py","old":"a","new":"b"}', call_id="c1"
+        )
 
-                              arguments='{"path":"f.py","old":"a","new":"b"}',
-
-                              call_id="c1")
-
-        tc2 = _mock_tool_call(name="read_file",
-
-                              arguments='{"path":"other.py"}',
-
-                              call_id="c2")
+        tc2 = _mock_tool_call(
+            name="read_file", arguments='{"path":"other.py"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked" if args[0] == "patch" else None,
-
         )
 
-
-
         agent._checkpoint_mgr.enabled = True
-
-
 
         def fake_handle(name, args, task_id, **kwargs):
 
             return f"result_{name}"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             with patch.object(agent._checkpoint_mgr, "ensure_checkpoint") as cp_mock:
-
                 agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
 
-
-
         cp_mock.assert_not_called()
 
-
-
     def test_concurrent_blocked_terminal_skips_checkpoint(self, agent, monkeypatch):
-
         """Concurrent path: blocked terminal should not trigger checkpoint."""
 
-        tc1 = _mock_tool_call(name="terminal",
+        tc1 = _mock_tool_call(
+            name="terminal", arguments='{"command":"rm -rf /tmp/foo"}', call_id="c1"
+        )
 
-                              arguments='{"command":"rm -rf /tmp/foo"}',
-
-                              call_id="c1")
-
-        tc2 = _mock_tool_call(name="read_file",
-
-                              arguments='{"path":"other.py"}',
-
-                              call_id="c2")
+        tc2 = _mock_tool_call(
+            name="read_file", arguments='{"path":"other.py"}', call_id="c2"
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             lambda *args, **kwargs: "Blocked" if args[0] == "terminal" else None,
-
         )
 
-
-
         agent._checkpoint_mgr.enabled = True
-
-
 
         def fake_handle(name, args, task_id, **kwargs):
 
             return f"result_{name}"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             with patch.object(agent._checkpoint_mgr, "ensure_checkpoint") as cp_mock:
-
-                with patch("agent.tool_executor._is_destructive_command", return_value=True):
-
+                with patch(
+                    "agent.tool_executor._is_destructive_command", return_value=True
+                ):
                     agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         cp_mock.assert_not_called()
 
-
-
-    def test_concurrent_blocked_write_does_not_steal_slot_from_allowed_write(self, agent, monkeypatch):
-
+    def test_concurrent_blocked_write_does_not_steal_slot_from_allowed_write(
+        self, agent, monkeypatch
+    ):
         """When write_file is blocked, its dedup slot must not be consumed,
 
         so a subsequent allowed write_file for the same path still checkpoints."""
 
-        tc1 = _mock_tool_call(name="write_file",
+        tc1 = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"dup.txt","content":"blocked"}',
+            call_id="c1",
+        )
 
-                              arguments='{"path":"dup.txt","content":"blocked"}',
-
-                              call_id="c1")
-
-        tc2 = _mock_tool_call(name="write_file",
-
-                              arguments='{"path":"dup.txt","content":"allowed"}',
-
-                              call_id="c2")
+        tc2 = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"dup.txt","content":"allowed"}',
+            call_id="c2",
+        )
 
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc1, tc2])
 
         messages = []
-
-
 
         call_count = {"n": 0}
 
@@ -5547,46 +4130,27 @@ class TestConcurrentToolExecution:
 
             return "Blocked" if call_count["n"] == 1 else None
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.plugins.get_pre_tool_call_block_message",
-
             block_first_only,
-
         )
 
-
-
         agent._checkpoint_mgr.enabled = True
-
-
 
         def fake_handle(name, args, task_id, **kwargs):
 
             return f"result_{name}"
 
-
-
         with patch("run_agent.handle_function_call", side_effect=fake_handle):
-
             with patch.object(agent._checkpoint_mgr, "ensure_checkpoint") as cp_mock:
-
                 agent._execute_tool_calls_concurrent(mock_msg, messages, "task-1")
-
-
 
         # Second (allowed) write must checkpoint even though first was blocked.
 
         cp_mock.assert_called_once()
 
 
-
-
-
 class TestAgentRuntimePostHookOwnershipSync:
-
     """Pin the inline-dispatch tool list against the post-hook ownership set.
 
 
@@ -5615,68 +4179,54 @@ class TestAgentRuntimePostHookOwnershipSync:
 
     """
 
-
-
     _DISPATCH_ANCHOR_LEFT = "_block_msg"
 
-
-
     @classmethod
-
     def _is_dispatch_anchor(cls, test_node) -> bool:
 
         # Looking for `_block_msg is not None`.
 
         if not isinstance(test_node, ast.Compare):
-
             return False
 
-        if not (isinstance(test_node.left, ast.Name) and test_node.left.id == cls._DISPATCH_ANCHOR_LEFT):
-
+        if not (
+            isinstance(test_node.left, ast.Name)
+            and test_node.left.id == cls._DISPATCH_ANCHOR_LEFT
+        ):
             return False
 
         if not (len(test_node.ops) == 1 and isinstance(test_node.ops[0], ast.IsNot)):
-
             return False
 
         comparator = test_node.comparators[0]
 
         return isinstance(comparator, ast.Constant) and comparator.value is None
 
-
-
     @staticmethod
-
     def _function_name_literal(test_node) -> str | None:
-
         """Return the string literal X for `function_name == "X"`, else None."""
 
         if not isinstance(test_node, ast.Compare):
-
             return None
 
-        if not (isinstance(test_node.left, ast.Name) and test_node.left.id == "function_name"):
-
+        if not (
+            isinstance(test_node.left, ast.Name)
+            and test_node.left.id == "function_name"
+        ):
             return None
 
         if not (len(test_node.ops) == 1 and isinstance(test_node.ops[0], ast.Eq)):
-
             return None
 
         comparator = test_node.comparators[0]
 
         if isinstance(comparator, ast.Constant) and isinstance(comparator.value, str):
-
             return comparator.value
 
         return None
 
-
-
     @classmethod
-
     def _extract_dispatch_chain_names(cls, func) -> set[str]:
-
         """Find the if/elif chain anchored on `_block_msg is not None`, return its
 
         `function_name == "..."` literals."""
@@ -5688,43 +4238,36 @@ class TestAgentRuntimePostHookOwnershipSync:
         names: set[str] = set()
 
         for node in ast.walk(tree):
-
             if not isinstance(node, ast.If):
-
                 continue
 
             if not cls._is_dispatch_anchor(node.test):
-
                 continue
 
             current = node
 
             while current is not None:
-
                 literal = cls._function_name_literal(current.test)
 
                 if literal is not None:
-
                     names.add(literal)
 
-                if current.orelse and len(current.orelse) == 1 and isinstance(current.orelse[0], ast.If):
-
+                if (
+                    current.orelse
+                    and len(current.orelse) == 1
+                    and isinstance(current.orelse[0], ast.If)
+                ):
                     current = current.orelse[0]
 
                 else:
-
                     current = None
 
             break
 
         return names
 
-
-
     @classmethod
-
     def _extract_invoke_tool_names(cls, func) -> set[str]:
-
         """invoke_tool uses a flat if/elif on function_name directly; walk every
 
         Compare in the function body (no other static `function_name == "..."`
@@ -5738,16 +4281,12 @@ class TestAgentRuntimePostHookOwnershipSync:
         names: set[str] = set()
 
         for node in ast.walk(tree):
-
             literal = cls._function_name_literal(node)
 
             if literal is not None:
-
                 names.add(literal)
 
         return names
-
-
 
     def test_frozenset_matches_inline_dispatch_chain(self):
 
@@ -5755,50 +4294,29 @@ class TestAgentRuntimePostHookOwnershipSync:
 
         from agent.agent_runtime_helpers import AGENT_RUNTIME_POST_HOOK_TOOL_NAMES
 
-
-
         inline_names = self._extract_dispatch_chain_names(
-
             tool_executor.execute_tool_calls_sequential
-
         )
 
         assert inline_names, (
-
             "Could not find the dispatch chain (anchored on "
-
             "`_block_msg is not None`) in execute_tool_calls_sequential. "
-
             "If the dispatcher was refactored, update _DISPATCH_ANCHOR_LEFT "
-
             "and the walker in this test."
-
         )
 
         assert inline_names == set(AGENT_RUNTIME_POST_HOOK_TOOL_NAMES), (
-
             "Inline dispatch chain in "
-
             "agent/tool_executor.py:execute_tool_calls_sequential has drifted "
-
             "from AGENT_RUNTIME_POST_HOOK_TOOL_NAMES in "
-
             "agent/agent_runtime_helpers.py.\n"
-
             f"  Inline branches:     {sorted(inline_names)}\n"
-
             f"  Ownership frozenset: {sorted(AGENT_RUNTIME_POST_HOOK_TOOL_NAMES)}\n"
-
             "Update both together so post_tool_call fires exactly once per "
-
             "tool execution."
-
         )
 
-
-
     def test_invoke_tool_dispatch_matches_inline_dispatch_chain(self):
-
         """invoke_tool (concurrent path) and the inline dispatcher (sequential
 
         path) must cover the same set of agent-runtime tools — otherwise
@@ -5809,45 +4327,26 @@ class TestAgentRuntimePostHookOwnershipSync:
 
         from agent import agent_runtime_helpers, tool_executor
 
-
-
         invoke_tool_names = self._extract_invoke_tool_names(
-
             agent_runtime_helpers.invoke_tool
-
         )
 
         inline_names = self._extract_dispatch_chain_names(
-
             tool_executor.execute_tool_calls_sequential
-
         )
 
         assert invoke_tool_names == inline_names, (
-
-            "Static `function_name == \"...\"` branches diverged between "
-
+            'Static `function_name == "..."` branches diverged between '
             "agent/agent_runtime_helpers.py:invoke_tool (concurrent path) "
-
             "and agent/tool_executor.py:execute_tool_calls_sequential "
-
             "(sequential path).\n"
-
             f"  invoke_tool:                   {sorted(invoke_tool_names)}\n"
-
             f"  execute_tool_calls_sequential: {sorted(inline_names)}"
-
         )
 
 
-
-
-
 class TestPathsOverlap:
-
     """Unit tests for the _paths_overlap helper."""
-
-
 
     def test_same_path_overlaps(self):
 
@@ -5855,15 +4354,11 @@ class TestPathsOverlap:
 
         assert _paths_overlap(Path("src/a.py"), Path("src/a.py"))
 
-
-
     def test_siblings_do_not_overlap(self):
 
         from run_agent import _paths_overlap
 
         assert not _paths_overlap(Path("src/a.py"), Path("src/b.py"))
-
-
 
     def test_parent_child_overlap(self):
 
@@ -5871,15 +4366,11 @@ class TestPathsOverlap:
 
         assert _paths_overlap(Path("src"), Path("src/sub/a.py"))
 
-
-
     def test_different_roots_do_not_overlap(self):
 
         from run_agent import _paths_overlap
 
         assert not _paths_overlap(Path("src/a.py"), Path("other/a.py"))
-
-
 
     def test_nested_vs_flat_do_not_overlap(self):
 
@@ -5887,15 +4378,11 @@ class TestPathsOverlap:
 
         assert not _paths_overlap(Path("src/sub/a.py"), Path("src/a.py"))
 
-
-
     def test_empty_paths_do_not_overlap(self):
 
         from run_agent import _paths_overlap
 
         assert not _paths_overlap(Path(""), Path(""))
-
-
 
     def test_one_empty_path_does_not_overlap(self):
 
@@ -5906,95 +4393,79 @@ class TestPathsOverlap:
         assert not _paths_overlap(Path("src/a.py"), Path(""))
 
 
-
-
-
 class TestParallelScopePathNormalization:
-
-    def test_extract_parallel_scope_path_normalizes_relative_to_cwd(self, tmp_path, monkeypatch):
+    def test_extract_parallel_scope_path_normalizes_relative_to_cwd(
+        self, tmp_path, monkeypatch
+    ):
 
         from run_agent import _extract_parallel_scope_path
 
-
-
         monkeypatch.chdir(tmp_path)
-
-
 
         scoped = _extract_parallel_scope_path("write_file", {"path": "./notes.txt"})
 
-
-
         assert scoped == tmp_path / "notes.txt"
 
-
-
-    def test_extract_parallel_scope_path_treats_relative_and_absolute_same_file_as_same_scope(self, tmp_path, monkeypatch):
+    def test_extract_parallel_scope_path_treats_relative_and_absolute_same_file_as_same_scope(
+        self, tmp_path, monkeypatch
+    ):
 
         from run_agent import _extract_parallel_scope_path, _paths_overlap
-
-
 
         monkeypatch.chdir(tmp_path)
 
         abs_path = tmp_path / "notes.txt"
 
-
-
         rel_scoped = _extract_parallel_scope_path("write_file", {"path": "notes.txt"})
 
         abs_scoped = _extract_parallel_scope_path("write_file", {"path": str(abs_path)})
-
-
 
         assert rel_scoped == abs_scoped
 
         assert _paths_overlap(rel_scoped, abs_scoped)
 
-
-
-    def test_should_parallelize_tool_batch_rejects_same_file_with_mixed_path_spellings(self, tmp_path, monkeypatch):
+    def test_should_parallelize_tool_batch_rejects_same_file_with_mixed_path_spellings(
+        self, tmp_path, monkeypatch
+    ):
 
         from run_agent import _should_parallelize_tool_batch
 
-
-
         monkeypatch.chdir(tmp_path)
 
-        tc1 = _mock_tool_call(name="write_file", arguments='{"path":"notes.txt","content":"one"}', call_id="c1")
+        tc1 = _mock_tool_call(
+            name="write_file",
+            arguments='{"path":"notes.txt","content":"one"}',
+            call_id="c1",
+        )
 
-        tc2 = _mock_tool_call(name="write_file", arguments=f'{{"path":"{tmp_path / "notes.txt"}","content":"two"}}', call_id="c2")
-
-
+        tc2 = _mock_tool_call(
+            name="write_file",
+            arguments=f'{{"path":"{tmp_path / "notes.txt"}","content":"two"}}',
+            call_id="c2",
+        )
 
         assert not _should_parallelize_tool_batch([tc1, tc2])
 
 
-
-
-
 class TestMcpParallelToolBatch:
-
     """Integration test: _should_parallelize_tool_batch respects MCP parallel flag."""
 
-
-
     def test_mcp_tools_default_sequential(self):
-
         """MCP tools without supports_parallel_tool_calls are sequential."""
 
         from run_agent import _should_parallelize_tool_batch
 
-        tc1 = _mock_tool_call(name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c1")
+        tc1 = _mock_tool_call(
+            name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c1"
+        )
 
-        tc2 = _mock_tool_call(name="mcp_github_search_code", arguments='{"q":"test"}', call_id="c2")
+        tc2 = _mock_tool_call(
+            name="mcp_github_search_code", arguments='{"q":"test"}', call_id="c2"
+        )
 
         assert not _should_parallelize_tool_batch([tc1, tc2])
 
-
-
     def test_mcp_tools_parallel_when_server_opted_in(self):
-
         """MCP tools from a parallel-safe server can run concurrently."""
 
         from run_agent import _should_parallelize_tool_batch
@@ -6002,7 +4473,6 @@ class TestMcpParallelToolBatch:
         from tools.mcp_tool import _mcp_tool_server_names, _parallel_safe_servers, _lock
 
         with _lock:
-
             _parallel_safe_servers.add("github")
 
             _mcp_tool_server_names["mcp_github_list_repos"] = "github"
@@ -6010,27 +4480,25 @@ class TestMcpParallelToolBatch:
             _mcp_tool_server_names["mcp_github_search_code"] = "github"
 
         try:
+            tc1 = _mock_tool_call(
+                name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c1"
+            )
 
-            tc1 = _mock_tool_call(name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c1")
-
-            tc2 = _mock_tool_call(name="mcp_github_search_code", arguments='{"q":"test"}', call_id="c2")
+            tc2 = _mock_tool_call(
+                name="mcp_github_search_code", arguments='{"q":"test"}', call_id="c2"
+            )
 
             assert _should_parallelize_tool_batch([tc1, tc2])
 
         finally:
-
             with _lock:
-
                 _parallel_safe_servers.discard("github")
 
                 _mcp_tool_server_names.pop("mcp_github_list_repos", None)
 
                 _mcp_tool_server_names.pop("mcp_github_search_code", None)
 
-
-
     def test_mixed_mcp_and_builtin_parallel(self):
-
         """MCP parallel tools mixed with built-in parallel-safe tools."""
 
         from run_agent import _should_parallelize_tool_batch
@@ -6038,31 +4506,28 @@ class TestMcpParallelToolBatch:
         from tools.mcp_tool import _mcp_tool_server_names, _parallel_safe_servers, _lock
 
         with _lock:
-
             _parallel_safe_servers.add("docs")
 
             _mcp_tool_server_names["mcp_docs_search"] = "docs"
 
         try:
+            tc1 = _mock_tool_call(
+                name="mcp_docs_search", arguments='{"query":"api"}', call_id="c1"
+            )
 
-            tc1 = _mock_tool_call(name="mcp_docs_search", arguments='{"query":"api"}', call_id="c1")
-
-            tc2 = _mock_tool_call(name="web_search", arguments='{"query":"test"}', call_id="c2")
+            tc2 = _mock_tool_call(
+                name="web_search", arguments='{"query":"test"}', call_id="c2"
+            )
 
             assert _should_parallelize_tool_batch([tc1, tc2])
 
         finally:
-
             with _lock:
-
                 _parallel_safe_servers.discard("docs")
 
                 _mcp_tool_server_names.pop("mcp_docs_search", None)
 
-
-
     def test_mixed_parallel_and_serial_mcp_servers(self):
-
         """One parallel MCP server + one non-parallel MCP server = sequential."""
 
         from run_agent import _should_parallelize_tool_batch
@@ -6070,7 +4535,6 @@ class TestMcpParallelToolBatch:
         from tools.mcp_tool import _mcp_tool_server_names, _parallel_safe_servers, _lock
 
         with _lock:
-
             _parallel_safe_servers.add("docs")
 
             # "github" is NOT in _parallel_safe_servers
@@ -6080,17 +4544,18 @@ class TestMcpParallelToolBatch:
             _mcp_tool_server_names["mcp_github_list_repos"] = "github"
 
         try:
+            tc1 = _mock_tool_call(
+                name="mcp_docs_search", arguments='{"query":"api"}', call_id="c1"
+            )
 
-            tc1 = _mock_tool_call(name="mcp_docs_search", arguments='{"query":"api"}', call_id="c1")
-
-            tc2 = _mock_tool_call(name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c2")
+            tc2 = _mock_tool_call(
+                name="mcp_github_list_repos", arguments='{"org":"openai"}', call_id="c2"
+            )
 
             assert not _should_parallelize_tool_batch([tc1, tc2])
 
         finally:
-
             with _lock:
-
                 _parallel_safe_servers.discard("docs")
 
                 _mcp_tool_server_names.pop("mcp_docs_search", None)
@@ -6098,11 +4563,7 @@ class TestMcpParallelToolBatch:
                 _mcp_tool_server_names.pop("mcp_github_list_repos", None)
 
 
-
-
-
 class TestHandleMaxIterations:
-
     def test_returns_summary(self, agent):
 
         resp = _mock_response(content="Here is a summary of what I did.")
@@ -6121,8 +4582,6 @@ class TestHandleMaxIterations:
 
         assert "summary" in result.lower()
 
-
-
     def test_api_failure_returns_error(self, agent):
 
         agent.client.chat.completions.create.side_effect = Exception("API down")
@@ -6139,8 +4598,6 @@ class TestHandleMaxIterations:
 
         assert "API down" in result
 
-
-
     def test_summary_skips_reasoning_for_unsupported_openrouter_model(self, agent):
 
         agent.base_url = "https://openrouter.ai/api/v1"
@@ -6155,11 +4612,7 @@ class TestHandleMaxIterations:
 
         messages = [{"role": "user", "content": "do stuff"}]
 
-
-
         result = agent._handle_max_iterations(messages, 60)
-
-
 
         assert result == "Summary"
 
@@ -6167,10 +4620,7 @@ class TestHandleMaxIterations:
 
         assert "reasoning" not in kwargs.get("extra_body", {})
 
-
-
     def test_summary_request_removes_orphan_tool_result(self, agent):
-
         """Regression: max-iterations summary request must NOT contain
 
         orphan tool results (tool_call_id with no matching assistant tool_call)."""
@@ -6182,26 +4632,31 @@ class TestHandleMaxIterations:
         agent._cached_system_prompt = "You are helpful."
 
         messages = [
-
             {"role": "user", "content": "Analyze finance-data-router"},
-
             {"role": "assistant", "content": "[Session Arc Summary] ..."},
-
-            {"role": "tool", "tool_call_id": "call_cfedFhJjGmu1RvRc1OUC38j8", "content": "file content here"},
-
-            {"role": "assistant", "tool_calls": [{"id": "call_8fXBXsT592Vpvm7wnW4obPEu", "function": {"name": "patch", "arguments": "{}"}}]},
-
-            {"role": "tool", "tool_call_id": "call_8fXBXsT592Vpvm7wnW4obPEu", "content": "patch result"},
-
+            {
+                "role": "tool",
+                "tool_call_id": "call_cfedFhJjGmu1RvRc1OUC38j8",
+                "content": "file content here",
+            },
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_8fXBXsT592Vpvm7wnW4obPEu",
+                        "function": {"name": "patch", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_8fXBXsT592Vpvm7wnW4obPEu",
+                "content": "patch result",
+            },
             {"role": "assistant", "content": "Done."},
-
         ]
 
-
-
         result = agent._handle_max_iterations(messages, 120)
-
-
 
         assert result == "Summary of work done."
 
@@ -6210,19 +4665,15 @@ class TestHandleMaxIterations:
         sent_msgs = kwargs.get("messages", [])
 
         orphan_ids = [
-
-            m.get("tool_call_id") for m in sent_msgs
-
-            if m.get("role") == "tool" and m.get("tool_call_id") == "call_cfedFhJjGmu1RvRc1OUC38j8"
-
+            m.get("tool_call_id")
+            for m in sent_msgs
+            if m.get("role") == "tool"
+            and m.get("tool_call_id") == "call_cfedFhJjGmu1RvRc1OUC38j8"
         ]
 
         assert len(orphan_ids) == 0, f"Orphan tool result still present: {orphan_ids}"
 
-
-
     def test_summary_request_inserts_stub_for_missing_tool_result(self, agent):
-
         """If an assistant tool_call has no matching tool result in the
 
         summary request, a stub must be inserted to satisfy the API contract."""
@@ -6234,20 +4685,20 @@ class TestHandleMaxIterations:
         agent._cached_system_prompt = "You are helpful."
 
         messages = [
-
             {"role": "user", "content": "do stuff"},
-
-            {"role": "assistant", "tool_calls": [{"id": "call_no_result", "function": {"name": "terminal", "arguments": "{}"}}]},
-
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_no_result",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    }
+                ],
+            },
             {"role": "assistant", "content": "Continuing..."},
-
         ]
 
-
-
         result = agent._handle_max_iterations(messages, 60)
-
-
 
         assert result == "Summary"
 
@@ -6256,19 +4707,14 @@ class TestHandleMaxIterations:
         sent_msgs = kwargs.get("messages", [])
 
         stub_ids = [
-
-            m.get("tool_call_id") for m in sent_msgs
-
+            m.get("tool_call_id")
+            for m in sent_msgs
             if m.get("role") == "tool" and m.get("tool_call_id") == "call_no_result"
-
         ]
 
         assert len(stub_ids) >= 1, f"No stub result for assistant tool_call: {stub_ids}"
 
-
-
     def test_summary_strips_strict_schema_foreign_fields(self, agent):
-
         """Regression: the max-iterations summary request must NOT carry
 
         Chat-Completions-schema-foreign keys — tool_name (SQLite FTS
@@ -6283,42 +4729,46 @@ class TestHandleMaxIterations:
 
         them on the main loop; this hand-built summary path must mirror it."""
 
-        agent.client.chat.completions.create.return_value = _mock_response(content="Summary")
+        agent.client.chat.completions.create.return_value = _mock_response(
+            content="Summary"
+        )
 
         agent._cached_system_prompt = "You are helpful."
 
         messages = [
-
             {"role": "user", "content": "do stuff"},
-
             {
-
                 "role": "assistant",
-
-                "tool_calls": [{"id": "call_1", "function": {"name": "execute_code", "arguments": "{}"}}],
-
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "function": {"name": "execute_code", "arguments": "{}"},
+                    }
+                ],
                 "codex_reasoning_items": [{"id": "rs_1"}],
-
             },
-
-            {"role": "tool", "tool_call_id": "call_1", "content": "result", "tool_name": "execute_code"},
-
-            {"role": "assistant", "content": "Done.", "_empty_recovery_synthetic": True},
-
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "result",
+                "tool_name": "execute_code",
+            },
+            {
+                "role": "assistant",
+                "content": "Done.",
+                "_empty_recovery_synthetic": True,
+            },
         ]
-
-
 
         result = agent._handle_max_iterations(messages, 60)
 
-
-
         assert result == "Summary"
 
-        sent_msgs = agent.client.chat.completions.create.call_args.kwargs.get("messages", [])
+        sent_msgs = agent.client.chat.completions.create.call_args.kwargs.get(
+            "messages", []
+        )
 
         for m in sent_msgs:
-
             assert "tool_name" not in m, m
 
             assert "codex_reasoning_items" not in m, m
@@ -6333,8 +4783,6 @@ class TestHandleMaxIterations:
 
         assert messages[1]["codex_reasoning_items"] == [{"id": "rs_1"}]
 
-
-
     def test_summary_omits_provider_preferences_for_non_openrouter(self, agent):
 
         agent.base_url = "https://api.openai.com/v1"
@@ -6345,23 +4793,21 @@ class TestHandleMaxIterations:
 
         agent.providers_allowed = ["Anthropic"]
 
-        agent.client.chat.completions.create.return_value = _mock_response(content="Summary")
+        agent.client.chat.completions.create.return_value = _mock_response(
+            content="Summary"
+        )
 
         agent._cached_system_prompt = "You are helpful."
 
-
-
-        result = agent._handle_max_iterations([{"role": "user", "content": "do stuff"}], 60)
-
-
+        result = agent._handle_max_iterations(
+            [{"role": "user", "content": "do stuff"}], 60
+        )
 
         assert result == "Summary"
 
         kwargs = agent.client.chat.completions.create.call_args.kwargs
 
         assert "provider" not in kwargs.get("extra_body", {})
-
-
 
     def test_summary_keeps_provider_preferences_for_openrouter(self, agent):
 
@@ -6373,23 +4819,21 @@ class TestHandleMaxIterations:
 
         agent.providers_allowed = ["Anthropic"]
 
-        agent.client.chat.completions.create.return_value = _mock_response(content="Summary")
+        agent.client.chat.completions.create.return_value = _mock_response(
+            content="Summary"
+        )
 
         agent._cached_system_prompt = "You are helpful."
 
-
-
-        result = agent._handle_max_iterations([{"role": "user", "content": "do stuff"}], 60)
-
-
+        result = agent._handle_max_iterations(
+            [{"role": "user", "content": "do stuff"}], 60
+        )
 
         assert result == "Summary"
 
         kwargs = agent.client.chat.completions.create.call_args.kwargs
 
         assert kwargs["extra_body"]["provider"]["only"] == ["Anthropic"]
-
-
 
     def test_codex_summary_sanitizes_orphan_tool_results(self, agent):
 
@@ -6409,126 +4853,72 @@ class TestHandleMaxIterations:
 
         captured = {}
 
-
-
         def fake_run_codex_stream(kwargs):
 
             captured.update(kwargs)
 
             return SimpleNamespace(
-
                 status="completed",
-
                 output=[
-
                     SimpleNamespace(
-
                         type="message",
-
                         status="completed",
-
                         content=[SimpleNamespace(type="output_text", text="Summary")],
-
                     )
-
                 ],
-
             )
 
-
-
         messages = [
-
             {"role": "user", "content": "do stuff"},
-
             {
-
                 "role": "tool",
-
                 "tool_call_id": "call_orphan",
-
                 "content": "orphaned result from compressed history",
-
             },
-
         ]
 
-
-
-        with patch.object(agent, "_run_codex_stream", side_effect=fake_run_codex_stream):
-
+        with patch.object(
+            agent, "_run_codex_stream", side_effect=fake_run_codex_stream
+        ):
             result = agent._handle_max_iterations(messages, 90)
-
-
 
         assert result == "Summary"
 
         input_items = captured["input"]
 
         assert not any(
-
             item.get("type") == "function_call_output"
-
             and item.get("call_id") == "call_orphan"
-
             for item in input_items
-
         )
-
-
 
     def test_api_sanitizer_matches_responses_call_id_when_id_differs(self, agent):
 
         messages = [
-
             {
-
                 "role": "assistant",
-
                 "content": "",
-
                 "tool_calls": [
-
                     {
-
                         "id": "fc_123",
-
                         "call_id": "call_123",
-
                         "response_item_id": "fc_123",
-
                         "type": "function",
-
                         "function": {"name": "web_search", "arguments": "{}"},
-
                     }
-
                 ],
-
             },
-
             {"role": "tool", "tool_call_id": "call_123", "content": "result"},
-
         ]
-
-
 
         sanitized = agent._sanitize_api_messages(messages)
 
-
-
-        assert [m.get("tool_call_id") for m in sanitized if m.get("role") == "tool"] == [
-
-            "call_123"
-
-        ]
-
-
-
+        assert [
+            m.get("tool_call_id") for m in sanitized if m.get("role") == "tool"
+        ] == ["call_123"]
 
 
 class TestRunConversation:
-
     """Tests for the main run_conversation method.
 
 
@@ -6539,10 +4929,7 @@ class TestRunConversation:
 
     """
 
-
-
     def _setup_agent(self, agent):
-
         """Common setup for run_conversation tests."""
 
         agent._cached_system_prompt = "You are helpful."
@@ -6555,8 +4942,6 @@ class TestRunConversation:
 
         agent.save_trajectories = False
 
-
-
     def test_stop_finish_reason_returns_response(self, agent):
 
         self._setup_agent(agent)
@@ -6566,22 +4951,15 @@ class TestRunConversation:
         agent.client.chat.completions.create.return_value = resp
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
 
         assert result["final_response"] == "Final answer"
 
         assert result["completed"] is True
-
-
 
     def test_ollama_small_runtime_context_fails_before_api_call(self, agent, caplog):
 
@@ -6595,23 +4973,13 @@ class TestRunConversation:
 
         agent._ollama_num_ctx = 4096
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             caplog.at_level(logging.WARNING, logger="agent.conversation_loop"),
-
         ):
-
             result = agent.run_conversation("Call ps -aux")
-
-
 
         assert result["failed"] is True
 
@@ -6621,7 +4989,10 @@ class TestRunConversation:
 
         assert result["turn_exit_reason"] == "ollama_runtime_context_too_small"
 
-        assert "Ollama loaded `qwen3.5:9b` with only 4,096 tokens" in result["final_response"]
+        assert (
+            "Ollama loaded `qwen3.5:9b` with only 4,096 tokens"
+            in result["final_response"]
+        )
 
         assert "model.ollama_num_ctx: 65536" in result["final_response"]
 
@@ -6630,8 +5001,6 @@ class TestRunConversation:
         assert "Ollama runtime context too small for Clawksis tool use" in caplog.text
 
         assert "runtime_context=4096" in caplog.text
-
-
 
     def test_tool_calls_then_stop(self, agent):
 
@@ -6646,17 +5015,13 @@ class TestRunConversation:
         agent.client.chat.completions.create.side_effect = [resp1, resp2]
 
         with (
-
-            patch("run_agent.handle_function_call", return_value="search result") as mock_handle_function_call,
-
+            patch(
+                "run_agent.handle_function_call", return_value="search result"
+            ) as mock_handle_function_call,
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("search something")
 
         assert result["final_response"] == "Done searching"
@@ -6665,9 +5030,9 @@ class TestRunConversation:
 
         assert mock_handle_function_call.call_args.kwargs["tool_call_id"] == "c1"
 
-        assert mock_handle_function_call.call_args.kwargs["session_id"] == agent.session_id
-
-
+        assert (
+            mock_handle_function_call.call_args.kwargs["session_id"] == agent.session_id
+        )
 
     def test_request_scoped_api_hooks_fire_for_each_api_call(self, agent):
 
@@ -6681,11 +5046,7 @@ class TestRunConversation:
 
         agent.client.chat.completions.create.side_effect = [resp1, resp2]
 
-
-
         hook_calls = []
-
-
 
         def _record_hook(name, **kwargs):
 
@@ -6693,39 +5054,28 @@ class TestRunConversation:
 
             return []
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="search result"),
-
             patch(
-
                 "clawk_cli.plugins.has_hook",
-
-                side_effect=lambda name: name in {"pre_api_request", "post_api_request"},
-
+                side_effect=lambda name: (
+                    name in {"pre_api_request", "post_api_request"}
+                ),
             ),
-
             patch("clawk_cli.plugins.invoke_hook", side_effect=_record_hook),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("search something")
-
-
 
         assert result["final_response"] == "Done searching"
 
         pre_request_calls = [kw for name, kw in hook_calls if name == "pre_api_request"]
 
-        post_request_calls = [kw for name, kw in hook_calls if name == "post_api_request"]
+        post_request_calls = [
+            kw for name, kw in hook_calls if name == "post_api_request"
+        ]
 
         assert len(pre_request_calls) == 2
 
@@ -6737,33 +5087,41 @@ class TestRunConversation:
 
         assert all(call["session_id"] == agent.session_id for call in pre_request_calls)
 
-        assert all(call["turn_id"] == pre_request_calls[0]["turn_id"] for call in pre_request_calls + post_request_calls)
+        assert all(
+            call["turn_id"] == pre_request_calls[0]["turn_id"]
+            for call in pre_request_calls + post_request_calls
+        )
 
         assert [call["api_request_id"] for call in pre_request_calls] == [
-
             call["api_request_id"] for call in post_request_calls
-
         ]
 
-        assert all("message_count" in c and isinstance(c.get("request_messages"), list) for c in pre_request_calls)
+        assert all(
+            "message_count" in c and isinstance(c.get("request_messages"), list)
+            for c in pre_request_calls
+        )
 
-        assert all("request" in c and "messages" in c["request"]["body"] for c in pre_request_calls)
+        assert all(
+            "request" in c and "messages" in c["request"]["body"]
+            for c in pre_request_calls
+        )
 
-        assert any(msg.get("role") == "user" and msg.get("content") == "search something" for msg in pre_request_calls[0]["request_messages"])
+        assert any(
+            msg.get("role") == "user" and msg.get("content") == "search something"
+            for msg in pre_request_calls[0]["request_messages"]
+        )
 
         assert all("usage" in c and "response" in c for c in post_request_calls)
 
         assert all("assistant_message" in c["response"] for c in post_request_calls)
 
-
-
-    def test_api_request_error_hook_skips_payload_work_without_listener(self, agent, monkeypatch):
+    def test_api_request_error_hook_skips_payload_work_without_listener(
+        self, agent, monkeypatch
+    ):
 
         payload_built = False
 
         hook_called = False
-
-
 
         def _payload_for_hook(_api_kwargs):
 
@@ -6773,8 +5131,6 @@ class TestRunConversation:
 
             return {}
 
-
-
         def _invoke_hook(_name, **_kwargs):
 
             nonlocal hook_called
@@ -6783,71 +5139,48 @@ class TestRunConversation:
 
             return []
 
-
-
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: False)
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", _invoke_hook)
 
         monkeypatch.setattr(agent, "_api_request_payload_for_hook", _payload_for_hook)
 
-
-
         agent._invoke_api_request_error_hook(
-
             task_id="task-1",
-
             turn_id="turn-1",
-
             api_request_id="api-1",
-
             api_call_count=1,
-
             api_start_time=0.0,
-
             api_kwargs={"messages": [{"role": "user", "content": "hi"}]},
-
             error_type="RuntimeError",
-
             error_message="boom",
-
         )
-
-
 
         assert payload_built is False
 
         assert hook_called is False
 
-
-
-    def test_request_scoped_api_hooks_skip_payload_work_without_listeners(self, agent, monkeypatch):
+    def test_request_scoped_api_hooks_skip_payload_work_without_listeners(
+        self, agent, monkeypatch
+    ):
 
         self._setup_agent(agent)
 
         agent.client.chat.completions.create.return_value = _mock_response(
-
             content="No listeners",
-
             finish_reason="stop",
-
         )
 
         hook_checks = {"pre_api_request": 0, "post_api_request": 0}
 
         payload_counts = {"request": 0, "response": 0}
 
-
-
         def _has_hook(name):
 
             if name in hook_checks:
-
                 hook_checks[name] += 1
 
             return False
-
-
 
         def _request_payload(_api_kwargs):
 
@@ -6855,15 +5188,11 @@ class TestRunConversation:
 
             return {}
 
-
-
         def _response_payload(_response, _assistant_message, *, finish_reason):
 
             payload_counts["response"] += 1
 
             return {}
-
-
 
         monkeypatch.setattr("clawk_cli.plugins.has_hook", _has_hook)
 
@@ -6871,31 +5200,19 @@ class TestRunConversation:
 
         monkeypatch.setattr(agent, "_api_response_payload_for_hook", _response_payload)
 
-
-
         with (
-
             patch("clawk_cli.plugins.invoke_hook", return_value=[]),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["final_response"] == "No listeners"
 
         assert hook_checks == {"pre_api_request": 1, "post_api_request": 1}
 
         assert payload_counts == {"request": 0, "response": 0}
-
-
 
     def test_content_with_tool_calls_stays_silent_for_non_cli_quiet_mode(self, agent):
 
@@ -6906,50 +5223,31 @@ class TestRunConversation:
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
         resp1 = _mock_response(
-
             content="I'll search for that.",
-
             finish_reason="tool_calls",
-
             tool_calls=[tc],
-
         )
 
         resp2 = _mock_response(content="Done searching", finish_reason="stop")
 
         agent.client.chat.completions.create.side_effect = [resp1, resp2]
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="search result"),
-
             patch.object(agent, "_safe_print") as mock_print,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("search something")
-
-
 
         assert result["final_response"] == "Done searching"
 
         mock_print.assert_not_called()
 
-
-
     def test_interrupt_breaks_loop(self, agent):
 
         self._setup_agent(agent)
-
-
 
         def interrupt_side_effect(api_kwargs):
 
@@ -6957,34 +5255,20 @@ class TestRunConversation:
 
             raise InterruptedError("Agent interrupted during API call")
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch("run_agent._set_interrupt"),
-
             patch.object(
-
                 agent, "_interruptible_api_call", side_effect=interrupt_side_effect
-
             ),
-
         ):
-
             result = agent.run_conversation("hello")
 
         assert result["interrupted"] is True
 
-
-
     def test_invalid_tool_name_retry(self, agent):
-
         """Model hallucinates an invalid tool name, agent retries and succeeds."""
 
         self._setup_agent(agent)
@@ -6992,9 +5276,7 @@ class TestRunConversation:
         bad_tc = _mock_tool_call(name="nonexistent_tool", arguments="{}", call_id="c1")
 
         resp_bad = _mock_response(
-
             content="", finish_reason="tool_calls", tool_calls=[bad_tc]
-
         )
 
         resp_good = _mock_response(content="Got it", finish_reason="stop")
@@ -7002,15 +5284,10 @@ class TestRunConversation:
         agent.client.chat.completions.create.side_effect = [resp_bad, resp_good]
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("do something")
 
         assert result["final_response"] == "Got it"
@@ -7019,10 +5296,7 @@ class TestRunConversation:
 
         assert result["api_calls"] == 2
 
-
-
     def test_reasoning_only_local_resumed_no_compression_triggered(self, agent):
-
         """Reasoning-only responses no longer trigger compression — prefill then accepted."""
 
         self._setup_agent(agent)
@@ -7032,44 +5306,28 @@ class TestRunConversation:
         agent.compression_enabled = True
 
         empty_resp = _mock_response(
-
             content=None,
-
             finish_reason="stop",
-
             reasoning_content="reasoning only",
-
         )
 
         prefill = [
-
             {"role": "user", "content": "old question"},
-
             {"role": "assistant", "content": "old answer"},
-
         ]
-
-
 
         # 6 responses: original + 2 prefill + 3 retries after prefill exhaustion
 
         with (
-
-            patch.object(agent, "_interruptible_api_call", side_effect=[empty_resp] * 6),
-
+            patch.object(
+                agent, "_interruptible_api_call", side_effect=[empty_resp] * 6
+            ),
             patch.object(agent, "_compress_context") as mock_compress,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello", conversation_history=prefill)
-
-
 
         mock_compress.assert_not_called()  # no compression triggered
 
@@ -7087,22 +5345,15 @@ class TestRunConversation:
 
         assert result["api_calls"] == 6  # 1 original + 2 prefill + 3 retries
 
-
-
     def test_reasoning_only_response_prefill_then_empty(self, agent):
-
         """Structured reasoning-only triggers prefill (2), then retries (3), then (empty)."""
 
         self._setup_agent(agent)
 
         empty_resp = _mock_response(
-
             content=None,
-
             finish_reason="stop",
-
             reasoning_content="structured reasoning answer",
-
         )
 
         # 6 responses: 1 original + 2 prefill + 3 retries after prefill exhaustion
@@ -7110,15 +5361,10 @@ class TestRunConversation:
         agent.client.chat.completions.create.side_effect = [empty_resp] * 6
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert result["completed"] is True
@@ -7131,44 +5377,29 @@ class TestRunConversation:
 
         assert result["api_calls"] == 6  # 1 original + 2 prefill + 3 retries
 
-
-
     def test_reasoning_only_prefill_succeeds_on_continuation(self, agent):
-
         """When prefill continuation produces content, it becomes the final response."""
 
         self._setup_agent(agent)
 
         empty_resp = _mock_response(
-
             content=None,
-
             finish_reason="stop",
-
             reasoning_content="structured reasoning answer",
-
         )
 
         content_resp = _mock_response(
-
             content="Here is the actual answer.",
-
             finish_reason="stop",
-
         )
 
         agent.client.chat.completions.create.side_effect = [empty_resp, content_resp]
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert result["completed"] is True
@@ -7182,15 +5413,10 @@ class TestRunConversation:
         roles = [m.get("role") for m in result["messages"]]
 
         for i in range(len(roles) - 1):
-
             if roles[i] == "assistant" and roles[i + 1] == "assistant":
-
                 raise AssertionError("Consecutive assistant messages found in history")
 
-
-
     def test_truly_empty_response_retries_3_times_then_empty(self, agent):
-
         """Truly empty response (no content, no reasoning) retries 3 times then falls through to (empty)."""
 
         self._setup_agent(agent)
@@ -7202,21 +5428,17 @@ class TestRunConversation:
         # 4 responses: 1 original + 3 nudge retries, all empty
 
         agent.client.chat.completions.create.side_effect = [
-
-            empty_resp, empty_resp, empty_resp, empty_resp,
-
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            empty_resp,
         ]
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert result["completed"] is True
@@ -7229,10 +5451,7 @@ class TestRunConversation:
 
         assert result["api_calls"] == 4  # 1 original + 3 retries
 
-
-
     def test_truly_empty_response_succeeds_on_nudge(self, agent):
-
         """Model produces content after being nudged for empty response."""
 
         self._setup_agent(agent)
@@ -7242,11 +5461,8 @@ class TestRunConversation:
         empty_resp = _mock_response(content=None, finish_reason="stop")
 
         content_resp = _mock_response(
-
             content="Here is the actual answer.",
-
             finish_reason="stop",
-
         )
 
         # 1 empty response, then model produces content on nudge
@@ -7254,15 +5470,10 @@ class TestRunConversation:
         agent.client.chat.completions.create.side_effect = [empty_resp, content_resp]
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert result["completed"] is True
@@ -7271,10 +5482,7 @@ class TestRunConversation:
 
         assert result["api_calls"] == 2  # 1 original + 1 nudge retry
 
-
-
     def test_empty_response_triggers_fallback_provider(self, agent):
-
         """After 3 empty retries, fallback provider is activated and produces content."""
 
         self._setup_agent(agent)
@@ -7283,13 +5491,13 @@ class TestRunConversation:
 
         # Configure a fallback chain
 
-        agent._fallback_chain = [{"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}]
+        agent._fallback_chain = [
+            {"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}
+        ]
 
         agent._fallback_index = 0
 
         agent._fallback_activated = False
-
-
 
         empty_resp = _mock_response(content=None, finish_reason="stop")
 
@@ -7298,16 +5506,14 @@ class TestRunConversation:
         # 4 empty (1 orig + 3 retries), then fallback model answers
 
         agent.client.chat.completions.create.side_effect = [
-
-            empty_resp, empty_resp, empty_resp, empty_resp, content_resp,
-
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            content_resp,
         ]
 
-
-
         fallback_called = {"called": False}
-
-
 
         def _mock_fallback():
 
@@ -7327,20 +5533,12 @@ class TestRunConversation:
 
             return True
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch.object(agent, "_try_activate_fallback", side_effect=_mock_fallback),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert fallback_called["called"], "Fallback should have been triggered"
@@ -7349,23 +5547,20 @@ class TestRunConversation:
 
         assert result["final_response"] == "Fallback answer."
 
-
-
     def test_empty_response_fallback_also_empty_returns_empty(self, agent):
-
         """If fallback also returns empty, final response is (empty)."""
 
         self._setup_agent(agent)
 
         agent.base_url = "http://127.0.0.1:1234/v1"
 
-        agent._fallback_chain = [{"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}]
+        agent._fallback_chain = [
+            {"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}
+        ]
 
         agent._fallback_index = 0
 
         agent._fallback_activated = False
-
-
 
         empty_resp = _mock_response(content=None, finish_reason="stop")
 
@@ -7374,19 +5569,19 @@ class TestRunConversation:
         # then 4 more empty from fallback (1 + 3 retries), no more fallbacks
 
         agent.client.chat.completions.create.side_effect = [
-
-            empty_resp, empty_resp, empty_resp, empty_resp,  # primary exhausted
-
-            empty_resp, empty_resp, empty_resp, empty_resp,  # fallback exhausted
-
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            empty_resp,  # primary exhausted
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            empty_resp,  # fallback exhausted
         ]
-
-
 
         def _mock_fallback():
 
             if agent._fallback_index >= len(agent._fallback_chain):
-
                 return False
 
             agent._fallback_index += 1
@@ -7399,20 +5594,12 @@ class TestRunConversation:
 
             return True
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch.object(agent, "_try_activate_fallback", side_effect=_mock_fallback),
-
         ):
-
             result = agent.run_conversation("answer me")
 
         assert result["completed"] is True
@@ -7423,55 +5610,37 @@ class TestRunConversation:
 
         assert "No reply:" in result["final_response"]
 
-
-
     def test_empty_response_emits_status_for_gateway(self, agent):
-
         """_emit_status is called during empty retries so gateway users see feedback."""
 
         self._setup_agent(agent)
 
         agent.base_url = "http://127.0.0.1:1234/v1"
 
-
-
         empty_resp = _mock_response(content=None, finish_reason="stop")
 
         # 4 empty: 1 original + 3 retries, all empty, no fallback
 
         agent.client.chat.completions.create.side_effect = [
-
-            empty_resp, empty_resp, empty_resp, empty_resp,
-
+            empty_resp,
+            empty_resp,
+            empty_resp,
+            empty_resp,
         ]
 
-
-
         status_messages = []
-
-
 
         def _capture_status(msg):
 
             status_messages.append(msg)
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch.object(agent, "_emit_status", side_effect=_capture_status),
-
         ):
-
             result = agent.run_conversation("answer me")
-
-
 
         # #34452: explanation replaces the bare "(empty)" sentinel, but the
 
@@ -7485,16 +5654,21 @@ class TestRunConversation:
 
         retry_msgs = [m for m in status_messages if "retrying" in m.lower()]
 
-        assert len(retry_msgs) == 3, f"Expected 3 retry status messages, got {len(retry_msgs)}: {status_messages}"
+        assert len(retry_msgs) == 3, (
+            f"Expected 3 retry status messages, got {len(retry_msgs)}: {status_messages}"
+        )
 
-        failure_msgs = [m for m in status_messages if "no content" in m.lower() or "no fallback" in m.lower()]
+        failure_msgs = [
+            m
+            for m in status_messages
+            if "no content" in m.lower() or "no fallback" in m.lower()
+        ]
 
-        assert len(failure_msgs) >= 1, f"Expected at least 1 failure status, got: {status_messages}"
-
-
+        assert len(failure_msgs) >= 1, (
+            f"Expected at least 1 failure status, got: {status_messages}"
+        )
 
     def test_partial_stream_recovery_uses_streamed_content(self, agent):
-
         """When streaming fails after partial delivery, recovered partial content becomes final response."""
 
         self._setup_agent(agent)
@@ -7502,29 +5676,23 @@ class TestRunConversation:
         # Simulate a partial-stream-stub response: content recovered from streaming
 
         partial_resp = _mock_response(
-
             content="Here is the partial answer that was stream",
-
             finish_reason="stop",
-
         )
 
         agent.client.chat.completions.create.return_value = partial_resp
 
         # Simulate that streaming had already delivered this text
 
-        agent._current_streamed_assistant_text = "Here is the partial answer that was stream"
+        agent._current_streamed_assistant_text = (
+            "Here is the partial answer that was stream"
+        )
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("explain something")
 
         # The partial content should be used as-is (not empty, not retried)
@@ -7535,10 +5703,7 @@ class TestRunConversation:
 
         assert result["api_calls"] == 1  # No retries
 
-
-
     def test_partial_stream_recovery_on_empty_stub(self, agent):
-
         """When stub response has no content but text was streamed, use streamed text."""
 
         self._setup_agent(agent)
@@ -7547,44 +5712,31 @@ class TestRunConversation:
 
         empty_stub = _mock_response(content=None, finish_reason="stop")
 
-
-
         def _fake_api_call(api_kwargs):
 
             # Simulate what streaming does: accumulate text before returning
 
             # a stub with no content (connection died mid-stream)
 
-            agent._current_streamed_assistant_text = "The answer to your question is that"
+            agent._current_streamed_assistant_text = (
+                "The answer to your question is that"
+            )
 
             return empty_stub
 
-
-
         status_messages = []
-
-
 
         def _capture_status(msg):
 
             status_messages.append(msg)
 
-
-
         with (
-
             patch.object(agent, "_interruptible_api_call", side_effect=_fake_api_call),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch.object(agent, "_emit_status", side_effect=_capture_status),
-
         ):
-
             result = agent.run_conversation("ask me")
 
         # Should recover partial streamed content, not fall through to (empty)
@@ -7597,20 +5749,23 @@ class TestRunConversation:
 
         # Should emit the stream-interrupted status, NOT the empty-retry status
 
-        recovery_msgs = [m for m in status_messages if "stream interrupted" in m.lower()]
+        recovery_msgs = [
+            m for m in status_messages if "stream interrupted" in m.lower()
+        ]
 
-        assert len(recovery_msgs) >= 1, f"Expected stream recovery status, got: {status_messages}"
+        assert len(recovery_msgs) >= 1, (
+            f"Expected stream recovery status, got: {status_messages}"
+        )
 
         # Should NOT have retry statuses
 
         retry_msgs = [m for m in status_messages if "retrying" in m.lower()]
 
-        assert len(retry_msgs) == 0, f"Should not retry when stream content exists: {status_messages}"
-
-
+        assert len(retry_msgs) == 0, (
+            f"Should not retry when stream content exists: {status_messages}"
+        )
 
     def test_partial_stream_recovery_preempts_prior_turn_fallback(self, agent):
-
         """Partial streamed content takes priority over _last_content_with_tools fallback."""
 
         self._setup_agent(agent)
@@ -7623,30 +5778,22 @@ class TestRunConversation:
 
         empty_stub = _mock_response(content=None, finish_reason="stop")
 
-
-
         def _fake_api_call(api_kwargs):
 
             # Simulate partial streaming before connection death
 
-            agent._current_streamed_assistant_text = "Fresh partial content from this turn"
+            agent._current_streamed_assistant_text = (
+                "Fresh partial content from this turn"
+            )
 
             return empty_stub
 
-
-
         with (
-
             patch.object(agent, "_interruptible_api_call", side_effect=_fake_api_call),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("question")
 
         # Should use the streamed content, not the old prior-turn fallback
@@ -7654,8 +5801,6 @@ class TestRunConversation:
         assert result["final_response"] == "Fresh partial content from this turn"
 
         assert result["api_calls"] == 1
-
-
 
     def test_nous_401_refreshes_after_remint_and_retries(self, agent):
 
@@ -7665,37 +5810,25 @@ class TestRunConversation:
 
         agent.api_mode = "chat_completions"
 
-
-
         calls = {"api": 0, "refresh": 0}
 
-
-
         class _UnauthorizedError(RuntimeError):
-
             def __init__(self):
 
                 super().__init__("Error code: 401 - unauthorized")
 
                 self.status_code = 401
 
-
-
         def _fake_api_call(api_kwargs):
 
             calls["api"] += 1
 
             if calls["api"] == 1:
-
                 raise _UnauthorizedError()
 
             return _mock_response(
-
                 content="Recovered after remint", finish_reason="stop"
-
             )
-
-
 
         def _fake_refresh(*, force=True):
 
@@ -7705,29 +5838,16 @@ class TestRunConversation:
 
             return True
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch.object(agent, "_interruptible_api_call", side_effect=_fake_api_call),
-
             patch.object(
-
                 agent, "_try_refresh_nous_client_credentials", side_effect=_fake_refresh
-
             ),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert calls["api"] == 2
 
@@ -7737,17 +5857,12 @@ class TestRunConversation:
 
         assert result["final_response"] == "Recovered after remint"
 
-
-
     def test_context_compression_triggered(self, agent):
-
         """When compressor says should_compress, compression runs."""
 
         self._setup_agent(agent)
 
         agent.compression_enabled = True
-
-
 
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
@@ -7757,36 +5872,21 @@ class TestRunConversation:
 
         agent.client.chat.completions.create.side_effect = [resp1, resp2]
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="result"),
-
             patch.object(
-
                 agent.context_compressor, "should_compress", return_value=True
-
             ),
-
             patch.object(agent, "_compress_context") as mock_compress,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             # _compress_context should return (messages, system_prompt)
 
             mock_compress.return_value = (
-
                 [{"role": "user", "content": "search something"}],
-
                 "compressed system prompt",
-
             )
 
             result = agent.run_conversation("search something")
@@ -7797,59 +5897,40 @@ class TestRunConversation:
 
         assert result["completed"] is True
 
-
-
     def test_glm_prompt_exceeds_max_length_triggers_compression(self, agent):
-
         """GLM/Z.AI uses 'Prompt exceeds max length' for context overflow."""
 
         self._setup_agent(agent)
 
         err_400 = Exception(
-
             "Error code: 400 - {'error': {'code': '1261', 'message': 'Prompt exceeds max length'}}"
-
         )
 
         err_400.status_code = 400
 
-        ok_resp = _mock_response(content="Recovered after compression", finish_reason="stop")
+        ok_resp = _mock_response(
+            content="Recovered after compression", finish_reason="stop"
+        )
 
         agent.client.chat.completions.create.side_effect = [err_400, ok_resp]
 
         prefill = [
-
             {"role": "user", "content": "previous question"},
-
             {"role": "assistant", "content": "previous answer"},
-
         ]
 
-
-
         with (
-
             patch.object(agent, "_compress_context") as mock_compress,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             mock_compress.return_value = (
-
                 [{"role": "user", "content": "hello"}],
-
                 "compressed system prompt",
-
             )
 
             result = agent.run_conversation("hello", conversation_history=prefill)
-
-
 
         mock_compress.assert_called_once()
 
@@ -7857,10 +5938,7 @@ class TestRunConversation:
 
         assert result["completed"] is True
 
-
-
     def test_minimax_delta_overflow_keeps_known_context_length(self, agent):
-
         """MiniMax reports overflow deltas like 'limit (2013)' without the real window.
 
 
@@ -7882,58 +5960,39 @@ class TestRunConversation:
         agent.context_compressor.context_length = 204_800
 
         agent.context_compressor.threshold_tokens = int(
-
-            agent.context_compressor.context_length * agent.context_compressor.threshold_percent
-
+            agent.context_compressor.context_length
+            * agent.context_compressor.threshold_percent
         )
 
-
-
         err_400 = Exception(
-
             "HTTP 400: invalid params, context window exceeds limit (2013)"
-
         )
 
         err_400.status_code = 400
 
-        ok_resp = _mock_response(content="Recovered after compression", finish_reason="stop")
+        ok_resp = _mock_response(
+            content="Recovered after compression", finish_reason="stop"
+        )
 
         agent.client.chat.completions.create.side_effect = [err_400, ok_resp]
 
         prefill = [
-
             {"role": "user", "content": "previous question"},
-
             {"role": "assistant", "content": "previous answer"},
-
         ]
 
-
-
         with (
-
             patch.object(agent, "_compress_context") as mock_compress,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             mock_compress.return_value = (
-
                 [{"role": "user", "content": "hello"}],
-
                 "compressed system prompt",
-
             )
 
             result = agent.run_conversation("hello", conversation_history=prefill)
-
-
 
         mock_compress.assert_called_once()
 
@@ -7945,10 +6004,7 @@ class TestRunConversation:
 
         assert result["completed"] is True
 
-
-
     def test_non_minimax_overflow_without_provider_limit_keeps_context(self, agent):
-
         """Generic overflow without a provider-reported max must NOT probe-step down.
 
 
@@ -7972,58 +6028,39 @@ class TestRunConversation:
         agent.context_compressor.context_length = 200_000
 
         agent.context_compressor.threshold_tokens = int(
-
-            agent.context_compressor.context_length * agent.context_compressor.threshold_percent
-
+            agent.context_compressor.context_length
+            * agent.context_compressor.threshold_percent
         )
 
-
-
         err_400 = Exception(
-
             "HTTP 400: invalid params, context window exceeds limit (2013)"
-
         )
 
         err_400.status_code = 400
 
-        ok_resp = _mock_response(content="Recovered after compression", finish_reason="stop")
+        ok_resp = _mock_response(
+            content="Recovered after compression", finish_reason="stop"
+        )
 
         agent.client.chat.completions.create.side_effect = [err_400, ok_resp]
 
         prefill = [
-
             {"role": "user", "content": "previous question"},
-
             {"role": "assistant", "content": "previous answer"},
-
         ]
 
-
-
         with (
-
             patch.object(agent, "_compress_context") as mock_compress,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             mock_compress.return_value = (
-
                 [{"role": "user", "content": "hello"}],
-
                 "compressed system prompt",
-
             )
 
             result = agent.run_conversation("hello", conversation_history=prefill)
-
-
 
         mock_compress.assert_called_once()
 
@@ -8035,10 +6072,7 @@ class TestRunConversation:
 
         assert result["completed"] is True
 
-
-
     def test_length_finish_reason_requests_continuation(self, agent):
-
         """Normal truncation (partial real content) triggers continuation."""
 
         self._setup_agent(agent)
@@ -8049,21 +6083,12 @@ class TestRunConversation:
 
         agent.client.chat.completions.create.side_effect = [first, second]
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
@@ -8071,18 +6096,20 @@ class TestRunConversation:
 
         assert result["final_response"] == "Part 1 Part 2"
 
-
-
-        second_call_messages = agent.client.chat.completions.create.call_args_list[1].kwargs["messages"]
+        second_call_messages = agent.client.chat.completions.create.call_args_list[
+            1
+        ].kwargs["messages"]
 
         assert second_call_messages[-1]["role"] == "user"
 
-        assert "truncated by the output length limit" in second_call_messages[-1]["content"]
+        assert (
+            "truncated by the output length limit"
+            in second_call_messages[-1]["content"]
+        )
 
-
-
-    def test_length_continuation_preserves_large_provider_default_output_cap(self, agent):
-
+    def test_length_continuation_preserves_large_provider_default_output_cap(
+        self, agent
+    ):
         """Continuation retries must not shrink a higher provider default cap."""
 
         self._setup_agent(agent)
@@ -8091,14 +6118,11 @@ class TestRunConversation:
 
         requested_caps = []
 
-
-
         def _fake_build_api_kwargs(api_messages):
 
             ephemeral = getattr(agent, "_ephemeral_max_output_tokens", None)
 
             if ephemeral is not None:
-
                 agent._ephemeral_max_output_tokens = None
 
             cap = ephemeral if ephemeral is not None else 65536
@@ -8107,31 +6131,21 @@ class TestRunConversation:
 
             return {"model": agent.model, "messages": api_messages, "max_tokens": cap}
 
-
-
         first = _mock_response(content="Part 1 ", finish_reason="length")
 
         second = _mock_response(content="Part 2", finish_reason="stop")
 
         agent.client.chat.completions.create.side_effect = [first, second]
 
-
-
         with (
-
-            patch.object(agent, "_build_api_kwargs", side_effect=_fake_build_api_kwargs),
-
+            patch.object(
+                agent, "_build_api_kwargs", side_effect=_fake_build_api_kwargs
+            ),
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
@@ -8139,10 +6153,9 @@ class TestRunConversation:
 
         assert requested_caps == [65536, 65536]
 
-
-
-    def test_ollama_glm_stop_after_tools_without_terminal_boundary_requests_continuation(self, agent):
-
+    def test_ollama_glm_stop_after_tools_without_terminal_boundary_requests_continuation(
+        self, agent
+    ):
         """Ollama-hosted GLM responses can misreport truncated output as stop."""
 
         self._setup_agent(agent)
@@ -8153,86 +6166,58 @@ class TestRunConversation:
 
         agent.model = "glm-5.1:cloud"
 
-
-
         tool_turn = _mock_response(
-
             content="",
-
             finish_reason="tool_calls",
-
-            tool_calls=[_mock_tool_call(name="web_search", arguments="{}", call_id="c1")],
-
+            tool_calls=[
+                _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
+            ],
         )
 
         misreported_stop = _mock_response(
-
             content="Based on the search results, the best next",
-
             finish_reason="stop",
-
         )
 
         continued = _mock_response(
-
             content=" step is to update the config.",
-
             finish_reason="stop",
-
         )
 
         agent.client.chat.completions.create.side_effect = [
-
             tool_turn,
-
             misreported_stop,
-
             continued,
-
         ]
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="search result"),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
         assert result["api_calls"] == 3
 
         assert (
-
             result["final_response"]
-
             == "Based on the search results, the best next step is to update the config."
-
         )
 
-
-
-        third_call_messages = agent.client.chat.completions.create.call_args_list[2].kwargs["messages"]
+        third_call_messages = agent.client.chat.completions.create.call_args_list[
+            2
+        ].kwargs["messages"]
 
         assert third_call_messages[-1]["role"] == "user"
 
-        assert "truncated by the output length limit" in third_call_messages[-1]["content"]
-
-
+        assert (
+            "truncated by the output length limit" in third_call_messages[-1]["content"]
+        )
 
     def test_ollama_glm_stop_with_terminal_boundary_does_not_continue(self, agent):
-
         """Complete Ollama/GLM responses should not be reclassified as truncated."""
 
         self._setup_agent(agent)
@@ -8243,62 +6228,39 @@ class TestRunConversation:
 
         agent.model = "glm-5.1:cloud"
 
-
-
         tool_turn = _mock_response(
-
             content="",
-
             finish_reason="tool_calls",
-
-            tool_calls=[_mock_tool_call(name="web_search", arguments="{}", call_id="c1")],
-
+            tool_calls=[
+                _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
+            ],
         )
 
         complete_stop = _mock_response(
-
             content="Based on the search results, the best next step is to update the config.",
-
             finish_reason="stop",
-
         )
 
         agent.client.chat.completions.create.side_effect = [tool_turn, complete_stop]
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="search result"),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
         assert result["api_calls"] == 2
 
         assert (
-
             result["final_response"]
-
             == "Based on the search results, the best next step is to update the config."
-
         )
 
-
-
     def test_non_ollama_stop_without_terminal_boundary_does_not_continue(self, agent):
-
         """The stop->length workaround should stay scoped to Ollama/GLM backends."""
 
         self._setup_agent(agent)
@@ -8309,45 +6271,28 @@ class TestRunConversation:
 
         agent.model = "gpt-4o-mini"
 
-
-
         tool_turn = _mock_response(
-
             content="",
-
             finish_reason="tool_calls",
-
-            tool_calls=[_mock_tool_call(name="web_search", arguments="{}", call_id="c1")],
-
+            tool_calls=[
+                _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
+            ],
         )
 
         normal_stop = _mock_response(
-
             content="Based on the search results, the best next",
-
             finish_reason="stop",
-
         )
 
         agent.client.chat.completions.create.side_effect = [tool_turn, normal_stop]
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="search result"),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         assert result["completed"] is True
 
@@ -8355,39 +6300,24 @@ class TestRunConversation:
 
         assert result["final_response"] == "Based on the search results, the best next"
 
-
-
     def test_length_thinking_exhausted_skips_continuation(self, agent):
-
         """When finish_reason='length' but content is only thinking, skip retries."""
 
         self._setup_agent(agent)
 
         resp = _mock_response(
-
             content="<think>internal reasoning</think>",
-
             finish_reason="length",
-
         )
 
         agent.client.chat.completions.create.return_value = resp
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         # Should return immediately — no continuation, only 1 API call
 
@@ -8407,10 +6337,7 @@ class TestRunConversation:
 
         assert "/thinkon" in result["final_response"]
 
-
-
     def test_length_empty_content_without_think_tags_retries_normally(self, agent):
-
         """When finish_reason='length' and content is None but no think tags,
 
         fall through to normal continuation retry (not thinking-exhaustion)."""
@@ -8421,21 +6348,12 @@ class TestRunConversation:
 
         agent.client.chat.completions.create.return_value = resp
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("hello")
-
-
 
         # Without think tags, the agent should attempt continuation retries
 
@@ -8445,43 +6363,29 @@ class TestRunConversation:
 
         assert result["completed"] is False
 
-
-
-    def test_length_with_tool_calls_returns_partial_without_executing_tools(self, agent):
+    def test_length_with_tool_calls_returns_partial_without_executing_tools(
+        self, agent
+    ):
 
         self._setup_agent(agent)
 
         bad_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"partial',
-
             call_id="c1",
-
         )
 
         resp = _mock_response(content="", finish_reason="length", tool_calls=[bad_tc])
 
         agent.client.chat.completions.create.return_value = resp
 
-
-
         with (
-
             patch("run_agent.handle_function_call") as mock_handle_function_call,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("write the report")
-
-
 
         assert result["completed"] is False
 
@@ -8491,10 +6395,7 @@ class TestRunConversation:
 
         mock_handle_function_call.assert_not_called()
 
-
-
     def test_truncated_tool_call_retries_once_before_refusing(self, agent):
-
         """When tool call args are truncated, the agent retries the API call
 
         (up to 3 times). If a retry succeeds (valid JSON args), tool execution
@@ -8506,49 +6407,37 @@ class TestRunConversation:
         agent.valid_tool_names.add("write_file")
 
         bad_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"partial',
-
             call_id="c1",
-
         )
 
         truncated_resp = _mock_response(
-
-            content="", finish_reason="length", tool_calls=[bad_tc],
-
+            content="",
+            finish_reason="length",
+            tool_calls=[bad_tc],
         )
 
         good_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"full content"}',
-
             call_id="c2",
-
         )
 
         good_resp = _mock_response(
-
-            content="", finish_reason="stop", tool_calls=[good_tc],
-
+            content="",
+            finish_reason="stop",
+            tool_calls=[good_tc],
         )
 
         with (
-
-            patch("run_agent.handle_function_call", return_value='{"success":true}') as mock_hfc,
-
+            patch(
+                "run_agent.handle_function_call", return_value='{"success":true}'
+            ) as mock_hfc,
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             # First call: truncated → retry. Second: valid → execute tool.
 
             # Third: final text response.
@@ -8556,14 +6445,12 @@ class TestRunConversation:
             final_resp = _mock_response(content="Done!", finish_reason="stop")
 
             agent.client.chat.completions.create.side_effect = [
-
-                truncated_resp, good_resp, final_resp,
-
+                truncated_resp,
+                good_resp,
+                final_resp,
             ]
 
             result = agent.run_conversation("write the report")
-
-
 
         # Tool was executed on the retry (good_resp)
 
@@ -8571,10 +6458,7 @@ class TestRunConversation:
 
         assert result["final_response"] == "Done!"
 
-
-
     def test_stub_stall_mid_tool_call_recovers_within_3_retries(self, agent):
-
         """A network stream stall mid tool-call (PARTIAL_STREAM_STUB_ID) must
 
         retry up to 3 times rather than hard-failing after one — and recover
@@ -8585,20 +6469,14 @@ class TestRunConversation:
 
         from clawk_constants import PARTIAL_STREAM_STUB_ID
 
-
-
         self._setup_agent(agent)
 
         agent.valid_tool_names.add("write_file")
 
         bad_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"partial',
-
             call_id="c1",
-
         )
 
         # Two consecutive stub-stall responses, then a clean tool call.
@@ -8612,42 +6490,33 @@ class TestRunConversation:
         stall2.id = PARTIAL_STREAM_STUB_ID
 
         good_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"full content"}',
-
             call_id="c2",
-
         )
 
-        good_resp = _mock_response(content="", finish_reason="stop", tool_calls=[good_tc])
+        good_resp = _mock_response(
+            content="", finish_reason="stop", tool_calls=[good_tc]
+        )
 
         final_resp = _mock_response(content="Done!", finish_reason="stop")
 
-
-
         with (
-
-            patch("run_agent.handle_function_call", return_value='{"success":true}') as mock_hfc,
-
+            patch(
+                "run_agent.handle_function_call", return_value='{"success":true}'
+            ) as mock_hfc,
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             agent.client.chat.completions.create.side_effect = [
-
-                stall1, stall2, good_resp, final_resp,
-
+                stall1,
+                stall2,
+                good_resp,
+                final_resp,
             ]
 
             result = agent.run_conversation("write the report")
-
-
 
         # Recovered on the 3rd attempt instead of refusing after the 1st.
 
@@ -8655,10 +6524,7 @@ class TestRunConversation:
 
         assert result["final_response"] == "Done!"
 
-
-
     def test_truncated_tool_args_detected_when_finish_reason_not_length(self, agent):
-
         """When a router rewrites finish_reason from 'length' to 'tool_calls',
 
         truncated JSON arguments should still be detected and refused rather
@@ -8670,40 +6536,26 @@ class TestRunConversation:
         agent.valid_tool_names.add("write_file")
 
         bad_tc = _mock_tool_call(
-
             name="write_file",
-
             arguments='{"path":"report.md","content":"partial',
-
             call_id="c1",
-
         )
 
         resp = _mock_response(
-
-            content="", finish_reason="tool_calls", tool_calls=[bad_tc],
-
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=[bad_tc],
         )
 
         agent.client.chat.completions.create.return_value = resp
 
-
-
         with (
-
             patch("run_agent.handle_function_call") as mock_handle_function_call,
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("write the report")
-
-
 
         assert result["completed"] is False
 
@@ -8713,10 +6565,7 @@ class TestRunConversation:
 
         mock_handle_function_call.assert_not_called()
 
-
-
     def test_kanban_block_called_on_iteration_exhaustion(self, agent, monkeypatch):
-
         """Regression: kanban worker must signal the dispatcher when its
 
         iteration budget is exhausted, otherwise the task silently re-runs
@@ -8745,84 +6594,57 @@ class TestRunConversation:
 
         agent.max_iterations = 2
 
-
-
         monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_test_task_123")
-
-
 
         # Return a tool call for every iteration to exhaust the budget.
 
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
         tool_resp = _mock_response(
-
-            content="", finish_reason="tool_calls", tool_calls=[tc],
-
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=[tc],
         )
 
         # Final summary response from _handle_max_iterations.
 
         summary_resp = _mock_response(
-
-            content="Could not finish — budget exhausted.", finish_reason="stop",
-
+            content="Could not finish — budget exhausted.",
+            finish_reason="stop",
         )
 
         agent.client.chat.completions.create.side_effect = [
-
-            tool_resp, tool_resp, summary_resp,
-
+            tool_resp,
+            tool_resp,
+            summary_resp,
         ]
-
-
 
         mock_record_failure = MagicMock(return_value=False)
 
         mock_connect = MagicMock(return_value=MagicMock())
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="ok"),
-
-            patch("clawk_cli.kanban_db._record_task_failure",
-
-                  mock_record_failure),
-
+            patch("clawk_cli.kanban_db._record_task_failure", mock_record_failure),
             patch("clawk_cli.kanban_db.connect", mock_connect),
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation("do the kanban work")
-
-
 
         # The agent should have reported the task as not completed.
 
         assert result["completed"] is False
-
-
 
         # _record_task_failure should have been called exactly once for
 
         # the exhaustion event, with outcome="timed_out".
 
         assert mock_record_failure.call_count == 1, (
-
             f"Expected exactly 1 _record_task_failure call, "
-
             f"got {mock_record_failure.call_count}. "
-
             f"Calls: {mock_record_failure.call_args_list}"
-
         )
 
         call = mock_record_failure.call_args_list[0]
@@ -8839,10 +6661,7 @@ class TestRunConversation:
 
         assert "Iteration budget exhausted" in call.kwargs.get("error", "")
 
-
-
     def test_no_kanban_block_when_not_in_kanban_mode(self, agent, monkeypatch):
-
         """The exhaustion bridge must NOT fire when CLAWK_KANBAN_TASK
 
         is unset (non-kanban runs are unaffected by #29747 gap 2)."""
@@ -8851,70 +6670,44 @@ class TestRunConversation:
 
         agent.max_iterations = 2
 
-
-
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
-
-
 
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
 
         tool_resp = _mock_response(
-
-            content="", finish_reason="tool_calls", tool_calls=[tc],
-
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=[tc],
         )
 
         summary_resp = _mock_response(
-
-            content="Summary.", finish_reason="stop",
-
+            content="Summary.",
+            finish_reason="stop",
         )
 
         agent.client.chat.completions.create.side_effect = [
-
-            tool_resp, tool_resp, summary_resp,
-
+            tool_resp,
+            tool_resp,
+            summary_resp,
         ]
-
-
 
         mock_record_failure = MagicMock(return_value=False)
 
-
-
         with (
-
             patch("run_agent.handle_function_call", return_value="ok"),
-
-            patch("clawk_cli.kanban_db._record_task_failure",
-
-                  mock_record_failure),
-
+            patch("clawk_cli.kanban_db._record_task_failure", mock_record_failure),
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             agent.run_conversation("do stuff")
 
-
-
         assert mock_record_failure.call_count == 0, (
-
             "_record_task_failure should not be called outside kanban mode"
-
         )
 
 
-
-
-
 class TestRetryExhaustion:
-
     """Regression: retry_count > max_retries was dead code (off-by-one).
 
 
@@ -8926,8 +6719,6 @@ class TestRetryExhaustion:
     invalid response, raising IndexError.
 
     """
-
-
 
     def _setup_agent(self, agent):
 
@@ -8941,27 +6732,19 @@ class TestRetryExhaustion:
 
         agent.save_trajectories = False
 
-
-
     @staticmethod
-
     def _make_fast_time_mock():
-
         """Return a mock time module where sleep loops exit instantly."""
 
         mock_time = MagicMock()
 
         _t = [1000.0]
 
-
-
         def _advancing_time():
 
             _t[0] += 500.0  # jump 500s per call so sleep_end is always in the past
 
             return _t[0]
-
-
 
         mock_time.time.side_effect = _advancing_time
 
@@ -8971,10 +6754,7 @@ class TestRetryExhaustion:
 
         return mock_time
 
-
-
     def test_invalid_response_returns_error_not_crash(self, agent):
-
         """Exhausted retries on invalid (empty choices) response must not IndexError."""
 
         self._setup_agent(agent)
@@ -8982,13 +6762,9 @@ class TestRetryExhaustion:
         # Return response with empty choices every time
 
         bad_resp = SimpleNamespace(
-
             choices=[],
-
             model="test/model",
-
             usage=None,
-
         )
 
         agent.client.chat.completions.create.return_value = bad_resp
@@ -9002,27 +6778,17 @@ class TestRetryExhaustion:
         from agent import conversation_loop as _conv_loop
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch("run_agent.time", self._make_fast_time_mock()),
-
             patch.object(_conv_loop, "time", self._make_fast_time_mock()),
-
             patch.object(_conv_loop, "jittered_backoff", lambda *a, **k: 0.0),
-
         ):
-
             result = agent.run_conversation("hello")
 
         assert result.get("completed") is False, (
-
             f"Expected completed=False, got: {result}"
-
         )
 
         assert result.get("failed") is True
@@ -9031,10 +6797,7 @@ class TestRetryExhaustion:
 
         assert "Invalid API response" in result["error"]
 
-
-
     def test_api_error_returns_gracefully_after_retries(self, agent):
-
         """Exhausted retries on API errors must return error result, not crash."""
 
         self._setup_agent(agent)
@@ -9044,21 +6807,13 @@ class TestRetryExhaustion:
         from agent import conversation_loop as _conv_loop
 
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch("run_agent.time", self._make_fast_time_mock()),
-
             patch.object(_conv_loop, "time", self._make_fast_time_mock()),
-
             patch.object(_conv_loop, "jittered_backoff", lambda *a, **k: 0.0),
-
         ):
-
             result = agent.run_conversation("hello")
 
         assert result.get("completed") is False
@@ -9069,10 +6824,7 @@ class TestRetryExhaustion:
 
         assert "rate limited" in result["error"]
 
-
-
     def test_build_api_kwargs_error_no_unbound_local(self, agent):
-
         """When _build_api_kwargs raises, except handler must not crash with UnboundLocalError.
 
 
@@ -9086,19 +6838,14 @@ class TestRetryExhaustion:
         self._setup_agent(agent)
 
         with (
-
-            patch.object(agent, "_build_api_kwargs", side_effect=ValueError("bad messages")),
-
+            patch.object(
+                agent, "_build_api_kwargs", side_effect=ValueError("bad messages")
+            ),
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
             patch("run_agent.time", self._make_fast_time_mock()),
-
         ):
-
             result = agent.run_conversation("hello")
 
         # Must surface the real error, not UnboundLocalError
@@ -9114,9 +6861,6 @@ class TestRetryExhaustion:
         assert "bad messages" in result["error"]
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Conversation history mutation
@@ -9124,69 +6868,41 @@ class TestRetryExhaustion:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestConversationHistoryNotMutated:
-
     """run_conversation must not mutate the caller's conversation_history list."""
 
-
-
     def test_caller_list_unchanged_after_run(self, agent):
-
         """Passing conversation_history should not modify the original list."""
 
         history = [
-
             {"role": "user", "content": "previous question"},
-
             {"role": "assistant", "content": "previous answer"},
-
         ]
 
         original_len = len(history)
-
-
 
         resp = _mock_response(content="new answer", finish_reason="stop")
 
         agent.client.chat.completions.create.return_value = resp
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation(
-
                 "new question", conversation_history=history
-
             )
-
-
 
         # Caller's list must be untouched
 
         assert len(history) == original_len, (
-
             f"conversation_history was mutated: expected {original_len} items, got {len(history)}"
-
         )
 
         # Result should have more messages than the original history
 
         assert len(result["messages"]) > original_len
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -9196,26 +6912,16 @@ class TestConversationHistoryNotMutated:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestNousCredentialRefresh:
-
     """Verify Nous credential refresh rebuilds the runtime client."""
 
-
-
     def test_try_refresh_nous_client_credentials_rebuilds_client(
-
         self, agent, monkeypatch
-
     ):
 
         agent.provider = "nous"
 
         agent.api_mode = "chat_completions"
-
-
 
         closed = {"value": False}
 
@@ -9223,35 +6929,22 @@ class TestNousCredentialRefresh:
 
         captured = {}
 
-
-
         class _ExistingClient:
-
             def close(self):
 
                 closed["value"] = True
 
-
-
         class _RebuiltClient:
-
             pass
-
-
 
         def _fake_resolve(**kwargs):
 
             captured.update(kwargs)
 
             return {
-
                 "api_key": "new-nous-key",
-
                 "base_url": "https://inference-api.nousresearch.com/v1",
-
             }
-
-
 
         def _fake_openai(**kwargs):
 
@@ -9259,23 +6952,14 @@ class TestNousCredentialRefresh:
 
             return _RebuiltClient()
 
-
-
         monkeypatch.setattr(
-
             "clawk_cli.auth.resolve_nous_runtime_credentials", _fake_resolve
-
         )
-
-
 
         agent.client = _ExistingClient()
 
         with patch("run_agent.OpenAI", side_effect=_fake_openai):
-
             ok = agent._try_refresh_nous_client_credentials(force=True)
-
-
 
         assert ok is True
 
@@ -9286,9 +6970,7 @@ class TestNousCredentialRefresh:
         assert rebuilt["kwargs"]["api_key"] == "new-nous-key"
 
         assert (
-
             rebuilt["kwargs"]["base_url"] == "https://inference-api.nousresearch.com/v1"
-
         )
 
         assert "default_headers" not in rebuilt["kwargs"]
@@ -9296,26 +6978,17 @@ class TestNousCredentialRefresh:
         assert isinstance(agent.client, _RebuiltClient)
 
 
-
-
-
 class TestCredentialPoolRecovery:
-
     def test_recover_with_pool_rotates_on_402(self, agent):
 
         current = SimpleNamespace(label="primary")
 
         next_entry = SimpleNamespace(label="secondary")
 
-
-
         class _Pool:
-
             def current(self):
 
                 return current
-
-
 
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
@@ -9325,23 +6998,14 @@ class TestCredentialPoolRecovery:
 
                 return next_entry
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=402,
-
             has_retried_429=False,
-
         )
-
-
 
         assert recovered is True
 
@@ -9349,16 +7013,13 @@ class TestCredentialPoolRecovery:
 
         agent._swap_credential.assert_called_once_with(next_entry)
 
-
-
-    def test_recover_with_pool_rotates_on_billing_reason_even_with_http_400(self, agent):
+    def test_recover_with_pool_rotates_on_billing_reason_even_with_http_400(
+        self, agent
+    ):
 
         next_entry = SimpleNamespace(label="secondary")
 
-
-
         class _Pool:
-
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
                 assert status_code == 400
@@ -9367,27 +7028,16 @@ class TestCredentialPoolRecovery:
 
                 return next_entry
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=400,
-
             has_retried_429=False,
-
             classified_reason=FailoverReason.billing,
-
             error_context={"reason": "out_of_extra_usage"},
-
         )
-
-
 
         assert recovered is True
 
@@ -9395,21 +7045,14 @@ class TestCredentialPoolRecovery:
 
         agent._swap_credential.assert_called_once_with(next_entry)
 
-
-
     def test_recover_with_pool_retries_first_429_then_rotates(self, agent):
 
         next_entry = SimpleNamespace(label="secondary")
 
-
-
         class _Pool:
-
             def current(self):
 
                 return SimpleNamespace(label="primary")
-
-
 
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
@@ -9419,20 +7062,13 @@ class TestCredentialPoolRecovery:
 
                 return next_entry
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=429,
-
             has_retried_429=False,
-
         )
 
         assert recovered is False
@@ -9441,14 +7077,9 @@ class TestCredentialPoolRecovery:
 
         agent._swap_credential.assert_not_called()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=429,
-
             has_retried_429=True,
-
         )
 
         assert recovered is True
@@ -9457,63 +7088,38 @@ class TestCredentialPoolRecovery:
 
         agent._swap_credential.assert_called_once_with(next_entry)
 
-
-
-
-
     def test_recover_with_pool_refreshes_on_401(self, agent):
-
         """401 with successful refresh should swap to refreshed credential."""
 
         refreshed_entry = SimpleNamespace(label="refreshed-primary", id="abc")
 
-
-
         class _Pool:
-
             def try_refresh_current(self):
 
                 return refreshed_entry
-
-
 
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=401,
-
             has_retried_429=False,
-
         )
-
-
 
         assert recovered is True
 
         agent._swap_credential.assert_called_once_with(refreshed_entry)
 
-
-
     def test_recover_with_pool_rotates_on_401_when_refresh_fails(self, agent):
-
         """401 with failed refresh should rotate to next credential."""
 
         next_entry = SimpleNamespace(label="secondary", id="def")
 
-
-
         class _Pool:
-
             def try_refresh_current(self):
 
                 return None  # refresh failed
-
-
 
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
@@ -9523,23 +7129,14 @@ class TestCredentialPoolRecovery:
 
                 return next_entry
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=401,
-
             has_retried_429=False,
-
         )
-
-
 
         assert recovered is True
 
@@ -9547,21 +7144,13 @@ class TestCredentialPoolRecovery:
 
         agent._swap_credential.assert_called_once_with(next_entry)
 
-
-
     def test_recover_with_pool_401_refresh_fails_no_more_credentials(self, agent):
-
         """401 with failed refresh and no other credentials returns not recovered."""
 
-
-
         class _Pool:
-
             def try_refresh_current(self):
 
                 return None
-
-
 
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
@@ -9569,59 +7158,35 @@ class TestCredentialPoolRecovery:
 
                 return None  # no more credentials
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=401,
-
             has_retried_429=False,
-
         )
-
-
 
         assert recovered is False
 
         agent._swap_credential.assert_not_called()
-
-
 
     def test_extract_api_error_context_uses_reset_timestamp_and_reason(self, agent):
 
         response = SimpleNamespace(headers={})
 
         error = SimpleNamespace(
-
             body={
-
                 "error": {
-
                     "code": "device_code_exhausted",
-
                     "message": "Weekly credits exhausted.",
-
                     "resets_at": "2026-04-12T10:30:00Z",
-
                 }
-
             },
-
             response=response,
-
         )
 
-
-
         context = agent._extract_api_error_context(error)
-
-
 
         assert context["reason"] == "device_code_exhausted"
 
@@ -9629,77 +7194,47 @@ class TestCredentialPoolRecovery:
 
         assert context["reset_at"] == "2026-04-12T10:30:00Z"
 
-
-
     def test_extract_api_error_context_uses_type_as_reason(self, agent):
 
         error = SimpleNamespace(
-
             body={
-
                 "error": {
-
                     "type": "usage_limit_reached",
-
                     "message": "The usage limit has been reached",
-
                 }
-
             },
-
             response=SimpleNamespace(headers={}),
-
         )
 
-
-
         context = agent._extract_api_error_context(error)
-
-
 
         assert context["reason"] == "usage_limit_reached"
 
         assert context["message"] == "The usage limit has been reached"
 
-
-
-    def test_extract_api_error_context_parses_resets_in_hours_and_minutes(self, agent, monkeypatch):
+    def test_extract_api_error_context_parses_resets_in_hours_and_minutes(
+        self, agent, monkeypatch
+    ):
 
         from agent import agent_runtime_helpers
-
-
 
         monkeypatch.setattr(agent_runtime_helpers.time, "time", lambda: 1_000.0)
 
         error = SimpleNamespace(
-
             body={
-
                 "error": {
-
                     "type": "GoUsageLimitError",
-
                     "message": "Weekly usage limit reached. Resets in 6hr 29min.",
-
                 }
-
             },
-
             response=SimpleNamespace(headers={}),
-
         )
 
-
-
         context = agent._extract_api_error_context(error)
-
-
 
         assert context["reason"] == "GoUsageLimitError"
 
         assert context["reset_at"] == 1_000.0 + (6 * 60 * 60) + (29 * 60)
-
-
 
     def test_recover_with_pool_passes_error_context_on_rotated_429(self, agent):
 
@@ -9707,15 +7242,10 @@ class TestCredentialPoolRecovery:
 
         captured = {}
 
-
-
         class _Pool:
-
             def current(self):
 
                 return SimpleNamespace(label="primary")
-
-
 
             def mark_exhausted_and_rotate(self, *, status_code, error_context=None):
 
@@ -9725,25 +7255,18 @@ class TestCredentialPoolRecovery:
 
                 return next_entry
 
-
-
         agent._credential_pool = _Pool()
 
         agent._swap_credential = MagicMock()
 
-
-
         recovered, retry_same = agent._recover_with_credential_pool(
-
             status_code=429,
-
             has_retried_429=True,
-
-            error_context={"reason": "device_code_exhausted", "reset_at": "2026-04-12T10:30:00Z"},
-
+            error_context={
+                "reason": "device_code_exhausted",
+                "reset_at": "2026-04-12T10:30:00Z",
+            },
         )
-
-
 
         assert recovered is True
 
@@ -9754,14 +7277,8 @@ class TestCredentialPoolRecovery:
         assert captured["error_context"]["reason"] == "device_code_exhausted"
 
 
-
-
-
 class TestMaxTokensParam:
-
     """Verify _max_tokens_param returns the correct key for each provider."""
-
-
 
     def test_returns_max_completion_tokens_for_direct_openai(self, agent):
 
@@ -9771,8 +7288,6 @@ class TestMaxTokensParam:
 
         assert result == {"max_completion_tokens": 4096}
 
-
-
     def test_returns_max_tokens_for_openrouter(self, agent):
 
         agent.base_url = "https://openrouter.ai/api/v1"
@@ -9780,8 +7295,6 @@ class TestMaxTokensParam:
         result = agent._max_tokens_param(4096)
 
         assert result == {"max_tokens": 4096}
-
-
 
     def test_returns_max_tokens_for_local(self, agent):
 
@@ -9791,8 +7304,6 @@ class TestMaxTokensParam:
 
         assert result == {"max_tokens": 4096}
 
-
-
     def test_not_tricked_by_openai_in_openrouter_url(self, agent):
 
         agent.base_url = "https://openrouter.ai/api/v1/api.openai.com"
@@ -9801,10 +7312,7 @@ class TestMaxTokensParam:
 
         assert result == {"max_tokens": 4096}
 
-
-
     def test_returns_max_completion_tokens_for_azure(self, agent):
-
         """Azure OpenAI requires max_completion_tokens for gpt-5.x models."""
 
         agent.base_url = "https://my-resource.openai.azure.com/openai/v1"
@@ -9813,10 +7321,7 @@ class TestMaxTokensParam:
 
         assert result == {"max_completion_tokens": 4096}
 
-
-
     def test_returns_max_completion_tokens_for_github_copilot(self, agent):
-
         """GitHub Copilot's OpenAI-compatible API rejects max_tokens for newer models."""
 
         agent.base_url = "https://api.githubcopilot.com"
@@ -9825,10 +7330,7 @@ class TestMaxTokensParam:
 
         assert result == {"max_completion_tokens": 4096}
 
-
-
     def test_returns_max_completion_tokens_for_github_copilot_path(self, agent):
-
         """Detect Copilot by hostname even when the configured URL includes a path."""
 
         agent.base_url = "https://api.githubcopilot.com/chat/completions"
@@ -9838,17 +7340,10 @@ class TestMaxTokensParam:
         assert result == {"max_completion_tokens": 4096}
 
 
-
-
-
 class TestGpt5ApiModeRouting:
-
     """Verify provider-specific GPT-5 API-mode routing."""
 
-
-
     def test_azure_gpt5_stays_on_chat_completions(self, agent):
-
         """Azure serves gpt-5.x on /chat/completions — must not upgrade to codex_responses."""
 
         agent.base_url = "https://my-resource.openai.azure.com/openai/v1"
@@ -9860,33 +7355,21 @@ class TestGpt5ApiModeRouting:
         # Mirror the routing logic from __init__
 
         if (
-
             agent.api_mode == "chat_completions"
-
             and not agent._is_azure_openai_url()
-
             and (
-
                 agent._is_direct_openai_url()
-
                 or agent._provider_model_requires_responses_api(
-
-                    agent.model, provider=agent.provider,
-
+                    agent.model,
+                    provider=agent.provider,
                 )
-
             )
-
         ):
-
             agent.api_mode = "codex_responses"
 
         assert agent.api_mode == "chat_completions"
 
-
-
     def test_non_azure_gpt5_upgrades_to_codex_responses(self, agent):
-
         """On api.openai.com, gpt-5.x must still upgrade to codex_responses."""
 
         agent.base_url = "https://api.openai.com/v1"
@@ -9896,33 +7379,21 @@ class TestGpt5ApiModeRouting:
         agent.model = "gpt-5.4-mini"
 
         if (
-
             agent.api_mode == "chat_completions"
-
             and not agent._is_azure_openai_url()
-
             and (
-
                 agent._is_direct_openai_url()
-
                 or agent._provider_model_requires_responses_api(
-
-                    agent.model, provider=agent.provider,
-
+                    agent.model,
+                    provider=agent.provider,
                 )
-
             )
-
         ):
-
             agent.api_mode = "codex_responses"
 
         assert agent.api_mode == "codex_responses"
 
-
-
     def test_nous_gpt5_stays_on_chat_completions(self, agent):
-
         """Nous serves gpt-5.x on /chat/completions — must not upgrade to codex_responses."""
 
         agent.provider = "nous"
@@ -9934,34 +7405,25 @@ class TestGpt5ApiModeRouting:
         agent.model = "openai/gpt-5.5"
 
         if (
-
             agent.api_mode == "chat_completions"
-
             and not agent._is_azure_openai_url()
-
             and (
-
                 agent._is_direct_openai_url()
-
                 or agent._provider_model_requires_responses_api(
-
-                    agent.model, provider=agent.provider,
-
+                    agent.model,
+                    provider=agent.provider,
                 )
-
             )
-
         ):
-
             agent.api_mode = "codex_responses"
 
         assert agent.api_mode == "chat_completions"
 
-
-
     def test_is_azure_openai_url_detection(self, agent):
 
-        assert agent._is_azure_openai_url("https://foo.openai.azure.com/openai/v1") is True
+        assert (
+            agent._is_azure_openai_url("https://foo.openai.azure.com/openai/v1") is True
+        )
 
         assert agent._is_azure_openai_url("https://api.openai.com/v1") is False
 
@@ -9974,9 +7436,6 @@ class TestGpt5ApiModeRouting:
         assert agent._is_azure_openai_url() is True
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # System prompt stability for prompt caching
@@ -9984,15 +7443,10 @@ class TestGpt5ApiModeRouting:
 # ---------------------------------------------------------------------------
 
 
-
 class TestSystemPromptStability:
-
     """Verify that the system prompt stays stable across turns for cache hits."""
 
-
-
     def test_stored_prompt_reused_for_continuing_session(self, agent):
-
         """When conversation_history is non-empty and session DB has a stored
 
         prompt, it should be reused instead of rebuilding from disk."""
@@ -10005,25 +7459,16 @@ class TestSystemPromptStability:
 
         agent._session_db = mock_db
 
-
-
         # Simulate a continuing session with history
 
         history = [
-
             {"role": "user", "content": "hello"},
-
             {"role": "assistant", "content": "hi"},
-
         ]
-
-
 
         # First call — _cached_system_prompt is None, history is non-empty
 
         agent._cached_system_prompt = None
-
-
 
         # Patch run_conversation internals to just test the system prompt logic.
 
@@ -10033,83 +7478,55 @@ class TestSystemPromptStability:
 
         conversation_history = history
 
-
-
         # The block under test (from run_conversation):
 
         if agent._cached_system_prompt is None:
-
             stored_prompt = None
 
             if conversation_history and agent._session_db:
-
                 try:
-
                     session_row = agent._session_db.get_session(agent.session_id)
 
                     if session_row:
-
                         stored_prompt = session_row.get("system_prompt") or None
 
                 except Exception:
-
                     pass
 
-
-
             if stored_prompt:
-
                 agent._cached_system_prompt = stored_prompt
-
-
 
         assert agent._cached_system_prompt == stored
 
         mock_db.get_session.assert_called_once_with(agent.session_id)
 
-
-
     def test_fresh_build_when_no_history(self, agent):
-
         """On the first turn (no history), system prompt should be built fresh."""
 
         mock_db = MagicMock()
 
         agent._session_db = mock_db
 
-
-
         agent._cached_system_prompt = None
 
         conversation_history = []
 
-
-
         # The block under test:
 
         if agent._cached_system_prompt is None:
-
             stored_prompt = None
 
             if conversation_history and agent._session_db:
-
                 session_row = agent._session_db.get_session(agent.session_id)
 
                 if session_row:
-
                     stored_prompt = session_row.get("system_prompt") or None
 
-
-
             if stored_prompt:
-
                 agent._cached_system_prompt = stored_prompt
 
             else:
-
                 agent._cached_system_prompt = agent._build_system_prompt()
-
-
 
         # Should have built fresh, not queried the DB
 
@@ -10119,10 +7536,7 @@ class TestSystemPromptStability:
 
         assert "Clawksis" in agent._cached_system_prompt
 
-
-
     def test_fresh_build_when_db_has_no_prompt(self, agent):
-
         """If the session DB has no stored prompt, build fresh even with history."""
 
         mock_db = MagicMock()
@@ -10131,58 +7545,38 @@ class TestSystemPromptStability:
 
         agent._session_db = mock_db
 
-
-
         agent._cached_system_prompt = None
 
         conversation_history = [{"role": "user", "content": "hi"}]
 
-
-
         if agent._cached_system_prompt is None:
-
             stored_prompt = None
 
             if conversation_history and agent._session_db:
-
                 try:
-
                     session_row = agent._session_db.get_session(agent.session_id)
 
                     if session_row:
-
                         stored_prompt = session_row.get("system_prompt") or None
 
                 except Exception:
-
                     pass
 
-
-
             if stored_prompt:
-
                 agent._cached_system_prompt = stored_prompt
 
             else:
-
                 agent._cached_system_prompt = agent._build_system_prompt()
-
-
 
         # Empty string is falsy, so should fall through to fresh build
 
         assert "Clawksis" in agent._cached_system_prompt
 
 
-
 class TestBudgetPressure:
-
     """Budget exhaustion grace call system."""
 
-
-
     def test_grace_call_flags_initialized(self, agent):
-
         """Agent should have budget grace call flags."""
 
         assert agent._budget_exhausted_injected is False
@@ -10190,17 +7584,10 @@ class TestBudgetPressure:
         assert agent._budget_grace_call is False
 
 
-
-
-
 class TestSafeWriter:
-
     """Verify _SafeWriter guards stdout against OSError (broken pipes)."""
 
-
-
     def test_write_delegates_normally(self):
-
         """When stdout is healthy, _SafeWriter is transparent."""
 
         from run_agent import _SafeWriter
@@ -10215,10 +7602,7 @@ class TestSafeWriter:
 
         assert inner.getvalue() == "hello"
 
-
-
     def test_write_catches_oserror(self):
-
         """OSError on write is silently caught, returns len(data)."""
 
         from run_agent import _SafeWriter
@@ -10235,10 +7619,7 @@ class TestSafeWriter:
 
         assert result == 5  # len("hello")
 
-
-
     def test_flush_catches_oserror(self):
-
         """OSError on flush is silently caught."""
 
         from run_agent import _SafeWriter
@@ -10253,10 +7634,7 @@ class TestSafeWriter:
 
         writer.flush()  # should not raise
 
-
-
     def test_print_survives_broken_stdout(self, monkeypatch):
-
         """print() through _SafeWriter doesn't crash on broken pipe."""
 
         import sys
@@ -10274,17 +7652,12 @@ class TestSafeWriter:
         sys.stdout = _SafeWriter(broken)
 
         try:
-
             print("this should not crash")  # would raise without _SafeWriter
 
         finally:
-
             sys.stdout = original
 
-
-
     def test_installed_in_run_conversation(self, agent):
-
         """run_conversation installs _SafeWriter on stdio."""
 
         import sys
@@ -10300,17 +7673,11 @@ class TestSafeWriter:
         original_stderr = sys.stderr
 
         try:
-
             with (
-
                 patch.object(agent, "_persist_session"),
-
                 patch.object(agent, "_save_trajectory"),
-
                 patch.object(agent, "_cleanup_task_resources"),
-
             ):
-
                 agent.run_conversation("test")
 
             assert isinstance(sys.stdout, _SafeWriter)
@@ -10318,21 +7685,15 @@ class TestSafeWriter:
             assert isinstance(sys.stderr, _SafeWriter)
 
         finally:
-
             sys.stdout = original_stdout
 
             sys.stderr = original_stderr
-
-
 
     # test_installed_before_init_time_honcho_error_prints removed —
 
     # Honcho integration extracted to plugin (PR #4154).
 
-
-
     def test_double_wrap_prevented(self):
-
         """Wrapping an already-wrapped stream doesn't add layers."""
 
         from run_agent import _SafeWriter
@@ -10350,7 +7711,6 @@ class TestSafeWriter:
         # The guard in run_conversation checks isinstance before wrapping
 
         if not isinstance(wrapped, _SafeWriter):
-
             wrapped = _SafeWriter(wrapped)
 
         # Still just one layer
@@ -10360,13 +7720,6 @@ class TestSafeWriter:
         assert inner.getvalue() == "test"
 
 
-
-
-
-
-
-
-
 # ===================================================================
 
 # Anthropic adapter integration fixes
@@ -10374,14 +7727,8 @@ class TestSafeWriter:
 # ===================================================================
 
 
-
-
-
 class TestBuildApiKwargsAnthropicMaxTokens:
-
     """Bug fix: max_tokens was always None for Anthropic mode, ignoring user config."""
-
-
 
     def test_max_tokens_passed_to_anthropic(self, agent):
 
@@ -10391,29 +7738,35 @@ class TestBuildApiKwargsAnthropicMaxTokens:
 
         agent.reasoning_config = None
 
-
-
         with patch("agent.anthropic_adapter.build_anthropic_kwargs") as mock_build:
-
-            mock_build.return_value = {"model": "claude-sonnet-4-20250514", "messages": [], "max_tokens": 4096}
+            mock_build.return_value = {
+                "model": "claude-sonnet-4-20250514",
+                "messages": [],
+                "max_tokens": 4096,
+            }
 
             agent._build_api_kwargs([{"role": "user", "content": "test"}])
 
             _, kwargs = mock_build.call_args
 
             if not kwargs:
+                kwargs = dict(
+                    zip(
+                        [
+                            "model",
+                            "messages",
+                            "tools",
+                            "max_tokens",
+                            "reasoning_config",
+                        ],
+                        mock_build.call_args[0],
+                    )
+                )
 
-                kwargs = dict(zip(
-
-                    ["model", "messages", "tools", "max_tokens", "reasoning_config"],
-
-                    mock_build.call_args[0],
-
-                ))
-
-            assert kwargs.get("max_tokens") == 4096 or mock_build.call_args[1].get("max_tokens") == 4096
-
-
+            assert (
+                kwargs.get("max_tokens") == 4096
+                or mock_build.call_args[1].get("max_tokens") == 4096
+            )
 
     def test_max_tokens_none_when_unset(self, agent):
 
@@ -10423,11 +7776,12 @@ class TestBuildApiKwargsAnthropicMaxTokens:
 
         agent.reasoning_config = None
 
-
-
         with patch("agent.anthropic_adapter.build_anthropic_kwargs") as mock_build:
-
-            mock_build.return_value = {"model": "claude-sonnet-4-20250514", "messages": [], "max_tokens": 16384}
+            mock_build.return_value = {
+                "model": "claude-sonnet-4-20250514",
+                "messages": [],
+                "max_tokens": 16384,
+            }
 
             agent._build_api_kwargs([{"role": "user", "content": "test"}])
 
@@ -10436,64 +7790,58 @@ class TestBuildApiKwargsAnthropicMaxTokens:
             # max_tokens should be None (let adapter use its default)
 
             if call_args[1]:
-
                 assert call_args[1].get("max_tokens") is None
 
             else:
-
                 assert call_args[0][3] is None
 
 
-
-
-
 class TestAnthropicImageFallback:
-
     def test_build_api_kwargs_converts_multimodal_user_image_to_text(self, agent):
 
         agent.api_mode = "anthropic_messages"
 
         agent.reasoning_config = None
 
-
-
-        api_messages = [{
-
-            "role": "user",
-
-            "content": [
-
-                {"type": "text", "text": "Can you see this now?"},
-
-                {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}},
-
-            ],
-
-        }]
-
-
+        api_messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Can you see this now?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/cat.png"},
+                    },
+                ],
+            }
+        ]
 
         with (
-
-            patch("tools.vision_tools.vision_analyze_tool", new=AsyncMock(return_value=json.dumps({"success": True, "analysis": "A cat sitting on a chair."}))),
-
+            patch(
+                "tools.vision_tools.vision_analyze_tool",
+                new=AsyncMock(
+                    return_value=json.dumps({
+                        "success": True,
+                        "analysis": "A cat sitting on a chair.",
+                    })
+                ),
+            ),
             patch("agent.anthropic_adapter.build_anthropic_kwargs") as mock_build,
-
         ):
-
-            mock_build.return_value = {"model": "claude-sonnet-4-20250514", "messages": [], "max_tokens": 4096}
+            mock_build.return_value = {
+                "model": "claude-sonnet-4-20250514",
+                "messages": [],
+                "max_tokens": 4096,
+            }
 
             agent._build_api_kwargs(api_messages)
 
-
-
-        kwargs = mock_build.call_args.kwargs or dict(zip(
-
-            ["model", "messages", "tools", "max_tokens", "reasoning_config"],
-
-            mock_build.call_args.args,
-
-        ))
+        kwargs = mock_build.call_args.kwargs or dict(
+            zip(
+                ["model", "messages", "tools", "max_tokens", "reasoning_config"],
+                mock_build.call_args.args,
+            )
+        )
 
         transformed = kwargs["messages"]
 
@@ -10503,11 +7851,14 @@ class TestAnthropicImageFallback:
 
         assert "Can you see this now?" in transformed[0]["content"]
 
-        assert "vision_analyze with image_url: https://example.com/cat.png" in transformed[0]["content"]
+        assert (
+            "vision_analyze with image_url: https://example.com/cat.png"
+            in transformed[0]["content"]
+        )
 
-
-
-    def test_build_api_kwargs_reuses_cached_image_analysis_for_duplicate_images(self, agent):
+    def test_build_api_kwargs_reuses_cached_image_analysis_for_duplicate_images(
+        self, agent
+    ):
 
         agent.api_mode = "anthropic_messages"
 
@@ -10515,81 +7866,60 @@ class TestAnthropicImageFallback:
 
         data_url = "data:image/png;base64,QUFBQQ=="
 
-
-
         api_messages = [
-
             {
-
                 "role": "user",
-
                 "content": [
-
                     {"type": "text", "text": "first"},
-
                     {"type": "input_image", "image_url": data_url},
-
                 ],
-
             },
-
             {
-
                 "role": "user",
-
                 "content": [
-
                     {"type": "text", "text": "second"},
-
                     {"type": "input_image", "image_url": data_url},
-
                 ],
-
             },
-
         ]
 
-
-
-        mock_vision = AsyncMock(return_value=json.dumps({"success": True, "analysis": "A small test image."}))
+        mock_vision = AsyncMock(
+            return_value=json.dumps({
+                "success": True,
+                "analysis": "A small test image.",
+            })
+        )
 
         with (
-
             patch("tools.vision_tools.vision_analyze_tool", new=mock_vision),
-
             patch("agent.anthropic_adapter.build_anthropic_kwargs") as mock_build,
-
         ):
-
-            mock_build.return_value = {"model": "claude-sonnet-4-20250514", "messages": [], "max_tokens": 4096}
+            mock_build.return_value = {
+                "model": "claude-sonnet-4-20250514",
+                "messages": [],
+                "max_tokens": 4096,
+            }
 
             agent._build_api_kwargs(api_messages)
-
-
 
         assert mock_vision.await_count == 1
 
 
-
-
-
 class TestFallbackAnthropicProvider:
-
     """Bug fix: _try_activate_fallback had no case for anthropic provider."""
-
-
 
     def test_fallback_to_anthropic_sets_api_mode(self, agent):
 
         agent._fallback_activated = False
 
-        agent._fallback_model = {"provider": "anthropic", "model": "claude-sonnet-4-20250514"}
+        agent._fallback_model = {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+        }
 
         agent._fallback_chain = [agent._fallback_model]
 
         agent._fallback_index = 0
-
-
 
         mock_client = MagicMock()
 
@@ -10597,23 +7927,17 @@ class TestFallbackAnthropicProvider:
 
         mock_client.api_key = "sk-ant-api03-test"
 
-
-
         with (
-
-            patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)),
-
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(mock_client, None),
+            ),
             patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
-
             patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=None),
-
         ):
-
             mock_build.return_value = MagicMock()
 
             result = agent._try_activate_fallback()
-
-
 
         assert result is True
 
@@ -10623,19 +7947,18 @@ class TestFallbackAnthropicProvider:
 
         assert agent.client is None
 
-
-
     def test_fallback_to_anthropic_enables_prompt_caching(self, agent):
 
         agent._fallback_activated = False
 
-        agent._fallback_model = {"provider": "anthropic", "model": "claude-sonnet-4-20250514"}
+        agent._fallback_model = {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+        }
 
         agent._fallback_chain = [agent._fallback_model]
 
         agent._fallback_index = 0
-
-
 
         mock_client = MagicMock()
 
@@ -10643,37 +7966,33 @@ class TestFallbackAnthropicProvider:
 
         mock_client.api_key = "sk-ant-api03-test"
 
-
-
         with (
-
-            patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)),
-
-            patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
-
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(mock_client, None),
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
             patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=None),
-
         ):
-
             agent._try_activate_fallback()
 
-
-
         assert agent._use_prompt_caching is True
-
-
 
     def test_fallback_to_openrouter_uses_openai_client(self, agent):
 
         agent._fallback_activated = False
 
-        agent._fallback_model = {"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}
+        agent._fallback_model = {
+            "provider": "openrouter",
+            "model": "anthropic/claude-sonnet-4",
+        }
 
         agent._fallback_chain = [agent._fallback_model]
 
         agent._fallback_index = 0
-
-
 
         mock_client = MagicMock()
 
@@ -10681,13 +8000,11 @@ class TestFallbackAnthropicProvider:
 
         mock_client.api_key = "sk-or-test"
 
-
-
-        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
-
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(mock_client, None),
+        ):
             result = agent._try_activate_fallback()
-
-
 
         assert result is True
 
@@ -10696,50 +8013,30 @@ class TestFallbackAnthropicProvider:
         assert agent.client is mock_client
 
 
-
-
-
 def test_aiagent_uses_copilot_acp_client():
 
     with (
-
-        patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+        patch(
+            "run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")
+        ),
         patch("run_agent.check_toolset_requirements", return_value={}),
-
         patch("run_agent.OpenAI") as mock_openai,
-
         patch("agent.copilot_acp_client.CopilotACPClient") as mock_acp_client,
-
     ):
-
         acp_client = MagicMock()
 
         mock_acp_client.return_value = acp_client
 
-
-
         agent = AIAgent(
-
             api_key="copilot-acp",
-
             base_url="acp://copilot",
-
             provider="copilot-acp",
-
             acp_command="/usr/local/bin/copilot",
-
             acp_args=["--acp", "--stdio"],
-
             quiet_mode=True,
-
             skip_context_files=True,
-
             skip_memory=True,
-
         )
-
-
 
     assert agent.client is acp_client
 
@@ -10756,19 +8053,12 @@ def test_aiagent_uses_copilot_acp_client():
     assert mock_acp_client.call_args.kwargs["args"] == ["--acp", "--stdio"]
 
 
-
-
-
 def test_quiet_spinner_allowed_with_explicit_print_fn(agent):
 
     agent._print_fn = lambda *_a, **_kw: None
 
     with patch.object(run_agent.sys.stdout, "isatty", return_value=False):
-
         assert agent._should_start_quiet_spinner() is True
-
-
-
 
 
 def test_quiet_spinner_allowed_on_real_tty(agent):
@@ -10776,11 +8066,7 @@ def test_quiet_spinner_allowed_on_real_tty(agent):
     agent._print_fn = None
 
     with patch.object(run_agent.sys.stdout, "isatty", return_value=True):
-
         assert agent._should_start_quiet_spinner() is True
-
-
-
 
 
 def test_quiet_spinner_suppressed_on_non_tty_without_print_fn(agent):
@@ -10788,11 +8074,7 @@ def test_quiet_spinner_suppressed_on_non_tty_without_print_fn(agent):
     agent._print_fn = None
 
     with patch.object(run_agent.sys.stdout, "isatty", return_value=False):
-
         assert agent._should_start_quiet_spinner() is False
-
-
-
 
 
 def test_is_openai_client_closed_honors_custom_client_flag():
@@ -10802,11 +8084,7 @@ def test_is_openai_client_closed_honors_custom_client_flag():
     assert AIAgent._is_openai_client_closed(SimpleNamespace(is_closed=False)) is False
 
 
-
-
-
 def test_is_openai_client_closed_handles_method_form():
-
     """Fix for issue #4377: is_closed as method (openai SDK) vs property (httpx).
 
 
@@ -10821,33 +8099,22 @@ def test_is_openai_client_closed_handles_method_form():
 
     """
 
-
-
     class MethodFormClient:
-
         """Mimics openai.OpenAI where is_closed() is a method."""
-
-
 
         def __init__(self, closed: bool):
 
             self._closed = closed
 
-
-
         def is_closed(self) -> bool:
 
             return self._closed
-
-
 
     # Method returning False - client is open
 
     open_client = MethodFormClient(closed=False)
 
     assert AIAgent._is_openai_client_closed(open_client) is False
-
-
 
     # Method returning True - client is closed
 
@@ -10856,69 +8123,48 @@ def test_is_openai_client_closed_handles_method_form():
     assert AIAgent._is_openai_client_closed(closed_client) is True
 
 
-
-
-
 def test_is_openai_client_closed_falls_back_to_http_client():
-
     """Verify fallback to _client.is_closed when top-level is_closed is None."""
 
-
-
     class ClientWithHttpClient:
-
         is_closed = None  # No top-level is_closed
-
-
 
         def __init__(self, http_closed: bool):
 
             self._client = SimpleNamespace(is_closed=http_closed)
 
+    assert (
+        AIAgent._is_openai_client_closed(ClientWithHttpClient(http_closed=False))
+        is False
+    )
 
-
-    assert AIAgent._is_openai_client_closed(ClientWithHttpClient(http_closed=False)) is False
-
-    assert AIAgent._is_openai_client_closed(ClientWithHttpClient(http_closed=True)) is True
-
-
-
+    assert (
+        AIAgent._is_openai_client_closed(ClientWithHttpClient(http_closed=True)) is True
+    )
 
 
 class TestAnthropicBaseUrlPassthrough:
-
     """Bug fix: base_url was filtered with 'anthropic in base_url', blocking proxies."""
-
-
 
     def test_custom_proxy_base_url_passed_through(self):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
-
         ):
-
             mock_build.return_value = MagicMock()
 
             a = AIAgent(
-
                 api_key="sk-ant-api03-test1234567890",
-
                 base_url="https://llm-proxy.company.com/v1",
-
                 api_mode="anthropic_messages",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             call_args = mock_build.call_args
@@ -10927,34 +8173,24 @@ class TestAnthropicBaseUrlPassthrough:
 
             assert call_args[0][1] == "https://llm-proxy.company.com/v1"
 
-
-
     def test_none_base_url_passed_as_none(self):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
-
         ):
-
             mock_build.return_value = MagicMock()
 
             a = AIAgent(
-
                 api_key="sk-ant...7890",
-
                 api_mode="anthropic_messages",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
 
             call_args = mock_build.call_args
@@ -10966,23 +8202,17 @@ class TestAnthropicBaseUrlPassthrough:
             assert not passed_url or passed_url is None
 
 
-
-
-
 class TestAnthropicCredentialRefresh:
-
     def test_try_refresh_anthropic_client_credentials_rebuilds_client(self):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
             patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
-
         ):
-
             old_client = MagicMock()
 
             new_client = MagicMock()
@@ -10990,22 +8220,13 @@ class TestAnthropicCredentialRefresh:
             mock_build.side_effect = [old_client, new_client]
 
             agent = AIAgent(
-
                 api_key="sk-ant-oat01-stale-token",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 api_mode="anthropic_messages",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
-
-
 
         agent._anthropic_client = old_client
 
@@ -11015,63 +8236,53 @@ class TestAnthropicCredentialRefresh:
 
         agent.provider = "anthropic"
 
-
-
         with (
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value="sk-ant-oat01-fresh-token"),
-
-            patch("agent.anthropic_adapter.build_anthropic_client", return_value=new_client) as rebuild,
-
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value="sk-ant-oat01-fresh-token",
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=new_client,
+            ) as rebuild,
         ):
-
             assert agent._try_refresh_anthropic_client_credentials() is True
-
-
 
         old_client.close.assert_called_once()
 
         rebuild.assert_called_once_with(
-
-            "sk-ant-oat01-fresh-token", "https://api.anthropic.com", timeout=None,
-
+            "sk-ant-oat01-fresh-token",
+            "https://api.anthropic.com",
+            timeout=None,
         )
 
         assert agent._anthropic_client is new_client
 
         assert agent._anthropic_api_key == "sk-ant-oat01-fresh-token"
 
-
-
-    def test_try_refresh_anthropic_client_credentials_returns_false_when_token_unchanged(self):
+    def test_try_refresh_anthropic_client_credentials_returns_false_when_token_unchanged(
+        self,
+    ):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
-            patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
-
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
-
             agent = AIAgent(
-
                 api_key="sk-ant-oat01-same-token",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 api_mode="anthropic_messages",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
-
-
 
         old_client = MagicMock()
 
@@ -11079,55 +8290,40 @@ class TestAnthropicCredentialRefresh:
 
         agent._anthropic_api_key = "sk-ant-oat01-same-token"
 
-
-
         with (
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value="sk-ant-oat01-same-token"),
-
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value="sk-ant-oat01-same-token",
+            ),
             patch("agent.anthropic_adapter.build_anthropic_client") as rebuild,
-
         ):
-
             assert agent._try_refresh_anthropic_client_credentials() is False
-
-
 
         old_client.close.assert_not_called()
 
         rebuild.assert_not_called()
 
-
-
     def test_anthropic_messages_create_preflights_refresh(self):
 
         with (
-
-            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
-
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
             patch("run_agent.check_toolset_requirements", return_value={}),
-
-            patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
-
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
-
             agent = AIAgent(
-
                 api_key="sk-ant-oat01-current-token",
-
                 base_url="https://openrouter.ai/api/v1",
-
                 api_mode="anthropic_messages",
-
                 quiet_mode=True,
-
                 skip_context_files=True,
-
                 skip_memory=True,
-
             )
-
-
 
         response = SimpleNamespace(content=[])
 
@@ -11135,22 +8331,20 @@ class TestAnthropicCredentialRefresh:
 
         agent._anthropic_client.messages.create.return_value = response
 
-
-
-        with patch.object(agent, "_try_refresh_anthropic_client_credentials", return_value=True) as refresh:
-
-            result = agent._anthropic_messages_create({"model": "claude-sonnet-4-20250514"})
-
-
+        with patch.object(
+            agent, "_try_refresh_anthropic_client_credentials", return_value=True
+        ) as refresh:
+            result = agent._anthropic_messages_create({
+                "model": "claude-sonnet-4-20250514"
+            })
 
         refresh.assert_called_once_with()
 
-        agent._anthropic_client.messages.create.assert_called_once_with(model="claude-sonnet-4-20250514")
+        agent._anthropic_client.messages.create.assert_called_once_with(
+            model="claude-sonnet-4-20250514"
+        )
 
         assert result is response
-
-
-
 
 
 # ===================================================================
@@ -11160,9 +8354,7 @@ class TestAnthropicCredentialRefresh:
 # ===================================================================
 
 
-
 def _make_chunk(content=None, tool_calls=None, finish_reason=None, model="test/model"):
-
     """Build a SimpleNamespace mimicking an OpenAI streaming chunk."""
 
     delta = SimpleNamespace(content=content, tool_calls=tool_calls)
@@ -11172,11 +8364,7 @@ def _make_chunk(content=None, tool_calls=None, finish_reason=None, model="test/m
     return SimpleNamespace(model=model, choices=[choice])
 
 
-
-
-
 def _make_tc_delta(index=0, tc_id=None, name=None, arguments=None):
-
     """Build a SimpleNamespace mimicking a streaming tool_call delta."""
 
     func = SimpleNamespace(name=name, arguments=arguments)
@@ -11184,27 +8372,16 @@ def _make_tc_delta(index=0, tc_id=None, name=None, arguments=None):
     return SimpleNamespace(index=index, id=tc_id, function=func)
 
 
-
-
-
 class TestStreamingApiCall:
-
     """Tests for _streaming_api_call — voice TTS streaming pipeline."""
-
-
 
     def test_content_assembly(self, agent):
 
         chunks = [
-
             _make_chunk(content="Hel"),
-
             _make_chunk(content="lo "),
-
             _make_chunk(content="World"),
-
             _make_chunk(finish_reason="stop"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
@@ -11213,11 +8390,7 @@ class TestStreamingApiCall:
 
         agent.stream_delta_callback = callback
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         assert resp.choices[0].message.content == "Hello World"
 
@@ -11231,8 +8404,6 @@ class TestStreamingApiCall:
 
         callback.assert_any_call("World")
 
-
-
     def test_tool_call_accumulation(self, agent):
 
         # Per OpenAI streaming spec, function names are delivered atomically
@@ -11244,22 +8415,16 @@ class TestStreamingApiCall:
         # resends of the full name) and `+=` for arguments.
 
         chunks = [
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_1", "web_search", '{"q":')]),
-
+            _make_chunk(
+                tool_calls=[_make_tc_delta(0, "call_1", "web_search", '{"q":')]
+            ),
             _make_chunk(tool_calls=[_make_tc_delta(0, None, None, '"test"}')]),
-
             _make_chunk(finish_reason="tool_calls"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         tc = resp.choices[0].message.tool_calls
 
@@ -11271,27 +8436,17 @@ class TestStreamingApiCall:
 
         assert tc[0].id == "call_1"
 
-
-
     def test_multiple_tool_calls(self, agent):
 
         chunks = [
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_a", "search", '{}')]),
-
-            _make_chunk(tool_calls=[_make_tc_delta(1, "call_b", "read", '{}')]),
-
+            _make_chunk(tool_calls=[_make_tc_delta(0, "call_a", "search", "{}")]),
+            _make_chunk(tool_calls=[_make_tc_delta(1, "call_b", "read", "{}")]),
             _make_chunk(finish_reason="tool_calls"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         tc = resp.choices[0].message.tool_calls
 
@@ -11301,23 +8456,21 @@ class TestStreamingApiCall:
 
         assert tc[1].function.name == "read"
 
-
-
     def test_truncated_tool_call_args_upgrade_finish_reason_to_length(self, agent):
 
         chunks = [
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_1", "write_file", '{"path":"x.txt","content":"hel')]),
-
+            _make_chunk(
+                tool_calls=[
+                    _make_tc_delta(
+                        0, "call_1", "write_file", '{"path":"x.txt","content":"hel'
+                    )
+                ]
+            ),
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         tc = resp.choices[0].message.tool_calls
 
@@ -11329,10 +8482,7 @@ class TestStreamingApiCall:
 
         assert resp.choices[0].finish_reason == "length"
 
-
-
     def test_ollama_reused_index_separate_tool_calls(self, agent):
-
         """Ollama sends every tool call at index 0 with different ids.
 
 
@@ -11342,28 +8492,25 @@ class TestStreamingApiCall:
         """
 
         chunks = [
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_a", "search", '{"q":"hello"}')]),
-
+            _make_chunk(
+                tool_calls=[_make_tc_delta(0, "call_a", "search", '{"q":"hello"}')]
+            ),
             # Second tool call at the SAME index 0, but different id
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_b", "read_file", '{"path":"x.py"}')]),
-
+            _make_chunk(
+                tool_calls=[_make_tc_delta(0, "call_b", "read_file", '{"path":"x.py"}')]
+            ),
             _make_chunk(finish_reason="tool_calls"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         tc = resp.choices[0].message.tool_calls
 
-        assert len(tc) == 2, f"Expected 2 tool calls, got {len(tc)}: {[t.function.name for t in tc]}"
+        assert len(tc) == 2, (
+            f"Expected 2 tool calls, got {len(tc)}: {[t.function.name for t in tc]}"
+        )
 
         assert tc[0].function.name == "search"
 
@@ -11377,33 +8524,20 @@ class TestStreamingApiCall:
 
         assert tc[1].id == "call_b"
 
-
-
     def test_ollama_reused_index_streamed_args(self, agent):
-
         """Ollama with streamed arguments across multiple chunks at same index."""
 
         chunks = [
-
             _make_chunk(tool_calls=[_make_tc_delta(0, "call_a", "search", '{"q":')]),
-
             _make_chunk(tool_calls=[_make_tc_delta(0, None, None, '"hello"}')]),
-
             # New tool call, same index 0
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_b", "read", '{}')]),
-
+            _make_chunk(tool_calls=[_make_tc_delta(0, "call_b", "read", "{}")]),
             _make_chunk(finish_reason="tool_calls"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         tc = resp.choices[0].message.tool_calls
 
@@ -11415,35 +8549,23 @@ class TestStreamingApiCall:
 
         assert tc[1].function.name == "read"
 
-        assert tc[1].function.arguments == '{}'
-
-
+        assert tc[1].function.arguments == "{}"
 
     def test_content_and_tool_calls_together(self, agent):
 
         chunks = [
-
             _make_chunk(content="I'll search"),
-
-            _make_chunk(tool_calls=[_make_tc_delta(0, "call_1", "search", '{}')]),
-
+            _make_chunk(tool_calls=[_make_tc_delta(0, "call_1", "search", "{}")]),
             _make_chunk(finish_reason="tool_calls"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         assert resp.choices[0].message.content == "I'll search"
 
         assert len(resp.choices[0].message.tool_calls) == 1
-
-
 
     def test_empty_content_returns_none(self, agent):
 
@@ -11451,65 +8573,40 @@ class TestStreamingApiCall:
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         assert resp.choices[0].message.content is None
 
         assert resp.choices[0].message.tool_calls is None
 
-
-
     def test_callback_exception_swallowed(self, agent):
 
         chunks = [
-
             _make_chunk(content="Hello"),
-
             _make_chunk(content=" World"),
-
             _make_chunk(finish_reason="stop"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
         agent.stream_delta_callback = MagicMock(side_effect=ValueError("boom"))
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
 
-
-
         assert resp.choices[0].message.content == "Hello World"
-
-
 
     def test_model_name_captured(self, agent):
 
         chunks = [
-
             _make_chunk(content="Hi", model="gpt-4o"),
-
             _make_chunk(finish_reason="stop", model="gpt-4o"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
 
-
-
         assert resp.model == "gpt-4o"
-
-
 
     def test_stream_kwarg_injected(self, agent):
 
@@ -11517,20 +8614,16 @@ class TestStreamingApiCall:
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         agent._interruptible_streaming_api_call({"messages": [], "model": "test"})
-
-
 
         call_kwargs = agent.client.chat.completions.create.call_args
 
-        assert call_kwargs[1].get("stream") is True or call_kwargs.kwargs.get("stream") is True
-
-
+        assert (
+            call_kwargs[1].get("stream") is True
+            or call_kwargs.kwargs.get("stream") is True
+        )
 
     def test_api_exception_propagates_no_non_streaming_fallback(self, agent):
-
         """When streaming fails before any deltas, error propagates to the main retry loop."""
 
         agent.client.chat.completions.create.side_effect = ConnectionError("fail")
@@ -11538,14 +8631,10 @@ class TestStreamingApiCall:
         # Prevent stream retry logic from replacing the mock client
 
         with patch.object(agent, "_replace_primary_openai_client", return_value=False):
-
             # The fallback also uses the same client, so it'll fail too
 
             with pytest.raises(ConnectionError, match="fail"):
-
                 agent._interruptible_streaming_api_call({"messages": []})
-
-
 
     def test_response_has_uuid_id(self, agent):
 
@@ -11553,46 +8642,29 @@ class TestStreamingApiCall:
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         assert resp.id.startswith("stream-")
 
         assert len(resp.id) > len("stream-")
-
-
 
     def test_empty_choices_chunk_skipped(self, agent):
 
         empty_chunk = SimpleNamespace(model="gpt-4", choices=[])
 
         chunks = [
-
             empty_chunk,
-
             _make_chunk(content="Hello", model="gpt-4"),
-
             _make_chunk(finish_reason="stop", model="gpt-4"),
-
         ]
 
         agent.client.chat.completions.create.return_value = iter(chunks)
 
-
-
         resp = agent._interruptible_streaming_api_call({"messages": []})
-
-
 
         assert resp.choices[0].message.content == "Hello"
 
         assert resp.model == "gpt-4"
-
-
-
 
 
 # ===================================================================
@@ -11602,17 +8674,10 @@ class TestStreamingApiCall:
 # ===================================================================
 
 
-
-
-
 class TestInterruptVprintForceTrue:
-
     """All interrupt _vprint calls must use force=True so they are always visible."""
 
-
-
     def test_all_interrupt_vprint_have_force_true(self):
-
         """Scan source for _vprint calls containing 'Interrupt' — each must have force=True."""
 
         import inspect
@@ -11624,25 +8689,15 @@ class TestInterruptVprintForceTrue:
         violations = []
 
         for i, line in enumerate(lines, 1):
-
             stripped = line.strip()
 
             if "_vprint(" in stripped and "Interrupt" in stripped:
-
                 if "force=True" not in stripped:
-
                     violations.append(f"line {i}: {stripped}")
 
         assert not violations, (
-
-            f"Interrupt _vprint calls missing force=True:\n"
-
-            + "\n".join(violations)
-
+            f"Interrupt _vprint calls missing force=True:\n" + "\n".join(violations)
         )
-
-
-
 
 
 # ===================================================================
@@ -11652,17 +8707,10 @@ class TestInterruptVprintForceTrue:
 # ===================================================================
 
 
-
-
-
 class TestAnthropicInterruptHandler:
-
     """_interruptible_api_call must handle Anthropic mode when interrupted."""
 
-
-
     def test_interruptible_has_anthropic_branch(self):
-
         """The interrupt handler must check api_mode == 'anthropic_messages'."""
 
         import inspect
@@ -11671,13 +8719,11 @@ class TestAnthropicInterruptHandler:
 
         source = inspect.getsource(interruptible_api_call)
 
-        assert "anthropic_messages" in source, \
+        assert "anthropic_messages" in source, (
             "interruptible_api_call must handle Anthropic interrupt (api_mode check)"
-
-
+        )
 
     def test_interruptible_rebuilds_anthropic_client(self):
-
         """After interrupting, the Anthropic client should be rebuilt."""
 
         import inspect
@@ -11686,13 +8732,11 @@ class TestAnthropicInterruptHandler:
 
         source = inspect.getsource(interruptible_api_call)
 
-        assert "build_anthropic_client" in source, \
+        assert "build_anthropic_client" in source, (
             "interruptible_api_call must rebuild Anthropic client after interrupt"
-
-
+        )
 
     def test_streaming_has_anthropic_branch(self):
-
         """_streaming_api_call must also handle Anthropic interrupt."""
 
         import inspect
@@ -11701,11 +8745,9 @@ class TestAnthropicInterruptHandler:
 
         source = inspect.getsource(interruptible_streaming_api_call)
 
-        assert "anthropic_messages" in source, \
+        assert "anthropic_messages" in source, (
             "interruptible_streaming_api_call must handle Anthropic interrupt"
-
-
-
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -11715,40 +8757,32 @@ class TestAnthropicInterruptHandler:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestStreamCallbackNonStreamingProvider:
-
     """When api_mode != chat_completions, stream_callback must still receive
 
     the response content so TTS works (batch delivery)."""
 
-
-
     def test_callback_receives_chat_completions_response(self, agent):
-
         """For chat_completions-shaped responses, callback gets content."""
 
         agent.api_mode = "anthropic_messages"
 
         mock_response = SimpleNamespace(
-
-            choices=[SimpleNamespace(
-
-                message=SimpleNamespace(content="Hello", tool_calls=None, reasoning_content=None),
-
-                finish_reason="stop", index=0,
-
-            )],
-
-            usage=None, model="test", id="test-id",
-
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello", tool_calls=None, reasoning_content=None
+                    ),
+                    finish_reason="stop",
+                    index=0,
+                )
+            ],
+            usage=None,
+            model="test",
+            id="test-id",
         )
 
         agent._interruptible_api_call = MagicMock(return_value=mock_response)
-
-
 
         received = []
 
@@ -11756,41 +8790,30 @@ class TestStreamCallbackNonStreamingProvider:
 
         agent._stream_callback = cb
 
-
-
         _cb = getattr(agent, "_stream_callback", None)
 
         response = agent._interruptible_api_call({})
 
         if _cb is not None and response:
-
             try:
-
                 if agent.api_mode == "anthropic_messages":
-
                     text_parts = [
-
-                        block.text for block in getattr(response, "content", [])
-
-                        if getattr(block, "type", None) == "text" and getattr(block, "text", None)
-
+                        block.text
+                        for block in getattr(response, "content", [])
+                        if getattr(block, "type", None) == "text"
+                        and getattr(block, "text", None)
                     ]
 
                     content = " ".join(text_parts) if text_parts else None
 
                 else:
-
                     content = response.choices[0].message.content
 
                 if content:
-
                     _cb(content)
 
             except Exception:
-
                 pass
-
-
 
         # Anthropic format not matched above; fallback via except
 
@@ -11805,38 +8828,26 @@ class TestStreamCallbackNonStreamingProvider:
         _cb2 = agent._stream_callback
 
         if _cb2 is not None and mock_response:
-
             try:
-
                 content = mock_response.choices[0].message.content
 
                 if content:
-
                     _cb2(content)
 
             except Exception:
-
                 pass
 
         assert received2 == ["Hello"]
 
-
-
     def test_callback_receives_anthropic_content(self, agent):
-
         """For Anthropic responses, text blocks are extracted and forwarded."""
 
         agent.api_mode = "anthropic_messages"
 
         mock_response = SimpleNamespace(
-
             content=[SimpleNamespace(type="text", text="Hello from Claude")],
-
             stop_reason="end_turn",
-
         )
-
-
 
         received = []
 
@@ -11846,42 +8857,28 @@ class TestStreamCallbackNonStreamingProvider:
 
         _cb = agent._stream_callback
 
-
-
         if _cb is not None and mock_response:
-
             try:
-
                 if agent.api_mode == "anthropic_messages":
-
                     text_parts = [
-
-                        block.text for block in getattr(mock_response, "content", [])
-
-                        if getattr(block, "type", None) == "text" and getattr(block, "text", None)
-
+                        block.text
+                        for block in getattr(mock_response, "content", [])
+                        if getattr(block, "type", None) == "text"
+                        and getattr(block, "text", None)
                     ]
 
                     content = " ".join(text_parts) if text_parts else None
 
                 else:
-
                     content = mock_response.choices[0].message.content
 
                 if content:
-
                     _cb(content)
 
             except Exception:
-
                 pass
 
-
-
         assert received == ["Hello from Claude"]
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -11891,14 +8888,8 @@ class TestStreamCallbackNonStreamingProvider:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestPersistUserMessageOverride:
-
     """Synthetic API-only user prefixes should never leak into transcripts."""
-
-
 
     def test_persist_session_rewrites_current_turn_user_message(self, agent):
 
@@ -11913,30 +8904,17 @@ class TestPersistUserMessageOverride:
         agent._persist_user_message_override = "Hello there"
 
         messages = [
-
             {
-
                 "role": "user",
-
                 "content": (
-
                     "[Voice input — respond concisely and conversationally, "
-
                     "2-3 sentences max. No code blocks or markdown.] Hello there"
-
                 ),
-
             },
-
             {"role": "assistant", "content": "Hi!"},
-
         ]
 
-
-
         agent._persist_session(messages, [])
-
-
 
         assert messages[0]["content"] == "Hello there"
 
@@ -11945,14 +8923,8 @@ class TestPersistUserMessageOverride:
         assert first_db_write["content"] == "Hello there"
 
 
-
-
-
 class TestReasoningReplayForStrictProviders:
-
     """Assistant replay must preserve provider-native reasoning fields."""
-
-
 
     def _setup_agent(self, agent):
 
@@ -11966,8 +8938,6 @@ class TestReasoningReplayForStrictProviders:
 
         agent.save_trajectories = False
 
-
-
     def test_kimi_tool_replay_includes_space_reasoning_content(self, agent):
 
         self._setup_agent(agent)
@@ -11978,28 +8948,16 @@ class TestReasoningReplayForStrictProviders:
 
         agent.provider = "kimi-coding"
 
-
-
         prior_assistant = {
-
             "role": "assistant",
-
             "content": "",
-
             "tool_calls": [
-
                 {
-
                     "id": "c1",
-
                     "type": "function",
-
-                    "function": {"name": "terminal", "arguments": "{\"command\":\"date\"}"},
-
+                    "function": {"name": "terminal", "arguments": '{"command":"date"}'},
                 }
-
             ],
-
         }
 
         tool_result = {"role": "tool", "tool_call_id": "c1", "content": "Tue Apr 21"}
@@ -12008,33 +8966,25 @@ class TestReasoningReplayForStrictProviders:
 
         agent.client.chat.completions.create.return_value = final_resp
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation(
-
                 "next step",
-
                 conversation_history=[prior_assistant, tool_result],
-
             )
-
-
 
         assert result["completed"] is True
 
-        sent_messages = agent.client.chat.completions.create.call_args.kwargs["messages"]
+        sent_messages = agent.client.chat.completions.create.call_args.kwargs[
+            "messages"
+        ]
 
-        replayed_assistant = next(msg for msg in sent_messages if msg.get("role") == "assistant")
+        replayed_assistant = next(
+            msg for msg in sent_messages if msg.get("role") == "assistant"
+        )
 
         assert replayed_assistant["role"] == "assistant"
 
@@ -12044,36 +8994,24 @@ class TestReasoningReplayForStrictProviders:
 
         assert replayed_assistant["reasoning_content"] == " "
 
-
-
-    def test_explicit_reasoning_content_beats_normalized_reasoning_on_replay(self, agent):
+    def test_explicit_reasoning_content_beats_normalized_reasoning_on_replay(
+        self, agent
+    ):
 
         self._setup_agent(agent)
 
         prior_assistant = {
-
             "role": "assistant",
-
             "content": "",
-
             "tool_calls": [
-
                 {
-
                     "id": "c1",
-
                     "type": "function",
-
-                    "function": {"name": "web_search", "arguments": "{\"q\":\"test\"}"},
-
+                    "function": {"name": "web_search", "arguments": '{"q":"test"}'},
                 }
-
             ],
-
             "reasoning": "summary reasoning",
-
             "reasoning_content": "provider-native scratchpad",
-
         }
 
         tool_result = {"role": "tool", "tool_call_id": "c1", "content": "ok"}
@@ -12082,38 +9020,27 @@ class TestReasoningReplayForStrictProviders:
 
         agent.client.chat.completions.create.return_value = final_resp
 
-
-
         with (
-
             patch.object(agent, "_persist_session"),
-
             patch.object(agent, "_save_trajectory"),
-
             patch.object(agent, "_cleanup_task_resources"),
-
         ):
-
             result = agent.run_conversation(
-
                 "next step",
-
                 conversation_history=[prior_assistant, tool_result],
-
             )
-
-
 
         assert result["completed"] is True
 
-        sent_messages = agent.client.chat.completions.create.call_args.kwargs["messages"]
+        sent_messages = agent.client.chat.completions.create.call_args.kwargs[
+            "messages"
+        ]
 
-        replayed_assistant = next(msg for msg in sent_messages if msg.get("role") == "assistant")
+        replayed_assistant = next(
+            msg for msg in sent_messages if msg.get("role") == "assistant"
+        )
 
         assert replayed_assistant["reasoning_content"] == "provider-native scratchpad"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -12123,14 +9050,8 @@ class TestReasoningReplayForStrictProviders:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestVprintForceOnErrors:
-
     """Error/warning messages must be visible during streaming TTS."""
-
-
 
     def test_forced_message_shown_during_tts(self, agent):
 
@@ -12139,12 +9060,9 @@ class TestVprintForceOnErrors:
         printed = []
 
         with patch("builtins.print", side_effect=lambda *a, **kw: printed.append(a)):
-
             agent._vprint("error msg", force=True)
 
         assert len(printed) == 1
-
-
 
     def test_non_forced_suppressed_during_tts(self, agent):
 
@@ -12153,12 +9071,9 @@ class TestVprintForceOnErrors:
         printed = []
 
         with patch("builtins.print", side_effect=lambda *a, **kw: printed.append(a)):
-
             agent._vprint("debug info")
 
         assert len(printed) == 0
-
-
 
     def test_all_shown_without_tts(self, agent):
 
@@ -12167,7 +9082,6 @@ class TestVprintForceOnErrors:
         printed = []
 
         with patch("builtins.print", side_effect=lambda *a, **kw: printed.append(a)):
-
             agent._vprint("debug")
 
             agent._vprint("error", force=True)
@@ -12175,31 +9089,20 @@ class TestVprintForceOnErrors:
         assert len(printed) == 2
 
 
-
-
-
 class TestNormalizeCodexDictArguments:
-
     """_normalize_codex_response must produce valid JSON strings for tool
 
     call arguments, even when the Responses API returns them as dicts."""
 
-
-
     def _make_codex_response(self, item_type, arguments, item_status="completed"):
-
         """Build a minimal Responses API response with a single tool call."""
 
         item = SimpleNamespace(
-
             type=item_type,
-
             status=item_status,
-
         )
 
         if item_type == "function_call":
-
             item.name = "web_search"
 
             item.arguments = arguments
@@ -12209,7 +9112,6 @@ class TestNormalizeCodexDictArguments:
             item.id = "fc_abc123"
 
         elif item_type == "custom_tool_call":
-
             item.name = "web_search"
 
             item.input = arguments
@@ -12219,17 +9121,11 @@ class TestNormalizeCodexDictArguments:
             item.id = "fc_abc123"
 
         return SimpleNamespace(
-
             output=[item],
-
             status="completed",
-
         )
 
-
-
     def test_function_call_dict_arguments_produce_valid_json(self, agent):
-
         """dict arguments from function_call must be serialised with
 
         json.dumps, not str(), so downstream json.loads() succeeds."""
@@ -12246,10 +9142,7 @@ class TestNormalizeCodexDictArguments:
 
         assert parsed == args_dict
 
-
-
     def test_custom_tool_call_dict_arguments_produce_valid_json(self, agent):
-
         """dict arguments from custom_tool_call must also use json.dumps."""
 
         args_dict = {"path": "/tmp/test.txt", "content": "hello"}
@@ -12264,10 +9157,7 @@ class TestNormalizeCodexDictArguments:
 
         assert parsed == args_dict
 
-
-
     def test_string_arguments_unchanged(self, agent):
-
         """String arguments must pass through without modification."""
 
         args_str = '{"query": "test"}'
@@ -12281,9 +9171,6 @@ class TestNormalizeCodexDictArguments:
         assert tc.function.arguments == args_str
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # OAuth flag and nudge counter fixes (salvaged from PR #1797)
@@ -12291,17 +9178,10 @@ class TestNormalizeCodexDictArguments:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestOAuthFlagAfterCredentialRefresh:
-
     """_is_anthropic_oauth must update when token type changes during refresh."""
 
-
-
     def test_oauth_flag_updates_api_key_to_oauth(self, agent):
-
         """Refreshing from API key to OAuth token must set flag to True."""
 
         agent.api_mode = "anthropic_messages"
@@ -12314,32 +9194,23 @@ class TestOAuthFlagAfterCredentialRefresh:
 
         agent._is_anthropic_oauth = False
 
-
-
         with (
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-
-                  return_value="sk-ant-setup-oauth-token"),
-
-            patch("agent.anthropic_adapter.build_anthropic_client",
-
-                  return_value=MagicMock()),
-
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value="sk-ant-setup-oauth-token",
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
-
             result = agent._try_refresh_anthropic_client_credentials()
-
-
 
         assert result is True
 
         assert agent._is_anthropic_oauth is True
 
-
-
     def test_oauth_flag_updates_oauth_to_api_key(self, agent):
-
         """Refreshing from OAuth to API key must set flag to False."""
 
         agent.api_mode = "anthropic_messages"
@@ -12352,37 +9223,25 @@ class TestOAuthFlagAfterCredentialRefresh:
 
         agent._is_anthropic_oauth = True
 
-
-
         with (
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-
-                  return_value="sk-ant-api03-new-key"),
-
-            patch("agent.anthropic_adapter.build_anthropic_client",
-
-                  return_value=MagicMock()),
-
+            patch(
+                "agent.anthropic_adapter.resolve_anthropic_token",
+                return_value="sk-ant-api03-new-key",
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
         ):
-
             result = agent._try_refresh_anthropic_client_credentials()
-
-
 
         assert result is True
 
         assert agent._is_anthropic_oauth is False
 
 
-
-
-
 class TestFallbackSetsOAuthFlag:
-
     """_try_activate_fallback must set _is_anthropic_oauth for Anthropic fallbacks."""
-
-
 
     def test_fallback_to_anthropic_oauth_sets_flag(self, agent):
 
@@ -12394,41 +9253,28 @@ class TestFallbackSetsOAuthFlag:
 
         agent._fallback_index = 0
 
-
-
         mock_client = MagicMock()
 
         mock_client.base_url = "https://api.anthropic.com/v1"
 
         mock_client.api_key = "sk-ant-setup-oauth-token"
 
-
-
         with (
-
-            patch("agent.auxiliary_client.resolve_provider_client",
-
-                  return_value=(mock_client, None)),
-
-            patch("agent.anthropic_adapter.build_anthropic_client",
-
-                  return_value=MagicMock()),
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-
-                  return_value=None),
-
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(mock_client, None),
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
+            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=None),
         ):
-
             result = agent._try_activate_fallback()
-
-
 
         assert result is True
 
         assert agent._is_anthropic_oauth is True
-
-
 
     def test_fallback_to_anthropic_api_key_clears_flag(self, agent):
 
@@ -12440,62 +9286,44 @@ class TestFallbackSetsOAuthFlag:
 
         agent._fallback_index = 0
 
-
-
         mock_client = MagicMock()
 
         mock_client.base_url = "https://api.anthropic.com/v1"
 
         mock_client.api_key = "sk-ant-api03-regular-key"
 
-
-
         with (
-
-            patch("agent.auxiliary_client.resolve_provider_client",
-
-                  return_value=(mock_client, None)),
-
-            patch("agent.anthropic_adapter.build_anthropic_client",
-
-                  return_value=MagicMock()),
-
-            patch("agent.anthropic_adapter.resolve_anthropic_token",
-
-                  return_value=None),
-
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(mock_client, None),
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
+            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=None),
         ):
-
             result = agent._try_activate_fallback()
-
-
 
         assert result is True
 
         assert agent._is_anthropic_oauth is False
 
 
-
-
-
 class TestMemoryNudgeCounterPersistence:
-
     """_turns_since_memory must persist across run_conversation calls."""
 
-
-
     def test_counters_initialized_in_init(self):
-
         """Counters must exist on the agent after __init__."""
 
         with patch("run_agent.get_tool_definitions", return_value=[]):
-
             a = AIAgent(
-
-                model="test", api_key="test-key", base_url="http://localhost:1234/v1",
-
-                provider="openrouter", skip_context_files=True, skip_memory=True,
-
+                model="test",
+                api_key="test-key",
+                base_url="http://localhost:1234/v1",
+                provider="openrouter",
+                skip_context_files=True,
+                skip_memory=True,
             )
 
         assert hasattr(a, "_turns_since_memory")
@@ -12506,10 +9334,7 @@ class TestMemoryNudgeCounterPersistence:
 
         assert a._iters_since_skill == 0
 
-
-
     def test_counters_not_reset_in_preamble(self):
-
         """The run_conversation preamble must not zero the nudge counters."""
 
         import inspect
@@ -12543,14 +9368,8 @@ class TestMemoryNudgeCounterPersistence:
         assert "agent._iters_since_skill = 0" not in preamble
 
 
-
-
-
 class TestDeadRetryCode:
-
     """Unreachable retry_count >= max_retries after raise must not exist."""
-
-
 
     def test_no_unreachable_max_retries_after_backoff(self):
 
@@ -12563,19 +9382,12 @@ class TestDeadRetryCode:
         occurrences = source.count("if retry_count >= max_retries:")
 
         assert occurrences == 2, (
-
             f"Expected 2 occurrences of 'if retry_count >= max_retries:' "
-
             f"but found {occurrences}"
-
         )
 
 
-
-
-
 class TestSupportsReasoningExtraBody:
-
     def _make_agent(self):
 
         agent = object.__new__(AIAgent)
@@ -12590,42 +9402,26 @@ class TestSupportsReasoningExtraBody:
 
         return agent
 
-
-
     def test_xiaomi_models_are_treated_as_reasoning_capable(self):
 
         agent = self._make_agent()
 
         for model in (
-
             "xiaomi/mimo-v2.5-pro",
-
             "xiaomi/mimo-v2.5",
-
             "xiaomi/mimo-v2-omni",
-
             "xiaomi/mimo-v2-pro",
-
             "xiaomi/mimo-v2-flash",
-
         ):
-
             agent.model = model
 
             assert agent._supports_reasoning_extra_body() is True, model
 
 
-
-
-
 class TestMemoryContextSanitization:
-
     """sanitize_context() helper correctness — used at provider boundaries."""
 
-
-
     def test_user_message_is_not_mutated_by_run_conversation(self):
-
         """User input must reach run_conversation untouched — if a user types
 
         a literal <memory-context> tag we don't silently delete their text.
@@ -12642,10 +9438,7 @@ class TestMemoryContextSanitization:
 
         assert "sanitize_context(persist_user_message)" not in src
 
-
-
     def test_sanitize_context_strips_full_block(self):
-
         """Helper-level: a string with an embedded memory-context block is
 
         cleaned to just the surrounding text.  Used by build_memory_context_block
@@ -12657,21 +9450,13 @@ class TestMemoryContextSanitization:
         user_text = "how is the honcho working"
 
         injected = (
-
             user_text + "\n\n"
-
             "<memory-context>\n"
-
             "[System note: The following is recalled memory context, "
-
             "NOT new user input. Treat as informational background data.]\n\n"
-
             "## User Representation\n"
-
             "[2026-01-13 02:13:00] stale observation about AstroMap\n"
-
             "</memory-context>"
-
         )
 
         result = sanitize_context(injected)
@@ -12683,11 +9468,7 @@ class TestMemoryContextSanitization:
         assert "how is the honcho working" in result
 
 
-
-
-
 class TestMemoryProviderTurnStart:
-
     """run_conversation() must call memory_manager.on_turn_start() before prefetch_all().
 
 
@@ -12700,10 +9481,7 @@ class TestMemoryProviderTurnStart:
 
     """
 
-
-
     def test_on_turn_start_called_before_prefetch(self):
-
         """Source-level check: on_turn_start appears before prefetch_all in run_conversation."""
 
         import inspect
@@ -12719,17 +9497,11 @@ class TestMemoryProviderTurnStart:
         idx_prefetch = src.index(".prefetch_all(")
 
         assert idx_turn_start < idx_prefetch, (
-
             "on_turn_start() must be called before prefetch_all() in run_conversation "
-
             "so that memory providers have the correct turn count for cadence checks"
-
         )
 
-
-
     def test_on_turn_start_uses_user_turn_count(self):
-
         """Source-level check: on_turn_start receives the user_turn_count."""
 
         import inspect
@@ -12743,4 +9515,3 @@ class TestMemoryProviderTurnStart:
         # assert the extracted-form spelling directly.
 
         assert "on_turn_start(agent._user_turn_count" in src
-

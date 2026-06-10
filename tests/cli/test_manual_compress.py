@@ -29,7 +29,9 @@ def test_manual_compress_reports_noop_without_success_banner(capsys):
         assert messages == history
         return 100
 
-    with patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate):
+    with patch(
+        "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+    ):
         shell._manual_compress()
 
     output = capsys.readouterr().out
@@ -43,7 +45,10 @@ def test_manual_compress_explains_when_token_estimate_rises(capsys):
     history = _make_history()
     compressed = [
         history[0],
-        {"role": "assistant", "content": "Dense summary that still counts as more tokens."},
+        {
+            "role": "assistant",
+            "content": "Dense summary that still counts as more tokens.",
+        },
         history[-1],
     ]
     shell.conversation_history = history
@@ -61,7 +66,9 @@ def test_manual_compress_explains_when_token_estimate_rises(capsys):
             return 120
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
-    with patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate):
+    with patch(
+        "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+    ):
         shell._manual_compress()
 
     output = capsys.readouterr().out
@@ -92,10 +99,12 @@ def test_manual_compress_syncs_session_id_after_split():
     shell.agent.compression_enabled = True
     shell.agent._cached_system_prompt = ""
     shell.agent.tools = None
+
     # Simulate _compress_context mutating agent.session_id as a side effect.
     def _fake_compress(*args, **kwargs):
         shell.agent.session_id = new_child_id
         return (compressed, "")
+
     shell.agent._compress_context.side_effect = _fake_compress
     shell.agent.session_id = old_id  # starts in sync
     shell._pending_title = "stale title"

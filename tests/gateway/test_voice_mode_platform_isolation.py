@@ -52,13 +52,23 @@ class TestVoiceModePlatformIsolation:
         runner._voice_mode[runner._voice_key(Platform.SLACK, "123")] = "voice_only"
 
         # Verify they are independent
-        assert runner._voice_mode.get(runner._voice_key(Platform.TELEGRAM, "123")) == "all"
-        assert runner._voice_mode.get(runner._voice_key(Platform.SLACK, "123")) == "voice_only"
+        assert (
+            runner._voice_mode.get(runner._voice_key(Platform.TELEGRAM, "123")) == "all"
+        )
+        assert (
+            runner._voice_mode.get(runner._voice_key(Platform.SLACK, "123"))
+            == "voice_only"
+        )
 
         # Disabling Telegram should not affect Slack
         runner._voice_mode[runner._voice_key(Platform.TELEGRAM, "123")] = "off"
-        assert runner._voice_mode.get(runner._voice_key(Platform.TELEGRAM, "123")) == "off"
-        assert runner._voice_mode.get(runner._voice_key(Platform.SLACK, "123")) == "voice_only"
+        assert (
+            runner._voice_mode.get(runner._voice_key(Platform.TELEGRAM, "123")) == "off"
+        )
+        assert (
+            runner._voice_mode.get(runner._voice_key(Platform.SLACK, "123"))
+            == "voice_only"
+        )
 
 
 class TestLegacyKeyMigration:
@@ -92,7 +102,10 @@ class TestLegacyKeyMigration:
             # Warning should be logged for each legacy key
             assert mock_logger.warning.called
             warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
-            assert any("Skipping legacy unprefixed voice mode key" in str(c) for c in warning_calls)
+            assert any(
+                "Skipping legacy unprefixed voice mode key" in str(c)
+                for c in warning_calls
+            )
 
     def test_load_voice_modes_preserves_prefixed_keys(self):
         """_load_voice_modes correctly loads platform-prefixed keys."""
@@ -146,10 +159,10 @@ class TestSyncVoiceModeStateToAdapter:
 
         # Set up voice mode state with multiple platforms
         runner._voice_mode = {
-            "telegram:123": "off",      # Should sync
-            "telegram:456": "all",       # Should NOT sync (mode is not "off")
-            "slack:123": "off",          # Should NOT sync (different platform)
-            "discord:789": "off",        # Should NOT sync (different platform)
+            "telegram:123": "off",  # Should sync
+            "telegram:456": "all",  # Should NOT sync (mode is not "off")
+            "slack:123": "off",  # Should NOT sync (different platform)
+            "discord:789": "off",  # Should NOT sync (different platform)
         }
 
         # Create a mock Telegram adapter
@@ -207,6 +220,7 @@ class TestSyncVoiceModeStateToAdapter:
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _make_runner() -> GatewayRunner:
     """Create a minimal GatewayRunner for testing."""

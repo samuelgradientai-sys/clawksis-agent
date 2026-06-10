@@ -88,7 +88,10 @@ class TestBrowseShSource(unittest.TestCase):
         )
         mock_get.side_effect = [
             _MockResponse(status_code=200, json_data={"skillMdUrl": blob_url}),
-            _MockResponse(status_code=200, text="# Airbnb Skill\n\nSearch and book Airbnb listings."),
+            _MockResponse(
+                status_code=200,
+                text="# Airbnb Skill\n\nSearch and book Airbnb listings.",
+            ),
         ]
         bundle = self.src.fetch("browse-sh/airbnb.com/search-listings-ddgioa")
         self.assertIsNotNone(bundle)
@@ -98,7 +101,9 @@ class TestBrowseShSource(unittest.TestCase):
         self.assertIn("Airbnb", bundle.files["SKILL.md"])
         self.assertEqual(bundle.source, "browse-sh")
         self.assertEqual(bundle.trust_level, "community")
-        self.assertEqual(bundle.identifier, "browse-sh/airbnb.com/search-listings-ddgioa")
+        self.assertEqual(
+            bundle.identifier, "browse-sh/airbnb.com/search-listings-ddgioa"
+        )
         self.assertEqual(bundle.metadata["skill_md_url"], blob_url)
         # Two HTTP calls: detail endpoint + blob.
         self.assertEqual(mock_get.call_count, 2)

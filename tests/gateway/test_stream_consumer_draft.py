@@ -25,7 +25,9 @@ from gateway.stream_consumer import (
 
 
 def _make_draft_capable_adapter(
-    *, supports_draft: bool = True, draft_succeeds: bool = True,
+    *,
+    supports_draft: bool = True,
+    draft_succeeds: bool = True,
 ):
     """Build a minimal BasePlatformAdapter subclass with draft support.
 
@@ -51,6 +53,7 @@ def _make_draft_capable_adapter(
 
     def _supports(chat_type=None, metadata=None):
         return bool(supports_draft) and (chat_type or "").lower() == "dm"
+
     adapter.supports_draft_streaming = _supports
 
     async def _send_draft(*, chat_id, draft_id, content, metadata=None):
@@ -63,6 +66,7 @@ def _make_draft_capable_adapter(
         if draft_succeeds:
             return SendResult(success=True, message_id=None)
         return SendResult(success=False, error="draft_rejected")
+
     adapter.send_draft = _send_draft
 
     # send / edit_message: count and return canned successes so the
@@ -82,7 +86,9 @@ class TestDraftTransportSelection:
 
     def test_default_transport_stays_on_edit(self):
         adapter = _make_draft_capable_adapter()
-        consumer = GatewayStreamConsumer(adapter, "12345", StreamConsumerConfig(chat_type="dm"))
+        consumer = GatewayStreamConsumer(
+            adapter, "12345", StreamConsumerConfig(chat_type="dm")
+        )
         assert consumer._resolve_draft_streaming() is False
 
     def test_auto_dm_with_draft_capable_adapter_picks_draft(self):
@@ -126,8 +132,11 @@ class TestDraftStreamingHappyPath:
     async def test_dm_stream_animates_draft_then_finalizes_with_send(self):
         adapter = _make_draft_capable_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
 
@@ -140,9 +149,7 @@ class TestDraftStreamingHappyPath:
         await task
 
         # At least one draft frame landed.
-        assert len(adapter.draft_calls) >= 1, (
-            "expected at least one send_draft frame"
-        )
+        assert len(adapter.draft_calls) >= 1, "expected at least one send_draft frame"
         # Final draft frame held the full accumulated text.
         assert adapter.draft_calls[-1]["content"] == "Hello world!"
         # All draft frames in this run shared a single draft_id (animation).
@@ -156,7 +163,9 @@ class TestDraftStreamingHappyPath:
         sent_content = (
             final_call.kwargs.get("content")
             if "content" in final_call.kwargs
-            else final_call.args[1] if len(final_call.args) > 1 else None
+            else final_call.args[1]
+            if len(final_call.args) > 1
+            else None
         )
         assert sent_content == "Hello world!"
 
@@ -164,8 +173,11 @@ class TestDraftStreamingHappyPath:
     async def test_group_chat_skips_draft_path(self):
         adapter = _make_draft_capable_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="group",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="group",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer = GatewayStreamConsumer(adapter, "67890", cfg)
 
@@ -189,8 +201,11 @@ class TestDraftFallbackOnFailure:
     async def test_first_draft_failure_disables_drafts_for_run(self):
         adapter = _make_draft_capable_adapter(draft_succeeds=False)
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
 
@@ -217,8 +232,11 @@ class TestDraftIdLifecycle:
     async def test_consecutive_responses_use_distinct_draft_ids(self):
         adapter = _make_draft_capable_adapter()
         cfg1 = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer1 = GatewayStreamConsumer(adapter, "12345", cfg1)
         consumer1.on_delta("First reply")
@@ -228,8 +246,11 @@ class TestDraftIdLifecycle:
         await task1
 
         cfg2 = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer2 = GatewayStreamConsumer(adapter, "12345", cfg2)
         consumer2.on_delta("Second reply")
@@ -253,8 +274,11 @@ class TestDraftIdLifecycle:
         bubble rather than overwriting the prior segment's preview."""
         adapter = _make_draft_capable_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
 
@@ -274,11 +298,13 @@ class TestDraftIdLifecycle:
         if len(draft_ids) >= 2:
             # Find pre-tool and post-tool calls by content
             pre_ids = {
-                c["draft_id"] for c in adapter.draft_calls
+                c["draft_id"]
+                for c in adapter.draft_calls
                 if "Pre-tool" in c["content"] and "Post-tool" not in c["content"]
             }
             post_ids = {
-                c["draft_id"] for c in adapter.draft_calls
+                c["draft_id"]
+                for c in adapter.draft_calls
                 if "Post-tool" in c["content"]
             }
             if pre_ids and post_ids:
@@ -297,8 +323,11 @@ class TestAlreadySentInDraftMode:
     async def test_drafts_do_not_set_already_sent_until_real_message(self):
         adapter = _make_draft_capable_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
 

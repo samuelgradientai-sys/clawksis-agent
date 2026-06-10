@@ -50,7 +50,10 @@ def generate_title(
 
     messages = [
         {"role": "system", "content": _TITLE_PROMPT},
-        {"role": "user", "content": f"User: {user_snippet}\n\nAssistant: {assistant_snippet}"},
+        {
+            "role": "user",
+            "content": f"User: {user_snippet}\n\nAssistant: {assistant_snippet}",
+        },
     ]
 
     try:
@@ -64,7 +67,7 @@ def generate_title(
         )
         title = (response.choices[0].message.content or "").strip()
         # Clean up: remove quotes, trailing punctuation, prefixes like "Title: "
-        title = title.strip('"\'')
+        title = title.strip("\"'")
         if title.lower().startswith("title:"):
             title = title[6:].strip()
         # Enforce reasonable length
@@ -113,7 +116,10 @@ def auto_title_session(
         return
 
     title = generate_title(
-        user_message, assistant_response, failure_callback=failure_callback, main_runtime=main_runtime
+        user_message,
+        assistant_response,
+        failure_callback=failure_callback,
+        main_runtime=main_runtime,
     )
     if not title:
         return
@@ -153,7 +159,9 @@ def maybe_auto_title(
     # conversation_history includes the exchange that just happened,
     # so for a first exchange we expect exactly 1 user message
     # (or 2 counting system). Be generous: generate on first 2 exchanges.
-    user_msg_count = sum(1 for m in (conversation_history or []) if m.get("role") == "user")
+    user_msg_count = sum(
+        1 for m in (conversation_history or []) if m.get("role") == "user"
+    )
     if user_msg_count > 2:
         return
 

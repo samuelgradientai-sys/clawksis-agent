@@ -63,7 +63,9 @@ def test_commit_memory_session_no_memory_manager_still_notifies_context_engine()
 
     agent.commit_memory_session([{"role": "user", "content": "x"}])
 
-    ctx.on_session_end.assert_called_once_with("sess-9", [{"role": "user", "content": "x"}])
+    ctx.on_session_end.assert_called_once_with(
+        "sess-9", [{"role": "user", "content": "x"}]
+    )
 
 
 def test_commit_memory_session_no_context_engine_still_notifies_memory_manager():
@@ -86,7 +88,9 @@ def test_commit_memory_session_tolerates_memory_manager_failure():
     # Must not raise
     agent.commit_memory_session([{"role": "user", "content": "x"}])
 
-    ctx.on_session_end.assert_called_once_with("sess-X", [{"role": "user", "content": "x"}])
+    ctx.on_session_end.assert_called_once_with(
+        "sess-X", [{"role": "user", "content": "x"}]
+    )
 
 
 def test_commit_memory_session_tolerates_context_engine_failure():

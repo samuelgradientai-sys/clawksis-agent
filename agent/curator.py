@@ -38,10 +38,7 @@ Strict invariants:
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 import json
@@ -63,23 +60,17 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Set
 
 
-
 from clawk_constants import get_clawk_home
 
 from tools import skill_usage
 
 
-
 logger = logging.getLogger(__name__)
-
-
-
 
 
 def _strip_aux_credential(value: Any) -> Optional[str]:
 
     if value is None:
-
         return None
 
     text = str(value).strip()
@@ -87,14 +78,8 @@ def _strip_aux_credential(value: Any) -> Optional[str]:
     return text or None
 
 
-
-
-
 class _ReviewRuntimeBinding(NamedTuple):
-
     """Provider/model for the curator review fork plus optional per-slot overrides."""
-
-
 
     provider: str
 
@@ -103,9 +88,6 @@ class _ReviewRuntimeBinding(NamedTuple):
     explicit_api_key: Optional[str]
 
     explicit_base_url: Optional[str]
-
-
-
 
 
 DEFAULT_INTERVAL_HOURS = 24 * 7  # 7 days
@@ -117,9 +99,6 @@ DEFAULT_STALE_AFTER_DAYS = 30
 DEFAULT_ARCHIVE_AFTER_DAYS = 90
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # .curator_state — persistent scheduler + status
@@ -127,37 +106,22 @@ DEFAULT_ARCHIVE_AFTER_DAYS = 90
 # ---------------------------------------------------------------------------
 
 
-
 def _state_file() -> Path:
 
     return get_clawk_home() / "skills" / ".curator_state"
 
 
-
-
-
 def _default_state() -> Dict[str, Any]:
 
     return {
-
         "last_run_at": None,
-
         "last_run_duration_seconds": None,
-
         "last_run_summary": None,
-
         "last_run_summary_shown_at": None,
-
         "last_report_path": None,
-
         "paused": False,
-
         "run_count": 0,
-
     }
-
-
-
 
 
 def load_state() -> Dict[str, Any]:
@@ -165,29 +129,24 @@ def load_state() -> Dict[str, Any]:
     path = _state_file()
 
     if not path.exists():
-
         return _default_state()
 
     try:
-
         data = json.loads(path.read_text(encoding="utf-8"))
 
         if isinstance(data, dict):
-
             base = _default_state()
 
-            base.update({k: v for k, v in data.items() if k in base or k.startswith("_")})
+            base.update({
+                k: v for k, v in data.items() if k in base or k.startswith("_")
+            })
 
             return base
 
     except (OSError, json.JSONDecodeError) as e:
-
         logger.debug("Failed to read curator state: %s", e)
 
     return _default_state()
-
-
-
 
 
 def save_state(data: Dict[str, Any]) -> None:
@@ -195,15 +154,14 @@ def save_state(data: Dict[str, Any]) -> None:
     path = _state_file()
 
     try:
-
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".curator_state_", suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".curator_state_", suffix=".tmp"
+        )
 
         try:
-
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-
                 json.dump(data, f, indent=2, sort_keys=True, ensure_ascii=False)
 
                 f.flush()
@@ -213,23 +171,16 @@ def save_state(data: Dict[str, Any]) -> None:
             os.replace(tmp, path)
 
         except BaseException:
-
             try:
-
                 os.unlink(tmp)
 
             except OSError:
-
                 pass
 
             raise
 
     except Exception as e:
-
         logger.debug("Failed to save curator state: %s", e, exc_info=True)
-
-
-
 
 
 def set_paused(paused: bool) -> None:
@@ -241,15 +192,9 @@ def set_paused(paused: bool) -> None:
     save_state(state)
 
 
-
-
-
 def is_paused() -> bool:
 
     return bool(load_state().get("paused"))
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -259,41 +204,31 @@ def is_paused() -> bool:
 # ---------------------------------------------------------------------------
 
 
-
 def _load_config() -> Dict[str, Any]:
-
     """Read curator.* config from ~/.clawksis/config.yaml. Tolerates missing file."""
 
     try:
-
         from clawk_cli.config import load_config
 
         cfg = load_config()
 
     except Exception as e:
-
         logger.debug("Failed to load config for curator: %s", e)
 
         return {}
 
     if not isinstance(cfg, dict):
-
         return {}
 
     cur = cfg.get("curator") or {}
 
     if not isinstance(cur, dict):
-
         return {}
 
     return cur
 
 
-
-
-
 def is_enabled() -> bool:
-
     """Default ON when no config says otherwise."""
 
     cfg = _load_config()
@@ -301,23 +236,15 @@ def is_enabled() -> bool:
     return bool(cfg.get("enabled", True))
 
 
-
-
-
 def get_interval_hours() -> int:
 
     cfg = _load_config()
 
     try:
-
         return int(cfg.get("interval_hours", DEFAULT_INTERVAL_HOURS))
 
     except (TypeError, ValueError):
-
         return DEFAULT_INTERVAL_HOURS
-
-
-
 
 
 def get_min_idle_hours() -> float:
@@ -325,15 +252,10 @@ def get_min_idle_hours() -> float:
     cfg = _load_config()
 
     try:
-
         return float(cfg.get("min_idle_hours", DEFAULT_MIN_IDLE_HOURS))
 
     except (TypeError, ValueError):
-
         return DEFAULT_MIN_IDLE_HOURS
-
-
-
 
 
 def get_stale_after_days() -> int:
@@ -341,15 +263,10 @@ def get_stale_after_days() -> int:
     cfg = _load_config()
 
     try:
-
         return int(cfg.get("stale_after_days", DEFAULT_STALE_AFTER_DAYS))
 
     except (TypeError, ValueError):
-
         return DEFAULT_STALE_AFTER_DAYS
-
-
-
 
 
 def get_archive_after_days() -> int:
@@ -357,19 +274,13 @@ def get_archive_after_days() -> int:
     cfg = _load_config()
 
     try:
-
         return int(cfg.get("archive_after_days", DEFAULT_ARCHIVE_AFTER_DAYS))
 
     except (TypeError, ValueError):
-
         return DEFAULT_ARCHIVE_AFTER_DAYS
 
 
-
-
-
 def get_prune_builtins() -> bool:
-
     """Whether the curator may prune (archive) bundled built-in skills too.
 
 
@@ -389,9 +300,6 @@ def get_prune_builtins() -> bool:
     return bool(cfg.get("prune_builtins", True))
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Idle / interval check
@@ -399,27 +307,19 @@ def get_prune_builtins() -> bool:
 # ---------------------------------------------------------------------------
 
 
-
 def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
 
     if not ts:
-
         return None
 
     try:
-
         return datetime.fromisoformat(ts)
 
     except (TypeError, ValueError):
-
         return None
 
 
-
-
-
 def should_run_now(now: Optional[datetime] = None) -> bool:
-
     """Return True if the curator should run immediately.
 
 
@@ -461,21 +361,16 @@ def should_run_now(now: Optional[datetime] = None) -> bool:
     """
 
     if not is_enabled():
-
         return False
 
     if is_paused():
-
         return False
-
-
 
     state = load_state()
 
     last = _parse_iso(state.get("last_run_at"))
 
     if last is None:
-
         # Never run before. Seed state so we wait a full interval before the
 
         # first real pass. Report-only; do not auto-mutate the library the
@@ -483,45 +378,32 @@ def should_run_now(now: Optional[datetime] = None) -> bool:
         # very first time a gateway ticks after an update.
 
         if now is None:
-
             now = datetime.now(timezone.utc)
 
         try:
-
             state["last_run_at"] = now.isoformat()
 
             state["last_run_summary"] = (
-
                 "deferred first run — curator seeded, will run after one "
-
                 "interval; use `clawk curator run --dry-run` to preview now"
-
             )
 
             save_state(state)
 
         except Exception as e:  # pragma: no cover — best-effort persistence
-
             logger.debug("Failed to seed curator last_run_at: %s", e)
 
         return False
 
-
-
     if now is None:
-
         now = datetime.now(timezone.utc)
 
     if last.tzinfo is None:
-
         last = last.replace(tzinfo=timezone.utc)
 
     interval = timedelta(hours=get_interval_hours())
 
     return (now - last) >= interval
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -531,9 +413,7 @@ def should_run_now(now: Optional[datetime] = None) -> bool:
 # ---------------------------------------------------------------------------
 
 
-
 def apply_automatic_transitions(now: Optional[datetime] = None) -> Dict[str, int]:
-
     """Walk every curator-managed skill and move active/stale/archived based on
 
     the latest real activity timestamp. Pinned skills are never touched.
@@ -558,47 +438,39 @@ def apply_automatic_transitions(now: Optional[datetime] = None) -> Dict[str, int
 
     from tools import skill_usage as _u
 
-
-
     if now is None:
-
         now = datetime.now(timezone.utc)
 
     stale_cutoff = now - timedelta(days=get_stale_after_days())
 
     archive_cutoff = now - timedelta(days=get_archive_after_days())
 
-
-
-    counts = {"marked_stale": 0, "archived": 0, "reactivated": 0, "checked": 0, "seeded": 0}
-
-
+    counts = {
+        "marked_stale": 0,
+        "archived": 0,
+        "reactivated": 0,
+        "checked": 0,
+        "seeded": 0,
+    }
 
     for row in _u.agent_created_report():
-
         counts["checked"] += 1
 
         name = row["name"]
 
         if row.get("pinned"):
-
             continue
-
-
 
         # First sight of a curation-eligible skill with no persisted record
 
         # (e.g. a newly-eligible built-in): anchor its clock to now and defer.
 
         if not row.get("_persisted", True):
-
             _u.seed_record_if_missing(name)
 
             counts["seeded"] += 1
 
             continue
-
-
 
         last_activity = _parse_iso(row.get("last_activity_at"))
 
@@ -609,43 +481,29 @@ def apply_automatic_transitions(now: Optional[datetime] = None) -> Dict[str, int
         anchor = last_activity or _parse_iso(row.get("created_at")) or now
 
         if anchor.tzinfo is None:
-
             anchor = anchor.replace(tzinfo=timezone.utc)
-
-
 
         current = row.get("state", _u.STATE_ACTIVE)
 
-
-
         if anchor <= archive_cutoff and current != _u.STATE_ARCHIVED:
-
             ok, _msg = _u.archive_skill(name)
 
             if ok:
-
                 counts["archived"] += 1
 
         elif anchor <= stale_cutoff and current == _u.STATE_ACTIVE:
-
             _u.set_state(name, _u.STATE_STALE)
 
             counts["marked_stale"] += 1
 
         elif anchor > stale_cutoff and current == _u.STATE_STALE:
-
             # Skill got used again after being marked stale — reactivate.
 
             _u.set_state(name, _u.STATE_ACTIVE)
 
             counts["reactivated"] += 1
 
-
-
     return counts
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -655,333 +513,168 @@ def apply_automatic_transitions(now: Optional[datetime] = None) -> Dict[str, int
 # ---------------------------------------------------------------------------
 
 
-
 CURATOR_DRY_RUN_BANNER = (
-
     "═══════════════════════════════════════════════════════════════\n"
-
     "DRY-RUN — REPORT ONLY. DO NOT MUTATE THE SKILL LIBRARY.\n"
-
     "═══════════════════════════════════════════════════════════════\n"
-
     "\n"
-
     "This is a PREVIEW pass. Follow every instruction below EXCEPT:\n"
-
     "\n"
-
     "  • DO NOT call skill_manage with action=patch, create, delete, "
-
     "write_file, or remove_file.\n"
-
     "  • DO NOT call terminal to mv skill directories into .archive/.\n"
-
     "  • DO NOT call terminal to mv, cp, rm, or rewrite any file under "
-
     "~/.clawksis/skills/.\n"
-
     "  • skills_list and skill_view are FINE — read as much as you need.\n"
-
     "\n"
-
     "Your output IS the deliverable. Produce the exact same "
-
     "human-readable summary and structured YAML block you would "
-
     "produce on a live run — but describe the actions you WOULD take, "
-
     "not actions you took. A downstream reviewer will read the report "
-
     "and decide whether to approve a live run with "
-
     "`clawk curator run` (no flag).\n"
-
     "\n"
-
     "If you accidentally take a mutating action, say so explicitly in "
-
     "the summary so the reviewer can revert it.\n"
-
     "═══════════════════════════════════════════════════════════════"
-
 )
-
-
-
 
 
 CURATOR_REVIEW_PROMPT = (
-
     "You are running as Clawksis' background skill CURATOR. This is an "
-
     "UMBRELLA-BUILDING consolidation pass, not a passive audit and not a "
-
     "duplicate-finder.\n\n"
-
     "The goal of the skill collection is a LIBRARY OF CLASS-LEVEL "
-
     "INSTRUCTIONS AND EXPERIENTIAL KNOWLEDGE. A collection of hundreds of "
-
     "narrow skills where each one captures one session's specific bug is "
-
     "a FAILURE of the library — not a feature. An agent searching skills "
-
     "matches on descriptions, not on exact names; one broad umbrella "
-
     "skill with labeled subsections beats five narrow siblings for "
-
     "discoverability, not the other way around.\n\n"
-
     "The right target shape is CLASS-LEVEL skills with rich SKILL.md "
-
     "bodies + `references/`, `templates/`, and `scripts/` subfiles for "
-
     "session-specific detail — not one-session-one-skill micro-entries.\n\n"
-
     "Hard rules — do not violate:\n"
-
     "1. DO NOT touch bundled or hub-installed skills. The candidate list "
-
     "below is already filtered to agent-created skills only.\n"
-
     "2. DO NOT delete any skill. Archiving (moving the skill's directory "
-
     "into ~/.clawksis/skills/.archive/) is the maximum destructive action. "
-
     "Archives are recoverable; deletion is not.\n"
-
     "3. DO NOT touch skills shown as pinned=yes. Skip them entirely.\n"
-
     "4. DO NOT use usage counters as a reason to skip consolidation. The "
-
     "counters are new and often mostly zero. Judge overlap on CONTENT, "
-
     "not on use_count. 'use=0' is not evidence a skill is valuable; it's "
-
     "absence of evidence either way.\n"
-
     "5. DO NOT reject consolidation on the grounds that 'each skill has "
-
     "a distinct trigger'. Pairwise distinctness is the wrong bar. The "
-
     "right bar is: 'would a human maintainer write this as N separate "
-
     "skills, or as one skill with N labeled subsections?' When the "
-
     "answer is the latter, merge.\n\n"
-
     "How to work — not optional:\n"
-
     "1. Scan the full candidate list. Identify PREFIX CLUSTERS (skills "
-
     "sharing a first word or domain keyword). Examples you are likely "
-
     "to find: clawk-config-*, clawksis-dashboard-*, gateway-*, codex-*, "
-
     "ollama-*, anthropic-*, gemini-*, mcp-*, salvage-*, pr-*, "
-
     "competitor-*, python-*, security-*, etc. Expect 10-25 clusters.\n"
-
     "2. For each cluster with 2+ members, do NOT ask 'are these pairs "
-
     "overlapping?' — ask 'what is the UMBRELLA CLASS these skills all "
-
     "serve? Would a maintainer name that class and write one skill for "
-
     "it?' If yes, pick (or create) the umbrella and absorb the siblings "
-
     "into it.\n"
-
     "3. Three ways to consolidate — use the right one per cluster:\n"
-
     "   a. MERGE INTO EXISTING UMBRELLA — one skill in the cluster is "
-
     "already broad enough to be the umbrella (example: `pr-triage-"
-
     "salvage` for the PR review cluster). Patch it to add a labeled "
-
     "section for each sibling's unique insight, then archive the "
-
     "siblings.\n"
-
     "   b. CREATE A NEW UMBRELLA SKILL.md — no existing member is broad "
-
     "enough. Use skill_manage action=create to write a new class-level "
-
     "skill whose SKILL.md covers the shared workflow and has short "
-
     "labeled subsections. Archive the now-absorbed narrow siblings.\n"
-
     "   c. DEMOTE TO REFERENCES/TEMPLATES/SCRIPTS — a sibling has "
-
     "narrow-but-valuable session-specific content. Move it into the "
-
     "umbrella's appropriate support directory:\n"
-
     "      • `references/<topic>.md` for session-specific detail OR "
-
     "condensed knowledge banks (quoted research, API docs excerpts, "
-
     "domain notes, provider quirks, reproduction recipes)\n"
-
     "      • `templates/<name>.<ext>` for starter files meant to be "
-
     "copied and modified\n"
-
     "      • `scripts/<name>.<ext>` for statically re-runnable actions "
-
     "(verification scripts, fixture generators, probes)\n"
-
     "      Then archive the old sibling. Use `terminal` with `mkdir -p "
-
     "~/.clawksis/skills/<umbrella>/references/ && mv ... <umbrella>/"
-
     "references/<topic>.md` (or templates/ / scripts/).\n\n"
-
     "Package integrity — not optional:\n"
-
     "Before demoting or archiving a skill, inspect it as a COMPLETE "
-
     "directory package, not just SKILL.md. A skill root may include "
-
     "`references/`, `templates/`, `scripts/`, and `assets/`; `skill_view` "
-
     "discovers those relative to the skill root. A reference markdown file "
-
     "inside another skill is NOT a new skill root and does not get its own "
-
     "linked-file discovery.\n"
-
     "If the source skill has support files OR SKILL.md contains relative "
-
     "links such as `references/...`, `templates/...`, `scripts/...`, or "
-
     "`assets/...`, DO NOT flatten only SKILL.md into "
-
     "`<umbrella>/references/<old>.md`. Choose one safe path instead:\n"
-
     "   • keep it as a standalone skill, OR\n"
-
     "   • fully merge it by re-homing every needed support file into the "
-
     "umbrella's canonical `references/`, `templates/`, `scripts/`, or "
-
     "`assets/` directories AND rewrite the destination instructions to "
-
     "the new paths, OR\n"
-
     "   • archive the entire original skill package unchanged.\n"
-
     "Never leave archived/demoted instructions pointing at files that were "
-
     "left behind under the old skill directory.\n"
-
     "4. Also flag skills whose NAME is too narrow (contains a PR number, "
-
     "a feature codename, a specific error string, an 'audit' / "
-
     "'diagnosis' / 'salvage' session artifact). These almost always "
-
     "belong as a subsection or support file under a class-level umbrella.\n"
-
     "5. Iterate. After one consolidation round, scan the remaining set "
-
     "and look for the NEXT umbrella opportunity. Don't stop after 3 "
-
     "merges.\n\n"
-
     "Your toolset:\n"
-
     "  - skills_list, skill_view        — read the current landscape\n"
-
     "  - skill_manage action=patch      — add sections to the umbrella\n"
-
     "  - skill_manage action=create     — create a new umbrella SKILL.md\n"
-
     "  - skill_manage action=write_file — add a references/, templates/, "
-
     "or scripts/ file under an existing skill (the skill must already "
-
     "exist)\n"
-
     "  - skill_manage action=delete     — archive a skill. MUST pass "
-
     "`absorbed_into=<umbrella>` when you've merged its content into another "
-
-    "skill, or `absorbed_into=\"\"` when you're truly pruning with no "
-
+    'skill, or `absorbed_into=""` when you\'re truly pruning with no '
     "forwarding target. This drives cron-job skill-reference migration — "
-
     "guessing from your YAML summary after the fact is fragile.\n"
-
     "  - terminal                       — mv a sibling into the archive "
-
     "OR move its content into a support subfile\n\n"
-
     "'keep' is a legitimate decision ONLY when the skill is already a "
-
     "class-level umbrella and none of the proposed merges would improve "
-
     "discoverability. 'This is narrow but distinct from its siblings' "
-
     "is NOT a reason to keep — it's a reason to move it under an "
-
     "umbrella as a subsection or support file.\n\n"
-
     "Expected output: real umbrella-ification. Process every obvious "
-
     "cluster. If you end the pass with fewer than 10 archives, you "
-
     "stopped too early — go back and look at the clusters you left "
-
     "alone.\n\n"
-
     "When done, write a human summary AND a structured machine-readable "
-
     "block so downstream tooling can distinguish consolidation from "
-
     "pruning. Format EXACTLY:\n\n"
-
     "## Structured summary (required)\n"
-
     "```yaml\n"
-
     "consolidations:\n"
-
     "  - from: <old-skill-name>\n"
-
     "    into: <umbrella-skill-name>\n"
-
     "    reason: <one short sentence — why merged, not just 'similar'>\n"
-
     "prunings:\n"
-
     "  - name: <skill-name>\n"
-
     "    reason: <one short sentence — why archived with no merge target>\n"
-
     "```\n\n"
-
     "Every skill you moved to .archive/ MUST appear in exactly one of the "
-
     "two lists. If you consolidated X into umbrella Y (patched Y, wrote "
-
     "a references file to Y, or created Y with X's content absorbed), X "
-
     "goes under `consolidations` with `into: Y`. If you archived X with "
-
     "no absorption — truly stale, irrelevant, or obsolete — X goes under "
-
     "`prunings`. Leave a list empty (`consolidations: []`) if none. Do "
-
     "not omit the block. The block comes AFTER your human-readable "
-
     "summary of clusters processed, patches made, and decisions left alone."
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -991,9 +684,7 @@ CURATOR_REVIEW_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
-
 def _reports_root() -> Path:
-
     """Directory where curator run reports are written.
 
 
@@ -1023,21 +714,15 @@ def _reports_root() -> Path:
     root = get_clawk_home() / "logs" / "curator"
 
     try:
-
         root.mkdir(parents=True, exist_ok=True)
 
     except OSError as e:
-
         logger.debug("Curator reports dir create failed: %s", e)
 
     return root
 
 
-
-
-
 def _needle_in_path_component(needle: str, path: str) -> bool:
-
     """Check if *needle* is a complete filename stem or directory name in *path*.
 
 
@@ -1055,35 +740,23 @@ def _needle_in_path_component(needle: str, path: str) -> bool:
     norm_needle = needle.replace("-", "_")
 
     for part in path.replace("\\", "/").split("/"):
-
         if not part:
-
             continue
 
         stem = part.rsplit(".", 1)[0] if "." in part else part
 
         if stem.replace("-", "_") == norm_needle:
-
             return True
 
     return False
 
 
-
-
-
 def _classify_removed_skills(
-
     removed: List[str],
-
     added: List[str],
-
     after_names: Set[str],
-
     tool_calls: List[Dict[str, Any]],
-
 ) -> Dict[str, List[Dict[str, Any]]]:
-
     """Split ``removed`` into consolidated vs pruned.
 
 
@@ -1124,20 +797,15 @@ def _classify_removed_skills(
 
     pruned: List[Dict[str, Any]] = []
 
-
-
     # Pre-parse tool calls: we only care about skill_manage.
 
     parsed_calls: List[Dict[str, Any]] = []
 
     for tc in tool_calls or []:
-
         if not isinstance(tc, dict):
-
             continue
 
         if tc.get("name") != "skill_manage":
-
             continue
 
         raw = tc.get("arguments") or ""
@@ -1147,17 +815,13 @@ def _classify_removed_skills(
         args: Dict[str, Any] = {}
 
         if isinstance(raw, dict):
-
             args = raw
 
         elif isinstance(raw, str):
-
             try:
-
                 args = json.loads(raw)
 
             except Exception:
-
                 # Truncated or malformed — fall back to substring match on
 
                 # the raw string so we still catch the common case.
@@ -1165,12 +829,9 @@ def _classify_removed_skills(
                 args = {"_raw": raw}
 
         if not isinstance(args, dict):
-
             continue
 
         parsed_calls.append(args)
-
-
 
     # Build a set of "destination" skill names: anything still present after
 
@@ -1180,32 +841,22 @@ def _classify_removed_skills(
 
     destinations = set(after_names) | set(added or [])
 
-
-
     for name in removed:
-
         if not name:
-
             continue
 
         into: Optional[str] = None
 
         evidence: Optional[str] = None
 
-
-
         # Normalise name variants we'll search for in path/content strings.
 
         needles = {name, name.replace("-", "_"), name.replace("_", "-")}
 
-
-
         for args in parsed_calls:
-
             target = args.get("name")
 
             if not isinstance(target, str) or not target:
-
                 continue
 
             # A call that operates on the removed skill itself isn't
@@ -1213,7 +864,6 @@ def _classify_removed_skills(
             # consolidation evidence.
 
             if target == name:
-
                 continue
 
             # The target must be a surviving or newly-created skill —
@@ -1221,10 +871,7 @@ def _classify_removed_skills(
             # otherwise we're pointing to a skill that doesn't exist.
 
             if target not in destinations:
-
                 continue
-
-
 
             # Look for the removed skill's name in file_path / content / raw.
 
@@ -1243,85 +890,55 @@ def _classify_removed_skills(
             haystacks: List[tuple[str, str]] = []
 
             for key in ("file_path", "file_content", "content", "new_string", "_raw"):
-
                 v = args.get(key)
 
                 if isinstance(v, str):
-
                     haystacks.append((key, v))
 
             hit = False
 
             for key, hay in haystacks:
-
                 for needle in needles:
-
                     if not needle:
-
                         continue
 
                     if key == "file_path":
-
                         matched = _needle_in_path_component(needle, hay)
 
                     else:
-
-                        matched = bool(
-
-                            re.search(rf'\b{re.escape(needle)}\b', hay)
-
-                        )
+                        matched = bool(re.search(rf"\b{re.escape(needle)}\b", hay))
 
                     if matched:
-
                         hit = True
 
                         evidence = (
-
                             f"skill_manage action={args.get('action', '?')} "
-
                             f"on '{target}' referenced '{name}' "
-
                             f"in {hay[:80]}"
-
                         )
 
                         break
 
                 if hit:
-
                     break
 
             if hit:
-
                 into = target
 
                 break
 
-
-
         if into:
-
             consolidated.append({"name": name, "into": into, "evidence": evidence})
 
         else:
-
             pruned.append({"name": name})
-
-
 
     return {"consolidated": consolidated, "pruned": pruned}
 
 
-
-
-
 def _parse_structured_summary(
-
     llm_final: str,
-
 ) -> Dict[str, List[Dict[str, str]]]:
-
     """Extract the structured YAML block from the curator's final response.
 
 
@@ -1351,10 +968,7 @@ def _parse_structured_summary(
     empty = {"consolidations": [], "prunings": []}
 
     if not llm_final or not isinstance(llm_final, str):
-
         return empty
-
-
 
     # Find the YAML fenced block. We look for ```yaml ... ``` specifically
 
@@ -1365,46 +979,30 @@ def _parse_structured_summary(
     import re
 
     match = re.search(
-
         r"```ya?ml\s*\n(.*?)\n```",
-
         llm_final,
-
         re.DOTALL | re.IGNORECASE,
-
     )
 
     if not match:
-
         return empty
 
-
-
     body = match.group(1)
-
-
 
     # Prefer PyYAML when available — every clawk install already has it
 
     # (config.yaml loader). Fall back to a hand parser for paranoia.
 
     try:
-
         import yaml  # type: ignore
 
         data = yaml.safe_load(body)
 
     except Exception:
-
         return empty
-
-
 
     if not isinstance(data, dict):
-
         return empty
-
-
 
     out: Dict[str, List[Dict[str, str]]] = {"consolidations": [], "prunings": []}
 
@@ -1412,78 +1010,54 @@ def _parse_structured_summary(
 
     prun_raw = data.get("prunings") or []
 
-
-
     if isinstance(cons_raw, list):
-
         for entry in cons_raw:
-
             if not isinstance(entry, dict):
-
                 continue
 
             frm = entry.get("from")
 
             into = entry.get("into")
 
-            if not (isinstance(frm, str) and frm.strip()
-
-                    and isinstance(into, str) and into.strip()):
-
+            if not (
+                isinstance(frm, str)
+                and frm.strip()
+                and isinstance(into, str)
+                and into.strip()
+            ):
                 continue
 
             reason = entry.get("reason")
 
             out["consolidations"].append({
-
                 "from": frm.strip(),
-
                 "into": into.strip(),
-
                 "reason": (reason or "").strip() if isinstance(reason, str) else "",
-
             })
 
-
-
     if isinstance(prun_raw, list):
-
         for entry in prun_raw:
-
             if not isinstance(entry, dict):
-
                 continue
 
             name = entry.get("name")
 
             if not (isinstance(name, str) and name.strip()):
-
                 continue
 
             reason = entry.get("reason")
 
             out["prunings"].append({
-
                 "name": name.strip(),
-
                 "reason": (reason or "").strip() if isinstance(reason, str) else "",
-
             })
-
-
 
     return out
 
 
-
-
-
 def _extract_absorbed_into_declarations(
-
     tool_calls: List[Dict[str, Any]],
-
 ) -> Dict[str, Dict[str, Any]]:
-
     """Walk this run's tool calls and extract model-declared absorption targets.
 
 
@@ -1519,13 +1093,10 @@ def _extract_absorbed_into_declarations(
     out: Dict[str, Dict[str, Any]] = {}
 
     for tc in tool_calls or []:
-
         if not isinstance(tc, dict):
-
             continue
 
         if tc.get("name") != "skill_manage":
-
             continue
 
         raw = tc.get("arguments") or ""
@@ -1533,31 +1104,24 @@ def _extract_absorbed_into_declarations(
         args: Dict[str, Any] = {}
 
         if isinstance(raw, dict):
-
             args = raw
 
         elif isinstance(raw, str):
-
             try:
-
                 args = json.loads(raw)
 
             except Exception:
-
                 continue
 
         if not isinstance(args, dict):
-
             continue
 
         if args.get("action") != "delete":
-
             continue
 
         name = args.get("name")
 
         if not isinstance(name, str) or not name.strip():
-
             continue
 
         # absorbed_into must be present (even empty string is meaningful);
@@ -1565,17 +1129,14 @@ def _extract_absorbed_into_declarations(
         # missing key means the model didn't declare intent.
 
         if "absorbed_into" not in args:
-
             continue
 
         target = args.get("absorbed_into")
 
         if target is None:
-
             continue
 
         if not isinstance(target, str):
-
             continue
 
         out[name.strip()] = {"into": target.strip(), "declared": True}
@@ -1583,23 +1144,13 @@ def _extract_absorbed_into_declarations(
     return out
 
 
-
-
-
 def _reconcile_classification(
-
     removed: List[str],
-
     heuristic: Dict[str, List[Dict[str, Any]]],
-
     model_block: Dict[str, List[Dict[str, str]]],
-
     destinations: Set[str],
-
     absorbed_declarations: Optional[Dict[str, Dict[str, Any]]] = None,
-
 ) -> Dict[str, List[Dict[str, Any]]]:
-
     """Merge heuristic (tool-call evidence) with the model's structured block.
 
 
@@ -1650,26 +1201,17 @@ def _reconcile_classification(
 
     heur_pruned = {e["name"] for e in heuristic.get("pruned", [])}
 
-
-
     model_cons = {e["from"]: e for e in model_block.get("consolidations", [])}
 
     model_pruned = {e["name"]: e for e in model_block.get("prunings", [])}
 
-
-
     declared = absorbed_declarations or {}
-
-
 
     consolidated: List[Dict[str, Any]] = []
 
     pruned: List[Dict[str, Any]] = []
 
-
-
     for name in removed:
-
         mc = model_cons.get(name)
 
         mp = model_pruned.get(name)
@@ -1678,30 +1220,20 @@ def _reconcile_classification(
 
         dec = declared.get(name)
 
-
-
         # Authoritative: model declared `absorbed_into` at the delete call.
 
         if dec is not None:
-
             into_claim = dec.get("into", "")
 
             if into_claim and into_claim in destinations:
-
                 entry: Dict[str, Any] = {
-
                     "name": name,
-
                     "into": into_claim,
-
                     "source": "absorbed_into (model-declared at delete)",
-
                     "reason": (mc.get("reason") or "") if mc else "",
-
                 }
 
                 if hc and hc.get("evidence"):
-
                     entry["evidence"] = hc["evidence"]
 
                 consolidated.append(entry)
@@ -1709,17 +1241,12 @@ def _reconcile_classification(
                 continue
 
             if into_claim == "":
-
                 # Explicit prune declaration
 
                 pruned.append({
-
                     "name": name,
-
-                    "source": "absorbed_into=\"\" (model-declared prune)",
-
+                    "source": 'absorbed_into="" (model-declared prune)',
                     "reason": (mp.get("reason") or "") if mp else "",
-
                 })
 
                 continue
@@ -1736,132 +1263,80 @@ def _reconcile_classification(
 
             # signals rather than trusting a broken reference.
 
-
-
         # Model says consolidated — trust it if the destination is real.
 
         if mc and mc.get("into") in destinations:
-
             entry: Dict[str, Any] = {
-
                 "name": name,
-
                 "into": mc["into"],
-
                 "source": "model" + ("+audit" if hc else ""),
-
                 "reason": mc.get("reason") or "",
-
             }
 
             if hc and hc.get("evidence"):
-
                 entry["evidence"] = hc["evidence"]
 
             consolidated.append(entry)
 
             continue
 
-
-
         # Model says consolidated but the umbrella doesn't exist —
 
         # hallucination. Fall back to heuristic or prune.
 
         if mc and mc.get("into") not in destinations:
-
             if hc:
-
                 consolidated.append({
-
                     "name": name,
-
                     "into": hc["into"],
-
                     "source": "tool-call audit (model named missing umbrella)",
-
                     "reason": "",
-
                     "evidence": hc.get("evidence", ""),
-
                     "model_claimed_into": mc["into"],
-
                 })
 
             else:
-
                 pruned.append({
-
                     "name": name,
-
                     "source": "fallback (model named missing umbrella, no tool-call evidence)",
-
                     "reason": "",
-
                 })
 
             continue
-
-
 
         # Heuristic found consolidation the model didn't mention.
 
         if hc:
-
             consolidated.append({
-
                 "name": name,
-
                 "into": hc["into"],
-
                 "source": "tool-call audit (model omitted from structured block)",
-
                 "reason": "",
-
                 "evidence": hc.get("evidence", ""),
-
             })
 
             continue
-
-
 
         # Model says pruned (or no mention + no heuristic evidence).
 
         reason = mp.get("reason", "") if mp else ""
 
         pruned.append({
-
             "name": name,
-
             "source": "model" if mp else "no-evidence fallback",
-
             "reason": reason,
-
         })
-
-
 
     return {"consolidated": consolidated, "pruned": pruned}
 
 
-
-
-
 def _build_rename_summary(
-
     *,
-
     before_names: Set[str],
-
     after_report: List[Dict[str, Any]],
-
     tool_calls: List[Dict[str, Any]],
-
     model_final: str,
-
 ) -> str:
-
     """Format the user-visible rename map for a curator run.
 
 
@@ -1915,21 +1390,13 @@ def _build_rename_summary(
     added = sorted(after_names - before_names)
 
     if not removed:
-
         return ""
 
-
-
     heuristic = _classify_removed_skills(
-
         removed=removed,
-
         added=added,
-
         after_names=after_names,
-
         tool_calls=tool_calls,
-
     )
 
     model_block = _parse_structured_summary(model_final)
@@ -1939,24 +1406,16 @@ def _build_rename_summary(
     absorbed_declarations = _extract_absorbed_into_declarations(tool_calls)
 
     classification = _reconcile_classification(
-
         removed=removed,
-
         heuristic=heuristic,
-
         model_block=model_block,
-
         destinations=destinations,
-
         absorbed_declarations=absorbed_declarations,
-
     )
 
     consolidated = classification["consolidated"]
 
     pruned = classification["pruned"]
-
-
 
     SHOW = 10
 
@@ -1969,9 +1428,7 @@ def _build_rename_summary(
     shown = 0
 
     for entry in consolidated:
-
         if shown >= SHOW:
-
             break
 
         name = entry.get("name", "?")
@@ -1983,9 +1440,7 @@ def _build_rename_summary(
         shown += 1
 
     for entry in pruned:
-
         if shown >= SHOW:
-
             break
 
         name = entry.get("name", "?") if isinstance(entry, dict) else str(entry)
@@ -1995,7 +1450,6 @@ def _build_rename_summary(
         shown += 1
 
     if total > SHOW:
-
         lines.append(f"  … and {total - SHOW} more")
 
     lines.append("full report: clawk curator status")
@@ -2009,47 +1463,27 @@ def _build_rename_summary(
     # Pruned-only runs don't get this hint (nothing surviving to pin).
 
     if consolidated:
-
         umbrellas = sorted({e.get("into") for e in consolidated if e.get("into")})
 
         if umbrellas:
-
             example = umbrellas[0]
 
-            lines.append(
-
-                f"keep an umbrella stable: clawk curator pin {example}"
-
-            )
+            lines.append(f"keep an umbrella stable: clawk curator pin {example}")
 
     return "\n".join(lines)
 
 
-
-
-
 def _write_run_report(
-
     *,
-
     started_at: datetime,
-
     elapsed_seconds: float,
-
     auto_counts: Dict[str, int],
-
     auto_summary: str,
-
     before_report: List[Dict[str, Any]],
-
     before_names: Set[str],
-
     after_report: List[Dict[str, Any]],
-
     llm_meta: Dict[str, Any],
-
 ) -> Optional[Path]:
-
     """Write run.json + REPORT.md under logs/curator/{YYYYMMDD-HHMMSS}/.
 
 
@@ -2063,16 +1497,12 @@ def _write_run_report(
     root = _reports_root()
 
     try:
-
         root.mkdir(parents=True, exist_ok=True)
 
     except Exception as e:
-
         logger.debug("Curator report dir create failed: %s", e)
 
         return None
-
-
 
     stamp = started_at.strftime("%Y%m%d-%H%M%S")
 
@@ -2083,22 +1513,17 @@ def _write_run_report(
     suffix = 1
 
     while run_dir.exists():
-
         suffix += 1
 
         run_dir = root / f"{stamp}-{suffix}"
 
     try:
-
         run_dir.mkdir(parents=True, exist_ok=False)
 
     except Exception as e:
-
         logger.debug("Curator run dir create failed: %s", e)
 
         return None
-
-
 
     # Diff before/after
 
@@ -2106,41 +1531,32 @@ def _write_run_report(
 
     after_names = set(after_by_name.keys())
 
-    removed = sorted(before_names - after_names)   # archived during this run
+    removed = sorted(before_names - after_names)  # archived during this run
 
-    added = sorted(after_names - before_names)     # new skills this run
+    added = sorted(after_names - before_names)  # new skills this run
 
     before_by_name = {r.get("name"): r for r in before_report if isinstance(r, dict)}
-
-
 
     # State transitions between the two snapshots (e.g. active -> stale)
 
     transitions: List[Dict[str, str]] = []
 
     for name in sorted(after_names & before_names):
-
         s_before = (before_by_name.get(name) or {}).get("state")
 
         s_after = (after_by_name.get(name) or {}).get("state")
 
         if s_before and s_after and s_before != s_after:
-
             transitions.append({"name": name, "from": s_before, "to": s_after})
-
-
 
     # Classify LLM tool calls
 
     tc_counts: Dict[str, int] = {}
 
     for tc in llm_meta.get("tool_calls", []) or []:
-
         name = tc.get("name", "unknown")
 
         tc_counts[name] = tc_counts.get(name, 0) + 1
-
-
 
     # Split "removed" into consolidated (absorbed into umbrella) vs pruned
 
@@ -2171,15 +1587,10 @@ def _write_run_report(
     #    (model forgot to list an actual consolidation).
 
     heuristic = _classify_removed_skills(
-
         removed=removed,
-
         added=added,
-
         after_names=after_names,
-
         tool_calls=llm_meta.get("tool_calls", []) or [],
-
     )
 
     model_block = _parse_structured_summary(llm_meta.get("final", "") or "")
@@ -2197,30 +1608,20 @@ def _write_run_report(
     # (into=<umbrella>) or pruned (into="").
 
     absorbed_declarations = _extract_absorbed_into_declarations(
-
         llm_meta.get("tool_calls", []) or []
-
     )
 
     classification = _reconcile_classification(
-
         removed=removed,
-
         heuristic=heuristic,
-
         model_block=model_block,
-
         destinations=destinations,
-
         absorbed_declarations=absorbed_declarations,
-
     )
 
     consolidated = classification["consolidated"]
 
     pruned = classification["pruned"]
-
-
 
     # Rewrite cron job skill references. When the curator consolidates
 
@@ -2236,184 +1637,112 @@ def _write_run_report(
 
     # break the curator.
 
-    cron_rewrites: Dict[str, Any] = {"rewrites": [], "jobs_updated": 0, "jobs_scanned": 0}
+    cron_rewrites: Dict[str, Any] = {
+        "rewrites": [],
+        "jobs_updated": 0,
+        "jobs_scanned": 0,
+    }
 
     try:
-
         consolidated_map = {
-
             e["name"]: e["into"]
-
             for e in consolidated
-
             if isinstance(e, dict) and e.get("name") and e.get("into")
-
         }
 
         pruned_names = [
-
-            e["name"] for e in pruned
-
-            if isinstance(e, dict) and e.get("name")
-
+            e["name"] for e in pruned if isinstance(e, dict) and e.get("name")
         ]
 
         if consolidated_map or pruned_names:
-
             from cron.jobs import rewrite_skill_refs as _rewrite_cron_refs
 
             cron_rewrites = _rewrite_cron_refs(
-
                 consolidated=consolidated_map,
-
                 pruned=pruned_names,
-
             )
 
     except Exception as e:
-
         logger.debug("Curator cron skill rewrite failed: %s", e, exc_info=True)
 
         cron_rewrites = {
-
             "rewrites": [],
-
             "jobs_updated": 0,
-
             "jobs_scanned": 0,
-
             "error": str(e),
-
         }
 
-
-
     payload = {
-
         "started_at": started_at.isoformat(),
-
         "duration_seconds": round(elapsed_seconds, 2),
-
         "model": llm_meta.get("model", ""),
-
         "provider": llm_meta.get("provider", ""),
-
         "auto_transitions": auto_counts,
-
         "counts": {
-
             "before": len(before_names),
-
             "after": len(after_names),
-
             "delta": len(after_names) - len(before_names),
-
             "archived_this_run": len(removed),
-
             "added_this_run": len(added),
-
             "consolidated_this_run": len(consolidated),
-
             "pruned_this_run": len(pruned),
-
             "state_transitions": len(transitions),
-
             "cron_jobs_rewritten": int(cron_rewrites.get("jobs_updated", 0)),
-
             "tool_calls_total": sum(tc_counts.values()),
-
         },
-
         "tool_call_counts": tc_counts,
-
         "archived": removed,
-
         "consolidated": consolidated,
-
         "pruned": pruned,
-
         "pruned_names": [p["name"] for p in pruned],
-
         "added": added,
-
         "state_transitions": transitions,
-
         "cron_rewrites": cron_rewrites,
-
         "llm_final": llm_meta.get("final", ""),
-
         "llm_summary": llm_meta.get("summary", ""),
-
         "llm_error": llm_meta.get("error"),
-
         "tool_calls": llm_meta.get("tool_calls", []),
-
     }
-
-
 
     # run.json — machine-readable, full fidelity
 
     try:
-
         (run_dir / "run.json").write_text(
-
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-
             encoding="utf-8",
-
         )
 
     except Exception as e:
-
         logger.debug("Curator run.json write failed: %s", e)
-
-
 
     # REPORT.md — human-readable
 
     try:
-
         md = _render_report_markdown(payload)
 
         (run_dir / "REPORT.md").write_text(md, encoding="utf-8")
 
     except Exception as e:
-
         logger.debug("Curator REPORT.md write failed: %s", e)
-
-
 
     # cron_rewrites.json — only when at least one job was touched, to
 
     # keep run dirs uncluttered for the common no-op case.
 
     try:
-
         if int(cron_rewrites.get("jobs_updated", 0)) > 0:
-
             (run_dir / "cron_rewrites.json").write_text(
-
                 json.dumps(cron_rewrites, indent=2, ensure_ascii=False) + "\n",
-
                 encoding="utf-8",
-
             )
 
     except Exception as e:
-
         logger.debug("Curator cron_rewrites.json write failed: %s", e)
-
-
 
     return run_dir
 
 
-
-
-
 def _render_report_markdown(p: Dict[str, Any]) -> str:
-
     """Render the human-readable report."""
 
     lines: List[str] = []
@@ -2426,8 +1755,6 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
 
     dur_label = f"{mins}m {secs}s" if mins else f"{secs}s"
 
-
-
     lines.append(f"# Curator run — {started}\n")
 
     model = p.get("model") or "(not resolved)"
@@ -2437,24 +1764,15 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
     counts = p.get("counts") or {}
 
     lines.append(
-
         f"Model: `{model}` via `{prov}`  ·  Duration: {dur_label}  ·  "
-
         f"Agent-created skills: {counts.get('before', 0)} → {counts.get('after', 0)} "
-
         f"({counts.get('delta', 0):+d})\n"
-
     )
-
-
 
     error = p.get("llm_error")
 
     if error:
-
         lines.append(f"> ⚠ LLM pass error: `{error}`\n")
-
-
 
     # Auto-transitions (pure, no LLM)
 
@@ -2466,13 +1784,13 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
 
     lines.append(f"- marked stale: {auto.get('marked_stale', 0)}")
 
-    lines.append(f"- archived (no LLM, pure time-based staleness): {auto.get('archived', 0)}")
+    lines.append(
+        f"- archived (no LLM, pure time-based staleness): {auto.get('archived', 0)}"
+    )
 
     lines.append(f"- reactivated: {auto.get('reactivated', 0)}")
 
     lines.append("")
-
-
 
     # LLM pass numbers
 
@@ -2480,23 +1798,27 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
 
     lines.append("## LLM consolidation pass\n")
 
-    lines.append(f"- tool calls: **{counts.get('tool_calls_total', 0)}** "
+    lines.append(
+        f"- tool calls: **{counts.get('tool_calls_total', 0)}** "
+        f"(by name: {', '.join(f'{k}={v}' for k, v in sorted(tc_counts.items())) or 'none'})"
+    )
 
-                 f"(by name: {', '.join(f'{k}={v}' for k, v in sorted(tc_counts.items())) or 'none'})")
+    lines.append(
+        f"- consolidated into umbrellas: **{counts.get('consolidated_this_run', 0)}**"
+    )
 
-    lines.append(f"- consolidated into umbrellas: **{counts.get('consolidated_this_run', 0)}**")
-
-    lines.append(f"- pruned (archived for staleness): **{counts.get('pruned_this_run', 0)}**")
+    lines.append(
+        f"- pruned (archived for staleness): **{counts.get('pruned_this_run', 0)}**"
+    )
 
     lines.append(f"- new skills this run: **{counts.get('added_this_run', 0)}**")
 
-    lines.append(f"- state transitions (active ↔ stale ↔ archived): "
-
-                 f"**{counts.get('state_transitions', 0)}**")
+    lines.append(
+        f"- state transitions (active ↔ stale ↔ archived): "
+        f"**{counts.get('state_transitions', 0)}**"
+    )
 
     lines.append("")
-
-
 
     # Consolidated list — content absorbed into an umbrella. The directory
 
@@ -2509,27 +1831,19 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
     consolidated = p.get("consolidated") or []
 
     if consolidated:
-
         lines.append(f"### Consolidated into umbrella skills ({len(consolidated)})\n")
 
         lines.append(
-
             "_These skills were **absorbed into another skill** during this run — "
-
             "their content still lives, just under a different name. "
-
             "The original directory was moved to `~/.clawksis/skills/.archive/` for "
-
             "safety and can be restored via `clawk curator restore <name>` if the "
-
             "consolidation was wrong._\n"
-
         )
 
         SHOW = 50
 
         for entry in consolidated[:SHOW]:
-
             name = entry.get("name", "?")
 
             into = entry.get("into", "?")
@@ -2541,11 +1855,9 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
             line = f"- `{name}` → merged into `{into}`"
 
             if reason:
-
                 line += f" — {reason}"
 
             if source and source.startswith("tool-call audit"):
-
                 # The model didn't enumerate this one — surface that to the
 
                 # user so they know why the row has no rationale.
@@ -2555,24 +1867,16 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
             lines.append(line)
 
             if entry.get("model_claimed_into"):
-
                 lines.append(
-
                     f"  ⚠ The curator's summary named `{entry['model_claimed_into']}` "
-
                     "as the umbrella but that skill doesn't exist post-run; "
-
                     "showing the tool-call audit's finding instead."
-
                 )
 
         if len(consolidated) > SHOW:
-
             lines.append(f"- … and {len(consolidated) - SHOW} more (see `run.json`)")
 
         lines.append("")
-
-
 
     # Pruned list — archived without consolidation. These are the
 
@@ -2581,25 +1885,18 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
     pruned = p.get("pruned") or []
 
     if pruned:
-
         lines.append(f"### Pruned — archived for staleness ({len(pruned)})\n")
 
         lines.append(
-
             "_These skills were archived without being merged into an umbrella "
-
             "(e.g. stale, unused, or judged irrelevant). "
-
             "Directories live under `~/.clawksis/skills/.archive/`. "
-
             "Restore any via `clawk curator restore <name>`._\n"
-
         )
 
         SHOW = 50
 
         for entry in pruned[:SHOW]:
-
             # Entries are dicts with {name, source, reason} when written via
 
             # the reconciler, or bare strings when an older format slipped
@@ -2607,7 +1904,6 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
             # through. Handle both.
 
             if isinstance(entry, dict):
-
                 name = entry.get("name", "?")
 
                 reason = (entry.get("reason") or "").strip()
@@ -2615,56 +1911,45 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
                 line = f"- `{name}`"
 
                 if reason:
-
                     line += f" — {reason}"
 
                 lines.append(line)
 
             else:
-
                 lines.append(f"- `{entry}`")
 
         if len(pruned) > SHOW:
-
             lines.append(f"- … and {len(pruned) - SHOW} more (see `run.json`)")
 
         lines.append("")
-
-
 
     # Added list
 
     added = p.get("added") or []
 
     if added:
-
         lines.append(f"### New skills this run ({len(added)})\n")
 
-        lines.append("_Usually these are new class-level umbrellas created via `skill_manage action=create`._\n")
+        lines.append(
+            "_Usually these are new class-level umbrellas created via `skill_manage action=create`._\n"
+        )
 
         for n in added:
-
             lines.append(f"- `{n}`")
 
         lines.append("")
-
-
 
     # State transitions
 
     trans = p.get("state_transitions") or []
 
     if trans:
-
         lines.append(f"### State transitions ({len(trans)})\n")
 
         for t in trans:
-
             lines.append(f"- `{t.get('name')}`: {t.get('from')} → {t.get('to')}")
 
         lines.append("")
-
-
 
     # Cron job rewrites — show which scheduled jobs had their skill
 
@@ -2677,23 +1962,19 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
     cron_rewrites_list = cron_rw.get("rewrites") or []
 
     if cron_rewrites_list:
-
-        lines.append(f"### Cron job skill references rewritten ({len(cron_rewrites_list)})\n")
+        lines.append(
+            f"### Cron job skill references rewritten ({len(cron_rewrites_list)})\n"
+        )
 
         lines.append(
-
             "_Cron jobs that referenced a consolidated or pruned skill were "
-
             "updated in-place so they keep loading the right instructions "
-
             "on their next run. See `cron_rewrites.json` for the full record._\n"
-
         )
 
         SHOW = 25
 
         for entry in cron_rewrites_list[:SHOW]:
-
             job_name = entry.get("job_name") or entry.get("job_id") or "?"
 
             before = entry.get("before") or []
@@ -2705,39 +1986,28 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
             dropped = entry.get("dropped") or []
 
             lines.append(
-
                 f"- `{job_name}`: `{', '.join(before)}` → `{', '.join(after) or '(none)'}`"
-
             )
 
             for old, new in mapped.items():
-
                 lines.append(f"    - `{old}` → `{new}` (consolidated)")
 
             for name in dropped:
-
                 lines.append(f"    - `{name}` dropped (pruned)")
 
         if len(cron_rewrites_list) > SHOW:
-
             lines.append(
-
                 f"- … and {len(cron_rewrites_list) - SHOW} more "
-
                 "(see `cron_rewrites.json`)"
-
             )
 
         lines.append("")
-
-
 
     # Full LLM final response
 
     final = (p.get("llm_final") or "").strip()
 
     if final:
-
         lines.append("## LLM final summary\n")
 
         lines.append(final)
@@ -2745,18 +2015,14 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
         lines.append("")
 
     elif not error:
-
         llm_sum = p.get("llm_summary") or ""
 
         if llm_sum:
-
             lines.append("## LLM summary\n")
 
             lines.append(llm_sum)
 
             lines.append("")
-
-
 
     # Recovery footer
 
@@ -2764,18 +2030,17 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
 
     lines.append("- Restore an archived skill: `clawk curator restore <name>`")
 
-    lines.append("- All archives live under `~/.clawksis/skills/.archive/` and are recoverable by `mv`")
+    lines.append(
+        "- All archives live under `~/.clawksis/skills/.archive/` and are recoverable by `mv`"
+    )
 
-    lines.append("- See `run.json` in this directory for the full machine-readable record.")
+    lines.append(
+        "- See `run.json` in this directory for the full machine-readable record."
+    )
 
     lines.append("")
 
-
-
     return "\n".join(lines)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2785,57 +2050,36 @@ def _render_report_markdown(p: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-
 def _render_candidate_list() -> str:
-
     """Human/agent-readable list of agent-created skills with usage stats."""
 
     rows = skill_usage.agent_created_report()
 
     if not rows:
-
         return "No agent-created skills to review."
 
     lines = [f"Agent-created skills ({len(rows)}):\n"]
 
     for r in rows:
-
         lines.append(
-
             f"- {r['name']}  "
-
             f"state={r['state']}  "
-
             f"pinned={'yes' if r.get('pinned') else 'no'}  "
-
             f"activity={r.get('activity_count', 0)}  "
-
             f"use={r.get('use_count', 0)}  "
-
             f"view={r.get('view_count', 0)}  "
-
             f"patches={r.get('patch_count', 0)}  "
-
             f"last_activity={r.get('last_activity_at') or 'never'}"
-
         )
 
     return "\n".join(lines)
 
 
-
-
-
 def run_curator_review(
-
     on_summary: Optional[Callable[[str], None]] = None,
-
     synchronous: bool = False,
-
     dry_run: bool = False,
-
 ) -> Dict[str, Any]:
-
     """Execute a single curator review pass.
 
 
@@ -2875,31 +2119,22 @@ def run_curator_review(
     start = datetime.now(timezone.utc)
 
     if dry_run:
-
         # Count candidates without mutating state.
 
         try:
-
             report = skill_usage.agent_created_report()
 
             counts = {
-
                 "checked": len(report),
-
                 "marked_stale": 0,
-
                 "archived": 0,
-
                 "reactivated": 0,
-
             }
 
         except Exception:
-
             counts = {"checked": 0, "marked_stale": 0, "archived": 0, "reactivated": 0}
 
     else:
-
         # Pre-mutation snapshot — best-effort, never blocks the run. A
 
         # failed snapshot logs at debug and continues (the alternative is
@@ -2911,46 +2146,34 @@ def run_curator_review(
         # curator entirely until they can fix disk space.
 
         try:
-
             from agent import curator_backup
 
             snap = curator_backup.snapshot_skills(reason="pre-curator-run")
 
             if snap is not None and on_summary:
-
                 try:
-
                     on_summary(f"curator: snapshot created ({snap.name})")
 
                 except Exception:
-
                     pass
 
         except Exception as e:
-
             logger.debug("Curator pre-run snapshot failed: %s", e, exc_info=True)
 
         counts = apply_automatic_transitions(now=start)
 
-
-
     auto_summary_parts = []
 
     if counts["marked_stale"]:
-
         auto_summary_parts.append(f"{counts['marked_stale']} marked stale")
 
     if counts["archived"]:
-
         auto_summary_parts.append(f"{counts['archived']} archived")
 
     if counts["reactivated"]:
-
         auto_summary_parts.append(f"{counts['reactivated']} reactivated")
 
     auto_summary = ", ".join(auto_summary_parts) if auto_summary_parts else "no changes"
-
-
 
     # Persist state before the LLM pass so a crash mid-review still records
 
@@ -2965,7 +2188,6 @@ def run_curator_review(
     state = load_state()
 
     if not dry_run:
-
         state["last_run_at"] = start.isoformat()
 
         state["run_count"] = int(state.get("run_count", 0)) + 1
@@ -2976,8 +2198,6 @@ def run_curator_review(
 
     save_state(state)
 
-
-
     def _llm_pass():
 
         nonlocal auto_summary
@@ -2985,45 +2205,31 @@ def run_curator_review(
         # Snapshot skill state BEFORE the LLM pass so the report can diff.
 
         try:
-
             before_report = skill_usage.agent_created_report()
 
         except Exception:
-
             before_report = []
 
         before_names = {r.get("name") for r in before_report if isinstance(r, dict)}
 
-
-
         llm_meta: Dict[str, Any] = {}
 
         try:
-
             candidate_list = _render_candidate_list()
 
             if "No agent-created skills" in candidate_list:
-
                 final_summary = f"{prefix}{auto_summary}; llm: skipped (no candidates)"
 
                 llm_meta = {
-
                     "final": "",
-
                     "summary": "skipped (no candidates)",
-
                     "model": "",
-
                     "provider": "",
-
                     "tool_calls": [],
-
                     "error": None,
-
                 }
 
             else:
-
                 # When pruning built-ins is enabled, the candidate list now
 
                 # includes bundled skills. Override the default "don't touch
@@ -3035,74 +2241,46 @@ def run_curator_review(
                 builtins_note = ""
 
                 if get_prune_builtins():
-
                     builtins_note = (
-
                         "\n\nPRUNE-BUILTINS MODE IS ON: bundled built-in skills "
-
                         "ARE included in the candidate list below and MAY be "
-
                         "archived for staleness/irrelevance, overriding hard "
-
                         "rule #1 for bundled skills ONLY. Hub-installed skills "
-
                         "remain strictly off-limits. Treat a stale built-in the "
-
                         "same as a stale agent-created skill: archive it (never "
-
                         "delete). It will be restored on `clawk update` only if "
-
                         "the user explicitly restores it."
-
                     )
 
                 if dry_run:
-
                     prompt = (
-
                         f"{CURATOR_DRY_RUN_BANNER}\n\n"
-
                         f"{CURATOR_REVIEW_PROMPT}{builtins_note}\n\n"
-
                         f"{candidate_list}"
-
                     )
 
                 else:
-
-                    prompt = f"{CURATOR_REVIEW_PROMPT}{builtins_note}\n\n{candidate_list}"
+                    prompt = (
+                        f"{CURATOR_REVIEW_PROMPT}{builtins_note}\n\n{candidate_list}"
+                    )
 
                 llm_meta = _run_llm_review(prompt)
 
-                final_summary = (
-
-                    f"{prefix}{auto_summary}; llm: {llm_meta.get('summary', 'no change')}"
-
-                )
+                final_summary = f"{prefix}{auto_summary}; llm: {llm_meta.get('summary', 'no change')}"
 
         except Exception as e:
-
             logger.debug("Curator LLM pass failed: %s", e, exc_info=True)
 
             final_summary = f"{prefix}{auto_summary}; llm: error ({e})"
 
             llm_meta = {
-
                 "final": "",
-
                 "summary": f"error ({e})",
-
                 "model": "",
-
                 "provider": "",
-
                 "tool_calls": [],
-
                 "error": str(e),
-
             }
-
-
 
         # Append the rename map (`old-name → umbrella`) to the user-visible
 
@@ -3113,28 +2291,18 @@ def run_curator_review(
         # block the run on a formatting issue.
 
         try:
-
             rename_lines = _build_rename_summary(
-
                 before_names=before_names,
-
                 after_report=skill_usage.agent_created_report(),
-
                 tool_calls=llm_meta.get("tool_calls", []) or [],
-
                 model_final=llm_meta.get("final", "") or "",
-
             )
 
             if rename_lines:
-
                 final_summary = f"{final_summary}\n{rename_lines}"
 
         except Exception as e:
-
             logger.debug("Curator rename summary build failed: %s", e, exc_info=True)
-
-
 
         elapsed = (datetime.now(timezone.utc) - start).total_seconds()
 
@@ -3144,8 +2312,6 @@ def run_curator_review(
 
         state2["last_run_summary"] = final_summary
 
-
-
         # Write the per-run report. Runs in a best-effort try so a
 
         # reporting bug never breaks the curator itself. Report path is
@@ -3153,89 +2319,54 @@ def run_curator_review(
         # recorded in state so `clawk curator status` can point at it.
 
         try:
-
             after_report = skill_usage.agent_created_report()
 
         except Exception:
-
             after_report = []
 
         try:
-
             report_path = _write_run_report(
-
                 started_at=start,
-
                 elapsed_seconds=elapsed,
-
                 auto_counts=counts,
-
                 auto_summary=auto_summary,
-
                 before_report=before_report,
-
                 before_names=before_names,
-
                 after_report=after_report,
-
                 llm_meta=llm_meta,
-
             )
 
             if report_path is not None:
-
                 state2["last_report_path"] = str(report_path)
 
         except Exception as e:
-
             logger.debug("Curator report write failed: %s", e, exc_info=True)
-
-
 
         save_state(state2)
 
-
-
         if on_summary:
-
             try:
-
                 on_summary(f"curator: {final_summary}")
 
             except Exception:
-
                 pass
 
-
-
     if synchronous:
-
         _llm_pass()
 
     else:
-
         t = threading.Thread(target=_llm_pass, daemon=True, name="curator-review")
 
         t.start()
 
-
-
     return {
-
         "started_at": start.isoformat(),
-
         "auto_transitions": counts,
-
         "summary_so_far": auto_summary,
-
     }
 
 
-
-
-
 def _resolve_review_runtime(cfg: Dict[str, Any]) -> _ReviewRuntimeBinding:
-
     """Resolve provider/model and per-slot credentials for the curator review fork.
 
 
@@ -3256,8 +2387,6 @@ def _resolve_review_runtime(cfg: Dict[str, Any]) -> _ReviewRuntimeBinding:
 
     _main_model = _main.get("default") or _main.get("model") or ""
 
-
-
     # 1. Canonical aux task slot
 
     _aux = cfg.get("auxiliary", {}) if isinstance(cfg.get("auxiliary"), dict) else {}
@@ -3269,65 +2398,44 @@ def _resolve_review_runtime(cfg: Dict[str, Any]) -> _ReviewRuntimeBinding:
     _task_model = (_cur_task.get("model") or "").strip() or None
 
     if _task_provider and _task_provider != "auto" and _task_model:
-
         return _ReviewRuntimeBinding(
-
             _task_provider,
-
             _task_model,
-
             _strip_aux_credential(_cur_task.get("api_key")),
-
             _strip_aux_credential(_cur_task.get("base_url")),
-
         )
-
-
 
     # 2. Legacy curator.auxiliary.{provider,model} (deprecated, pre-unification)
 
     _cur = cfg.get("curator", {}) if isinstance(cfg.get("curator"), dict) else {}
 
-    _legacy = _cur.get("auxiliary", {}) if isinstance(_cur.get("auxiliary"), dict) else {}
+    _legacy = (
+        _cur.get("auxiliary", {}) if isinstance(_cur.get("auxiliary"), dict) else {}
+    )
 
     _legacy_provider = _legacy.get("provider") or None
 
     _legacy_model = _legacy.get("model") or None
 
     if _legacy_provider and _legacy_model:
-
         logger.info(
-
             "curator: using deprecated curator.auxiliary.{provider,model} "
-
             "config — please migrate to auxiliary.curator.{provider,model}"
-
         )
 
         return _ReviewRuntimeBinding(
-
             str(_legacy_provider),
-
             str(_legacy_model),
-
             _strip_aux_credential(_legacy.get("api_key")),
-
             _strip_aux_credential(_legacy.get("base_url")),
-
         )
-
-
 
     # 3. Fall through to the main chat model
 
     return _ReviewRuntimeBinding(_main_provider, _main_model, None, None)
 
 
-
-
-
 def _resolve_review_model(cfg: Dict[str, Any]) -> tuple[str, str]:
-
     """Pick (provider, model) for the curator review fork.
 
 
@@ -3361,11 +2469,7 @@ def _resolve_review_model(cfg: Dict[str, Any]) -> tuple[str, str]:
     return b.provider, b.model
 
 
-
-
-
 def _run_llm_review(prompt: str) -> Dict[str, Any]:
-
     """Spawn an AIAgent fork to run the curator review prompt.
 
 
@@ -3393,34 +2497,23 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
     import contextlib
 
     result_meta: Dict[str, Any] = {
-
         "final": "",
-
         "summary": "",
-
         "model": "",
-
         "provider": "",
-
         "tool_calls": [],
-
         "error": None,
-
     }
 
     try:
-
         from run_agent import AIAgent
 
     except Exception as e:
-
         result_meta["error"] = f"AIAgent import failed: {e}"
 
         result_meta["summary"] = result_meta["error"]
 
         return result_meta
-
-
 
     # Resolve provider + model the same way the CLI does, so the curator
 
@@ -3455,7 +2548,6 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
     _model_name = ""
 
     try:
-
         from clawk_cli.config import load_config
 
         from clawk_cli.runtime_provider import resolve_runtime_provider
@@ -3467,15 +2559,10 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
         _provider, _model_name = _binding.provider, _binding.model
 
         _rp = resolve_runtime_provider(
-
             requested=_provider,
-
             target_model=_model_name,
-
             explicit_api_key=_binding.explicit_api_key,
-
             explicit_base_url=_binding.explicit_base_url,
-
         )
 
         _api_key = _rp.get("api_key")
@@ -3487,53 +2574,31 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
         _resolved_provider = _rp.get("provider") or _provider
 
     except Exception as e:
-
         logger.debug("Curator provider resolution failed: %s", e, exc_info=True)
-
-
 
     result_meta["model"] = _model_name
 
     result_meta["provider"] = _resolved_provider or ""
 
-
-
     review_agent = None
 
     try:
-
         review_agent = AIAgent(
-
             model=_model_name,
-
             provider=_resolved_provider,
-
             api_key=_api_key,
-
             base_url=_base_url,
-
             api_mode=_api_mode,
-
             # Umbrella-building over a large skill collection is worth a
-
             # high iteration ceiling — the pass typically takes 50-100
-
             # API calls against hundreds of candidate skills. The
-
             # single-session review path caps itself at a much smaller
-
             # number because it's not doing a curation sweep.
-
             max_iterations=9999,
-
             quiet_mode=True,
-
             platform="curator",
-
             skip_context_files=True,
-
             skip_memory=True,
-
         )
 
         # Disable recursive nudges — the curator must never spawn its own review.
@@ -3541,8 +2606,6 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
         review_agent._memory_nudge_interval = 0
 
         review_agent._skill_nudge_interval = 0
-
-
 
         # Redirect the forked agent's stdout/stderr to /dev/null while it
 
@@ -3554,25 +2617,23 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
 
         # run_curator_review(synchronous=True) from the CLI.
 
-        with open(os.devnull, "w", encoding="utf-8") as _devnull, \
-             contextlib.redirect_stdout(_devnull), \
-             contextlib.redirect_stderr(_devnull):
-
+        with (
+            open(os.devnull, "w", encoding="utf-8") as _devnull,
+            contextlib.redirect_stdout(_devnull),
+            contextlib.redirect_stderr(_devnull),
+        ):
             conv_result = review_agent.run_conversation(user_message=prompt)
-
-
 
         final = ""
 
         if isinstance(conv_result, dict):
-
             final = str(conv_result.get("final_response") or "").strip()
 
         result_meta["final"] = final
 
-        result_meta["summary"] = (final[:240] + "…") if len(final) > 240 else (final or "no change")
-
-
+        result_meta["summary"] = (
+            (final[:240] + "…") if len(final) > 240 else (final or "no change")
+        )
 
         # Collect tool calls for the report. Walk the forked agent's
 
@@ -3585,17 +2646,13 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
         _calls: List[Dict[str, Any]] = []
 
         for msg in getattr(review_agent, "_session_messages", []) or []:
-
             if not isinstance(msg, dict):
-
                 continue
 
             tcs = msg.get("tool_calls") or []
 
             for tc in tcs:
-
                 if not isinstance(tc, dict):
-
                     continue
 
                 fn = tc.get("function") or {}
@@ -3605,7 +2662,6 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
                 args_raw = fn.get("arguments") or ""
 
                 if isinstance(args_raw, str) and len(args_raw) > 400:
-
                     args_raw = args_raw[:400] + "…"
 
                 _calls.append({"name": name, "arguments": args_raw})
@@ -3613,27 +2669,19 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
         result_meta["tool_calls"] = _calls
 
     except Exception as e:
-
         result_meta["error"] = f"error: {e}"
 
         result_meta["summary"] = result_meta["error"]
 
     finally:
-
         if review_agent is not None:
-
             try:
-
                 review_agent.close()
 
             except Exception:
-
                 pass
 
     return result_meta
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -3643,42 +2691,30 @@ def _run_llm_review(prompt: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-
 def maybe_run_curator(
-
     *,
-
     idle_for_seconds: Optional[float] = None,
-
     on_summary: Optional[Callable[[str], None]] = None,
-
 ) -> Optional[Dict[str, Any]]:
-
     """Best-effort: run a curator pass if all gates pass. Returns the result
 
     dict if a pass was started, else None. Never raises."""
 
     try:
-
         if not should_run_now():
-
             return None
 
         # Idle gating: only enforce when the caller provided a measurement.
 
         if idle_for_seconds is not None:
-
             min_idle_s = get_min_idle_hours() * 3600.0
 
             if idle_for_seconds < min_idle_s:
-
                 return None
 
         return run_curator_review(on_summary=on_summary)
 
     except Exception as e:
-
         logger.debug("maybe_run_curator failed: %s", e, exc_info=True)
 
         return None
-

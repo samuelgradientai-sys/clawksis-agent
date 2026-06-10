@@ -6,7 +6,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from plugins.teams_pipeline.models import GraphSubscription
-from plugins.teams_pipeline.store import TeamsPipelineStore, resolve_teams_pipeline_store_path
+from plugins.teams_pipeline.store import (
+    TeamsPipelineStore,
+    resolve_teams_pipeline_store_path,
+)
 from tools.microsoft_graph_auth import MicrosoftGraphTokenProvider
 from tools.microsoft_graph_client import MicrosoftGraphClient
 
@@ -76,7 +79,9 @@ def sync_graph_subscription_record(
     expiration = _parse_datetime(normalized.get("expiration_datetime"))
     effective_status = status
     if effective_status is None:
-        effective_status = "expired" if expiration and expiration <= _utc_now() else "active"
+        effective_status = (
+            "expired" if expiration and expiration <= _utc_now() else "active"
+        )
     normalized["status"] = effective_status
     if renewed:
         normalized["latest_renewal_at"] = _utc_now_iso()
@@ -99,14 +104,18 @@ def is_managed_subscription(
     expected_client_state_value: str | None,
 ) -> bool:
     subscription_id = str(
-        subscription_payload.get("subscription_id") or subscription_payload.get("id") or ""
+        subscription_payload.get("subscription_id")
+        or subscription_payload.get("id")
+        or ""
     ).strip()
     if subscription_id and store.get_subscription(subscription_id):
         return True
 
     if expected_client_state_value:
         candidate_state = str(
-            subscription_payload.get("client_state") or subscription_payload.get("clientState") or ""
+            subscription_payload.get("client_state")
+            or subscription_payload.get("clientState")
+            or ""
         ).strip()
         if candidate_state and candidate_state == expected_client_state_value:
             return True
@@ -147,12 +156,10 @@ async def maintain_graph_subscriptions(
             expected_client_state_value=managed_client_state,
         )
         if not managed:
-            skipped.append(
-                {
-                    "subscription_id": subscription_id,
-                    "reason": "not_managed_by_teams_pipeline",
-                }
-            )
+            skipped.append({
+                "subscription_id": subscription_id,
+                "reason": "not_managed_by_teams_pipeline",
+            })
             continue
 
         remote_ids.add(subscription_id)
@@ -160,17 +167,18 @@ async def maintain_graph_subscriptions(
             sync_graph_subscription_record(store, raw)
             synced += 1
         except Exception as exc:
-            skipped.append(
-                {
-                    "subscription_id": subscription_id,
-                    "reason": f"failed_to_sync_local_store: {exc}",
-                }
-            )
+            skipped.append({
+                "subscription_id": subscription_id,
+                "reason": f"failed_to_sync_local_store: {exc}",
+            })
             continue
 
         expiration = _parse_datetime(raw.get("expirationDateTime"))
         if expiration is None:
-            skipped.append({"subscription_id": subscription_id, "reason": "missing_expiration"})
+            skipped.append({
+                "subscription_id": subscription_id,
+                "reason": "missing_expiration",
+            })
             continue
 
         seconds_until_expiry = int((expiration - now).total_seconds())
@@ -179,31 +187,32 @@ async def maintain_graph_subscriptions(
                 subscription_id,
                 {
                     "status": "expired",
-                    "expiration_datetime": expiration.isoformat().replace("+00:00", "Z"),
+                    "expiration_datetime": expiration.isoformat().replace(
+                        "+00:00", "Z"
+                    ),
                 },
             )
-            skipped.append(
-                {
-                    "subscription_id": subscription_id,
-                    "reason": "already_expired",
-                    "expiration_datetime": expiration.isoformat().replace("+00:00", "Z"),
-                }
-            )
+            skipped.append({
+                "subscription_id": subscription_id,
+                "reason": "already_expired",
+                "expiration_datetime": expiration.isoformat().replace("+00:00", "Z"),
+            })
             continue
 
         if seconds_until_expiry > threshold_hours * 3600:
-            skipped.append(
-                {
-                    "subscription_id": subscription_id,
-                    "reason": "not_due",
-                    "expires_in_seconds": seconds_until_expiry,
-                }
-            )
+            skipped.append({
+                "subscription_id": subscription_id,
+                "reason": "not_due",
+                "expires_in_seconds": seconds_until_expiry,
+            })
             continue
 
-        new_expiration = (max(now, expiration) + timedelta(hours=extend_hours)).replace(
-            microsecond=0
-        ).isoformat().replace("+00:00", "Z")
+        new_expiration = (
+            (max(now, expiration) + timedelta(hours=extend_hours))
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
         candidate = {
             "subscription_id": subscription_id,
             "resource": raw.get("resource"),
@@ -218,7 +227,12 @@ async def maintain_graph_subscriptions(
             f"/subscriptions/{subscription_id}",
             json_body={"expirationDateTime": new_expiration},
         )
-        merged = {**raw, **(patched or {}), "id": subscription_id, "expirationDateTime": new_expiration}
+        merged = {
+            **raw,
+            **(patched or {}),
+            "id": subscription_id,
+            "expirationDateTime": new_expiration,
+        }
         sync_graph_subscription_record(store, merged, status="active", renewed=True)
         renewed.append({**candidate, "result": patched})
 

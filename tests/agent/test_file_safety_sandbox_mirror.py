@@ -6,7 +6,7 @@ The guard fires when a tool tries to write into the per-task mirror
 
 directory created by a non-local terminal backend (Docker, Daytona, etc.).
 
-Those paths look like ``…/sandboxes/<backend>/<task>/home/.clawksissis/…`` and
+Those paths look like ``…/sandboxes/<backend>/<task>/home/.clawksis/…`` and
 
 they accumulate divergent copies of authoritative profile state (SOUL.md,
 
@@ -29,15 +29,10 @@ The agent reported success; the rule never took effect.
 from __future__ import annotations
 
 
-
 from pathlib import Path
 
 
-
 import pytest
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -47,36 +42,29 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestClassifySandboxMirrorTarget:
-
     def test_docker_mirror_soul_md_classified(self, tmp_path):
-
         """The exact path shape reported in #32049."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
-
-
         target = (
-
             tmp_path
-
-            / "profiles" / "group1"
-
-            / "sandboxes" / "docker" / "default" / "home" / ".clawksis"
-
-            / "profiles" / "group1" / "SOUL.md"
-
+            / "profiles"
+            / "group1"
+            / "sandboxes"
+            / "docker"
+            / "default"
+            / "home"
+            / ".clawksis"
+            / "profiles"
+            / "group1"
+            / "SOUL.md"
         )
 
         target.parent.mkdir(parents=True)
 
         target.write_text("# mirror copy\n")
-
-
 
         result = classify_sandbox_mirror_target(str(target))
 
@@ -84,55 +72,36 @@ class TestClassifySandboxMirrorTarget:
 
         assert result["target_path"] == str(target.resolve())
 
-        assert result["mirror_root"].endswith(
-
-            "sandboxes/docker/default/home/.clawksissis"
-
-        )
+        assert result["mirror_root"].endswith("sandboxes/docker/default/home/.clawksis")
 
         assert result["inner_path"] == "profiles/group1/SOUL.md"
 
-
-
     @pytest.mark.parametrize(
-
         "backend,inner",
-
         [
-
             ("docker", "profiles/coder/memories/MEMORY.md"),
-
             ("daytona", "profiles/default/cron/jobs.json"),
-
             ("podman", ".env"),
-
         ],
-
     )
-
     def test_other_backends_and_inner_files_match(self, tmp_path, backend, inner):
-
         """The detector is backend-agnostic — sandbox-mirror shape is what matters."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
-
-
         target = (
-
             tmp_path
-
-            / "sandboxes" / backend / "task-42" / "home" / ".clawksis"
-
+            / "sandboxes"
+            / backend
+            / "task-42"
+            / "home"
+            / ".clawksis"
             / Path(inner)
-
         )
 
         target.parent.mkdir(parents=True, exist_ok=True)
 
         target.write_text("x")
-
-
 
         result = classify_sandbox_mirror_target(str(target))
 
@@ -142,15 +111,10 @@ class TestClassifySandboxMirrorTarget:
 
         assert backend in result["mirror_root"]
 
-
-
     def test_path_outside_sandbox_returns_none(self, tmp_path):
-
         """A plain Clawksis path is not a mirror."""
 
         from agent.file_safety import classify_sandbox_mirror_target
-
-
 
         target = tmp_path / ".clawksis" / "profiles" / "group1" / "SOUL.md"
 
@@ -158,104 +122,66 @@ class TestClassifySandboxMirrorTarget:
 
         target.write_text("# real SOUL\n")
 
-
-
         assert classify_sandbox_mirror_target(str(target)) is None
 
-
-
     def test_sandboxes_segment_without_home_clawk_returns_none(self, tmp_path):
-
         """A ``sandboxes/`` directory unrelated to Clawksis-state mirroring (e.g.
 
         the sandbox workspace itself) is not flagged."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
-
-
-        target = (
-
-            tmp_path
-
-            / "sandboxes" / "docker" / "task-42" / "workspace" / "main.py"
-
-        )
+        target = tmp_path / "sandboxes" / "docker" / "task-42" / "workspace" / "main.py"
 
         target.parent.mkdir(parents=True)
 
         target.write_text("print('hi')\n")
 
-
-
         assert classify_sandbox_mirror_target(str(target)) is None
 
-
-
     def test_sandboxes_segment_with_home_but_no_clawksis_returns_none(self, tmp_path):
-
         """``sandboxes/<backend>/<task>/home/anything-not-clawksis`` is not a mirror."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
-
-
-        target = (
-
-            tmp_path
-
-            / "sandboxes" / "docker" / "task-42" / "home" / ".bashrc"
-
-        )
+        target = tmp_path / "sandboxes" / "docker" / "task-42" / "home" / ".bashrc"
 
         target.parent.mkdir(parents=True)
 
         target.write_text("alias ll='ls -la'\n")
 
-
-
         assert classify_sandbox_mirror_target(str(target)) is None
 
-
-
     def test_truncated_sandbox_path_returns_none(self, tmp_path):
-
-        """``…/sandboxes/<backend>/<task>`` without ``home/.clawksissis/<thing>`` is not a mirror."""
+        """``…/sandboxes/<backend>/<task>`` without ``home/.clawksis/<thing>`` is not a mirror."""
 
         from agent.file_safety import classify_sandbox_mirror_target
-
-
 
         target = tmp_path / "sandboxes" / "docker" / "task-42"
 
         target.mkdir(parents=True)
 
-
-
         assert classify_sandbox_mirror_target(str(target)) is None
 
-
-
     def test_non_existent_path_still_classifies_by_shape(self, tmp_path):
-
         """Detection is path-shape only — it must not require the file to exist
 
         (the agent is about to CREATE the mirror file, that's the bug)."""
 
         from agent.file_safety import classify_sandbox_mirror_target
 
-
-
         target = (
-
             tmp_path
-
-            / "profiles" / "group1"
-
-            / "sandboxes" / "docker" / "default" / "home" / ".clawksis"
-
-            / "profiles" / "group1" / "SOUL.md"
-
+            / "profiles"
+            / "group1"
+            / "sandboxes"
+            / "docker"
+            / "default"
+            / "home"
+            / ".clawksis"
+            / "profiles"
+            / "group1"
+            / "SOUL.md"
         )
 
         # Parent directory exists so .resolve() doesn't strip the tail
@@ -266,16 +192,11 @@ class TestClassifySandboxMirrorTarget:
 
         assert not target.exists()
 
-
-
         result = classify_sandbox_mirror_target(str(target))
 
         assert result is not None
 
         assert result["inner_path"] == "profiles/group1/SOUL.md"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -285,16 +206,10 @@ class TestClassifySandboxMirrorTarget:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestGetSandboxMirrorWarning:
-
     def test_non_mirror_returns_none(self, tmp_path):
 
         from agent.file_safety import get_sandbox_mirror_warning
-
-
 
         target = tmp_path / ".clawksis" / "profiles" / "group1" / "SOUL.md"
 
@@ -302,35 +217,29 @@ class TestGetSandboxMirrorWarning:
 
         target.write_text("# real SOUL\n")
 
-
-
         assert get_sandbox_mirror_warning(str(target)) is None
-
-
 
     def test_mirror_warning_names_mirror_root_and_inner_path(self, tmp_path):
 
         from agent.file_safety import get_sandbox_mirror_warning
 
-
-
         target = (
-
             tmp_path
-
-            / "profiles" / "group1"
-
-            / "sandboxes" / "docker" / "default" / "home" / ".clawksis"
-
-            / "profiles" / "group1" / "SOUL.md"
-
+            / "profiles"
+            / "group1"
+            / "sandboxes"
+            / "docker"
+            / "default"
+            / "home"
+            / ".clawksis"
+            / "profiles"
+            / "group1"
+            / "SOUL.md"
         )
 
         target.parent.mkdir(parents=True)
 
         target.write_text("# mirror copy\n")
-
-
 
         warn = get_sandbox_mirror_warning(str(target))
 
@@ -338,7 +247,7 @@ class TestGetSandboxMirrorWarning:
 
         # Must name the mirror root so the user can locate the sandbox.
 
-        assert "sandboxes/docker/default/home/.clawksissis" in warn
+        assert "sandboxes/docker/default/home/.clawksis" in warn
 
         # Must hint at what the agent likely meant.
 
@@ -348,29 +257,25 @@ class TestGetSandboxMirrorWarning:
 
         assert "cross_profile=True" in warn
 
-
-
     def test_warning_is_defense_in_depth_not_boundary(self, tmp_path):
 
         from agent.file_safety import get_sandbox_mirror_warning
 
-
-
         target = (
-
             tmp_path
-
-            / "sandboxes" / "docker" / "t" / "home" / ".clawksis"
-
-            / "profiles" / "g" / "SOUL.md"
-
+            / "sandboxes"
+            / "docker"
+            / "t"
+            / "home"
+            / ".clawksis"
+            / "profiles"
+            / "g"
+            / "SOUL.md"
         )
 
         target.parent.mkdir(parents=True)
 
         target.write_text("x")
-
-
 
         warn = get_sandbox_mirror_warning(str(target))
 
@@ -383,9 +288,6 @@ class TestGetSandboxMirrorWarning:
         assert "not a security boundary" in warn.lower()
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Independence from cross-profile classifier
@@ -393,18 +295,12 @@ class TestGetSandboxMirrorWarning:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestSandboxMirrorIsOrthogonalToCrossProfile:
-
     """The sandbox-mirror guard must fire even when the inner path is
 
     in-profile from the host's view — the bug is the mirror, not the
 
     profile mismatch."""
-
-
 
     def test_same_profile_mirror_still_flagged(self, tmp_path, monkeypatch):
 
@@ -412,27 +308,27 @@ class TestSandboxMirrorIsOrthogonalToCrossProfile:
 
         monkeypatch.setattr(fs, "_clawk_root_path", lambda: tmp_path)
 
-        monkeypatch.setattr(fs, "_clawk_home_path", lambda: tmp_path / "profiles" / "group1")
-
-
+        monkeypatch.setattr(
+            fs, "_clawk_home_path", lambda: tmp_path / "profiles" / "group1"
+        )
 
         target = (
-
             tmp_path
-
-            / "profiles" / "group1"
-
-            / "sandboxes" / "docker" / "default" / "home" / ".clawksis"
-
-            / "profiles" / "group1" / "SOUL.md"
-
+            / "profiles"
+            / "group1"
+            / "sandboxes"
+            / "docker"
+            / "default"
+            / "home"
+            / ".clawksis"
+            / "profiles"
+            / "group1"
+            / "SOUL.md"
         )
 
         target.parent.mkdir(parents=True)
 
         target.write_text("x")
-
-
 
         # cross-profile classifier: active profile == target's inner-mirror
 
@@ -445,4 +341,3 @@ class TestSandboxMirrorIsOrthogonalToCrossProfile:
         # sandbox-mirror classifier: fires unconditionally on the shape.
 
         assert fs.classify_sandbox_mirror_target(str(target)) is not None
-

@@ -12,6 +12,7 @@ This module verifies:
 - ``enabled_for`` short-circuits on broken keys
 - a missing binary is broken-set'd after one snapshot attempt
 """
+
 from __future__ import annotations
 
 from pathlib import Path

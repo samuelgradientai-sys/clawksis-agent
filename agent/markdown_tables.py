@@ -102,7 +102,9 @@ def looks_like_table_row(row: str) -> bool:
     return stripped.count("|") >= 2
 
 
-def _render_block(rows: List[List[str]], available_width: int | None = None) -> List[str]:
+def _render_block(
+    rows: List[List[str]], available_width: int | None = None
+) -> List[str]:
     """Render ``rows`` (header + body, divider implied) at uniform widths.
 
     If ``available_width`` is given and the rebuilt horizontal table
@@ -117,8 +119,7 @@ def _render_block(rows: List[List[str]], available_width: int | None = None) -> 
     rows = [r + [""] * (ncols - len(r)) for r in rows]
 
     widths = [
-        max(_MIN_COL_WIDTH, *(_disp_width(r[c]) for r in rows))
-        for c in range(ncols)
+        max(_MIN_COL_WIDTH, *(_disp_width(r[c]) for r in rows)) for c in range(ncols)
     ]
 
     # Total horizontal width for the rendered row:
@@ -284,11 +285,7 @@ def realign_markdown_tables(text: str, available_width: int | None = None) -> st
     while i < n:
         line = lines[i]
         # A table starts with a header row whose next line is a divider.
-        if (
-            "|" in line
-            and i + 1 < n
-            and is_table_divider(lines[i + 1])
-        ):
+        if "|" in line and i + 1 < n and is_table_divider(lines[i + 1]):
             header = split_table_row(line)
             body: List[List[str]] = []
             j = i + 2

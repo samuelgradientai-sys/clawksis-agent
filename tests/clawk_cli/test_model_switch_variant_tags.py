@@ -8,6 +8,7 @@ The fix: Step c now skips colon→slash conversion when the model name already
 contains a forward slash (i.e. is already in ``vendor/model`` format), since
 the colon is a variant tag, not a vendor separator.
 """
+
 import pytest
 from unittest.mock import patch
 
@@ -15,19 +16,34 @@ from clawk_cli.model_switch import switch_model
 
 
 # Shared mock context — skip network calls, credential resolution, catalog lookups
-_MOCK_VALIDATION = {"accepted": True, "persist": True, "recognized": True, "message": None}
+_MOCK_VALIDATION = {
+    "accepted": True,
+    "persist": True,
+    "recognized": True,
+    "message": None,
+}
 
 
 def _run_switch(raw_input: str, current_provider: str = "openrouter") -> str:
     """Run switch_model with mocked dependencies, return the resolved model name."""
-    with patch("clawk_cli.model_switch.resolve_alias", return_value=None), \
-         patch("clawk_cli.model_switch.list_provider_models", return_value=[]), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-               return_value={"api_key": "test", "base_url": "", "api_mode": "chat_completions"}), \
-         patch("clawk_cli.models.validate_requested_model", return_value=_MOCK_VALIDATION), \
-         patch("clawk_cli.model_switch.get_model_info", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_capabilities", return_value=None), \
-         patch("clawk_cli.models.detect_provider_for_model", return_value=None):
+    with (
+        patch("clawk_cli.model_switch.resolve_alias", return_value=None),
+        patch("clawk_cli.model_switch.list_provider_models", return_value=[]),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "test",
+                "base_url": "",
+                "api_mode": "chat_completions",
+            },
+        ),
+        patch(
+            "clawk_cli.models.validate_requested_model", return_value=_MOCK_VALIDATION
+        ),
+        patch("clawk_cli.model_switch.get_model_info", return_value=None),
+        patch("clawk_cli.model_switch.get_model_capabilities", return_value=None),
+        patch("clawk_cli.models.detect_provider_for_model", return_value=None),
+    ):
         result = switch_model(
             raw_input=raw_input,
             current_provider=current_provider,
@@ -40,11 +56,20 @@ def _run_switch(raw_input: str, current_provider: str = "openrouter") -> str:
 class TestVariantTagPreservation:
     """OpenRouter variant tags (:free, :extended, :fast) must survive model switching."""
 
-    @pytest.mark.parametrize("model,expected", [
-        ("nvidia/nemotron-3-super-120b-a12b:free", "nvidia/nemotron-3-super-120b-a12b:free"),
-        ("anthropic/claude-sonnet-4.6:extended", "anthropic/claude-sonnet-4.6:extended"),
-        ("meta-llama/llama-4-maverick:fast", "meta-llama/llama-4-maverick:fast"),
-    ])
+    @pytest.mark.parametrize(
+        "model,expected",
+        [
+            (
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                "nvidia/nemotron-3-super-120b-a12b:free",
+            ),
+            (
+                "anthropic/claude-sonnet-4.6:extended",
+                "anthropic/claude-sonnet-4.6:extended",
+            ),
+            ("meta-llama/llama-4-maverick:fast", "meta-llama/llama-4-maverick:fast"),
+        ],
+    )
     def test_slash_format_preserves_variant_tag(self, model, expected):
         """Models already in vendor/model:tag format must not have their tag mangled."""
         assert _run_switch(model) == expected

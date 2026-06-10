@@ -28,9 +28,12 @@ class TestHostHeaderValidator:
 
         for bound in ("127.0.0.1", "localhost", "::1"):
             for host_header in (
-                "127.0.0.1", "127.0.0.1:9119",
-                "localhost", "localhost:9119",
-                "[::1]", "[::1]:9119",
+                "127.0.0.1",
+                "127.0.0.1:9119",
+                "localhost",
+                "localhost:9119",
+                "[::1]",
+                "[::1]:9119",
             ):
                 assert _is_accepted_host(host_header, bound), (
                     f"bound={bound} must accept host={host_header}"

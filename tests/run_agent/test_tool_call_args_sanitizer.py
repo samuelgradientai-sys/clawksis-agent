@@ -124,7 +124,9 @@ def test_multiple_corrupted_tool_calls_in_one_message():
 
     assert repaired == 2
     assert messages[0]["tool_calls"][0]["function"]["arguments"] == "{}"
-    assert messages[0]["tool_calls"][1]["function"]["arguments"] == '{"path":"/tmp/bar"}'
+    assert (
+        messages[0]["tool_calls"][1]["function"]["arguments"] == '{"path":"/tmp/bar"}'
+    )
     assert messages[0]["tool_calls"][2]["function"]["arguments"] == "{}"
     assert messages[1]["tool_call_id"] == "call_1"
     assert messages[1]["content"] == marker
@@ -151,9 +153,17 @@ def test_empty_string_arguments_treated_as_empty_object(caplog):
 
 def test_non_assistant_messages_ignored():
     messages = [
-        {"role": "user", "content": "hello", "tool_calls": [_tool_call(arguments='{"bad":')]},
+        {
+            "role": "user",
+            "content": "hello",
+            "tool_calls": [_tool_call(arguments='{"bad":')],
+        },
         {"role": "tool", "tool_call_id": "call_1", "content": "ok"},
-        {"role": "system", "content": "sys", "tool_calls": [_tool_call(arguments='{"bad":')]},
+        {
+            "role": "system",
+            "content": "sys",
+            "tool_calls": [_tool_call(arguments='{"bad":')],
+        },
         None,
         "not a dict",
     ]

@@ -14,8 +14,8 @@ from run_agent import AIAgent
 # Layer 1 — _sanitize_api_messages role-allowlist guard
 # ---------------------------------------------------------------------------
 
-class TestSanitizeApiMessagesRoleFilter:
 
+class TestSanitizeApiMessagesRoleFilter:
     def test_drops_session_meta_role(self):
         msgs = [
             {"role": "user", "content": "hello"},
@@ -34,7 +34,9 @@ class TestSanitizeApiMessagesRoleFilter:
             {"role": "tool", "tool_call_id": "c1", "content": "ok"},
         ]
         # Need a matching assistant tool_call so the tool result isn't orphaned
-        msgs[2]["tool_calls"] = [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}]
+        msgs[2]["tool_calls"] = [
+            {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+        ]
         out = AIAgent._sanitize_api_messages(msgs)
         roles = [m["role"] for m in out]
         assert "system" in roles
@@ -49,7 +51,10 @@ class TestSanitizeApiMessagesRoleFilter:
         ]
         with caplog.at_level(logging.DEBUG, logger="run_agent"):
             AIAgent._sanitize_api_messages(msgs)
-        assert any("invalid role" in r.message and "session_meta" in r.message for r in caplog.records)
+        assert any(
+            "invalid role" in r.message and "session_meta" in r.message
+            for r in caplog.records
+        )
 
     def test_drops_multiple_invalid_roles(self):
         msgs = [
@@ -67,8 +72,8 @@ class TestSanitizeApiMessagesRoleFilter:
 # Layer 2 — CLI session-restore filters session_meta before loading
 # ---------------------------------------------------------------------------
 
-class TestCLISessionRestoreFiltering:
 
+class TestCLISessionRestoreFiltering:
     def test_restore_filters_session_meta(self):
         """Simulates the CLI restore path and verifies session_meta is removed."""
         # Build a fake restored message list (as returned by get_messages_as_conversation)

@@ -3,6 +3,7 @@
 Covers the fallback logic in _get_session_info() when a cloud provider
 is configured but fails at runtime (issue #10883).
 """
+
 import logging
 from unittest.mock import Mock
 
@@ -69,7 +70,8 @@ class TestCloudProviderRuntimeFallback:
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
         monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: None)
         monkeypatch.setattr(
-            browser_tool, "_create_local_session",
+            browser_tool,
+            "_create_local_session",
             Mock(side_effect=OSError("no chromium")),
         )
 
@@ -94,7 +96,11 @@ class TestCloudProviderRuntimeFallback:
 
         provider = Mock()
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
-        monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: "ws://host:9222/devtools/browser/abc")
+        monkeypatch.setattr(
+            browser_tool,
+            "_get_cdp_override",
+            lambda: "ws://host:9222/devtools/browser/abc",
+        )
 
         session = browser_tool._get_session_info("task-5")
 
@@ -105,9 +111,13 @@ class TestCloudProviderRuntimeFallback:
         """Fallback emits a warning log with the provider class name and error."""
         _reset_session_state(monkeypatch)
 
-        BrowserUseProviderFake = type("BrowserUseProvider", (), {
-            "create_session": Mock(side_effect=ConnectionError("timeout")),
-        })
+        BrowserUseProviderFake = type(
+            "BrowserUseProvider",
+            (),
+            {
+                "create_session": Mock(side_effect=ConnectionError("timeout")),
+            },
+        )
         provider = BrowserUseProviderFake()
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
         monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: None)
@@ -116,8 +126,10 @@ class TestCloudProviderRuntimeFallback:
             session = browser_tool._get_session_info("task-6")
 
         assert session["fallback_from_cloud"] is True
-        assert any("BrowserUseProvider" in r.message and "timeout" in r.message
-                    for r in caplog.records)
+        assert any(
+            "BrowserUseProvider" in r.message and "timeout" in r.message
+            for r in caplog.records
+        )
 
     def test_cloud_failure_does_not_poison_next_task(self, monkeypatch):
         """A fallback for one task_id doesn't affect a new task_id when cloud recovers."""

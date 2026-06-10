@@ -60,7 +60,9 @@ class _RaisingProvider(VideoGenProvider):
 
 
 class TestUnifiedDispatch:
-    def _run(self, args: Dict[str, Any], *, configured: Optional[str] = None) -> Dict[str, Any]:
+    def _run(
+        self, args: Dict[str, Any], *, configured: Optional[str] = None
+    ) -> Dict[str, Any]:
         from tools import video_generation_tool
         import clawk_cli.plugins as plugins_module
 
@@ -122,5 +124,6 @@ class TestUnifiedDispatch:
     def test_operation_field_not_in_schema(self):
         """Make sure we removed the operation field from the schema."""
         from tools.video_generation_tool import VIDEO_GENERATE_SCHEMA
+
         assert "operation" not in VIDEO_GENERATE_SCHEMA["parameters"]["properties"]
         assert "video_url" not in VIDEO_GENERATE_SCHEMA["parameters"]["properties"]

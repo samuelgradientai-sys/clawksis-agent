@@ -18,6 +18,7 @@ def _mock_runtime_provider(monkeypatch):
     since these tests don't care about provider resolution — the agent
     is mocked too."""
     import clawk_cli.runtime_provider as rp
+
     def _fake_resolve(*args, **kwargs):
         return {
             "provider": "openrouter",
@@ -26,6 +27,7 @@ def _mock_runtime_provider(monkeypatch):
             "model": "test/model",
             "api_mode": "chat_completions",
         }
+
     monkeypatch.setattr(rp, "resolve_runtime_provider", _fake_resolve)
 
 
@@ -47,12 +49,14 @@ class TestCronJobCleanup:
             "model": "test/model",
         }
 
-        with patch("clawk_state.SessionDB", return_value=mock_db), \
-             patch.object(scheduler, "_build_job_prompt", return_value="hello"), \
-             patch.object(scheduler, "_resolve_origin", return_value=None), \
-             patch.object(scheduler, "_resolve_delivery_target", return_value=None), \
-             patch("dotenv.load_dotenv", return_value=None), \
-             patch("run_agent.AIAgent") as MockAgent:
+        with (
+            patch("clawk_state.SessionDB", return_value=mock_db),
+            patch.object(scheduler, "_build_job_prompt", return_value="hello"),
+            patch.object(scheduler, "_resolve_origin", return_value=None),
+            patch.object(scheduler, "_resolve_delivery_target", return_value=None),
+            patch("dotenv.load_dotenv", return_value=None),
+            patch("run_agent.AIAgent") as MockAgent,
+        ):
             # Make the agent raise immediately so we hit the finally block
             MockAgent.return_value.run_conversation.side_effect = RuntimeError("boom")
             scheduler.run_job(job)
@@ -75,12 +79,14 @@ class TestCronJobCleanup:
             "model": "test/model",
         }
 
-        with patch("clawk_state.SessionDB", return_value=mock_db), \
-             patch.object(scheduler, "_build_job_prompt", return_value="hello"), \
-             patch.object(scheduler, "_resolve_origin", return_value=None), \
-             patch.object(scheduler, "_resolve_delivery_target", return_value=None), \
-             patch("dotenv.load_dotenv", return_value=None), \
-             patch("run_agent.AIAgent") as MockAgent:
+        with (
+            patch("clawk_state.SessionDB", return_value=mock_db),
+            patch.object(scheduler, "_build_job_prompt", return_value="hello"),
+            patch.object(scheduler, "_resolve_origin", return_value=None),
+            patch.object(scheduler, "_resolve_delivery_target", return_value=None),
+            patch("dotenv.load_dotenv", return_value=None),
+            patch("run_agent.AIAgent") as MockAgent,
+        ):
             MockAgent.return_value.run_conversation.side_effect = RuntimeError("boom")
             # Must not raise
             scheduler.run_job(job)

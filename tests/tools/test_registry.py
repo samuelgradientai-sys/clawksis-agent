@@ -176,7 +176,10 @@ class TestToolsetAvailability:
             name="first", toolset="zeta", schema=_make_schema(), handler=_dummy_handler
         )
         reg.register(
-            name="second", toolset="alpha", schema=_make_schema(), handler=_dummy_handler
+            name="second",
+            toolset="alpha",
+            schema=_make_schema(),
+            handler=_dummy_handler,
         )
         reg.register(
             name="third", toolset="alpha", schema=_make_schema(), handler=_dummy_handler
@@ -186,13 +189,22 @@ class TestToolsetAvailability:
     def test_get_tool_names_for_toolset(self):
         reg = ToolRegistry()
         reg.register(
-            name="z_tool", toolset="grouped", schema=_make_schema(), handler=_dummy_handler
+            name="z_tool",
+            toolset="grouped",
+            schema=_make_schema(),
+            handler=_dummy_handler,
         )
         reg.register(
-            name="a_tool", toolset="grouped", schema=_make_schema(), handler=_dummy_handler
+            name="a_tool",
+            toolset="grouped",
+            schema=_make_schema(),
+            handler=_dummy_handler,
         )
         reg.register(
-            name="other_tool", toolset="other", schema=_make_schema(), handler=_dummy_handler
+            name="other_tool",
+            toolset="other",
+            schema=_make_schema(),
+            handler=_dummy_handler,
         )
         assert reg.get_tool_names_for_toolset("grouped") == ["a_tool", "z_tool"]
 
@@ -346,23 +358,31 @@ class TestEmojiMetadata:
     def test_emoji_stored_on_entry(self):
         reg = ToolRegistry()
         reg.register(
-            name="t", toolset="s", schema=_make_schema(),
-            handler=_dummy_handler, emoji="🔥",
+            name="t",
+            toolset="s",
+            schema=_make_schema(),
+            handler=_dummy_handler,
+            emoji="🔥",
         )
         assert reg._tools["t"].emoji == "🔥"
 
     def test_get_emoji_returns_registered(self):
         reg = ToolRegistry()
         reg.register(
-            name="t", toolset="s", schema=_make_schema(),
-            handler=_dummy_handler, emoji="🎯",
+            name="t",
+            toolset="s",
+            schema=_make_schema(),
+            handler=_dummy_handler,
+            emoji="🎯",
         )
         assert reg.get_emoji("t") == "🎯"
 
     def test_get_emoji_returns_default_when_unset(self):
         reg = ToolRegistry()
         reg.register(
-            name="t", toolset="s", schema=_make_schema(),
+            name="t",
+            toolset="s",
+            schema=_make_schema(),
             handler=_dummy_handler,
         )
         assert reg.get_emoji("t") == "⚡"
@@ -376,8 +396,11 @@ class TestEmojiMetadata:
     def test_emoji_empty_string_treated_as_unset(self):
         reg = ToolRegistry()
         reg.register(
-            name="t", toolset="s", schema=_make_schema(),
-            handler=_dummy_handler, emoji="",
+            name="t",
+            toolset="s",
+            schema=_make_schema(),
+            handler=_dummy_handler,
+            emoji="",
         )
         assert reg.get_emoji("t") == "⚡"
 
@@ -386,7 +409,10 @@ class TestEntryLookup:
     def test_get_entry_returns_registered_entry(self):
         reg = ToolRegistry()
         reg.register(
-            name="alpha", toolset="core", schema=_make_schema("alpha"), handler=_dummy_handler
+            name="alpha",
+            toolset="core",
+            schema=_make_schema("alpha"),
+            handler=_dummy_handler,
         )
         entry = reg.get_entry("alpha")
         assert entry is not None

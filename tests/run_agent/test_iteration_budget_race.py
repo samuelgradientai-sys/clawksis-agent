@@ -3,8 +3,8 @@
 The `used` property must acquire the lock before reading `_used` to prevent
 data races with concurrent `consume()` / `refund()` calls.
 """
-from concurrent.futures import ThreadPoolExecutor
 
+from concurrent.futures import ThreadPoolExecutor
 
 
 def test_iteration_budget_used_is_thread_safe():

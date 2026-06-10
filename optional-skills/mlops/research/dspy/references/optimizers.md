@@ -44,10 +44,12 @@ DSPy optimizers (called "teleprompters") automatically improve your modules by:
 import dspy
 from dspy.teleprompt import BootstrapFewShot
 
+
 # Define metric
 def validate_answer(example, pred, trace=None):
     """Return True if prediction matches gold answer."""
     return example.answer.lower() == pred.answer.lower()
+
 
 # Training data
 trainset = [
@@ -61,9 +63,7 @@ qa = dspy.ChainOfThought("question -> answer")
 
 # Optimize
 optimizer = BootstrapFewShot(
-    metric=validate_answer,
-    max_bootstrapped_demos=3,
-    max_rounds=2
+    metric=validate_answer, max_bootstrapped_demos=3, max_rounds=2
 )
 
 optimized_qa = optimizer.compile(qa, trainset=trainset)
@@ -103,34 +103,35 @@ result = optimized_qa(question="What is 5+7?")
 ```python
 from dspy.teleprompt import MIPRO
 
+
 # Define metric with more nuance
 def answer_quality(example, pred, trace=None):
     """Score answer quality 0-1."""
     if example.answer.lower() in pred.answer.lower():
         return 1.0
     # Partial credit for similar answers
-    return 0.5 if len(set(example.answer.split()) & set(pred.answer.split())) > 0 else 0.0
+    return (
+        0.5 if len(set(example.answer.split()) & set(pred.answer.split())) > 0 else 0.0
+    )
+
 
 # Larger training set (MIPRO benefits from more data)
 trainset = [...]  # 50-200 examples
-valset = [...]    # 20-50 examples
+valset = [...]  # 20-50 examples
 
 # Create module
 qa = dspy.ChainOfThought("question -> answer")
 
 # Optimize with MIPRO
 optimizer = MIPRO(
-    metric=answer_quality,
-    num_candidates=10,
-    init_temperature=1.0,
-    verbose=True
+    metric=answer_quality, num_candidates=10, init_temperature=1.0, verbose=True
 )
 
 optimized_qa = optimizer.compile(
     student=qa,
     trainset=trainset,
     valset=valset,  # MIPRO uses separate validation set
-    num_trials=100   # More trials = better quality
+    num_trials=100,  # More trials = better quality
 )
 ```
 
@@ -167,9 +168,11 @@ from dspy.teleprompt import BootstrapFinetune
 # Training data
 trainset = [...]  # 100+ examples recommended
 
+
 # Define metric
 def validate(example, pred, trace=None):
     return example.answer == pred.answer
+
 
 # Create module
 qa = dspy.ChainOfThought("question -> answer")
@@ -214,9 +217,11 @@ from dspy.teleprompt import COPRO
 # Training data
 trainset = [...]
 
+
 # Define metric
 def metric(example, pred, trace=None):
     return example.answer == pred.answer
+
 
 # Create module
 qa = dspy.ChainOfThought("question -> answer")
@@ -225,7 +230,7 @@ qa = dspy.ChainOfThought("question -> answer")
 optimizer = COPRO(
     metric=metric,
     breadth=10,  # Candidates per iteration
-    depth=3      # Optimization rounds
+    depth=3,  # Optimization rounds
 )
 
 optimized_qa = optimizer.compile(qa, trainset=trainset)
@@ -273,6 +278,7 @@ def exact_match(example, pred, trace=None):
     """Return True if prediction exactly matches gold."""
     return example.answer == pred.answer
 
+
 def contains_answer(example, pred, trace=None):
     """Return True if prediction contains gold answer."""
     return example.answer.lower() in pred.answer.lower()
@@ -297,10 +303,12 @@ def f1_score(example, pred, trace=None):
 
     return 2 * (precision * recall) / (precision + recall)
 
+
 def semantic_similarity(example, pred, trace=None):
     """Embedding similarity between prediction and gold."""
     from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+
+    model = SentenceTransformer("all-MiniLM-L6-v2")
 
     emb1 = model.encode(example.answer)
     emb2 = model.encode(pred.answer)
@@ -353,9 +361,9 @@ def metric_with_trace(example, pred, trace=None):
 
 ```python
 # Split data
-trainset = data[:100]   # 70%
+trainset = data[:100]  # 70%
 valset = data[100:120]  # 15%
-testset = data[120:]    # 15%
+testset = data[120:]  # 15%
 
 # Optimize on train
 optimized = optimizer.compile(module, trainset=trainset)
@@ -365,6 +373,7 @@ optimized = optimizer.compile(module, trainset=trainset, valset=valset)
 
 # Evaluate on test
 from dspy.evaluate import Evaluate
+
 evaluator = Evaluate(devset=testset, metric=metric)
 score = evaluator(optimized)
 ```
@@ -417,6 +426,7 @@ print(results)
 ```python
 from dspy.teleprompt import Teleprompter
 
+
 class CustomOptimizer(Teleprompter):
     def __init__(self, metric):
         self.metric = metric
@@ -454,6 +464,7 @@ class EnsembleModule(dspy.Module):
         predictions = [m(question=question).answer for m in self.modules]
         # Vote or average
         return dspy.Prediction(answer=max(set(predictions), key=predictions.count))
+
 
 # Optimize multiple modules
 opt1 = BootstrapFewShot(metric=metric).compile(module, trainset=trainset)
@@ -513,7 +524,7 @@ else:
 optimizer = BootstrapFewShot(max_bootstrapped_demos=20)  # Overfits!
 
 # ✅ Good: Moderate demos
-optimizer = BootstrapFewShot(max_bootstrapped_demos=3-5)
+optimizer = BootstrapFewShot(max_bootstrapped_demos=3 - 5)
 ```
 
 ### 2. Metric Doesn't Match Task
@@ -522,6 +533,7 @@ optimizer = BootstrapFewShot(max_bootstrapped_demos=3-5)
 # ❌ Bad: Binary metric for nuanced task
 def bad_metric(example, pred, trace=None):
     return example.answer == pred.answer  # Too strict!
+
 
 # ✅ Good: Graded metric
 def good_metric(example, pred, trace=None):

@@ -32,8 +32,6 @@ Covers ``plugins/security-guidance/``:
 
 """
 
-
-
 import importlib.util
 
 import sys
@@ -43,15 +41,10 @@ import types
 from pathlib import Path
 
 
-
 import pytest
 
 
-
-
-
 @pytest.fixture(autouse=True)
-
 def _isolate_env(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / ".clawksis"
@@ -67,9 +60,6 @@ def _isolate_env(tmp_path, monkeypatch):
     yield clawk_home
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Module loading
@@ -77,25 +67,18 @@ def _isolate_env(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 def _repo_root() -> Path:
 
     return Path(__file__).resolve().parents[2]
 
 
-
-
-
 def _load_patterns():
-
     """Import patterns.py in isolation (no plugin glue)."""
 
     pat_path = _repo_root() / "plugins" / "security-guidance" / "patterns.py"
 
     spec = importlib.util.spec_from_file_location(
-
         "security_guidance_patterns_under_test", pat_path
-
     )
 
     mod = importlib.util.module_from_spec(spec)
@@ -105,17 +88,12 @@ def _load_patterns():
     return mod
 
 
-
-
-
 def _load_plugin_init():
-
     """Import the plugin __init__.py with patterns.py as a sibling."""
 
     plugin_dir = _repo_root() / "plugins" / "security-guidance"
 
     if "clawk_plugins" not in sys.modules:
-
         ns = types.ModuleType("clawk_plugins")
 
         ns.__path__ = []
@@ -123,13 +101,9 @@ def _load_plugin_init():
         sys.modules["clawk_plugins"] = ns
 
     spec = importlib.util.spec_from_file_location(
-
         "clawk_plugins.security_guidance",
-
         plugin_dir / "__init__.py",
-
         submodule_search_locations=[str(plugin_dir)],
-
     )
 
     mod = importlib.util.module_from_spec(spec)
@@ -145,9 +119,6 @@ def _load_plugin_init():
     return mod
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # patterns.py data integrity
@@ -155,23 +126,18 @@ def _load_plugin_init():
 # ---------------------------------------------------------------------------
 
 
-
 class TestPatternsData:
-
     def test_has_at_least_one_rule(self):
 
         p = _load_patterns()
 
         assert len(p.SECURITY_PATTERNS) >= 1
 
-
-
     def test_every_rule_has_required_fields(self):
 
         p = _load_patterns()
 
         for rule in p.SECURITY_PATTERNS:
-
             assert "ruleName" in rule
 
             assert "reminder" in rule and rule["reminder"]
@@ -182,8 +148,6 @@ class TestPatternsData:
 
             assert any(k in rule for k in ("substrings", "regex", "path_check")), rule
 
-
-
     def test_rule_names_are_unique(self):
 
         p = _load_patterns()
@@ -191,8 +155,6 @@ class TestPatternsData:
         names = [r["ruleName"] for r in p.SECURITY_PATTERNS]
 
         assert len(names) == len(set(names))
-
-
 
     def test_rule_id_enum_in_sync(self):
 
@@ -208,8 +170,6 @@ class TestPatternsData:
 
         assert rule_names == enum_names
 
-
-
     def test_rule_names_to_mask_packs_bits(self):
 
         p = _load_patterns()
@@ -223,9 +183,6 @@ class TestPatternsData:
         assert mask & (1 << p.RuleId.EVAL_INJECTION)
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # _scan_content
@@ -233,41 +190,30 @@ class TestPatternsData:
 # ---------------------------------------------------------------------------
 
 
-
 class TestScanContent:
-
     def test_pickle_load_in_py_warns(self):
 
         mod = _load_plugin_init()
 
         findings = mod._scan_content(
-
             "/tmp/foo.py", "import pickle\nx = pickle.load(open('p.pkl', 'rb'))\n"
-
         )
 
         names = [n for n, _ in findings]
 
         assert "pickle_deserialization" in names
 
-
-
     def test_pickle_load_in_md_skipped_by_path_filter(self):
 
         mod = _load_plugin_init()
 
         findings = mod._scan_content(
-
             "/tmp/foo.md", "import pickle\nx = pickle.load(open('p.pkl', 'rb'))\n"
-
         )
 
         assert findings == []
 
-
-
     def test_method_call_eval_does_not_trip(self):
-
         """model.eval() / redis.eval() / spec.eval() must not match eval_injection."""
 
         mod = _load_plugin_init()
@@ -275,8 +221,6 @@ class TestScanContent:
         findings = mod._scan_content("/tmp/foo.py", "model.eval()\nout = model(x)\n")
 
         assert "eval_injection" not in [n for n, _ in findings]
-
-
 
     def test_bare_eval_in_py_warns(self):
 
@@ -286,51 +230,36 @@ class TestScanContent:
 
         assert "eval_injection" in [n for n, _ in findings]
 
-
-
     def test_subprocess_shell_true_warns(self):
 
         mod = _load_plugin_init()
 
         findings = mod._scan_content(
-
             "/tmp/foo.py", "subprocess.run('ls ' + path, shell=True)\n"
-
         )
 
         assert "python_subprocess_shell" in [n for n, _ in findings]
-
-
 
     def test_dangerously_set_inner_html_warns(self):
 
         mod = _load_plugin_init()
 
         findings = mod._scan_content(
-
             "/tmp/foo.tsx", "<div dangerouslySetInnerHTML={{__html: x}} />"
-
         )
 
         assert "react_dangerously_set_html" in [n for n, _ in findings]
 
-
-
     def test_github_workflow_path_check_fires_on_path_alone(self):
-
         """github_actions_workflow has no regex/substring — fires on path."""
 
         mod = _load_plugin_init()
 
         findings = mod._scan_content(
-
             ".github/workflows/test.yml", "name: CI\non: pull_request"
-
         )
 
         assert "github_actions_workflow" in [n for n, _ in findings]
-
-
 
     def test_non_workflow_path_doesnt_trip_workflow_rule(self):
 
@@ -340,15 +269,11 @@ class TestScanContent:
 
         assert "github_actions_workflow" not in [n for n, _ in findings]
 
-
-
     def test_empty_content_returns_no_findings(self):
 
         mod = _load_plugin_init()
 
         assert mod._scan_content("/tmp/foo.py", "") == []
-
-
 
     def test_huge_content_skipped(self):
 
@@ -363,9 +288,6 @@ class TestScanContent:
         assert mod._scan_content("/tmp/foo.py", big) == []
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Hooks
@@ -373,29 +295,20 @@ class TestScanContent:
 # ---------------------------------------------------------------------------
 
 
-
 class TestTransformToolResultHook:
-
     def test_warns_on_write_file_with_dangerous_content(self):
 
         mod = _load_plugin_init()
 
         args = {
-
             "path": "/tmp/foo.py",
-
             "content": "import pickle\nx = pickle.loads(b)\n",
-
         }
 
         result = mod._on_transform_tool_result(
-
             tool_name="write_file",
-
             args=args,
-
             result='{"success": true, "bytes_written": 30}',
-
         )
 
         assert isinstance(result, str)
@@ -408,8 +321,6 @@ class TestTransformToolResultHook:
 
         assert result.startswith('{"success": true')
 
-
-
     def test_no_warn_on_clean_content(self):
 
         mod = _load_plugin_init()
@@ -417,18 +328,11 @@ class TestTransformToolResultHook:
         args = {"path": "/tmp/foo.py", "content": "import json\nx = json.loads(b)\n"}
 
         assert (
-
             mod._on_transform_tool_result(
-
                 tool_name="write_file", args=args, result='{"success": true}'
-
             )
-
             is None
-
         )
-
-
 
     def test_no_warn_when_result_is_error(self):
 
@@ -441,44 +345,29 @@ class TestTransformToolResultHook:
         # top — the model has bigger problems to solve.
 
         assert (
-
             mod._on_transform_tool_result(
-
                 tool_name="write_file", args=args, result='{"error": "boom"}'
-
             )
-
             is None
-
         )
-
-
 
     def test_patch_tool_new_string_scanned(self):
 
         mod = _load_plugin_init()
 
         args = {
-
             "path": "/tmp/foo.py",
-
             "old_string": "x = 1",
-
             "new_string": "x = eval(user_input)",
-
         }
 
         result = mod._on_transform_tool_result(
-
             tool_name="patch", args=args, result='{"success": true}'
-
         )
 
         assert isinstance(result, str)
 
         assert "eval_injection" in result
-
-
 
     def test_untargeted_tool_skipped(self):
 
@@ -491,18 +380,11 @@ class TestTransformToolResultHook:
         args = {"command": "echo pickle.load"}
 
         assert (
-
             mod._on_transform_tool_result(
-
                 tool_name="terminal", args=args, result='{"output": "pickle.load"}'
-
             )
-
             is None
-
         )
-
-
 
     def test_disable_kill_switch(self, monkeypatch):
 
@@ -513,21 +395,13 @@ class TestTransformToolResultHook:
         args = {"path": "/tmp/foo.py", "content": "pickle.load(f)\n"}
 
         assert (
-
             mod._on_transform_tool_result(
-
                 tool_name="write_file", args=args, result='{"ok": true}'
-
             )
-
             is None
-
         )
 
-
-
     def test_block_mode_makes_transform_hook_quiet(self, monkeypatch):
-
         """In block mode, pre_tool_call handles the warning; the transform
 
         hook stays silent so we don't double-emit."""
@@ -539,23 +413,14 @@ class TestTransformToolResultHook:
         args = {"path": "/tmp/foo.py", "content": "pickle.load(f)\n"}
 
         assert (
-
             mod._on_transform_tool_result(
-
                 tool_name="write_file", args=args, result='{"ok": true}'
-
             )
-
             is None
-
         )
 
 
-
-
-
 class TestPreToolCallHook:
-
     def test_no_block_in_warn_mode(self):
 
         mod = _load_plugin_init()
@@ -563,8 +428,6 @@ class TestPreToolCallHook:
         args = {"path": "/tmp/foo.py", "content": "pickle.load(f)\n"}
 
         assert mod._on_pre_tool_call(tool_name="write_file", args=args) is None
-
-
 
     def test_blocks_in_block_mode_on_dangerous_pattern(self, monkeypatch):
 
@@ -584,8 +447,6 @@ class TestPreToolCallHook:
 
         assert "SECURITY_GUIDANCE_BLOCK" in out["message"]  # tells user how to disable
 
-
-
     def test_no_block_in_block_mode_on_clean_content(self, monkeypatch):
 
         mod = _load_plugin_init()
@@ -595,8 +456,6 @@ class TestPreToolCallHook:
         args = {"path": "/tmp/foo.py", "content": "import json\n"}
 
         assert mod._on_pre_tool_call(tool_name="write_file", args=args) is None
-
-
 
     def test_untargeted_tool_skipped(self, monkeypatch):
 
@@ -609,9 +468,6 @@ class TestPreToolCallHook:
         assert mod._on_pre_tool_call(tool_name="terminal", args=args) is None
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Bundled-plugin discovery
@@ -619,46 +475,31 @@ class TestPreToolCallHook:
 # ---------------------------------------------------------------------------
 
 
-
 class TestPluginDiscovery:
-
     def test_loads_via_plugin_manager(self, _isolate_env, monkeypatch):
-
         """End-to-end: enable in config.yaml and verify the PluginManager
 
         picks it up via the standard discovery path."""
 
         import yaml
 
-
-
         config = {"plugins": {"enabled": ["security-guidance"]}}
 
         (_isolate_env / "config.yaml").write_text(yaml.safe_dump(config))
 
-
-
         # Wipe any cached plugin state from earlier tests in this worker.
 
         for k in list(sys.modules):
-
             if k.startswith(("clawk_plugins", "clawk_cli.plugins")):
-
                 del sys.modules[k]
 
-
-
         from clawk_cli.plugins import _ensure_plugins_discovered
-
-
 
         mgr = _ensure_plugins_discovered(force=True)
 
         loaded = set()
 
         if hasattr(mgr, "_plugins"):
-
             loaded = set(mgr._plugins.keys())
 
         assert "security-guidance" in loaded
-

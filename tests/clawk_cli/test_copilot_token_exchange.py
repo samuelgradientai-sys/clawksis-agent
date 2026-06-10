@@ -13,6 +13,7 @@ import pytest
 def _clear_jwt_cache():
     """Reset the module-level JWT cache before each test."""
     import clawk_cli.copilot_auth as mod
+
     mod._jwt_cache.clear()
     yield
     mod._jwt_cache.clear()
@@ -21,7 +22,9 @@ def _clear_jwt_cache():
 class TestExchangeCopilotToken:
     """Tests for exchange_copilot_token()."""
 
-    def _mock_urlopen(self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None):
+    def _mock_urlopen(
+        self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None
+    ):
         """Create a mock urlopen context manager returning a token response."""
         if expires_at is None:
             expires_at = time.time() + 1800
@@ -62,7 +65,11 @@ class TestExchangeCopilotToken:
 
     @patch("urllib.request.urlopen")
     def test_refreshes_expired_cache(self, mock_urlopen):
-        from clawk_cli.copilot_auth import exchange_copilot_token, _jwt_cache, _token_fingerprint
+        from clawk_cli.copilot_auth import (
+            exchange_copilot_token,
+            _jwt_cache,
+            _token_fingerprint,
+        )
 
         # Seed cache with expired entry
         fp = _token_fingerprint("gho_test123")
@@ -108,7 +115,9 @@ class TestGetCopilotApiToken:
         mock_exchange.return_value = ("exchanged_jwt", time.time() + 1800)
         assert get_copilot_api_token("gho_raw") == "exchanged_jwt"
 
-    @patch("clawk_cli.copilot_auth.exchange_copilot_token", side_effect=ValueError("fail"))
+    @patch(
+        "clawk_cli.copilot_auth.exchange_copilot_token", side_effect=ValueError("fail")
+    )
     def test_falls_back_to_raw_token(self, mock_exchange):
         from clawk_cli.copilot_auth import get_copilot_api_token
 
@@ -146,7 +155,10 @@ class TestTokenFingerprint:
 class TestCallerIntegration:
     """Test that callers correctly use token exchange."""
 
-    @patch("clawk_cli.copilot_auth.resolve_copilot_token", return_value=("gho_raw", "GH_TOKEN"))
+    @patch(
+        "clawk_cli.copilot_auth.resolve_copilot_token",
+        return_value=("gho_raw", "GH_TOKEN"),
+    )
     @patch("clawk_cli.copilot_auth.get_copilot_api_token", return_value="exchanged_jwt")
     def test_auth_resolve_uses_exchange(self, mock_exchange, mock_resolve):
         from clawk_cli.auth import _resolve_api_key_provider_secret

@@ -16,6 +16,7 @@ Practical examples of building production systems with DSPy.
 ```python
 import dspy
 
+
 class BasicRAG(dspy.Module):
     def __init__(self, num_passages=3):
         super().__init__()
@@ -27,14 +28,11 @@ class BasicRAG(dspy.Module):
         context = "\n\n".join(passages)
         return self.generate(context=context, question=question)
 
+
 # Configure retriever (example with Chroma)
 from dspy.retrieve.chromadb_rm import ChromadbRM
 
-retriever = ChromadbRM(
-    collection_name="my_docs",
-    persist_directory="./chroma_db",
-    k=3
-)
+retriever = ChromadbRM(collection_name="my_docs", persist_directory="./chroma_db", k=3)
 dspy.settings.configure(rm=retriever)
 
 # Use RAG
@@ -52,15 +50,17 @@ from dspy.teleprompt import BootstrapFewShot
 trainset = [
     dspy.Example(
         question="What is retrieval augmented generation?",
-        answer="RAG combines retrieval of relevant documents with generation..."
+        answer="RAG combines retrieval of relevant documents with generation...",
     ).with_inputs("question"),
     # ... more examples
 ]
+
 
 # Define metric
 def answer_correctness(example, pred, trace=None):
     # Check if answer contains key information
     return example.answer.lower() in pred.answer.lower()
+
 
 # Optimize RAG
 optimizer = BootstrapFewShot(metric=answer_correctness)
@@ -102,6 +102,7 @@ class MultiHopRAG(dspy.Module):
         # Generate final answer
         return self.generate_answer(context=all_context, question=question)
 
+
 # Use multi-hop RAG
 multi_rag = MultiHopRAG()
 result = multi_rag(question="Who wrote the book that inspired Blade Runner?")
@@ -128,10 +129,9 @@ class RerankedRAG(dspy.Module):
         # Rerank passages
         scored_passages = []
         for passage in passages:
-            score = float(self.rerank(
-                question=question,
-                passage=passage
-            ).relevance_score)
+            score = float(
+                self.rerank(question=question, passage=passage).relevance_score
+            )
             scored_passages.append((score, passage))
 
         # Take top 3 after reranking
@@ -149,14 +149,17 @@ class RerankedRAG(dspy.Module):
 ```python
 from dspy.predict import ReAct
 
+
 # Define tools
 def search_wikipedia(query: str) -> str:
     """Search Wikipedia for information."""
     import wikipedia
+
     try:
         return wikipedia.summary(query, sentences=3)
     except:
         return "No results found"
+
 
 def calculate(expression: str) -> str:
     """Evaluate mathematical expression safely."""
@@ -167,16 +170,20 @@ def calculate(expression: str) -> str:
     except:
         return "Invalid expression"
 
+
 def search_web(query: str) -> str:
     """Search the web."""
     # Your web search implementation
     return results
 
+
 # Create agent signature
 class ResearchAgent(dspy.Signature):
     """Answer questions using available tools."""
+
     question = dspy.InputField()
     answer = dspy.OutputField()
+
 
 # Create ReAct agent
 agent = ReAct(ResearchAgent, tools=[search_wikipedia, calculate, search_web])
@@ -204,10 +211,7 @@ class MultiAgentSystem(dspy.Module):
         self.router = dspy.Predict("question -> agent_type: str")
 
         # Specialized agents
-        self.research_agent = ReAct(
-            ResearchAgent,
-            tools=[search_wikipedia, search_web]
-        )
+        self.research_agent = ReAct(ResearchAgent, tools=[search_wikipedia, search_web])
         self.math_agent = dspy.ProgramOfThought("problem -> answer")
         self.reasoning_agent = dspy.ChainOfThought("question -> answer")
 
@@ -221,6 +225,7 @@ class MultiAgentSystem(dspy.Module):
             return self.math_agent(problem=question)
         else:
             return self.reasoning_agent(question=question)
+
 
 # Use multi-agent system
 mas = MultiAgentSystem()
@@ -241,6 +246,7 @@ class SentimentClassifier(dspy.Module):
     def forward(self, text):
         return self.classify(text=text)
 
+
 # Training data
 trainset = [
     dspy.Example(text="I love this!", sentiment="positive").with_inputs("text"),
@@ -248,9 +254,11 @@ trainset = [
     # ... more examples
 ]
 
+
 # Optimize
 def accuracy(example, pred, trace=None):
     return example.sentiment == pred.sentiment
+
 
 optimizer = BootstrapFewShot(metric=accuracy, max_bootstrapped_demos=5)
 classifier = SentimentClassifier()
@@ -267,23 +275,25 @@ print(result.sentiment)  # "positive"
 class TopicClassifier(dspy.Module):
     def __init__(self):
         super().__init__()
-        self.classify = dspy.ChainOfThought(
-            "text -> category: str, confidence: float"
-        )
+        self.classify = dspy.ChainOfThought("text -> category: str, confidence: float")
 
     def forward(self, text):
         result = self.classify(text=text)
         return dspy.Prediction(
-            category=result.category,
-            confidence=float(result.confidence)
+            category=result.category, confidence=float(result.confidence)
         )
+
 
 # Define categories in signature
 class TopicSignature(dspy.Signature):
     """Classify text into one of: technology, sports, politics, entertainment."""
+
     text = dspy.InputField()
-    category = dspy.OutputField(desc="one of: technology, sports, politics, entertainment")
+    category = dspy.OutputField(
+        desc="one of: technology, sports, politics, entertainment"
+    )
     confidence = dspy.OutputField(desc="0.0 to 1.0")
+
 
 classifier = dspy.ChainOfThought(TopicSignature)
 result = classifier(text="The Lakers won the championship")
@@ -333,9 +343,10 @@ class AdaptiveSummarizer(dspy.Module):
     def forward(self, text, target_length="3 sentences"):
         return self.summarize(text=text, target_length=target_length)
 
+
 # Use summarizer
 summarizer = AdaptiveSummarizer()
-long_text = "..." # Long article
+long_text = "..."  # Long article
 
 short_summary = summarizer(long_text, target_length="1 sentence")
 medium_summary = summarizer(long_text, target_length="3 sentences")
@@ -347,26 +358,30 @@ detailed_summary = summarizer(long_text, target_length="1 paragraph")
 ```python
 from pydantic import BaseModel, Field
 
+
 class PersonInfo(BaseModel):
     name: str = Field(description="Full name")
     age: int = Field(description="Age in years")
     occupation: str = Field(description="Job title")
     location: str = Field(description="City and country")
 
+
 class ExtractPerson(dspy.Signature):
     """Extract person information from text."""
+
     text = dspy.InputField()
     person: PersonInfo = dspy.OutputField()
+
 
 extractor = dspy.TypedPredictor(ExtractPerson)
 
 text = "Dr. Jane Smith, 42, is a neuroscientist at Stanford University in Palo Alto, California."
 result = extractor(text=text)
 
-print(result.person.name)       # "Dr. Jane Smith"
-print(result.person.age)        # 42
-print(result.person.occupation) # "neuroscientist"
-print(result.person.location)   # "Palo Alto, California"
+print(result.person.name)  # "Dr. Jane Smith"
+print(result.person.age)  # 42
+print(result.person.occupation)  # "neuroscientist"
+print(result.person.location)  # "Palo Alto, California"
 ```
 
 ### Batch Processing
@@ -382,6 +397,7 @@ class BatchProcessor(dspy.Module):
     def forward(self, texts):
         # Batch processing for efficiency
         return self.process.batch([{"text": t} for t in texts])
+
 
 # Process 1000 documents
 processor = BatchProcessor()
@@ -415,19 +431,13 @@ class DocumentPipeline(dspy.Module):
         category = self.classify(key_points=key_points).category
 
         # Stage 3: Summarize
-        summary = self.summarize(
-            key_points=key_points,
-            category=category
-        ).summary
+        summary = self.summarize(key_points=key_points, category=category).summary
 
         # Stage 4: Generate tags
         tags = self.tag(summary=summary).tags
 
         return dspy.Prediction(
-            key_points=key_points,
-            category=category,
-            summary=summary,
-            tags=tags
+            key_points=key_points, category=category, summary=summary, tags=tags
         )
 ```
 
@@ -455,8 +465,7 @@ class QualityControlPipeline(dspy.Module):
 
             # Improve based on issues
             output = self.improve(
-                output=output,
-                issues=verification.issues
+                output=output, issues=verification.issues
             ).improved_output
 
         return dspy.Prediction(output=output, iterations=max_iterations)
@@ -468,6 +477,7 @@ class QualityControlPipeline(dspy.Module):
 
 ```python
 from functools import lru_cache
+
 
 class CachedRAG(dspy.Module):
     def __init__(self):
@@ -525,7 +535,7 @@ class MonitoredModule(dspy.Module):
         return {
             "calls": self.call_count,
             "errors": self.errors,
-            "error_rate": self.errors / max(self.call_count, 1)
+            "error_rate": self.errors / max(self.call_count, 1),
         }
 ```
 
@@ -550,6 +560,7 @@ class ABTestModule(dspy.Module):
             self.b_calls += 1
             return self.variant_b(input=input)
 
+
 # Compare two optimizers
 baseline = dspy.ChainOfThought("question -> answer")
 optimized = BootstrapFewShot(...).compile(baseline, trainset=trainset)
@@ -558,6 +569,7 @@ ab_test = ABTestModule(variant_a=baseline, variant_b=optimized)
 
 # Route 50% to each
 import random
+
 variant = "a" if random.random() < 0.5 else "b"
 result = ab_test(input=question, variant=variant)
 ```
@@ -567,6 +579,7 @@ result = ab_test(input=question, variant=variant)
 ```python
 import dspy
 from dspy.teleprompt import BootstrapFewShot
+
 
 class CustomerSupportBot(dspy.Module):
     """Complete customer support system."""
@@ -603,18 +616,15 @@ class CustomerSupportBot(dspy.Module):
         # Route to appropriate handler
         if intent == "technical":
             response = self.technical_handler(
-                message=full_message,
-                history=history_str
+                message=full_message, history=history_str
             ).response
         elif intent == "billing":
             response = self.billing_handler(
-                message=full_message,
-                history=history_str
+                message=full_message, history=history_str
             ).response
         else:
             response = self.general_handler(
-                message=full_message,
-                history=history_str
+                message=full_message, history=history_str
             ).response
 
         # Update history
@@ -623,15 +633,17 @@ class CustomerSupportBot(dspy.Module):
 
         return dspy.Prediction(response=response, intent=intent)
 
+
 # Training data
 trainset = [
     dspy.Example(
         message="My account isn't working",
         intent="technical",
-        response="I'd be happy to help. What error are you seeing?"
+        response="I'd be happy to help. What error are you seeing?",
     ).with_inputs("message"),
     # ... more examples
 ]
+
 
 # Define metric
 def response_quality(example, pred, trace=None):
@@ -641,6 +653,7 @@ def response_quality(example, pred, trace=None):
     if example.intent != pred.intent:
         return 0.3
     return 1.0
+
 
 # Optimize
 optimizer = BootstrapFewShot(metric=response_quality)

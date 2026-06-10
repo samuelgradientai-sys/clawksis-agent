@@ -1,9 +1,6 @@
 """Tests for ACP Registry metadata shipped with Clawksis."""
 
-
-
 from __future__ import annotations
-
 
 
 import json
@@ -17,7 +14,6 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 MANIFEST = ROOT / "acp_registry" / "agent.json"
@@ -29,15 +25,9 @@ FORBIDDEN_MANIFEST_KEYS = {"schema_version", "display_name"}
 ALLOWED_DISTRIBUTIONS = {"binary", "npx", "uvx"}
 
 
-
-
-
 def _manifest() -> dict:
 
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
-
-
-
 
 
 def _pyproject_version() -> str:
@@ -47,14 +37,9 @@ def _pyproject_version() -> str:
     return data["project"]["version"]
 
 
-
-
-
 def test_agent_json_matches_official_registry_required_fields():
 
     data = _manifest()
-
-
 
     assert FORBIDDEN_MANIFEST_KEYS.isdisjoint(data)
 
@@ -66,9 +51,13 @@ def test_agent_json_matches_official_registry_required_fields():
 
     assert data["description"]
 
-    assert data["repository"] == "https://github.com/samuelgradientai-sys/clawksis-agent"
+    assert (
+        data["repository"] == "https://github.com/samuelgradientai-sys/clawksis-agent"
+    )
 
-    assert data["website"].startswith("https://github.com/samuelgradientai-sys/clawksis-agent")
+    assert data["website"].startswith(
+        "https://github.com/samuelgradientai-sys/clawksis-agent"
+    )
 
     assert data["authors"] == ["Nous Research"]
 
@@ -77,14 +66,9 @@ def test_agent_json_matches_official_registry_required_fields():
     assert set(data["distribution"]) <= ALLOWED_DISTRIBUTIONS
 
 
-
-
-
 def test_agent_json_uses_uvx_distribution_without_local_command_fields():
 
     data = _manifest()
-
-
 
     assert set(data["distribution"]) == {"uvx"}
 
@@ -107,38 +91,24 @@ def test_agent_json_uses_uvx_distribution_without_local_command_fields():
     assert "command" not in data["distribution"]
 
 
-
-
-
 def test_agent_json_version_matches_pyproject():
 
     assert _manifest()["version"] == _pyproject_version()
 
 
-
-
-
 def test_agent_json_pins_uvx_package_to_pyproject_version():
-
     """The registry CI rejects ``@latest`` and floating pins; the manifest must
 
     always reference the exact PyPI version listed in pyproject.toml."""
 
     assert _manifest()["distribution"]["uvx"]["package"] == (
-
         f"clawksis-agent[acp]=={_pyproject_version()}"
-
     )
-
-
-
 
 
 def test_icon_svg_is_16x16_current_color():
 
     root = ET.fromstring(ICON.read_text(encoding="utf-8"))
-
-
 
     assert root.attrib["viewBox"] == "0 0 16 16"
 
@@ -147,14 +117,9 @@ def test_icon_svg_is_16x16_current_color():
     assert root.attrib["height"] == "16"
 
 
-
-
-
 def test_icon_svg_has_no_hardcoded_colors_or_gradients():
 
     text = ICON.read_text(encoding="utf-8")
-
-
 
     assert "linearGradient" not in text
 
@@ -164,17 +129,11 @@ def test_icon_svg_has_no_hardcoded_colors_or_gradients():
 
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", text)
 
-
-
     root = ET.fromstring(text)
 
     for element in root.iter():
-
         for attr in ("fill", "stroke"):
-
             value = element.attrib.get(attr)
 
             if value is not None:
-
                 assert value in {"currentColor", "none"}
-

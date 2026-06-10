@@ -10,6 +10,7 @@ making /stop take multiple retry cycles × read-timeout to actually stop
 The fix adds an `_interrupt_requested` check at the top of the retry loop
 so the agent exits immediately instead of retrying.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -37,9 +38,7 @@ def _make_agent(**kwargs):
 class TestStreamInterruptBeforeRetry:
     """Verify _interrupt_requested is checked before each streaming retry."""
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_interrupt_prevents_stream_retry(self, mock_close, mock_create):
@@ -76,9 +75,7 @@ class TestStreamInterruptBeforeRetry:
             "The retry loop retried despite _interrupt_requested being set."
         )
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_interrupt_before_first_attempt(self, mock_close, mock_create):

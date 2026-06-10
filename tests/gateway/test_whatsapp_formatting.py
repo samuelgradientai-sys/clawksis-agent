@@ -18,6 +18,7 @@ from gateway.config import Platform
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter():
     """Create a WhatsAppAdapter with test attributes (bypass __init__)."""
     from gateway.platforms.whatsapp import WhatsAppAdapter
@@ -69,6 +70,7 @@ class _AsyncCM:
 # ---------------------------------------------------------------------------
 # format_message tests
 # ---------------------------------------------------------------------------
+
 
 class TestFormatMessage:
     """WhatsApp markdown conversion."""
@@ -142,11 +144,13 @@ class TestFormatMessage:
 # MAX_MESSAGE_LENGTH tests
 # ---------------------------------------------------------------------------
 
+
 class TestMessageLimits:
     """WhatsApp message length limits."""
 
     def test_max_message_length_is_practical(self):
         from gateway.platforms.whatsapp import WhatsAppAdapter
+
         assert WhatsAppAdapter.MAX_MESSAGE_LENGTH == 4096
 
     def test_chunk_limit_reserves_default_self_chat_prefix(self, monkeypatch):
@@ -168,6 +172,7 @@ class TestMessageLimits:
 # ---------------------------------------------------------------------------
 # send() chunking tests
 # ---------------------------------------------------------------------------
+
 
 class TestSendChunking:
     """WhatsApp send() splits long messages into chunks."""
@@ -295,6 +300,7 @@ class TestSendChunking:
 # bridge event metadata
 # ---------------------------------------------------------------------------
 
+
 class TestBridgeEventMetadata:
     """WhatsApp bridge metadata is preserved for downstream consumers."""
 
@@ -330,14 +336,17 @@ class TestBridgeEventMetadata:
 # display_config tier classification
 # ---------------------------------------------------------------------------
 
+
 class TestWhatsAppTier:
     """WhatsApp should be classified as TIER_MEDIUM."""
 
     def test_whatsapp_streaming_follows_global(self):
         from gateway.display_config import resolve_display_setting
+
         # TIER_MEDIUM has streaming: None (follow global), not False
         assert resolve_display_setting({}, "whatsapp", "streaming") is None
 
     def test_whatsapp_tool_progress_is_new(self):
         from gateway.display_config import resolve_display_setting
+
         assert resolve_display_setting({}, "whatsapp", "tool_progress") == "new"

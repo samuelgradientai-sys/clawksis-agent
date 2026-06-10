@@ -27,26 +27,22 @@ training_args = TrainingArguments(
     output_dir="./results",
     report_to="wandb",  # Enable W&B logging
     run_name="bert-base-finetuning",
-
     # Training params
     num_train_epochs=3,
     per_device_train_batch_size=16,
     per_device_eval_batch_size=64,
     learning_rate=2e-5,
-
     # Logging
     logging_dir="./logs",
     logging_steps=100,
     logging_first_step=True,
-
     # Evaluation
     evaluation_strategy="steps",
     eval_steps=500,
     save_steps=500,
-
     # Other
     load_best_model_at_end=True,
-    metric_for_best_model="eval_accuracy"
+    metric_for_best_model="eval_accuracy",
 )
 
 # Trainer automatically logs to W&B
@@ -55,7 +51,7 @@ trainer = Trainer(
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
-    compute_metrics=compute_metrics
+    compute_metrics=compute_metrics,
 )
 
 # Train (metrics logged automatically)
@@ -72,6 +68,7 @@ from transformers import Trainer, TrainingArguments
 from transformers.integrations import WandbCallback
 import wandb
 
+
 class CustomWandbCallback(WandbCallback):
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         super().on_evaluate(args, state, control, metrics, **kwargs)
@@ -79,8 +76,9 @@ class CustomWandbCallback(WandbCallback):
         # Log custom metrics
         wandb.log({
             "custom/eval_score": metrics["eval_accuracy"] * 100,
-            "custom/epoch": state.epoch
+            "custom/epoch": state.epoch,
         })
+
 
 # Use custom callback
 trainer = Trainer(
@@ -88,7 +86,7 @@ trainer = Trainer(
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
-    callbacks=[CustomWandbCallback()]
+    callbacks=[CustomWandbCallback()],
 )
 ```
 
@@ -98,25 +96,21 @@ trainer = Trainer(
 from transformers import Trainer, TrainingArguments
 
 training_args = TrainingArguments(
-    output_dir="./results",
-    report_to="wandb",
-    load_best_model_at_end=True
+    output_dir="./results", report_to="wandb", load_best_model_at_end=True
 )
 
 trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_dataset,
-    eval_dataset=eval_dataset
+    eval_dataset=eval_dataset,
 )
 
 trainer.train()
 
 # Save final model as artifact
 model_artifact = wandb.Artifact(
-    'hf-bert-model',
-    type='model',
-    description='BERT finetuned on sentiment analysis'
+    "hf-bert-model", type="model", description="BERT finetuned on sentiment analysis"
 )
 
 # Save model files
@@ -124,7 +118,7 @@ trainer.save_model("./final_model")
 model_artifact.add_dir("./final_model")
 
 # Log artifact
-wandb.log_artifact(model_artifact, aliases=['best', 'production'])
+wandb.log_artifact(model_artifact, aliases=["best", "production"])
 wandb.finish()
 ```
 
@@ -142,8 +136,9 @@ wandb_logger = WandbLogger(
     project="lightning-demo",
     name="resnet50-training",
     log_model=True,  # Log model checkpoints as artifacts
-    save_code=True   # Save code as artifact
+    save_code=True,  # Save code as artifact
 )
+
 
 # Lightning module
 class LitModel(pl.LightningModule):
@@ -158,8 +153,8 @@ class LitModel(pl.LightningModule):
         loss = F.cross_entropy(y_hat, y)
 
         # Log metrics (automatically sent to W&B)
-        self.log('train/loss', loss, on_step=True, on_epoch=True)
-        self.log('train/accuracy', accuracy(y_hat, y), on_epoch=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True)
+        self.log("train/accuracy", accuracy(y_hat, y), on_epoch=True)
 
         return loss
 
@@ -168,21 +163,17 @@ class LitModel(pl.LightningModule):
         y_hat = self.model(x)
         loss = F.cross_entropy(y_hat, y)
 
-        self.log('val/loss', loss, on_step=False, on_epoch=True)
-        self.log('val/accuracy', accuracy(y_hat, y), on_epoch=True)
+        self.log("val/loss", loss, on_step=False, on_epoch=True)
+        self.log("val/accuracy", accuracy(y_hat, y), on_epoch=True)
 
         return loss
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
+
 # Trainer with W&B logger
-trainer = pl.Trainer(
-    logger=wandb_logger,
-    max_epochs=10,
-    accelerator="gpu",
-    devices=1
-)
+trainer = pl.Trainer(logger=wandb_logger, max_epochs=10, accelerator="gpu", devices=1)
 
 # Train (metrics logged automatically)
 trainer.fit(model, datamodule=dm)
@@ -216,7 +207,7 @@ class LitModel(pl.LightningModule):
                 probs=None,
                 y_true=self.all_targets,
                 preds=self.all_preds,
-                class_names=self.class_names
+                class_names=self.class_names,
             )
         })
 ```
@@ -230,16 +221,17 @@ import wandb
 
 # Define sweep
 sweep_config = {
-    'method': 'bayes',
-    'metric': {'name': 'val/accuracy', 'goal': 'maximize'},
-    'parameters': {
-        'learning_rate': {'min': 1e-5, 'max': 1e-2, 'distribution': 'log_uniform'},
-        'batch_size': {'values': [16, 32, 64]},
-        'hidden_size': {'values': [128, 256, 512]}
-    }
+    "method": "bayes",
+    "metric": {"name": "val/accuracy", "goal": "maximize"},
+    "parameters": {
+        "learning_rate": {"min": 1e-5, "max": 1e-2, "distribution": "log_uniform"},
+        "batch_size": {"values": [16, 32, 64]},
+        "hidden_size": {"values": [128, 256, 512]},
+    },
 }
 
 sweep_id = wandb.sweep(sweep_config, project="lightning-sweeps")
+
 
 def train():
     # Initialize W&B
@@ -252,10 +244,7 @@ def train():
     wandb_logger = WandbLogger()
 
     # Create model with sweep params
-    model = LitModel(
-        learning_rate=config.learning_rate,
-        hidden_size=config.hidden_size
-    )
+    model = LitModel(learning_rate=config.learning_rate, hidden_size=config.hidden_size)
 
     # Create datamodule with sweep batch size
     dm = DataModule(batch_size=config.batch_size)
@@ -263,6 +252,7 @@ def train():
     # Train
     trainer = pl.Trainer(logger=wandb_logger, max_epochs=10)
     trainer.fit(model, dm)
+
 
 # Run sweep
 wandb.agent(sweep_id, function=train, count=30)
@@ -280,49 +270,46 @@ import wandb
 # Initialize W&B
 wandb.init(
     project="keras-demo",
-    config={
-        "learning_rate": 0.001,
-        "epochs": 10,
-        "batch_size": 32
-    }
+    config={"learning_rate": 0.001, "epochs": 10, "batch_size": 32},
 )
 
 config = wandb.config
 
 # Build model
 model = tf.keras.Sequential([
-    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(128, activation="relu"),
     tf.keras.layers.Dropout(0.2),
-    tf.keras.layers.Dense(10, activation='softmax')
+    tf.keras.layers.Dense(10, activation="softmax"),
 ])
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(config.learning_rate),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"],
 )
 
 # Train with W&B callback
 history = model.fit(
-    x_train, y_train,
+    x_train,
+    y_train,
     validation_data=(x_val, y_val),
     epochs=config.epochs,
     batch_size=config.batch_size,
     callbacks=[
         WandbCallback(
-            log_weights=True,      # Log model weights
-            log_gradients=True,    # Log gradients
+            log_weights=True,  # Log model weights
+            log_gradients=True,  # Log gradients
             training_data=(x_train, y_train),
             validation_data=(x_val, y_val),
-            labels=class_names
+            labels=class_names,
         )
-    ]
+    ],
 )
 
 # Save model as artifact
-model.save('model.h5')
-artifact = wandb.Artifact('keras-model', type='model')
-artifact.add_file('model.h5')
+model.save("model.h5")
+artifact = wandb.Artifact("keras-model", type="model")
+artifact.add_file("model.h5")
 wandb.log_artifact(artifact)
 
 wandb.finish()
@@ -342,8 +329,9 @@ optimizer = tf.keras.optimizers.Adam(1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
 # Metrics
-train_loss = tf.keras.metrics.Mean(name='train_loss')
-train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
+train_loss = tf.keras.metrics.Mean(name="train_loss")
+train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
+
 
 @tf.function
 def train_step(x, y):
@@ -357,6 +345,7 @@ def train_step(x, y):
     train_loss(loss)
     train_accuracy(y, predictions)
 
+
 # Training loop
 for epoch in range(EPOCHS):
     train_loss.reset_states()
@@ -368,17 +357,17 @@ for epoch in range(EPOCHS):
         # Log every 100 steps
         if step % 100 == 0:
             wandb.log({
-                'train/loss': train_loss.result().numpy(),
-                'train/accuracy': train_accuracy.result().numpy(),
-                'epoch': epoch,
-                'step': step
+                "train/loss": train_loss.result().numpy(),
+                "train/accuracy": train_accuracy.result().numpy(),
+                "epoch": epoch,
+                "step": step,
             })
 
     # Log epoch metrics
     wandb.log({
-        'epoch/train_loss': train_loss.result().numpy(),
-        'epoch/train_accuracy': train_accuracy.result().numpy(),
-        'epoch': epoch
+        "epoch/train_loss": train_loss.result().numpy(),
+        "epoch/train_accuracy": train_accuracy.result().numpy(),
+        "epoch": epoch,
     })
 
 wandb.finish()
@@ -397,12 +386,7 @@ import wandb
 wandb.init(project="fastai-demo")
 
 # Create data loaders
-dls = ImageDataLoaders.from_folder(
-    path,
-    train='train',
-    valid='valid',
-    bs=64
-)
+dls = ImageDataLoaders.from_folder(path, train="train", valid="valid", bs=64)
 
 # Create learner with W&B callback
 learn = vision_learner(
@@ -410,10 +394,10 @@ learn = vision_learner(
     resnet34,
     metrics=accuracy,
     cbs=WandbCallback(
-        log_preds=True,     # Log predictions
-        log_model=True,     # Log model as artifact
-        log_dataset=True    # Log dataset as artifact
-    )
+        log_preds=True,  # Log predictions
+        log_model=True,  # Log model as artifact
+        log_dataset=True,  # Log dataset as artifact
+    ),
 )
 
 # Train (metrics logged automatically)
@@ -431,11 +415,10 @@ import xgboost as xgb
 import wandb
 
 # Initialize W&B
-run = wandb.init(project="xgboost-demo", config={
-    "max_depth": 6,
-    "learning_rate": 0.1,
-    "n_estimators": 100
-})
+run = wandb.init(
+    project="xgboost-demo",
+    config={"max_depth": 6, "learning_rate": 0.1, "n_estimators": 100},
+)
 
 config = wandb.config
 
@@ -445,35 +428,34 @@ dval = xgb.DMatrix(X_val, label=y_val)
 
 # XGBoost params
 params = {
-    'max_depth': config.max_depth,
-    'learning_rate': config.learning_rate,
-    'objective': 'binary:logistic',
-    'eval_metric': ['logloss', 'auc']
+    "max_depth": config.max_depth,
+    "learning_rate": config.learning_rate,
+    "objective": "binary:logistic",
+    "eval_metric": ["logloss", "auc"],
 }
+
 
 # Custom callback for W&B
 def wandb_callback(env):
     """Log XGBoost metrics to W&B."""
     for metric_name, metric_value in env.evaluation_result_list:
-        wandb.log({
-            f"{metric_name}": metric_value,
-            "iteration": env.iteration
-        })
+        wandb.log({f"{metric_name}": metric_value, "iteration": env.iteration})
+
 
 # Train with callback
 model = xgb.train(
     params,
     dtrain,
     num_boost_round=config.n_estimators,
-    evals=[(dtrain, 'train'), (dval, 'val')],
+    evals=[(dtrain, "train"), (dval, "val")],
     callbacks=[wandb_callback],
-    verbose_eval=10
+    verbose_eval=10,
 )
 
 # Save model
-model.save_model('xgboost_model.json')
-artifact = wandb.Artifact('xgboost-model', type='model')
-artifact.add_file('xgboost_model.json')
+model.save_model("xgboost_model.json")
+artifact = wandb.Artifact("xgboost-model", type="model")
+artifact.add_file("xgboost_model.json")
 wandb.log_artifact(artifact)
 
 wandb.finish()
@@ -493,11 +475,12 @@ val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
 
 # Parameters
 params = {
-    'objective': 'binary',
-    'metric': ['binary_logloss', 'auc'],
-    'learning_rate': 0.1,
-    'num_leaves': 31
+    "objective": "binary",
+    "metric": ["binary_logloss", "auc"],
+    "learning_rate": 0.1,
+    "num_leaves": 31,
 }
+
 
 # Custom callback
 def log_to_wandb(env):
@@ -506,8 +489,9 @@ def log_to_wandb(env):
         dataset_name, metric_name, metric_value, _ = entry
         wandb.log({
             f"{dataset_name}/{metric_name}": metric_value,
-            "iteration": env.iteration
+            "iteration": env.iteration,
         })
+
 
 # Train
 model = lgb.train(
@@ -515,14 +499,14 @@ model = lgb.train(
     train_data,
     num_boost_round=100,
     valid_sets=[train_data, val_data],
-    valid_names=['train', 'val'],
-    callbacks=[log_to_wandb]
+    valid_names=["train", "val"],
+    callbacks=[log_to_wandb],
 )
 
 # Save model
-model.save_model('lgbm_model.txt')
-artifact = wandb.Artifact('lgbm-model', type='model')
-artifact.add_file('lgbm_model.txt')
+model.save_model("lgbm_model.txt")
+artifact = wandb.Artifact("lgbm-model", type="model")
+artifact.add_file("lgbm_model.txt")
 wandb.log_artifact(artifact)
 
 wandb.finish()
@@ -539,11 +523,10 @@ import torch.optim as optim
 import wandb
 
 # Initialize W&B
-wandb.init(project="pytorch-native", config={
-    "learning_rate": 0.001,
-    "epochs": 10,
-    "batch_size": 32
-})
+wandb.init(
+    project="pytorch-native",
+    config={"learning_rate": 0.001, "epochs": 10, "batch_size": 32},
+)
 
 config = wandb.config
 
@@ -583,10 +566,10 @@ for epoch in range(config.epochs):
         # Log every 100 batches
         if batch_idx % 100 == 0:
             wandb.log({
-                'train/loss': loss.item(),
-                'train/batch_accuracy': 100. * correct / total,
-                'epoch': epoch,
-                'batch': batch_idx
+                "train/loss": loss.item(),
+                "train/batch_accuracy": 100.0 * correct / total,
+                "epoch": epoch,
+                "batch": batch_idx,
             })
 
     # Validation
@@ -608,17 +591,17 @@ for epoch in range(config.epochs):
 
     # Log epoch metrics
     wandb.log({
-        'epoch/train_loss': train_loss / len(train_loader),
-        'epoch/train_accuracy': 100. * correct / total,
-        'epoch/val_loss': val_loss / len(val_loader),
-        'epoch/val_accuracy': 100. * val_correct / val_total,
-        'epoch': epoch
+        "epoch/train_loss": train_loss / len(train_loader),
+        "epoch/train_accuracy": 100.0 * correct / total,
+        "epoch/val_loss": val_loss / len(val_loader),
+        "epoch/val_accuracy": 100.0 * val_correct / val_total,
+        "epoch": epoch,
     })
 
 # Save final model
-torch.save(model.state_dict(), 'model.pth')
-artifact = wandb.Artifact('final-model', type='model')
-artifact.add_file('model.pth')
+torch.save(model.state_dict(), "model.pth")
+artifact = wandb.Artifact("final-model", type="model")
+artifact.add_file("model.pth")
 wandb.log_artifact(artifact)
 
 wandb.finish()
@@ -630,6 +613,7 @@ wandb.finish()
 
 ```python
 import wandb
+
 
 class WandbIntegration:
     """Generic W&B integration wrapper."""
@@ -649,9 +633,7 @@ class WandbIntegration:
 
     def log_images(self, images, caption=""):
         """Log images."""
-        wandb.log({
-            caption: [wandb.Image(img) for img in images]
-        })
+        wandb.log({caption: [wandb.Image(img) for img in images]})
 
     def log_table(self, data, columns):
         """Log tabular data."""
@@ -660,17 +642,14 @@ class WandbIntegration:
 
     def save_model(self, model_path, metadata=None):
         """Save model as artifact."""
-        artifact = wandb.Artifact(
-            'model',
-            type='model',
-            metadata=metadata or {}
-        )
+        artifact = wandb.Artifact("model", type="model", metadata=metadata or {})
         artifact.add_file(model_path)
         self.run.log_artifact(artifact)
 
     def finish(self):
         """Finish W&B run."""
         wandb.finish()
+
 
 # Usage
 wb = WandbIntegration(project="my-project", config={"lr": 0.001})
@@ -681,13 +660,10 @@ for epoch in range(10):
     loss, accuracy = train_epoch()
 
     # Log metrics
-    wb.log_metrics({
-        'train/loss': loss,
-        'train/accuracy': accuracy
-    })
+    wb.log_metrics({"train/loss": loss, "train/accuracy": accuracy})
 
 # Save model
-wb.save_model('model.pth', metadata={'accuracy': 0.95})
+wb.save_model("model.pth", metadata={"accuracy": 0.95})
 wb.finish()
 ```
 

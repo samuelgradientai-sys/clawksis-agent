@@ -30,7 +30,9 @@ eq[4].set_color(GREEN)
 ## Building Incrementally
 
 ```python
-parts = MathTex(r"f(x)", r"=", r"\sum_{n=0}^{\infty}", r"\frac{f^{(n)}(a)}{n!}", r"(x-a)^n")
+parts = MathTex(
+    r"f(x)", r"=", r"\sum_{n=0}^{\infty}", r"\frac{f^{(n)}(a)}{n!}", r"(x-a)^n"
+)
 self.play(Write(parts[0:2]))
 self.wait(0.5)
 self.play(Write(parts[2]))
@@ -57,12 +59,12 @@ self.play(GrowFromCenter(brace), Write(label))
 ## Common LaTeX
 
 ```python
-MathTex(r"\frac{a}{b}")                  # fraction
-MathTex(r"\alpha, \beta, \gamma")         # Greek
-MathTex(r"\sum_{i=1}^{n} x_i")           # summation
+MathTex(r"\frac{a}{b}")  # fraction
+MathTex(r"\alpha, \beta, \gamma")  # Greek
+MathTex(r"\sum_{i=1}^{n} x_i")  # summation
 MathTex(r"\int_{0}^{\infty} e^{-x} dx")  # integral
-MathTex(r"\vec{v}")                       # vector
-MathTex(r"\lim_{x \to \infty} f(x)")    # limit
+MathTex(r"\vec{v}")  # vector
+MathTex(r"\lim_{x \to \infty} f(x)")  # limit
 ```
 
 ## Matrices
@@ -143,7 +145,7 @@ lagrangian = MathTex(
 # With isolation — each named substring is a separate submobject
 lagrangian = MathTex(
     r"\mathcal{L} = \bar{\psi}(i \gamma^\mu D_\mu - m)\psi - \tfrac{1}{4}F_{\mu\nu}F^{\mu\nu}",
-    substrings_to_isolate=[r"\psi", r"D_\mu", r"\gamma^\mu", r"F_{\mu\nu}"]
+    substrings_to_isolate=[r"\psi", r"D_\mu", r"\gamma^\mu", r"F_{\mu\nu}"],
 )
 # Now you can color individual terms
 lagrangian.set_color_by_tex(r"\psi", BLUE)
@@ -159,7 +161,7 @@ For equations with multiple related lines, pass each line as a separate argument
 ```python
 maxwell = MathTex(
     r"\nabla \cdot \mathbf{E} = \frac{\rho}{\epsilon_0}",
-    r"\nabla \times \mathbf{B} = \mu_0\mathbf{J} + \mu_0\epsilon_0\frac{\partial \mathbf{E}}{\partial t}"
+    r"\nabla \times \mathbf{B} = \mu_0\mathbf{J} + \mu_0\epsilon_0\frac{\partial \mathbf{E}}{\partial t}",
 ).arrange(DOWN)
 
 # Each line is a separate submobject — animate independently
@@ -176,11 +178,14 @@ Map specific substrings between source and target equations during transformatio
 eq1 = MathTex(r"A^2 + B^2 = C^2")
 eq2 = MathTex(r"A^2 = C^2 - B^2")
 
-self.play(TransformMatchingTex(
-    eq1, eq2,
-    key_map={"+": "-"},   # map "+" in source to "-" in target
-    path_arc=PI / 2,      # arc the pieces into position
-))
+self.play(
+    TransformMatchingTex(
+        eq1,
+        eq2,
+        key_map={"+": "-"},  # map "+" in source to "-" in target
+        path_arc=PI / 2,  # arc the pieces into position
+    )
+)
 ```
 
 ## set_color_by_tex — Color by Substring
@@ -205,12 +210,15 @@ lines = [
     MathTex(r"A = \sqrt{(C + B)(C - B)}", **kw),
 ]
 
-self.play(TransformMatchingTex(
-    lines[0].copy(), lines[1],
-    matched_keys=["A^2", "B^2", "C^2"],  # explicitly match these
-    key_map={"+": "-"},                    # map + to -
-    path_arc=PI / 2,                       # arc pieces into position
-))
+self.play(
+    TransformMatchingTex(
+        lines[0].copy(),
+        lines[1],
+        matched_keys=["A^2", "B^2", "C^2"],  # explicitly match these
+        key_map={"+": "-"},  # map + to -
+        path_arc=PI / 2,  # arc pieces into position
+    )
+)
 ```
 
 Without `matched_keys`, the animation matches the longest common substrings, which can produce unexpected results on complex equations (e.g., "^2 = C^2" matching across terms).

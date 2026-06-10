@@ -8,6 +8,7 @@ The script is intentionally Organism-agnostic: it walks `org.__dict__` and print
 all str fields. By default it shows `prompt_template` if present; pass --field to
 target a different attribute (e.g. `regex_pattern`, `sql_query`, `code_block`).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -74,7 +75,14 @@ def main() -> int:
         field = args.field
         if field is None:
             for k, v in vars(org).items():
-                if isinstance(v, str) and not k.startswith("_") and k not in {"id",}:
+                if (
+                    isinstance(v, str)
+                    and not k.startswith("_")
+                    and k
+                    not in {
+                        "id",
+                    }
+                ):
                     field = k
                     break
         val = getattr(org, field, None) if field else None

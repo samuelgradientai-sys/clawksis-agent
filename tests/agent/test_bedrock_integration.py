@@ -19,21 +19,25 @@ class TestProviderRegistry:
 
     def test_bedrock_in_registry(self):
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         assert "bedrock" in PROVIDER_REGISTRY
 
     def test_bedrock_auth_type_is_aws_sdk(self):
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.auth_type == "aws_sdk"
 
     def test_bedrock_has_no_api_key_env_vars(self):
         """Bedrock uses the AWS SDK credential chain, not API keys."""
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.api_key_env_vars == ()
 
     def test_bedrock_base_url_env_var(self):
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.base_url_env_var == "BEDROCK_BASE_URL"
 
@@ -43,18 +47,22 @@ class TestProviderAliases:
 
     def test_aws_alias(self):
         from clawk_cli.models import _PROVIDER_ALIASES
+
         assert _PROVIDER_ALIASES.get("aws") == "bedrock"
 
     def test_aws_bedrock_alias(self):
         from clawk_cli.models import _PROVIDER_ALIASES
+
         assert _PROVIDER_ALIASES.get("aws-bedrock") == "bedrock"
 
     def test_amazon_bedrock_alias(self):
         from clawk_cli.models import _PROVIDER_ALIASES
+
         assert _PROVIDER_ALIASES.get("amazon-bedrock") == "bedrock"
 
     def test_amazon_alias(self):
         from clawk_cli.models import _PROVIDER_ALIASES
+
         assert _PROVIDER_ALIASES.get("amazon") == "bedrock"
 
 
@@ -63,6 +71,7 @@ class TestProviderLabels:
 
     def test_bedrock_label(self):
         from clawk_cli.models import _PROVIDER_LABELS
+
         assert _PROVIDER_LABELS.get("bedrock") == "AWS Bedrock"
 
 
@@ -71,17 +80,20 @@ class TestModelCatalog:
 
     def test_bedrock_has_curated_models(self):
         from clawk_cli.models import _PROVIDER_MODELS
+
         models = _PROVIDER_MODELS.get("bedrock", [])
         assert len(models) > 0
 
     def test_bedrock_models_include_claude(self):
         from clawk_cli.models import _PROVIDER_MODELS
+
         models = _PROVIDER_MODELS.get("bedrock", [])
         claude_models = [m for m in models if "anthropic.claude" in m]
         assert len(claude_models) > 0
 
     def test_bedrock_models_include_nova(self):
         from clawk_cli.models import _PROVIDER_MODELS
+
         models = _PROVIDER_MODELS.get("bedrock", [])
         nova_models = [m for m in models if "amazon.nova" in m]
         assert len(nova_models) > 0
@@ -94,16 +106,19 @@ class TestResolveProvider:
         """When user explicitly requests 'bedrock', it should resolve."""
         # bedrock is in the registry, so resolve_provider should return it
         from clawk_cli.auth import resolve_provider
+
         result = resolve_provider("bedrock")
         assert result == "bedrock"
 
     def test_aws_alias_resolves_to_bedrock(self):
         from clawk_cli.auth import resolve_provider
+
         result = resolve_provider("aws")
         assert result == "bedrock"
 
     def test_amazon_bedrock_alias_resolves(self):
         from clawk_cli.auth import resolve_provider
+
         result = resolve_provider("amazon-bedrock")
         assert result == "bedrock"
 
@@ -113,13 +128,21 @@ class TestResolveProvider:
         from clawk_cli.auth import resolve_provider
 
         # Clear all other provider env vars
-        for var in ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "GOOGLE_API_KEY", "DEEPSEEK_API_KEY"]:
+        for var in [
+            "OPENAI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "GOOGLE_API_KEY",
+            "DEEPSEEK_API_KEY",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
         # Set AWS credentials
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
         # Mock the auth store to have no active provider
         with patch("clawk_cli.auth._load_auth_store", return_value={}):
@@ -134,12 +157,21 @@ class TestRuntimeProvider:
         from clawk_cli.runtime_provider import resolve_runtime_provider
 
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "eu-west-1")
 
         # Mock resolve_provider to return bedrock
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+        ):
             result = resolve_runtime_provider(requested="bedrock")
 
         assert result["provider"] == "bedrock"
@@ -155,8 +187,15 @@ class TestRuntimeProvider:
         monkeypatch.delenv("AWS_REGION", raising=False)
         monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
 
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+        ):
             result = resolve_runtime_provider(requested="bedrock")
 
         assert result["region"] == "us-east-1"
@@ -168,19 +207,38 @@ class TestRuntimeProvider:
         from clawk_cli.auth import AuthError
 
         # Clear all AWS env vars
-        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
-                     "AWS_BEARER_TOKEN_BEDROCK", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-                     "AWS_WEB_IDENTITY_TOKEN_FILE"]:
+        for var in [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_PROFILE",
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+            "AWS_WEB_IDENTITY_TOKEN_FILE",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
         # Mock both the provider resolution and boto3's credential chain
         mock_session = MagicMock()
         mock_session.get_credentials.return_value = None
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}), \
-             patch("clawk_cli.runtime_provider.resolve_requested_provider", return_value="auto"), \
-             patch.dict("sys.modules", {"botocore": MagicMock(), "botocore.session": MagicMock()}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+            patch(
+                "clawk_cli.runtime_provider.resolve_requested_provider",
+                return_value="auto",
+            ),
+            patch.dict(
+                "sys.modules",
+                {"botocore": MagicMock(), "botocore.session": MagicMock()},
+            ),
+        ):
             import botocore.session as _bs
+
             _bs.get_session = MagicMock(return_value=mock_session)
             with pytest.raises(AuthError, match="No AWS credentials"):
                 resolve_runtime_provider(requested="auto")
@@ -191,12 +249,23 @@ class TestRuntimeProvider:
         from clawk_cli.runtime_provider import resolve_runtime_provider
 
         # No AWS env vars set — but explicit bedrock request should not raise
-        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
-                     "AWS_BEARER_TOKEN_BEDROCK"]:
+        for var in [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_PROFILE",
+            "AWS_BEARER_TOKEN_BEDROCK",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+        ):
             result = resolve_runtime_provider(requested="bedrock")
         assert result["provider"] == "bedrock"
         assert result["api_mode"] == "bedrock_converse"
@@ -206,27 +275,37 @@ class TestRuntimeProvider:
 # providers.py integration
 # ---------------------------------------------------------------------------
 
+
 class TestProvidersModule:
     """Verify bedrock is wired into clawk_cli/providers.py."""
 
     def test_bedrock_alias_in_providers(self):
         from clawk_cli.providers import ALIASES
-        assert ALIASES.get("bedrock") is None  # "bedrock" IS the canonical name, not an alias
+
+        assert (
+            ALIASES.get("bedrock") is None
+        )  # "bedrock" IS the canonical name, not an alias
         assert ALIASES.get("aws") == "bedrock"
         assert ALIASES.get("aws-bedrock") == "bedrock"
 
     def test_bedrock_transport_mapping(self):
         from clawk_cli.providers import TRANSPORT_TO_API_MODE
+
         assert TRANSPORT_TO_API_MODE.get("bedrock_converse") == "bedrock_converse"
 
     def test_determine_api_mode_from_bedrock_url(self):
         from clawk_cli.providers import determine_api_mode
-        assert determine_api_mode(
-            "unknown", "https://bedrock-runtime.us-east-1.amazonaws.com"
-        ) == "bedrock_converse"
+
+        assert (
+            determine_api_mode(
+                "unknown", "https://bedrock-runtime.us-east-1.amazonaws.com"
+            )
+            == "bedrock_converse"
+        )
 
     def test_label_override(self):
         from clawk_cli.providers import _LABEL_OVERRIDES
+
         assert _LABEL_OVERRIDES.get("bedrock") == "AWS Bedrock"
 
 
@@ -234,21 +313,25 @@ class TestProvidersModule:
 # Error classifier integration
 # ---------------------------------------------------------------------------
 
+
 class TestErrorClassifierBedrock:
     """Verify Bedrock error patterns are in the global error classifier."""
 
     def test_throttling_in_rate_limit_patterns(self):
         from agent.error_classifier import _RATE_LIMIT_PATTERNS
+
         assert "throttlingexception" in _RATE_LIMIT_PATTERNS
 
     def test_context_overflow_patterns(self):
         from agent.error_classifier import _CONTEXT_OVERFLOW_PATTERNS
+
         assert "input is too long" in _CONTEXT_OVERFLOW_PATTERNS
 
 
 # ---------------------------------------------------------------------------
 # pyproject.toml bedrock extra
 # ---------------------------------------------------------------------------
+
 
 class TestPackaging:
     """Verify Bedrock remains a declared lazy optional dependency."""
@@ -301,8 +384,10 @@ class TestBedrockPreserveDotsFlag:
 
     def test_bedrock_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="bedrock", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_bedrock_runtime_us_east_1_url_preserves_dots(self):
@@ -310,22 +395,26 @@ class TestBedrockPreserveDotsFlag:
         a ``bedrock-runtime.us-east-1.amazonaws.com`` base URL must not
         mangle dots."""
         from types import SimpleNamespace
+
         agent = SimpleNamespace(
             provider="custom",
             base_url="https://bedrock-runtime.us-east-1.amazonaws.com",
         )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_bedrock_runtime_ap_northeast_2_url_preserves_dots(self):
         """Reporter-reported region (ap-northeast-2) exercises the same
         base-URL heuristic."""
         from types import SimpleNamespace
+
         agent = SimpleNamespace(
             provider="custom",
             base_url="https://bedrock-runtime.ap-northeast-2.amazonaws.com",
         )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_non_bedrock_aws_url_does_not_preserve_dots(self):
@@ -334,11 +423,13 @@ class TestBedrockPreserveDotsFlag:
         the heuristic is scoped to the ``bedrock-runtime.`` substring
         specifically."""
         from types import SimpleNamespace
+
         agent = SimpleNamespace(
             provider="custom",
             base_url="https://s3.us-east-1.amazonaws.com",
         )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is False
 
     def test_anthropic_native_still_does_not_preserve_dots(self):
@@ -346,8 +437,12 @@ class TestBedrockPreserveDotsFlag:
         existing Anthropic native behaviour — ``claude-sonnet-4.6`` still
         becomes ``claude-sonnet-4-6`` for the Anthropic API."""
         from types import SimpleNamespace
-        agent = SimpleNamespace(provider="anthropic", base_url="https://api.anthropic.com")
+
+        agent = SimpleNamespace(
+            provider="anthropic", base_url="https://api.anthropic.com"
+        )
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is False
 
 
@@ -359,24 +454,32 @@ class TestBedrockModelNameNormalization:
     def test_global_anthropic_inference_profile_preserved(self):
         """The reporter's exact model ID."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "global.anthropic.claude-opus-4-7", preserve_dots=True
-        ) == "global.anthropic.claude-opus-4-7"
+
+        assert (
+            normalize_model_name("global.anthropic.claude-opus-4-7", preserve_dots=True)
+            == "global.anthropic.claude-opus-4-7"
+        )
 
     def test_us_anthropic_dated_inference_profile_preserved(self):
         """Regional + dated Sonnet inference profile."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-            preserve_dots=True,
-        ) == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+        assert (
+            normalize_model_name(
+                "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                preserve_dots=True,
+            )
+            == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        )
 
     def test_apac_anthropic_haiku_inference_profile_preserved(self):
         """APAC inference profile — same structural-dot shape."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "apac.anthropic.claude-haiku-4-5", preserve_dots=True
-        ) == "apac.anthropic.claude-haiku-4-5"
+
+        assert (
+            normalize_model_name("apac.anthropic.claude-haiku-4-5", preserve_dots=True)
+            == "apac.anthropic.claude-haiku-4-5"
+        )
 
     def test_bedrock_prefix_preserved_without_preserve_dots(self):
         """Bedrock inference profile IDs are auto-detected by prefix and
@@ -384,9 +487,13 @@ class TestBedrockModelNameNormalization:
         these IDs because the dots are namespace separators, not version
         separators.  Regression for #12295."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "global.anthropic.claude-opus-4-7", preserve_dots=False
-        ) == "global.anthropic.claude-opus-4-7"
+
+        assert (
+            normalize_model_name(
+                "global.anthropic.claude-opus-4-7", preserve_dots=False
+            )
+            == "global.anthropic.claude-opus-4-7"
+        )
 
     def test_bare_foundation_model_id_preserved(self):
         """Non-inference-profile Bedrock IDs
@@ -394,10 +501,14 @@ class TestBedrockModelNameNormalization:
         vendor separators and must also survive intact under
         ``preserve_dots=True``."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "anthropic.claude-3-5-sonnet-20241022-v2:0",
-            preserve_dots=True,
-        ) == "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+        assert (
+            normalize_model_name(
+                "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                preserve_dots=True,
+            )
+            == "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        )
 
 
 class TestBedrockBuildAnthropicKwargsEndToEnd:
@@ -409,6 +520,7 @@ class TestBedrockBuildAnthropicKwargsEndToEnd:
 
     def test_bedrock_inference_profile_survives_build_kwargs(self):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="global.anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],
@@ -428,6 +540,7 @@ class TestBedrockBuildAnthropicKwargsEndToEnd:
         in ``normalize_model_name`` is the load-bearing piece.
         Regression for #12295."""
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="global.anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],
@@ -446,26 +559,32 @@ class TestBedrockModelIdDetection:
 
     def test_bare_bedrock_id_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("anthropic.claude-opus-4-7") is True
 
     def test_regional_us_prefix_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("us.anthropic.claude-sonnet-4-5-v1:0") is True
 
     def test_regional_global_prefix_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("global.anthropic.claude-opus-4-7") is True
 
     def test_regional_eu_prefix_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("eu.anthropic.claude-sonnet-4-6") is True
 
     def test_openrouter_format_not_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("claude-opus-4.6") is False
 
     def test_bare_claude_not_detected(self):
         from agent.anthropic_adapter import _is_bedrock_model_id
+
         assert _is_bedrock_model_id("claude-opus-4-7") is False
 
     def test_bare_bedrock_id_preserved_without_flag(self):
@@ -473,19 +592,23 @@ class TestBedrockModelIdDetection:
         sent to bedrock-mantle via auxiliary clients that don't pass
         ``preserve_dots=True``."""
         from agent.anthropic_adapter import normalize_model_name
-        assert normalize_model_name(
-            "anthropic.claude-opus-4-7", preserve_dots=False
-        ) == "anthropic.claude-opus-4-7"
+
+        assert (
+            normalize_model_name("anthropic.claude-opus-4-7", preserve_dots=False)
+            == "anthropic.claude-opus-4-7"
+        )
 
     def test_openrouter_dots_still_converted(self):
         """Non-Bedrock dotted model names must still be converted."""
         from agent.anthropic_adapter import normalize_model_name
+
         assert normalize_model_name("claude-opus-4.6") == "claude-opus-4-6"
 
     def test_bare_bedrock_id_survives_build_kwargs(self):
         """End-to-end: bare Bedrock ID through ``build_anthropic_kwargs``
         without ``preserve_dots=True`` -- the auxiliary client path."""
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],
@@ -511,13 +634,21 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_returns_client_with_credentials(self, monkeypatch):
         """With valid AWS credentials, Bedrock should return a usable client."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-west-2")
 
         mock_anthropic_bedrock = MagicMock()
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=mock_anthropic_bedrock):
-            from agent.auxiliary_client import resolve_provider_client, AnthropicAuxiliaryClient
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=mock_anthropic_bedrock,
+        ):
+            from agent.auxiliary_client import (
+                resolve_provider_client,
+                AnthropicAuxiliaryClient,
+            )
+
             client, model = resolve_provider_client("bedrock", None)
 
         assert client is not None, (
@@ -533,6 +664,7 @@ class TestAuxiliaryClientBedrockResolution:
         """Without AWS credentials, Bedrock should return (None, None) gracefully."""
         with patch("agent.bedrock_adapter.has_aws_credentials", return_value=False):
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("bedrock", None)
 
         assert client is None
@@ -541,12 +673,17 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_uses_configured_region(self, monkeypatch):
         """Bedrock client base_url should reflect AWS_REGION."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "eu-central-1")
 
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=MagicMock()):
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=MagicMock(),
+        ):
             from agent.auxiliary_client import resolve_provider_client
+
             client, _ = resolve_provider_client("bedrock", None)
 
         assert client is not None
@@ -555,11 +692,16 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_respects_explicit_model(self, monkeypatch):
         """When caller passes an explicit model, it should be used."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=MagicMock()):
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=MagicMock(),
+        ):
             from agent.auxiliary_client import resolve_provider_client
+
             _, model = resolve_provider_client(
                 "bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
             )
@@ -569,11 +711,19 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_async_mode(self, monkeypatch):
         """Async mode should return an AsyncAnthropicAuxiliaryClient."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=MagicMock()):
-            from agent.auxiliary_client import resolve_provider_client, AsyncAnthropicAuxiliaryClient
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=MagicMock(),
+        ):
+            from agent.auxiliary_client import (
+                resolve_provider_client,
+                AsyncAnthropicAuxiliaryClient,
+            )
+
             client, model = resolve_provider_client("bedrock", None, async_mode=True)
 
         assert client is not None
@@ -582,11 +732,16 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_default_model_is_haiku(self, monkeypatch):
         """Default auxiliary model for Bedrock should be Haiku (fast, cheap)."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=MagicMock()):
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=MagicMock(),
+        ):
             from agent.auxiliary_client import resolve_provider_client
+
             _, model = resolve_provider_client("bedrock", None)
 
         assert "haiku" in model.lower()

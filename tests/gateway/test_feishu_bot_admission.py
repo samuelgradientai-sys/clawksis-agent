@@ -85,7 +85,9 @@ def test_feishu_load_settings_warns_on_unknown_allow_bots(monkeypatch, caplog):
         settings = FeishuAdapter._load_settings(extra={})
 
     assert settings.allow_bots == "none"
-    assert any("allow_bots" in r.message and "menton" in r.message for r in caplog.records)
+    assert any(
+        "allow_bots" in r.message and "menton" in r.message for r in caplog.records
+    )
 
 
 @pytest.mark.parametrize(
@@ -117,13 +119,15 @@ def test_feishu_load_settings_parses_per_group_require_mention(monkeypatch):
     monkeypatch.setenv("FEISHU_APP_ID", "cli_test")
     monkeypatch.setenv("FEISHU_APP_SECRET", "secret_test")
 
-    settings = FeishuAdapter._load_settings(extra={
-        "group_rules": {
-            "oc_free": {"policy": "open", "require_mention": False},
-            "oc_strict": {"policy": "open", "require_mention": True},
-            "oc_inherit": {"policy": "open"},
-        },
-    })
+    settings = FeishuAdapter._load_settings(
+        extra={
+            "group_rules": {
+                "oc_free": {"policy": "open", "require_mention": False},
+                "oc_strict": {"policy": "open", "require_mention": True},
+                "oc_inherit": {"policy": "open"},
+            },
+        }
+    )
     assert settings.group_rules["oc_free"].require_mention is False
     assert settings.group_rules["oc_strict"].require_mention is True
     assert settings.group_rules["oc_inherit"].require_mention is None
@@ -206,14 +210,23 @@ _ADMIT_CASES = [
     pytest.param(
         _admit_case(
             adapter={"bot_open_id": "ou_me", "allow_bots": "all"},
-            sender={"sender_type": "bot", "open_id": "ou_me", "user_id": "u_me", "union_id": "un_me"},
+            sender={
+                "sender_type": "bot",
+                "open_id": "ou_me",
+                "user_id": "u_me",
+                "union_id": "un_me",
+            },
             expected="self_echo",
         ),
         id="self_echo:mixed_ids",
     ),
     pytest.param(
         _admit_case(
-            adapter={"bot_open_id": "ou_self", "bot_user_id": "u_self", "allow_bots": "all"},
+            adapter={
+                "bot_open_id": "ou_self",
+                "bot_user_id": "u_self",
+                "allow_bots": "all",
+            },
             sender={"sender_type": "bot", "open_id": None, "user_id": "u_self"},
             expected="self_echo",
         ),
@@ -409,7 +422,9 @@ def test_admit_group_mention_checked_once_per_call():
     # Stage 2 (mentions mode) and stage 4 (group require_mention) must not
     # double-evaluate _mentions_self for the same admit call.
     adapter = make_adapter_skeleton(
-        bot_open_id="ou_self", allow_bots="mentions", require_mention=True,
+        bot_open_id="ou_self",
+        allow_bots="mentions",
+        require_mention=True,
         group_policy="open",
     )
     calls = 0
@@ -433,7 +448,9 @@ def test_admit_per_group_require_mention_overrides_global():
     from gateway.platforms.feishu import FeishuGroupRule
 
     adapter = make_adapter_skeleton(
-        bot_open_id="ou_self", require_mention=True, group_policy="open",
+        bot_open_id="ou_self",
+        require_mention=True,
+        group_policy="open",
     )
     adapter._group_rules = {
         "oc_free": FeishuGroupRule(policy="open", require_mention=False),
@@ -441,7 +458,10 @@ def test_admit_per_group_require_mention_overrides_global():
     stub_mention(adapter, False)
 
     sender = make_sender(sender_type="user", open_id="ou_human")
-    assert adapter._admit(sender, make_message(chat_id="oc_free", chat_type="group")) is None
+    assert (
+        adapter._admit(sender, make_message(chat_id="oc_free", chat_type="group"))
+        is None
+    )
     assert (
         adapter._admit(sender, make_message(chat_id="oc_other", chat_type="group"))
         == "group_policy_rejected"
@@ -455,6 +475,7 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
     import asyncio
 
     from gateway.platforms import feishu as feishu_mod
+
     FeishuAdapter = feishu_mod.FeishuAdapter
 
     class _FakeBaseRequestBuilder:
@@ -482,8 +503,12 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
         SimpleNamespace(builder=lambda: _FakeBaseRequestBuilder()),
         raising=False,
     )
-    monkeypatch.setattr(feishu_mod, "HttpMethod", SimpleNamespace(GET="GET"), raising=False)
-    monkeypatch.setattr(feishu_mod, "AccessTokenType", SimpleNamespace(TENANT="TENANT"), raising=False)
+    monkeypatch.setattr(
+        feishu_mod, "HttpMethod", SimpleNamespace(GET="GET"), raising=False
+    )
+    monkeypatch.setattr(
+        feishu_mod, "AccessTokenType", SimpleNamespace(TENANT="TENANT"), raising=False
+    )
 
     adapter = object.__new__(FeishuAdapter)
     adapter._bot_open_id = ""
@@ -496,9 +521,11 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
     def _fake_request(request):
         captured["uri"] = getattr(request, "uri", None)
         captured["http_method"] = getattr(request, "http_method", None)
-        return SimpleNamespace(raw=SimpleNamespace(
-            content=b'{"code":0,"bot":{"app_name":"Clawksis","open_id":"ou_hydrated"}}'
-        ))
+        return SimpleNamespace(
+            raw=SimpleNamespace(
+                content=b'{"code":0,"bot":{"app_name":"Clawksis","open_id":"ou_hydrated"}}'
+            )
+        )
 
     adapter._client = SimpleNamespace(request=_fake_request)
 
@@ -570,6 +597,7 @@ def _group_case(
 
 def _group_rule(policy: str, **kwargs):
     from gateway.platforms.feishu import FeishuGroupRule
+
     return FeishuGroupRule(policy=policy, **kwargs)
 
 
@@ -631,19 +659,27 @@ _GROUP_CASES = [
 # parametrize so we can use _group_rule() (FeishuGroupRule import).
 _GROUP_RULE_CASES = [
     pytest.param(
-        "disabled", "bot", False,
+        "disabled",
+        "bot",
+        False,
         id="bot:disabled_policy_blocks_even_with_bypass",
     ),
     pytest.param(
-        "disabled", "app", False,
+        "disabled",
+        "app",
+        False,
         id="app:disabled_policy_blocks_even_with_bypass",
     ),
     pytest.param(
-        "admin_only", "bot", False,
+        "admin_only",
+        "bot",
+        False,
         id="bot:admin_only_policy_blocks_non_admin",
     ),
     pytest.param(
-        "admin_only", "app", False,
+        "admin_only",
+        "app",
+        False,
         id="app:admin_only_policy_blocks_non_admin",
     ),
 ]
@@ -655,11 +691,14 @@ def test_allow_group_message_matrix(case):
     adapter._admins = case["admins"]
     adapter._group_rules = case["group_rules"]
     sender = make_sender(**case["sender"])
-    assert adapter._allow_group_message(
-        sender_id=sender.sender_id,
-        chat_id=case["chat_id"],
-        is_bot=case["is_bot"],
-    ) is case["expected"]
+    assert (
+        adapter._allow_group_message(
+            sender_id=sender.sender_id,
+            chat_id=case["chat_id"],
+            is_bot=case["is_bot"],
+        )
+        is case["expected"]
+    )
 
 
 @pytest.mark.parametrize("policy, sender_type, expected", _GROUP_RULE_CASES)
@@ -667,11 +706,14 @@ def test_allow_group_message_channel_locks_apply_to_bots(policy, sender_type, ex
     adapter = make_adapter_skeleton()
     adapter._group_rules = {"oc_locked": _group_rule(policy)}
     sender = make_sender(sender_type=sender_type, open_id="ou_peer")
-    assert adapter._allow_group_message(
-        sender_id=sender.sender_id,
-        chat_id="oc_locked",
-        is_bot=True,
-    ) is expected
+    assert (
+        adapter._allow_group_message(
+            sender_id=sender.sender_id,
+            chat_id="oc_locked",
+            is_bot=True,
+        )
+        is expected
+    )
 
 
 @pytest.mark.parametrize("sender_type", ["bot", "app"])
@@ -679,15 +721,16 @@ def test_allow_group_message_blacklist_is_human_scope_only(sender_type):
     # blacklist is parallel to allowlist (human-scope); admitted bots bypass
     # it. To block a specific bot, gate upstream via FEISHU_ALLOW_BOTS.
     adapter = make_adapter_skeleton()
-    adapter._group_rules = {
-        "oc_1": _group_rule("blacklist", blacklist={"ou_peer"})
-    }
+    adapter._group_rules = {"oc_1": _group_rule("blacklist", blacklist={"ou_peer"})}
     sender = make_sender(sender_type=sender_type, open_id="ou_peer")
-    assert adapter._allow_group_message(
-        sender_id=sender.sender_id,
-        chat_id="oc_1",
-        is_bot=True,
-    ) is True
+    assert (
+        adapter._allow_group_message(
+            sender_id=sender.sender_id,
+            chat_id="oc_1",
+            is_bot=True,
+        )
+        is True
+    )
 
 
 # --- Realistic payload smoke -----------------------------------------------
@@ -714,7 +757,9 @@ def test_admit_accepts_realistic_bot_at_bot_group_event():
     )
     sender = SimpleNamespace(
         sender_type="bot",
-        sender_id=SimpleNamespace(union_id="on_peerUnion", user_id="u_peer", open_id="ou_peer_bot"),
+        sender_id=SimpleNamespace(
+            union_id="on_peerUnion", user_id="u_peer", open_id="ou_peer_bot"
+        ),
         tenant_key="tenant_ab",
     )
 

@@ -53,7 +53,7 @@ class OpenRouterProfile(ProviderProfile):
         # meaningful for openrouter/pareto-code; sending it on any other
         # model has no documented effect and would be confusing in logs.
         # See: https://openrouter.ai/docs/guides/routing/routers/pareto-router
-        model = (context.get("model") or "")
+        model = context.get("model") or ""
         if model == "openrouter/pareto-code":
             score = context.get("openrouter_min_coding_score")
             if score is not None and score != "":

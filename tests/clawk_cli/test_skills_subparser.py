@@ -20,15 +20,14 @@ def test_no_duplicate_skills_subparser():
     import sys
 
     # Remove cached module if present
-    if 'clawk_cli.main' in sys.modules:
-        del sys.modules['clawk_cli.main']
+    if "clawk_cli.main" in sys.modules:
+        del sys.modules["clawk_cli.main"]
 
     try:
         import clawk_cli.main  # noqa: F401
     except argparse.ArgumentError as e:
         if "conflicting subparser" in str(e):
             raise AssertionError(
-                f"Duplicate subparser detected: {e}. "
-                "See issue #898 for details."
+                f"Duplicate subparser detected: {e}. See issue #898 for details."
             ) from e
         raise

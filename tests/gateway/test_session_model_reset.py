@@ -1,4 +1,5 @@
 """Tests that /new (and its /reset alias) clears session-scoped overrides."""
+
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -80,7 +81,10 @@ async def test_new_command_clears_session_model_override():
         "base_url": "",
         "api_mode": "openai",
     }
-    runner._session_reasoning_overrides[session_key] = {"enabled": True, "effort": "high"}
+    runner._session_reasoning_overrides[session_key] = {
+        "enabled": True,
+        "effort": "high",
+    }
     runner._pending_model_notes[session_key] = "[Note: switched to gpt-4o.]"
 
     await runner._handle_reset_command(_make_event("/new"))
@@ -126,7 +130,10 @@ async def test_new_command_only_clears_own_session():
         "base_url": "",
         "api_mode": "anthropic",
     }
-    runner._session_reasoning_overrides[session_key] = {"enabled": True, "effort": "high"}
+    runner._session_reasoning_overrides[session_key] = {
+        "enabled": True,
+        "effort": "high",
+    }
     runner._session_reasoning_overrides[other_key] = {"enabled": True, "effort": "low"}
     runner._pending_model_notes[session_key] = "[Note: switched to gpt-4o.]"
     runner._pending_model_notes[other_key] = "[Note: switched to claude-sonnet-4-6.]"

@@ -78,6 +78,7 @@ Respond in the following format:
 </answer>
 """
 
+
 def prepare_dataset(raw_data):
     """Transform raw data into GRPO-compatible format.
 
@@ -85,13 +86,15 @@ def prepare_dataset(raw_data):
     - 'prompt': List[Dict] with role/content (system + user messages)
     - 'answer': str (ground truth, optional but recommended)
     """
-    return raw_data.map(lambda x: {
-        'prompt': [
-            {'role': 'system', 'content': SYSTEM_PROMPT},
-            {'role': 'user', 'content': x['question']}
-        ],
-        'answer': extract_answer(x['raw_answer'])
-    })
+    return raw_data.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": extract_answer(x["raw_answer"]),
+        }
+    )
 ```
 
 **Pro tips:**
@@ -104,13 +107,13 @@ def prepare_dataset(raw_data):
 **Template structure:**
 ```python
 def reward_function_name(
-    prompts,        # List[List[Dict]]: Original prompts
-    completions,    # List[List[Dict]]: Model generations
-    answer=None,    # Optional: Ground truth from dataset
-    **kwargs        # Additional dataset columns
+    prompts,  # List[List[Dict]]: Original prompts
+    completions,  # List[List[Dict]]: Model generations
+    answer=None,  # Optional: Ground truth from dataset
+    **kwargs,  # Additional dataset columns
 ) -> list[float]:
     """Evaluate completions and return rewards (one per completion)."""
-    responses = [comp[0]['content'] for comp in completions]
+    responses = [comp[0]["content"] for comp in completions]
     rewards = []
     for response in responses:
         score = compute_score(response)
@@ -122,40 +125,43 @@ def reward_function_name(
 ```python
 def correctness_reward(prompts, completions, answer, **kwargs):
     """Reward correct answers with high score."""
-    responses = [comp[0]['content'] for comp in completions]
+    responses = [comp[0]["content"] for comp in completions]
     extracted = [extract_final_answer(r) for r in responses]
-    return [2.0 if ans == gt else 0.0
-            for ans, gt in zip(extracted, answer)]
+    return [2.0 if ans == gt else 0.0 for ans, gt in zip(extracted, answer)]
 ```
 
 **Example 2: format reward (structured output)**
 ```python
 import re
 
+
 def format_reward(completions, **kwargs):
     """Reward XML-like structured format."""
-    pattern = r'<reasoning>.*?</reasoning>\s*<answer>.*?</answer>'
-    responses = [comp[0]['content'] for comp in completions]
-    return [1.0 if re.search(pattern, r, re.DOTALL) else 0.0
-            for r in responses]
+    pattern = r"<reasoning>.*?</reasoning>\s*<answer>.*?</answer>"
+    responses = [comp[0]["content"] for comp in completions]
+    return [1.0 if re.search(pattern, r, re.DOTALL) else 0.0 for r in responses]
 ```
 
 **Example 3: incremental format reward (partial credit)**
 ```python
 def incremental_format_reward(completions, **kwargs):
     """Award partial credit for format compliance."""
-    responses = [comp[0]['content'] for comp in completions]
+    responses = [comp[0]["content"] for comp in completions]
     rewards = []
 
     for r in responses:
         score = 0.0
-        if '<reasoning>' in r:  score += 0.25
-        if '</reasoning>' in r: score += 0.25
-        if '<answer>' in r:     score += 0.25
-        if '</answer>' in r:    score += 0.25
+        if "<reasoning>" in r:
+            score += 0.25
+        if "</reasoning>" in r:
+            score += 0.25
+        if "<answer>" in r:
+            score += 0.25
+        if "</answer>" in r:
+            score += 0.25
         # Penalize extra text after closing tag
-        if r.count('</answer>') == 1:
-            extra_text = r.split('</answer>')[-1].strip()
+        if r.count("</answer>") == 1:
+            extra_text = r.split("</answer>")[-1].strip()
             score -= len(extra_text) * 0.001
         rewards.append(score)
 
@@ -172,33 +178,27 @@ from trl import GRPOConfig
 
 training_args = GRPOConfig(
     output_dir="outputs/grpo-model",
-
     # Learning rate
-    learning_rate=5e-6,          # Lower = more stable
+    learning_rate=5e-6,  # Lower = more stable
     adam_beta1=0.9,
     adam_beta2=0.99,
     weight_decay=0.1,
     warmup_ratio=0.1,
-    lr_scheduler_type='cosine',
-
+    lr_scheduler_type="cosine",
     # Batch settings
     per_device_train_batch_size=1,
     gradient_accumulation_steps=4,  # Effective batch = 4
-
     # GRPO-specific
-    num_generations=8,            # Group size: 8–16 recommended
+    num_generations=8,  # Group size: 8–16 recommended
     max_prompt_length=256,
     max_completion_length=512,
-
     # Training duration
     num_train_epochs=1,
     max_steps=None,
-
     # Optimization
-    bf16=True,                    # Faster on A100/H100
-    optim="adamw_8bit",          # Memory-efficient optimizer
+    bf16=True,  # Faster on A100/H100
+    optim="adamw_8bit",  # Memory-efficient optimizer
     max_grad_norm=0.1,
-
     # Logging
     logging_steps=1,
     save_steps=100,
@@ -213,12 +213,12 @@ training_args = GRPOConfig(
     learning_rate=1e-5,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=2,
-    num_generations=16,           # Larger groups = better signal
+    num_generations=16,  # Larger groups = better signal
     max_prompt_length=512,
     max_completion_length=1024,
     num_train_epochs=1,
     bf16=True,
-    use_vllm=True,                # Fast generation with vLLM
+    use_vllm=True,  # Fast generation with vLLM
     logging_steps=10,
 )
 ```
@@ -257,8 +257,13 @@ peft_config = LoraConfig(
     r=16,
     lora_alpha=32,
     target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
     ],
     task_type="CAUSAL_LM",
     lora_dropout=0.05,
@@ -274,7 +279,7 @@ trainer = GRPOTrainer(
     ],
     args=training_args,
     train_dataset=dataset,
-    peft_config=peft_config,   # Remove for full fine-tuning
+    peft_config=peft_config,  # Remove for full fine-tuning
 )
 
 trainer.train()
@@ -394,21 +399,24 @@ class AdaptiveReward:
 ```python
 def load_custom_knowledge_base(csv_path):
     import pandas as pd
+
     df = pd.read_csv(csv_path)
-    return Dataset.from_pandas(df).map(lambda x: {
-        'prompt': [
-            {'role': 'system', 'content': CUSTOM_SYSTEM_PROMPT},
-            {'role': 'user', 'content': x['question']}
-        ],
-        'answer': x['expert_answer']
-    })
+    return Dataset.from_pandas(df).map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": CUSTOM_SYSTEM_PROMPT},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": x["expert_answer"],
+        }
+    )
 ```
 
 ## Deployment and inference
 
 ### Save and merge LoRA
 ```python
-if hasattr(trainer.model, 'merge_and_unload'):
+if hasattr(trainer.model, "merge_and_unload"):
     merged_model = trainer.model.merge_and_unload()
     merged_model.save_pretrained("production_model")
     tokenizer.save_pretrained("production_model")
@@ -422,15 +430,15 @@ generator = pipeline("text-generation", model="production_model", tokenizer=toke
 
 result = generator(
     [
-        {'role': 'system', 'content': SYSTEM_PROMPT},
-        {'role': 'user', 'content': "What is 15 + 27?"},
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "What is 15 + 27?"},
     ],
     max_new_tokens=256,
     do_sample=True,
     temperature=0.7,
     top_p=0.9,
 )
-print(result[0]['generated_text'])
+print(result[0]["generated_text"])
 ```
 
 ## Best practices checklist
@@ -468,10 +476,11 @@ print(result[0]['generated_text'])
 ### Quick debug reward
 ```python
 def debug_reward(completions, **kwargs):
-    responses = [comp[0]['content'] for comp in completions]
+    responses = [comp[0]["content"] for comp in completions]
     for i, r in enumerate(responses[:2]):
         print(f"Response {i}: {r[:200]}...")
     return [1.0] * len(responses)
+
 
 # Test without training
 trainer = GRPOTrainer(..., reward_funcs=[debug_reward])

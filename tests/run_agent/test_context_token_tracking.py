@@ -18,10 +18,20 @@ import run_agent
 
 
 def _patch_bootstrap(monkeypatch):
-    monkeypatch.setattr(run_agent, "get_tool_definitions", lambda **kwargs: [{
-        "type": "function",
-        "function": {"name": "t", "description": "t", "parameters": {"type": "object", "properties": {}}},
-    }])
+    monkeypatch.setattr(
+        run_agent,
+        "get_tool_definitions",
+        lambda **kwargs: [
+            {
+                "type": "function",
+                "function": {
+                    "name": "t",
+                    "description": "t",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+    )
     monkeypatch.setattr(run_agent, "check_toolset_requirements", lambda: {})
 
 
@@ -32,6 +42,7 @@ class _FakeAnthropicClient:
 
 class _FakeOpenAIClient:
     """Fake OpenAI client returned by mocked resolve_provider_client."""
+
     api_key = "fake-codex-key"
     base_url = "https://api.openai.com/v1"
     _default_headers = None
@@ -40,7 +51,10 @@ class _FakeOpenAIClient:
 def _make_agent(monkeypatch, api_mode, provider, response_fn):
     _patch_bootstrap(monkeypatch)
     if api_mode == "anthropic_messages":
-        monkeypatch.setattr("agent.anthropic_adapter.build_anthropic_client", lambda k, b=None, **kwargs: _FakeAnthropicClient())
+        monkeypatch.setattr(
+            "agent.anthropic_adapter.build_anthropic_client",
+            lambda k, b=None, **kwargs: _FakeAnthropicClient(),
+        )
     if provider == "openai-codex":
         monkeypatch.setattr(
             "agent.auxiliary_client.resolve_provider_client",
@@ -57,9 +71,17 @@ def _make_agent(monkeypatch, api_mode, provider, response_fn):
         def run_conversation(self, msg, conversation_history=None, task_id=None):
             self._interruptible_api_call = lambda kw: response_fn()
             self._disable_streaming = True
-            return super().run_conversation(msg, conversation_history=conversation_history, task_id=task_id)
+            return super().run_conversation(
+                msg, conversation_history=conversation_history, task_id=task_id
+            )
 
-    return _A(model="test-model", api_key="test-key", base_url="http://localhost:1234/v1", provider=provider, api_mode=api_mode)
+    return _A(
+        model="test-model",
+        api_key="test-key",
+        base_url="http://localhost:1234/v1",
+        provider=provider,
+        api_mode=api_mode,
+    )
 
 
 def _anthropic_resp(input_tok, output_tok, cache_read=0, cache_creation=0):
@@ -78,36 +100,58 @@ def _anthropic_resp(input_tok, output_tok, cache_read=0, cache_creation=0):
 
 # -- Anthropic: cached tokens must be included --
 
+
 def test_anthropic_cache_read_and_creation_added(monkeypatch):
-    agent = _make_agent(monkeypatch, "anthropic_messages", "anthropic",
-                        lambda: _anthropic_resp(3, 10, cache_read=15000, cache_creation=2000))
+    agent = _make_agent(
+        monkeypatch,
+        "anthropic_messages",
+        "anthropic",
+        lambda: _anthropic_resp(3, 10, cache_read=15000, cache_creation=2000),
+    )
     agent.run_conversation("hi")
     assert agent.context_compressor.last_prompt_tokens == 17003  # 3+15000+2000
     assert agent.session_prompt_tokens == 17003
 
 
 def test_anthropic_no_cache_fields(monkeypatch):
-    agent = _make_agent(monkeypatch, "anthropic_messages", "anthropic",
-                        lambda: _anthropic_resp(500, 20))
+    agent = _make_agent(
+        monkeypatch, "anthropic_messages", "anthropic", lambda: _anthropic_resp(500, 20)
+    )
     agent.run_conversation("hi")
     assert agent.context_compressor.last_prompt_tokens == 500
 
 
 def test_anthropic_cache_read_only(monkeypatch):
-    agent = _make_agent(monkeypatch, "anthropic_messages", "anthropic",
-                        lambda: _anthropic_resp(5, 15, cache_read=17666, cache_creation=15))
+    agent = _make_agent(
+        monkeypatch,
+        "anthropic_messages",
+        "anthropic",
+        lambda: _anthropic_resp(5, 15, cache_read=17666, cache_creation=15),
+    )
     agent.run_conversation("hi")
     assert agent.context_compressor.last_prompt_tokens == 17686  # 5+17666+15
 
 
 # -- OpenAI: prompt_tokens already total --
 
+
 def test_openai_prompt_tokens_unchanged(monkeypatch):
     resp = lambda: SimpleNamespace(
-        choices=[SimpleNamespace(index=0, message=SimpleNamespace(
-            role="assistant", content="ok", tool_calls=None, reasoning_content=None,
-        ), finish_reason="stop")],
-        usage=SimpleNamespace(prompt_tokens=5000, completion_tokens=100, total_tokens=5100),
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=SimpleNamespace(
+                    role="assistant",
+                    content="ok",
+                    tool_calls=None,
+                    reasoning_content=None,
+                ),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(
+            prompt_tokens=5000, completion_tokens=100, total_tokens=5100
+        ),
         model="gpt-4o",
     )
     agent = _make_agent(monkeypatch, "chat_completions", "openrouter", resp)
@@ -117,11 +161,17 @@ def test_openai_prompt_tokens_unchanged(monkeypatch):
 
 # -- Codex: no cache fields, getattr returns 0 --
 
+
 def test_codex_no_cache_fields(monkeypatch):
     resp = lambda: SimpleNamespace(
-        output=[SimpleNamespace(type="message", content=[SimpleNamespace(type="output_text", text="ok")])],
+        output=[
+            SimpleNamespace(
+                type="message", content=[SimpleNamespace(type="output_text", text="ok")]
+            )
+        ],
         usage=SimpleNamespace(input_tokens=3000, output_tokens=50, total_tokens=3050),
-        status="completed", model="gpt-5-codex",
+        status="completed",
+        model="gpt-5-codex",
     )
     agent = _make_agent(monkeypatch, "codex_responses", "openai-codex", resp)
     agent.run_conversation("hi")

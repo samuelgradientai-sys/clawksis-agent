@@ -98,8 +98,18 @@ class TestRegistration:
 
     @pytest.mark.parametrize(
         "builtin",
-        ["edge", "openai", "elevenlabs", "minimax", "gemini",
-         "mistral", "xai", "piper", "kittentts", "neutts"],
+        [
+            "edge",
+            "openai",
+            "elevenlabs",
+            "minimax",
+            "gemini",
+            "mistral",
+            "xai",
+            "piper",
+            "kittentts",
+            "neutts",
+        ],
     )
     def test_rejects_builtin_shadow_with_warning(self, builtin, caplog):
         """Built-in names always win — plugin registration is silently ignored
@@ -176,6 +186,7 @@ class TestABCContract:
             @property
             def name(self) -> str:
                 return "incomplete"
+
             # synthesize NOT implemented
 
         with pytest.raises(TypeError, match="abstract"):
@@ -185,6 +196,7 @@ class TestABCContract:
         class Incomplete(TTSProvider):
             def synthesize(self, text, output_path, **kw):
                 return output_path
+
             # name NOT implemented
 
         with pytest.raises(TypeError, match="abstract"):

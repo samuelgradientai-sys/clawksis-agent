@@ -89,9 +89,7 @@ async def test_unknown_slash_command_returns_guidance(monkeypatch):
     # If the LLM were called, this would fail: the guard must short-circuit
     # before _run_agent is invoked.
     runner._run_agent = AsyncMock(
-        side_effect=AssertionError(
-            "unknown slash command leaked through to the agent"
-        )
+        side_effect=AssertionError("unknown slash command leaked through to the agent")
     )
 
     monkeypatch.setattr(
@@ -115,9 +113,7 @@ async def test_unknown_slash_command_underscored_form_also_guarded(monkeypatch):
 
     runner = _make_runner()
     runner._run_agent = AsyncMock(
-        side_effect=AssertionError(
-            "unknown slash command leaked through to the agent"
-        )
+        side_effect=AssertionError("unknown slash command leaked through to the agent")
     )
 
     monkeypatch.setattr(
@@ -153,6 +149,7 @@ async def test_underscored_alias_for_hyphenated_builtin_not_flagged(monkeypatch)
     import gateway.run as gateway_run
 
     runner = _make_runner()
+
     # Prevent real MCP work; we only care that the unknown guard doesn't fire.
     async def _noop_reload(*_a, **_kw):
         return "mcp reloaded"
@@ -173,6 +170,7 @@ async def test_underscored_alias_for_hyphenated_builtin_not_flagged(monkeypatch)
 # ------------------------------------------------------------------
 # command:<name> decision hook — deny / handled / rewrite
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_command_hook_can_deny_before_dispatch(monkeypatch):
@@ -253,9 +251,7 @@ async def test_command_hook_allow_decision_is_passthrough(monkeypatch):
 
     runner = _make_runner()
     runner._handle_status_command = AsyncMock(return_value="status: ok")
-    runner.hooks.emit_collect = AsyncMock(
-        return_value=[{"decision": "allow"}]
-    )
+    runner.hooks.emit_collect = AsyncMock(return_value=[{"decision": "allow"}])
 
     monkeypatch.setattr(
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
@@ -274,9 +270,7 @@ async def test_command_hook_non_dict_return_values_ignored(monkeypatch):
 
     runner = _make_runner()
     runner._handle_status_command = AsyncMock(return_value="status: ok")
-    runner.hooks.emit_collect = AsyncMock(
-        return_value=["some string", 42, None, {}]
-    )
+    runner.hooks.emit_collect = AsyncMock(return_value=["some string", 42, None, {}])
 
     monkeypatch.setattr(
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}

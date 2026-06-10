@@ -18,8 +18,7 @@ from datasets import load_dataset
 
 # Load model (num_labels=1 for single reward score)
 model = AutoModelForSequenceClassification.from_pretrained(
-    "Qwen/Qwen2.5-0.5B-Instruct",
-    num_labels=1
+    "Qwen/Qwen2.5-0.5B-Instruct", num_labels=1
 )
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
 
@@ -31,15 +30,12 @@ config = RewardConfig(
     output_dir="Qwen2.5-Reward",
     per_device_train_batch_size=2,
     num_train_epochs=1,
-    learning_rate=1e-5
+    learning_rate=1e-5,
 )
 
 # Train
 trainer = RewardTrainer(
-    model=model,
-    args=config,
-    processing_class=tokenizer,
-    train_dataset=dataset
+    model=model, args=config, processing_class=tokenizer, train_dataset=dataset
 )
 trainer.train()
 ```

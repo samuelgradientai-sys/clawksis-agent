@@ -3,15 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
-
 from clawk_cli.config import (
-
     format_managed_message,
-
     get_managed_system,
-
     recommended_update_command,
-
 )
 
 from clawk_cli.main import cmd_update
@@ -19,46 +14,29 @@ from clawk_cli.main import cmd_update
 from tools.skills_hub import OptionalSkillSource
 
 
-
-
-
 def test_get_managed_system_homebrew(monkeypatch):
 
     monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
-
-
 
     assert get_managed_system() == "Homebrew"
 
     assert recommended_update_command() == "brew upgrade clawksis-agent"
 
 
-
-
-
 def test_format_managed_message_homebrew(monkeypatch):
 
     monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
 
-
-
     message = format_managed_message("update Clawksis")
-
-
 
     assert "managed by Homebrew" in message
 
     assert "brew upgrade clawksis-agent" in message
 
 
-
-
-
 def test_recommended_update_command_defaults_to_clawk_update(monkeypatch):
 
     monkeypatch.delenv("CLAWK_MANAGED", raising=False)
-
-
 
     # Also short-circuit the .managed marker path — CI runners may have an
 
@@ -70,26 +48,19 @@ def test_recommended_update_command_defaults_to_clawk_update(monkeypatch):
 
     # detect_install_method().
 
-    with patch("clawk_cli.config.get_managed_update_command", return_value=None), \
-         patch("clawk_cli.config.detect_install_method", return_value="git"):
-
+    with (
+        patch("clawk_cli.config.get_managed_update_command", return_value=None),
+        patch("clawk_cli.config.detect_install_method", return_value="git"),
+    ):
         assert recommended_update_command() == "clawk update"
-
-
-
 
 
 def test_cmd_update_blocks_managed_homebrew(monkeypatch, capsys):
 
     monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
 
-
-
     with patch("clawk_cli.main.subprocess.run") as mock_run:
-
         cmd_update(SimpleNamespace())
-
-
 
     assert not mock_run.called
 
@@ -100,9 +71,6 @@ def test_cmd_update_blocks_managed_homebrew(monkeypatch, capsys):
     assert "brew upgrade clawksis-agent" in captured.err
 
 
-
-
-
 def test_optional_skill_source_honors_env_override(monkeypatch, tmp_path):
 
     optional_dir = tmp_path / "optional-skills"
@@ -111,11 +79,6 @@ def test_optional_skill_source_honors_env_override(monkeypatch, tmp_path):
 
     monkeypatch.setenv("CLAWK_OPTIONAL_SKILLS", str(optional_dir))
 
-
-
     source = OptionalSkillSource()
 
-
-
     assert source._optional_dir == optional_dir
-

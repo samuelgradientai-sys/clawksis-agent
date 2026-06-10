@@ -134,7 +134,9 @@ async def resolve(
     except Exception as exc:
         logger.error(
             "Slash-confirm handler for /%s raised: %s",
-            command, exc, exc_info=True,
+            command,
+            exc,
+            exc_info=True,
         )
         return f"❌ Error handling confirmation: {exc}"
     return result if isinstance(result, str) else None
@@ -154,8 +156,10 @@ def resolve_sync_compat(
     """
     try:
         from agent.async_utils import safe_schedule_threadsafe
+
         fut = safe_schedule_threadsafe(
-            resolve(session_key, confirm_id, choice), loop,
+            resolve(session_key, confirm_id, choice),
+            loop,
             logger=logger,
             log_message="resolve_sync_compat scheduling failed",
         )

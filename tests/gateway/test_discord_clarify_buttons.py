@@ -36,6 +36,7 @@ from gateway.config import PlatformConfig  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter(*, allowed_users=None, allowed_roles=None):
     config = PlatformConfig(enabled=True, token="test-token", extra={})
     adapter = DiscordAdapter(config)
@@ -47,14 +48,16 @@ def _make_adapter(*, allowed_users=None, allowed_roles=None):
 
 def _clear_clarify_state():
     from tools import clarify_gateway as cm
+
     with cm._lock:
         cm._entries.clear()
         cm._session_index.clear()
         cm._notify_cbs.clear()
 
 
-def _make_interaction(*, user_id="42", display_name="Tester", roles=None,
-                      include_message=True):
+def _make_interaction(
+    *, user_id="42", display_name="Tester", roles=None, include_message=True
+):
     """Build a mock discord.Interaction with response.edit_message /
     send_message / defer all coroutine-callable."""
     user = SimpleNamespace(
@@ -80,6 +83,7 @@ def _make_interaction(*, user_id="42", display_name="Tester", roles=None,
 # ===========================================================================
 # ClarifyChoiceView construction
 # ===========================================================================
+
 
 class TestClarifyChoiceViewConstruction:
     """The view should build numeric buttons plus an Other button."""
@@ -134,6 +138,7 @@ class TestClarifyChoiceViewConstruction:
 # Choice callback → resolve_gateway_clarify
 # ===========================================================================
 
+
 class TestClarifyChoiceResolve:
     """Clicking a numeric button should resolve the clarify entry."""
 
@@ -143,6 +148,7 @@ class TestClarifyChoiceResolve:
     @pytest.mark.asyncio
     async def test_choice_resolves_with_canonical_choice_text(self):
         from tools import clarify_gateway as cm
+
         cm.register("cidA", "sk-A", "Pick", ["red", "green", "blue"])
 
         view = ClarifyChoiceView(
@@ -204,6 +210,7 @@ class TestClarifyChoiceResolve:
     @pytest.mark.asyncio
     async def test_unauthorized_user_rejected(self):
         from tools import clarify_gateway as cm
+
         cm.register("cidC", "sk-C", "Pick", ["x"])
 
         # Allowlist set, user not in it
@@ -231,6 +238,7 @@ class TestClarifyChoiceResolve:
 # "Other" button → mark_awaiting_text
 # ===========================================================================
 
+
 class TestClarifyOtherButton:
     """Clicking Other should flip the entry into text-capture mode."""
 
@@ -240,6 +248,7 @@ class TestClarifyOtherButton:
     @pytest.mark.asyncio
     async def test_other_flips_entry_to_awaiting_text(self):
         from tools import clarify_gateway as cm
+
         cm.register("cidD", "sk-D", "Pick", ["x", "y"])
 
         view = ClarifyChoiceView(
@@ -269,6 +278,7 @@ class TestClarifyOtherButton:
     @pytest.mark.asyncio
     async def test_other_unauthorized_user_rejected(self):
         from tools import clarify_gateway as cm
+
         cm.register("cidE", "sk-E", "Pick", ["x"])
 
         view = ClarifyChoiceView(
@@ -289,6 +299,7 @@ class TestClarifyOtherButton:
 # ===========================================================================
 # DiscordAdapter.send_clarify integration
 # ===========================================================================
+
 
 class TestDiscordSendClarify:
     """Verify send_clarify renders an embed and (optionally) attaches the view."""

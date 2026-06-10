@@ -115,23 +115,23 @@ class TestReconfigureWritesProvider:
         assert config["video_gen"]["model"] == "xai_fake-video-v1"
         assert config["video_gen"]["use_gateway"] is False
 
-    def test_reconfigure_with_no_env_vars_writes_provider(
-        self, monkeypatch, tmp_path
-    ):
+    def test_reconfigure_with_no_env_vars_writes_provider(self, monkeypatch, tmp_path):
         """No env vars at all (managed-style plugin) → writes
         video_gen.provider via the no-env-vars early-return branch."""
         from clawk_cli import tools_config
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        video_gen_registry.register_provider(_FakeVideoProvider(
-            "noenv_video",
-            schema={
-                "name": "NoEnvVideo",
-                "badge": "free",
-                "tag": "",
-                "env_vars": [],
-            },
-        ))
+        video_gen_registry.register_provider(
+            _FakeVideoProvider(
+                "noenv_video",
+                schema={
+                    "name": "NoEnvVideo",
+                    "badge": "free",
+                    "tag": "",
+                    "env_vars": [],
+                },
+            )
+        )
         monkeypatch.setattr(tools_config, "_prompt_choice", lambda *a, **kw: 0)
 
         config: dict = {}
@@ -154,16 +154,18 @@ class TestPluginVideoProvidersRow:
     def test_post_setup_propagated_when_declared(self, monkeypatch):
         from clawk_cli import tools_config
 
-        video_gen_registry.register_provider(_FakeVideoProvider(
-            "xai_video",
-            schema={
-                "name": "xAI Grok Imagine",
-                "badge": "paid",
-                "tag": "grok video",
-                "env_vars": [],
-                "post_setup": "xai_grok",
-            },
-        ))
+        video_gen_registry.register_provider(
+            _FakeVideoProvider(
+                "xai_video",
+                schema={
+                    "name": "xAI Grok Imagine",
+                    "badge": "paid",
+                    "tag": "grok video",
+                    "env_vars": [],
+                    "post_setup": "xai_grok",
+                },
+            )
+        )
 
         rows = tools_config._plugin_video_gen_providers()
         match = next(r for r in rows if r.get("video_gen_plugin_name") == "xai_video")
@@ -226,7 +228,11 @@ class TestVideoPluginProviderActive:
 
         config = {"video_gen": {"provider": "xai"}}
         providers = [
-            {"name": "xAI Grok Imagine", "env_vars": [], "video_gen_plugin_name": "xai"},
+            {
+                "name": "xAI Grok Imagine",
+                "env_vars": [],
+                "video_gen_plugin_name": "xai",
+            },
             {
                 "name": "FAL.ai",
                 "env_vars": [{"key": "FAL_KEY", "prompt": "FAL"}],

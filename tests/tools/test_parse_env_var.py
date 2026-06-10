@@ -8,6 +8,7 @@ import pytest
 
 import sys
 import tools.terminal_tool  # noqa: F401 -- ensure module is loaded
+
 _tt_mod = sys.modules["tools.terminal_tool"]
 from tools.terminal_tool import _parse_env_var
 
@@ -28,20 +29,28 @@ class TestParseEnvVar:
     def test_valid_json(self):
         volumes = '["/host:/container"]'
         with patch.dict("os.environ", {"TERMINAL_DOCKER_VOLUMES": volumes}):
-            result = _parse_env_var("TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON")
+            result = _parse_env_var(
+                "TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON"
+            )
             assert result == ["/host:/container"]
 
     def test_get_env_config_parses_docker_forward_env_json(self):
-        with patch.dict("os.environ", {
-            "TERMINAL_ENV": "docker",
-            "TERMINAL_DOCKER_FORWARD_ENV": '["GITHUB_TOKEN", "NPM_TOKEN"]',
-        }, clear=False):
+        with patch.dict(
+            "os.environ",
+            {
+                "TERMINAL_ENV": "docker",
+                "TERMINAL_DOCKER_FORWARD_ENV": '["GITHUB_TOKEN", "NPM_TOKEN"]',
+            },
+            clear=False,
+        ):
             config = _tt_mod._get_env_config()
             assert config["docker_forward_env"] == ["GITHUB_TOKEN", "NPM_TOKEN"]
 
     def test_create_environment_passes_docker_forward_env(self):
         fake_env = object()
-        with patch.object(_tt_mod, "_DockerEnvironment", return_value=fake_env) as mock_docker:
+        with patch.object(
+            _tt_mod, "_DockerEnvironment", return_value=fake_env
+        ) as mock_docker:
             result = _tt_mod._create_environment(
                 "docker",
                 image="python:3.11",
@@ -57,6 +66,7 @@ class TestParseEnvVar:
         with patch.dict("os.environ", {}, clear=False):
             # Remove the var if it exists, rely on default
             import os
+
             env = os.environ.copy()
             env.pop("TERMINAL_TIMEOUT", None)
             with patch.dict("os.environ", env, clear=True):
@@ -79,12 +89,16 @@ class TestParseEnvVar:
     def test_invalid_json_raises_with_var_name(self):
         with patch.dict("os.environ", {"TERMINAL_DOCKER_VOLUMES": "/host:/container"}):
             with pytest.raises(ValueError, match="TERMINAL_DOCKER_VOLUMES"):
-                _parse_env_var("TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON")
+                _parse_env_var(
+                    "TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON"
+                )
 
     def test_invalid_json_includes_type_label(self):
         with patch.dict("os.environ", {"TERMINAL_DOCKER_VOLUMES": "not json"}):
             with pytest.raises(ValueError, match="valid JSON"):
-                _parse_env_var("TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON")
+                _parse_env_var(
+                    "TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON"
+                )
 
 
 class TestImportTimeEnvParsing:
@@ -92,7 +106,9 @@ class TestImportTimeEnvParsing:
 
     def test_invalid_foreground_timeout_falls_back_to_default(self):
         try:
-            with patch.dict("os.environ", {"TERMINAL_MAX_FOREGROUND_TIMEOUT": "5m"}, clear=False):
+            with patch.dict(
+                "os.environ", {"TERMINAL_MAX_FOREGROUND_TIMEOUT": "5m"}, clear=False
+            ):
                 mod = importlib.reload(_tt_mod)
                 assert mod.FOREGROUND_MAX_TIMEOUT == 600
         finally:
@@ -100,7 +116,9 @@ class TestImportTimeEnvParsing:
 
     def test_invalid_disk_warning_threshold_falls_back_to_default(self):
         try:
-            with patch.dict("os.environ", {"TERMINAL_DISK_WARNING_GB": "huge"}, clear=False):
+            with patch.dict(
+                "os.environ", {"TERMINAL_DISK_WARNING_GB": "huge"}, clear=False
+            ):
                 mod = importlib.reload(_tt_mod)
                 assert mod.DISK_USAGE_WARNING_THRESHOLD_GB == 500.0
         finally:

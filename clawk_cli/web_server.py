@@ -18,10 +18,7 @@ Usage:
 
 """
 
-
-
 from contextlib import asynccontextmanager
-
 
 
 import asyncio
@@ -63,55 +60,34 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-
 import yaml
-
 
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 if str(PROJECT_ROOT) not in sys.path:
-
     sys.path.insert(0, str(PROJECT_ROOT))
-
 
 
 from clawk_cli import __version__, __release_date__
 
 from clawk_cli.config import (
-
     cfg_get,
-
     DEFAULT_CONFIG,
-
     OPTIONAL_ENV_VARS,
-
     get_config_path,
-
     get_env_path,
-
     get_clawk_home,
-
     load_config,
-
     load_env,
-
     save_config,
-
     save_env_value,
-
     remove_env_value,
-
     check_config_version,
-
     detect_install_method,
-
     format_docker_update_message,
-
     recommended_update_command_for_method,
-
     redact_key,
-
 )
 
 from gateway.status import get_running_pid, read_runtime_status
@@ -119,9 +95,7 @@ from gateway.status import get_running_pid, read_runtime_status
 from utils import env_var_enabled
 
 
-
 try:
-
     from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 
     from fastapi.middleware.cors import CORSMiddleware
@@ -133,7 +107,6 @@ try:
     from pydantic import BaseModel
 
 except ImportError:
-
     # First try lazy-installing the dashboard extras. Only the user actually
 
     # running `clawk dashboard` needs fastapi+uvicorn; lazy install keeps
@@ -141,12 +114,17 @@ except ImportError:
     # them out of every other install path. After install, re-import.
 
     try:
-
         from tools.lazy_deps import ensure as _lazy_ensure
 
         _lazy_ensure("tool.dashboard", prompt=False)
 
-        from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+        from fastapi import (
+            FastAPI,
+            HTTPException,
+            Request,
+            WebSocket,
+            WebSocketDisconnect,
+        )
 
         from fastapi.middleware.cors import CORSMiddleware
 
@@ -157,21 +135,19 @@ except ImportError:
         from pydantic import BaseModel
 
     except Exception:
-
         raise SystemExit(
-
             "Web UI requires fastapi and uvicorn.\n"
-
             f"Install with: {sys.executable} -m pip install 'fastapi' 'uvicorn[standard]'"
-
         )
 
 
-
-WEB_DIST = Path(os.environ["CLAWK_WEB_DIST"]) if "CLAWK_WEB_DIST" in os.environ else Path(__file__).parent / "web_dist"
+WEB_DIST = (
+    Path(os.environ["CLAWK_WEB_DIST"])
+    if "CLAWK_WEB_DIST" in os.environ
+    else Path(__file__).parent / "web_dist"
+)
 
 _log = logging.getLogger(__name__)
-
 
 
 # ---------------------------------------------------------------------------
@@ -197,9 +173,7 @@ _log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-
 @asynccontextmanager
-
 async def _lifespan(app: "FastAPI"):
 
     app.state.event_channels = {}  # dict[str, set]
@@ -209,11 +183,7 @@ async def _lifespan(app: "FastAPI"):
     yield
 
 
-
-
-
 def _get_event_state(app: "FastAPI"):
-
     """Return (event_channels, event_lock) from app.state.
 
 
@@ -231,11 +201,9 @@ def _get_event_state(app: "FastAPI"):
     """
 
     try:
-
         return app.state.event_channels, app.state.event_lock
 
     except AttributeError:
-
         app.state.event_channels = {}
 
         app.state.event_lock = asyncio.Lock()
@@ -243,11 +211,7 @@ def _get_event_state(app: "FastAPI"):
         return app.state.event_channels, app.state.event_lock
 
 
-
-
-
 app = FastAPI(title="Clawksis", version=__version__, lifespan=_lifespan)
-
 
 
 # ---------------------------------------------------------------------------
@@ -266,10 +230,11 @@ app = FastAPI(title="Clawksis", version=__version__, lifespan=_lifespan)
 
 # ---------------------------------------------------------------------------
 
-_SESSION_TOKEN = os.environ.get("CLAWK_DASHBOARD_SESSION_TOKEN") or secrets.token_urlsafe(32)
+_SESSION_TOKEN = os.environ.get(
+    "CLAWK_DASHBOARD_SESSION_TOKEN"
+) or secrets.token_urlsafe(32)
 
 _SESSION_HEADER_NAME = "X-Clawksis-Session-Token"
-
 
 
 # In-browser Chat tab (/chat, /api/pty, /api/ws, …).  Always enabled: the
@@ -287,7 +252,6 @@ _SESSION_HEADER_NAME = "X-Clawksis-Session-Token"
 _DASHBOARD_EMBEDDED_CHAT_ENABLED = True
 
 
-
 # Simple rate limiter for the reveal endpoint
 
 _reveal_timestamps: List[float] = []
@@ -297,7 +261,6 @@ _REVEAL_MAX_PER_WINDOW = 5
 _REVEAL_WINDOW_SECONDS = 30
 
 
-
 # CORS: restrict to localhost origins only.  The web UI is intended to run
 
 # locally; binding to 0.0.0.0 with allow_origins=["*"] would let any website
@@ -305,19 +268,12 @@ _REVEAL_WINDOW_SECONDS = 30
 # read/modify config and secrets.
 
 
-
 app.add_middleware(
-
     CORSMiddleware,
-
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-
     allow_methods=["*"],
-
     allow_headers=["*"],
-
 )
-
 
 
 # ---------------------------------------------------------------------------
@@ -347,17 +303,11 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 from clawk_cli.dashboard_auth.public_paths import (
-
     PUBLIC_API_PATHS as _PUBLIC_API_PATHS,
-
 )
 
 
-
-
-
 def _has_valid_session_token(request: Request) -> bool:
-
     """True if the request carries a valid dashboard session token.
 
 
@@ -375,16 +325,10 @@ def _has_valid_session_token(request: Request) -> bool:
     session_header = request.headers.get(_SESSION_HEADER_NAME, "")
 
     if session_header and hmac.compare_digest(
-
         session_header.encode(),
-
         _SESSION_TOKEN.encode(),
-
     ):
-
         return True
-
-
 
     auth = request.headers.get("authorization", "")
 
@@ -393,19 +337,11 @@ def _has_valid_session_token(request: Request) -> bool:
     return hmac.compare_digest(auth.encode(), expected.encode())
 
 
-
-
-
 def _require_token(request: Request) -> None:
-
     """Validate the ephemeral session token.  Raises 401 on mismatch."""
 
     if not _has_valid_session_token(request):
-
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-
-
 
 
 # Accepted Host header values for loopback binds. DNS rebinding attacks
@@ -421,17 +357,13 @@ def _require_token(request: Request) -> None:
 # request whose Host isn't one we bound for. See GHSA-ppp5-vxwm-4cf7.
 
 _LOOPBACK_HOST_VALUES: frozenset = frozenset({
-
-    "localhost", "127.0.0.1", "::1",
-
+    "localhost",
+    "127.0.0.1",
+    "::1",
 })
 
 
-
-
-
 def should_require_auth(host: str, allow_public: bool) -> bool:
-
     """Return True iff the dashboard OAuth auth gate must be active.
 
 
@@ -459,11 +391,7 @@ def should_require_auth(host: str, allow_public: bool) -> bool:
     return (host not in _LOOPBACK_HOST_VALUES) and (not allow_public)
 
 
-
-
-
 def _is_accepted_host(host_header: str, bound_host: str) -> bool:
-
     """True if the Host header targets the interface we bound to.
 
 
@@ -481,7 +409,6 @@ def _is_accepted_host(host_header: str, bound_host: str) -> bool:
     """
 
     if not host_header:
-
         return False
 
     # Strip port suffix. IPv6 addresses use bracket notation:
@@ -499,26 +426,20 @@ def _is_accepted_host(host_header: str, bound_host: str) -> bool:
     h = host_header.strip()
 
     if h.startswith("["):
-
         # IPv6 bracketed — port (if any) follows "]:"
 
         close = h.find("]")
 
         if close != -1:
-
             host_only = h[1:close]  # strip brackets
 
         else:
-
             host_only = h.strip("[]")
 
     else:
-
         host_only = h.rsplit(":", 1)[0] if ":" in h else h
 
     host_only = host_only.lower()
-
-
 
     # 0.0.0.0 bind means operator explicitly opted into all-interfaces
 
@@ -527,33 +448,22 @@ def _is_accepted_host(host_header: str, bound_host: str) -> bool:
     # defence can protect that mode; rely on operator network controls.
 
     if bound_host in {"0.0.0.0", "::"}:
-
         return True
-
-
 
     # Loopback bind: accept the loopback names
 
     bound_lc = bound_host.lower()
 
     if bound_lc in _LOOPBACK_HOST_VALUES:
-
         return host_only in _LOOPBACK_HOST_VALUES
-
-
 
     # Explicit non-loopback bind: require exact host match
 
     return host_only == bound_lc
 
 
-
-
-
 @app.middleware("http")
-
 async def host_header_middleware(request: Request, call_next):
-
     """Reject requests whose Host header doesn't match the bound interface.
 
 
@@ -581,33 +491,20 @@ async def host_header_middleware(request: Request, call_next):
     bound_host = getattr(app.state, "bound_host", None)
 
     if bound_host:
-
         host_header = request.headers.get("host", "")
 
         if not _is_accepted_host(host_header, bound_host):
-
             return JSONResponse(
-
                 status_code=400,
-
                 content={
-
                     "detail": (
-
                         "Invalid Host header. Dashboard requests must use "
-
                         "the hostname the server was bound to."
-
                     ),
-
                 },
-
             )
 
     return await call_next(request)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -625,11 +522,7 @@ async def host_header_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.middleware("http")
-
 async def _dashboard_auth_gate(request: Request, call_next):
 
     from clawk_cli.dashboard_auth.middleware import gated_auth_middleware
@@ -637,13 +530,8 @@ async def _dashboard_auth_gate(request: Request, call_next):
     return await gated_auth_middleware(request, call_next)
 
 
-
-
-
 @app.middleware("http")
-
 async def auth_middleware(request: Request, call_next):
-
     """Require the session token on all /api/ routes except the public list."""
 
     # When the OAuth gate is active, cookie-based auth (gated_auth_middleware
@@ -653,27 +541,18 @@ async def auth_middleware(request: Request, call_next):
     # and is skipped here so the gate's session attachment isn't overridden.
 
     if getattr(request.app.state, "auth_required", False):
-
         return await call_next(request)
 
     path = request.url.path
 
     if path.startswith("/api/") and path not in _PUBLIC_API_PATHS:
-
         if not _has_valid_session_token(request):
-
             return JSONResponse(
-
                 status_code=401,
-
                 content={"detail": "Unauthorized"},
-
             )
 
     return await call_next(request)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -683,367 +562,228 @@ async def auth_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 
-
 # Manual overrides for fields that need select options or custom types
 
 _SCHEMA_OVERRIDES: Dict[str, Dict[str, Any]] = {
-
     "model": {
-
         "type": "string",
-
         "description": "Default model (e.g. anthropic/claude-sonnet-4.6)",
-
         "category": "general",
-
     },
-
     "model_context_length": {
-
         "type": "number",
-
         "description": "Context window override (0 = auto-detect from model metadata)",
-
         "category": "general",
-
     },
-
     "terminal.backend": {
-
         "type": "select",
-
         "description": "Terminal execution backend",
-
         "options": ["local", "docker", "ssh", "modal", "daytona", "singularity"],
-
     },
-
     "terminal.modal_mode": {
-
         "type": "select",
-
         "description": "Modal sandbox mode",
-
         "options": ["sandbox", "function"],
-
     },
-
     "tts.provider": {
-
         "type": "select",
-
         "description": "Text-to-speech provider",
-
         "options": ["edge", "elevenlabs", "openai", "neutts"],
-
     },
-
     "stt.provider": {
-
         "type": "select",
-
         "description": "Speech-to-text provider",
-
         # "mistral" temporarily removed — mistralai PyPI package quarantined
-
         # (malicious 2.4.6 release on 2026-05-12). Restore once available.
-
         "options": ["local", "groq", "openai", "xai", "elevenlabs"],
-
     },
-
     "stt.elevenlabs.model_id": {
-
         "type": "select",
-
         "description": "ElevenLabs Scribe model",
-
         "options": ["scribe_v2", "scribe_v1"],
-
     },
-
     "display.skin": {
-
         "type": "select",
-
         "description": "CLI visual theme",
-
         "options": ["default", "ares", "mono", "slate"],
-
     },
-
     "dashboard.theme": {
-
         "type": "select",
-
         "description": "Web dashboard visual theme",
-
         "options": ["default", "midnight", "ember", "mono", "cyberpunk", "rose"],
-
     },
-
     "display.resume_display": {
-
         "type": "select",
-
         "description": "How resumed sessions display history",
-
         "options": ["minimal", "full", "off"],
-
     },
-
     "display.busy_input_mode": {
-
         "type": "select",
-
         "description": "Input behavior while agent is running",
-
         "options": ["interrupt", "queue", "steer"],
-
     },
-
     "memory.provider": {
-
         "type": "select",
-
         "description": "Memory provider plugin",
-
         "options": ["builtin", "honcho"],
-
     },
-
     "approvals.mode": {
-
         "type": "select",
-
         "description": "Dangerous command approval mode",
-
         "options": ["ask", "yolo", "deny"],
-
     },
-
     "context.engine": {
-
         "type": "select",
-
         "description": "Context management engine",
-
         "options": ["default", "custom"],
-
     },
-
     "human_delay.mode": {
-
         "type": "select",
-
         "description": "Simulated typing delay mode",
-
         "options": ["off", "typing", "fixed"],
-
     },
-
     "logging.level": {
-
         "type": "select",
-
         "description": "Log level for agent.log",
-
         "options": ["DEBUG", "INFO", "WARNING", "ERROR"],
-
     },
-
     "agent.service_tier": {
-
         "type": "select",
-
         "description": "API service tier (OpenAI/Anthropic)",
-
         "options": ["", "auto", "default", "flex"],
-
     },
-
     "delegation.reasoning_effort": {
-
         "type": "select",
-
         "description": "Reasoning effort for delegated subagents",
-
         "options": ["", "low", "medium", "high"],
-
     },
-
 }
-
 
 
 # Categories with fewer fields get merged into "general" to avoid tab sprawl.
 
 _CATEGORY_MERGE: Dict[str, str] = {
-
     "privacy": "security",
-
     "context": "agent",
-
     "skills": "agent",
-
     "cron": "agent",
-
     "network": "agent",
-
     "checkpoints": "agent",
-
     "approvals": "security",
-
     "human_delay": "display",
-
     "dashboard": "display",
-
     "code_execution": "agent",
-
     "prompt_caching": "agent",
-
     "goals": "agent",
-
     # Only `telegram.reactions` currently lives under telegram — fold it in
-
     # with the other messaging-platform config (discord) so it isn't an
-
     # orphan tab of one field.
-
     "telegram": "discord",
-
 }
-
 
 
 # Display order for tabs — unlisted categories sort alphabetically after these.
 
 _CATEGORY_ORDER = [
-
-    "general", "agent", "terminal", "display", "delegation",
-
-    "memory", "compression", "security", "browser", "voice",
-
-    "tts", "stt", "logging", "discord", "auxiliary",
-
+    "general",
+    "agent",
+    "terminal",
+    "display",
+    "delegation",
+    "memory",
+    "compression",
+    "security",
+    "browser",
+    "voice",
+    "tts",
+    "stt",
+    "logging",
+    "discord",
+    "auxiliary",
 ]
 
 
-
-
-
 def _infer_type(value: Any) -> str:
-
     """Infer a UI field type from a Python value."""
 
     if isinstance(value, bool):
-
         return "boolean"
 
     if isinstance(value, int):
-
         return "number"
 
     if isinstance(value, float):
-
         return "number"
 
     if isinstance(value, list):
-
         return "list"
 
     if isinstance(value, dict):
-
         return "object"
 
     return "string"
 
 
-
-
-
 def _build_schema_from_config(
-
     config: Dict[str, Any],
-
     prefix: str = "",
-
 ) -> Dict[str, Dict[str, Any]]:
-
     """Walk DEFAULT_CONFIG and produce a flat dot-path → field schema dict."""
 
     schema: Dict[str, Dict[str, Any]] = {}
 
     for key, value in config.items():
-
         full_key = f"{prefix}.{key}" if prefix else key
-
-
 
         # Skip internal / version keys
 
-        if full_key in {"_config_version",}:
-
+        if full_key in {
+            "_config_version",
+        }:
             continue
-
-
 
         # Category is the first path component for nested keys, or "general"
 
         # for top-level scalar fields (model, toolsets, timezone, etc.).
 
         if prefix:
-
             category = prefix.split(".")[0]
 
         elif isinstance(value, dict):
-
             category = key
 
         else:
-
             category = "general"
 
-
-
         if isinstance(value, dict):
-
             # Recurse into nested dicts
 
             schema.update(_build_schema_from_config(value, full_key))
 
         else:
-
             entry: Dict[str, Any] = {
-
                 "type": _infer_type(value),
-
                 "description": full_key.replace(".", " → ").replace("_", " ").title(),
-
                 "category": category,
-
             }
 
             # Apply manual overrides
 
             if full_key in _SCHEMA_OVERRIDES:
-
                 entry.update(_SCHEMA_OVERRIDES[full_key])
 
             # Merge small categories
 
-            entry["category"] = _CATEGORY_MERGE.get(entry["category"], entry["category"])
+            entry["category"] = _CATEGORY_MERGE.get(
+                entry["category"], entry["category"]
+            )
 
             schema[full_key] = entry
 
     return schema
 
 
-
-
-
 CONFIG_SCHEMA = _build_schema_from_config(DEFAULT_CONFIG)
-
 
 
 # Inject virtual fields that don't live in DEFAULT_CONFIG but are surfaced
@@ -1057,55 +797,33 @@ _mcl_entry = _SCHEMA_OVERRIDES["model_context_length"]
 _ordered_schema: Dict[str, Dict[str, Any]] = {}
 
 for _k, _v in CONFIG_SCHEMA.items():
-
     _ordered_schema[_k] = _v
 
     if _k == "model":
-
         _ordered_schema["model_context_length"] = _mcl_entry
 
 CONFIG_SCHEMA = _ordered_schema
 
 
-
-
-
 class ConfigUpdate(BaseModel):
-
     config: dict
 
 
-
-
-
 class EnvVarUpdate(BaseModel):
-
     key: str
 
     value: str
 
 
-
-
-
 class EnvVarDelete(BaseModel):
-
     key: str
-
-
-
 
 
 class EnvVarReveal(BaseModel):
-
     key: str
 
 
-
-
-
 class MessagingPlatformUpdate(BaseModel):
-
     enabled: Optional[bool] = None
 
     env: Dict[str, str] = {}
@@ -1113,21 +831,13 @@ class MessagingPlatformUpdate(BaseModel):
     clear_env: List[str] = []
 
 
-
-
-
 class AudioTranscriptionRequest(BaseModel):
-
     data_url: str
 
     mime_type: Optional[str] = None
 
 
-
-
-
 class ModelAssignment(BaseModel):
-
     """Payload for POST /api/model/set — assign a provider/model to a slot.
 
 
@@ -1142,8 +852,6 @@ class ModelAssignment(BaseModel):
 
     """
 
-
-
     scope: str
 
     provider: str
@@ -1153,43 +861,23 @@ class ModelAssignment(BaseModel):
     task: str = ""
 
 
-
-
-
 _AUDIO_MIME_EXTENSIONS: Dict[str, str] = {
-
     "audio/aac": ".aac",
-
     "audio/flac": ".flac",
-
     "audio/m4a": ".m4a",
-
     "audio/mp3": ".mp3",
-
     "audio/mp4": ".mp4",
-
     "audio/mpeg": ".mp3",
-
     "audio/ogg": ".ogg",
-
     "audio/wav": ".wav",
-
     "audio/wave": ".wav",
-
     "audio/webm": ".webm",
-
     "audio/x-m4a": ".m4a",
-
     "audio/x-wav": ".wav",
-
     "video/webm": ".webm",
-
 }
 
 _MAX_TRANSCRIPTION_UPLOAD_BYTES = 25 * 1024 * 1024
-
-
-
 
 
 def _audio_extension_for_mime(mime_type: str) -> str:
@@ -1199,11 +887,7 @@ def _audio_extension_for_mime(mime_type: str) -> str:
     return _AUDIO_MIME_EXTENSIONS.get(normalized, ".webm")
 
 
-
-
-
 class ModelAssignment(BaseModel):
-
     """Payload for POST /api/model/set — assign a provider/model to a slot.
 
 
@@ -1239,15 +923,9 @@ class ModelAssignment(BaseModel):
     base_url: str = ""
 
 
-
-
-
 def _apply_main_model_assignment(
-
     model_cfg: "Any", provider: str, model: str, base_url: str = ""
-
 ) -> dict:
-
     """Apply a main-slot model assignment to a ``model`` config dict in place.
 
 
@@ -1273,7 +951,6 @@ def _apply_main_model_assignment(
     """
 
     if not isinstance(model_cfg, dict):
-
         model_cfg = {}
 
     model_cfg["provider"] = provider
@@ -1281,11 +958,9 @@ def _apply_main_model_assignment(
     model_cfg["default"] = model
 
     if provider.strip().lower() == "custom" and base_url.strip():
-
         model_cfg["base_url"] = base_url.strip()
 
     elif model_cfg.get("base_url"):
-
         model_cfg["base_url"] = ""
 
     model_cfg.pop("context_length", None)
@@ -1293,27 +968,18 @@ def _apply_main_model_assignment(
     return model_cfg
 
 
-
-
-
 _GATEWAY_HEALTH_URL = os.getenv("GATEWAY_HEALTH_URL")
 
 try:
-
     _GATEWAY_HEALTH_TIMEOUT = float(os.getenv("GATEWAY_HEALTH_TIMEOUT", "3"))
 
 except (ValueError, TypeError):
-
     _log.warning(
-
         "Invalid GATEWAY_HEALTH_TIMEOUT value %r — using default 3.0s",
-
         os.getenv("GATEWAY_HEALTH_TIMEOUT"),
-
     )
 
     _GATEWAY_HEALTH_TIMEOUT = 3.0
-
 
 
 # DEPRECATED (scheduled for removal): GATEWAY_HEALTH_URL / GATEWAY_HEALTH_TIMEOUT.
@@ -1329,11 +995,7 @@ except (ValueError, TypeError):
 # config surface.
 
 
-
-
-
 def _probe_gateway_health() -> tuple[bool, dict | None]:
-
     """Probe the gateway via its HTTP health endpoint (cross-container).
 
 
@@ -1371,10 +1033,7 @@ def _probe_gateway_health() -> tuple[bool, dict | None]:
     """
 
     if not _GATEWAY_HEALTH_URL:
-
         return False, None
-
-
 
     # Normalise to base URL so we always probe the right paths regardless of
 
@@ -1383,46 +1042,31 @@ def _probe_gateway_health() -> tuple[bool, dict | None]:
     base = _GATEWAY_HEALTH_URL.rstrip("/")
 
     if base.endswith("/health/detailed"):
-
         base = base[: -len("/health/detailed")]
 
     elif base.endswith("/health"):
-
         base = base[: -len("/health")]
 
-
-
     for path in (f"{base}/health/detailed", f"{base}/health"):
-
         try:
-
             req = urllib.request.Request(path, method="GET")
 
             with urllib.request.urlopen(req, timeout=_GATEWAY_HEALTH_TIMEOUT) as resp:
-
                 if resp.status == 200:
-
                     body = json.loads(resp.read())
 
                     return True, body
 
         except Exception:
-
             continue
 
     return False, None
 
 
-
-
-
 @app.get("/api/status")
-
 async def get_status():
 
     current_ver, latest_ver = check_config_version()
-
-
 
     # --- Gateway liveness detection ---
 
@@ -1438,29 +1082,20 @@ async def get_status():
 
     remote_health_body: dict | None = None
 
-
-
     if not gateway_running and _GATEWAY_HEALTH_URL:
-
         loop = asyncio.get_running_loop()
 
         alive, remote_health_body = await loop.run_in_executor(
-
             None, _probe_gateway_health
-
         )
 
         if alive:
-
             gateway_running = True
 
             # PID from the remote container (display only — not locally valid)
 
             if remote_health_body:
-
                 gateway_pid = remote_health_body.get("pid")
-
-
 
     gateway_state = None
 
@@ -1473,24 +1108,16 @@ async def get_status():
     configured_gateway_platforms: set[str] | None = None
 
     try:
-
         from gateway.config import load_gateway_config
-
-
 
         gateway_config = load_gateway_config()
 
         configured_gateway_platforms = {
-
             platform.value for platform in gateway_config.get_connected_platforms()
-
         }
 
     except Exception:
-
         configured_gateway_platforms = None
-
-
 
     # Prefer the detailed health endpoint response (has full state) when the
 
@@ -1498,28 +1125,23 @@ async def get_status():
 
     runtime = read_runtime_status()
 
-    if runtime is None and remote_health_body and remote_health_body.get("gateway_state"):
-
+    if (
+        runtime is None
+        and remote_health_body
+        and remote_health_body.get("gateway_state")
+    ):
         runtime = remote_health_body
 
-
-
     if runtime:
-
         gateway_state = runtime.get("gateway_state")
 
         gateway_platforms = runtime.get("platforms") or {}
 
         if configured_gateway_platforms is not None:
-
             gateway_platforms = {
-
                 key: value
-
                 for key, value in gateway_platforms.items()
-
                 if key in configured_gateway_platforms
-
             }
 
         gateway_exit_reason = runtime.get("exit_reason")
@@ -1527,13 +1149,15 @@ async def get_status():
         gateway_updated_at = runtime.get("updated_at")
 
         if not gateway_running:
-
-            gateway_state = gateway_state if gateway_state in {"stopped", "startup_failed"} else "stopped"
+            gateway_state = (
+                gateway_state
+                if gateway_state in {"stopped", "startup_failed"}
+                else "stopped"
+            )
 
             gateway_platforms = {}
 
         elif gateway_running and remote_health_body is not None:
-
             # The health probe confirmed the gateway is alive, but the local
 
             # runtime status file may be stale (cross-container).  Override
@@ -1541,54 +1165,39 @@ async def get_status():
             # stopped/None state so the dashboard shows the correct badge.
 
             if gateway_state in {None, "stopped"}:
-
                 gateway_state = "running"
-
-
 
     # If there was no runtime info at all but the health probe confirmed alive,
 
     # ensure we still report the gateway as running (no shared volume scenario).
 
     if gateway_running and gateway_state is None and remote_health_body is not None:
-
         gateway_state = "running"
-
-
 
     active_sessions = 0
 
     try:
-
         from clawk_state import SessionDB
 
         db = SessionDB()
 
         try:
-
             sessions = db.list_sessions_rich(limit=50)
 
             now = time.time()
 
             active_sessions = sum(
-
-                1 for s in sessions
-
+                1
+                for s in sessions
                 if s.get("ended_at") is None
-
                 and (now - s.get("last_active", s.get("started_at", 0))) < 300
-
             )
 
         finally:
-
             db.close()
 
     except Exception:
-
         pass
-
-
 
     # Dashboard auth gate (Phase 7): surface whether the gate is engaged
 
@@ -1603,65 +1212,38 @@ async def get_status():
     auth_providers: list[str] = []
 
     try:
-
         from clawk_cli.dashboard_auth import list_providers as _list_providers
 
         auth_providers = [p.name for p in _list_providers()]
 
     except Exception:
-
         # Module not importable yet (early startup) — leave as [].
 
         pass
 
-
-
     return {
-
         "version": __version__,
-
         "release_date": __release_date__,
-
         "clawk_home": str(get_clawk_home()),
-
         "config_path": str(get_config_path()),
-
         "env_path": str(get_env_path()),
-
         "config_version": current_ver,
-
         "latest_config_version": latest_ver,
-
         "gateway_running": gateway_running,
-
         "gateway_pid": gateway_pid,
-
         "gateway_health_url": _GATEWAY_HEALTH_URL,
-
         "gateway_state": gateway_state,
-
         "gateway_platforms": gateway_platforms,
-
         "gateway_exit_reason": gateway_exit_reason,
-
         "gateway_updated_at": gateway_updated_at,
-
         "active_sessions": active_sessions,
-
         "auth_required": auth_required,
-
         "auth_providers": auth_providers,
-
     }
 
 
-
-
-
 @app.get("/api/system/stats")
-
 async def get_system_stats():
-
     """Host + process system stats for the System page.
 
 
@@ -1676,124 +1258,81 @@ async def get_system_stats():
 
     import platform as _platform
 
-
-
     info: Dict[str, Any] = {
-
         "os": _platform.system(),
-
         "os_release": _platform.release(),
-
         "os_version": _platform.version(),
-
         "platform": _platform.platform(),
-
         "arch": _platform.machine(),
-
         "hostname": _platform.node(),
-
         "python_version": _platform.python_version(),
-
         "python_impl": _platform.python_implementation(),
-
         "clawk_version": __version__,
-
         "cpu_count": os.cpu_count(),
-
     }
-
-
 
     # psutil enriches the picture when present; everything below is optional.
 
     try:
-
         import psutil  # type: ignore
-
-
 
         vm = psutil.virtual_memory()
 
         info["memory"] = {
-
             "total": vm.total,
-
             "available": vm.available,
-
             "used": vm.used,
-
             "percent": vm.percent,
-
         }
 
         try:
-
             du = psutil.disk_usage(str(get_clawk_home()))
 
             info["disk"] = {
-
                 "total": du.total,
-
                 "used": du.used,
-
                 "free": du.free,
-
                 "percent": du.percent,
-
             }
 
         except Exception:
-
             pass
 
         try:
-
             info["cpu_percent"] = psutil.cpu_percent(interval=0.1)
 
             la = getattr(psutil, "getloadavg", None)
 
             if la:
-
                 info["load_avg"] = list(la())
 
         except Exception:
-
             pass
 
         try:
-
             boot = psutil.boot_time()
 
             info["uptime_seconds"] = int(time.time() - boot)
 
         except Exception:
-
             pass
 
         try:
-
             proc = psutil.Process()
 
             info["process"] = {
-
                 "pid": proc.pid,
-
                 "rss": proc.memory_info().rss,
-
                 "create_time": int(proc.create_time()),
-
                 "num_threads": proc.num_threads(),
-
             }
 
         except Exception:
-
             pass
 
         info["psutil"] = True
 
     except Exception:
-
         info["psutil"] = False
 
         # stdlib-only fallbacks for load average + uptime where the kernel
@@ -1801,19 +1340,12 @@ async def get_system_stats():
         # exposes them.
 
         try:
-
             info["load_avg"] = list(os.getloadavg())
 
         except (OSError, AttributeError):
-
             pass
 
-
-
     return info
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1831,109 +1363,68 @@ async def get_system_stats():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.get("/api/curator")
-
 async def get_curator_status():
 
     try:
-
         from agent import curator
 
     except Exception as exc:
-
         raise HTTPException(status_code=500, detail=f"Curator unavailable: {exc}")
 
     try:
-
         state = curator.load_state()
 
     except Exception:
-
         state = {}
 
     return {
-
         "enabled": _safe_call(curator, "is_enabled", True),
-
         "paused": _safe_call(curator, "is_paused", False),
-
         "interval_hours": _safe_call(curator, "get_interval_hours", None),
-
         "last_run_at": state.get("last_run_at"),
-
         "min_idle_hours": _safe_call(curator, "get_min_idle_hours", None),
-
         "stale_after_days": _safe_call(curator, "get_stale_after_days", None),
-
         "archive_after_days": _safe_call(curator, "get_archive_after_days", None),
-
     }
 
 
-
-
-
 class CuratorPause(BaseModel):
-
     paused: bool
 
 
-
-
-
 @app.put("/api/curator/paused")
-
 async def set_curator_paused(body: CuratorPause):
 
     from agent import curator
-
-
 
     curator.set_paused(bool(body.paused))
 
     return {"ok": True, "paused": bool(body.paused)}
 
 
-
-
-
 @app.post("/api/curator/run")
-
 async def run_curator():
-
     """Trigger a curator review now (backgrounded; tail via action status)."""
 
     try:
-
         proc = _spawn_clawk_action(["curator", "run"], "curator-run")
 
     except Exception as exc:
-
         raise HTTPException(status_code=500, detail=f"Failed to run curator: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "curator-run"}
 
 
-
-
-
 def _safe_call(mod, fn_name: str, default):
 
     try:
-
         fn = getattr(mod, fn_name, None)
 
         return fn() if callable(fn) else default
 
     except Exception:
-
         return default
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1943,11 +1434,7 @@ def _safe_call(mod, fn_name: str, default):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.get("/api/portal")
-
 async def get_portal_status():
 
     cfg = load_config() or {}
@@ -1955,77 +1442,51 @@ async def get_portal_status():
     auth: Dict[str, Any] = {}
 
     try:
-
         from clawk_cli.auth import get_nous_auth_status
-
-
 
         auth = get_nous_auth_status() or {}
 
     except Exception:
-
         auth = {}
-
-
 
     features = []
 
     try:
-
         from clawk_cli.nous_subscription import get_nous_subscription_features
-
-
 
         feats = get_nous_subscription_features(cfg)
 
         if feats is not None:
-
             for feat in feats.items():
-
                 if getattr(feat, "managed_by_nous", False):
-
                     state = "via Nous Portal"
 
-                elif getattr(feat, "active", False) and getattr(feat, "current_provider", None):
-
+                elif getattr(feat, "active", False) and getattr(
+                    feat, "current_provider", None
+                ):
                     state = feat.current_provider
 
                 elif getattr(feat, "active", False):
-
                     state = "active"
 
                 else:
-
                     state = "not configured"
 
                 features.append({"label": getattr(feat, "label", ""), "state": state})
 
     except Exception:
-
         _log.exception("portal features failed")
-
-
 
     model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
 
     return {
-
         "logged_in": bool(auth.get("logged_in")),
-
         "portal_url": auth.get("portal_base_url"),
-
         "inference_url": auth.get("inference_base_url"),
-
         "provider": str((model_cfg or {}).get("provider") or ""),
-
         "subscription_url": "https://portal.nousresearch.com/manage-subscription",
-
         "features": features,
-
     }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2039,65 +1500,43 @@ async def get_portal_status():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.post("/api/ops/prompt-size")
-
 async def run_prompt_size():
 
     try:
-
         proc = _spawn_clawk_action(["prompt-size"], "prompt-size")
 
     except Exception as exc:
-
         raise HTTPException(status_code=500, detail=f"Failed: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "prompt-size"}
 
 
-
-
-
 @app.post("/api/ops/dump")
-
 async def run_dump():
 
     try:
-
         proc = _spawn_clawk_action(["dump"], "dump")
 
     except Exception as exc:
-
         raise HTTPException(status_code=500, detail=f"Failed: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "dump"}
 
 
-
-
-
 @app.post("/api/ops/config-migrate")
-
 async def run_config_migrate():
 
     try:
-
         proc = _spawn_clawk_action(["config", "migrate"], "config-migrate")
 
     except Exception as exc:
-
         raise HTTPException(status_code=500, detail=f"Failed: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "config-migrate"}
 
 
-
-
-
 class DebugShareRequest(BaseModel):
-
     # Redaction is ON by default — force-mode scrubs credential-shaped tokens
 
     # out of log content before it leaves the machine. The toggle exists so an
@@ -2111,13 +1550,8 @@ class DebugShareRequest(BaseModel):
     lines: int = 200
 
 
-
-
-
 @app.post("/api/ops/debug-share")
-
 async def run_debug_share_endpoint(body: DebugShareRequest | None = None):
-
     """Upload a redacted debug report + full logs and return the paste URLs.
 
 
@@ -2138,52 +1572,32 @@ async def run_debug_share_endpoint(body: DebugShareRequest | None = None):
 
     from clawk_cli.debug import build_debug_share
 
-
-
     req = body or DebugShareRequest()
 
     try:
-
         result = await asyncio.to_thread(
-
             build_debug_share,
-
             log_lines=max(1, min(int(req.lines), 5000)),
-
             redact=bool(req.redact),
-
         )
 
     except RuntimeError as exc:
-
         # Required summary-report upload failed (offline / paste service down).
 
         raise HTTPException(status_code=502, detail=f"Upload failed: {exc}")
 
     except Exception as exc:
-
         _log.exception("debug share failed")
 
         raise HTTPException(status_code=500, detail=f"Failed: {exc}")
 
-
-
     return {
-
         "ok": True,
-
         "urls": result.urls,
-
         "failures": result.failures,
-
         "redacted": result.redacted,
-
         "auto_delete_seconds": result.auto_delete_seconds,
-
     }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2205,49 +1619,29 @@ async def run_debug_share_endpoint(body: DebugShareRequest | None = None):
 # ---------------------------------------------------------------------------
 
 
-
 _ACTION_LOG_DIR: Path = get_clawk_home() / "logs"
-
 
 
 # Short ``name`` (from the URL) → absolute log file path.
 
 _ACTION_LOG_FILES: Dict[str, str] = {
-
     "gateway-restart": "gateway-restart.log",
-
     "gateway-start": "gateway-start.log",
-
     "gateway-stop": "gateway-stop.log",
-
     "clawk-update": "clawk-update.log",
-
     "doctor": "action-doctor.log",
-
     "security-audit": "action-security-audit.log",
-
     "backup": "action-backup.log",
-
     "import": "action-import.log",
-
     "checkpoints-prune": "action-checkpoints-prune.log",
-
     "skills-install": "action-skills-install.log",
-
     "skills-uninstall": "action-skills-uninstall.log",
-
     "skills-update": "action-skills-update.log",
-
     "curator-run": "action-curator-run.log",
-
     "prompt-size": "action-prompt-size.log",
-
     "dump": "action-dump.log",
-
     "config-migrate": "action-config-migrate.log",
-
 }
-
 
 
 # ``name`` → most recently spawned Popen handle.  Used so ``status`` can
@@ -2257,7 +1651,6 @@ _ACTION_LOG_FILES: Dict[str, str] = {
 _ACTION_PROCS: Dict[str, subprocess.Popen] = {}
 
 
-
 # ``name`` → completed synthetic action result for actions the server handled
 
 # without spawning a subprocess (for example, unsupported Docker updates).
@@ -2265,11 +1658,7 @@ _ACTION_PROCS: Dict[str, subprocess.Popen] = {}
 _ACTION_RESULTS: Dict[str, Dict[str, Any]] = {}
 
 
-
-
-
 def _record_completed_action(name: str, message: str, exit_code: int = 1) -> None:
-
     """Record a non-spawned action result and write it to the action log."""
 
     log_file_name = _ACTION_LOG_FILES[name]
@@ -2279,17 +1668,13 @@ def _record_completed_action(name: str, message: str, exit_code: int = 1) -> Non
     log_path = _ACTION_LOG_DIR / log_file_name
 
     with open(log_path, "ab", buffering=0) as log_file:
-
         log_file.write(
-
             f"\n=== {name} completed {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode()
-
         )
 
         log_file.write(message.encode("utf-8", errors="replace"))
 
         if not message.endswith("\n"):
-
             log_file.write(b"\n")
 
     _ACTION_PROCS.pop(name, None)
@@ -2297,11 +1682,7 @@ def _record_completed_action(name: str, message: str, exit_code: int = 1) -> Non
     _ACTION_RESULTS[name] = {"exit_code": exit_code, "pid": None}
 
 
-
-
-
 def _spawn_clawk_action(subcommand: List[str], name: str) -> subprocess.Popen:
-
     """Spawn ``clawk <subcommand>`` detached and record the Popen handle.
 
 
@@ -2321,46 +1702,27 @@ def _spawn_clawk_action(subcommand: List[str], name: str) -> subprocess.Popen:
     log_file = open(log_path, "ab", buffering=0)
 
     log_file.write(
-
         f"\n=== {name} started {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode()
-
     )
-
-
 
     cmd = [sys.executable, "-m", "clawk_cli.main", *subcommand]
 
-
-
     popen_kwargs: Dict[str, Any] = {
-
         "cwd": str(PROJECT_ROOT),
-
         "stdin": subprocess.DEVNULL,
-
         "stdout": log_file,
-
         "stderr": subprocess.STDOUT,
-
         "env": {**os.environ, "CLAWK_NONINTERACTIVE": "1"},
-
     }
 
     if sys.platform == "win32":
-
         popen_kwargs["creationflags"] = (
-
             subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-
             | getattr(subprocess, "DETACHED_PROCESS", 0)
-
         )
 
     else:
-
         popen_kwargs["start_new_session"] = True
-
-
 
     proc = subprocess.Popen(cmd, **popen_kwargs)
 
@@ -2379,11 +1741,7 @@ def _spawn_clawk_action(subcommand: List[str], name: str) -> subprocess.Popen:
     return proc
 
 
-
-
-
 def _tail_lines(path: Path, n: int) -> List[str]:
-
     """Return the last ``n`` lines of ``path``.  Reads the whole file — fine
 
     for our small per-action logs.  Binary-decoded with ``errors='replace'``
@@ -2391,15 +1749,12 @@ def _tail_lines(path: Path, n: int) -> List[str]:
     so log corruption doesn't 500 the endpoint."""
 
     if not path.exists():
-
         return []
 
     try:
-
         text = path.read_text(encoding="utf-8", errors="replace")
 
     except OSError:
-
         return []
 
     lines = text.splitlines()
@@ -2407,99 +1762,62 @@ def _tail_lines(path: Path, n: int) -> List[str]:
     return lines[-n:] if n > 0 else lines
 
 
-
-
-
 @app.post("/api/gateway/restart")
-
 async def restart_gateway():
-
     """Kick off a ``clawk gateway restart`` in the background."""
 
     try:
-
         proc = _spawn_clawk_action(["gateway", "restart"], "gateway-restart")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn gateway restart")
 
         raise HTTPException(status_code=500, detail=f"Failed to restart gateway: {exc}")
 
     return {
-
         "ok": True,
-
         "pid": proc.pid,
-
         "name": "gateway-restart",
-
     }
 
 
-
-
-
 @app.post("/api/clawksis/update")
-
 async def update_clawk():
-
     """Kick off ``clawk update`` in the background."""
 
     install_method = detect_install_method(PROJECT_ROOT)
 
     if install_method == "docker":
-
         message = format_docker_update_message()
 
         _record_completed_action("clawk-update", message, exit_code=1)
 
         return {
-
             "ok": False,
-
             "pid": None,
-
             "name": "clawk-update",
-
             "error": "docker_update_unsupported",
-
             "message": message,
-
             "update_command": recommended_update_command_for_method(install_method),
-
         }
 
-
-
     try:
-
         proc = _spawn_clawk_action(["update"], "clawk-update")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn clawk update")
 
         raise HTTPException(status_code=500, detail=f"Failed to start update: {exc}")
 
     return {
-
         "ok": True,
-
         "pid": proc.pid,
-
         "name": "clawk-update",
-
     }
 
 
-
-
-
 @app.get("/api/clawksis/update/check")
-
 async def check_clawk_update(force: bool = False):
-
     """Report whether a Clawksis update is available, without applying it.
 
 
@@ -2542,35 +1860,20 @@ async def check_clawk_update(force: bool = False):
 
     update_command = recommended_update_command_for_method(install_method)
 
-
-
     payload: Dict[str, Any] = {
-
         "install_method": install_method,
-
         "current_version": __version__,
-
         "behind": None,
-
         "update_available": False,
-
         "can_apply": install_method in ("git", "pip"),
-
         "update_command": update_command,
-
         "message": None,
-
     }
 
-
-
     if install_method == "docker":
-
         payload["message"] = format_docker_update_message()
 
         return payload
-
-
 
     # banner.check_for_updates() handles git / pypi / nix-revision paths and
 
@@ -2579,209 +1882,128 @@ async def check_clawk_update(force: bool = False):
     # button reflects reality immediately.
 
     try:
-
         from clawk_cli.banner import check_for_updates
 
-
-
         if force:
-
             try:
-
                 (get_clawk_home() / ".update_check").unlink()
 
             except OSError:
-
                 pass
-
-
 
         behind = await asyncio.to_thread(check_for_updates)
 
     except Exception:
-
         _log.exception("Update check failed")
 
         behind = None
 
-
-
     payload["behind"] = behind
 
     if behind is None:
-
         payload["message"] = "Couldn't reach the update source — try again later."
 
     elif behind == 0:
-
         payload["message"] = "You're on the latest version."
 
     else:
-
         payload["update_available"] = True
-
-
 
     return payload
 
 
-
-
-
 @app.post("/api/audio/transcribe")
-
 async def transcribe_audio_upload(payload: AudioTranscriptionRequest):
 
     data_url = (payload.data_url or "").strip()
 
     if not data_url.startswith("data:") or "," not in data_url:
-
         raise HTTPException(status_code=400, detail="Invalid audio payload")
-
-
 
     header, encoded = data_url.split(",", 1)
 
     if ";base64" not in header:
-
         raise HTTPException(
-
             status_code=400, detail="Audio payload must be base64 encoded"
-
         )
 
-
-
     mime_type = (
-
         payload.mime_type or header[5:].split(";", 1)[0] or "audio/webm"
-
     ).strip()
 
     normalized_mime_type = mime_type.split(";", 1)[0].lower()
 
     if not (
-
         normalized_mime_type.startswith("audio/")
-
         or normalized_mime_type == "video/webm"
-
     ):
-
         raise HTTPException(
-
             status_code=400, detail="Payload must be an audio recording"
-
         )
 
-
-
     try:
-
         audio_bytes = base64.b64decode(encoded, validate=True)
 
     except (binascii.Error, ValueError):
-
         raise HTTPException(status_code=400, detail="Audio payload is not valid base64")
 
-
-
     if not audio_bytes:
-
         raise HTTPException(status_code=400, detail="Audio recording is empty")
 
     if len(audio_bytes) > _MAX_TRANSCRIPTION_UPLOAD_BYTES:
-
         raise HTTPException(status_code=413, detail="Audio recording is too large")
-
-
 
     temp_path = ""
 
     try:
-
         suffix = _audio_extension_for_mime(mime_type)
 
         with tempfile.NamedTemporaryFile(
-
             prefix="clawk-desktop-voice-",
-
             suffix=suffix,
-
             delete=False,
-
         ) as tmp:
-
             tmp.write(audio_bytes)
 
             temp_path = tmp.name
 
-
-
         from tools.transcription_tools import transcribe_audio
-
-
 
         loop = asyncio.get_running_loop()
 
         result = await loop.run_in_executor(None, transcribe_audio, temp_path)
 
     except HTTPException:
-
         raise
 
     except Exception as exc:
-
         _log.exception("Desktop voice transcription failed")
 
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
 
     finally:
-
         if temp_path:
-
             try:
-
                 os.unlink(temp_path)
 
             except OSError:
-
                 pass
 
-
-
     if not result.get("success"):
-
         raise HTTPException(
-
             status_code=400,
-
             detail=result.get("error") or "Transcription failed",
-
         )
 
-
-
     return {
-
         "ok": True,
-
         "transcript": str(result.get("transcript") or "").strip(),
-
         "provider": result.get("provider"),
-
     }
 
 
-
-
-
 class TTSSpeakRequest(BaseModel):
-
     text: str
-
-
-
 
 
 def _elevenlabs_voice_label(voice: Dict[str, Any]) -> str:
@@ -2790,18 +2012,11 @@ def _elevenlabs_voice_label(voice: Dict[str, Any]) -> str:
 
     category = str(voice.get("category") or "").strip()
 
-
-
     return f"{name} ({category})" if category else name
 
 
-
-
-
 @app.get("/api/audio/elevenlabs/voices")
-
 async def get_elevenlabs_voices():
-
     """Return ElevenLabs voices when an API key is configured.
 
 
@@ -2812,96 +2027,62 @@ async def get_elevenlabs_voices():
 
     """
 
-    api_key = (load_env().get("ELEVENLABS_API_KEY") or os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+    api_key = (
+        load_env().get("ELEVENLABS_API_KEY")
+        or os.environ.get("ELEVENLABS_API_KEY")
+        or ""
+    ).strip()
 
     if not api_key:
-
         return {"available": False, "voices": []}
 
-
-
     request = urllib.request.Request(
-
         "https://api.elevenlabs.io/v1/voices",
-
         headers={
-
             "Accept": "application/json",
-
             "xi-api-key": api_key,
-
         },
-
     )
 
-
-
     try:
-
         loop = asyncio.get_running_loop()
-
-
 
         def _fetch() -> Dict[str, Any]:
 
             with urllib.request.urlopen(request, timeout=10) as response:
-
                 return json.loads(response.read().decode("utf-8"))
-
-
 
         payload = await loop.run_in_executor(None, _fetch)
 
     except Exception as exc:
-
         _log.warning("ElevenLabs voice list failed: %s", exc)
 
         raise HTTPException(status_code=502, detail="Could not load ElevenLabs voices")
 
-
-
     voices = []
 
     for voice in payload.get("voices") or []:
-
         if not isinstance(voice, dict):
-
             continue
-
-
 
         voice_id = str(voice.get("voice_id") or "").strip()
 
         if not voice_id:
-
             continue
 
-
-
         voices.append({
-
             "voice_id": voice_id,
-
             "name": str(voice.get("name") or voice_id),
-
             "label": _elevenlabs_voice_label(voice),
-
         })
-
-
 
     voices.sort(key=lambda item: str(item.get("label") or "").lower())
 
     return {"available": True, "voices": voices}
 
 
-
-
-
 @app.post("/api/audio/speak")
-
 async def speak_text(payload: TTSSpeakRequest):
-
     """Synthesize speech and return audio as base64 data URL.
 
 
@@ -2919,13 +2100,9 @@ async def speak_text(payload: TTSSpeakRequest):
     text = (payload.text or "").strip()
 
     if not text:
-
         raise HTTPException(status_code=400, detail="Text is required")
 
-
-
     try:
-
         from tools.tts_tool import text_to_speech_tool
 
         loop = asyncio.get_running_loop()
@@ -2933,125 +2110,79 @@ async def speak_text(payload: TTSSpeakRequest):
         result_json = await loop.run_in_executor(None, text_to_speech_tool, text)
 
     except Exception as exc:
-
         _log.exception("Desktop voice TTS failed")
 
         raise HTTPException(status_code=500, detail=f"Speech synthesis failed: {exc}")
 
-
-
     try:
-
-        result = json.loads(result_json) if isinstance(result_json, str) else result_json
-
-    except Exception:
-
-        raise HTTPException(status_code=500, detail="Invalid TTS response")
-
-
-
-    if not result.get("success"):
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail=result.get("error") or "Speech synthesis failed",
-
+        result = (
+            json.loads(result_json) if isinstance(result_json, str) else result_json
         )
 
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid TTS response")
 
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error") or "Speech synthesis failed",
+        )
 
     file_path = result.get("file_path")
 
     if not file_path or not os.path.isfile(file_path):
-
         raise HTTPException(status_code=500, detail="Audio file missing")
-
-
 
     ext = os.path.splitext(file_path)[1].lower()
 
     mime_type = {
-
         ".mp3": "audio/mpeg",
-
         ".ogg": "audio/ogg",
-
         ".opus": "audio/ogg",
-
         ".wav": "audio/wav",
-
         ".flac": "audio/flac",
-
     }.get(ext, "audio/mpeg")
 
-
-
     try:
-
         with open(file_path, "rb") as fh:
-
             audio_bytes = fh.read()
 
     except OSError as exc:
-
         raise HTTPException(status_code=500, detail=f"Could not read audio: {exc}")
 
     finally:
-
         try:
-
             os.unlink(file_path)
 
         except OSError:
-
             pass
-
-
 
     encoded = base64.b64encode(audio_bytes).decode("ascii")
 
     return {
-
         "ok": True,
-
         "data_url": f"data:{mime_type};base64,{encoded}",
-
         "mime_type": mime_type,
-
         "provider": result.get("provider"),
-
     }
 
 
-
-
-
 @app.get("/api/actions/{name}/status")
-
 async def get_action_status(name: str, lines: int = 200):
-
     """Tail an action log and report whether the process is still running."""
 
     log_file_name = _ACTION_LOG_FILES.get(name)
 
     if log_file_name is None:
-
         raise HTTPException(status_code=404, detail=f"Unknown action: {name}")
-
-
 
     log_path = _ACTION_LOG_DIR / log_file_name
 
     tail = _tail_lines(log_path, min(max(lines, 1), 2000))
 
-
-
     proc = _ACTION_PROCS.get(name)
 
     if proc is None:
-
         result = _ACTION_RESULTS.get(name)
 
         running = False
@@ -3061,49 +2192,29 @@ async def get_action_status(name: str, lines: int = 200):
         pid = result.get("pid") if result else None
 
     else:
-
         exit_code = proc.poll()
 
         running = exit_code is None
 
         pid = proc.pid
 
-
-
     return {
-
         "name": name,
-
         "running": running,
-
         "exit_code": exit_code,
-
         "pid": pid,
-
         "lines": tail,
-
     }
 
 
-
-
-
 @app.get("/api/sessions")
-
 async def get_sessions(
-
     limit: int = 20,
-
     offset: int = 0,
-
     min_messages: int = 0,
-
     archived: str = "exclude",
-
     order: str = "created",
-
 ):
-
     """List sessions.
 
 
@@ -3129,33 +2240,23 @@ async def get_sessions(
     """
 
     if archived not in ("exclude", "only", "include"):
-
         raise HTTPException(
-
             status_code=400,
-
             detail="archived must be one of: exclude, only, include",
-
         )
 
     if order not in ("created", "recent"):
-
         raise HTTPException(
-
             status_code=400,
-
             detail="order must be one of: created, recent",
-
         )
 
     try:
-
         from clawk_state import SessionDB
 
         db = SessionDB()
 
         try:
-
             min_message_count = max(0, min_messages)
 
             archived_only = archived == "only"
@@ -3163,67 +2264,50 @@ async def get_sessions(
             include_archived = archived == "include"
 
             sessions = db.list_sessions_rich(
-
                 limit=limit,
-
                 offset=offset,
-
                 min_message_count=min_message_count,
-
                 include_archived=include_archived,
-
                 archived_only=archived_only,
-
                 order_by_last_active=order == "recent",
-
             )
 
             total = db.session_count(
-
                 min_message_count=min_message_count,
-
                 include_archived=include_archived,
-
                 archived_only=archived_only,
-
             )
 
             now = time.time()
 
             for s in sessions:
-
                 s["is_active"] = (
-
                     s.get("ended_at") is None
-
                     and (now - s.get("last_active", s.get("started_at", 0))) < 300
-
                 )
 
                 # SQLite stores the flag as 0/1; expose a real JSON boolean.
 
                 s["archived"] = bool(s.get("archived"))
 
-            return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
+            return {
+                "sessions": sessions,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
 
         finally:
-
             db.close()
 
     except Exception:
-
         _log.exception("GET /api/sessions failed")
 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-
-
-
 @app.get("/api/sessions/search")
-
 async def search_sessions(q: str = "", limit: int = 20):
-
     """Search sessions by ID plus full-text message content using FTS5.
 
 
@@ -3245,20 +2329,15 @@ async def search_sessions(q: str = "", limit: int = 20):
     """
 
     if not q or not q.strip():
-
         return {"results": []}
 
     try:
-
         from clawk_state import SessionDB
 
         db = SessionDB()
 
         try:
-
             safe_limit = max(1, min(int(limit or 20), 100))
-
-
 
             # Walk parent_session_id to the compression root, memoized so a
 
@@ -3270,16 +2349,12 @@ async def search_sessions(q: str = "", limit: int = 20):
 
             root_cache: dict = {}
 
-
-
             def compression_root(session_id: str) -> str:
 
                 if not session_id:
-
                     return session_id
 
                 if session_id in root_cache:
-
                     return root_cache[session_id]
 
                 chain = []
@@ -3291,27 +2366,22 @@ async def search_sessions(q: str = "", limit: int = 20):
                 root = session_id
 
                 while cur and cur not in visited:
-
                     visited.add(cur)
 
                     chain.append(cur)
 
                     if cur in root_cache:
-
                         root = root_cache[cur]
 
                         break
 
                     try:
-
                         s = db.get_session(cur)
 
                     except Exception:
-
                         s = None
 
                     if not s:
-
                         root = cur
 
                         break
@@ -3319,21 +2389,17 @@ async def search_sessions(q: str = "", limit: int = 20):
                     parent = s.get("parent_session_id") if isinstance(s, dict) else None
 
                     if not parent:
-
                         root = cur
 
                         break
 
                     try:
-
                         parent_session = db.get_session(parent)
 
                     except Exception:
-
                         parent_session = None
 
                     if not parent_session:
-
                         root = cur
 
                         break
@@ -3343,19 +2409,13 @@ async def search_sessions(q: str = "", limit: int = 20):
                     started_at = s.get("started_at")
 
                     is_compression_edge = (
-
                         parent_session.get("end_reason") == "compression"
-
                         and parent_ended_at is not None
-
                         and started_at is not None
-
                         and started_at >= parent_ended_at
-
                     )
 
                     if not is_compression_edge:
-
                         root = cur
 
                         break
@@ -3363,42 +2423,31 @@ async def search_sessions(q: str = "", limit: int = 20):
                     cur = parent
 
                 for node in chain:
-
                     root_cache[node] = root
 
                 return root
 
-
-
             tip_cache: dict = {}
-
-
 
             def lineage_tip(root_id: str) -> str:
 
                 if root_id in tip_cache:
-
                     return tip_cache[root_id]
 
                 tip = root_id
 
                 try:
-
                     resolved = db.get_compression_tip(root_id)
 
                     if resolved:
-
                         tip = resolved
 
                 except Exception:
-
                     pass
 
                 tip_cache[root_id] = tip
 
                 return tip
-
-
 
             # Both ID matches and content matches share one keyspace, keyed by
 
@@ -3410,18 +2459,14 @@ async def search_sessions(q: str = "", limit: int = 20):
 
             seen: dict = {}
 
-
-
             def add_lineage_result(raw_sid: str, payload: dict) -> None:
 
                 if not raw_sid:
-
                     return
 
                 root = compression_root(raw_sid)
 
                 if root in seen or len(seen) >= safe_limit:
-
                     return
 
                 payload = dict(payload)
@@ -3432,8 +2477,6 @@ async def search_sessions(q: str = "", limit: int = 20):
 
                 seen[root] = payload
 
-
-
             # Direct ID matches first: users often paste a session id from CLI,
 
             # logs, or another Clawksis surface. FTS can't find those unless the
@@ -3442,8 +2485,9 @@ async def search_sessions(q: str = "", limit: int = 20):
 
             # SQL-bounded, so this stays cheap even with thousands of sessions.
 
-            for row in db.search_sessions_by_id(q, limit=safe_limit, include_archived=True):
-
+            for row in db.search_sessions_by_id(
+                q, limit=safe_limit, include_archived=True
+            ):
                 sid = row.get("id")
 
                 preview = (row.get("preview") or "").strip()
@@ -3451,26 +2495,15 @@ async def search_sessions(q: str = "", limit: int = 20):
                 snippet = preview or f"Session ID: {sid}"
 
                 add_lineage_result(
-
                     sid,
-
                     {
-
                         "snippet": snippet,
-
                         "role": None,
-
                         "source": row.get("source"),
-
                         "model": row.get("model"),
-
                         "session_started": row.get("started_at"),
-
                     },
-
                 )
-
-
 
             # Auto-add prefix wildcards so partial words match
 
@@ -3483,13 +2516,10 @@ async def search_sessions(q: str = "", limit: int = 20):
             terms = []
 
             for token in re.findall(r'"[^"]*"|\S+', q.strip()):
-
                 if token.startswith('"') or token.endswith("*"):
-
                     terms.append(token)
 
                 else:
-
                     terms.append(token + "*")
 
             prefix_query = " ".join(terms)
@@ -3502,52 +2532,33 @@ async def search_sessions(q: str = "", limit: int = 20):
 
             matches = db.search_messages(query=prefix_query, limit=fetch_limit)
 
-
-
             for m in matches:
-
                 if len(seen) >= safe_limit:
-
                     break
 
                 add_lineage_result(
-
                     m["session_id"],
-
                     {
-
                         "snippet": m.get("snippet", ""),
-
                         "role": m.get("role"),
-
                         "source": m.get("source"),
-
                         "model": m.get("model"),
-
                         "session_started": m.get("session_started"),
-
                     },
-
                 )
 
             return {"results": list(seen.values())}
 
         finally:
-
             db.close()
 
     except Exception:
-
         _log.exception("GET /api/sessions/search failed")
 
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-
-
-
 def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
-
     """Normalize config for the web UI.
 
 
@@ -3573,7 +2584,6 @@ def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
     model_val = config.get("model")
 
     if isinstance(model_val, dict):
-
         # Extract context_length before flattening the dict
 
         ctx_len = model_val.get("context_length", 0)
@@ -3583,17 +2593,12 @@ def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
         config["model_context_length"] = ctx_len if isinstance(ctx_len, int) else 0
 
     else:
-
         config["model_context_length"] = 0
 
     return config
 
 
-
-
-
 @app.get("/api/config")
-
 async def get_config():
 
     config = _normalize_config_for_web(load_config())
@@ -3603,53 +2608,30 @@ async def get_config():
     return {k: v for k, v in config.items() if not k.startswith("_")}
 
 
-
-
-
 @app.get("/api/config/defaults")
-
 async def get_defaults():
 
     return DEFAULT_CONFIG
 
 
-
-
-
 @app.get("/api/config/schema")
-
 async def get_schema():
 
     return {"fields": CONFIG_SCHEMA, "category_order": _CATEGORY_ORDER}
 
 
-
-
-
 _EMPTY_MODEL_INFO: dict = {
-
     "model": "",
-
     "provider": "",
-
     "auto_context_length": 0,
-
     "config_context_length": 0,
-
     "effective_context_length": 0,
-
     "capabilities": {},
-
 }
 
 
-
-
-
 @app.get("/api/model/info")
-
 def get_model_info():
-
     """Return resolved model metadata for the currently configured model.
 
 
@@ -3663,17 +2645,13 @@ def get_model_info():
     """
 
     try:
-
         cfg = load_config()
 
         model_cfg = cfg.get("model", "")
 
-
-
         # Extract model name and provider from the config
 
         if isinstance(model_cfg, dict):
-
             model_name = model_cfg.get("default", model_cfg.get("name", ""))
 
             provider = model_cfg.get("provider", "")
@@ -3683,7 +2661,6 @@ def get_model_info():
             config_ctx = model_cfg.get("context_length")
 
         else:
-
             model_name = str(model_cfg) if model_cfg else ""
 
             provider = ""
@@ -3692,112 +2669,70 @@ def get_model_info():
 
             config_ctx = None
 
-
-
         if not model_name:
-
             return dict(_EMPTY_MODEL_INFO, provider=provider)
-
-
 
         # Resolve auto-detected context length (pass config_ctx=None to get
 
         # purely auto-detected value, then separately report the override)
 
         try:
-
             from agent.model_metadata import get_model_context_length
 
             auto_ctx = get_model_context_length(
-
                 model=model_name,
-
                 base_url=base_url,
-
                 provider=provider,
-
                 config_context_length=None,  # ignore override — we want auto value
-
             )
 
         except Exception:
-
             auto_ctx = 0
-
-
 
         config_ctx_int = 0
 
         if isinstance(config_ctx, int) and config_ctx > 0:
-
             config_ctx_int = config_ctx
-
-
 
         # Effective is what the agent actually uses
 
         effective_ctx = config_ctx_int if config_ctx_int > 0 else auto_ctx
-
-
 
         # Try to get model capabilities from models.dev
 
         caps = {}
 
         try:
-
             from agent.models_dev import get_model_capabilities
 
             mc = get_model_capabilities(provider=provider, model=model_name)
 
             if mc is not None:
-
                 caps = {
-
                     "supports_tools": mc.supports_tools,
-
                     "supports_vision": mc.supports_vision,
-
                     "supports_reasoning": mc.supports_reasoning,
-
                     "context_window": mc.context_window,
-
                     "max_output_tokens": mc.max_output_tokens,
-
                     "model_family": mc.model_family,
-
                 }
 
         except Exception:
-
             pass
 
-
-
         return {
-
             "model": model_name,
-
             "provider": provider,
-
             "auto_context_length": auto_ctx,
-
             "config_context_length": config_ctx_int,
-
             "effective_context_length": effective_ctx,
-
             "capabilities": caps,
-
         }
 
     except Exception:
-
         _log.exception("GET /api/model/info failed")
 
         return dict(_EMPTY_MODEL_INFO)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -3811,45 +2746,27 @@ def get_model_info():
 # ---------------------------------------------------------------------------
 
 
-
 # Canonical auxiliary task slots. Keep in sync with DEFAULT_CONFIG["auxiliary"]
 
 # in clawk_cli/config.py — listed here for deterministic ordering in the UI.
 
 _AUX_TASK_SLOTS: Tuple[str, ...] = (
-
     "vision",
-
     "web_extract",
-
     "compression",
-
     "skills_hub",
-
     "approval",
-
     "mcp",
-
     "title_generation",
-
     "triage_specifier",
-
     "kanban_decomposer",
-
     "profile_describer",
-
     "curator",
-
 )
 
 
-
-
-
 @app.get("/api/model/options")
-
 def get_model_options():
-
     """Return authenticated providers + their curated model lists.
 
 
@@ -3865,31 +2782,20 @@ def get_model_options():
     """
 
     try:
-
         from clawk_cli.inventory import build_models_payload, load_picker_context
 
-
-
         return build_models_payload(
-
             load_picker_context(), max_models=50, pricing=True, capabilities=True
-
         )
 
     except Exception:
-
         _log.exception("GET /api/model/options failed")
 
         raise HTTPException(status_code=500, detail="Failed to list model options")
 
 
-
-
-
 @app.get("/api/model/recommended-default")
-
 def get_recommended_default_model(provider: str = ""):
-
     """Return the recommended default model for a freshly-authenticated provider.
 
 
@@ -3916,31 +2822,18 @@ def get_recommended_default_model(provider: str = ""):
 
     slug = (provider or "").strip().lower()
 
-
-
     if slug == "nous":
-
         try:
-
             from clawk_cli.models import (
-
                 get_curated_nous_model_ids,
-
                 get_pricing_for_provider,
-
                 check_nous_free_tier,
-
                 partition_nous_models_by_tier,
-
                 union_with_portal_free_recommendations,
-
                 union_with_portal_paid_recommendations,
-
             )
 
             from clawk_cli.auth import get_provider_auth_state
-
-
 
             model_ids = get_curated_nous_model_ids()
 
@@ -3948,92 +2841,66 @@ def get_recommended_default_model(provider: str = ""):
 
             free_tier = check_nous_free_tier(force_fresh=True)
 
-
-
             portal_url = ""
 
             try:
-
                 state = get_provider_auth_state("nous") or {}
 
                 portal_url = state.get("portal_base_url", "") or ""
 
             except Exception:
-
                 portal_url = ""
 
-
-
             if free_tier:
-
                 model_ids, pricing = union_with_portal_free_recommendations(
-
                     model_ids, pricing, portal_url
-
                 )
 
                 model_ids, _unavailable = partition_nous_models_by_tier(
-
                     model_ids, pricing, free_tier=True
-
                 )
 
             else:
-
                 model_ids, pricing = union_with_portal_paid_recommendations(
-
                     model_ids, pricing, portal_url
-
                 )
-
-
 
             model = model_ids[0] if model_ids else ""
 
             return {"provider": "nous", "model": model, "free_tier": bool(free_tier)}
 
         except Exception:
-
             _log.exception("GET /api/model/recommended-default (nous) failed")
 
             return {"provider": "nous", "model": "", "free_tier": None}
 
-
-
     # Non-Nous: first curated model for the provider, matching prior behaviour.
 
     try:
-
         from clawk_cli.inventory import build_models_payload, load_picker_context
-
-
 
         payload = build_models_payload(load_picker_context(), max_models=50)
 
         for row in payload.get("providers", []):
-
             if str(row.get("slug", "")).lower() == slug:
-
                 models = row.get("models") or []
 
-                return {"provider": slug, "model": models[0] if models else "", "free_tier": None}
+                return {
+                    "provider": slug,
+                    "model": models[0] if models else "",
+                    "free_tier": None,
+                }
 
         return {"provider": slug, "model": "", "free_tier": None}
 
     except Exception:
-
         _log.exception("GET /api/model/recommended-default failed")
 
         return {"provider": slug, "model": "", "free_tier": None}
 
 
-
-
-
 @app.get("/api/model/auxiliary")
-
 def get_auxiliary_models():
-
     """Return current auxiliary task assignments.
 
 
@@ -4057,71 +2924,48 @@ def get_auxiliary_models():
     """
 
     try:
-
         cfg = load_config()
 
         aux_cfg = cfg.get("auxiliary", {})
 
         if not isinstance(aux_cfg, dict):
-
             aux_cfg = {}
-
-
 
         tasks = []
 
         for slot in _AUX_TASK_SLOTS:
-
-            slot_cfg = aux_cfg.get(slot, {}) if isinstance(aux_cfg.get(slot), dict) else {}
+            slot_cfg = (
+                aux_cfg.get(slot, {}) if isinstance(aux_cfg.get(slot), dict) else {}
+            )
 
             tasks.append({
-
                 "task": slot,
-
                 "provider": str(slot_cfg.get("provider", "auto") or "auto"),
-
                 "model": str(slot_cfg.get("model", "") or ""),
-
                 "base_url": str(slot_cfg.get("base_url", "") or ""),
-
             })
-
-
 
         model_cfg = cfg.get("model", {})
 
         if isinstance(model_cfg, dict):
-
             main = {
-
                 "provider": str(model_cfg.get("provider", "") or ""),
-
                 "model": str(model_cfg.get("default", model_cfg.get("name", "")) or ""),
-
             }
 
         else:
-
             main = {"provider": "", "model": str(model_cfg) if model_cfg else ""}
-
-
 
         return {"tasks": tasks, "main": main}
 
     except Exception:
-
         _log.exception("GET /api/model/auxiliary failed")
 
         raise HTTPException(status_code=500, detail="Failed to read auxiliary config")
 
 
-
-
-
 @app.post("/api/model/set")
-
 async def set_model_assignment(body: ModelAssignment):
-
     """Assign a model to the main slot or an auxiliary task slot.
 
 
@@ -4144,35 +2988,25 @@ async def set_model_assignment(body: ModelAssignment):
 
     base_url = (body.base_url or "").strip()
 
-
-
     if scope not in {"main", "auxiliary"}:
-
-        raise HTTPException(status_code=400, detail="scope must be 'main' or 'auxiliary'")
-
-
+        raise HTTPException(
+            status_code=400, detail="scope must be 'main' or 'auxiliary'"
+        )
 
     try:
-
         cfg = load_config()
 
-
-
         if scope == "main":
-
             if not provider or not model:
-
-                raise HTTPException(status_code=400, detail="provider and model required for main")
+                raise HTTPException(
+                    status_code=400, detail="provider and model required for main"
+                )
 
             model_cfg = _apply_main_model_assignment(
-
                 cfg.get("model", {}), provider, model, base_url
-
             )
 
             cfg["model"] = model_cfg
-
-
 
             # When switching the main provider to Nous, mirror the CLI's
 
@@ -4195,83 +3029,55 @@ async def set_model_assignment(body: ModelAssignment):
             gateway_tools: list[str] = []
 
             if provider.strip().lower() == "nous":
-
                 try:
-
                     from clawk_cli.nous_subscription import apply_nous_managed_defaults
 
                     from clawk_cli.tools_config import _get_platform_tools
 
-
-
                     enabled = _get_platform_tools(
-
                         cfg, "cli", include_default_mcp_servers=False
-
                     )
 
                     changed = apply_nous_managed_defaults(
-
                         cfg,
-
                         enabled_toolsets=enabled,
-
                         force_fresh=True,
-
                     )
 
                     gateway_tools = sorted(changed)
 
                 except Exception:
-
                     # Portal lookup hiccups / non-subscriber / non-nous gating
 
                     # must never block saving the model assignment.
 
                     _log.debug("apply_nous_managed_defaults skipped", exc_info=True)
 
-
-
             save_config(cfg)
 
             return {
-
                 "ok": True,
-
                 "scope": "main",
-
                 "provider": provider,
-
                 "model": model,
-
                 "base_url": model_cfg.get("base_url", ""),
-
                 "gateway_tools": gateway_tools,
-
             }
-
-
 
         # scope == "auxiliary"
 
         aux = cfg.get("auxiliary")
 
         if not isinstance(aux, dict):
-
             aux = {}
 
-
-
         if task == "__reset__":
-
             # Reset every slot to provider="auto", model="" — keeps other fields intact.
 
             for slot in _AUX_TASK_SLOTS:
-
                 slot_cfg = aux.get(slot)
 
                 if not isinstance(slot_cfg, dict):
-
                     slot_cfg = {}
 
                 slot_cfg["provider"] = "auto"
@@ -4286,26 +3092,22 @@ async def set_model_assignment(body: ModelAssignment):
 
             return {"ok": True, "scope": "auxiliary", "reset": True}
 
-
-
         if not provider:
-
-            raise HTTPException(status_code=400, detail="provider required for auxiliary")
-
-
+            raise HTTPException(
+                status_code=400, detail="provider required for auxiliary"
+            )
 
         targets = [task] if task else list(_AUX_TASK_SLOTS)
 
         for slot in targets:
-
             if slot not in _AUX_TASK_SLOTS:
-
-                raise HTTPException(status_code=400, detail=f"unknown auxiliary task: {slot}")
+                raise HTTPException(
+                    status_code=400, detail=f"unknown auxiliary task: {slot}"
+                )
 
             slot_cfg = aux.get(slot)
 
             if not isinstance(slot_cfg, dict):
-
                 slot_cfg = {}
 
             slot_cfg["provider"] = provider
@@ -4314,46 +3116,28 @@ async def set_model_assignment(body: ModelAssignment):
 
             aux[slot] = slot_cfg
 
-
-
         cfg["auxiliary"] = aux
 
         save_config(cfg)
 
         return {
-
             "ok": True,
-
             "scope": "auxiliary",
-
             "tasks": targets,
-
             "provider": provider,
-
             "model": model,
-
         }
 
     except HTTPException:
-
         raise
 
     except Exception:
-
         _log.exception("POST /api/model/set failed")
 
         raise HTTPException(status_code=500, detail="Failed to save model assignment")
 
 
-
-
-
-
-
-
-
 def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
-
     """Reverse _normalize_config_for_web before saving.
 
 
@@ -4384,38 +3168,28 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
     config.pop("_model_meta", None)
 
-
-
     # Extract and remove model_context_length before processing model
 
     ctx_override = config.pop("model_context_length", 0)
 
     if not isinstance(ctx_override, int):
-
         try:
-
             ctx_override = int(ctx_override)
 
         except (TypeError, ValueError):
-
             ctx_override = 0
-
-
 
     model_val = config.get("model")
 
     if isinstance(model_val, str) and model_val:
-
         # Read the current disk config to recover model subkeys
 
         try:
-
             disk_config = load_config()
 
             disk_model = disk_config.get("model")
 
             if isinstance(disk_model, dict):
-
                 # Preserve all subkeys, update default with the new value
 
                 disk_model["default"] = model_val
@@ -4423,11 +3197,9 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
                 # Write context_length into the model dict (0 = remove/auto)
 
                 if ctx_override > 0:
-
                     disk_model["context_length"] = ctx_override
 
                 else:
-
                     disk_model.pop("context_length", None)
 
                 config["model"] = disk_model
@@ -4437,47 +3209,32 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
             # user is setting a context_length override
 
             elif ctx_override > 0:
-
                 config["model"] = {
-
                     "default": model_val,
-
                     "context_length": ctx_override,
-
                 }
 
         except Exception:
-
             pass  # can't read disk config — just use the string form
 
     return config
 
 
-
-
-
 @app.put("/api/config")
-
 async def update_config(body: ConfigUpdate):
 
     try:
-
         save_config(_denormalize_config_from_web(body.config))
 
         return {"ok": True}
 
     except Exception:
-
         _log.exception("PUT /api/config failed")
 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-
-
-
 @app.get("/api/env")
-
 async def get_env_vars():
 
     env_on_disk = load_env()
@@ -4487,55 +3244,35 @@ async def get_env_vars():
     result = {}
 
     for var_name, info in OPTIONAL_ENV_VARS.items():
-
         value = env_on_disk.get(var_name)
 
         result[var_name] = {
-
             "is_set": bool(value),
-
             "redacted_value": redact_key(value) if value else None,
-
             "description": info.get("description", ""),
-
             "url": info.get("url"),
-
             "category": info.get("category", ""),
-
             "is_password": info.get("password", False),
-
             "tools": info.get("tools", []),
-
             "advanced": info.get("advanced", False),
-
             # True when this var is a messaging-platform credential owned by a
-
             # Channels page card. The Keys/Env page uses this to hide it and
-
             # avoid duplicating the (richer) Channels configuration UI.
-
             "channel_managed": var_name in channel_keys,
-
         }
 
     return result
 
 
-
-
-
 @app.put("/api/env")
-
 async def set_env_var(body: EnvVarUpdate):
 
     try:
-
         save_env_value(body.key, body.value)
 
         return {"ok": True, "key": body.key}
 
     except ValueError as exc:
-
         # save_env_value raises ValueError for invalid names and for keys
 
         # on the denylist (LD_PRELOAD, PATH, PYTHONPATH, …). Surface the
@@ -4547,13 +3284,9 @@ async def set_env_var(body: EnvVarUpdate):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     except Exception:
-
         _log.exception("PUT /api/env failed")
 
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-
 
 
 # Live credential probes keyed by env var. Each entry is (method, url, auth)
@@ -4567,23 +3300,17 @@ async def set_env_var(body: EnvVarUpdate):
 # endpoints) are not network-validated; the client treats those as "unknown".
 
 _CREDENTIAL_PROBES: dict[str, tuple[str, str]] = {
-
     "OPENROUTER_API_KEY": ("https://openrouter.ai/api/v1/key", "bearer"),
-
     "OPENAI_API_KEY": ("https://api.openai.com/v1/models", "bearer"),
-
     "XAI_API_KEY": ("https://api.x.ai/v1/models", "bearer"),
-
-    "GEMINI_API_KEY": ("https://generativelanguage.googleapis.com/v1beta/models", "query"),
-
+    "GEMINI_API_KEY": (
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "query",
+    ),
 }
 
 
-
-
-
 def _parse_model_ids(resp: "Any") -> List[str]:
-
     """Extract model ids from an OpenAI-compatible ``/v1/models`` response.
 
 
@@ -4597,49 +3324,36 @@ def _parse_model_ids(resp: "Any") -> List[str]:
     """
 
     try:
-
         if not resp.is_success:
-
             return []
 
         payload = resp.json()
 
     except Exception:
-
         return []
 
     data = payload.get("data") if isinstance(payload, dict) else payload
 
     if not isinstance(data, list):
-
         return []
 
     ids: List[str] = []
 
     for item in data:
-
         if isinstance(item, dict):
-
             mid = str(item.get("id") or "").strip()
 
         else:
-
             mid = str(item or "").strip()
 
         if mid:
-
             ids.append(mid)
 
     return ids
 
 
-
-
-
 @app.post("/api/providers/validate")
-
 async def validate_provider_credential(body: EnvVarUpdate, request: Request):
-
     """Live-probe a provider credential before it's saved.
 
 
@@ -4658,17 +3372,12 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
 
     import httpx
 
-
-
     key = (body.key or "").strip()
 
     value = (body.value or "").strip()
 
     if not value:
-
         return {"ok": False, "reachable": True, "message": "Enter a value first."}
-
-
 
     # Local / custom endpoint: validate connectivity, not auth — any HTTP
 
@@ -4679,32 +3388,32 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
     # auto-pick a default without asking the user to type a model name.
 
     if key == "OPENAI_BASE_URL":
-
         url = value.rstrip("/") + "/models"
 
         try:
-
             with httpx.Client(timeout=httpx.Timeout(8.0)) as client:
-
                 resp = client.get(url)
 
-            return {"ok": True, "reachable": True, "message": "", "models": _parse_model_ids(resp)}
+            return {
+                "ok": True,
+                "reachable": True,
+                "message": "",
+                "models": _parse_model_ids(resp),
+            }
 
         except Exception:
-
-            return {"ok": False, "reachable": False, "message": f"Could not reach {url}."}
-
-
+            return {
+                "ok": False,
+                "reachable": False,
+                "message": f"Could not reach {url}.",
+            }
 
     probe = _CREDENTIAL_PROBES.get(key)
 
     if not probe:
-
         # No probe for this provider — can't validate, don't block.
 
         return {"ok": True, "reachable": False, "message": ""}
-
-
 
     url, auth = probe
 
@@ -4713,63 +3422,56 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
     params = {}
 
     if auth == "bearer":
-
         headers["Authorization"] = f"Bearer {value}"
 
     else:
-
         params["key"] = value
 
-
-
     try:
-
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
-
             resp = client.get(url, headers=headers, params=params)
 
     except Exception:
-
-        return {"ok": False, "reachable": False, "message": "Could not reach the provider to verify the key."}
-
-
+        return {
+            "ok": False,
+            "reachable": False,
+            "message": "Could not reach the provider to verify the key.",
+        }
 
     if resp.status_code in (401, 403):
-
-        return {"ok": False, "reachable": True, "message": "That API key was rejected. Double-check it and try again."}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "That API key was rejected. Double-check it and try again.",
+        }
 
     if resp.status_code == 429 or resp.is_success:
-
         # 429 = key is valid but rate-limited; success = valid.
 
         return {"ok": True, "reachable": True, "message": ""}
 
-    return {"ok": False, "reachable": True, "message": f"Provider returned HTTP {resp.status_code} for this key."}
-
-
-
+    return {
+        "ok": False,
+        "reachable": True,
+        "message": f"Provider returned HTTP {resp.status_code} for this key.",
+    }
 
 
 @app.delete("/api/env")
-
 async def remove_env_var(body: EnvVarDelete):
 
     try:
-
         removed = remove_env_value(body.key)
 
         if not removed:
-
             raise HTTPException(status_code=404, detail=f"{body.key} not found in .env")
 
         return {"ok": True, "key": body.key}
 
     except HTTPException:
-
         raise
 
     except ValueError as exc:
-
         # remove_env_value raises ValueError for invalid key names. Surface
 
         # the message to the SPA so the user understands why the delete was
@@ -4779,19 +3481,13 @@ async def remove_env_var(body: EnvVarDelete):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     except Exception:
-
         _log.exception("DELETE /api/env failed")
 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-
-
-
 @app.post("/api/env/reveal")
-
 async def reveal_env_var(body: EnvVarReveal, request: Request):
-
     """Return the real (unredacted) value of a single env var.
 
 
@@ -4810,8 +3506,6 @@ async def reveal_env_var(body: EnvVarReveal, request: Request):
 
     _require_token(request)
 
-
-
     # --- Rate limit ---
 
     now = time.time()
@@ -4821,12 +3515,11 @@ async def reveal_env_var(body: EnvVarReveal, request: Request):
     _reveal_timestamps[:] = [t for t in _reveal_timestamps if t > cutoff]
 
     if len(_reveal_timestamps) >= _REVEAL_MAX_PER_WINDOW:
-
-        raise HTTPException(status_code=429, detail="Too many reveal requests. Try again shortly.")
+        raise HTTPException(
+            status_code=429, detail="Too many reveal requests. Try again shortly."
+        )
 
     _reveal_timestamps.append(now)
-
-
 
     # --- Reveal ---
 
@@ -4835,17 +3528,11 @@ async def reveal_env_var(body: EnvVarReveal, request: Request):
     value = env_on_disk.get(body.key)
 
     if value is None:
-
         raise HTTPException(status_code=404, detail=f"{body.key} not found in .env")
-
-
 
     _log.info("env/reveal: %s", body.key)
 
     return {"key": body.key, "value": value}
-
-
-
 
 
 # Entries omit fields they don't need to override; the catalog builder fills
@@ -4855,375 +3542,190 @@ async def reveal_env_var(body: EnvVarReveal, request: Request):
 # and pulls required_env from a plugin's PlatformEntry when available.
 
 _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
-
     "telegram": {
-
         "name": "Telegram",
-
         "description": "Run Clawksis from Telegram DMs, groups, and topics.",
-
         "docs_url": "https://core.telegram.org/bots/features#botfather",
-
         "env_vars": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS", "TELEGRAM_PROXY"),
-
         "required_env": ("TELEGRAM_BOT_TOKEN",),
-
     },
-
     "discord": {
-
         "name": "Discord",
-
         "description": "Connect Clawksis to Discord DMs, channels, and threads.",
-
         "docs_url": "https://discord.com/developers/applications",
-
         "env_vars": (
-
             "DISCORD_BOT_TOKEN",
-
             "DISCORD_ALLOWED_USERS",
-
             "DISCORD_REPLY_TO_MODE",
-
         ),
-
         "required_env": ("DISCORD_BOT_TOKEN",),
-
     },
-
     "slack": {
-
         "name": "Slack",
-
         "description": "Use Clawksis from Slack via Socket Mode.",
-
         "docs_url": "https://api.slack.com/apps",
-
         "env_vars": ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"),
-
         "required_env": ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"),
-
     },
-
     "mattermost": {
-
         "name": "Mattermost",
-
         "description": "Connect Clawksis to Mattermost channels and direct messages.",
-
         "docs_url": "https://mattermost.com/deploy/",
-
         "env_vars": ("MATTERMOST_URL", "MATTERMOST_TOKEN", "MATTERMOST_ALLOWED_USERS"),
-
         "required_env": ("MATTERMOST_URL", "MATTERMOST_TOKEN"),
-
     },
-
     "matrix": {
-
         "name": "Matrix",
-
         "description": "Use Clawksis in Matrix rooms and direct messages.",
-
         "docs_url": "https://matrix.org/ecosystem/servers/",
-
         "env_vars": (
-
             "MATRIX_HOMESERVER",
-
             "MATRIX_ACCESS_TOKEN",
-
             "MATRIX_USER_ID",
-
             "MATRIX_ALLOWED_USERS",
-
         ),
-
         "required_env": ("MATRIX_HOMESERVER", "MATRIX_ACCESS_TOKEN", "MATRIX_USER_ID"),
-
     },
-
     "signal": {
-
         "name": "Signal",
-
         "description": "Connect through a signal-cli REST bridge.",
-
         "docs_url": "https://github.com/bbernhard/signal-cli-rest-api",
-
         "env_vars": ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT", "SIGNAL_ALLOWED_USERS"),
-
         "required_env": ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT"),
-
     },
-
     "whatsapp": {
-
         "name": "WhatsApp",
-
         "description": "Use Clawksis through the bundled WhatsApp bridge with QR-based auth.",
-
         "docs_url": "https://github.com/tulir/whatsmeow",
-
         "env_vars": ("WHATSAPP_ENABLED", "WHATSAPP_MODE", "WHATSAPP_ALLOWED_USERS"),
-
         "required_env": (),
-
     },
-
     "homeassistant": {
-
         "name": "Home Assistant",
-
         "description": "Control your smart home from Clawksis via Home Assistant.",
-
         "docs_url": "https://www.home-assistant.io/docs/authentication/",
-
         "env_vars": ("HASS_URL", "HASS_TOKEN"),
-
         "required_env": ("HASS_URL", "HASS_TOKEN"),
-
     },
-
     "email": {
-
         "name": "Email",
-
         "description": "Talk to Clawksis through an IMAP/SMTP mailbox.",
-
         "docs_url": "https://github.com/samuelgradientai-sys/clawksis-agent",
-
         "env_vars": (
-
             "EMAIL_ADDRESS",
-
             "EMAIL_PASSWORD",
-
             "EMAIL_IMAP_HOST",
-
             "EMAIL_SMTP_HOST",
-
         ),
-
         "required_env": (
-
             "EMAIL_ADDRESS",
-
             "EMAIL_PASSWORD",
-
             "EMAIL_IMAP_HOST",
-
             "EMAIL_SMTP_HOST",
-
         ),
-
     },
-
     "sms": {
-
         "name": "SMS (Twilio)",
-
         "description": "Send and receive text messages via Twilio.",
-
         "docs_url": "https://www.twilio.com/console",
-
         "env_vars": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
-
         "required_env": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
-
     },
-
     "dingtalk": {
-
         "name": "DingTalk",
-
         "description": "Connect Clawksis to DingTalk groups (钉钉).",
-
         "docs_url": "https://open.dingtalk.com/document/orgapp/the-robot-development-process",
-
         "env_vars": ("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"),
-
         "required_env": ("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"),
-
     },
-
     "feishu": {
-
         "name": "Feishu / Lark",
-
         "description": "Use Clawksis inside Feishu / Lark.",
-
         "docs_url": "https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/intro",
-
         "env_vars": (
-
             "FEISHU_APP_ID",
-
             "FEISHU_APP_SECRET",
-
             "FEISHU_ENCRYPT_KEY",
-
             "FEISHU_VERIFICATION_TOKEN",
-
         ),
-
         "required_env": ("FEISHU_APP_ID", "FEISHU_APP_SECRET"),
-
     },
-
     "wecom": {
-
         "name": "WeCom (group bot)",
-
         "description": "Send-only WeCom group bot via webhook.",
-
         "docs_url": "https://developer.work.weixin.qq.com/document/path/91770",
-
         "env_vars": ("WECOM_BOT_ID", "WECOM_SECRET"),
-
         "required_env": ("WECOM_BOT_ID",),
-
     },
-
     "wecom_callback": {
-
         "name": "WeCom (app)",
-
         "description": "Two-way WeCom integration via callback app.",
-
         "docs_url": "https://developer.work.weixin.qq.com/document/path/90930",
-
         "env_vars": (
-
             "WECOM_CALLBACK_CORP_ID",
-
             "WECOM_CALLBACK_CORP_SECRET",
-
             "WECOM_CALLBACK_AGENT_ID",
-
             "WECOM_CALLBACK_TOKEN",
-
             "WECOM_CALLBACK_ENCODING_AES_KEY",
-
         ),
-
         "required_env": (
-
             "WECOM_CALLBACK_CORP_ID",
-
             "WECOM_CALLBACK_CORP_SECRET",
-
             "WECOM_CALLBACK_AGENT_ID",
-
         ),
-
     },
-
     "weixin": {
-
         "name": "WeChat (Official Account)",
-
         "description": "Connect a WeChat Official Account.",
-
         "docs_url": "https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html",
-
         "env_vars": ("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN", "WEIXIN_BASE_URL"),
-
         "required_env": ("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"),
-
     },
-
     "bluebubbles": {
-
         "name": "BlueBubbles (iMessage)",
-
         "description": "Use Clawksis through iMessage via a BlueBubbles server.",
-
         "docs_url": "https://bluebubbles.app/",
-
         "env_vars": (
-
             "BLUEBUBBLES_SERVER_URL",
-
             "BLUEBUBBLES_PASSWORD",
-
             "BLUEBUBBLES_ALLOWED_USERS",
-
         ),
-
         "required_env": ("BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_PASSWORD"),
-
     },
-
     "qqbot": {
-
         "name": "QQ Bot",
-
         "description": "Connect Clawksis to a QQ Bot from the QQ Open Platform.",
-
         "docs_url": "https://q.qq.com",
-
         "env_vars": ("QQ_APP_ID", "QQ_CLIENT_SECRET", "QQ_ALLOWED_USERS"),
-
         "required_env": ("QQ_APP_ID", "QQ_CLIENT_SECRET"),
-
     },
-
     "yuanbao": {
-
         "name": "Yuanbao (元宝)",
-
         "description": "Connect Clawksis to Tencent Yuanbao.",
-
         "docs_url": "",
-
         "required_env": (),
-
     },
-
     "api_server": {
-
         "name": "API server",
-
         "description": "Expose Clawksis as an OpenAI-compatible HTTP API for tools like Open WebUI.",
-
         "docs_url": "https://github.com/samuelgradientai-sys/clawksis-agent",
-
         "env_vars": (
-
             "API_SERVER_ENABLED",
-
             "API_SERVER_KEY",
-
             "API_SERVER_PORT",
-
             "API_SERVER_HOST",
-
             "API_SERVER_MODEL_NAME",
-
         ),
-
         "required_env": (),
-
     },
-
     "webhook": {
-
         "name": "Webhooks",
-
         "description": "Receive events from GitHub, GitLab, and other webhook sources.",
-
         "docs_url": "https://github.com/samuelgradientai-sys/clawksis-agent",
-
         "env_vars": ("WEBHOOK_ENABLED", "WEBHOOK_PORT", "WEBHOOK_SECRET"),
-
         "required_env": (),
-
     },
-
 }
-
 
 
 # Display order: well-known platforms surface first; unknown plugins fall to
@@ -5231,49 +3733,27 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
 # the end alphabetically.
 
 _PLATFORM_ORDER: tuple[str, ...] = (
-
     "telegram",
-
     "discord",
-
     "slack",
-
     "mattermost",
-
     "matrix",
-
     "whatsapp",
-
     "signal",
-
     "bluebubbles",
-
     "homeassistant",
-
     "email",
-
     "sms",
-
     "dingtalk",
-
     "feishu",
-
     "wecom",
-
     "wecom_callback",
-
     "weixin",
-
     "qqbot",
-
     "yuanbao",
-
     "api_server",
-
     "webhook",
-
 )
-
 
 
 # Display labels for env vars not in OPTIONAL_ENV_VARS (HOME_CHANNEL_*, bridge
@@ -5283,273 +3763,139 @@ _PLATFORM_ORDER: tuple[str, ...] = (
 # falls back here so the UI can still render a friendly label.
 
 _MESSAGING_ENV_FALLBACKS: dict[str, dict[str, Any]] = {
-
     "SIGNAL_HTTP_URL": {
-
         "description": "signal-cli REST API base URL, e.g. http://127.0.0.1:8080",
-
         "prompt": "Signal bridge URL",
-
         "url": "https://github.com/bbernhard/signal-cli-rest-api",
-
     },
-
     "SIGNAL_ACCOUNT": {
-
         "description": "Signal account phone number registered with the bridge",
-
         "prompt": "Signal account",
-
     },
-
     "SIGNAL_ALLOWED_USERS": {
-
         "description": "Comma-separated Signal users allowed to use the bot",
-
         "prompt": "Allowed Signal users",
-
     },
-
     "WHATSAPP_ENABLED": {
-
         "description": "Enable the WhatsApp gateway adapter",
-
         "prompt": "Enable WhatsApp",
-
         "advanced": True,
-
     },
-
     "WHATSAPP_MODE": {
-
         "description": "WhatsApp bridge mode",
-
         "prompt": "WhatsApp mode",
-
         "advanced": True,
-
     },
-
     "WHATSAPP_ALLOWED_USERS": {
-
         "description": "Comma-separated WhatsApp users allowed to use the bot",
-
         "prompt": "Allowed WhatsApp users",
-
     },
-
     "HASS_URL": {
-
         "description": "Home Assistant base URL, e.g. https://homeassistant.local:8123",
-
         "prompt": "Home Assistant URL",
-
     },
-
     "HASS_TOKEN": {
-
         "description": "Long-lived access token from Home Assistant (Profile → Security)",
-
         "prompt": "Home Assistant access token",
-
         "password": True,
-
     },
-
     "EMAIL_ADDRESS": {
-
         "description": "Email address to send and receive from",
-
         "prompt": "Email address",
-
     },
-
     "EMAIL_PASSWORD": {
-
         "description": "Email account password or app password",
-
         "prompt": "Email password",
-
         "password": True,
-
     },
-
     "EMAIL_IMAP_HOST": {
-
         "description": "IMAP server host (e.g. imap.gmail.com)",
-
         "prompt": "IMAP host",
-
     },
-
     "EMAIL_SMTP_HOST": {
-
         "description": "SMTP server host (e.g. smtp.gmail.com)",
-
         "prompt": "SMTP host",
-
     },
-
     "TWILIO_ACCOUNT_SID": {
-
         "description": "Twilio Account SID",
-
         "prompt": "Twilio Account SID",
-
         "url": "https://www.twilio.com/console",
-
     },
-
     "TWILIO_AUTH_TOKEN": {
-
         "description": "Twilio Auth Token",
-
         "prompt": "Twilio Auth Token",
-
         "password": True,
-
     },
-
     "WECOM_BOT_ID": {"description": "WeCom group bot ID", "prompt": "WeCom Bot ID"},
-
     "WECOM_SECRET": {
-
         "description": "WeCom group bot secret",
-
         "prompt": "WeCom Secret",
-
         "password": True,
-
     },
-
     "WECOM_CALLBACK_CORP_ID": {
-
         "description": "WeCom corp ID",
-
         "prompt": "WeCom Corp ID",
-
     },
-
     "WECOM_CALLBACK_CORP_SECRET": {
-
         "description": "WeCom app corp secret",
-
         "prompt": "WeCom Corp Secret",
-
         "password": True,
-
     },
-
     "WECOM_CALLBACK_AGENT_ID": {
-
         "description": "WeCom app agent ID",
-
         "prompt": "WeCom Agent ID",
-
     },
-
     "WECOM_CALLBACK_TOKEN": {
-
         "description": "WeCom callback verification token",
-
         "prompt": "WeCom Token",
-
     },
-
     "WECOM_CALLBACK_ENCODING_AES_KEY": {
-
         "description": "WeCom callback AES encoding key",
-
         "prompt": "WeCom AES Key",
-
         "password": True,
-
     },
-
     "WEIXIN_ACCOUNT_ID": {
-
         "description": "WeChat Official Account ID",
-
         "prompt": "Account ID",
-
     },
-
     "WEIXIN_TOKEN": {
-
         "description": "WeChat callback token",
-
         "prompt": "Token",
-
         "password": True,
-
     },
-
     "WEIXIN_BASE_URL": {
-
         "description": "WeChat platform base URL",
-
         "prompt": "Base URL",
-
     },
-
     "FEISHU_APP_ID": {"description": "Feishu / Lark app ID", "prompt": "App ID"},
-
     "FEISHU_APP_SECRET": {
-
         "description": "Feishu / Lark app secret",
-
         "prompt": "App secret",
-
         "password": True,
-
     },
-
     "FEISHU_ENCRYPT_KEY": {
-
         "description": "Feishu / Lark encrypt key",
-
         "prompt": "Encrypt key",
-
         "password": True,
-
     },
-
     "FEISHU_VERIFICATION_TOKEN": {
-
         "description": "Feishu / Lark verification token",
-
         "prompt": "Verification token",
-
         "password": True,
-
     },
-
     "DINGTALK_CLIENT_ID": {
-
         "description": "DingTalk client ID (App key)",
-
         "prompt": "Client ID",
-
     },
-
     "DINGTALK_CLIENT_SECRET": {
-
         "description": "DingTalk client secret (App secret)",
-
         "prompt": "Client secret",
-
         "password": True,
-
     },
-
 }
 
 
-
-
-
 def _messaging_platform_catalog() -> tuple[dict[str, Any], ...]:
-
     """Build the messaging catalog from the gateway's Platform enum + plugin registry.
 
 
@@ -5570,40 +3916,26 @@ def _messaging_platform_catalog() -> tuple[dict[str, Any], ...]:
 
     from gateway.config import Platform
 
-
-
     seen: set[str] = set()
 
     entries: list[dict[str, Any]] = []
 
-
-
     for member in Platform.__members__.values():
-
         if member.value == "local":
-
             continue
 
         if member.value in seen:
-
             continue
 
         seen.add(member.value)
 
         entries.append(_build_catalog_entry(member.value))
 
-
-
     try:
-
         from gateway.platform_registry import platform_registry
 
-
-
         for plugin_entry in platform_registry.plugin_entries():
-
             if plugin_entry.name in seen:
-
                 continue
 
             seen.add(plugin_entry.name)
@@ -5611,27 +3943,18 @@ def _messaging_platform_catalog() -> tuple[dict[str, Any], ...]:
             entries.append(_build_catalog_entry(plugin_entry.name, plugin_entry))
 
     except Exception:
-
         _log.debug("plugin platform registry unavailable", exc_info=True)
-
-
 
     order = {pid: idx for idx, pid in enumerate(_PLATFORM_ORDER)}
 
     entries.sort(
-
         key=lambda e: (order.get(e["id"], len(_PLATFORM_ORDER)), e["name"].lower())
-
     )
 
     return tuple(entries)
 
 
-
-
-
 def _channel_managed_env_keys() -> frozenset[str]:
-
     """Env-var keys owned by a Channels page platform card.
 
 
@@ -5649,23 +3972,17 @@ def _channel_managed_env_keys() -> frozenset[str]:
     """
 
     try:
-
         keys: set[str] = set()
 
         for entry in _messaging_platform_catalog():
-
             keys.update(entry.get("env_vars", ()))
 
         return frozenset(keys)
 
     except Exception:
-
         _log.debug("could not build channel-managed env key set", exc_info=True)
 
         return frozenset()
-
-
-
 
 
 # Cross-cutting gateway / relay knobs stay on the Keys → Settings tab even though
@@ -5675,51 +3992,31 @@ def _channel_managed_env_keys() -> frozenset[str]:
 # (``DISCORD_*``, ``MATRIX_*``, …) are owned by the Messaging UI instead.
 
 _MESSAGING_KEYS_PAGE_KEYS = frozenset({
-
     "GATEWAY_ALLOW_ALL_USERS",
-
     "GATEWAY_PROXY_KEY",
-
     "GATEWAY_PROXY_URL",
-
 })
 
 
-
-
-
 def _platform_env_prefixes(platform_id: str) -> tuple[str, ...]:
-
     """Env-var prefixes owned by a messaging platform card."""
 
     aliases: dict[str, tuple[str, ...]] = {
-
         "email": ("EMAIL_",),
-
         "homeassistant": ("HASS_",),
-
         "qqbot": ("QQ_", "QQBOT_"),
-
         "sms": ("TWILIO_",),
-
         "wecom": ("WECOM_BOT_", "WECOM_SECRET"),
-
         "wecom_callback": ("WECOM_CALLBACK_",),
-
     }
 
     if platform_id in aliases:
-
         return aliases[platform_id]
 
     return (platform_id.upper().replace("-", "_") + "_",)
 
 
-
-
-
 def _discover_platform_env_vars(platform_id: str) -> tuple[str, ...]:
-
     """All messaging-category env vars for a platform (override + plugin + prefix)."""
 
     prefixes = _platform_env_prefixes(platform_id)
@@ -5727,17 +4024,13 @@ def _discover_platform_env_vars(platform_id: str) -> tuple[str, ...]:
     keys: list[str] = []
 
     for name, info in OPTIONAL_ENV_VARS.items():
-
         if info.get("category") != "messaging":
-
             continue
 
         if name in _MESSAGING_KEYS_PAGE_KEYS:
-
             continue
 
         if not any(name.startswith(prefix) for prefix in prefixes):
-
             continue
 
         keys.append(name)
@@ -5745,119 +4038,72 @@ def _discover_platform_env_vars(platform_id: str) -> tuple[str, ...]:
     return tuple(sorted(set(keys)))
 
 
-
-
-
 def _merge_platform_env_vars(
-
     platform_id: str,
-
     override: dict[str, Any],
-
     plugin_entry: Any | None,
-
 ) -> tuple[str, ...]:
-
     """Canonical env-var list for a messaging platform card."""
 
     discovered = _discover_platform_env_vars(platform_id)
 
     if "env_vars" in override:
-
         return tuple(dict.fromkeys((*override["env_vars"], *discovered)))
 
     if plugin_entry is not None and plugin_entry.required_env:
-
         return tuple(dict.fromkeys((*tuple(plugin_entry.required_env), *discovered)))
 
     return discovered
 
 
-
-
-
 def _build_catalog_entry(
-
     platform_id: str, plugin_entry: Any | None = None
-
 ) -> dict[str, Any]:
 
     override = _PLATFORM_OVERRIDES.get(platform_id, {})
 
-
-
     env_vars = _merge_platform_env_vars(platform_id, override, plugin_entry)
 
-
-
     if "required_env" in override:
-
         required_env = tuple(override["required_env"])
 
     elif plugin_entry is not None:
-
         required_env = tuple(plugin_entry.required_env or ())
 
     else:
-
         required_env = ()
 
-
-
     if override.get("name"):
-
         name = override["name"]
 
     elif plugin_entry is not None and plugin_entry.label:
-
         name = plugin_entry.label
 
     else:
-
         name = platform_id.replace("_", " ").title()
-
-
 
     description = override.get("description")
 
     if not description and plugin_entry is not None:
-
         description = plugin_entry.install_hint or ""
 
-
-
     return {
-
         "id": platform_id,
-
         "name": name,
-
         "description": description or "",
-
         "docs_url": override.get("docs_url", ""),
-
         "env_vars": env_vars,
-
         "required_env": required_env,
-
     }
-
-
-
 
 
 def _catalog_lookup(platform_id: str) -> dict[str, Any] | None:
 
     for entry in _messaging_platform_catalog():
-
         if entry["id"] == platform_id:
-
             return entry
 
     return None
-
-
-
 
 
 def _messaging_env_info(key: str) -> dict[str, Any]:
@@ -5865,28 +4111,17 @@ def _messaging_env_info(key: str) -> dict[str, Any]:
     info = OPTIONAL_ENV_VARS.get(key) or _MESSAGING_ENV_FALLBACKS.get(key) or {}
 
     return {
-
         "description": info.get("description", ""),
-
         "prompt": info.get("prompt", key),
-
         "url": info.get("url"),
-
         "is_password": info.get("password", False),
-
         "advanced": info.get("advanced", False),
-
     }
-
-
-
 
 
 def _gateway_platform_config(platform_id: str):
 
     from gateway.config import Platform, load_gateway_config
-
-
 
     config = load_gateway_config()
 
@@ -5897,13 +4132,8 @@ def _gateway_platform_config(platform_id: str):
     return config, platform, platform_config
 
 
-
-
-
 def _messaging_platform_payload(
-
     entry: dict[str, Any], env_on_disk: dict[str, str], runtime: dict | None
-
 ) -> dict[str, Any]:
 
     platform_id = entry["id"]
@@ -5913,165 +4143,94 @@ def _messaging_platform_payload(
     runtime_platforms = runtime.get("platforms") if runtime else {}
 
     runtime_platform = (
-
         runtime_platforms.get(platform_id, {})
-
         if isinstance(runtime_platforms, dict)
-
         else {}
-
     )
 
     env_vars = []
 
-
-
     for key in entry["env_vars"]:
-
         value = env_on_disk.get(key) or os.getenv(key, "")
 
-        env_vars.append(
-
-            {
-
-                "key": key,
-
-                "required": key in entry["required_env"],
-
-                "is_set": bool(value),
-
-                "redacted_value": redact_key(value) if value else None,
-
-                **_messaging_env_info(key),
-
-            }
-
-        )
-
-
+        env_vars.append({
+            "key": key,
+            "required": key in entry["required_env"],
+            "is_set": bool(value),
+            "redacted_value": redact_key(value) if value else None,
+            **_messaging_env_info(key),
+        })
 
     try:
-
         gateway_config, platform, platform_config = _gateway_platform_config(
-
             platform_id
-
         )
 
         enabled = bool(platform_config and platform_config.enabled)
 
         configured = bool(
-
             platform_config
-
             and gateway_config._is_platform_connected(platform, platform_config)
-
         )
 
         home_channel = (
-
             platform_config.home_channel.to_dict()
-
             if platform_config and platform_config.home_channel
-
             else None
-
         )
 
     except Exception:
-
         enabled = False
 
         configured = all(
-
             env_on_disk.get(key) or os.getenv(key, "") for key in entry["required_env"]
-
         )
 
         home_channel = None
 
-
-
     state = (
-
         runtime_platform.get("state") if isinstance(runtime_platform, dict) else None
-
     )
 
     if not enabled:
-
         state = "disabled"
 
     elif not configured:
-
         state = "not_configured"
 
     elif gateway_running and not state:
-
         state = "pending_restart"
 
     elif not gateway_running and not state:
-
         state = "gateway_stopped"
 
-
-
     return {
-
         "id": platform_id,
-
         "name": entry["name"],
-
         "description": entry["description"],
-
         "docs_url": entry["docs_url"],
-
         "enabled": enabled,
-
         "configured": configured,
-
         "gateway_running": gateway_running,
-
         "state": state,
-
         "error_code": (
-
             runtime_platform.get("error_code")
-
             if isinstance(runtime_platform, dict)
-
             else None
-
         ),
-
         "error_message": (
-
             runtime_platform.get("error_message")
-
             if isinstance(runtime_platform, dict)
-
             else None
-
         ),
-
         "updated_at": (
-
             runtime_platform.get("updated_at")
-
             if isinstance(runtime_platform, dict)
-
             else None
-
         ),
-
         "home_channel": home_channel,
-
         "env_vars": env_vars,
-
     }
-
-
-
 
 
 def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
@@ -6081,7 +4240,6 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
     platforms = config.setdefault("platforms", {})
 
     if not isinstance(platforms, dict):
-
         platforms = {}
 
         config["platforms"] = platforms
@@ -6089,7 +4247,6 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
     platform_config = platforms.setdefault(platform_id, {})
 
     if not isinstance(platform_config, dict):
-
         platform_config = {}
 
         platforms[platform_id] = platform_config
@@ -6099,11 +4256,7 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
     save_config(config)
 
 
-
-
-
 @app.get("/api/messaging/platforms")
-
 async def get_messaging_platforms():
 
     env_on_disk = load_env()
@@ -6111,197 +4264,121 @@ async def get_messaging_platforms():
     runtime = read_runtime_status()
 
     return {
-
         "platforms": [
-
             _messaging_platform_payload(entry, env_on_disk, runtime)
-
             for entry in _messaging_platform_catalog()
-
         ]
-
     }
 
 
-
-
-
 @app.put("/api/messaging/platforms/{platform_id}")
-
 async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpdate):
 
     entry = _catalog_lookup(platform_id)
 
     if not entry:
-
         raise HTTPException(
-
             status_code=404, detail=f"Unknown messaging platform: {platform_id}"
-
         )
-
-
 
     allowed_env = set(entry["env_vars"])
 
     try:
-
         for key in body.clear_env:
-
             if key not in allowed_env:
-
                 raise HTTPException(
-
                     status_code=400,
-
                     detail=f"{key} is not configurable for {entry['name']}",
-
                 )
 
             remove_env_value(key)
 
-
-
         for key, value in body.env.items():
-
             if key not in allowed_env:
-
                 raise HTTPException(
-
                     status_code=400,
-
                     detail=f"{key} is not configurable for {entry['name']}",
-
                 )
 
             trimmed = value.strip()
 
             if trimmed:
-
                 save_env_value(key, trimmed)
 
-
-
         if body.enabled is not None:
-
             _write_platform_enabled(platform_id, body.enabled)
-
-
 
         return {"ok": True, "platform": platform_id}
 
     except HTTPException:
-
         raise
 
     except Exception:
-
         _log.exception("PUT /api/messaging/platforms/%s failed", platform_id)
 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-
-
-
 @app.post("/api/messaging/platforms/{platform_id}/test")
-
 async def test_messaging_platform(platform_id: str):
 
     entry = _catalog_lookup(platform_id)
 
     if not entry:
-
         raise HTTPException(
-
             status_code=404, detail=f"Unknown messaging platform: {platform_id}"
-
         )
-
-
 
     env_on_disk = load_env()
 
     payload = _messaging_platform_payload(entry, env_on_disk, read_runtime_status())
 
     if not payload["enabled"]:
-
         message = f"{entry['name']} is disabled. Enable it, then restart the gateway."
 
         return {"ok": False, "state": payload["state"], "message": message}
 
     if not payload["configured"]:
-
         missing = [
-
             field["key"]
-
             for field in payload["env_vars"]
-
             if field["required"] and not field["is_set"]
-
         ]
 
         message = (
-
             f"Missing required setup: {', '.join(missing)}"
-
             if missing
-
             else "Platform setup is incomplete."
-
         )
 
         return {"ok": False, "state": payload["state"], "message": message}
 
     if not payload["gateway_running"]:
-
         return {
-
             "ok": False,
-
             "state": payload["state"],
-
             "message": "Gateway is not running. Restart the gateway to connect this platform.",
-
         }
 
     if payload["state"] == "connected":
-
         return {
-
             "ok": True,
-
             "state": payload["state"],
-
             "message": f"{entry['name']} is connected.",
-
         }
 
     if payload.get("error_message"):
-
         return {
-
             "ok": False,
-
             "state": payload["state"],
-
             "message": payload["error_message"],
-
         }
 
     return {
-
         "ok": False,
-
         "state": payload["state"],
-
         "message": "Setup looks complete, but the gateway has not reported a connection yet. Restart the gateway.",
-
     }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -6325,11 +4402,7 @@ async def test_messaging_platform(platform_id: str):
 # can surface a one-click copy.
 
 
-
-
-
 def _truncate_token(value: Optional[str], visible: int = 6) -> str:
-
     """Return ``...XXXXXX`` (last N chars) for safe display in the UI.
 
 
@@ -6351,11 +4424,9 @@ def _truncate_token(value: Optional[str], visible: int = 6) -> str:
     """
 
     if not value:
-
         return ""
 
     if callable(value) and not isinstance(value, str):
-
         # Entra ID bearer provider — never reveal a minted token in the UI.
 
         return "<entra-id-bearer>"
@@ -6363,23 +4434,17 @@ def _truncate_token(value: Optional[str], visible: int = 6) -> str:
     s = str(value)
 
     if "." in s and s.count(".") >= 2:
-
         # Looks like a JWT — show the trailing piece of the signature only.
 
         s = s.rsplit(".", 1)[-1]
 
     if len(s) <= visible:
-
         return s
 
     return f"…{s[-visible:]}"
 
 
-
-
-
 def _anthropic_oauth_status() -> Dict[str, Any]:
-
     """Combined status across the three Anthropic credential sources we read.
 
 
@@ -6397,119 +4462,73 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
     """
 
     try:
-
         from agent.anthropic_adapter import (
-
             read_clawk_oauth_credentials,
-
             read_claude_code_credentials,
-
             _CLAWK_OAUTH_FILE,
-
         )
 
     except ImportError:
-
         read_claude_code_credentials = None  # type: ignore
 
         read_clawk_oauth_credentials = None  # type: ignore
 
         _CLAWK_OAUTH_FILE = None  # type: ignore
 
-
-
     clawk_creds = None
 
     if read_clawk_oauth_credentials:
-
         try:
-
             clawk_creds = read_clawk_oauth_credentials()
 
         except Exception:
-
             clawk_creds = None
 
     if clawk_creds and clawk_creds.get("accessToken"):
-
         return {
-
             "logged_in": True,
-
             "source": "clawk_pkce",
-
             "source_label": f"Clawksis PKCE ({_CLAWK_OAUTH_FILE})",
-
             "token_preview": _truncate_token(clawk_creds.get("accessToken")),
-
             "expires_at": clawk_creds.get("expiresAt"),
-
             "has_refresh_token": bool(clawk_creds.get("refreshToken")),
-
         }
-
-
 
     cc_creds = None
 
     if read_claude_code_credentials:
-
         try:
-
             cc_creds = read_claude_code_credentials()
 
         except Exception:
-
             cc_creds = None
 
     if cc_creds and cc_creds.get("accessToken"):
-
         return {
-
             "logged_in": True,
-
             "source": "claude_code",
-
             "source_label": "Claude Code (~/.claude/.credentials.json)",
-
             "token_preview": _truncate_token(cc_creds.get("accessToken")),
-
             "expires_at": cc_creds.get("expiresAt"),
-
             "has_refresh_token": bool(cc_creds.get("refreshToken")),
-
         }
-
-
 
     env_token = os.getenv("ANTHROPIC_TOKEN") or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
 
     if env_token:
-
         return {
-
             "logged_in": True,
-
             "source": "env_var",
-
             "source_label": "ANTHROPIC_TOKEN environment variable",
-
             "token_preview": _truncate_token(env_token),
-
             "expires_at": None,
-
             "has_refresh_token": False,
-
         }
 
     return {"logged_in": False, "source": None}
 
 
-
-
-
 def _claude_code_only_status() -> Dict[str, Any]:
-
     """Surface Claude Code CLI credentials as their own provider entry.
 
 
@@ -6523,37 +4542,24 @@ def _claude_code_only_status() -> Dict[str, Any]:
     """
 
     try:
-
         from agent.anthropic_adapter import read_claude_code_credentials
 
         creds = read_claude_code_credentials()
 
     except Exception:
-
         creds = None
 
     if creds and creds.get("accessToken"):
-
         return {
-
             "logged_in": True,
-
             "source": "claude_code_cli",
-
             "source_label": "~/.claude/.credentials.json",
-
             "token_preview": _truncate_token(creds.get("accessToken")),
-
             "expires_at": creds.get("expiresAt"),
-
             "has_refresh_token": bool(creds.get("refreshToken")),
-
         }
 
     return {"logged_in": False, "source": None}
-
-
-
 
 
 # Provider catalog. The order matters — it's how we render the UI list.
@@ -6571,249 +4577,139 @@ def _claude_code_only_status() -> Dict[str, Any]:
 # to a third-party CLI like Claude Code or Qwen).
 
 _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
-
     {
-
         "id": "nous",
-
         "name": "Nous Portal",
-
         "flow": "device_code",
-
         "cli_command": "clawk auth add nous",
-
         "docs_url": "https://portal.nousresearch.com",
-
         "status_fn": None,  # dispatched via auth.get_nous_auth_status
-
     },
-
     {
-
         "id": "openai-codex",
-
         "name": "OpenAI OAuth (ChatGPT)",
-
         "flow": "device_code",
-
         "cli_command": "clawk auth add openai-codex",
-
         "docs_url": "https://platform.openai.com/docs",
-
         "status_fn": None,  # dispatched via auth.get_codex_auth_status
-
     },
-
     {
-
         "id": "qwen-oauth",
-
         "name": "Qwen (via Qwen CLI)",
-
         "flow": "external",
-
         "cli_command": "clawk auth add qwen-oauth",
-
         "docs_url": "https://github.com/QwenLM/qwen-code",
-
         "status_fn": None,  # dispatched via auth.get_qwen_auth_status
-
     },
-
     {
-
         "id": "minimax-oauth",
-
         "name": "MiniMax (OAuth)",
-
         # MiniMax's flow is structurally device-code (verification URI +
-
         # user code, backend polls the token endpoint) with a PKCE
-
         # extension for code-binding. The dashboard renders the same UX
-
         # as Nous's device-code flow; the PKCE bit is a security
-
         # extension that doesn't change the operator experience.
-
         "flow": "device_code",
-
         "cli_command": "clawk auth add minimax-oauth",
-
         "docs_url": "https://www.minimax.io",
-
         "status_fn": None,  # dispatched via auth.get_minimax_oauth_auth_status
-
     },
-
     {
-
         "id": "xai-oauth",
-
         "name": "xAI Grok OAuth (SuperGrok / Premium+)",
-
         # Loopback PKCE: the desktop's local backend binds a 127.0.0.1
-
         # callback server, the client opens the browser, and the redirect
-
         # lands back on the loopback listener — no code to copy/paste.
-
         "flow": "loopback",
-
         "cli_command": "clawk auth add xai-oauth",
-
         "docs_url": "https://github.com/samuelgradientai-sys/clawksis-agent",
-
         "status_fn": None,  # dispatched via auth.get_xai_oauth_auth_status
-
     },
-
     # ── Anthropic / Claude entries sit at the bottom: the API-key path
-
     # first, then the subscription OAuth path (which only works with extra
-
     # usage credits on top of a Claude Max plan — see disclaimer in name).
-
     {
-
         "id": "anthropic",
-
         "name": "Anthropic API Key",
-
         "flow": "pkce",
-
         "cli_command": "clawk auth add anthropic",
-
         "docs_url": "https://docs.claude.com/en/api/getting-started",
-
         "status_fn": _anthropic_oauth_status,
-
     },
-
     {
-
         "id": "claude-code",
-
         "name": "Anthropic OAuth: Required Extra Usage Credits to Use Subscription",
-
         "flow": "external",
-
         "cli_command": "claude setup-token",
-
         "docs_url": "https://docs.claude.com/en/docs/claude-code",
-
         "status_fn": _claude_code_only_status,
-
     },
-
 )
 
 
-
-
-
 def _resolve_provider_status(provider_id: str, status_fn) -> Dict[str, Any]:
-
     """Dispatch to the right status helper for an OAuth provider entry."""
 
     if status_fn is not None:
-
         try:
-
             return status_fn()
 
         except Exception as e:
-
             return {"logged_in": False, "error": str(e)}
 
     try:
-
         from clawk_cli import auth as hauth
 
         if provider_id == "nous":
-
             raw = hauth.get_nous_auth_status()
 
             return {
-
                 "logged_in": bool(raw.get("logged_in")),
-
                 "source": "nous_portal",
-
                 "source_label": raw.get("portal_base_url") or "Nous Portal",
-
                 "token_preview": _truncate_token(raw.get("access_token")),
-
                 "expires_at": raw.get("access_expires_at"),
-
                 "has_refresh_token": bool(raw.get("has_refresh_token")),
-
             }
 
         if provider_id == "openai-codex":
-
             raw = hauth.get_codex_auth_status()
 
             return {
-
                 "logged_in": bool(raw.get("logged_in")),
-
                 "source": raw.get("source") or "openai_codex",
-
                 "source_label": raw.get("auth_mode") or "OpenAI Codex",
-
                 "token_preview": _truncate_token(raw.get("api_key")),
-
                 "expires_at": None,
-
                 "has_refresh_token": False,
-
                 "last_refresh": raw.get("last_refresh"),
-
             }
 
         if provider_id == "qwen-oauth":
-
             raw = hauth.get_qwen_auth_status()
 
             return {
-
                 "logged_in": bool(raw.get("logged_in")),
-
                 "source": "qwen_cli",
-
                 "source_label": raw.get("auth_store_path") or "Qwen CLI",
-
                 "token_preview": _truncate_token(raw.get("access_token")),
-
                 "expires_at": raw.get("expires_at"),
-
                 "has_refresh_token": bool(raw.get("has_refresh_token")),
-
             }
 
         if provider_id == "minimax-oauth":
-
             raw = hauth.get_minimax_oauth_auth_status()
 
             return {
-
                 "logged_in": bool(raw.get("logged_in")),
-
                 "source": "minimax_oauth",
-
                 "source_label": f"MiniMax ({raw.get('region', 'global')})",
-
                 "token_preview": None,
-
                 "expires_at": raw.get("expires_at"),
-
                 "has_refresh_token": True,
-
             }
 
         if provider_id == "xai-oauth":
-
             raw = hauth.get_xai_oauth_auth_status()
 
             # source_label is meant to be a human-readable origin (auth-store
@@ -6823,37 +4719,25 @@ def _resolve_provider_status(provider_id: str, status_fn) -> Dict[str, Any]:
             # ("oauth_pkce"). Prefer the store path, then the source slug.
 
             return {
-
                 "logged_in": bool(raw.get("logged_in")),
-
                 "source": raw.get("source") or "xai_oauth",
-
-                "source_label": raw.get("auth_store") or raw.get("source") or "xAI Grok OAuth",
-
+                "source_label": raw.get("auth_store")
+                or raw.get("source")
+                or "xAI Grok OAuth",
                 "token_preview": _truncate_token(raw.get("api_key")),
-
                 "expires_at": None,
-
                 "has_refresh_token": True,
-
                 "last_refresh": raw.get("last_refresh"),
-
             }
 
     except Exception as e:
-
         return {"logged_in": False, "error": str(e)}
 
     return {"logged_in": False}
 
 
-
-
-
 @app.get("/api/providers/oauth")
-
 async def list_oauth_providers():
-
     """Enumerate every OAuth-capable LLM provider with current status.
 
 
@@ -6889,56 +4773,34 @@ async def list_oauth_providers():
     providers = []
 
     for p in _OAUTH_PROVIDER_CATALOG:
-
         status = _resolve_provider_status(p["id"], p.get("status_fn"))
 
         providers.append({
-
             "id": p["id"],
-
             "name": p["name"],
-
             "flow": p["flow"],
-
             "cli_command": p["cli_command"],
-
             "docs_url": p["docs_url"],
-
             "status": status,
-
         })
 
     return {"providers": providers}
 
 
-
-
-
 @app.delete("/api/providers/oauth/{provider_id}")
-
 async def disconnect_oauth_provider(provider_id: str, request: Request):
-
     """Disconnect an OAuth provider. Token-protected (matches /env/reveal)."""
 
     _require_token(request)
 
-
-
     valid_ids = {p["id"] for p in _OAUTH_PROVIDER_CATALOG}
 
     if provider_id not in valid_ids:
-
         raise HTTPException(
-
             status_code=400,
-
             detail=f"Unknown provider: {provider_id}. "
-
-                   f"Available: {', '.join(sorted(valid_ids))}",
-
+            f"Available: {', '.join(sorted(valid_ids))}",
         )
-
-
 
     # Anthropic and claude-code clear the same Clawksis-managed PKCE file
 
@@ -6949,39 +4811,30 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
     # want to undo a disconnect.
 
     if provider_id in {"anthropic", "claude-code"}:
-
         try:
-
             from agent.anthropic_adapter import _CLAWK_OAUTH_FILE
 
             if _CLAWK_OAUTH_FILE.exists():
-
                 _CLAWK_OAUTH_FILE.unlink()
 
         except Exception:
-
             pass
 
         # Also clear the credential pool entry if present.
 
         try:
-
             from clawk_cli.auth import clear_provider_auth
 
             clear_provider_auth("anthropic")
 
         except Exception:
-
             pass
 
         _log.info("oauth/disconnect: %s", provider_id)
 
         return {"ok": True, "provider": provider_id}
 
-
-
     try:
-
         from clawk_cli.auth import clear_provider_auth
 
         cleared = clear_provider_auth(provider_id)
@@ -6991,13 +4844,9 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
         return {"ok": bool(cleared), "provider": provider_id}
 
     except Exception as e:
-
         _log.exception("disconnect %s failed", provider_id)
 
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -7097,13 +4946,11 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
 # expired sessions so the dict doesn't grow without bound.
 
 
-
 _OAUTH_SESSION_TTL_SECONDS = 15 * 60
 
 _oauth_sessions: Dict[str, Dict[str, Any]] = {}
 
 _oauth_sessions_lock = threading.Lock()
-
 
 
 # Import OAuth constants from canonical source instead of duplicating.
@@ -7113,85 +4960,59 @@ _oauth_sessions_lock = threading.Lock()
 # Phase 2 endpoints will return 501 in that case.
 
 try:
-
     from agent.anthropic_adapter import (
-
         _OAUTH_CLIENT_ID as _ANTHROPIC_OAUTH_CLIENT_ID,
-
         _OAUTH_TOKEN_URL as _ANTHROPIC_OAUTH_TOKEN_URL,
-
         _OAUTH_REDIRECT_URI as _ANTHROPIC_OAUTH_REDIRECT_URI,
-
         _OAUTH_SCOPES as _ANTHROPIC_OAUTH_SCOPES,
-
         _generate_pkce as _generate_pkce_pair,
-
     )
 
     _ANTHROPIC_OAUTH_AVAILABLE = True
 
 except ImportError:
-
     _ANTHROPIC_OAUTH_AVAILABLE = False
 
 _ANTHROPIC_OAUTH_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
 
 
-
-
-
 def _gc_oauth_sessions() -> None:
-
     """Drop expired sessions. Called opportunistically on /start."""
 
     cutoff = time.time() - _OAUTH_SESSION_TTL_SECONDS
 
     with _oauth_sessions_lock:
-
-        stale = [sid for sid, sess in _oauth_sessions.items() if sess["created_at"] < cutoff]
+        stale = [
+            sid for sid, sess in _oauth_sessions.items() if sess["created_at"] < cutoff
+        ]
 
         for sid in stale:
-
             _oauth_sessions.pop(sid, None)
 
 
-
-
-
 def _new_oauth_session(provider_id: str, flow: str) -> tuple[str, Dict[str, Any]]:
-
     """Create + register a new OAuth session, return (session_id, session_dict)."""
 
     sid = secrets.token_urlsafe(16)
 
     sess = {
-
         "session_id": sid,
-
         "provider": provider_id,
-
         "flow": flow,
-
         "created_at": time.time(),
-
         "status": "pending",  # pending | approved | denied | expired | error
-
         "error_message": None,
-
     }
 
     with _oauth_sessions_lock:
-
         _oauth_sessions[sid] = sess
 
     return sid, sess
 
 
-
-
-
-def _save_anthropic_oauth_creds(access_token: str, refresh_token: str, expires_at_ms: int) -> None:
-
+def _save_anthropic_oauth_creds(
+    access_token: str, refresh_token: str, expires_at_ms: int
+) -> None:
     """Persist Anthropic PKCE creds to both Clawksis file AND credential pool.
 
 
@@ -7205,27 +5026,19 @@ def _save_anthropic_oauth_creds(access_token: str, refresh_token: str, expires_a
     from agent.anthropic_adapter import _CLAWK_OAUTH_FILE
 
     payload = {
-
         "accessToken": access_token,
-
         "refreshToken": refresh_token,
-
         "expiresAt": expires_at_ms,
-
     }
 
     _CLAWK_OAUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     tmp_path = _CLAWK_OAUTH_FILE.with_name(
-
         f"{_CLAWK_OAUTH_FILE.name}.tmp.{os.getpid()}.{secrets.token_hex(8)}"
-
     )
 
     try:
-
         with tmp_path.open("w", encoding="utf-8") as handle:
-
             handle.write(json.dumps(payload, indent=2))
 
             handle.flush()
@@ -7235,23 +5048,17 @@ def _save_anthropic_oauth_creds(access_token: str, refresh_token: str, expires_a
         os.replace(tmp_path, _CLAWK_OAUTH_FILE)
 
         try:
-
             _CLAWK_OAUTH_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
         except OSError:
-
             pass
 
     finally:
-
         try:
-
             if tmp_path.exists():
-
                 tmp_path.unlink()
 
         except OSError:
-
             pass
 
     # Best-effort credential-pool insert. Failure here doesn't invalidate
@@ -7261,17 +5068,11 @@ def _save_anthropic_oauth_creds(access_token: str, refresh_token: str, expires_a
     # strategy, not for runtime credential resolution.
 
     try:
-
         from agent.credential_pool import (
-
             PooledCredential,
-
             load_pool,
-
             AUTH_TYPE_OAUTH,
-
             SOURCE_MANUAL,
-
         )
 
         import uuid
@@ -7280,57 +5081,44 @@ def _save_anthropic_oauth_creds(access_token: str, refresh_token: str, expires_a
 
         # Avoid duplicate entries: delete any prior dashboard-issued OAuth entry
 
-        existing = [e for e in pool.entries() if getattr(e, "source", "").startswith(f"{SOURCE_MANUAL}:dashboard_pkce")]
+        existing = [
+            e
+            for e in pool.entries()
+            if getattr(e, "source", "").startswith(f"{SOURCE_MANUAL}:dashboard_pkce")
+        ]
 
         for e in existing:
-
             try:
-
                 pool.remove_entry(getattr(e, "id", ""))
 
             except Exception:
-
                 pass
 
         entry = PooledCredential(
-
             provider="anthropic",
-
             id=uuid.uuid4().hex[:6],
-
             label="dashboard PKCE",
-
             auth_type=AUTH_TYPE_OAUTH,
-
             priority=0,
-
             source=f"{SOURCE_MANUAL}:dashboard_pkce",
-
             access_token=access_token,
-
             refresh_token=refresh_token,
-
             expires_at_ms=expires_at_ms,
-
         )
 
         pool.add_entry(entry)
 
     except Exception as e:
-
         _log.warning("anthropic pool add (dashboard) failed: %s", e)
 
 
-
-
-
 def _start_anthropic_pkce() -> Dict[str, Any]:
-
     """Begin PKCE flow. Returns the auth URL the UI should open."""
 
     if not _ANTHROPIC_OAUTH_AVAILABLE:
-
-        raise HTTPException(status_code=501, detail="Anthropic OAuth not available (missing adapter)")
+        raise HTTPException(
+            status_code=501, detail="Anthropic OAuth not available (missing adapter)"
+        )
 
     verifier, challenge = _generate_pkce_pair()
 
@@ -7341,60 +5129,41 @@ def _start_anthropic_pkce() -> Dict[str, Any]:
     sess["state"] = verifier  # Anthropic round-trips verifier as state
 
     params = {
-
         "code": "true",
-
         "client_id": _ANTHROPIC_OAUTH_CLIENT_ID,
-
         "response_type": "code",
-
         "redirect_uri": _ANTHROPIC_OAUTH_REDIRECT_URI,
-
         "scope": _ANTHROPIC_OAUTH_SCOPES,
-
         "code_challenge": challenge,
-
         "code_challenge_method": "S256",
-
         "state": verifier,
-
     }
 
     auth_url = f"{_ANTHROPIC_OAUTH_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
     return {
-
         "session_id": sid,
-
         "flow": "pkce",
-
         "auth_url": auth_url,
-
         "expires_in": _OAUTH_SESSION_TTL_SECONDS,
-
     }
 
 
-
-
-
 def _submit_anthropic_pkce(session_id: str, code_input: str) -> Dict[str, Any]:
-
     """Exchange authorization code for tokens. Persists on success."""
 
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.get(session_id)
 
     if not sess or sess["provider"] != "anthropic" or sess["flow"] != "pkce":
-
         raise HTTPException(status_code=404, detail="Unknown or expired session")
 
     if sess["status"] != "pending":
-
-        return {"ok": False, "status": sess["status"], "message": sess.get("error_message")}
-
-
+        return {
+            "ok": False,
+            "status": sess["status"],
+            "message": sess.get("error_message"),
+        }
 
     # Anthropic's redirect callback page formats the code as `<code>#<state>`.
 
@@ -7405,64 +5174,40 @@ def _submit_anthropic_pkce(session_id: str, code_input: str) -> Dict[str, Any]:
     code = parts[0].strip()
 
     if not code:
-
         return {"ok": False, "status": "error", "message": "No code provided"}
 
     state_from_callback = parts[1] if len(parts) > 1 else ""
 
-
-
     exchange_data = json.dumps({
-
         "grant_type": "authorization_code",
-
         "client_id": _ANTHROPIC_OAUTH_CLIENT_ID,
-
         "code": code,
-
         "state": state_from_callback or sess["state"],
-
         "redirect_uri": _ANTHROPIC_OAUTH_REDIRECT_URI,
-
         "code_verifier": sess["verifier"],
-
     }).encode()
 
     req = urllib.request.Request(
-
         _ANTHROPIC_OAUTH_TOKEN_URL,
-
         data=exchange_data,
-
         headers={
-
             "Content-Type": "application/json",
-
             "User-Agent": "clawksis-dashboard/1.0",
-
         },
-
         method="POST",
-
     )
 
     try:
-
         with urllib.request.urlopen(req, timeout=20) as resp:
-
             result = json.loads(resp.read().decode())
 
     except Exception as e:
-
         with _oauth_sessions_lock:
-
             sess["status"] = "error"
 
             sess["error_message"] = f"Token exchange failed: {e}"
 
         return {"ok": False, "status": "error", "message": sess["error_message"]}
-
-
 
     access_token = result.get("access_token", "")
 
@@ -7471,27 +5216,20 @@ def _submit_anthropic_pkce(session_id: str, code_input: str) -> Dict[str, Any]:
     expires_in = int(result.get("expires_in") or 3600)
 
     if not access_token:
-
         with _oauth_sessions_lock:
-
             sess["status"] = "error"
 
             sess["error_message"] = "No access token returned"
 
         return {"ok": False, "status": "error", "message": sess["error_message"]}
 
-
-
     expires_at_ms = int(time.time() * 1000) + (expires_in * 1000)
 
     try:
-
         _save_anthropic_oauth_creds(access_token, refresh_token, expires_at_ms)
 
     except Exception as e:
-
         with _oauth_sessions_lock:
-
             sess["status"] = "error"
 
             sess["error_message"] = f"Save failed: {e}"
@@ -7499,7 +5237,6 @@ def _submit_anthropic_pkce(session_id: str, code_input: str) -> Dict[str, Any]:
         return {"ok": False, "status": "error", "message": sess["error_message"]}
 
     with _oauth_sessions_lock:
-
         sess["status"] = "approved"
 
     _log.info("oauth/pkce: anthropic login completed (session=%s)", session_id)
@@ -7507,11 +5244,7 @@ def _submit_anthropic_pkce(session_id: str, code_input: str) -> Dict[str, Any]:
     return {"ok": True, "status": "approved"}
 
 
-
-
-
 async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
-
     """Initiate a device-code flow (Nous, OpenAI Codex, or MiniMax).
 
 
@@ -7525,13 +5258,9 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
     """
 
     if provider_id == "nous":
-
         from clawk_cli.auth import (
-
             _request_device_code,
-
             PROVIDER_REGISTRY,
-
         )
 
         import httpx
@@ -7539,55 +5268,33 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         pconfig = PROVIDER_REGISTRY["nous"]
 
         portal_base_url = (
-
             os.getenv("CLAWK_PORTAL_BASE_URL")
-
             or os.getenv("NOUS_PORTAL_BASE_URL")
-
             or pconfig.portal_base_url
-
         ).rstrip("/")
 
         client_id = pconfig.client_id
 
         scope = pconfig.scope
 
-
-
         def _do_nous_device_request():
 
             with httpx.Client(
-
                 timeout=httpx.Timeout(15.0),
-
                 headers={"Accept": "application/json"},
-
             ) as client:
-
                 return (
-
                     _request_device_code(
-
                         client=client,
-
                         portal_base_url=portal_base_url,
-
                         client_id=client_id,
-
                         scope=scope,
-
                     ),
-
                     scope,
-
                 )
 
-
-
         device_data, effective_scope = await asyncio.get_running_loop().run_in_executor(
-
             None, _do_nous_device_request
-
         )
 
         sid, sess = _new_oauth_session("nous", "device_code")
@@ -7605,31 +5312,19 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         sess["scope"] = effective_scope
 
         threading.Thread(
-
             target=_nous_poller, args=(sid,), daemon=True, name=f"oauth-poll-{sid[:6]}"
-
         ).start()
 
         return {
-
             "session_id": sid,
-
             "flow": "device_code",
-
             "user_code": str(device_data["user_code"]),
-
             "verification_url": str(device_data["verification_uri_complete"]),
-
             "expires_in": int(device_data["expires_in"]),
-
             "poll_interval": int(device_data["interval"]),
-
         }
 
-
-
     if provider_id == "openai-codex":
-
         # Codex uses fixed OpenAI device-auth endpoints; reuse the helper.
 
         sid, _ = _new_oauth_session("openai-codex", "device_code")
@@ -7645,11 +5340,10 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         # to stdout — we capture nothing here, just status.
 
         threading.Thread(
-
-            target=_codex_full_login_worker, args=(sid,), daemon=True,
-
+            target=_codex_full_login_worker,
+            args=(sid,),
+            daemon=True,
             name=f"oauth-codex-{sid[:6]}",
-
         ).start()
 
         # Block briefly until the worker has populated the user_code, OR error.
@@ -7657,49 +5351,38 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         deadline = time.monotonic() + 10
 
         while time.monotonic() < deadline:
-
             with _oauth_sessions_lock:
-
                 s = _oauth_sessions.get(sid)
 
             if s and (s.get("user_code") or s["status"] != "pending"):
-
                 break
 
             await asyncio.sleep(0.1)
 
         with _oauth_sessions_lock:
-
             s = _oauth_sessions.get(sid, {})
 
         if s.get("status") == "error":
-
-            raise HTTPException(status_code=500, detail=s.get("error_message") or "device-auth failed")
+            raise HTTPException(
+                status_code=500, detail=s.get("error_message") or "device-auth failed"
+            )
 
         if not s.get("user_code"):
-
-            raise HTTPException(status_code=504, detail="device-auth timed out before returning a user code")
+            raise HTTPException(
+                status_code=504,
+                detail="device-auth timed out before returning a user code",
+            )
 
         return {
-
             "session_id": sid,
-
             "flow": "device_code",
-
             "user_code": s["user_code"],
-
             "verification_url": s["verification_url"],
-
             "expires_in": int(s.get("expires_in") or 900),
-
             "poll_interval": int(s.get("interval") or 5),
-
         }
 
-
-
     if provider_id == "minimax-oauth":
-
         # MiniMax uses a device-code-style flow (verification URI + user
 
         # code + background poll) with a PKCE extension on top. From the
@@ -7713,15 +5396,10 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         # token exchange to the original session.
 
         from clawk_cli.auth import (
-
             _minimax_pkce_pair,
-
             _minimax_request_user_code,
-
             MINIMAX_OAUTH_CLIENT_ID,
-
             MINIMAX_OAUTH_GLOBAL_BASE,
-
         )
 
         import httpx
@@ -7729,41 +5407,26 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         verifier, challenge, state = _minimax_pkce_pair()
 
         portal_base_url = (
-
             os.getenv("MINIMAX_PORTAL_BASE_URL") or MINIMAX_OAUTH_GLOBAL_BASE
-
         ).rstrip("/")
 
         def _do_minimax_request():
 
             with httpx.Client(
-
                 timeout=httpx.Timeout(15.0),
-
                 headers={"Accept": "application/json"},
-
                 follow_redirects=True,
-
             ) as client:
-
                 return _minimax_request_user_code(
-
                     client=client,
-
                     portal_base_url=portal_base_url,
-
                     client_id=MINIMAX_OAUTH_CLIENT_ID,
-
                     code_challenge=challenge,
-
                     state=state,
-
                 )
 
         device_data = await asyncio.get_event_loop().run_in_executor(
-
             None, _do_minimax_request
-
         )
 
         sid, sess = _new_oauth_session("minimax-oauth", "device_code")
@@ -7776,11 +5439,7 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
 
         interval_raw = device_data.get("interval")
 
-        sess["interval_ms"] = (
-
-            int(interval_raw) if interval_raw is not None else None
-
-        )
+        sess["interval_ms"] = int(interval_raw) if interval_raw is not None else None
 
         sess["user_code"] = str(device_data["user_code"])
 
@@ -7807,13 +5466,11 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         sess["expired_in_raw"] = expired_in_raw
 
         if expired_in_raw > 1_000_000_000_000:  # likely unix-ms
-
             expires_at_ts = expired_in_raw / 1000.0
 
             expires_in_seconds = max(0, int(expires_at_ts - time.time()))
 
         else:
-
             expires_at_ts = time.time() + expired_in_raw
 
             expires_in_seconds = expired_in_raw
@@ -7821,39 +5478,25 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
         sess["expires_at"] = expires_at_ts
 
         threading.Thread(
-
             target=_minimax_poller,
-
             args=(sid,),
-
             daemon=True,
-
             name=f"oauth-poll-{sid[:6]}",
-
         ).start()
 
         return {
-
             "session_id": sid,
-
             "flow": "device_code",
-
             "user_code": str(device_data["user_code"]),
-
             "verification_url": str(device_data["verification_uri"]),
-
             "expires_in": expires_in_seconds,
-
             "poll_interval": max(2, (sess["interval_ms"] or 2000) // 1000),
-
         }
 
-
-
-    raise HTTPException(status_code=400, detail=f"Provider {provider_id} does not support device-code flow")
-
-
-
+    raise HTTPException(
+        status_code=400,
+        detail=f"Provider {provider_id} does not support device-code flow",
+    )
 
 
 # xAI Grok OAuth uses a loopback-redirect PKCE flow (RFC 8252). Unlike the
@@ -7871,11 +5514,7 @@ async def _start_device_code_flow(provider_id: str) -> Dict[str, Any]:
 _XAI_LOOPBACK_TIMEOUT_SECONDS = 300.0
 
 
-
-
-
 def _start_xai_loopback_flow() -> Dict[str, Any]:
-
     """Begin the xAI loopback PKCE flow.
 
 
@@ -7890,14 +5529,11 @@ def _start_xai_loopback_flow() -> Dict[str, Any]:
 
     from clawk_cli import auth as hauth
 
-
-
     discovery = hauth._xai_oauth_discovery()
 
     server, thread, callback_result, redirect_uri = hauth._xai_start_callback_server()
 
     try:
-
         hauth._xai_validate_loopback_redirect_uri(redirect_uri)
 
         verifier = hauth._oauth_pkce_code_verifier()
@@ -7909,21 +5545,14 @@ def _start_xai_loopback_flow() -> Dict[str, Any]:
         nonce = secrets.token_hex(16)
 
         authorize_url = hauth._xai_oauth_build_authorize_url(
-
             authorization_endpoint=discovery["authorization_endpoint"],
-
             redirect_uri=redirect_uri,
-
             code_challenge=challenge,
-
             state=state,
-
             nonce=nonce,
-
         )
 
     except Exception:
-
         # Binding succeeded but URL construction failed — release the socket
 
         # and join the serving thread so we don't leak a listener (or a
@@ -7931,26 +5560,20 @@ def _start_xai_loopback_flow() -> Dict[str, Any]:
         # lingering daemon thread) on the loopback port.
 
         try:
-
             server.shutdown()
 
             server.server_close()
 
         except Exception:
-
             pass
 
         try:
-
             thread.join(timeout=1.0)
 
         except Exception:
-
             pass
 
         raise
-
-
 
     sid, sess = _new_oauth_session("xai-oauth", "loopback")
 
@@ -7975,64 +5598,42 @@ def _start_xai_loopback_flow() -> Dict[str, Any]:
     sess["expires_at"] = time.time() + _XAI_LOOPBACK_TIMEOUT_SECONDS
 
     threading.Thread(
-
-        target=_xai_loopback_worker, args=(sid,), daemon=True,
-
+        target=_xai_loopback_worker,
+        args=(sid,),
+        daemon=True,
         name=f"oauth-xai-{sid[:6]}",
-
     ).start()
 
     return {
-
         "session_id": sid,
-
         "flow": "loopback",
-
         "auth_url": authorize_url,
-
         "expires_in": int(_XAI_LOOPBACK_TIMEOUT_SECONDS),
-
     }
 
 
-
-
-
 def _xai_loopback_worker(session_id: str) -> None:
-
     """Wait for the xAI loopback callback, exchange the code, persist tokens."""
 
     from datetime import datetime, timezone
 
-
-
     from clawk_cli import auth as hauth
 
-
-
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.get(session_id)
 
     if not sess:
-
         return
-
-
 
     def _fail(message: str) -> None:
 
         with _oauth_sessions_lock:
-
             s = _oauth_sessions.get(session_id)
 
             if s is not None:
-
                 s["status"] = "error"
 
                 s["error_message"] = message
-
-
 
     def _cancelled() -> bool:
 
@@ -8045,41 +5646,25 @@ def _xai_loopback_worker(session_id: str) -> None:
         # the user no longer wants.
 
         with _oauth_sessions_lock:
-
             return session_id not in _oauth_sessions
 
-
-
     try:
-
         callback = hauth._xai_wait_for_callback(
-
             sess["server"],
-
             sess["thread"],
-
             sess["callback_result"],
-
             timeout_seconds=_XAI_LOOPBACK_TIMEOUT_SECONDS,
-
         )
 
     except Exception as exc:
-
         _fail(f"xAI authorization timed out: {exc}")
 
         return
 
-
-
     if _cancelled():
-
         return
 
-
-
     if callback.get("error"):
-
         detail = callback.get("error_description") or callback["error"]
 
         _fail(f"xAI authorization failed: {detail}")
@@ -8087,7 +5672,6 @@ def _xai_loopback_worker(session_id: str) -> None:
         return
 
     if callback.get("state") != sess["state"]:
-
         _fail("xAI authorization failed: state mismatch.")
 
         return
@@ -8095,27 +5679,17 @@ def _xai_loopback_worker(session_id: str) -> None:
     code = str(callback.get("code") or "").strip()
 
     if not code:
-
         _fail("xAI authorization failed: missing authorization code.")
 
         return
 
-
-
     try:
-
         payload = hauth._xai_oauth_exchange_code_for_tokens(
-
             token_endpoint=sess["token_endpoint"],
-
             code=code,
-
             redirect_uri=sess["redirect_uri"],
-
             code_verifier=sess["verifier"],
-
             code_challenge=sess["challenge"],
-
         )
 
         access_token = str(payload.get("access_token", "") or "").strip()
@@ -8123,83 +5697,56 @@ def _xai_loopback_worker(session_id: str) -> None:
         refresh_token = str(payload.get("refresh_token", "") or "").strip()
 
         if not access_token or not refresh_token:
-
             _fail("xAI token exchange did not return the expected tokens.")
 
             return
 
         base_url = hauth._xai_validate_inference_base_url(
-
             os.getenv("CLAWK_XAI_BASE_URL", "").strip().rstrip("/")
-
             or os.getenv("XAI_BASE_URL", "").strip().rstrip("/"),
-
             fallback=hauth.DEFAULT_XAI_OAUTH_BASE_URL,
-
         )
 
         last_refresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         tokens = {
-
             "access_token": access_token,
-
             "refresh_token": refresh_token,
-
             "id_token": str(payload.get("id_token", "") or "").strip(),
-
             "expires_in": payload.get("expires_in"),
-
-            "token_type": str(payload.get("token_type") or "Bearer").strip() or "Bearer",
-
+            "token_type": str(payload.get("token_type") or "Bearer").strip()
+            or "Bearer",
         }
 
         if _cancelled():
-
             return
 
         hauth._save_xai_oauth_tokens(
-
             tokens,
-
             discovery=sess.get("discovery"),
-
             redirect_uri=sess["redirect_uri"],
-
             last_refresh=last_refresh,
-
         )
 
         _add_xai_oauth_pool_entry(access_token, refresh_token, base_url, last_refresh)
 
     except Exception as exc:
-
         _fail(f"xAI token exchange failed: {exc}")
 
         return
 
-
-
     with _oauth_sessions_lock:
-
         s = _oauth_sessions.get(session_id)
 
         if s is not None:
-
             s["status"] = "approved"
 
     _log.info("oauth/loopback: xai-oauth login completed (session=%s)", session_id)
 
 
-
-
-
 def _add_xai_oauth_pool_entry(
-
     access_token: str, refresh_token: str, base_url: str, last_refresh: str
-
 ) -> None:
-
     """Mirror `clawk auth add xai-oauth`'s credential-pool insert.
 
 
@@ -8213,87 +5760,57 @@ def _add_xai_oauth_pool_entry(
     """
 
     try:
-
         import uuid
 
-
-
         from agent.credential_pool import (
-
             PooledCredential,
-
             load_pool,
-
             AUTH_TYPE_OAUTH,
-
             SOURCE_MANUAL,
-
         )
 
         pool = load_pool("xai-oauth")
 
         existing = [
-
-            e for e in pool.entries()
-
-            if getattr(e, "source", "").startswith(f"{SOURCE_MANUAL}:dashboard_xai_pkce")
-
+            e
+            for e in pool.entries()
+            if getattr(e, "source", "").startswith(
+                f"{SOURCE_MANUAL}:dashboard_xai_pkce"
+            )
         ]
 
         for e in existing:
-
             try:
-
                 pool.remove_entry(getattr(e, "id", ""))
 
             except Exception:
-
                 pass
 
         entry = PooledCredential(
-
             provider="xai-oauth",
-
             id=uuid.uuid4().hex[:6],
-
             label="dashboard PKCE",
-
             auth_type=AUTH_TYPE_OAUTH,
-
             priority=0,
-
             source=f"{SOURCE_MANUAL}:dashboard_xai_pkce",
-
             access_token=access_token,
-
             refresh_token=refresh_token,
-
             base_url=base_url,
-
             last_refresh=last_refresh,
-
         )
 
         pool.add_entry(entry)
 
     except Exception as e:
-
         _log.warning("xai-oauth pool add (dashboard) failed: %s", e)
 
 
-
-
-
 def _nous_poller(session_id: str) -> None:
-
     """Background poller that drives a Nous device-code flow to completion."""
 
     from clawk_cli.auth import (
-
         _poll_for_token,
-
         refresh_nous_oauth_from_state,
-
     )
 
     from datetime import datetime, timezone
@@ -8301,11 +5818,9 @@ def _nous_poller(session_id: str) -> None:
     import httpx
 
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.get(session_id)
 
     if not sess:
-
         return
 
     portal_base_url = sess["portal_base_url"]
@@ -8321,23 +5836,16 @@ def _nous_poller(session_id: str) -> None:
     expires_in = max(60, int(sess["expires_at"] - time.time()))
 
     try:
-
-        with httpx.Client(timeout=httpx.Timeout(15.0), headers={"Accept": "application/json"}) as client:
-
+        with httpx.Client(
+            timeout=httpx.Timeout(15.0), headers={"Accept": "application/json"}
+        ) as client:
             token_data = _poll_for_token(
-
                 client=client,
-
                 portal_base_url=portal_base_url,
-
                 client_id=client_id,
-
                 device_code=device_code,
-
                 expires_in=expires_in,
-
                 poll_interval=interval,
-
             )
 
         # Same post-processing as _nous_device_code_login (validate/refresh JWT)
@@ -8347,43 +5855,28 @@ def _nous_poller(session_id: str) -> None:
         token_ttl = int(token_data.get("expires_in") or 0)
 
         auth_state = {
-
             "portal_base_url": portal_base_url,
-
             "inference_base_url": token_data.get("inference_base_url"),
-
             "client_id": client_id,
-
             "scope": token_data.get("scope") or scope,
-
             "token_type": token_data.get("token_type", "Bearer"),
-
             "access_token": token_data["access_token"],
-
             "refresh_token": token_data.get("refresh_token"),
-
             "obtained_at": now.isoformat(),
-
             "expires_at": (
-
-                datetime.fromtimestamp(now.timestamp() + token_ttl, tz=timezone.utc).isoformat()
-
-                if token_ttl else None
-
+                datetime.fromtimestamp(
+                    now.timestamp() + token_ttl, tz=timezone.utc
+                ).isoformat()
+                if token_ttl
+                else None
             ),
-
             "expires_in": token_ttl,
-
         }
 
         full_state = refresh_nous_oauth_from_state(
-
             auth_state,
-
             timeout_seconds=15.0,
-
             force_refresh=False,
-
         )
 
         from clawk_cli.auth import persist_nous_credentials
@@ -8391,27 +5884,20 @@ def _nous_poller(session_id: str) -> None:
         persist_nous_credentials(full_state)
 
         with _oauth_sessions_lock:
-
             sess["status"] = "approved"
 
         _log.info("oauth/device: nous login completed (session=%s)", session_id)
 
     except Exception as e:
-
         _log.warning("nous device-code poll failed (session=%s): %s", session_id, e)
 
         with _oauth_sessions_lock:
-
             sess["status"] = "error"
 
             sess["error_message"] = str(e)
 
 
-
-
-
 def _minimax_poller(session_id: str) -> None:
-
     """Background poller that drives a MiniMax OAuth flow to completion.
 
 
@@ -8433,17 +5919,11 @@ def _minimax_poller(session_id: str) -> None:
     """
 
     from clawk_cli.auth import (
-
         _minimax_poll_token,
-
         _minimax_resolve_token_expiry_unix,
-
         _minimax_save_auth_state,
-
         MINIMAX_OAUTH_GLOBAL_INFERENCE,
-
         MINIMAX_OAUTH_SCOPE,
-
     )
 
     from datetime import datetime, timezone
@@ -8451,11 +5931,9 @@ def _minimax_poller(session_id: str) -> None:
     import httpx
 
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.get(session_id)
 
     if not sess:
-
         return
 
     portal_base_url = sess["portal_base_url"]
@@ -8471,33 +5949,19 @@ def _minimax_poller(session_id: str) -> None:
     expired_in_raw = sess["expired_in_raw"]
 
     try:
-
         with httpx.Client(
-
             timeout=httpx.Timeout(15.0),
-
             headers={"Accept": "application/json"},
-
             follow_redirects=True,
-
         ) as client:
-
             token_data = _minimax_poll_token(
-
                 client=client,
-
                 portal_base_url=portal_base_url,
-
                 client_id=client_id,
-
                 user_code=user_code,
-
                 code_verifier=code_verifier,
-
                 expired_in=expired_in_raw,
-
                 interval_ms=interval_ms,
-
             )
 
         # Build the auth_state dict in the same shape as the CLI flow's
@@ -8513,71 +5977,47 @@ def _minimax_poller(session_id: str) -> None:
         now = datetime.now(timezone.utc)
 
         expires_at_ts = _minimax_resolve_token_expiry_unix(
-
-            int(token_data["expired_in"]), now=now,
-
+            int(token_data["expired_in"]),
+            now=now,
         )
 
         expires_in_s = max(0, int(expires_at_ts - now.timestamp()))
 
         auth_state = {
-
             "provider": "minimax-oauth",
-
             "region": sess.get("region", "global"),
-
             "portal_base_url": portal_base_url,
-
             "inference_base_url": MINIMAX_OAUTH_GLOBAL_INFERENCE,
-
             "client_id": client_id,
-
             "scope": MINIMAX_OAUTH_SCOPE,
-
             "token_type": token_data.get("token_type", "Bearer"),
-
             "access_token": token_data["access_token"],
-
             "refresh_token": token_data["refresh_token"],
-
             "resource_url": token_data.get("resource_url"),
-
             "obtained_at": now.isoformat(),
-
             "expires_at": datetime.fromtimestamp(
-
                 expires_at_ts, tz=timezone.utc
-
             ).isoformat(),
-
             "expires_in": expires_in_s,
-
         }
 
         _minimax_save_auth_state(auth_state)
 
         with _oauth_sessions_lock:
-
             sess["status"] = "approved"
 
         _log.info("oauth/device: minimax login completed (session=%s)", session_id)
 
     except Exception as e:
-
         _log.warning("minimax device-code poll failed (session=%s): %s", session_id, e)
 
         with _oauth_sessions_lock:
-
             sess["status"] = "error"
 
             sess["error_message"] = str(e)
 
 
-
-
-
 def _codex_full_login_worker(session_id: str) -> None:
-
     """Run the complete OpenAI Codex device-code flow.
 
 
@@ -8607,39 +6047,26 @@ def _codex_full_login_worker(session_id: str) -> None:
     """
 
     try:
-
         import httpx
 
         from clawk_cli.auth import (
-
             CODEX_OAUTH_CLIENT_ID,
-
             CODEX_OAUTH_TOKEN_URL,
-
             DEFAULT_CODEX_BASE_URL,
-
         )
 
         issuer = "https://auth.openai.com"
 
-
-
         # Step 1: request device code
 
         with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-
             resp = client.post(
-
                 f"{issuer}/api/accounts/deviceauth/usercode",
-
                 json={"client_id": CODEX_OAUTH_CLIENT_ID},
-
                 headers={"Content-Type": "application/json"},
-
             )
 
         if resp.status_code != 200:
-
             raise RuntimeError(f"deviceauth/usercode returned {resp.status_code}")
 
         device_data = resp.json()
@@ -8651,17 +6078,16 @@ def _codex_full_login_worker(session_id: str) -> None:
         poll_interval = max(3, int(device_data.get("interval", "5")))
 
         if not user_code or not device_auth_id:
-
-            raise RuntimeError("device-code response missing user_code or device_auth_id")
+            raise RuntimeError(
+                "device-code response missing user_code or device_auth_id"
+            )
 
         verification_url = f"{issuer}/codex/device"
 
         with _oauth_sessions_lock:
-
             sess = _oauth_sessions.get(session_id)
 
             if not sess:
-
                 return
 
             sess["user_code"] = user_code
@@ -8676,8 +6102,6 @@ def _codex_full_login_worker(session_id: str) -> None:
 
             sess["expires_at"] = time.time() + sess["expires_in"]
 
-
-
         # Step 2: poll until authorized
 
         deadline = time.monotonic() + sess["expires_in"]
@@ -8685,46 +6109,32 @@ def _codex_full_login_worker(session_id: str) -> None:
         code_resp = None
 
         with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-
             while time.monotonic() < deadline:
-
                 time.sleep(poll_interval)
 
                 poll = client.post(
-
                     f"{issuer}/api/accounts/deviceauth/token",
-
                     json={"device_auth_id": device_auth_id, "user_code": user_code},
-
                     headers={"Content-Type": "application/json"},
-
                 )
 
                 if poll.status_code == 200:
-
                     code_resp = poll.json()
 
                     break
 
                 if poll.status_code in {403, 404}:
-
                     continue  # user hasn't authorized yet
 
                 raise RuntimeError(f"deviceauth/token poll returned {poll.status_code}")
 
-
-
         if code_resp is None:
-
             with _oauth_sessions_lock:
-
                 sess["status"] = "expired"
 
                 sess["error_message"] = "Device code expired before approval"
 
             return
-
-
 
         # Step 3: exchange authorization_code for tokens
 
@@ -8733,35 +6143,24 @@ def _codex_full_login_worker(session_id: str) -> None:
         code_verifier = code_resp.get("code_verifier", "")
 
         if not authorization_code or not code_verifier:
-
-            raise RuntimeError("device-auth response missing authorization_code/code_verifier")
+            raise RuntimeError(
+                "device-auth response missing authorization_code/code_verifier"
+            )
 
         with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-
             token_resp = client.post(
-
                 CODEX_OAUTH_TOKEN_URL,
-
                 data={
-
                     "grant_type": "authorization_code",
-
                     "code": authorization_code,
-
                     "redirect_uri": f"{issuer}/deviceauth/callback",
-
                     "client_id": CODEX_OAUTH_CLIENT_ID,
-
                     "code_verifier": code_verifier,
-
                 },
-
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
-
             )
 
         if token_resp.status_code != 200:
-
             raise RuntimeError(f"token exchange returned {token_resp.status_code}")
 
         tokens = token_resp.json()
@@ -8771,51 +6170,34 @@ def _codex_full_login_worker(session_id: str) -> None:
         refresh_token = tokens.get("refresh_token", "")
 
         if not access_token:
-
             raise RuntimeError("token exchange did not return access_token")
-
-
 
         from clawk_cli.auth import _save_codex_tokens
 
-
-
         _save_codex_tokens({
-
             "access_token": access_token,
-
             "refresh_token": refresh_token,
-
         })
 
         with _oauth_sessions_lock:
-
             sess["status"] = "approved"
 
         _log.info("oauth/device: openai-codex login completed (session=%s)", session_id)
 
     except Exception as e:
-
         _log.warning("codex device-code worker failed (session=%s): %s", session_id, e)
 
         with _oauth_sessions_lock:
-
             s = _oauth_sessions.get(session_id)
 
             if s:
-
                 s["status"] = "error"
 
                 s["error_message"] = str(e)
 
 
-
-
-
 @app.post("/api/providers/oauth/{provider_id}/start")
-
 async def start_oauth_login(provider_id: str, request: Request):
-
     """Initiate an OAuth login flow. Token-protected."""
 
     _require_token(request)
@@ -8825,23 +6207,17 @@ async def start_oauth_login(provider_id: str, request: Request):
     valid = {p["id"] for p in _OAUTH_PROVIDER_CATALOG}
 
     if provider_id not in valid:
-
         raise HTTPException(status_code=400, detail=f"Unknown provider {provider_id}")
 
     catalog_entry = next(p for p in _OAUTH_PROVIDER_CATALOG if p["id"] == provider_id)
 
     if catalog_entry["flow"] == "external":
-
         raise HTTPException(
-
             status_code=400,
-
             detail=f"{provider_id} uses an external CLI; run `{catalog_entry['cli_command']}` manually",
-
         )
 
     try:
-
         # The pkce branch is gated on provider_id == "anthropic" because
 
         # `_start_anthropic_pkce()` is hardcoded to the Anthropic flow.
@@ -8855,27 +6231,20 @@ async def start_oauth_login(provider_id: str, request: Request):
         # start function and an explicit branch here.
 
         if catalog_entry["flow"] == "pkce" and provider_id == "anthropic":
-
             return _start_anthropic_pkce()
 
         if catalog_entry["flow"] == "device_code":
-
             return await _start_device_code_flow(provider_id)
 
         if catalog_entry["flow"] == "loopback" and provider_id == "xai-oauth":
-
             return await asyncio.get_running_loop().run_in_executor(
-
                 None, _start_xai_loopback_flow
-
             )
 
     except HTTPException:
-
         raise
 
     except Exception as e:
-
         _log.exception("oauth/start %s failed", provider_id)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -8883,45 +6252,33 @@ async def start_oauth_login(provider_id: str, request: Request):
     raise HTTPException(status_code=400, detail="Unsupported flow")
 
 
-
-
-
 class OAuthSubmitBody(BaseModel):
-
     session_id: str
 
     code: str
 
 
-
-
-
 @app.post("/api/providers/oauth/{provider_id}/submit")
-
 async def submit_oauth_code(provider_id: str, body: OAuthSubmitBody, request: Request):
-
     """Submit the auth code for PKCE flows. Token-protected."""
 
     _require_token(request)
 
     if provider_id == "anthropic":
-
         return await asyncio.get_running_loop().run_in_executor(
-
-            None, _submit_anthropic_pkce, body.session_id, body.code,
-
+            None,
+            _submit_anthropic_pkce,
+            body.session_id,
+            body.code,
         )
 
-    raise HTTPException(status_code=400, detail=f"submit not supported for {provider_id}")
-
-
-
+    raise HTTPException(
+        status_code=400, detail=f"submit not supported for {provider_id}"
+    )
 
 
 @app.get("/api/providers/oauth/{provider_id}/poll/{session_id}")
-
 async def poll_oauth_session(provider_id: str, session_id: str):
-
     """Poll a session's status (no auth — read-only state).
 
 
@@ -8937,47 +6294,32 @@ async def poll_oauth_session(provider_id: str, session_id: str):
     """
 
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.get(session_id)
 
     if not sess:
-
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
     if sess["provider"] != provider_id:
-
         raise HTTPException(status_code=400, detail="Provider mismatch for session")
 
     return {
-
         "session_id": session_id,
-
         "status": sess["status"],
-
         "error_message": sess.get("error_message"),
-
         "expires_at": sess.get("expires_at"),
-
     }
 
 
-
-
-
 @app.delete("/api/providers/oauth/sessions/{session_id}")
-
 async def cancel_oauth_session(session_id: str, request: Request):
-
     """Cancel a pending OAuth session. Token-protected."""
 
     _require_token(request)
 
     with _oauth_sessions_lock:
-
         sess = _oauth_sessions.pop(session_id, None)
 
     if sess is None:
-
         return {"ok": False, "message": "session not found"}
 
     # Loopback sessions own a bound 127.0.0.1 callback server. Without an
@@ -8989,7 +6331,6 @@ async def cancel_oauth_session(session_id: str, request: Request):
     # an orphaned listener can't block a subsequent sign-in attempt.
 
     if sess.get("flow") == "loopback":
-
         # The worker is blocked in _xai_wait_for_callback, which polls
 
         # callback_result rather than the server state. Flag the result as
@@ -9005,7 +6346,6 @@ async def cancel_oauth_session(session_id: str, request: Request):
         result = sess.get("callback_result")
 
         if isinstance(result, dict):
-
             result["error"] = result.get("error") or "cancelled"
 
         server = sess.get("server")
@@ -9013,31 +6353,22 @@ async def cancel_oauth_session(session_id: str, request: Request):
         thread = sess.get("thread")
 
         try:
-
             if server is not None:
-
                 server.shutdown()
 
                 server.server_close()
 
         except Exception:
-
             pass
 
         try:
-
             if thread is not None:
-
                 thread.join(timeout=1.0)
 
         except Exception:
-
             pass
 
     return {"ok": True, "session_id": session_id}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -9047,13 +6378,7 @@ async def cancel_oauth_session(session_id: str, request: Request):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
 def _session_latest_descendant(session_id: str):
-
     """Resolve a session id to the newest child leaf session.
 
 
@@ -9066,109 +6391,70 @@ def _session_latest_descendant(session_id: str):
 
     from clawk_state import SessionDB
 
-
-
     def row_get(row, key, index):
 
         if isinstance(row, dict):
-
             return row.get(key)
 
         try:
-
             return row[key]
 
         except Exception:
-
             try:
-
                 return row[index]
 
             except Exception:
-
                 return None
-
-
 
     db = SessionDB()
 
     try:
-
         sid = db.resolve_session_id(session_id)
 
         if not sid or not db.get_session(sid):
-
             return None, []
 
-
-
         conn = (
-
             getattr(db, "conn", None)
-
             or getattr(db, "_conn", None)
-
             or getattr(db, "connection", None)
-
             or getattr(db, "_connection", None)
-
         )
-
-
 
         rows = []
 
         if conn is not None:
-
             raw_rows = conn.execute(
-
                 "SELECT id, parent_session_id, started_at FROM sessions"
-
             ).fetchall()
 
             for row in raw_rows:
-
                 rows.append({
-
                     "id": row_get(row, "id", 0),
-
                     "parent_session_id": row_get(row, "parent_session_id", 1),
-
                     "started_at": row_get(row, "started_at", 2),
-
                 })
 
         else:
-
             rows = db.list_sessions_rich(limit=10000, offset=0)
-
-
 
         children = {}
 
         for row in rows:
-
             rid = row.get("id")
 
             parent = row.get("parent_session_id")
 
             if rid and parent:
-
                 children.setdefault(parent, []).append(row)
-
-
 
         def started(row):
 
             try:
-
                 return float(row.get("started_at") or 0)
 
             except Exception:
-
                 return 0.0
-
-
 
         current = sid
 
@@ -9176,14 +6462,10 @@ def _session_latest_descendant(session_id: str):
 
         seen = {sid}
 
-
-
         while children.get(current):
-
             candidates = [r for r in children[current] if r.get("id") not in seen]
 
             if not candidates:
-
                 break
 
             candidates.sort(key=started, reverse=True)
@@ -9194,16 +6476,10 @@ def _session_latest_descendant(session_id: str):
 
             seen.add(current)
 
-
-
         return current, path
 
     finally:
-
         db.close()
-
-
-
 
 
 # CRITICAL — every literal-path route below MUST be declared BEFORE the
@@ -9226,18 +6502,13 @@ def _session_latest_descendant(session_id: str):
 
 # reorder this block, move every route in it together.
 
-class BulkDeleteSessions(BaseModel):
 
+class BulkDeleteSessions(BaseModel):
     ids: List[str]
 
 
-
-
-
 @app.post("/api/sessions/bulk-delete")
-
 async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
-
     """Delete every session in ``body.ids`` in a single DB transaction.
 
 
@@ -9309,13 +6580,9 @@ async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
     # multi-thousand-row transactions.
 
     if len(body.ids) > 500:
-
         raise HTTPException(
-
             status_code=400,
-
             detail="ids must contain at most 500 entries",
-
         )
 
     from clawk_state import SessionDB
@@ -9323,23 +6590,16 @@ async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
     db = SessionDB()
 
     try:
-
         deleted = db.delete_sessions(body.ids)
 
         return {"ok": True, "deleted": deleted}
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.get("/api/sessions/empty/count")
-
 async def count_empty_sessions_endpoint():
-
     """Return the number of empty, ended, non-archived sessions.
 
 
@@ -9357,21 +6617,14 @@ async def count_empty_sessions_endpoint():
     db = SessionDB()
 
     try:
-
         return {"count": db.count_empty_sessions()}
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.delete("/api/sessions/empty")
-
 async def delete_empty_sessions_endpoint():
-
     """Delete every empty (``message_count == 0``), ended,
 
     non-archived session in a single transaction.
@@ -9413,23 +6666,16 @@ async def delete_empty_sessions_endpoint():
     db = SessionDB()
 
     try:
-
         deleted = db.delete_empty_sessions()
 
         return {"ok": True, "deleted": deleted}
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.get("/api/sessions/stats")
-
 async def get_session_stats():
-
     """Session-store statistics for the Sessions page (mirrors `clawk sessions stats`).
 
 
@@ -9442,12 +6688,9 @@ async def get_session_stats():
 
     from clawk_state import SessionDB
 
-
-
     db = SessionDB()
 
     try:
-
         total = db.session_count(include_archived=True)
 
         active_store = db.session_count(include_archived=False)
@@ -9459,41 +6702,27 @@ async def get_session_stats():
         by_source: Dict[str, int] = {}
 
         try:
-
             for s in db.list_sessions_rich(limit=10000, include_archived=True):
-
                 src = str(s.get("source") or "cli")
 
                 by_source[src] = by_source.get(src, 0) + 1
 
         except Exception:
-
             pass
 
         return {
-
             "total": total,
-
             "active_store": active_store,
-
             "archived": archived,
-
             "messages": messages,
-
             "by_source": by_source,
-
         }
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.get("/api/sessions/{session_id}")
-
 async def get_session_detail(session_id: str):
 
     from clawk_state import SessionDB
@@ -9501,53 +6730,36 @@ async def get_session_detail(session_id: str):
     db = SessionDB()
 
     try:
-
         sid = db.resolve_session_id(session_id)
 
         session = db.get_session(sid) if sid else None
 
         if not session:
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         return session
 
     finally:
-
         db.close()
 
 
-
-
-
-
-
 @app.get("/api/sessions/{session_id}/latest-descendant")
-
 async def get_session_latest_descendant(session_id: str):
 
     latest, path = _session_latest_descendant(session_id)
 
     if not latest:
-
         raise HTTPException(status_code=404, detail="Session not found")
 
     return {
-
         "requested_session_id": path[0] if path else session_id,
-
         "session_id": latest,
-
         "path": path,
-
         "changed": bool(path and latest != path[0]),
-
     }
 
 
-
 @app.get("/api/sessions/{session_id}/messages")
-
 async def get_session_messages(session_id: str):
 
     from clawk_state import SessionDB
@@ -9555,11 +6767,9 @@ async def get_session_messages(session_id: str):
     db = SessionDB()
 
     try:
-
         sid = db.resolve_session_id(session_id)
 
         if not sid:
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         messages = db.get_messages(sid)
@@ -9567,15 +6777,10 @@ async def get_session_messages(session_id: str):
         return {"session_id": sid, "messages": messages}
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.delete("/api/sessions/{session_id}")
-
 async def delete_session_endpoint(session_id: str):
 
     from clawk_state import SessionDB
@@ -9583,35 +6788,23 @@ async def delete_session_endpoint(session_id: str):
     db = SessionDB()
 
     try:
-
         if not db.delete_session(session_id):
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         return {"ok": True}
 
     finally:
-
         db.close()
 
 
-
-
-
 class SessionRename(BaseModel):
-
     title: Optional[str] = None
 
     archived: Optional[bool] = None
 
 
-
-
-
 @app.patch("/api/sessions/{session_id}")
-
 async def rename_session_endpoint(session_id: str, body: SessionRename):
-
     """Update a session: rename (or clear its title) and/or archive it.
 
 
@@ -9627,139 +6820,95 @@ async def rename_session_endpoint(session_id: str, body: SessionRename):
     db = SessionDB()
 
     try:
-
         sid = db.resolve_session_id(session_id)
 
         if not sid:
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         if body.title is None and body.archived is None:
-
             raise HTTPException(
-
                 status_code=400,
-
                 detail="Nothing to update; provide 'title' and/or 'archived'.",
-
             )
 
         if body.title is not None:
-
             try:
-
                 db.set_session_title(sid, body.title or "")
 
             except ValueError as e:
-
                 # Title too long, invalid characters, or already in use.
 
                 raise HTTPException(status_code=400, detail=str(e))
 
         if body.archived is not None:
-
             db.set_session_archived(sid, body.archived)
 
         result = {"ok": True, "title": db.get_session_title(sid) or ""}
 
         if body.archived is not None:
-
             result["archived"] = bool(body.archived)
 
         return result
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.get("/api/sessions/{session_id}/export")
-
 async def export_session_endpoint(session_id: str):
-
     """Export a single session (metadata + messages) as JSON."""
 
     from clawk_state import SessionDB
 
-
-
     db = SessionDB()
 
     try:
-
         sid = db.resolve_session_id(session_id)
 
         if not sid:
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         data = db.export_session(sid)
 
         if data is None:
-
             raise HTTPException(status_code=404, detail="Session not found")
 
         return data
 
     finally:
-
         db.close()
 
 
-
-
-
 class SessionPrune(BaseModel):
-
     older_than_days: int = 90
 
     source: Optional[str] = None
 
 
-
-
-
 @app.post("/api/sessions/prune")
-
 async def prune_sessions_endpoint(body: SessionPrune):
-
     """Delete ended sessions older than N days (mirrors `clawk sessions prune`)."""
 
     if body.older_than_days < 1:
-
         raise HTTPException(status_code=400, detail="older_than_days must be >= 1")
 
     from clawk_state import SessionDB
 
-
-
     db = SessionDB()
 
     try:
-
         sessions_dir = get_clawk_home() / "sessions"
 
         removed = db.prune_sessions(
-
             older_than_days=body.older_than_days,
-
             source=(body.source or None),
-
             sessions_dir=sessions_dir if sessions_dir.exists() else None,
-
         )
 
         return {"ok": True, "removed": removed}
 
     finally:
-
         db.close()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -9769,52 +6918,32 @@ async def prune_sessions_endpoint(body: SessionPrune):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.get("/api/logs")
-
 async def get_logs(
-
     file: str = "agent",
-
     lines: int = 100,
-
     level: Optional[str] = None,
-
     component: Optional[str] = None,
-
     search: Optional[str] = None,
-
 ):
 
     from clawk_cli.logs import _read_tail, LOG_FILES
 
-
-
     log_name = LOG_FILES.get(file)
 
     if not log_name:
-
         raise HTTPException(status_code=400, detail=f"Unknown log file: {file}")
 
     log_path = get_clawk_home() / "logs" / log_name
 
     if not log_path.exists():
-
         return {"file": file, "lines": []}
 
-
-
     try:
-
         from clawk_logging import COMPONENT_PREFIXES
 
     except ImportError:
-
         COMPONENT_PREFIXES = {}
-
-
 
     # Normalize "ALL" / "all" / empty → no filter. _matches_filters treats an
 
@@ -9825,39 +6954,26 @@ async def get_logs(
     min_level = level if level and level.upper() != "ALL" else None
 
     if component and component.lower() != "all":
-
         comp_prefixes = COMPONENT_PREFIXES.get(component)
 
         if comp_prefixes is None:
-
             raise HTTPException(
-
                 status_code=400,
-
                 detail=f"Unknown component: {component}. "
-
-                       f"Available: {', '.join(sorted(COMPONENT_PREFIXES))}",
-
+                f"Available: {', '.join(sorted(COMPONENT_PREFIXES))}",
             )
 
     else:
-
         comp_prefixes = None
-
-
 
     has_filters = bool(min_level or comp_prefixes or search)
 
     result = _read_tail(
-
-        log_path, min(lines, 500) if not search else 2000,
-
+        log_path,
+        min(lines, 500) if not search else 2000,
         has_filters=has_filters,
-
         min_level=min_level,
-
         component_prefixes=comp_prefixes,
-
     )
 
     # Post-filter by search term (case-insensitive substring match).
@@ -9867,15 +6983,11 @@ async def get_logs(
     # trim to the requested line count afterward.
 
     if search:
-
         needle = search.lower()
 
-        result = [l for l in result if needle in l.lower()][-min(lines, 500):]
+        result = [l for l in result if needle in l.lower()][-min(lines, 500) :]
 
     return {"file": file, "lines": result}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -9885,12 +6997,8 @@ async def get_logs(
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class CronJobCreate(BaseModel):
-
-    prompt: str
+    prompt: str = ""
 
     schedule: str
 
@@ -9898,72 +7006,69 @@ class CronJobCreate(BaseModel):
 
     deliver: str = "local"
 
+    repeat: Optional[int] = None
 
+    skills: List[str] = []
 
+    model: Optional[str] = None
+
+    provider: Optional[str] = None
+
+    script: Optional[str] = None
+
+    context_from: List[str] = []
+
+    enabled_toolsets: List[str] = []
+
+    workdir: Optional[str] = None
+
+    no_agent: bool = False
 
 
 class CronJobUpdate(BaseModel):
-
     updates: dict
-
-
-
 
 
 _CRON_PROFILE_LOCK = threading.RLock()
 
 
-
-
-
 def _cron_profile_dicts() -> List[Dict[str, Any]]:
-
     """Return dashboard profile records, falling back to a directory scan."""
 
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         return [_profile_to_dict(p) for p in profiles_mod.list_profiles()]
 
     except Exception:
-
-        _log.exception("Failed to list profiles for cron dashboard; falling back to directory scan")
+        _log.exception(
+            "Failed to list profiles for cron dashboard; falling back to directory scan"
+        )
 
         return _fallback_profile_dicts(profiles_mod)
 
 
-
-
-
 def _cron_profile_home(profile: Optional[str]) -> Tuple[str, Path]:
-
     """Resolve a profile query value to (profile_name, CLAWK_HOME)."""
 
     from clawk_cli import profiles as profiles_mod
 
-
-
     raw = (profile or "default").strip() or "default"
 
     try:
-
         canon = profiles_mod.normalize_profile_name(raw)
 
         profiles_mod.validate_profile_name(canon)
 
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     if not profiles_mod.profile_exists(canon):
-
-        raise HTTPException(status_code=404, detail=f"Profile '{canon}' does not exist.")
+        raise HTTPException(
+            status_code=404, detail=f"Profile '{canon}' does not exist."
+        )
 
     return canon, profiles_mod.get_profile_dir(canon)
-
-
-
 
 
 def _annotate_cron_job(job: Dict[str, Any], profile: str, home: Path) -> Dict[str, Any]:
@@ -9981,11 +7086,7 @@ def _annotate_cron_job(job: Dict[str, Any], profile: str, home: Path) -> Dict[st
     return annotated
 
 
-
-
-
 def _call_cron_for_profile(profile: Optional[str], func_name: str, *args, **kwargs):
-
     """Run cron.jobs helpers against the selected profile's cron directory.
 
 
@@ -10003,10 +7104,7 @@ def _call_cron_for_profile(profile: Optional[str], func_name: str, *args, **kwar
     profile_name, home = _cron_profile_home(profile)
 
     with _CRON_PROFILE_LOCK:
-
         from cron import jobs as cron_jobs
-
-
 
         old_cron_dir = cron_jobs.CRON_DIR
 
@@ -10021,265 +7119,197 @@ def _call_cron_for_profile(profile: Optional[str], func_name: str, *args, **kwar
         cron_jobs.OUTPUT_DIR = cron_jobs.CRON_DIR / "output"
 
         try:
-
             result = getattr(cron_jobs, func_name)(*args, **kwargs)
 
         finally:
-
             cron_jobs.CRON_DIR = old_cron_dir
 
             cron_jobs.JOBS_FILE = old_jobs_file
 
             cron_jobs.OUTPUT_DIR = old_output_dir
 
-
-
     if isinstance(result, list):
-
         return [_annotate_cron_job(j, profile_name, home) for j in result]
 
     if isinstance(result, dict):
-
         return _annotate_cron_job(result, profile_name, home)
 
     return result
 
 
-
-
-
 def _find_cron_job_profile(job_id: str) -> Optional[str]:
 
     for profile in _cron_profile_dicts():
-
         name = str(profile.get("name") or "")
 
         if not name:
-
             continue
 
         jobs = _call_cron_for_profile(name, "list_jobs", True)
 
         if any(j.get("id") == job_id or j.get("name") == job_id for j in jobs):
-
             return name
 
     return None
 
 
-
-
-
 @app.get("/api/cron/jobs")
-
 async def list_cron_jobs(profile: str = "all"):
 
     requested = (profile or "all").strip()
 
     if requested.lower() != "all":
-
         return _call_cron_for_profile(requested, "list_jobs", True)
-
-
 
     jobs: List[Dict[str, Any]] = []
 
     for item in _cron_profile_dicts():
-
         name = str(item.get("name") or "")
 
         if not name:
-
             continue
 
         try:
-
             jobs.extend(_call_cron_for_profile(name, "list_jobs", True))
 
         except Exception:
-
             _log.exception("Failed to list cron jobs for profile %s", name)
 
     return jobs
 
 
-
-
-
 @app.get("/api/cron/jobs/{job_id}")
-
 async def get_cron_job(job_id: str, profile: Optional[str] = None):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = _call_cron_for_profile(selected, "get_job", job_id)
 
     if not job:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
 
 
-
-
-
 @app.post("/api/cron/jobs")
-
 async def create_cron_job(body: CronJobCreate, profile: str = "default"):
 
     try:
-
         return _call_cron_for_profile(
-
             profile,
-
             "create_job",
-
-            prompt=body.prompt,
-
+            prompt=body.prompt or None,
             schedule=body.schedule,
-
             name=body.name,
-
             deliver=body.deliver,
-
+            repeat=body.repeat,
+            skills=body.skills or None,
+            model=body.model or None,
+            provider=body.provider or None,
+            script=body.script or None,
+            context_from=body.context_from or None,
+            enabled_toolsets=body.enabled_toolsets or None,
+            workdir=body.workdir or None,
+            no_agent=body.no_agent,
         )
 
     except Exception as e:
-
         _log.exception("POST /api/cron/jobs failed")
 
         raise HTTPException(status_code=400, detail=str(e))
 
 
-
-
-
 @app.put("/api/cron/jobs/{job_id}")
-
-async def update_cron_job(job_id: str, body: CronJobUpdate, profile: Optional[str] = None):
+async def update_cron_job(
+    job_id: str, body: CronJobUpdate, profile: Optional[str] = None
+):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     try:
-
         job = _call_cron_for_profile(selected, "update_job", job_id, body.updates)
 
     except ValueError as exc:
-
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not job:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
 
 
-
-
-
 @app.post("/api/cron/jobs/{job_id}/pause")
-
 async def pause_cron_job(job_id: str, profile: Optional[str] = None):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = _call_cron_for_profile(selected, "pause_job", job_id)
 
     if not job:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
 
 
-
-
-
 @app.post("/api/cron/jobs/{job_id}/resume")
-
 async def resume_cron_job(job_id: str, profile: Optional[str] = None):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = _call_cron_for_profile(selected, "resume_job", job_id)
 
     if not job:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
 
 
-
-
-
 @app.post("/api/cron/jobs/{job_id}/trigger")
-
 async def trigger_cron_job(job_id: str, profile: Optional[str] = None):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = _call_cron_for_profile(selected, "trigger_job", job_id)
 
     if not job:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
 
 
-
-
-
 @app.delete("/api/cron/jobs/{job_id}")
-
 async def delete_cron_job(job_id: str, profile: Optional[str] = None):
 
     selected = profile or _find_cron_job_profile(job_id)
 
     if not selected:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     try:
-
         removed = _call_cron_for_profile(selected, "remove_job", job_id)
 
     except ValueError as exc:
-
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not removed:
-
         raise HTTPException(status_code=404, detail="Job not found")
 
     return {"ok": True}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -10299,11 +7329,7 @@ async def delete_cron_job(job_id: str, profile: Optional[str] = None):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class MCPServerCreate(BaseModel):
-
     name: str
 
     url: Optional[str] = None
@@ -10321,197 +7347,125 @@ class MCPServerCreate(BaseModel):
     auth: Optional[str] = None
 
 
-
-
-
 def _redact_mcp_env(env: Dict[str, Any]) -> Dict[str, str]:
-
     """Mask secret-shaped MCP env values for read responses."""
 
     out: Dict[str, str] = {}
 
     for k, v in (env or {}).items():
-
         try:
-
             out[str(k)] = redact_key(str(v)) if v else ""
 
         except Exception:
-
             out[str(k)] = "***"
 
     return out
 
 
-
-
-
 def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 
-    transport = "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    transport = (
+        "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    )
 
     return {
-
         "name": name,
-
         "transport": transport,
-
         "url": cfg.get("url"),
-
         "command": cfg.get("command"),
-
         "args": list(cfg.get("args") or []),
-
         "env": _redact_mcp_env(cfg.get("env") or {}),
-
         "auth": cfg.get("auth"),
-
         "enabled": cfg.get("enabled", True) is not False,
-
         # Tool selection: list of enabled tool names, or None = all.
-
         "tools": cfg.get("tools"),
-
     }
 
 
-
-
-
 @app.get("/api/mcp/servers")
-
 async def list_mcp_servers():
 
     from clawk_cli.mcp_config import _get_mcp_servers
 
-
-
     servers = _get_mcp_servers()
 
     return {
-
         "servers": [
-
             _mcp_server_summary(name, cfg) for name, cfg in sorted(servers.items())
-
         ]
-
     }
 
 
-
-
-
 @app.post("/api/mcp/servers")
-
 async def add_mcp_server(body: MCPServerCreate):
 
     from clawk_cli.mcp_config import _get_mcp_servers, _save_mcp_server
 
-
-
     name = (body.name or "").strip()
 
     if not name:
-
         raise HTTPException(status_code=400, detail="Server name is required")
 
     if name in _get_mcp_servers():
-
         raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
 
     if not body.url and not body.command:
-
         raise HTTPException(
-
             status_code=400,
-
             detail="Provide either a URL (HTTP/SSE server) or a command (stdio server)",
-
         )
-
-
 
     server_config: Dict[str, Any] = {}
 
     if body.url:
-
         server_config["url"] = body.url.strip()
 
     if body.command:
-
         server_config["command"] = body.command.strip()
 
         if body.args:
-
             server_config["args"] = list(body.args)
 
     if body.env:
-
         server_config["env"] = dict(body.env)
 
     if body.auth:
-
         server_config["auth"] = body.auth
 
-
-
     try:
-
         _save_mcp_server(name, server_config)
 
     except Exception as exc:
-
         _log.exception("POST /api/mcp/servers failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-
-
     return _mcp_server_summary(name, server_config)
 
 
-
-
-
 @app.delete("/api/mcp/servers/{name}")
-
 async def remove_mcp_server(name: str):
 
     from clawk_cli.mcp_config import _remove_mcp_server
 
-
-
     if not _remove_mcp_server(name):
-
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
     return {"ok": True}
 
 
-
-
-
 @app.post("/api/mcp/servers/{name}/test")
-
 async def test_mcp_server(name: str):
-
     """Connect to the server, list its tools, disconnect.  Returns tool list."""
 
     from clawk_cli.mcp_config import _get_mcp_servers, _probe_single_server
 
-
-
     servers = _get_mcp_servers()
 
     if name not in servers:
-
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
-
-
     try:
-
         # Probe blocks on a dedicated MCP event loop — run in a thread so the
 
         # FastAPI event loop is never blocked.
@@ -10519,41 +7473,24 @@ async def test_mcp_server(name: str):
         tools = await asyncio.to_thread(_probe_single_server, name, servers[name])
 
     except Exception as exc:
-
         return {
-
             "ok": False,
-
             "error": str(exc),
-
             "tools": [],
-
         }
 
     return {
-
         "ok": True,
-
         "tools": [{"name": t, "description": d} for t, d in tools],
-
     }
 
 
-
-
-
 class MCPEnabledToggle(BaseModel):
-
     enabled: bool
 
 
-
-
-
 @app.put("/api/mcp/servers/{name}/enabled")
-
 async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
-
     """Enable or disable an MCP server (takes effect on next session/gateway).
 
 
@@ -10571,11 +7508,9 @@ async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
     servers = cfg.get("mcp_servers")
 
     if not isinstance(servers, dict) or name not in servers:
-
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
     if not isinstance(servers[name], dict):
-
         raise HTTPException(status_code=400, detail="Malformed server config")
 
     servers[name]["enabled"] = bool(body.enabled)
@@ -10585,13 +7520,8 @@ async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
     return {"ok": True, "name": name, "enabled": bool(body.enabled)}
 
 
-
-
-
 @app.get("/api/mcp/catalog")
-
 async def list_mcp_catalog():
-
     """Browse the Nous-approved MCP catalog (the optional-mcps/ manifests).
 
 
@@ -10605,87 +7535,53 @@ async def list_mcp_catalog():
     """
 
     try:
-
         from clawk_cli import mcp_catalog
 
     except Exception as exc:
-
         _log.exception("mcp_catalog import failed")
 
         raise HTTPException(status_code=500, detail=f"Catalog unavailable: {exc}")
 
-
-
     entries = []
 
     try:
-
         for entry in mcp_catalog.list_catalog():
-
             auth = entry.auth
 
             entries.append({
-
                 "name": entry.name,
-
                 "description": entry.description,
-
                 "source": entry.source,
-
                 "transport": entry.transport.type,
-
                 "auth_type": getattr(auth, "type", "none"),
-
                 # Env vars the user must supply (names + prompts only, never values).
-
                 "required_env": [
-
                     {"name": e.name, "prompt": e.prompt, "required": e.required}
-
                     for e in getattr(auth, "env", []) or []
-
                 ],
-
                 "needs_install": entry.install is not None,
-
                 "installed": mcp_catalog.is_installed(entry.name),
-
                 "enabled": mcp_catalog.is_enabled(entry.name),
-
             })
 
     except Exception:
-
         _log.exception("list_mcp_catalog failed")
-
-
 
     diagnostics = []
 
     try:
-
         diagnostics = [
-
             {"name": n, "kind": k, "message": m}
-
             for (n, k, m) in mcp_catalog.catalog_diagnostics()
-
         ]
 
     except Exception:
-
         pass
-
-
 
     return {"entries": entries, "diagnostics": diagnostics}
 
 
-
-
-
 class MCPCatalogInstall(BaseModel):
-
     name: str
 
     # env: KEY=VALUE map for catalog entries that declare required env vars.
@@ -10695,13 +7591,8 @@ class MCPCatalogInstall(BaseModel):
     enable: bool = True
 
 
-
-
-
 @app.post("/api/mcp/catalog/install")
-
 async def install_mcp_catalog_entry(body: MCPCatalogInstall):
-
     """Install a catalog MCP into config.yaml.
 
 
@@ -10718,58 +7609,41 @@ async def install_mcp_catalog_entry(body: MCPCatalogInstall):
 
     from clawk_cli import mcp_catalog
 
-
-
     name = (body.name or "").strip()
 
     entry = mcp_catalog.get_entry(name)
 
     if entry is None:
-
         raise HTTPException(status_code=404, detail=f"No catalog entry '{name}'")
-
-
 
     # Persist any supplied env vars first (catalog entries declare which names
 
     # they need; we only write the ones the user provided).
 
     if body.env:
-
         for k, v in body.env.items():
-
             if v:
-
                 save_env_value(k, v)
-
-
 
     # Git-bootstrap entries can take a while to clone — run via the background
 
     # action path so the request returns immediately and the UI can tail logs.
 
     if entry.install is not None:
-
         try:
-
             proc = _spawn_clawk_action(["mcp", "install", name], "mcp-install")
 
         except Exception as exc:
-
             raise HTTPException(status_code=500, detail=f"Install failed: {exc}")
 
         return {"ok": True, "name": name, "background": True, "action": "mcp-install"}
 
-
-
     # No git step — install synchronously via the catalog API.
 
     try:
-
         await asyncio.to_thread(mcp_catalog.install_entry, entry, enable=body.enable)
 
     except Exception as exc:
-
         _log.exception("install_mcp_catalog_entry failed")
 
         raise HTTPException(status_code=400, detail=str(exc))
@@ -10777,15 +7651,9 @@ async def install_mcp_catalog_entry(body: MCPCatalogInstall):
     return {"ok": True, "name": name, "background": False}
 
 
-
-
-
 # Register the mcp-install action log so /api/actions/mcp-install/status works.
 
 _ACTION_LOG_FILES.setdefault("mcp-install", "action-mcp-install.log")
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -10801,61 +7669,37 @@ _ACTION_LOG_FILES.setdefault("mcp-install", "action-mcp-install.log")
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class PairingApprove(BaseModel):
-
     platform: str
 
     code: str
 
 
-
-
-
 class PairingRevoke(BaseModel):
-
     platform: str
 
     user_id: str
-
-
-
 
 
 def _pairing_store():
 
     from gateway.pairing import PairingStore
 
-
-
     return PairingStore()
 
 
-
-
-
 @app.get("/api/pairing")
-
 async def list_pairing():
 
     store = _pairing_store()
 
     return {
-
         "pending": store.list_pending(),
-
         "approved": store.list_approved(),
-
     }
 
 
-
-
-
 @app.post("/api/pairing/approve")
-
 async def approve_pairing(body: PairingApprove):
 
     store = _pairing_store()
@@ -10865,41 +7709,26 @@ async def approve_pairing(body: PairingApprove):
     code = (body.code or "").upper().strip()
 
     if not platform or not code:
-
         raise HTTPException(status_code=400, detail="platform and code are required")
-
-
 
     result = store.approve_code(platform, code)
 
     if result:
-
         return {"ok": True, "user": result}
 
     if store._is_locked_out(platform):
-
         raise HTTPException(
-
             status_code=429,
-
             detail=f"Platform '{platform}' is locked out after too many failed approvals.",
-
         )
 
     raise HTTPException(
-
         status_code=404,
-
         detail=f"Code '{code}' not found or expired for platform '{platform}'.",
-
     )
 
 
-
-
-
 @app.post("/api/pairing/revoke")
-
 async def revoke_pairing(body: PairingRevoke):
 
     store = _pairing_store()
@@ -10907,27 +7736,18 @@ async def revoke_pairing(body: PairingRevoke):
     platform = (body.platform or "").lower().strip()
 
     if not platform or not body.user_id:
-
         raise HTTPException(status_code=400, detail="platform and user_id are required")
 
     if store.revoke(platform, body.user_id):
-
         return {"ok": True}
 
     raise HTTPException(
-
         status_code=404,
-
         detail=f"User {body.user_id} not found in approved list for {platform}.",
-
     )
 
 
-
-
-
 @app.post("/api/pairing/clear-pending")
-
 async def clear_pending_pairing():
 
     store = _pairing_store()
@@ -10935,9 +7755,6 @@ async def clear_pending_pairing():
     count = store.clear_pending()
 
     return {"ok": True, "cleared": count}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -10955,11 +7772,7 @@ async def clear_pending_pairing():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class WebhookCreate(BaseModel):
-
     name: str
 
     description: Optional[str] = None
@@ -10981,79 +7794,47 @@ class WebhookCreate(BaseModel):
     secret: Optional[str] = None
 
 
-
-
-
-def _webhook_route_summary(name: str, route: Dict[str, Any], base_url: str) -> Dict[str, Any]:
+def _webhook_route_summary(
+    name: str, route: Dict[str, Any], base_url: str
+) -> Dict[str, Any]:
 
     return {
-
         "name": name,
-
         "description": route.get("description", ""),
-
         "events": list(route.get("events") or []),
-
         "deliver": route.get("deliver", "log"),
-
         "deliver_only": bool(route.get("deliver_only")),
-
         "prompt": route.get("prompt", ""),
-
         "skills": list(route.get("skills") or []),
-
         "created_at": route.get("created_at"),
-
         "url": f"{base_url}/webhooks/{name}",
-
         # Secret is masked on read; full value only returned on create.
-
         "secret_set": bool(route.get("secret")),
-
         # Default-enabled; only an explicit enabled:false turns a route off.
-
         "enabled": route.get("enabled", True) is not False,
-
     }
 
 
-
-
-
 @app.get("/api/webhooks")
-
 async def list_webhooks():
 
     import clawk_cli.webhook as wh
-
-
 
     base_url = wh._get_webhook_base_url()
 
     subs = wh._load_subscriptions()
 
     return {
-
         "enabled": wh._is_webhook_enabled(),
-
         "base_url": base_url,
-
         "subscriptions": [
-
             _webhook_route_summary(name, route, base_url)
-
             for name, route in subs.items()
-
         ],
-
     }
 
 
-
-
-
 @app.post("/api/webhooks")
-
 async def create_webhook(body: WebhookCreate):
 
     import re as _re
@@ -11064,83 +7845,49 @@ async def create_webhook(body: WebhookCreate):
 
     import clawk_cli.webhook as wh
 
-
-
     if not wh._is_webhook_enabled():
-
         raise HTTPException(
-
             status_code=400,
-
             detail="Webhook platform is not enabled. Enable it in messaging settings first.",
-
         )
-
-
 
     name = (body.name or "").strip().lower().replace(" ", "-")
 
     if not _re.match(r"^[a-z0-9][a-z0-9_-]*$", name):
-
         raise HTTPException(
-
             status_code=400,
-
             detail="Invalid name. Use lowercase alphanumeric with hyphens/underscores.",
-
         )
-
-
 
     if body.deliver_only and body.deliver == "log":
-
         raise HTTPException(
-
             status_code=400,
-
             detail="Direct delivery requires a real target (telegram, discord, …), not 'log'.",
-
         )
-
-
 
     secret = body.secret or _secrets.token_urlsafe(32)
 
     route: Dict[str, Any] = {
-
         "description": body.description or f"Dashboard-created subscription: {name}",
-
         "events": [e.strip() for e in body.events if e.strip()],
-
         "secret": secret,
-
         "prompt": body.prompt or "",
-
         "skills": [s.strip() for s in body.skills if s.strip()],
-
         "deliver": body.deliver or "log",
-
         "created_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
-
     }
 
     if body.deliver_only:
-
         route["deliver_only"] = True
 
     if body.deliver_chat_id:
-
         route["deliver_extra"] = {"chat_id": body.deliver_chat_id}
-
-
 
     subs = wh._load_subscriptions()
 
     subs[name] = route
 
     wh._save_subscriptions(subs)
-
-
 
     base_url = wh._get_webhook_base_url()
 
@@ -11153,23 +7900,16 @@ async def create_webhook(body: WebhookCreate):
     return summary
 
 
-
-
-
 @app.delete("/api/webhooks/{name}")
-
 async def delete_webhook(name: str):
 
     import clawk_cli.webhook as wh
-
-
 
     key = (name or "").strip().lower()
 
     subs = wh._load_subscriptions()
 
     if key not in subs:
-
         raise HTTPException(status_code=404, detail=f"No subscription named '{key}'")
 
     del subs[key]
@@ -11179,21 +7919,12 @@ async def delete_webhook(name: str):
     return {"ok": True}
 
 
-
-
-
 class WebhookEnabledToggle(BaseModel):
-
     enabled: bool
 
 
-
-
-
 @app.put("/api/webhooks/{name}/enabled")
-
 async def set_webhook_enabled(name: str, body: WebhookEnabledToggle):
-
     """Enable or disable a webhook route.
 
 
@@ -11210,14 +7941,11 @@ async def set_webhook_enabled(name: str, body: WebhookEnabledToggle):
 
     import clawk_cli.webhook as wh
 
-
-
     key = (name or "").strip().lower()
 
     subs = wh._load_subscriptions()
 
     if key not in subs:
-
         raise HTTPException(status_code=404, detail=f"No subscription named '{key}'")
 
     subs[key]["enabled"] = bool(body.enabled)
@@ -11225,9 +7953,6 @@ async def set_webhook_enabled(name: str, body: WebhookEnabledToggle):
     wh._save_subscriptions(subs)
 
     return {"ok": True, "name": key, "enabled": bool(body.enabled)}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -11247,19 +7972,13 @@ async def set_webhook_enabled(name: str, body: WebhookEnabledToggle):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.post("/api/gateway/start")
-
 async def start_gateway():
 
     try:
-
         proc = _spawn_clawk_action(["gateway", "start"], "gateway-start")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn gateway start")
 
         raise HTTPException(status_code=500, detail=f"Failed to start gateway: {exc}")
@@ -11267,27 +7986,18 @@ async def start_gateway():
     return {"ok": True, "pid": proc.pid, "name": "gateway-start"}
 
 
-
-
-
 @app.post("/api/gateway/stop")
-
 async def stop_gateway():
 
     try:
-
         proc = _spawn_clawk_action(["gateway", "stop"], "gateway-stop")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn gateway stop")
 
         raise HTTPException(status_code=500, detail=f"Failed to stop gateway: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "gateway-stop"}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -11305,11 +8015,7 @@ async def stop_gateway():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class CredentialPoolAdd(BaseModel):
-
     provider: str
 
     # api_key for API-key providers; OAuth pooling stays CLI-only (it needs
@@ -11321,11 +8027,7 @@ class CredentialPoolAdd(BaseModel):
     label: Optional[str] = None
 
 
-
-
-
 def _pool_entry_summary(entry: Any, index: int) -> Dict[str, Any]:
-
     """Redacted, display-safe view of one PooledCredential.
 
 
@@ -11337,42 +8039,25 @@ def _pool_entry_summary(entry: Any, index: int) -> Dict[str, Any]:
     token = getattr(entry, "access_token", "") or ""
 
     return {
-
         "index": index,
-
         "id": getattr(entry, "id", None),
-
         "label": getattr(entry, "label", None),
-
         "auth_type": getattr(entry, "auth_type", None),
-
         "source": getattr(entry, "source", None),
-
         "priority": getattr(entry, "priority", 0),
-
         "last_status": getattr(entry, "last_status", None),
-
         "request_count": getattr(entry, "request_count", 0),
-
         "token_preview": redact_key(token) if token else "",
-
         "has_refresh": bool(getattr(entry, "refresh_token", None)),
-
     }
 
 
-
-
-
 @app.get("/api/credentials/pool")
-
 async def list_credential_pool():
 
     from agent.credential_pool import load_pool
 
     from clawk_cli.auth import read_credential_pool
-
-
 
     providers = []
 
@@ -11383,13 +8068,10 @@ async def list_credential_pool():
     raw_pool = read_credential_pool()
 
     for provider_id in sorted(raw_pool.keys()):
-
         try:
-
             pool = load_pool(provider_id)
 
         except Exception:
-
             _log.exception("load_pool(%s) failed", provider_id)
 
             continue
@@ -11397,85 +8079,55 @@ async def list_credential_pool():
         entries = pool.entries()
 
         if not entries:
-
             continue
 
         providers.append({
-
             "provider": provider_id,
-
             "entries": [
-
                 _pool_entry_summary(e, i) for i, e in enumerate(entries, start=1)
-
             ],
-
         })
 
     return {"providers": providers}
 
 
-
-
-
 @app.post("/api/credentials/pool")
-
 async def add_credential_pool_entry(body: CredentialPoolAdd):
 
     import uuid as _uuid
 
     from agent.credential_pool import (
-
         load_pool,
-
         PooledCredential,
-
         AUTH_TYPE_API_KEY,
-
         SOURCE_MANUAL,
-
     )
-
-
 
     provider = (body.provider or "").strip().lower()
 
     api_key = (body.api_key or "").strip()
 
     if not provider or not api_key:
-
         raise HTTPException(status_code=400, detail="provider and api_key are required")
 
-
-
     try:
-
         pool = load_pool(provider)
 
         label = (body.label or "").strip() or f"key #{len(pool.entries()) + 1}"
 
         entry = PooledCredential(
-
             provider=provider,
-
             id=_uuid.uuid4().hex[:6],
-
             label=label,
-
             auth_type=AUTH_TYPE_API_KEY,
-
             priority=0,
-
             source=SOURCE_MANUAL,
-
             access_token=api_key,
-
         )
 
         pool.add_entry(entry)
 
     except Exception as exc:
-
         _log.exception("POST /api/credentials/pool failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -11483,41 +8135,28 @@ async def add_credential_pool_entry(body: CredentialPoolAdd):
     return {"ok": True, "provider": provider, "count": len(pool.entries())}
 
 
-
-
-
 @app.delete("/api/credentials/pool/{provider}/{index}")
-
 async def remove_credential_pool_entry(provider: str, index: int):
-
     """Remove a pool entry.  ``index`` is 1-based (matches the list response)."""
 
     from agent.credential_pool import load_pool
 
-
-
     provider = (provider or "").strip().lower()
 
     try:
-
         pool = load_pool(provider)
 
         removed = pool.remove_index(index)
 
     except Exception as exc:
-
         _log.exception("DELETE /api/credentials/pool failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if removed is None:
-
         raise HTTPException(status_code=404, detail="No pool entry at that index")
 
     return {"ok": True, "provider": provider, "count": len(pool.entries())}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -11539,36 +8178,22 @@ async def remove_credential_pool_entry(provider: str, index: int):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class MemoryProviderSelect(BaseModel):
-
     # "" or "built-in" disables the external provider (built-in only).
 
     provider: str
 
 
-
-
-
 class MemoryReset(BaseModel):
-
     # "all" | "memory" | "user"
 
     target: str = "all"
 
 
-
-
-
 @app.get("/api/memory")
-
 async def get_memory_status():
 
     from plugins.memory import discover_memory_providers
-
-
 
     cfg = load_config()
 
@@ -11577,32 +8202,20 @@ async def get_memory_status():
     mem = cfg.get("memory")
 
     if isinstance(mem, dict):
-
         active = str(mem.get("provider") or "")
-
-
 
     providers = []
 
     try:
-
         for name, description, configured in discover_memory_providers():
-
             providers.append({
-
                 "name": name,
-
                 "description": description,
-
                 "configured": bool(configured),
-
             })
 
     except Exception:
-
         _log.exception("discover_memory_providers failed")
-
-
 
     # Built-in memory file sizes (so the UI can show what a reset would erase).
 
@@ -11611,63 +8224,39 @@ async def get_memory_status():
     files = {}
 
     for fname, key in (("MEMORY.md", "memory"), ("USER.md", "user")):
-
         path = mem_dir / fname
 
         files[key] = path.stat().st_size if path.exists() else 0
 
-
-
     return {
-
         "active": active,
-
         "providers": providers,
-
         "builtin_files": files,
-
     }
 
 
-
-
-
 @app.put("/api/memory/provider")
-
 async def set_memory_provider(body: MemoryProviderSelect):
 
     provider = (body.provider or "").strip()
 
     if provider.lower() in {"built-in", "builtin", "none"}:
-
         provider = ""
 
-
-
     if provider:
-
         from plugins.memory import discover_memory_providers
-
-
 
         valid = {name for name, _d, _c in discover_memory_providers()}
 
         if provider not in valid:
-
             raise HTTPException(
-
                 status_code=400,
-
                 detail=f"Unknown memory provider '{provider}'. Run `clawk memory setup` to configure a new one.",
-
             )
-
-
 
     cfg = load_config()
 
     if not isinstance(cfg.get("memory"), dict):
-
         cfg["memory"] = {}
 
     cfg["memory"]["provider"] = provider
@@ -11677,20 +8266,15 @@ async def set_memory_provider(body: MemoryProviderSelect):
     return {"ok": True, "active": provider}
 
 
-
-
-
 @app.post("/api/memory/reset")
-
 async def reset_memory(body: MemoryReset):
 
     target = (body.target or "all").strip().lower()
 
     if target not in {"all", "memory", "user"}:
-
-        raise HTTPException(status_code=400, detail="target must be all, memory, or user")
-
-
+        raise HTTPException(
+            status_code=400, detail="target must be all, memory, or user"
+        )
 
     mem_dir = get_clawk_home() / "memories"
 
@@ -11699,33 +8283,26 @@ async def reset_memory(body: MemoryReset):
     targets = []
 
     if target in {"all", "memory"}:
-
         targets.append("MEMORY.md")
 
     if target in {"all", "user"}:
-
         targets.append("USER.md")
 
     for fname in targets:
-
         path = mem_dir / fname
 
         if path.exists():
-
             try:
-
                 path.unlink()
 
                 deleted.append(fname)
 
             except OSError as exc:
-
-                raise HTTPException(status_code=500, detail=f"Could not delete {fname}: {exc}")
+                raise HTTPException(
+                    status_code=500, detail=f"Could not delete {fname}: {exc}"
+                )
 
     return {"ok": True, "deleted": deleted}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -11751,19 +8328,13 @@ async def reset_memory(body: MemoryReset):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.post("/api/ops/doctor")
-
 async def run_doctor():
 
     try:
-
         proc = _spawn_clawk_action(["doctor"], "doctor")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn doctor")
 
         raise HTTPException(status_code=500, detail=f"Failed to run doctor: {exc}")
@@ -11771,55 +8342,40 @@ async def run_doctor():
     return {"ok": True, "pid": proc.pid, "name": "doctor"}
 
 
-
-
-
 @app.post("/api/ops/security-audit")
-
 async def run_security_audit():
 
     try:
-
         proc = _spawn_clawk_action(["security", "audit"], "security-audit")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn security audit")
 
-        raise HTTPException(status_code=500, detail=f"Failed to run security audit: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to run security audit: {exc}"
+        )
 
     return {"ok": True, "pid": proc.pid, "name": "security-audit"}
 
 
-
-
-
 class BackupRequest(BaseModel):
-
     # Optional output path; defaults to a timestamped zip in the home dir.
 
     output: Optional[str] = None
 
 
-
-
-
 @app.post("/api/ops/backup")
-
 async def run_backup(body: BackupRequest):
 
     args = ["backup"]
 
     if body.output:
-
         args.append(body.output.strip())
 
     try:
-
         proc = _spawn_clawk_action(args, "backup")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn backup")
 
         raise HTTPException(status_code=500, detail=f"Failed to run backup: {exc}")
@@ -11827,37 +8383,25 @@ async def run_backup(body: BackupRequest):
     return {"ok": True, "pid": proc.pid, "name": "backup"}
 
 
-
-
-
 class ImportRequest(BaseModel):
-
     archive: str
 
 
-
-
-
 @app.post("/api/ops/import")
-
 async def run_import(body: ImportRequest):
 
     archive = (body.archive or "").strip()
 
     if not archive:
-
         raise HTTPException(status_code=400, detail="archive path is required")
 
     if not os.path.isfile(archive):
-
         raise HTTPException(status_code=404, detail=f"Archive not found: {archive}")
 
     try:
-
         proc = _spawn_clawk_action(["import", archive], "import")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn import")
 
         raise HTTPException(status_code=500, detail=f"Failed to run import: {exc}")
@@ -11865,13 +8409,8 @@ async def run_import(body: ImportRequest):
     return {"ok": True, "pid": proc.pid, "name": "import"}
 
 
-
-
-
 @app.get("/api/ops/hooks")
-
 async def list_hooks():
-
     """List configured shell hooks from config.yaml with consent + health.
 
 
@@ -11888,84 +8427,55 @@ async def list_hooks():
 
     from agent import shell_hooks
 
-
-
     try:
-
         from clawk_cli.plugins import VALID_HOOKS
 
         valid_events = sorted(VALID_HOOKS)
 
     except Exception:
-
         valid_events = []
-
-
 
     specs = []
 
     try:
-
         specs = shell_hooks.iter_configured_hooks(_load_config())
 
     except Exception:
-
         _log.exception("iter_configured_hooks failed")
-
-
 
     out = []
 
     for spec in specs:
-
         entry = None
 
         try:
-
             entry = shell_hooks.allowlist_entry_for(spec.event, spec.command)
 
         except Exception:
-
             pass
 
         executable = False
 
         try:
-
             executable = shell_hooks.script_is_executable(spec.command)
 
         except Exception:
-
             pass
 
         out.append({
-
             "event": spec.event,
-
             "matcher": spec.matcher,
-
             "command": spec.command,
-
             "timeout": spec.timeout,
-
             "allowed": entry is not None,
-
             "approved_at": (entry or {}).get("approved_at"),
-
             "executable": executable,
-
         })
-
-
 
     return {"hooks": out, "valid_events": valid_events}
 
 
-
-
-
 class HookCreate(BaseModel):
-
     event: str
 
     command: str
@@ -11983,13 +8493,8 @@ class HookCreate(BaseModel):
     approve: bool = True
 
 
-
-
-
 @app.post("/api/ops/hooks")
-
 async def create_hook(body: HookCreate):
-
     """Add a shell hook to config.yaml (and optionally approve it).
 
 
@@ -12006,48 +8511,33 @@ async def create_hook(body: HookCreate):
 
     from agent import shell_hooks
 
-
-
     event = (body.event or "").strip()
 
     command = (body.command or "").strip()
 
     if not event or not command:
-
         raise HTTPException(status_code=400, detail="event and command are required")
 
-
-
     try:
-
         from clawk_cli.plugins import VALID_HOOKS
 
         if event not in VALID_HOOKS:
-
             raise HTTPException(
-
                 status_code=400,
-
                 detail=f"Unknown event '{event}'. Valid: {', '.join(sorted(VALID_HOOKS))}",
-
             )
 
     except HTTPException:
-
         raise
 
     except Exception:
-
         pass
-
-
 
     cfg = load_config()
 
     hooks_cfg = cfg.get("hooks")
 
     if not isinstance(hooks_cfg, dict):
-
         hooks_cfg = {}
 
         cfg["hooks"] = hooks_cfg
@@ -12055,80 +8545,54 @@ async def create_hook(body: HookCreate):
     entries = hooks_cfg.get(event)
 
     if not isinstance(entries, list):
-
         entries = []
 
         hooks_cfg[event] = entries
 
-
-
     new_entry: Dict[str, Any] = {"command": command}
 
     if body.matcher:
-
         new_entry["matcher"] = body.matcher
 
     if body.timeout is not None:
-
         new_entry["timeout"] = int(body.timeout)
 
     entries.append(new_entry)
 
     save_config(cfg)
 
-
-
     approved = False
 
     if body.approve:
-
         try:
-
             shell_hooks._record_approval(event, command)
 
             approved = True
 
         except Exception:
-
             _log.exception("hook consent record failed")
-
-
 
     return {"ok": True, "event": event, "command": command, "approved": approved}
 
 
-
-
-
 class HookDelete(BaseModel):
-
     event: str
 
     command: str
 
 
-
-
-
 @app.delete("/api/ops/hooks")
-
 async def delete_hook(body: HookDelete):
-
     """Remove a hook from config.yaml and revoke its consent allowlist entry."""
 
     from agent import shell_hooks
-
-
 
     event = (body.event or "").strip()
 
     command = (body.command or "").strip()
 
     if not event or not command:
-
         raise HTTPException(status_code=400, detail="event and command are required")
-
-
 
     cfg = load_config()
 
@@ -12137,57 +8601,40 @@ async def delete_hook(body: HookDelete):
     removed = False
 
     if isinstance(hooks_cfg, dict) and isinstance(hooks_cfg.get(event), list):
-
         before = len(hooks_cfg[event])
 
         hooks_cfg[event] = [
-
-            e for e in hooks_cfg[event]
-
+            e
+            for e in hooks_cfg[event]
             if not (isinstance(e, dict) and e.get("command") == command)
-
         ]
 
         removed = len(hooks_cfg[event]) < before
 
         if not hooks_cfg[event]:
-
             del hooks_cfg[event]
 
         if not hooks_cfg:
-
             cfg.pop("hooks", None)
 
         save_config(cfg)
 
-
-
     # Revoke consent regardless so a re-add re-prompts.
 
     try:
-
         shell_hooks.revoke(command)
 
     except Exception:
-
         pass
 
-
-
     if not removed:
-
         raise HTTPException(status_code=404, detail="No matching hook found")
 
     return {"ok": True}
 
 
-
-
-
 @app.get("/api/ops/checkpoints")
-
 async def list_checkpoints():
-
     """List the /rollback shadow store checkpoints (read-only)."""
 
     # Checkpoints live under <clawk_home>/checkpoints/.  Surface a count +
@@ -12205,11 +8652,8 @@ async def list_checkpoints():
     total_bytes = 0
 
     if cp_dir.is_dir():
-
         for child in sorted(cp_dir.iterdir()):
-
             if not child.is_dir():
-
                 continue
 
             size = 0
@@ -12217,55 +8661,40 @@ async def list_checkpoints():
             count = 0
 
             for f in child.rglob("*"):
-
                 if f.is_file():
-
                     try:
-
                         size += f.stat().st_size
 
                         count += 1
 
                     except OSError:
-
                         pass
 
             total_bytes += size
 
             sessions.append({
-
                 "session": child.name,
-
                 "files": count,
-
                 "bytes": size,
-
             })
 
     return {"sessions": sessions, "total_bytes": total_bytes}
 
 
-
-
-
 @app.post("/api/ops/checkpoints/prune")
-
 async def prune_checkpoints():
 
     try:
-
         proc = _spawn_clawk_action(["checkpoints", "prune"], "checkpoints-prune")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn checkpoints prune")
 
-        raise HTTPException(status_code=500, detail=f"Failed to prune checkpoints: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to prune checkpoints: {exc}"
+        )
 
     return {"ok": True, "pid": proc.pid, "name": "checkpoints-prune"}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -12285,33 +8714,22 @@ async def prune_checkpoints():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class SkillInstallRequest(BaseModel):
-
     identifier: str
 
 
-
-
-
 @app.post("/api/skills/hub/install")
-
 async def install_skill_hub(body: SkillInstallRequest):
 
     identifier = (body.identifier or "").strip()
 
     if not identifier:
-
         raise HTTPException(status_code=400, detail="identifier is required")
 
     try:
-
         proc = _spawn_clawk_action(["skills", "install", identifier], "skills-install")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn skills install")
 
         raise HTTPException(status_code=500, detail=f"Failed to install skill: {exc}")
@@ -12319,33 +8737,24 @@ async def install_skill_hub(body: SkillInstallRequest):
     return {"ok": True, "pid": proc.pid, "name": "skills-install"}
 
 
-
-
-
 class SkillUninstallRequest(BaseModel):
-
     name: str
 
 
-
-
-
 @app.post("/api/skills/hub/uninstall")
-
 async def uninstall_skill_hub(body: SkillUninstallRequest):
 
     name = (body.name or "").strip()
 
     if not name:
-
         raise HTTPException(status_code=400, detail="name is required")
 
     try:
-
-        proc = _spawn_clawk_action(["skills", "uninstall", name, "--yes"], "skills-uninstall")
+        proc = _spawn_clawk_action(
+            ["skills", "uninstall", name, "--yes"], "skills-uninstall"
+        )
 
     except Exception as exc:
-
         _log.exception("Failed to spawn skills uninstall")
 
         raise HTTPException(status_code=500, detail=f"Failed to uninstall skill: {exc}")
@@ -12353,19 +8762,13 @@ async def uninstall_skill_hub(body: SkillUninstallRequest):
     return {"ok": True, "pid": proc.pid, "name": "skills-uninstall"}
 
 
-
-
-
 @app.post("/api/skills/hub/update")
-
 async def update_skills_hub():
 
     try:
-
         proc = _spawn_clawk_action(["skills", "update"], "skills-update")
 
     except Exception as exc:
-
         _log.exception("Failed to spawn skills update")
 
         raise HTTPException(status_code=500, detail=f"Failed to update skills: {exc}")
@@ -12373,13 +8776,8 @@ async def update_skills_hub():
     return {"ok": True, "pid": proc.pid, "name": "skills-update"}
 
 
-
-
-
 @app.get("/api/skills/hub/search")
-
 async def search_skills_hub(q: str = "", source: str = "all", limit: int = 20):
-
     """Search the skill hub across all configured sources.
 
 
@@ -12395,65 +8793,40 @@ async def search_skills_hub(q: str = "", source: str = "all", limit: int = 20):
     query = (q or "").strip()
 
     if not query:
-
         return {"results": []}
-
-
 
     def _run():
 
         from tools.skills_hub import create_source_router, unified_search
 
-
-
         sources = create_source_router()
 
         metas = unified_search(
-
             query, sources, source_filter=source or "all", limit=min(max(limit, 1), 50)
-
         )
 
         return [
-
             {
-
                 "name": m.name,
-
                 "description": m.description,
-
                 "source": m.source,
-
                 "identifier": m.identifier,
-
                 "trust_level": m.trust_level,
-
                 "repo": m.repo,
-
                 "tags": list(m.tags or []),
-
             }
-
             for m in metas
-
         ]
 
-
-
     try:
-
         results = await asyncio.to_thread(_run)
 
     except Exception as exc:
-
         _log.exception("skills hub search failed")
 
         raise HTTPException(status_code=502, detail=f"Hub search failed: {exc}")
 
     return {"results": results}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -12463,11 +8836,7 @@ async def search_skills_hub(q: str = "", source: str = "all", limit: int = 20):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class ProfileCreate(BaseModel):
-
     name: str
 
     clone_from_default: bool = False
@@ -12483,109 +8852,59 @@ class ProfileCreate(BaseModel):
     model: Optional[str] = None
 
 
-
-
-
 class ProfileRename(BaseModel):
-
     new_name: str
 
 
-
-
-
 class ProfileSoulUpdate(BaseModel):
-
     content: str
 
 
-
-
-
 class ProfileActiveUpdate(BaseModel):
-
     name: str
 
 
-
-
-
 class ProfileDescriptionUpdate(BaseModel):
-
     description: str = ""
 
 
-
-
-
 class ProfileModelUpdate(BaseModel):
-
     provider: str
 
     model: str
 
 
-
-
-
 class ProfileDescribeAuto(BaseModel):
-
     overwrite: bool = False
-
-
-
 
 
 def _profile_attr(info, name: str, default: Any = None) -> Any:
 
     try:
-
         return getattr(info, name)
 
     except Exception:
-
         return default
-
-
-
 
 
 def _profile_to_dict(info) -> Dict[str, Any]:
 
     return {
-
         "name": _profile_attr(info, "name", ""),
-
         "path": str(_profile_attr(info, "path", "")),
-
         "is_default": bool(_profile_attr(info, "is_default", False)),
-
         "model": _profile_attr(info, "model"),
-
         "provider": _profile_attr(info, "provider"),
-
         "has_env": bool(_profile_attr(info, "has_env", False)),
-
         "skill_count": int(_profile_attr(info, "skill_count", 0) or 0),
-
         "gateway_running": bool(_profile_attr(info, "gateway_running", False)),
-
         "description": _profile_attr(info, "description", "") or "",
-
         "description_auto": bool(_profile_attr(info, "description_auto", False)),
-
         "distribution_name": _profile_attr(info, "distribution_name"),
-
         "distribution_version": _profile_attr(info, "distribution_version"),
-
         "distribution_source": _profile_attr(info, "distribution_source"),
-
         "has_alias": _profile_attr(info, "alias_path") is not None,
-
     }
-
-
-
 
 
 def _fallback_profile_dicts(profiles_mod) -> List[Dict[str, Any]]:
@@ -12593,135 +8912,113 @@ def _fallback_profile_dicts(profiles_mod) -> List[Dict[str, Any]]:
     def _safe(callable_, default):
 
         try:
-
             return callable_()
 
         except Exception:
-
             return default
-
-
 
     profiles: List[Dict[str, Any]] = []
 
     default_home = profiles_mod._get_default_clawk_home()
 
     if default_home.is_dir():
-
-        model, provider = _safe(lambda: profiles_mod._read_config_model(default_home), (None, None))
+        model, provider = _safe(
+            lambda: profiles_mod._read_config_model(default_home), (None, None)
+        )
 
         profiles.append({
-
             "name": "default",
-
             "path": str(default_home),
-
             "is_default": True,
-
             "model": model,
-
             "provider": provider,
-
             "has_env": (default_home / ".env").exists(),
-
             "skill_count": _safe(lambda: profiles_mod._count_skills(default_home), 0),
-
-            "gateway_running": _safe(lambda: profiles_mod._check_gateway_running(default_home), False),
-
-            "description": _safe(lambda: profiles_mod.read_profile_meta(default_home).get("description", ""), ""),
-
-            "description_auto": _safe(lambda: profiles_mod.read_profile_meta(default_home).get("description_auto", False), False),
-
+            "gateway_running": _safe(
+                lambda: profiles_mod._check_gateway_running(default_home), False
+            ),
+            "description": _safe(
+                lambda: profiles_mod.read_profile_meta(default_home).get(
+                    "description", ""
+                ),
+                "",
+            ),
+            "description_auto": _safe(
+                lambda: profiles_mod.read_profile_meta(default_home).get(
+                    "description_auto", False
+                ),
+                False,
+            ),
             "distribution_name": None,
-
             "distribution_version": None,
-
             "distribution_source": None,
-
             "has_alias": False,
-
         })
-
-
 
     profiles_root = profiles_mod._get_profiles_root()
 
     if profiles_root.is_dir():
-
         for entry in sorted(profiles_root.iterdir()):
-
             if not entry.is_dir() or not profiles_mod._PROFILE_ID_RE.match(entry.name):
-
                 continue
 
-            model, provider = _safe(lambda entry=entry: profiles_mod._read_config_model(entry), (None, None))
+            model, provider = _safe(
+                lambda entry=entry: profiles_mod._read_config_model(entry), (None, None)
+            )
 
             profiles.append({
-
                 "name": entry.name,
-
                 "path": str(entry),
-
                 "is_default": False,
-
                 "model": model,
-
                 "provider": provider,
-
                 "has_env": (entry / ".env").exists(),
-
-                "skill_count": _safe(lambda entry=entry: profiles_mod._count_skills(entry), 0),
-
-                "gateway_running": _safe(lambda entry=entry: profiles_mod._check_gateway_running(entry), False),
-
-                "description": _safe(lambda entry=entry: profiles_mod.read_profile_meta(entry).get("description", ""), ""),
-
-                "description_auto": _safe(lambda entry=entry: profiles_mod.read_profile_meta(entry).get("description_auto", False), False),
-
+                "skill_count": _safe(
+                    lambda entry=entry: profiles_mod._count_skills(entry), 0
+                ),
+                "gateway_running": _safe(
+                    lambda entry=entry: profiles_mod._check_gateway_running(entry),
+                    False,
+                ),
+                "description": _safe(
+                    lambda entry=entry: profiles_mod.read_profile_meta(entry).get(
+                        "description", ""
+                    ),
+                    "",
+                ),
+                "description_auto": _safe(
+                    lambda entry=entry: profiles_mod.read_profile_meta(entry).get(
+                        "description_auto", False
+                    ),
+                    False,
+                ),
                 "distribution_name": None,
-
                 "distribution_version": None,
-
                 "distribution_source": None,
-
                 "has_alias": False,
-
             })
-
-
 
     return profiles
 
 
-
-
-
 def _resolve_profile_dir(name: str) -> Path:
-
     """Validate ``name`` and resolve to its directory or raise an HTTPException."""
 
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         profiles_mod.validate_profile_name(name)
 
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     if not profiles_mod.profile_exists(name):
-
         raise HTTPException(status_code=404, detail=f"Profile '{name}' does not exist.")
 
     return profiles_mod.get_profile_dir(name)
 
 
-
-
-
 def _profile_setup_command(name: str) -> str:
-
     """Return the shell command used to configure a profile in the CLI."""
 
     _resolve_profile_dir(name)
@@ -12729,11 +9026,7 @@ def _profile_setup_command(name: str) -> str:
     return "clawk setup" if name == "default" else f"{name} setup"
 
 
-
-
-
 def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
-
     """Write the main model assignment into a specific profile's config.yaml.
 
 
@@ -12752,48 +9045,38 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
 
     from clawk_constants import set_clawk_home_override, reset_clawk_home_override
 
-
-
     token = set_clawk_home_override(str(profile_dir))
 
     try:
-
         cfg = load_config()
 
-        cfg["model"] = _apply_main_model_assignment(cfg.get("model", {}), provider, model)
+        cfg["model"] = _apply_main_model_assignment(
+            cfg.get("model", {}), provider, model
+        )
 
         save_config(cfg)
 
     finally:
-
         reset_clawk_home_override(token)
 
 
-
-
-
 @app.get("/api/profiles")
-
 async def list_profiles_endpoint():
 
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         return {"profiles": [_profile_to_dict(p) for p in profiles_mod.list_profiles()]}
 
     except Exception:
-
-        _log.exception("GET /api/profiles failed; falling back to profile directory scan")
+        _log.exception(
+            "GET /api/profiles failed; falling back to profile directory scan"
+        )
 
         return {"profiles": _fallback_profile_dicts(profiles_mod)}
 
 
-
-
-
 @app.post("/api/profiles")
-
 async def create_profile_endpoint(body: ProfileCreate):
 
     from clawk_cli import profiles as profiles_mod
@@ -12801,21 +9084,13 @@ async def create_profile_endpoint(body: ProfileCreate):
     clone = body.clone_from_default or body.clone_all
 
     try:
-
         path = profiles_mod.create_profile(
-
             name=body.name,
-
             clone_from="default" if clone else None,
-
             clone_all=body.clone_all,
-
             clone_config=body.clone_from_default and not body.clone_all,
-
             no_skills=body.no_skills,
-
             description=body.description,
-
         )
 
         # Match the CLI's profile-create flow: fresh named profiles get the
@@ -12829,10 +9104,7 @@ async def create_profile_endpoint(body: ProfileCreate):
         # the opt-out marker and seed_profile_skills() will no-op.
 
         if not clone:
-
             profiles_mod.seed_profile_skills(path, quiet=True)
-
-
 
         # Match the CLI's profile-create flow: named profiles should get a
 
@@ -12841,20 +9113,15 @@ async def create_profile_endpoint(body: ProfileCreate):
         collision = profiles_mod.check_alias_collision(body.name)
 
         if not collision:
-
             profiles_mod.create_wrapper_script(body.name)
 
     except (ValueError, FileExistsError, FileNotFoundError) as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-
         _log.exception("POST /api/profiles failed")
 
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
     # Optional explicit model assignment for the new profile. Best-effort:
 
@@ -12871,29 +9138,19 @@ async def create_profile_endpoint(body: ProfileCreate):
     model_set = False
 
     if provider and model:
-
         try:
-
             _write_profile_model(path, provider, model)
 
             model_set = True
 
         except Exception:
-
             _log.exception("Setting model for new profile %s failed", body.name)
-
-
 
     return {"ok": True, "name": body.name, "path": str(path), "model_set": model_set}
 
 
-
-
-
 @app.get("/api/profiles/active")
-
 async def get_active_profile_endpoint():
-
     """Return the sticky active profile and the profile this dashboard
 
     process is currently running as.
@@ -12911,31 +9168,22 @@ async def get_active_profile_endpoint():
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         active = profiles_mod.get_active_profile() or "default"
 
     except Exception:
-
         active = "default"
 
     try:
-
         current = profiles_mod.get_active_profile_name() or "default"
 
     except Exception:
-
         current = "default"
 
     return {"active": active, "current": current}
 
 
-
-
-
 @app.post("/api/profiles/active")
-
 async def set_active_profile_endpoint(body: ProfileActiveUpdate):
-
     """Set the sticky active profile (mirrors ``clawk profile use``).
 
 
@@ -12949,19 +9197,15 @@ async def set_active_profile_endpoint(body: ProfileActiveUpdate):
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         profiles_mod.set_active_profile(body.name)
 
     except FileNotFoundError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-
         _log.exception("POST /api/profiles/active failed")
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -12969,117 +9213,79 @@ async def set_active_profile_endpoint(body: ProfileActiveUpdate):
     return {"ok": True, "active": profiles_mod.normalize_profile_name(body.name)}
 
 
-
-
-
 @app.get("/api/profiles/{name}/setup-command")
-
 async def get_profile_setup_command(name: str):
 
     return {"command": _profile_setup_command(name)}
 
 
-
-
-
 @app.post("/api/profiles/{name}/open-terminal")
-
 async def open_profile_terminal_endpoint(name: str):
 
     try:
-
         command = _profile_setup_command(name)
 
-
-
         if sys.platform.startswith("win"):
-
             subprocess.Popen(["cmd.exe", "/c", "start", "", command])
 
         elif sys.platform == "darwin":
-
             escaped = command.replace("\\", "\\\\").replace('"', '\\"')
 
             applescript = (
-
                 'tell application "Terminal"\n'
-
                 "activate\n"
-
                 f'do script "{escaped}"\n'
-
                 "end tell"
-
             )
 
             subprocess.Popen(["osascript", "-e", applescript])
 
         else:
-
             terminal_commands = [
-
-                ("x-terminal-emulator", ["x-terminal-emulator", "-e", "sh", "-lc", command]),
-
+                (
+                    "x-terminal-emulator",
+                    ["x-terminal-emulator", "-e", "sh", "-lc", command],
+                ),
                 ("gnome-terminal", ["gnome-terminal", "--", "sh", "-lc", command]),
-
                 ("konsole", ["konsole", "-e", "sh", "-lc", command]),
-
                 ("xfce4-terminal", ["xfce4-terminal", "-e", f"sh -lc '{command}'"]),
-
                 ("mate-terminal", ["mate-terminal", "-e", f"sh -lc '{command}'"]),
-
                 ("lxterminal", ["lxterminal", "-e", f"sh -lc '{command}'"]),
-
                 ("tilix", ["tilix", "-e", "sh", "-lc", command]),
-
                 ("alacritty", ["alacritty", "-e", "sh", "-lc", command]),
-
                 ("kitty", ["kitty", "sh", "-lc", command]),
-
                 ("xterm", ["xterm", "-e", "sh", "-lc", command]),
-
             ]
 
             for executable, popen_args in terminal_commands:
-
-                if subprocess.call(
-
-                    ["which", executable],
-
-                    stdout=subprocess.DEVNULL,
-
-                    stderr=subprocess.DEVNULL,
-
-                ) == 0:
-
+                if (
+                    subprocess.call(
+                        ["which", executable],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    == 0
+                ):
                     subprocess.Popen(popen_args)
 
                     break
 
             else:
-
                 raise HTTPException(
-
                     status_code=400,
-
                     detail="No supported terminal emulator found",
-
                 )
 
     except FileNotFoundError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     except HTTPException:
-
         raise
 
     except Exception as e:
-
         _log.exception("POST /api/profiles/%s/open-terminal failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -13087,29 +9293,21 @@ async def open_profile_terminal_endpoint(name: str):
     return {"ok": True, "command": command}
 
 
-
-
-
 @app.patch("/api/profiles/{name}")
-
 async def rename_profile_endpoint(name: str, body: ProfileRename):
 
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         path = profiles_mod.rename_profile(name, body.new_name)
 
     except FileNotFoundError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
     except (ValueError, FileExistsError) as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-
         _log.exception("PATCH /api/profiles/%s failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -13117,13 +9315,8 @@ async def rename_profile_endpoint(name: str, body: ProfileRename):
     return {"ok": True, "name": body.new_name, "path": str(path)}
 
 
-
-
-
 @app.delete("/api/profiles/{name}")
-
 async def delete_profile_endpoint(name: str):
-
     """Delete a profile. The dashboard collects the user's confirmation in
 
     its own dialog before this request, so we always pass ``yes=True`` to
@@ -13133,19 +9326,15 @@ async def delete_profile_endpoint(name: str):
     from clawk_cli import profiles as profiles_mod
 
     try:
-
         path = profiles_mod.delete_profile(name, yes=True)
 
     except FileNotFoundError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-
         _log.exception("DELETE /api/profiles/%s failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -13153,43 +9342,30 @@ async def delete_profile_endpoint(name: str):
     return {"ok": True, "path": str(path)}
 
 
-
-
-
 @app.get("/api/profiles/{name}/soul")
-
 async def get_profile_soul(name: str):
 
     soul_path = _resolve_profile_dir(name) / "SOUL.md"
 
     if soul_path.exists():
-
         try:
-
             return {"content": soul_path.read_text(encoding="utf-8"), "exists": True}
 
         except OSError as e:
-
             raise HTTPException(status_code=500, detail=f"Could not read SOUL.md: {e}")
 
     return {"content": "", "exists": False}
 
 
-
-
-
 @app.put("/api/profiles/{name}/soul")
-
 async def update_profile_soul(name: str, body: ProfileSoulUpdate):
 
     soul_path = _resolve_profile_dir(name) / "SOUL.md"
 
     try:
-
         soul_path.write_text(body.content, encoding="utf-8")
 
     except OSError as e:
-
         _log.exception("PUT /api/profiles/%s/soul failed", name)
 
         raise HTTPException(status_code=500, detail=f"Could not write SOUL.md: {e}")
@@ -13197,13 +9373,10 @@ async def update_profile_soul(name: str, body: ProfileSoulUpdate):
     return {"ok": True}
 
 
-
-
-
 @app.put("/api/profiles/{name}/description")
-
-async def update_profile_description_endpoint(name: str, body: ProfileDescriptionUpdate):
-
+async def update_profile_description_endpoint(
+    name: str, body: ProfileDescriptionUpdate
+):
     """Set or clear a profile's role description (kanban routing signal).
 
 
@@ -13223,19 +9396,13 @@ async def update_profile_description_endpoint(name: str, body: ProfileDescriptio
     text = (body.description or "").strip()
 
     try:
-
         profiles_mod.write_profile_meta(
-
             profile_dir,
-
             description=text,
-
             description_auto=False,
-
         )
 
     except Exception as e:
-
         _log.exception("PUT /api/profiles/%s/description failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -13243,13 +9410,8 @@ async def update_profile_description_endpoint(name: str, body: ProfileDescriptio
     return {"ok": True, "description": text, "description_auto": False}
 
 
-
-
-
 @app.put("/api/profiles/{name}/model")
-
 async def update_profile_model_endpoint(name: str, body: ProfileModelUpdate):
-
     """Set the main model (``model.default`` + ``model.provider``) for a
 
     specific profile's config.yaml, without touching the dashboard's own
@@ -13267,15 +9429,12 @@ async def update_profile_model_endpoint(name: str, body: ProfileModelUpdate):
     model = (body.model or "").strip()
 
     if not provider or not model:
-
         raise HTTPException(status_code=400, detail="provider and model are required")
 
     try:
-
         _write_profile_model(profile_dir, provider, model)
 
     except Exception as e:
-
         _log.exception("PUT /api/profiles/%s/model failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
@@ -13283,13 +9442,8 @@ async def update_profile_model_endpoint(name: str, body: ProfileModelUpdate):
     return {"ok": True, "provider": provider, "model": model}
 
 
-
-
-
 @app.post("/api/profiles/{name}/describe-auto")
-
 async def describe_profile_auto_endpoint(name: str, body: ProfileDescribeAuto):
-
     """Auto-generate a profile's description via the auxiliary LLM
 
     (``auxiliary.profile_describer``). Mirrors ``clawk profile describe
@@ -13309,37 +9463,26 @@ async def describe_profile_auto_endpoint(name: str, body: ProfileDescribeAuto):
     _resolve_profile_dir(name)
 
     try:
-
         from clawk_cli import profile_describer
 
-        outcome = profile_describer.describe_profile(name, overwrite=bool(body.overwrite))
+        outcome = profile_describer.describe_profile(
+            name, overwrite=bool(body.overwrite)
+        )
 
     except Exception as e:
-
         _log.exception("POST /api/profiles/%s/describe-auto failed", name)
 
         raise HTTPException(status_code=500, detail=str(e))
 
     return {
-
         "ok": bool(outcome.ok),
-
         "reason": outcome.reason,
-
         "description": outcome.description,
-
         # Only a successful generation is an auto-authored description. A failed
-
         # sweep leaves any existing description untouched, so don't claim it's
-
         # auto-generated.
-
         "description_auto": bool(outcome.ok),
-
     }
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -13349,21 +9492,13 @@ async def describe_profile_auto_endpoint(name: str, body: ProfileDescribeAuto):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class SkillToggle(BaseModel):
-
     name: str
 
     enabled: bool
 
 
-
-
-
 @app.get("/api/skills")
-
 async def get_skills():
 
     from tools.skills_tool import _find_all_skills
@@ -13377,17 +9512,12 @@ async def get_skills():
     skills = _find_all_skills(skip_disabled=True)
 
     for s in skills:
-
         s["enabled"] = s["name"] not in disabled
 
     return skills
 
 
-
-
-
 @app.put("/api/skills/toggle")
-
 async def toggle_skill(body: SkillToggle):
 
     from clawk_cli.skills_config import get_disabled_skills, save_disabled_skills
@@ -13397,11 +9527,9 @@ async def toggle_skill(body: SkillToggle):
     disabled = get_disabled_skills(config)
 
     if body.enabled:
-
         disabled.discard(body.name)
 
     else:
-
         disabled.add(body.name)
 
     save_disabled_skills(config, disabled)
@@ -13409,91 +9537,56 @@ async def toggle_skill(body: SkillToggle):
     return {"ok": True, "name": body.name, "enabled": body.enabled}
 
 
-
-
-
 @app.get("/api/tools/toolsets")
-
 async def get_toolsets():
 
     from clawk_cli.tools_config import (
-
         _get_effective_configurable_toolsets,
-
         _get_platform_tools,
-
         _toolset_has_keys,
-
         gui_toolset_label,
-
     )
 
     from toolsets import resolve_toolset
 
-
-
     config = load_config()
 
     enabled_toolsets = _get_platform_tools(
-
         config,
-
         "cli",
-
         include_default_mcp_servers=False,
-
     )
 
     result = []
 
     for name, label, desc in _get_effective_configurable_toolsets():
-
         try:
-
             tools = sorted(set(resolve_toolset(name)))
 
         except Exception:
-
             tools = []
 
         is_enabled = name in enabled_toolsets
 
         result.append({
-
             "name": name,
-
             "label": gui_toolset_label(label),
-
             "description": desc,
-
             "enabled": is_enabled,
-
             "available": is_enabled,
-
             "configured": _toolset_has_keys(name, config),
-
             "tools": tools,
-
         })
 
     return result
 
 
-
-
-
 class ToolsetToggle(BaseModel):
-
     enabled: bool
 
 
-
-
-
 @app.put("/api/tools/toolsets/{name}")
-
 async def toggle_toolset(name: str, body: ToolsetToggle):
-
     """Enable/disable a configurable toolset for the desktop (cli) platform.
 
 
@@ -13507,39 +9600,24 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
     """
 
     from clawk_cli.tools_config import (
-
         _get_effective_configurable_toolsets,
-
         _get_platform_tools,
-
         _save_platform_tools,
-
     )
-
-
 
     valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
 
     if name not in valid:
-
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
-
-
 
     config = load_config()
 
-    enabled = set(
-
-        _get_platform_tools(config, "cli", include_default_mcp_servers=False)
-
-    )
+    enabled = set(_get_platform_tools(config, "cli", include_default_mcp_servers=False))
 
     if body.enabled:
-
         enabled.add(name)
 
     else:
-
         enabled.discard(name)
 
     _save_platform_tools(config, "cli", enabled)
@@ -13547,13 +9625,8 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
     return {"ok": True, "name": name, "enabled": body.enabled}
 
 
-
-
-
 @app.get("/api/tools/toolsets/{name}/config")
-
 async def get_toolset_config(name: str):
-
     """Return the provider matrix + key status for a toolset's config panel.
 
 
@@ -13571,28 +9644,18 @@ async def get_toolset_config(name: str):
     """
 
     from clawk_cli.tools_config import (
-
         TOOL_CATEGORIES,
-
         _get_effective_configurable_toolsets,
-
         _is_provider_active,
-
         _visible_providers,
-
     )
 
     from clawk_cli.config import get_env_value
 
-
-
     valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
 
     if name not in valid:
-
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
-
-
 
     config = load_config()
 
@@ -13603,27 +9666,16 @@ async def get_toolset_config(name: str):
     active_provider = None
 
     if cat:
-
         for prov in _visible_providers(cat, config, force_fresh=True):
-
             env_vars = [
-
                 {
-
                     "key": e["key"],
-
                     "prompt": e.get("prompt", e["key"]),
-
                     "url": e.get("url"),
-
                     "default": e.get("default"),
-
                     "is_set": bool(get_env_value(e["key"])),
-
                 }
-
                 for e in prov.get("env_vars", [])
-
             ]
 
             # Surface the same active-provider determination the CLI picker
@@ -13637,55 +9689,32 @@ async def get_toolset_config(name: str):
             is_active = _is_provider_active(prov, config, force_fresh=True)
 
             if is_active and active_provider is None:
-
                 active_provider = prov["name"]
 
             providers.append({
-
                 "name": prov["name"],
-
                 "badge": prov.get("badge", ""),
-
                 "tag": prov.get("tag", ""),
-
                 "env_vars": env_vars,
-
                 "post_setup": prov.get("post_setup"),
-
                 "requires_nous_auth": bool(prov.get("requires_nous_auth")),
-
                 "is_active": is_active,
-
             })
 
     return {
-
         "name": name,
-
         "has_category": cat is not None,
-
         "providers": providers,
-
         "active_provider": active_provider,
-
     }
 
 
-
-
-
 class ToolsetProviderSelect(BaseModel):
-
     provider: str
 
 
-
-
-
 @app.put("/api/tools/toolsets/{name}/provider")
-
 async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
-
     """Persist a provider selection for a toolset (no key prompting).
 
 
@@ -13703,39 +9732,26 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
     """
 
     from clawk_cli.tools_config import (
-
         apply_provider_selection,
-
         _get_effective_configurable_toolsets,
-
     )
-
-
 
     valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
 
     if name not in valid:
-
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
-
-
 
     config = load_config()
 
     try:
-
         apply_provider_selection(name, body.provider, config)
 
     except KeyError as exc:
-
         raise HTTPException(status_code=400, detail=str(exc).strip('"'))
 
     save_config(config)
 
     return {"ok": True, "name": name, "provider": body.provider}
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -13745,43 +9761,28 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class RawConfigUpdate(BaseModel):
-
     yaml_text: str
 
 
-
-
-
 @app.get("/api/config/raw")
-
 async def get_config_raw():
 
     path = get_config_path()
 
     if not path.exists():
-
         return {"yaml": ""}
 
     return {"yaml": path.read_text(encoding="utf-8")}
 
 
-
-
-
 @app.put("/api/config/raw")
-
 async def update_config_raw(body: RawConfigUpdate):
 
     try:
-
         parsed = yaml.safe_load(body.yaml_text)
 
         if not isinstance(parsed, dict):
-
             raise HTTPException(status_code=400, detail="YAML must be a mapping")
 
         save_config(parsed)
@@ -13789,11 +9790,7 @@ async def update_config_raw(body: RawConfigUpdate):
         return {"ok": True}
 
     except yaml.YAMLError as e:
-
         raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -13803,26 +9800,20 @@ async def update_config_raw(body: RawConfigUpdate):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.get("/api/analytics/usage")
-
 async def get_usage_analytics(days: int = 30):
 
     from clawk_state import SessionDB
 
     from agent.insights import InsightsEngine
 
-
-
     db = SessionDB()
 
     try:
-
         cutoff = time.time() - (days * 86400)
 
-        cur = db._conn.execute("""
+        cur = db._conn.execute(
+            """
 
             SELECT date(started_at, 'unixepoch') as day,
 
@@ -13846,13 +9837,14 @@ async def get_usage_analytics(days: int = 30):
 
             GROUP BY day ORDER BY day
 
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
 
         daily = [dict(r) for r in cur.fetchall()]
 
-
-
-        cur2 = db._conn.execute("""
+        cur2 = db._conn.execute(
+            """
 
             SELECT model,
 
@@ -13870,13 +9862,14 @@ async def get_usage_analytics(days: int = 30):
 
             GROUP BY model ORDER BY SUM(input_tokens) + SUM(output_tokens) DESC
 
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
 
         by_model = [dict(r) for r in cur2.fetchall()]
 
-
-
-        cur3 = db._conn.execute("""
+        cur3 = db._conn.execute(
+            """
 
             SELECT SUM(input_tokens) as total_input,
 
@@ -13896,58 +9889,41 @@ async def get_usage_analytics(days: int = 30):
 
             FROM sessions WHERE started_at > ?
 
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
 
         totals = dict(cur3.fetchone())
 
         insights_report = InsightsEngine(db).generate(days=days)
 
-        skills = insights_report.get("skills", {
-
-            "summary": {
-
-                "total_skill_loads": 0,
-
-                "total_skill_edits": 0,
-
-                "total_skill_actions": 0,
-
-                "distinct_skills_used": 0,
-
+        skills = insights_report.get(
+            "skills",
+            {
+                "summary": {
+                    "total_skill_loads": 0,
+                    "total_skill_edits": 0,
+                    "total_skill_actions": 0,
+                    "distinct_skills_used": 0,
+                },
+                "top_skills": [],
             },
-
-            "top_skills": [],
-
-        })
-
-
+        )
 
         return {
-
             "daily": daily,
-
             "by_model": by_model,
-
             "totals": totals,
-
             "period_days": days,
-
             "skills": skills,
-
         }
 
     finally:
-
         db.close()
 
 
-
-
-
 @app.get("/api/analytics/models")
-
 async def get_models_analytics(days: int = 30):
-
     """Rich per-model analytics for the Models dashboard page.
 
 
@@ -13960,17 +9936,13 @@ async def get_models_analytics(days: int = 30):
 
     from clawk_state import SessionDB
 
-
-
     db = SessionDB()
 
     try:
-
         cutoff = time.time() - (days * 86400)
 
-
-
-        cur = db._conn.execute("""
+        cur = db._conn.execute(
+            """
 
             SELECT model,
 
@@ -14004,16 +9976,15 @@ async def get_models_analytics(days: int = 30):
 
             ORDER BY SUM(input_tokens) + SUM(output_tokens) DESC
 
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
 
         rows = [dict(r) for r in cur.fetchall()]
-
-
 
         models = []
 
         for row in rows:
-
             provider = row.get("billing_provider") or ""
 
             model_name = row["model"]
@@ -14021,70 +9992,42 @@ async def get_models_analytics(days: int = 30):
             caps = {}
 
             try:
-
                 from agent.models_dev import get_model_capabilities
 
                 mc = get_model_capabilities(provider=provider, model=model_name)
 
                 if mc is not None:
-
                     caps = {
-
                         "supports_tools": mc.supports_tools,
-
                         "supports_vision": mc.supports_vision,
-
                         "supports_reasoning": mc.supports_reasoning,
-
                         "context_window": mc.context_window,
-
                         "max_output_tokens": mc.max_output_tokens,
-
                         "model_family": mc.model_family,
-
                     }
 
             except Exception:
-
                 pass
 
-
-
             models.append({
-
                 "model": model_name,
-
                 "provider": provider,
-
                 "input_tokens": row["input_tokens"],
-
                 "output_tokens": row["output_tokens"],
-
                 "cache_read_tokens": row["cache_read_tokens"],
-
                 "reasoning_tokens": row["reasoning_tokens"],
-
                 "estimated_cost": row["estimated_cost"],
-
                 "actual_cost": row["actual_cost"],
-
                 "sessions": row["sessions"],
-
                 "api_calls": row["api_calls"],
-
                 "tool_calls": row["tool_calls"],
-
                 "last_used_at": row["last_used_at"],
-
                 "avg_tokens_per_session": row["avg_tokens_per_session"],
-
                 "capabilities": caps,
-
             })
 
-
-
-        totals_cur = db._conn.execute("""
+        totals_cur = db._conn.execute(
+            """
 
             SELECT COUNT(DISTINCT model) as distinct_models,
 
@@ -14106,28 +10049,20 @@ async def get_models_analytics(days: int = 30):
 
             FROM sessions WHERE started_at > ? AND model IS NOT NULL AND model != ''
 
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
 
         totals = dict(totals_cur.fetchone())
 
-
-
         return {
-
             "models": models,
-
             "totals": totals,
-
             "period_days": days,
-
         }
 
     finally:
-
         db.close()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -14157,9 +10092,7 @@ async def get_models_analytics(days: int = 30):
 # ---------------------------------------------------------------------------
 
 
-
 import re
-
 
 
 # PTY bridge is POSIX-only (depends on fcntl/termios/ptyprocess).  On native
@@ -14171,25 +10104,19 @@ import re
 # /api/pty endpoint cleanly refuses with a WSL-suggested message.
 
 try:
-
     from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
 
     _PTY_BRIDGE_AVAILABLE = True
 
 except ImportError as _pty_import_err:  # pragma: no cover - Windows-only path
-
     PtyBridge = None  # type: ignore[assignment]
 
     _PTY_BRIDGE_AVAILABLE = False
 
-
-
     class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
-
         """Stub on platforms where pty_bridge can't be imported."""
 
         pass
-
 
 
 _RESIZE_RE = re.compile(rb"\x1b\[RESIZE:(\d+);(\d+)\]")
@@ -14205,11 +10132,7 @@ _VALID_CHANNEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 
 
-
-
-
 def _ws_client_reason(ws: "WebSocket") -> Optional[str]:
-
     """Return a rejection reason for the client IP, or None when allowed.
 
 
@@ -14227,33 +10150,25 @@ def _ws_client_reason(ws: "WebSocket") -> Optional[str]:
     """
 
     if getattr(app.state, "auth_required", False):
-
         return None
 
     bound_host = (getattr(app.state, "bound_host", "") or "").strip().lower()
 
     if bound_host and bound_host not in _LOOPBACK_HOSTS:
-
         return None
 
     client_host = ws.client.host if ws.client else ""
 
     if not client_host:
-
         return None
 
     if client_host in _LOOPBACK_HOSTS:
-
         return None
 
     return f"peer_not_loopback peer={client_host} bound={bound_host or '?'}"
 
 
-
-
-
 def _ws_client_is_allowed(ws: "WebSocket") -> bool:
-
     """Check if the WebSocket client IP is acceptable.
 
 
@@ -14301,7 +10216,6 @@ def _ws_client_is_allowed(ws: "WebSocket") -> bool:
     """
 
     if getattr(app.state, "auth_required", False):
-
         return True
 
     # Any explicit non-loopback bind (0.0.0.0, ::, or a specific LAN /
@@ -14317,23 +10231,17 @@ def _ws_client_is_allowed(ws: "WebSocket") -> bool:
     bound_host = (getattr(app.state, "bound_host", "") or "").strip().lower()
 
     if bound_host and bound_host not in _LOOPBACK_HOSTS:
-
         return True
 
     client_host = ws.client.host if ws.client else ""
 
     if not client_host:
-
         return True
 
     return client_host in _LOOPBACK_HOSTS
 
 
-
-
-
 def _ws_host_origin_reason(ws: "WebSocket") -> Optional[str]:
-
     """Return a Host/Origin rejection reason, or None when allowed.
 
 
@@ -14349,31 +10257,21 @@ def _ws_host_origin_reason(ws: "WebSocket") -> Optional[str]:
     bound_host = getattr(app.state, "bound_host", None)
 
     if not bound_host:
-
         return None
-
-
 
     host_header = ws.headers.get("host", "")
 
     if not _is_accepted_host(host_header, bound_host):
-
         return f"host_mismatch host={host_header or '?'} bound={bound_host}"
-
-
 
     origin = ws.headers.get("origin", "")
 
     if not origin:
-
         return None
-
-
 
     parsed = urllib.parse.urlparse(origin)
 
     if parsed.scheme not in {"http", "https"}:
-
         # Non-web origin (packaged Electron: file://, null, app://). The
 
         # upstream credential check is the real auth boundary; trust it.
@@ -14382,26 +10280,16 @@ def _ws_host_origin_reason(ws: "WebSocket") -> Optional[str]:
 
         return None
 
-
-
     if not parsed.netloc:
-
         return f"origin_mismatch origin={origin} bound={bound_host}"
 
-
-
     if not _is_accepted_host(parsed.netloc, bound_host):
-
         return f"origin_mismatch origin={origin} bound={bound_host}"
 
     return None
 
 
-
-
-
 def _ws_host_origin_is_allowed(ws: "WebSocket") -> bool:
-
     """Apply the dashboard Host/Origin guard to WebSocket upgrades.
 
 
@@ -14421,51 +10309,33 @@ def _ws_host_origin_is_allowed(ws: "WebSocket") -> bool:
     return _ws_host_origin_reason(ws) is None
 
 
-
-
-
 def _ws_request_reason(ws: "WebSocket") -> Optional[str]:
-
     """First Host/Origin or peer-IP rejection reason, or None when allowed."""
 
     return _ws_host_origin_reason(ws) or _ws_client_reason(ws)
 
 
-
-
-
 def _ws_request_is_allowed(ws: "WebSocket") -> bool:
-
     """Return True when the WebSocket upgrade matches dashboard boundaries."""
 
     return _ws_host_origin_is_allowed(ws) and _ws_client_is_allowed(ws)
 
 
-
-
-
 def _ws_auth_mode() -> str:
-
     """Short label for the active WS auth mode — logged on every connection."""
 
     if getattr(app.state, "auth_required", False):
-
         return "gated"
 
     bound_host = (getattr(app.state, "bound_host", "") or "").strip().lower()
 
     if bound_host and bound_host not in _LOOPBACK_HOSTS:
-
         return "insecure"
 
     return "loopback"
 
 
-
-
-
 def _ws_auth_reason(ws: "WebSocket") -> tuple[Optional[str], str]:
-
     """Validate WS-upgrade auth; return ``(reason, credential)``.
 
 
@@ -14531,7 +10401,6 @@ def _ws_auth_reason(ws: "WebSocket") -> tuple[Optional[str], str]:
     auth_required = bool(getattr(app.state, "auth_required", False))
 
     if auth_required:
-
         # Lazy import — keeps this function importable in test harnesses
 
         # that don't bring in the dashboard_auth layer.
@@ -14539,16 +10408,10 @@ def _ws_auth_reason(ws: "WebSocket") -> tuple[Optional[str], str]:
         from clawk_cli.dashboard_auth.audit import AuditEvent, audit_log
 
         from clawk_cli.dashboard_auth.ws_tickets import (
-
             TicketInvalid,
-
             consume_internal_credential,
-
             consume_ticket,
-
         )
-
-
 
         # Server-spawned children (PTY child → /api/ws, /api/pub) present the
 
@@ -14559,85 +10422,56 @@ def _ws_auth_reason(ws: "WebSocket") -> tuple[Optional[str], str]:
         internal = ws.query_params.get("internal", "")
 
         if internal:
-
             try:
-
                 consume_internal_credential(internal)
 
                 return None, "internal"
 
             except TicketInvalid as exc:
-
                 audit_log(
-
                     AuditEvent.WS_TICKET_REJECTED,
-
                     reason=f"internal: {exc}",
-
                     ip=(ws.client.host if ws.client else ""),
-
                     path=ws.url.path,
-
                 )
 
                 return "internal_invalid", "internal"
 
-
-
         ticket = ws.query_params.get("ticket", "")
 
         if not ticket:
-
             return "no_credential", "none"
 
-
-
         try:
-
             consume_ticket(ticket)
 
             return None, "ticket"
 
         except TicketInvalid as exc:
-
             audit_log(
-
                 AuditEvent.WS_TICKET_REJECTED,
-
                 reason=str(exc),
-
                 ip=(ws.client.host if ws.client else ""),
-
                 path=ws.url.path,
-
             )
 
             return "ticket_invalid", "ticket"
 
-
-
     token = ws.query_params.get("token", "")
 
     if not token:
-
         return "no_credential", "none"
 
     if hmac.compare_digest(token.encode(), _SESSION_TOKEN.encode()):
-
         return None, "token"
 
     return "token_mismatch", "token"
 
 
-
-
-
 def _ws_auth_ok(ws: "WebSocket") -> bool:
-
     """True when the WS-upgrade credential is accepted. See _ws_auth_reason."""
 
     return _ws_auth_reason(ws)[0] is None
-
 
 
 # Per-channel subscriber registry used by /api/pub (PTY-side gateway → dashboard)
@@ -14651,17 +10485,10 @@ def _ws_auth_ok(ws: "WebSocket") -> bool:
 # (State is initialised in _lifespan on app startup — see above.)
 
 
-
-
-
 def _resolve_chat_argv(
-
     resume: Optional[str] = None,
-
     sidecar_url: Optional[str] = None,
-
 ) -> tuple[list[str], Optional[str], Optional[dict]]:
-
     """Resolve the argv + cwd + env for the chat PTY.
 
 
@@ -14702,8 +10529,6 @@ def _resolve_chat_argv(
 
     from clawk_cli.main import PROJECT_ROOT, _make_tui_argv
 
-
-
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
 
     env = os.environ.copy()
@@ -14726,40 +10551,24 @@ def _resolve_chat_argv(
 
     env.setdefault("CLAWK_TUI_INLINE", "1")
 
-
-
     if resume:
-
         latest_resume, _latest_path = _session_latest_descendant(resume)
 
         if latest_resume:
-
             resume = latest_resume
 
         env["CLAWK_TUI_RESUME"] = resume
 
-
-
     if sidecar_url:
-
         env["CLAWK_TUI_SIDECAR_URL"] = sidecar_url
 
-
-
     if gateway_ws_url := _build_gateway_ws_url():
-
         env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
-
-
 
     return list(argv), str(cwd) if cwd else None, env
 
 
-
-
-
 def _build_gateway_ws_url() -> Optional[str]:
-
     """ws:// URL the PTY child should attach to for JSON-RPC gateway traffic.
 
 
@@ -14784,48 +10593,27 @@ def _build_gateway_ws_url() -> Optional[str]:
 
     port = getattr(app.state, "bound_port", None)
 
-
-
     if not host or not port:
-
         return None
 
-
-
     netloc = (
-
         f"[{host}]:{port}"
-
         if ":" in host and not host.startswith("[")
-
         else f"{host}:{port}"
-
     )
 
-
-
     if getattr(app.state, "auth_required", False):
-
         from clawk_cli.dashboard_auth.ws_tickets import internal_ws_credential
-
-
 
         qs = urllib.parse.urlencode({"internal": internal_ws_credential()})
 
     else:
-
         qs = urllib.parse.urlencode({"token": _SESSION_TOKEN})
-
-
 
     return f"ws://{netloc}/api/ws?{qs}"
 
 
-
-
-
 def _build_sidecar_url(channel: str) -> Optional[str]:
-
     """ws:// URL the PTY child should publish events to, or None when unbound.
 
 
@@ -14856,92 +10644,64 @@ def _build_sidecar_url(channel: str) -> Optional[str]:
 
     port = getattr(app.state, "bound_port", None)
 
-
-
     if not host or not port:
-
         return None
 
-
-
-    netloc = f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
-
-
+    netloc = (
+        f"[{host}]:{port}"
+        if ":" in host and not host.startswith("[")
+        else f"{host}:{port}"
+    )
 
     if getattr(app.state, "auth_required", False):
-
         # Gated mode — use the internal credential so the WS upgrade survives
 
         # _ws_auth_ok and the child can reconnect.
 
         from clawk_cli.dashboard_auth.ws_tickets import internal_ws_credential
 
-
-
-        qs = urllib.parse.urlencode(
-
-            {"internal": internal_ws_credential(), "channel": channel}
-
-        )
+        qs = urllib.parse.urlencode({
+            "internal": internal_ws_credential(),
+            "channel": channel,
+        })
 
     else:
-
         qs = urllib.parse.urlencode({"token": _SESSION_TOKEN, "channel": channel})
-
-
 
     return f"ws://{netloc}/api/pub?{qs}"
 
 
-
-
-
 async def _broadcast_event(app: Any, channel: str, payload: str) -> None:
-
     """Fan out one publisher frame to every subscriber on `channel`."""
 
     event_channels, event_lock = _get_event_state(app)
 
     async with event_lock:
-
         subs = list(event_channels.get(channel, ()))
 
-
-
     for sub in subs:
-
         try:
-
             await sub.send_text(payload)
 
         except Exception:
-
             # Subscriber went away mid-send; the /api/events finally clause
 
             # will remove it from the registry on its next iteration.
 
-            _log.warning("broadcast send failed for subscriber on %s", channel, exc_info=True)
-
-
-
+            _log.warning(
+                "broadcast send failed for subscriber on %s", channel, exc_info=True
+            )
 
 
 def _channel_or_close_code(ws: WebSocket) -> Optional[str]:
-
     """Return the channel id from the query string or None if invalid."""
 
     channel = ws.query_params.get("channel", "")
 
-
-
     return channel if _VALID_CHANNEL_RE.match(channel) else None
 
 
-
-
-
 def _ws_close_reason(text: str) -> str:
-
     """Clamp a WS close reason to the protocol's 123-byte UTF-8 limit.
 
 
@@ -14957,32 +10717,22 @@ def _ws_close_reason(text: str) -> str:
     encoded = text.encode("utf-8", "replace")
 
     if len(encoded) <= 123:
-
         return text
 
     return encoded[:120].decode("utf-8", "ignore") + "..."
 
 
-
-
-
 @app.websocket("/api/pty")
-
 async def pty_ws(ws: WebSocket) -> None:
 
     peer = ws.client.host if ws.client else "?"
 
-
-
     if not _DASHBOARD_EMBEDDED_CHAT_ENABLED:
-
         _log.info("pty refused: embedded chat disabled peer=%s", peer)
 
         await ws.close(code=4404, reason="embedded chat disabled")
 
         return
-
-
 
     # --- auth + host/origin/peer check (before accept so we can close
 
@@ -15001,74 +10751,55 @@ async def pty_ws(ws: WebSocket) -> None:
     mode = _ws_auth_mode()
 
     if auth_reason is not None:
-
         _log.warning(
-
             "pty auth rejected reason=%s mode=%s cred=%s peer=%s",
-
-            auth_reason, mode, cred, peer,
-
+            auth_reason,
+            mode,
+            cred,
+            peer,
         )
 
         await ws.close(code=4401, reason=_ws_close_reason(f"auth: {auth_reason}"))
 
         return
 
-
-
     host_origin_reason = _ws_host_origin_reason(ws)
 
     if host_origin_reason is not None:
-
         _log.warning("pty refused: %s peer=%s", host_origin_reason, peer)
 
         await ws.close(code=4403, reason=_ws_close_reason(host_origin_reason))
 
         return
 
-
-
     client_reason = _ws_client_reason(ws)
 
     if client_reason is not None:
-
         _log.warning("pty refused: %s", client_reason)
 
         await ws.close(code=4408, reason=_ws_close_reason(client_reason))
 
         return
 
-
-
     await ws.accept()
 
     _log.info("pty accepted peer=%s mode=%s cred=%s", peer, mode, cred)
-
-
 
     # On native Windows, the POSIX PTY bridge can't be imported.  Tell the
 
     # client and close cleanly rather than pretending the feature works.
 
     if not _PTY_BRIDGE_AVAILABLE:
-
         await ws.send_text(
-
             "\r\n\x1b[31mChat unavailable: the embedded terminal requires a "
-
             "POSIX PTY, which native Windows Python doesn't provide.\x1b[0m\r\n"
-
             "\x1b[33mInstall Clawksis inside WSL2 to use the dashboard's /chat "
-
             "tab — the rest of the dashboard works here.\x1b[0m\r\n"
-
         )
 
         await ws.close(code=1011)
 
         return
-
-
 
     # --- spawn PTY ------------------------------------------------------
 
@@ -15078,14 +10809,10 @@ async def pty_ws(ws: WebSocket) -> None:
 
     sidecar_url = _build_sidecar_url(channel) if channel else None
 
-
-
     try:
-
         argv, cwd, env = _resolve_chat_argv(resume=resume, sidecar_url=sidecar_url)
 
     except SystemExit as exc:
-
         # _make_tui_argv calls sys.exit(1) when node/npm is missing.
 
         await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
@@ -15094,16 +10821,10 @@ async def pty_ws(ws: WebSocket) -> None:
 
         return
 
-
-
-
-
     try:
-
         bridge = PtyBridge.spawn(argv, cwd=cwd, env=env)
 
     except PtyUnavailableError as exc:
-
         await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
 
         await ws.close(code=1011)
@@ -15111,89 +10832,65 @@ async def pty_ws(ws: WebSocket) -> None:
         return
 
     except (FileNotFoundError, OSError) as exc:
-
         await ws.send_text(f"\r\n\x1b[31mChat failed to start: {exc}\x1b[0m\r\n")
 
         await ws.close(code=1011)
 
         return
 
-
-
     loop = asyncio.get_running_loop()
-
-
 
     # --- reader task: PTY master → WebSocket ----------------------------
 
     async def pump_pty_to_ws() -> None:
 
         while True:
-
             chunk = await loop.run_in_executor(
-
                 None, bridge.read, _PTY_READ_CHUNK_TIMEOUT
-
             )
 
             if chunk is None:  # EOF
-
                 return
 
             if not chunk:  # no data this tick; yield control and retry
-
                 await asyncio.sleep(0)
 
                 continue
 
             try:
-
                 await ws.send_bytes(chunk)
 
             except Exception:
-
                 return
 
-
-
     reader_task = asyncio.create_task(pump_pty_to_ws())
-
-
 
     # --- writer loop: WebSocket → PTY master ----------------------------
 
     try:
-
         while True:
-
             msg = await ws.receive()
 
             msg_type = msg.get("type")
 
             if msg_type == "websocket.disconnect":
-
                 break
 
             raw = msg.get("bytes")
 
             if raw is None:
-
                 text = msg.get("text")
 
                 raw = text.encode("utf-8") if isinstance(text, str) else b""
 
             if not raw:
-
                 continue
-
-
 
             # Resize escape is consumed locally, never written to the PTY.
 
             match = _RESIZE_RE.match(raw)
 
             if match and match.end() == len(raw):
-
                 cols = int(match.group(1))
 
                 rows = int(match.group(2))
@@ -15202,30 +10899,21 @@ async def pty_ws(ws: WebSocket) -> None:
 
                 continue
 
-
-
             bridge.write(raw)
 
     except WebSocketDisconnect:
-
         pass
 
     finally:
-
         reader_task.cancel()
 
         try:
-
             await reader_task
 
         except (asyncio.CancelledError, Exception):
-
             pass
 
         bridge.close()
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -15247,45 +10935,27 @@ async def pty_ws(ws: WebSocket) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.websocket("/api/ws")
-
 async def gateway_ws(ws: WebSocket) -> None:
 
     if not _DASHBOARD_EMBEDDED_CHAT_ENABLED:
-
         await ws.close(code=4403)
 
         return
 
-
-
     if not _ws_auth_ok(ws):
-
         await ws.close(code=4401)
 
         return
 
-
-
     if not _ws_request_is_allowed(ws):
-
         await ws.close(code=4403)
 
         return
 
-
-
     from tui_gateway.ws import handle_ws
 
-
-
     await handle_ws(ws)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -15309,119 +10979,75 @@ async def gateway_ws(ws: WebSocket) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @app.websocket("/api/pub")
-
 async def pub_ws(ws: WebSocket) -> None:
 
     if not _DASHBOARD_EMBEDDED_CHAT_ENABLED:
-
         await ws.close(code=4403)
 
         return
 
-
-
     if not _ws_auth_ok(ws):
-
         await ws.close(code=4401)
 
         return
 
-
-
     if not _ws_request_is_allowed(ws):
-
         await ws.close(code=4403)
 
         return
 
-
-
     channel = _channel_or_close_code(ws)
 
     if not channel:
-
         await ws.close(code=4400)
 
         return
 
-
-
     await ws.accept()
 
-
-
     try:
-
         while True:
-
             await _broadcast_event(ws.app, channel, await ws.receive_text())
 
     except WebSocketDisconnect:
-
         pass
 
 
-
-
-
 @app.websocket("/api/events")
-
 async def events_ws(ws: WebSocket) -> None:
 
     if not _DASHBOARD_EMBEDDED_CHAT_ENABLED:
-
         await ws.close(code=4403)
 
         return
 
-
-
     if not _ws_auth_ok(ws):
-
         await ws.close(code=4401)
 
         return
 
-
-
     if not _ws_request_is_allowed(ws):
-
         await ws.close(code=4403)
 
         return
 
-
-
     channel = _channel_or_close_code(ws)
 
     if not channel:
-
         await ws.close(code=4400)
 
         return
 
-
-
     await ws.accept()
-
-
 
     event_channels, event_lock = _get_event_state(ws.app)
 
     async with event_lock:
-
         event_channels.setdefault(channel, set()).add(ws)
 
-
-
     try:
-
         while True:
-
             # Subscribers don't speak — the receive() just blocks until
 
             # disconnect so the connection stays open as long as the
@@ -15431,33 +11057,20 @@ async def events_ws(ws: WebSocket) -> None:
             await ws.receive_text()
 
     except WebSocketDisconnect:
-
         pass
 
     finally:
-
         async with event_lock:
-
             subs = event_channels.get(channel)
 
-
-
             if subs is not None:
-
                 subs.discard(ws)
 
-
-
                 if not subs:
-
                     event_channels.pop(channel, None)
 
 
-
-
-
 def _normalise_prefix(raw: Optional[str]) -> str:
-
     """Normalise an X-Forwarded-Prefix header value.
 
 
@@ -15477,11 +11090,7 @@ def _normalise_prefix(raw: Optional[str]) -> str:
     return normalise_prefix(raw)
 
 
-
-
-
 def mount_spa(application: FastAPI):
-
     """Mount the built SPA. Falls back to index.html for client-side routing.
 
 
@@ -15511,27 +11120,18 @@ def mount_spa(application: FastAPI):
     if not WEB_DIST.exists():
 
         @application.get("/{full_path:path}")
-
         async def no_frontend(full_path: str):
 
             return JSONResponse(
-
                 {"error": "Frontend not built. Run: cd web && npm run build"},
-
                 status_code=404,
-
             )
 
         return
 
-
-
     _index_path = WEB_DIST / "index.html"
 
-
-
     def _serve_index(prefix: str = ""):
-
         """Return index.html with the session token + base-path injected.
 
 
@@ -15563,39 +11163,24 @@ def mount_spa(application: FastAPI):
         gated_js = "true" if gated else "false"
 
         if gated:
-
             bootstrap_script = (
-
                 f"<script>"
-
                 f"window.__CLAWK_DASHBOARD_EMBEDDED_CHAT__={chat_js};"
-
                 f'window.__CLAWK_BASE_PATH__="{prefix}";'
-
                 f"window.__CLAWK_AUTH_REQUIRED__={gated_js};"
-
                 f"</script>"
-
             )
 
         else:
-
             bootstrap_script = (
-
                 f'<script>window.__CLAWK_SESSION_TOKEN__="{_SESSION_TOKEN}";'
-
                 f"window.__CLAWK_DASHBOARD_EMBEDDED_CHAT__={chat_js};"
-
                 f'window.__CLAWK_BASE_PATH__="{prefix}";'
-
                 f"window.__CLAWK_AUTH_REQUIRED__={gated_js};"
-
                 f"</script>"
-
             )
 
         if prefix:
-
             # Rewrite absolute asset URLs baked into the Vite build so the
 
             # browser fetches them through the same proxy prefix.
@@ -15615,14 +11200,9 @@ def mount_spa(application: FastAPI):
         html = html.replace("</head>", f"{bootstrap_script}</head>", 1)
 
         return HTMLResponse(
-
             html,
-
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
-
         )
-
-
 
     # When served behind a path-prefix proxy, the built CSS contains
 
@@ -15639,17 +11219,13 @@ def mount_spa(application: FastAPI):
     # when a prefix is in play.
 
     @application.get("/assets/{filename}.css")
-
     async def serve_css(filename: str, request: Request):
 
         css_path = WEB_DIST / "assets" / f"{filename}.css"
 
         if not css_path.is_file() or not css_path.resolve().is_relative_to(
-
             WEB_DIST.resolve()
-
         ):
-
             return JSONResponse({"error": "not found"}, status_code=404)
 
         prefix = _normalise_prefix(request.headers.get("x-forwarded-prefix"))
@@ -15657,25 +11233,20 @@ def mount_spa(application: FastAPI):
         css = css_path.read_text()
 
         if prefix:
-
             for asset_dir in ("/fonts/", "/fonts-terminal/", "/ds-assets/", "/assets/"):
-
                 css = css.replace(f"url({asset_dir}", f"url({prefix}{asset_dir}")
 
-                css = css.replace(f"url(\"{asset_dir}", f"url(\"{prefix}{asset_dir}")
+                css = css.replace(f'url("{asset_dir}', f'url("{prefix}{asset_dir}')
 
                 css = css.replace(f"url('{asset_dir}", f"url('{prefix}{asset_dir}")
 
         return Response(content=css, media_type="text/css")
 
-
-
-    application.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
-
-
+    application.mount(
+        "/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets"
+    )
 
     @application.get("/{full_path:path}")
-
     async def serve_spa(full_path: str, request: Request):
 
         prefix = _normalise_prefix(request.headers.get("x-forwarded-prefix"))
@@ -15693,13 +11264,9 @@ def mount_spa(application: FastAPI):
         # so the caller sees a clear "no such endpoint" instead.
 
         if full_path == "api" or full_path.startswith("api/"):
-
             return JSONResponse(
-
                 {"detail": f"No such API endpoint: /{full_path}"},
-
                 status_code=404,
-
             )
 
         file_path = WEB_DIST / full_path
@@ -15707,23 +11274,14 @@ def mount_spa(application: FastAPI):
         # Prevent path traversal via url-encoded sequences (%2e%2e/)
 
         if (
-
             full_path
-
             and file_path.resolve().is_relative_to(WEB_DIST.resolve())
-
             and file_path.exists()
-
             and file_path.is_file()
-
         ):
-
             return FileResponse(file_path)
 
         return _serve_index(prefix)
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -15733,37 +11291,57 @@ def mount_spa(application: FastAPI):
 # ---------------------------------------------------------------------------
 
 
-
 # Built-in dashboard themes — label + description only.  The actual color
 
 # definitions live in the frontend (web/src/themes/presets.ts).
 
 _BUILTIN_DASHBOARD_THEMES = [
-
-    {"name": "default",       "label": "Clawksis Teal",         "description": "Classic dark teal — the canonical Clawksis look"},
-
-    {"name": "default-large", "label": "Clawksis Teal (Large)", "description": "Clawksis Teal with bigger fonts and roomier spacing"},
-
-    {"name": "nous-blue",     "label": "Nous Blue",           "description": "Light mode — vivid Nous-blue accents on cream canvas"},
-
-    {"name": "midnight",      "label": "Midnight",            "description": "Deep blue-violet with cool accents"},
-
-    {"name": "ember",     "label": "Ember",          "description": "Warm crimson and bronze — forge vibes"},
-
-    {"name": "mono",      "label": "Mono",           "description": "Clean grayscale — minimal and focused"},
-
-    {"name": "cyberpunk", "label": "Cyberpunk",      "description": "Neon green on black — matrix terminal"},
-
-    {"name": "rose",      "label": "Rosé",           "description": "Soft pink and warm ivory — easy on the eyes"},
-
+    {
+        "name": "default",
+        "label": "Clawksis Teal",
+        "description": "Classic dark teal — the canonical Clawksis look",
+    },
+    {
+        "name": "default-large",
+        "label": "Clawksis Teal (Large)",
+        "description": "Clawksis Teal with bigger fonts and roomier spacing",
+    },
+    {
+        "name": "nous-blue",
+        "label": "Nous Blue",
+        "description": "Light mode — vivid Nous-blue accents on cream canvas",
+    },
+    {
+        "name": "midnight",
+        "label": "Midnight",
+        "description": "Deep blue-violet with cool accents",
+    },
+    {
+        "name": "ember",
+        "label": "Ember",
+        "description": "Warm crimson and bronze — forge vibes",
+    },
+    {
+        "name": "mono",
+        "label": "Mono",
+        "description": "Clean grayscale — minimal and focused",
+    },
+    {
+        "name": "cyberpunk",
+        "label": "Cyberpunk",
+        "description": "Neon green on black — matrix terminal",
+    },
+    {
+        "name": "rose",
+        "label": "Rosé",
+        "description": "Soft pink and warm ivory — easy on the eyes",
+    },
 ]
 
 
-
-
-
-def _parse_theme_layer(value: Any, default_hex: str, default_alpha: float = 1.0) -> Optional[Dict[str, Any]]:
-
+def _parse_theme_layer(
+    value: Any, default_hex: str, default_alpha: float = 1.0
+) -> Optional[Dict[str, Any]]:
     """Normalise a theme layer spec from YAML into `{hex, alpha}` form.
 
 
@@ -15777,29 +11355,23 @@ def _parse_theme_layer(value: Any, default_hex: str, default_alpha: float = 1.0)
     """
 
     if value is None:
-
         return {"hex": default_hex, "alpha": default_alpha}
 
     if isinstance(value, str):
-
         return {"hex": value, "alpha": default_alpha}
 
     if isinstance(value, dict):
-
         hex_val = value.get("hex", default_hex)
 
         alpha_val = value.get("alpha", default_alpha)
 
         if not isinstance(hex_val, str):
-
             return None
 
         try:
-
             alpha_f = float(alpha_val)
 
         except (TypeError, ValueError):
-
             alpha_f = default_alpha
 
         return {"hex": hex_val, "alpha": max(0.0, min(1.0, alpha_f))}
@@ -15807,49 +11379,42 @@ def _parse_theme_layer(value: Any, default_hex: str, default_alpha: float = 1.0)
     return None
 
 
-
-
-
 _THEME_DEFAULT_TYPOGRAPHY: Dict[str, str] = {
-
     "fontSans": 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-
     "fontMono": 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
-
     "baseSize": "15px",
-
     "lineHeight": "1.55",
-
     "letterSpacing": "0",
-
 }
-
 
 
 _THEME_DEFAULT_LAYOUT: Dict[str, str] = {
-
     "radius": "0.5rem",
-
     "density": "comfortable",
-
 }
-
 
 
 _THEME_OVERRIDE_KEYS = {
-
-    "card", "cardForeground", "popover", "popoverForeground",
-
-    "primary", "primaryForeground", "secondary", "secondaryForeground",
-
-    "muted", "mutedForeground", "accent", "accentForeground",
-
-    "destructive", "destructiveForeground", "success", "warning",
-
-    "border", "input", "ring",
-
+    "card",
+    "cardForeground",
+    "popover",
+    "popoverForeground",
+    "primary",
+    "primaryForeground",
+    "secondary",
+    "secondaryForeground",
+    "muted",
+    "mutedForeground",
+    "accent",
+    "accentForeground",
+    "destructive",
+    "destructiveForeground",
+    "success",
+    "warning",
+    "border",
+    "input",
+    "ring",
 }
-
 
 
 # Well-known named asset slots themes can populate.  Any other keys under
@@ -15859,7 +11424,6 @@ _THEME_OVERRIDE_KEYS = {
 # for plugin/shell use.
 
 _THEME_NAMED_ASSET_KEYS = {"bg", "hero", "logo", "crest", "sidebar", "header"}
-
 
 
 # Component-style buckets themes can override.  The value under each bucket
@@ -15875,17 +11439,19 @@ _THEME_NAMED_ASSET_KEYS = {"bg", "hero", "logo", "crest", "sidebar", "header"}
 # without shipping their own CSS.
 
 _THEME_COMPONENT_BUCKETS = {
-
-    "card", "header", "footer", "sidebar", "tab",
-
-    "progress", "badge", "backdrop", "page",
-
+    "card",
+    "header",
+    "footer",
+    "sidebar",
+    "tab",
+    "progress",
+    "badge",
+    "backdrop",
+    "page",
 }
 
 
-
 _THEME_LAYOUT_VARIANTS = {"standard", "cockpit", "tiled"}
-
 
 
 # Cap on customCSS length so a malformed/oversized theme YAML can't blow up
@@ -15897,11 +11463,7 @@ _THEME_LAYOUT_VARIANTS = {"standard", "cockpit", "tiled"}
 _THEME_CUSTOM_CSS_MAX = 32 * 1024
 
 
-
-
-
 def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-
     """Normalise a user theme YAML into the wire format `ThemeProvider`
 
     expects.  Returns ``None`` if the theme is unusable.
@@ -15915,78 +11477,76 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     """
 
     if not isinstance(data, dict):
-
         return None
 
     name = data.get("name")
 
     if not isinstance(name, str) or not name.strip():
-
         return None
-
-
 
     # Palette
 
-    palette_src = data.get("palette", {}) if isinstance(data.get("palette"), dict) else {}
+    palette_src = (
+        data.get("palette", {}) if isinstance(data.get("palette"), dict) else {}
+    )
 
     # Allow top-level `colors.background` as a shorthand too.
 
     colors_src = data.get("colors", {}) if isinstance(data.get("colors"), dict) else {}
 
-
-
-    def _layer(key: str, default_hex: str, default_alpha: float = 1.0) -> Dict[str, Any]:
+    def _layer(
+        key: str, default_hex: str, default_alpha: float = 1.0
+    ) -> Dict[str, Any]:
 
         spec = palette_src.get(key, colors_src.get(key))
 
         parsed = _parse_theme_layer(spec, default_hex, default_alpha)
 
-        return parsed if parsed is not None else {"hex": default_hex, "alpha": default_alpha}
-
-
+        return (
+            parsed
+            if parsed is not None
+            else {"hex": default_hex, "alpha": default_alpha}
+        )
 
     palette = {
-
         "background": _layer("background", "#041c1c", 1.0),
-
         "midground": _layer("midground", "#ffe6cb", 1.0),
-
         "foreground": _layer("foreground", "#ffffff", 0.0),
-
-        "warmGlow": palette_src.get("warmGlow") or data.get("warmGlow") or "rgba(255, 189, 56, 0.35)",
-
+        "warmGlow": palette_src.get("warmGlow")
+        or data.get("warmGlow")
+        or "rgba(255, 189, 56, 0.35)",
         "noiseOpacity": 1.0,
-
     }
 
     raw_noise = palette_src.get("noiseOpacity", data.get("noiseOpacity"))
 
     try:
-
         palette["noiseOpacity"] = float(raw_noise) if raw_noise is not None else 1.0
 
     except (TypeError, ValueError):
-
         palette["noiseOpacity"] = 1.0
-
-
 
     # Typography
 
-    typo_src = data.get("typography", {}) if isinstance(data.get("typography"), dict) else {}
+    typo_src = (
+        data.get("typography", {}) if isinstance(data.get("typography"), dict) else {}
+    )
 
     typography = dict(_THEME_DEFAULT_TYPOGRAPHY)
 
-    for key in ("fontSans", "fontMono", "fontDisplay", "fontUrl", "baseSize", "lineHeight", "letterSpacing"):
-
+    for key in (
+        "fontSans",
+        "fontMono",
+        "fontDisplay",
+        "fontUrl",
+        "baseSize",
+        "lineHeight",
+        "letterSpacing",
+    ):
         val = typo_src.get(key)
 
         if isinstance(val, str) and val.strip():
-
             typography[key] = val
-
-
 
     # Layout
 
@@ -15997,16 +11557,12 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     radius = layout_src.get("radius")
 
     if isinstance(radius, str) and radius.strip():
-
         layout["radius"] = radius
 
     density = layout_src.get("density")
 
     if isinstance(density, str) and density in {"compact", "comfortable", "spacious"}:
-
         layout["density"] = density
-
-
 
     # Color overrides — keep only valid keys with string values.
 
@@ -16015,14 +11571,9 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     color_overrides: Dict[str, str] = {}
 
     if isinstance(overrides_src, dict):
-
         for key, val in overrides_src.items():
-
             if key in _THEME_OVERRIDE_KEYS and isinstance(val, str) and val.strip():
-
                 color_overrides[key] = val
-
-
 
     # Assets — named slots + arbitrary user-defined keys.  Values must be
 
@@ -16039,40 +11590,27 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     assets_src = data.get("assets", {}) if isinstance(data.get("assets"), dict) else {}
 
     for key in _THEME_NAMED_ASSET_KEYS:
-
         val = assets_src.get(key)
 
         if isinstance(val, str) and val.strip():
-
             assets_out[key] = val
 
     custom_assets_src = assets_src.get("custom")
 
     if isinstance(custom_assets_src, dict):
-
         custom_assets: Dict[str, str] = {}
 
         for key, val in custom_assets_src.items():
-
             if (
-
                 isinstance(key, str)
-
                 and key.replace("-", "").replace("_", "").isalnum()
-
                 and isinstance(val, str)
-
                 and val.strip()
-
             ):
-
                 custom_assets[key] = val
 
         if custom_assets:
-
             assets_out["custom"] = custom_assets
-
-
 
     # Custom CSS — raw CSS text the frontend injects as a scoped <style>
 
@@ -16089,10 +11627,7 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     custom_css: Optional[str] = None
 
     if isinstance(custom_css_val, str) and custom_css_val.strip():
-
         custom_css = custom_css_val[:_THEME_CUSTOM_CSS_MAX]
-
-
 
     # Component style overrides — per-bucket dicts of camelCase CSS
 
@@ -16105,93 +11640,59 @@ def _normalise_theme_definition(data: Dict[str, Any]) -> Optional[Dict[str, Any]
     component_styles: Dict[str, Dict[str, str]] = {}
 
     if isinstance(component_styles_src, dict):
-
         for bucket, props in component_styles_src.items():
-
             if bucket not in _THEME_COMPONENT_BUCKETS or not isinstance(props, dict):
-
                 continue
 
             clean: Dict[str, str] = {}
 
             for prop, value in props.items():
-
                 if (
-
                     isinstance(prop, str)
-
                     and prop.replace("-", "").replace("_", "").isalnum()
-
                     and isinstance(value, (str, int, float))
-
                     and str(value).strip()
-
                 ):
-
                     clean[prop] = str(value)
 
             if clean:
-
                 component_styles[bucket] = clean
-
-
 
     layout_variant_src = data.get("layoutVariant")
 
     layout_variant = (
-
         layout_variant_src
-
-        if isinstance(layout_variant_src, str) and layout_variant_src in _THEME_LAYOUT_VARIANTS
-
+        if isinstance(layout_variant_src, str)
+        and layout_variant_src in _THEME_LAYOUT_VARIANTS
         else "standard"
-
     )
 
-
-
     result: Dict[str, Any] = {
-
         "name": name,
-
         "label": data.get("label") or name,
-
         "description": data.get("description", ""),
-
         "palette": palette,
-
         "typography": typography,
-
         "layout": layout,
-
         "layoutVariant": layout_variant,
-
     }
 
     if color_overrides:
-
         result["colorOverrides"] = color_overrides
 
     if assets_out:
-
         result["assets"] = assets_out
 
     if custom_css is not None:
-
         result["customCSS"] = custom_css
 
     if component_styles:
-
         result["componentStyles"] = component_styles
 
     return result
 
 
-
-
-
 def _discover_user_themes() -> list:
-
     """Scan ~/.clawksis/dashboard-themes/*.yaml for user-created themes.
 
 
@@ -16207,37 +11708,27 @@ def _discover_user_themes() -> list:
     themes_dir = get_clawk_home() / "dashboard-themes"
 
     if not themes_dir.is_dir():
-
         return []
 
     result = []
 
     for f in sorted(themes_dir.glob("*.yaml")):
-
         try:
-
             data = yaml.safe_load(f.read_text(encoding="utf-8"))
 
         except Exception:
-
             continue
 
         normalised = _normalise_theme_definition(data)
 
         if normalised is not None:
-
             result.append(normalised)
 
     return result
 
 
-
-
-
 @app.get("/api/dashboard/themes")
-
 async def get_dashboard_themes():
-
     """Return available themes and the currently active one.
 
 
@@ -16265,27 +11756,19 @@ async def get_dashboard_themes():
     themes = []
 
     for t in _BUILTIN_DASHBOARD_THEMES:
-
         seen.add(t["name"])
 
         themes.append(t)
 
     for t in user_themes:
-
         if t["name"] in seen:
-
             continue
 
         themes.append({
-
             "name": t["name"],
-
             "label": t["label"],
-
             "description": t["description"],
-
             "definition": t,
-
         })
 
         seen.add(t["name"])
@@ -16293,27 +11776,17 @@ async def get_dashboard_themes():
     return {"themes": themes, "active": active}
 
 
-
-
-
 class ThemeSetBody(BaseModel):
-
     name: str
 
 
-
-
-
 @app.put("/api/dashboard/theme")
-
 async def set_dashboard_theme(body: ThemeSetBody):
-
     """Set the active dashboard theme (persists to config.yaml)."""
 
     config = load_config()
 
     if "dashboard" not in config:
-
         config["dashboard"] = {}
 
     config["dashboard"]["theme"] = body.name
@@ -16323,9 +11796,6 @@ async def set_dashboard_theme(body: ThemeSetBody):
     return {"ok": True, "theme": body.name}
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # Dashboard plugin system
@@ -16333,9 +11803,7 @@ async def set_dashboard_theme(body: ThemeSetBody):
 # ---------------------------------------------------------------------------
 
 
-
 def _safe_plugin_api_relpath(api_field: Any, *, dashboard_dir: Path) -> Optional[str]:
-
     """Validate the manifest's ``api`` field for the plugin loader.
 
 
@@ -16375,41 +11843,31 @@ def _safe_plugin_api_relpath(api_field: Any, *, dashboard_dir: Path) -> Optional
     """
 
     if not isinstance(api_field, str) or not api_field.strip():
-
         return None
 
     candidate = Path(api_field)
 
     if candidate.is_absolute():
-
         return None
 
     try:
-
         resolved = (dashboard_dir / candidate).resolve()
 
         base = dashboard_dir.resolve()
 
     except (OSError, RuntimeError):
-
         return None
 
     try:
-
         resolved.relative_to(base)
 
     except ValueError:
-
         return None
 
     return api_field
 
 
-
-
-
 def _discover_dashboard_plugins() -> list:
-
     """Scan plugins/*/dashboard/manifest.json for dashboard extensions.
 
 
@@ -16428,20 +11886,14 @@ def _discover_dashboard_plugins() -> list:
 
     seen_names: set = set()
 
-
-
     from clawk_cli.plugins import get_bundled_plugins_dir
 
     bundled_root = get_bundled_plugins_dir()
 
     search_dirs = [
-
         (get_clawk_home() / "plugins", "user"),
-
         (bundled_root / "memory", "bundled"),
-
         (bundled_root, "bundled"),
-
     ]
 
     # GHSA-5qr3-c538-wm9j (#29156): the previous ``os.environ.get(...)``
@@ -16463,37 +11915,27 @@ def _discover_dashboard_plugins() -> list:
     # ``clawk_cli/plugins.py`` and the documented user contract.
 
     if env_var_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
-
         search_dirs.append((Path.cwd() / ".clawk" / "plugins", "project"))
 
-
-
     for plugins_root, source in search_dirs:
-
         if not plugins_root.is_dir():
-
             continue
 
         for child in sorted(plugins_root.iterdir()):
-
             if not child.is_dir():
-
                 continue
 
             manifest_file = child / "dashboard" / "manifest.json"
 
             if not manifest_file.exists():
-
                 continue
 
             try:
-
                 data = json.loads(manifest_file.read_text(encoding="utf-8"))
 
                 name = data.get("name", child.name)
 
                 if name in seen_names:
-
                     continue
 
                 seen_names.add(name)
@@ -16506,24 +11948,21 @@ def _discover_dashboard_plugins() -> list:
 
                 # (useful for slot-only plugins like a header-crest injector).
 
-                raw_tab = data.get("tab", {}) if isinstance(data.get("tab"), dict) else {}
+                raw_tab = (
+                    data.get("tab", {}) if isinstance(data.get("tab"), dict) else {}
+                )
 
                 tab_info = {
-
                     "path": raw_tab.get("path", f"/{name}"),
-
                     "position": raw_tab.get("position", "end"),
-
                 }
 
                 override_path = raw_tab.get("override")
 
                 if isinstance(override_path, str) and override_path.startswith("/"):
-
                     tab_info["override"] = override_path
 
                 if bool(raw_tab.get("hidden")):
-
                     tab_info["hidden"] = True
 
                 # Slots: list of named slot locations this plugin populates.
@@ -16537,7 +11976,6 @@ def _discover_dashboard_plugins() -> list:
                 slots: List[str] = []
 
                 if isinstance(slots_src, list):
-
                     slots = [s for s in slots_src if isinstance(s, str) and s]
 
                 # Validate ``api`` at discovery time so the value cached
@@ -16556,56 +11994,37 @@ def _discover_dashboard_plugins() -> list:
 
                 dashboard_dir = child / "dashboard"
 
-                safe_api = _safe_plugin_api_relpath(raw_api, dashboard_dir=dashboard_dir)
+                safe_api = _safe_plugin_api_relpath(
+                    raw_api, dashboard_dir=dashboard_dir
+                )
 
                 if raw_api and safe_api is None:
-
                     _log.warning(
-
                         "Plugin %s: refusing unsafe api path %r (must be a "
-
                         "relative file inside the plugin's dashboard/ "
-
                         "directory); backend routes from this plugin will "
-
                         "not be mounted",
-
-                        name, raw_api,
-
+                        name,
+                        raw_api,
                     )
 
                 plugins.append({
-
                     "name": name,
-
                     "label": data.get("label", name),
-
                     "description": data.get("description", ""),
-
                     "icon": data.get("icon", "Puzzle"),
-
                     "version": data.get("version", "0.0.0"),
-
                     "tab": tab_info,
-
                     "slots": slots,
-
                     "entry": data.get("entry", "dist/index.js"),
-
                     "css": data.get("css"),
-
                     "has_api": bool(safe_api),
-
                     "source": source,
-
                     "_dir": str(dashboard_dir),
-
                     "_api_file": safe_api,
-
                 })
 
             except Exception as exc:
-
                 _log.warning("Bad dashboard plugin manifest %s: %s", manifest_file, exc)
 
                 continue
@@ -16613,15 +12032,9 @@ def _discover_dashboard_plugins() -> list:
     return plugins
 
 
-
-
-
 # Cache discovered plugins per-process (refresh on explicit re-scan).
 
 _dashboard_plugins_cache: Optional[list] = None
-
-
-
 
 
 def _get_dashboard_plugins(force_rescan: bool = False) -> list:
@@ -16629,25 +12042,17 @@ def _get_dashboard_plugins(force_rescan: bool = False) -> list:
     global _dashboard_plugins_cache
 
     if _dashboard_plugins_cache is None or force_rescan:
-
         _dashboard_plugins_cache = _discover_dashboard_plugins()
 
     elif _dashboard_plugins_cache:
-
         if any(not Path(p["_dir"]).is_dir() for p in _dashboard_plugins_cache):
-
             _dashboard_plugins_cache = _discover_dashboard_plugins()
 
     return _dashboard_plugins_cache
 
 
-
-
-
 @app.get("/api/dashboard/plugins")
-
 async def get_dashboard_plugins():
-
     """Return discovered dashboard plugins (excludes user-hidden ones)."""
 
     plugins = _get_dashboard_plugins()
@@ -16661,23 +12066,14 @@ async def get_dashboard_plugins():
     # Strip internal fields before sending to frontend and filter out hidden.
 
     return [
-
         {k: v for k, v in p.items() if not k.startswith("_")}
-
         for p in plugins
-
         if p["name"] not in hidden
-
     ]
 
 
-
-
-
 @app.get("/api/dashboard/plugins/rescan")
-
 async def rescan_dashboard_plugins():
-
     """Force re-scan of dashboard plugins."""
 
     plugins = _get_dashboard_plugins(force_rescan=True)
@@ -16685,11 +12081,7 @@ async def rescan_dashboard_plugins():
     return {"ok": True, "count": len(plugins)}
 
 
-
-
-
 class _AgentPluginInstallBody(BaseModel):
-
     identifier: str
 
     force: bool = False
@@ -16697,114 +12089,76 @@ class _AgentPluginInstallBody(BaseModel):
     enable: bool = True
 
 
-
-
-
 def _strip_dashboard_manifest(p: Dict[str, Any]) -> Dict[str, Any]:
 
     return {k: v for k, v in p.items() if not k.startswith("_")}
 
 
-
-
-
 def _merged_plugins_hub() -> Dict[str, Any]:
-
     """Agent discovery + dashboard manifests + optional provider picker metadata."""
 
     from clawk_cli.plugins_cmd import (
-
         _discover_all_plugins,
-
         _get_current_context_engine,
-
         _get_current_memory_provider,
-
         _discover_context_engines,
-
         _discover_memory_providers,
-
         _get_disabled_set,
-
         _get_enabled_set,
-
         _read_manifest as _read_plugin_manifest_at,
-
     )
-
-
 
     dashboard_list = _get_dashboard_plugins()
 
     dash_by_name = {str(p["name"]): p for p in dashboard_list}
 
-
-
     disabled_set = _get_disabled_set()
 
     enabled_set = _get_enabled_set()
-
-
 
     # Read user-hidden plugins from config for the user_hidden field.
 
     config = load_config()
 
-    hidden_plugins: list = cfg_get(config, "dashboard", "hidden_plugins", default=[]) or []
-
-
+    hidden_plugins: list = (
+        cfg_get(config, "dashboard", "hidden_plugins", default=[]) or []
+    )
 
     plugins_root_resolved = (get_clawk_home() / "plugins").resolve()
 
     rows: List[Dict[str, Any]] = []
 
-
-
     for name, version, description, source, dir_str in _discover_all_plugins():
-
         if name in disabled_set:
-
             runtime_status = "disabled"
 
         elif name in enabled_set:
-
             runtime_status = "enabled"
 
         else:
-
             runtime_status = "inactive"
-
-
 
         dir_path = Path(dir_str)
 
         dm = dash_by_name.get(name)
 
-        has_dash_manifest = dm is not None or (dir_path / "dashboard" / "manifest.json").exists()
-
-
+        has_dash_manifest = (
+            dm is not None or (dir_path / "dashboard" / "manifest.json").exists()
+        )
 
         under_user_tree = False
 
         try:
-
             dir_path.resolve().relative_to(plugins_root_resolved)
 
             under_user_tree = True
 
         except ValueError:
-
             pass
 
-
-
         can_remove_update = (
-
             source in {"user", "git"} and under_user_tree and Path(dir_str).is_dir()
-
         )
-
-
 
         # Check if this plugin provides tools that require auth
 
@@ -16817,17 +12171,13 @@ def _merged_plugins_hub() -> Dict[str, Any]:
         provides_tools = manifest_data.get("provides_tools") or []
 
         if provides_tools:
-
             try:
-
                 from tools.registry import registry
 
                 for tname in provides_tools:
-
                     entry = registry.get_entry(tname)
 
                     if entry and entry.check_fn and not entry.check_fn():
-
                         auth_required = True
 
                         auth_command = f"clawk auth {name}"
@@ -16835,159 +12185,96 @@ def _merged_plugins_hub() -> Dict[str, Any]:
                         break
 
             except Exception:
-
                 pass
 
-
-
         rows.append({
-
             "name": name,
-
             "version": version or "",
-
             "description": description or "",
-
             "source": source,
-
             "runtime_status": runtime_status,
-
             "has_dashboard_manifest": has_dash_manifest,
-
             "dashboard_manifest": _strip_dashboard_manifest(dm) if dm else None,
-
             "path": dir_str,
-
             "can_remove": can_remove_update,
-
             "can_update_git": can_remove_update and (Path(dir_str) / ".git").exists(),
-
             "auth_required": auth_required,
-
             "auth_command": auth_command,
-
             "user_hidden": name in hidden_plugins,
-
         })
-
-
 
     agent_names = {r["name"] for r in rows}
 
     orphan_dashboard = [
-
         _strip_dashboard_manifest(p)
-
         for p in dashboard_list
-
         if str(p["name"]) not in agent_names
-
     ]
-
-
 
     memory_providers: List[Dict[str, str]] = []
 
     try:
-
         for n, desc in _discover_memory_providers():
-
             memory_providers.append({"name": n, "description": desc})
 
     except Exception:
-
         memory_providers = []
-
-
 
     context_engines: List[Dict[str, str]] = []
 
     try:
-
         for n, desc in _discover_context_engines():
-
             context_engines.append({"name": n, "description": desc})
 
     except Exception:
-
         context_engines = []
 
-
-
     return {
-
         "plugins": rows,
-
         "orphan_dashboard_plugins": orphan_dashboard,
-
         "providers": {
-
             "memory_provider": _get_current_memory_provider() or "",
-
             "memory_options": memory_providers,
-
             "context_engine": _get_current_context_engine(),
-
             "context_options": context_engines,
-
         },
-
     }
 
 
-
-
-
 @app.get("/api/dashboard/plugins/hub")
-
 async def get_plugins_hub(request: Request):
-
     """Unified agent plugins + dashboard extension metadata (session protected)."""
 
     _require_token(request)
 
     try:
-
         return _merged_plugins_hub()
 
     except Exception as exc:
-
         _log.warning("plugins/hub failed: %s", exc)
 
-        raise HTTPException(status_code=500, detail="Failed to build plugins hub.") from exc
-
-
-
+        raise HTTPException(
+            status_code=500, detail="Failed to build plugins hub."
+        ) from exc
 
 
 @app.post("/api/dashboard/agent-plugins/install")
-
 async def post_agent_plugin_install(request: Request, body: _AgentPluginInstallBody):
 
     _require_token(request)
 
     from clawk_cli.plugins_cmd import dashboard_install_plugin
 
-
-
     result = dashboard_install_plugin(
-
         body.identifier.strip(),
-
         force=body.force,
-
         enable=body.enable,
-
     )
 
     if not result.get("ok"):
-
         raise HTTPException(
-
             status_code=400,
-
             detail=result.get("error") or "Install failed.",
-
         )
 
     _get_dashboard_plugins(force_rescan=True)
@@ -16999,27 +12286,18 @@ async def post_agent_plugin_install(request: Request, body: _AgentPluginInstallB
     return result
 
 
-
-
-
 def _validate_plugin_name(name: str) -> str:
-
     """Reject path-traversal attempts in plugin name URL parameters."""
 
     name = name.strip("/")
 
     if not name or ".." in name or "\\" in name:
-
         raise HTTPException(status_code=400, detail="Invalid plugin name.")
 
     return name
 
 
-
-
-
 @app.post("/api/dashboard/agent-plugins/{name:path}/enable")
-
 async def post_agent_plugin_enable(request: Request, name: str):
 
     _require_token(request)
@@ -17028,22 +12306,17 @@ async def post_agent_plugin_enable(request: Request, name: str):
 
     from clawk_cli.plugins_cmd import dashboard_set_agent_plugin_enabled
 
-
-
     result = dashboard_set_agent_plugin_enabled(name, enabled=True)
 
     if not result.get("ok"):
-
-        raise HTTPException(status_code=400, detail=result.get("error") or "Enable failed.")
+        raise HTTPException(
+            status_code=400, detail=result.get("error") or "Enable failed."
+        )
 
     return result
 
 
-
-
-
 @app.post("/api/dashboard/agent-plugins/{name:path}/disable")
-
 async def post_agent_plugin_disable(request: Request, name: str):
 
     _require_token(request)
@@ -17052,22 +12325,17 @@ async def post_agent_plugin_disable(request: Request, name: str):
 
     from clawk_cli.plugins_cmd import dashboard_set_agent_plugin_enabled
 
-
-
     result = dashboard_set_agent_plugin_enabled(name, enabled=False)
 
     if not result.get("ok"):
-
-        raise HTTPException(status_code=400, detail=result.get("error") or "Disable failed.")
+        raise HTTPException(
+            status_code=400, detail=result.get("error") or "Disable failed."
+        )
 
     return result
 
 
-
-
-
 @app.post("/api/dashboard/agent-plugins/{name:path}/update")
-
 async def post_agent_plugin_update(request: Request, name: str):
 
     _require_token(request)
@@ -17076,24 +12344,19 @@ async def post_agent_plugin_update(request: Request, name: str):
 
     from clawk_cli.plugins_cmd import dashboard_update_user_plugin
 
-
-
     result = dashboard_update_user_plugin(name)
 
     if not result.get("ok"):
-
-        raise HTTPException(status_code=400, detail=result.get("error") or "Update failed.")
+        raise HTTPException(
+            status_code=400, detail=result.get("error") or "Update failed."
+        )
 
     _get_dashboard_plugins(force_rescan=True)
 
     return result
 
 
-
-
-
 @app.delete("/api/dashboard/agent-plugins/{name:path}")
-
 async def delete_agent_plugin(request: Request, name: str):
 
     _require_token(request)
@@ -17102,107 +12365,73 @@ async def delete_agent_plugin(request: Request, name: str):
 
     from clawk_cli.plugins_cmd import dashboard_remove_user_plugin
 
-
-
     result = dashboard_remove_user_plugin(name)
 
     if not result.get("ok"):
-
-        raise HTTPException(status_code=400, detail=result.get("error") or "Remove failed.")
+        raise HTTPException(
+            status_code=400, detail=result.get("error") or "Remove failed."
+        )
 
     _get_dashboard_plugins(force_rescan=True)
 
     return result
 
 
-
-
-
 class _PluginProvidersPutBody(BaseModel):
-
     memory_provider: Optional[str] = None
 
     context_engine: Optional[str] = None
 
 
-
-
-
 @app.put("/api/dashboard/plugin-providers")
-
 async def put_plugin_providers(request: Request, body: _PluginProvidersPutBody):
-
     """Persist memory provider / context engine selection (writes config.yaml)."""
 
     _require_token(request)
 
     from clawk_cli.plugins_cmd import (
-
         _save_context_engine,
-
         _save_memory_provider,
-
     )
 
-
-
     if body.memory_provider is not None:
-
         _save_memory_provider(body.memory_provider)
 
     if body.context_engine is not None:
-
         _save_context_engine(body.context_engine)
 
     return {"ok": True}
 
 
-
-
-
 class _PluginVisibilityBody(BaseModel):
-
     hidden: bool
 
 
-
-
-
 @app.post("/api/dashboard/plugins/{name:path}/visibility")
-
-async def post_plugin_visibility(request: Request, name: str, body: _PluginVisibilityBody):
-
+async def post_plugin_visibility(
+    request: Request, name: str, body: _PluginVisibilityBody
+):
     """Toggle a plugin's sidebar visibility (persists to config.yaml dashboard.hidden_plugins)."""
 
     _require_token(request)
 
     name = _validate_plugin_name(name)
 
-
-
     config = load_config()
 
     if "dashboard" not in config or not isinstance(config.get("dashboard"), dict):
-
         config["dashboard"] = {}
 
     hidden_list: list = config["dashboard"].get("hidden_plugins") or []
 
     if not isinstance(hidden_list, list):
-
         hidden_list = []
 
-
-
     if body.hidden and name not in hidden_list:
-
         hidden_list.append(name)
 
     elif not body.hidden and name in hidden_list:
-
         hidden_list.remove(name)
-
-
 
     config["dashboard"]["hidden_plugins"] = hidden_list
 
@@ -17211,13 +12440,8 @@ async def post_plugin_visibility(request: Request, name: str, body: _PluginVisib
     return {"ok": True, "name": name, "hidden": body.hidden}
 
 
-
-
-
 @app.get("/dashboard-plugins/{plugin_name}/{file_path:path}")
-
 async def serve_plugin_asset(plugin_name: str, file_path: str):
-
     """Serve static assets from a dashboard plugin directory.
 
 
@@ -17255,26 +12479,17 @@ async def serve_plugin_asset(plugin_name: str, file_path: str):
     plugin = next((p for p in plugins if p["name"] == plugin_name), None)
 
     if not plugin:
-
         raise HTTPException(status_code=404, detail="Plugin not found")
-
-
 
     base = Path(plugin["_dir"])
 
     target = (base / file_path).resolve()
 
-
-
     if not target.is_relative_to(base.resolve()):
-
         raise HTTPException(status_code=403, detail="Path traversal blocked")
 
     if not target.exists() or not target.is_file():
-
         raise HTTPException(status_code=404, detail="File not found")
-
-
 
     # Browser-asset suffix allowlist. Everything outside this set is
 
@@ -17289,71 +12504,41 @@ async def serve_plugin_asset(plugin_name: str, file_path: str):
     suffix = target.suffix.lower()
 
     content_types = {
-
         ".js": "application/javascript",
-
         ".mjs": "application/javascript",
-
         ".css": "text/css",
-
         ".json": "application/json",
-
         ".html": "text/html",
-
         ".svg": "image/svg+xml",
-
         ".png": "image/png",
-
         ".jpg": "image/jpeg",
-
         ".jpeg": "image/jpeg",
-
         ".gif": "image/gif",
-
         ".webp": "image/webp",
-
         ".ico": "image/x-icon",
-
         ".woff2": "font/woff2",
-
         ".woff": "font/woff",
-
         ".ttf": "font/ttf",
-
         ".otf": "font/otf",
-
         ".map": "application/json",
-
     }
 
     if suffix not in content_types:
-
         raise HTTPException(
-
             status_code=404,
-
             detail="File not found",
-
         )
 
     media_type = content_types[suffix]
 
     return FileResponse(
-
         target,
-
         media_type=media_type,
-
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
-
     )
 
 
-
-
-
 def _mount_plugin_api_routes():
-
     """Import and mount backend API routes from plugins that declare them.
 
 
@@ -17381,25 +12566,18 @@ def _mount_plugin_api_routes():
     """
 
     for plugin in _get_dashboard_plugins():
-
         api_file_name = plugin.get("_api_file")
 
         if not api_file_name:
-
             continue
 
         if plugin.get("source") == "project":
-
             _log.warning(
-
                 "Plugin %s: ignoring backend api=%s (project plugins may "
-
                 "not auto-import Python code; move the plugin to "
-
                 "~/.clawksis/plugins/ if you trust it)",
-
-                plugin["name"], api_file_name,
-
+                plugin["name"],
+                api_file_name,
             )
 
             continue
@@ -17409,7 +12587,6 @@ def _mount_plugin_api_routes():
         api_path = dashboard_dir / api_file_name
 
         try:
-
             resolved_api = api_path.resolve()
 
             resolved_base = dashboard_dir.resolve()
@@ -17417,7 +12594,6 @@ def _mount_plugin_api_routes():
             resolved_api.relative_to(resolved_base)
 
         except (OSError, RuntimeError, ValueError):
-
             # Discovery already filters this, but re-check here in case
 
             # ``_dir`` was tampered with after caching or a future caller
@@ -17427,29 +12603,29 @@ def _mount_plugin_api_routes():
             # primitive contained even if the upstream check regresses.
 
             _log.warning(
-
                 "Plugin %s: refusing to import api file outside its "
-
-                "dashboard directory (%s)", plugin["name"], api_path,
-
+                "dashboard directory (%s)",
+                plugin["name"],
+                api_path,
             )
 
             continue
 
         if not api_path.exists():
-
-            _log.warning("Plugin %s declares api=%s but file not found", plugin["name"], api_file_name)
+            _log.warning(
+                "Plugin %s declares api=%s but file not found",
+                plugin["name"],
+                api_file_name,
+            )
 
             continue
 
         try:
-
             module_name = f"clawk_dashboard_plugin_{plugin['name']}"
 
             spec = importlib.util.spec_from_file_location(module_name, api_path)
 
             if spec is None or spec.loader is None:
-
                 continue
 
             mod = importlib.util.module_from_spec(spec)
@@ -17469,11 +12645,9 @@ def _mount_plugin_api_routes():
             sys.modules[module_name] = mod
 
             try:
-
                 spec.loader.exec_module(mod)
 
             except Exception:
-
                 sys.modules.pop(module_name, None)
 
                 raise
@@ -17481,8 +12655,9 @@ def _mount_plugin_api_routes():
             router = getattr(mod, "router", None)
 
             if router is None:
-
-                _log.warning("Plugin %s api file has no 'router' attribute", plugin["name"])
+                _log.warning(
+                    "Plugin %s api file has no 'router' attribute", plugin["name"]
+                )
 
                 continue
 
@@ -17491,17 +12666,12 @@ def _mount_plugin_api_routes():
             _log.info("Mounted plugin API routes: /api/plugins/%s/", plugin["name"])
 
         except Exception as exc:
-
             _log.warning("Failed to load plugin %s API routes: %s", plugin["name"], exc)
-
-
-
 
 
 # Mount plugin API routes before the SPA catch-all.
 
 _mount_plugin_api_routes()
-
 
 
 # Mount the dashboard auth routes (/login, /auth/*, /api/auth/*) before the
@@ -17517,30 +12687,18 @@ from clawk_cli.dashboard_auth.routes import router as _dashboard_auth_router  # 
 app.include_router(_dashboard_auth_router)
 
 
-
 mount_spa(app)
 
 
-
-
-
 def start_server(
-
     host: str = "127.0.0.1",
-
     port: int = 9119,
-
     open_browser: bool = True,
-
     allow_public: bool = False,
-
 ):
-
     """Start the web UI server."""
 
     import uvicorn
-
-
 
     # Phase 0: stash the auth-gate flag on app.state so middleware / SPA-token
 
@@ -17552,10 +12710,7 @@ def start_server(
 
     app.state.auth_required = should_require_auth(host, allow_public)
 
-
-
     if app.state.auth_required:
-
         # Phase 3.5: the gate engages on non-loopback binds.  The legacy
 
         # "refusing to bind" guard is replaced by "require at least one
@@ -17565,7 +12720,6 @@ def start_server(
         from clawk_cli.dashboard_auth import list_providers
 
         if not list_providers():
-
             # Surface the *specific* reason any bundled provider declined
 
             # to register (e.g. missing CLAWK_DASHBOARD_OAUTH_CLIENT_ID).
@@ -17581,94 +12735,52 @@ def start_server(
             skip_reasons: list[str] = []
 
             try:
-
                 from plugins.dashboard_auth import nous as _nous_plugin
 
-
-
                 if _nous_plugin.LAST_SKIP_REASON:
-
-                    skip_reasons.append(
-
-                        f"  • nous: {_nous_plugin.LAST_SKIP_REASON}"
-
-                    )
+                    skip_reasons.append(f"  • nous: {_nous_plugin.LAST_SKIP_REASON}")
 
             except Exception:
-
                 pass
 
-
-
             if skip_reasons:
-
                 raise SystemExit(
-
                     f"Refusing to bind dashboard to {host} — the OAuth auth "
-
                     f"gate engages on non-loopback binds, but no auth "
-
                     f"providers are registered.\n"
-
                     f"\n"
-
                     f"Bundled providers reported these issues:\n"
-
                     + "\n".join(skip_reasons)
-
                     + "\n"
-
                     f"\n"
-
                     f"Or pass --insecure to skip the auth gate (NOT "
-
                     f"recommended on untrusted networks)."
-
                 )
 
             raise SystemExit(
-
                 f"Refusing to bind dashboard to {host} — the OAuth auth "
-
                 f"gate engages on non-loopback binds, but no auth providers "
-
                 f"are registered and no bundled plugin reported a reason "
-
                 f"(was the dashboard_auth/nous plugin removed?).\n"
-
                 f"Install a DashboardAuthProvider plugin, or pass --insecure "
-
                 f"to skip the auth gate (NOT recommended on untrusted "
-
                 f"networks)."
-
             )
 
         _log.info(
-
-            "Dashboard binding to %s with OAuth auth gate enabled. "
-
-            "Providers: %s",
-
+            "Dashboard binding to %s with OAuth auth gate enabled. Providers: %s",
             host,
-
             ", ".join(p.name for p in list_providers()),
-
         )
 
     elif host not in _LOOPBACK_HOST_VALUES and allow_public:
-
         # --insecure path — no auth, loud warning.
 
         _log.warning(
-
             "Binding to %s with --insecure — the dashboard has no robust "
-
-            "authentication. Only use on trusted networks.", host,
-
+            "authentication. Only use on trusted networks.",
+            host,
         )
-
-
 
     # Record the bound host so host_header_middleware can validate incoming
 
@@ -17682,13 +12794,8 @@ def start_server(
 
     app.state.bound_port = port
 
-
-
     if open_browser:
-
         import webbrowser
-
-
 
         # On headless Linux (no DISPLAY or WAYLAND_DISPLAY) some registered
 
@@ -17705,48 +12812,55 @@ def start_server(
         # display-capable.
 
         _has_display = (
-
             sys.platform != "linux"
-
             or bool(os.environ.get("DISPLAY"))
-
             or bool(os.environ.get("WAYLAND_DISPLAY"))
-
         )
-
-
 
         if _has_display:
 
             def _open():
 
                 try:
-
                     time.sleep(1.0)
 
                     webbrowser.open(f"http://{host}:{port}")
 
                 except Exception:
-
                     pass
-
-
 
             threading.Thread(target=_open, daemon=True).start()
 
         else:
-
             _log.debug(
-
                 "Skipping browser-open: no DISPLAY or WAYLAND_DISPLAY detected "
-
                 "(headless Linux). Pass --no-open to suppress this detection."
-
             )
 
-
-
     print(f"  Clawksis Web UI → http://{host}:{port}")
+
+    # Foreground server: the terminal "stays here" on purpose because uvicorn
+    # is serving. Make that obvious so it doesn't read as a hang.
+    print(
+        "  (running in the foreground — press Ctrl+C to stop; "
+        "add `&` or use nohup/systemd to keep it serving after you log out)"
+    )
+
+    # Over SSH a loopback bind (the secure default) is NOT reachable from the
+    # operator's laptop — http://127.0.0.1 there points at their own machine,
+    # not this box. Print a copy-paste SSH tunnel so the dashboard stays
+    # private (no public port) yet is reachable locally.
+    if host in ("127.0.0.1", "localhost", "::1") and (
+        os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")
+    ):
+        _ssh_parts = os.environ.get("SSH_CONNECTION", "").split()
+        _server_ip = _ssh_parts[2] if len(_ssh_parts) >= 3 else "<this-server>"
+        _ssh_user = os.environ.get("USER") or "root"
+        print(
+            "  Remote machine — bound to loopback. From YOUR laptop run:\n"
+            f"      ssh -L {port}:127.0.0.1:{port} {_ssh_user}@{_server_ip}\n"
+            f"  then open http://127.0.0.1:{port} in your local browser."
+        )
 
     # proxy_headers defaults to False so _ws_client_is_allowed sees the real
 
@@ -17761,10 +12875,9 @@ def start_server(
     # we flip proxy_headers on for that mode.
 
     uvicorn.run(
-
-        app, host=host, port=port, log_level="warning",
-
+        app,
+        host=host,
+        port=port,
+        log_level="warning",
         proxy_headers=bool(app.state.auth_required),
-
     )
-

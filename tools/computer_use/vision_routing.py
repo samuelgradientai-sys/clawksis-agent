@@ -82,11 +82,14 @@ def _lookup_supports_vision(provider: str, model: str) -> Optional[bool]:
         return None
     try:
         from agent.models_dev import get_model_capabilities
+
         caps = get_model_capabilities(provider, model)
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug(
             "computer_use vision_routing: caps lookup failed for %s:%s — %s",
-            provider, model, exc,
+            provider,
+            model,
+            exc,
         )
         return None
     if caps is None:
@@ -94,7 +97,9 @@ def _lookup_supports_vision(provider: str, model: str) -> Optional[bool]:
     return bool(getattr(caps, "supports_vision", False))
 
 
-def _provider_accepts_multimodal_tool_result(provider: str, model: str) -> Optional[bool]:
+def _provider_accepts_multimodal_tool_result(
+    provider: str, model: str
+) -> Optional[bool]:
     """Return whether *provider*+*model* carries images inside tool-result messages.
 
     Reuses ``tools.vision_tools._supports_media_in_tool_results`` so the

@@ -175,9 +175,7 @@ class ParallelWebSearchProvider(WebSearchProvider):
                 return {"success": False, "error": "Interrupted"}
 
             mode = _resolve_search_mode()
-            logger.info(
-                "Parallel search: '%s' (mode=%s, limit=%d)", query, mode, limit
-            )
+            logger.info("Parallel search: '%s' (mode=%s, limit=%d)", query, mode, limit)
             response = _get_sync_client().beta.search(
                 search_queries=[query],
                 objective=query,
@@ -188,14 +186,12 @@ class ParallelWebSearchProvider(WebSearchProvider):
             web_results = []
             for i, result in enumerate(response.results or []):
                 excerpts = result.excerpts or []
-                web_results.append(
-                    {
-                        "url": result.url or "",
-                        "title": result.title or "",
-                        "description": " ".join(excerpts) if excerpts else "",
-                        "position": i + 1,
-                    }
-                )
+                web_results.append({
+                    "url": result.url or "",
+                    "title": result.title or "",
+                    "description": " ".join(excerpts) if excerpts else "",
+                    "position": i + 1,
+                })
 
             return {"success": True, "data": {"web": web_results}}
         except ValueError as exc:
@@ -209,9 +205,7 @@ class ParallelWebSearchProvider(WebSearchProvider):
             logger.warning("Parallel search error: %s", exc)
             return {"success": False, "error": f"Parallel search failed: {exc}"}
 
-    async def extract(
-        self, urls: List[str], **kwargs: Any
-    ) -> List[Dict[str, Any]]:
+    async def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
         """Extract content from one or more URLs via the async SDK.
 
         Returns the legacy list-of-results shape that
@@ -223,9 +217,7 @@ class ParallelWebSearchProvider(WebSearchProvider):
             from tools.interrupt import is_interrupted
 
             if is_interrupted():
-                return [
-                    {"url": u, "error": "Interrupted", "title": ""} for u in urls
-                ]
+                return [{"url": u, "error": "Interrupted", "title": ""} for u in urls]
 
             logger.info("Parallel extract: %d URL(s)", len(urls))
             response = await _get_async_client().beta.extract(
@@ -240,39 +232,47 @@ class ParallelWebSearchProvider(WebSearchProvider):
                     content = "\n\n".join(result.excerpts or [])
                 url = result.url or ""
                 title = result.title or ""
-                results.append(
-                    {
-                        "url": url,
-                        "title": title,
-                        "content": content,
-                        "raw_content": content,
-                        "metadata": {"sourceURL": url, "title": title},
-                    }
-                )
+                results.append({
+                    "url": url,
+                    "title": title,
+                    "content": content,
+                    "raw_content": content,
+                    "metadata": {"sourceURL": url, "title": title},
+                })
 
             for error in response.errors or []:
-                results.append(
-                    {
-                        "url": error.url or "",
-                        "title": "",
-                        "content": "",
-                        "error": error.content or error.error_type or "extraction failed",
-                        "metadata": {"sourceURL": error.url or ""},
-                    }
-                )
+                results.append({
+                    "url": error.url or "",
+                    "title": "",
+                    "content": "",
+                    "error": error.content or error.error_type or "extraction failed",
+                    "metadata": {"sourceURL": error.url or ""},
+                })
 
             return results
         except ValueError as exc:
-            return [{"url": u, "title": "", "content": "", "error": str(exc)} for u in urls]
+            return [
+                {"url": u, "title": "", "content": "", "error": str(exc)} for u in urls
+            ]
         except ImportError as exc:
             return [
-                {"url": u, "title": "", "content": "", "error": f"Parallel SDK not installed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Parallel SDK not installed: {exc}",
+                }
                 for u in urls
             ]
         except Exception as exc:  # noqa: BLE001
             logger.warning("Parallel extract error: %s", exc)
             return [
-                {"url": u, "title": "", "content": "", "error": f"Parallel extract failed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Parallel extract failed: {exc}",
+                }
                 for u in urls
             ]
 

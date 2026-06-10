@@ -39,6 +39,7 @@ from gateway.platforms.webhook import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(
     routes=None,
     secret="",
@@ -91,9 +92,7 @@ def _mock_request(headers=None, body=b"", content_length=None, match_info=None):
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 def _generic_signature(body: bytes, secret: str) -> str:
@@ -362,7 +361,11 @@ class TestRenderDeliveryExtra:
     def test_render_delivery_extra_templates(self):
         """String values in deliver_extra are rendered with payload data."""
         adapter = _make_adapter()
-        extra = {"repo": "{repository.full_name}", "pr_number": "{number}", "static": 42}
+        extra = {
+            "repo": "{repository.full_name}",
+            "pr_number": "{number}",
+            "static": 42,
+        }
         payload = {"repository": {"full_name": "org/repo"}, "number": 7}
         result = adapter._render_delivery_extra(extra, payload)
         assert result["repo"] == "org/repo"
@@ -473,11 +476,12 @@ class TestEventFilter:
 
 
 class TestHTTPHandling:
-
     @pytest.mark.asyncio
     async def test_unknown_route_returns_404(self):
         """POST to an unknown route returns 404."""
-        adapter = _make_adapter(routes={"real": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}})
+        adapter = _make_adapter(
+            routes={"real": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        )
         app = _create_app(adapter)
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post("/webhooks/nonexistent", json={"a": 1})
@@ -534,8 +538,10 @@ class TestHTTPHandling:
         # Use port 0 — the OS picks a free port, but aiohttp requires a real bind.
         # We just test that the method completes and marks connected.
         # Need to mock TCPSite to avoid actual binding.
-        with patch("gateway.platforms.webhook.web.AppRunner") as MockRunner, \
-             patch("gateway.platforms.webhook.web.TCPSite") as MockSite:
+        with (
+            patch("gateway.platforms.webhook.web.AppRunner") as MockRunner,
+            patch("gateway.platforms.webhook.web.TCPSite") as MockSite,
+        ):
             mock_runner_inst = AsyncMock()
             MockRunner.return_value = mock_runner_inst
             mock_site_inst = AsyncMock()
@@ -570,7 +576,6 @@ class TestHTTPHandling:
 
 
 class TestIdempotency:
-
     @pytest.mark.asyncio
     async def test_duplicate_delivery_id_returns_200(self):
         """Second request with same delivery ID returns 200 duplicate."""
@@ -636,7 +641,6 @@ class TestIdempotency:
 
 
 class TestRateLimiting:
-
     @pytest.mark.asyncio
     async def test_rate_limit_rejects_excess(self):
         """Exceeding the rate limit returns 429."""
@@ -696,7 +700,6 @@ class TestRateLimiting:
 
 
 class TestBodySize:
-
     @pytest.mark.asyncio
     async def test_oversized_payload_rejected(self):
         """Content-Length > max_body_bytes returns 413."""
@@ -720,7 +723,6 @@ class TestBodySize:
 
 
 class TestInsecureNoAuth:
-
     @pytest.mark.asyncio
     async def test_insecure_no_auth_skips_validation(self):
         """Setting secret to _INSECURE_NO_AUTH bypasses signature check."""
@@ -741,7 +743,6 @@ class TestInsecureNoAuth:
 
 
 class TestSessionIsolation:
-
     @pytest.mark.asyncio
     async def test_concurrent_webhooks_get_independent_sessions(self):
         """Two events on the same route produce different session keys."""
@@ -785,7 +786,6 @@ class TestSessionIsolation:
 
 
 class TestDeliveryCleanup:
-
     @pytest.mark.asyncio
     async def test_delivery_info_survives_multiple_sends(self):
         """send() must NOT pop delivery_info.
@@ -865,9 +865,7 @@ class TestRawTemplateToken:
         """{__raw__} in a template dumps the entire payload as JSON."""
         adapter = _make_adapter()
         payload = {"action": "opened", "number": 42}
-        result = adapter._render_prompt(
-            "Payload: {__raw__}", payload, "push", "test"
-        )
+        result = adapter._render_prompt("Payload: {__raw__}", payload, "push", "test")
         expected_json = json.dumps(payload, indent=2)
         assert result == f"Payload: {expected_json}"
 
@@ -952,9 +950,7 @@ class TestDeliverCrossPlatformThreadId:
             }
         }
         await adapter._deliver_cross_platform("telegram", "hello", delivery)
-        mock_target.send.assert_awaited_once_with(
-            "12345", "hello", metadata=None
-        )
+        mock_target.send.assert_awaited_once_with("12345", "hello", metadata=None)
 
 
 class TestInsecureNoAuthSafetyRail:
@@ -1009,6 +1005,7 @@ class TestInsecureNoAuthSafetyRail:
     def test_is_loopback_host_accepts(self, host):
         """_is_loopback_host covers all documented loopback spellings."""
         from gateway.platforms.webhook import _is_loopback_host
+
         assert _is_loopback_host(host) is True
 
     @pytest.mark.parametrize(
@@ -1018,6 +1015,7 @@ class TestInsecureNoAuthSafetyRail:
     def test_is_loopback_host_rejects(self, host):
         """_is_loopback_host treats public/LAN/empty as non-loopback."""
         from gateway.platforms.webhook import _is_loopback_host
+
         assert _is_loopback_host(host) is False
 
     @pytest.mark.asyncio
@@ -1031,4 +1029,3 @@ class TestInsecureNoAuthSafetyRail:
             assert result is True
         finally:
             await adapter.disconnect()
-

@@ -34,6 +34,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_credential_cache():
     from agent.azure_identity_adapter import reset_credential_cache
+
     reset_credential_cache()
     yield
     reset_credential_cache()
@@ -53,7 +54,9 @@ def fake_azure_identity(monkeypatch):
     fake_module = SimpleNamespace(
         DefaultAzureCredential=lambda **kw: SimpleNamespace(
             kwargs=kw,
-            get_token=lambda scope: SimpleNamespace(token="fake", expires_on=9999999999),
+            get_token=lambda scope: SimpleNamespace(
+                token="fake", expires_on=9999999999
+            ),
         ),
         get_bearer_token_provider=lambda credential, scope: (
             last.__setitem__("scope", scope),
@@ -68,11 +71,13 @@ def fake_azure_identity(monkeypatch):
 @pytest.fixture
 def patch_load_config(monkeypatch):
     """Helper to set model_cfg seen by _try_azure_foundry."""
+
     def _apply(model_cfg):
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
             lambda: {"model": model_cfg},
         )
+
     return _apply
 
 
@@ -82,7 +87,9 @@ def patch_load_config(monkeypatch):
 
 
 class TestAuxAzureFoundryApiKey:
-    def test_chat_completions_returns_plain_openai_client(self, monkeypatch, patch_load_config):
+    def test_chat_completions_returns_plain_openai_client(
+        self, monkeypatch, patch_load_config
+    ):
         from agent.auxiliary_client import _try_azure_foundry
         from openai import OpenAI as _OpenAI
 
@@ -99,7 +106,9 @@ class TestAuxAzureFoundryApiKey:
         assert isinstance(client, _OpenAI)
         assert client.api_key == "sk-azure-static-key"
 
-    def test_codex_responses_wraps_in_codex_aux_client(self, monkeypatch, patch_load_config):
+    def test_codex_responses_wraps_in_codex_aux_client(
+        self, monkeypatch, patch_load_config
+    ):
         from agent.auxiliary_client import _try_azure_foundry, CodexAuxiliaryClient
 
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "sk-azure-static-key")
@@ -153,7 +162,10 @@ class TestAuxAzureFoundryApiKey:
 
 class TestAuxAzureFoundryEntra:
     def test_callable_api_key_reaches_openai_constructor(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """The token provider callable must arrive at ``OpenAI(api_key=...)``
         intact — never stringified to ``"no-key-required"`` or to the
@@ -199,7 +211,10 @@ class TestAuxAzureFoundryEntra:
         assert received["base_url"] == "https://r.openai.azure.com/openai/v1"
 
     def test_codex_responses_with_entra_wraps_correctly(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """GPT-5.x deployment on Entra ID — auto-upgraded to
         codex_responses, wrapped in CodexAuxiliaryClient, callable
@@ -233,7 +248,10 @@ class TestAuxAzureFoundryEntra:
         assert received["api_key"]().startswith("jwt-for-")
 
     def test_entra_anthropic_messages_uses_bearer_hook(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """Entra ID + anthropic_messages: runtime returns a callable
         api_key; ``_maybe_wrap_anthropic`` → ``build_anthropic_client``
@@ -291,7 +309,10 @@ class TestAuxAzureFoundryEntra:
 
 class TestResolveProviderClientAzureFoundry:
     def test_dispatches_to_azure_branch_not_generic_api_key_path(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """End-to-end: the public ``resolve_provider_client`` entry
         point must take the dedicated azure-foundry branch, NOT the
@@ -324,7 +345,10 @@ class TestResolveProviderClientAzureFoundry:
         assert callable(received["api_key"])
 
     def test_warns_and_returns_none_on_failure(
-        self, monkeypatch, patch_load_config, caplog,
+        self,
+        monkeypatch,
+        patch_load_config,
+        caplog,
     ):
         """When azure-foundry is requested but cannot be resolved
         (e.g. no model + no key), we return (None, None) and log a

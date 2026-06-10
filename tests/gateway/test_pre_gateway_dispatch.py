@@ -27,7 +27,9 @@ def _clear_auth_env(monkeypatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
-def _make_event(text: str = "hello", platform: Platform = Platform.WHATSAPP) -> MessageEvent:
+def _make_event(
+    text: str = "hello", platform: Platform = Platform.WHATSAPP
+) -> MessageEvent:
     return MessageEvent(
         text=text,
         message_id="m1",

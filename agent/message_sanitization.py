@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # inside the OpenAI SDK.  Used by every surrogate-sanitization helper
 # below as well as by run_agent and the CLI for paste-from-clipboard
 # scrubbing.
-_SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
 
 def _sanitize_surrogates(text: str) -> str:
@@ -35,7 +35,7 @@ def _sanitize_surrogates(text: str) -> str:
     OpenAI SDK.  This is a fast no-op when the text contains no surrogates.
     """
     if _SURROGATE_RE.search(text):
-        return _SURROGATE_RE.sub('\ufffd', text)
+        return _SURROGATE_RE.sub("\ufffd", text)
     return text
 
 
@@ -55,7 +55,7 @@ def _sanitize_structure_surrogates(payload: Any) -> bool:
             for key, value in node.items():
                 if isinstance(value, str):
                     if _SURROGATE_RE.search(value):
-                        node[key] = _SURROGATE_RE.sub('\ufffd', value)
+                        node[key] = _SURROGATE_RE.sub("\ufffd", value)
                         found = True
                 elif isinstance(value, (dict, list)):
                     _walk(value)
@@ -63,7 +63,7 @@ def _sanitize_structure_surrogates(payload: Any) -> bool:
             for idx, value in enumerate(node):
                 if isinstance(value, str):
                     if _SURROGATE_RE.search(value):
-                        node[idx] = _SURROGATE_RE.sub('\ufffd', value)
+                        node[idx] = _SURROGATE_RE.sub("\ufffd", value)
                         found = True
                 elif isinstance(value, (dict, list)):
                     _walk(value)
@@ -90,18 +90,18 @@ def _sanitize_messages_surrogates(messages: list) -> bool:
             continue
         content = msg.get("content")
         if isinstance(content, str) and _SURROGATE_RE.search(content):
-            msg["content"] = _SURROGATE_RE.sub('\ufffd', content)
+            msg["content"] = _SURROGATE_RE.sub("\ufffd", content)
             found = True
         elif isinstance(content, list):
             for part in content:
                 if isinstance(part, dict):
                     text = part.get("text")
                     if isinstance(text, str) and _SURROGATE_RE.search(text):
-                        part["text"] = _SURROGATE_RE.sub('\ufffd', text)
+                        part["text"] = _SURROGATE_RE.sub("\ufffd", text)
                         found = True
         name = msg.get("name")
         if isinstance(name, str) and _SURROGATE_RE.search(name):
-            msg["name"] = _SURROGATE_RE.sub('\ufffd', name)
+            msg["name"] = _SURROGATE_RE.sub("\ufffd", name)
             found = True
         tool_calls = msg.get("tool_calls")
         if isinstance(tool_calls, list):
@@ -110,17 +110,17 @@ def _sanitize_messages_surrogates(messages: list) -> bool:
                     continue
                 tc_id = tc.get("id")
                 if isinstance(tc_id, str) and _SURROGATE_RE.search(tc_id):
-                    tc["id"] = _SURROGATE_RE.sub('\ufffd', tc_id)
+                    tc["id"] = _SURROGATE_RE.sub("\ufffd", tc_id)
                     found = True
                 fn = tc.get("function")
                 if isinstance(fn, dict):
                     fn_name = fn.get("name")
                     if isinstance(fn_name, str) and _SURROGATE_RE.search(fn_name):
-                        fn["name"] = _SURROGATE_RE.sub('\ufffd', fn_name)
+                        fn["name"] = _SURROGATE_RE.sub("\ufffd", fn_name)
                         found = True
                     fn_args = fn.get("arguments")
                     if isinstance(fn_args, str) and _SURROGATE_RE.search(fn_args):
-                        fn["arguments"] = _SURROGATE_RE.sub('\ufffd', fn_args)
+                        fn["arguments"] = _SURROGATE_RE.sub("\ufffd", fn_args)
                         found = True
         # Walk any additional string / nested fields (reasoning,
         # reasoning_content, reasoning_details, etc.) — surrogates from
@@ -132,7 +132,7 @@ def _sanitize_messages_surrogates(messages: list) -> bool:
                 continue
             if isinstance(value, str):
                 if _SURROGATE_RE.search(value):
-                    msg[key] = _SURROGATE_RE.sub('\ufffd', value)
+                    msg[key] = _SURROGATE_RE.sub("\ufffd", value)
                     found = True
             elif isinstance(value, (dict, list)):
                 if _sanitize_structure_surrogates(value):
@@ -223,23 +223,23 @@ def _repair_tool_call_arguments(raw_args: str, tool_name: str = "?") -> str:
     # Attempt common JSON repairs
     fixed = raw_stripped
     # 1. Strip trailing commas before } or ]
-    fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+    fixed = re.sub(r",\s*([}\]])", r"\1", fixed)
     # 2. Close unclosed structures
-    open_curly = fixed.count('{') - fixed.count('}')
-    open_bracket = fixed.count('[') - fixed.count(']')
+    open_curly = fixed.count("{") - fixed.count("}")
+    open_bracket = fixed.count("[") - fixed.count("]")
     if open_curly > 0:
-        fixed += '}' * open_curly
+        fixed += "}" * open_curly
     if open_bracket > 0:
-        fixed += ']' * open_bracket
+        fixed += "]" * open_bracket
     # 3. Remove excess closing braces/brackets (bounded to 50 iterations)
     for _ in range(50):
         try:
             json.loads(fixed)
             break
         except json.JSONDecodeError:
-            if fixed.endswith('}') and fixed.count('}') > fixed.count('{'):
+            if fixed.endswith("}") and fixed.count("}") > fixed.count("{"):
                 fixed = fixed[:-1]
-            elif fixed.endswith(']') and fixed.count(']') > fixed.count('['):
+            elif fixed.endswith("]") and fixed.count("]") > fixed.count("["):
                 fixed = fixed[:-1]
             else:
                 break
@@ -248,7 +248,9 @@ def _repair_tool_call_arguments(raw_args: str, tool_name: str = "?") -> str:
         json.loads(fixed)
         logger.warning(
             "Repaired malformed tool_call arguments for %s: %s → %s",
-            tool_name, raw_stripped[:80], fixed[:80],
+            tool_name,
+            raw_stripped[:80],
+            fixed[:80],
         )
         return fixed
     except json.JSONDecodeError:
@@ -263,7 +265,9 @@ def _repair_tool_call_arguments(raw_args: str, tool_name: str = "?") -> str:
             json.loads(escaped)
             logger.warning(
                 "Repaired control-char-laced tool_call arguments for %s: %s → %s",
-                tool_name, raw_stripped[:80], escaped[:80],
+                tool_name,
+                raw_stripped[:80],
+                escaped[:80],
             )
             return escaped
     except (json.JSONDecodeError, TypeError, ValueError):
@@ -274,7 +278,8 @@ def _repair_tool_call_arguments(raw_args: str, tool_name: str = "?") -> str:
     logger.warning(
         "Unrepairable tool_call arguments for %s — "
         "replaced with empty object (was: %s)",
-        tool_name, raw_stripped[:80],
+        tool_name,
+        raw_stripped[:80],
     )
     return "{}"
 
@@ -285,7 +290,7 @@ def _strip_non_ascii(text: str) -> str:
     Used as a last resort when the system encoding is ASCII and can't handle
     any non-ASCII characters (e.g. LANG=C on Chromebooks).
     """
-    return text.encode('ascii', errors='ignore').decode('ascii')
+    return text.encode("ascii", errors="ignore").decode("ascii")
 
 
 def _sanitize_messages_non_ascii(messages: list) -> bool:
@@ -380,7 +385,11 @@ def _strip_images_from_messages(messages: list) -> bool:
             continue
         new_parts = []
         for part in content:
-            if isinstance(part, dict) and part.get("type") in {"image_url", "image", "input_image"}:
+            if isinstance(part, dict) and part.get("type") in {
+                "image_url",
+                "image",
+                "input_image",
+            }:
                 found = True
             else:
                 new_parts.append(part)
@@ -390,7 +399,9 @@ def _strip_images_from_messages(messages: list) -> bool:
             elif msg.get("role") == "tool":
                 # Preserve tool_call_id linkage — providers require every
                 # assistant tool_call to have a matching tool response.
-                msg["content"] = "[image content removed — server does not support images]"
+                msg["content"] = (
+                    "[image content removed — server does not support images]"
+                )
             else:
                 # Synthetic image-only user/assistant message with no text;
                 # safe to drop.

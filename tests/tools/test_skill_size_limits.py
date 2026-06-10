@@ -29,12 +29,7 @@ def isolate_skills(tmp_path, monkeypatch):
 
 def _make_skill_content(body_chars: int) -> str:
     """Generate valid SKILL.md content with a body of the given character count."""
-    frontmatter = (
-        "---\n"
-        "name: test-skill\n"
-        "description: A test skill\n"
-        "---\n"
-    )
+    frontmatter = "---\nname: test-skill\ndescription: A test skill\n---\n"
     body = "# Test Skill\n\n" + ("x" * max(0, body_chars - 15))
     return frontmatter + body
 
@@ -55,7 +50,9 @@ class TestValidateContentSize:
         assert "100,000" in err
 
     def test_custom_label(self):
-        err = _validate_content_size("a" * (MAX_SKILL_CONTENT_CHARS + 1), label="references/api.md")
+        err = _validate_content_size(
+            "a" * (MAX_SKILL_CONTENT_CHARS + 1), label="references/api.md"
+        )
         assert "references/api.md" in err
 
 
@@ -64,12 +61,16 @@ class TestCreateSkillSizeLimit:
 
     def test_create_within_limit(self, isolate_skills):
         content = _make_skill_content(5000)
-        result = json.loads(skill_manage(action="create", name="small-skill", content=content))
+        result = json.loads(
+            skill_manage(action="create", name="small-skill", content=content)
+        )
         assert result["success"] is True
 
     def test_create_over_limit(self, isolate_skills):
         content = _make_skill_content(MAX_SKILL_CONTENT_CHARS + 100)
-        result = json.loads(skill_manage(action="create", name="huge-skill", content=content))
+        result = json.loads(
+            skill_manage(action="create", name="huge-skill", content=content)
+        )
         assert result["success"] is False
         assert "100,000" in result["error"]
 
@@ -79,7 +80,9 @@ class TestCreateSkillSizeLimit:
         body_budget = MAX_SKILL_CONTENT_CHARS - len(frontmatter)
         content = frontmatter + ("x" * body_budget)
         assert len(content) == MAX_SKILL_CONTENT_CHARS
-        result = json.loads(skill_manage(action="create", name="edge-skill", content=content))
+        result = json.loads(
+            skill_manage(action="create", name="edge-skill", content=content)
+        )
         assert result["success"] is True
 
 
@@ -109,12 +112,14 @@ class TestPatchSkillSizeLimit:
         json.loads(skill_manage(action="create", name="near-limit", content=near_limit))
 
         # Patch that adds enough to go over
-        result = json.loads(skill_manage(
-            action="patch",
-            name="near-limit",
-            old_string="# Test Skill",
-            new_string="# Test Skill\n" + ("y" * 200),
-        ))
+        result = json.loads(
+            skill_manage(
+                action="patch",
+                name="near-limit",
+                old_string="# Test Skill",
+                new_string="# Test Skill\n" + ("y" * 200),
+            )
+        )
         assert result["success"] is False
         assert "100,000" in result["error"]
 
@@ -130,13 +135,15 @@ class TestPatchSkillSizeLimit:
 
         # Patch that removes content to bring it under the limit.
         # Use replace_all to replace the repeated x's with a shorter string.
-        result = json.loads(skill_manage(
-            action="patch",
-            name="bloated",
-            old_string="x" * 100,
-            new_string="y",
-            replace_all=True,
-        ))
+        result = json.loads(
+            skill_manage(
+                action="patch",
+                name="bloated",
+                old_string="x" * 100,
+                new_string="y",
+                replace_all=True,
+            )
+        )
         # Should succeed because the result is well within limits
         assert result["success"] is True
 
@@ -145,20 +152,24 @@ class TestPatchSkillSizeLimit:
         small = _make_skill_content(1000)
         json.loads(skill_manage(action="create", name="with-ref", content=small))
         # Create a supporting file
-        json.loads(skill_manage(
-            action="write_file",
-            name="with-ref",
-            file_path="references/data.md",
-            file_content="# Data\n\nSmall content.",
-        ))
+        json.loads(
+            skill_manage(
+                action="write_file",
+                name="with-ref",
+                file_path="references/data.md",
+                file_content="# Data\n\nSmall content.",
+            )
+        )
         # Try to patch it to be oversized
-        result = json.loads(skill_manage(
-            action="patch",
-            name="with-ref",
-            old_string="Small content.",
-            new_string="x" * (MAX_SKILL_CONTENT_CHARS + 100),
-            file_path="references/data.md",
-        ))
+        result = json.loads(
+            skill_manage(
+                action="patch",
+                name="with-ref",
+                old_string="Small content.",
+                new_string="x" * (MAX_SKILL_CONTENT_CHARS + 100),
+                file_path="references/data.md",
+            )
+        )
         assert result["success"] is False
         assert "references/data.md" in result["error"]
 
@@ -170,12 +181,14 @@ class TestWriteFileSizeLimit:
         small = _make_skill_content(1000)
         json.loads(skill_manage(action="create", name="file-test", content=small))
 
-        result = json.loads(skill_manage(
-            action="write_file",
-            name="file-test",
-            file_path="references/huge.md",
-            file_content="x" * (MAX_SKILL_CONTENT_CHARS + 1),
-        ))
+        result = json.loads(
+            skill_manage(
+                action="write_file",
+                name="file-test",
+                file_path="references/huge.md",
+                file_content="x" * (MAX_SKILL_CONTENT_CHARS + 1),
+            )
+        )
         assert result["success"] is False
         assert "100,000" in result["error"]
 
@@ -183,12 +196,14 @@ class TestWriteFileSizeLimit:
         small = _make_skill_content(1000)
         json.loads(skill_manage(action="create", name="file-ok", content=small))
 
-        result = json.loads(skill_manage(
-            action="write_file",
-            name="file-ok",
-            file_path="references/normal.md",
-            file_content="# Normal\n\n" + ("x" * 5000),
-        ))
+        result = json.loads(
+            skill_manage(
+                action="write_file",
+                name="file-ok",
+                file_path="references/normal.md",
+                file_content="# Normal\n\n" + ("x" * 5000),
+            )
+        )
         assert result["success"] is True
 
 

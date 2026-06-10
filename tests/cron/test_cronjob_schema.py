@@ -23,7 +23,9 @@ def test_cronjob_schema_schedule_description_flags_required_for_create():
     """`schedule` description must explicitly state REQUIRED for action=create."""
     from tools.cronjob_tools import CRONJOB_SCHEMA
 
-    schedule_desc = CRONJOB_SCHEMA["parameters"]["properties"]["schedule"]["description"]
+    schedule_desc = CRONJOB_SCHEMA["parameters"]["properties"]["schedule"][
+        "description"
+    ]
     assert "REQUIRED" in schedule_desc
     assert "action=create" in schedule_desc
 

@@ -46,9 +46,15 @@ def test_get_git_banner_state_reads_origin_and_head(tmp_path):
     (repo_dir / ".git").mkdir(parents=True)
 
     results = {
-        ("git", "rev-parse", "--short=8", "origin/main"): MagicMock(returncode=0, stdout="b2f477a3\n"),
-        ("git", "rev-parse", "--short=8", "HEAD"): MagicMock(returncode=0, stdout="af8aad31\n"),
-        ("git", "rev-list", "--count", "origin/main..HEAD"): MagicMock(returncode=0, stdout="3\n"),
+        ("git", "rev-parse", "--short=8", "origin/main"): MagicMock(
+            returncode=0, stdout="b2f477a3\n"
+        ),
+        ("git", "rev-parse", "--short=8", "HEAD"): MagicMock(
+            returncode=0, stdout="af8aad31\n"
+        ),
+        ("git", "rev-list", "--count", "origin/main..HEAD"): MagicMock(
+            returncode=0, stdout="3\n"
+        ),
     }
 
     def fake_run(cmd, **kwargs):
@@ -74,8 +80,10 @@ def test_get_git_banner_state_falls_back_to_build_sha_when_no_repo():
     """
     from clawk_cli import banner
 
-    with patch.object(banner, "_resolve_repo_dir", return_value=None), \
-         patch("clawk_cli.build_info.get_build_sha", return_value="abcdef12"):
+    with (
+        patch.object(banner, "_resolve_repo_dir", return_value=None),
+        patch("clawk_cli.build_info.get_build_sha", return_value="abcdef12"),
+    ):
         state = banner.get_git_banner_state()
 
     assert state == {"upstream": "abcdef12", "local": "abcdef12", "ahead": 0}
@@ -88,8 +96,10 @@ def test_get_git_banner_state_returns_none_when_no_repo_and_no_build_sha():
     """
     from clawk_cli import banner
 
-    with patch.object(banner, "_resolve_repo_dir", return_value=None), \
-         patch("clawk_cli.build_info.get_build_sha", return_value=None):
+    with (
+        patch.object(banner, "_resolve_repo_dir", return_value=None),
+        patch("clawk_cli.build_info.get_build_sha", return_value=None),
+    ):
         state = banner.get_git_banner_state()
 
     assert state is None
@@ -109,8 +119,10 @@ def test_get_git_banner_state_falls_back_when_live_git_returns_nothing(tmp_path)
 
     # All git invocations fail (returncode=1, empty stdout).
     failed = MagicMock(returncode=1, stdout="")
-    with patch("clawk_cli.banner.subprocess.run", return_value=failed), \
-         patch("clawk_cli.build_info.get_build_sha", return_value="cafef00d"):
+    with (
+        patch("clawk_cli.banner.subprocess.run", return_value=failed),
+        patch("clawk_cli.build_info.get_build_sha", return_value="cafef00d"),
+    ):
         state = banner.get_git_banner_state(repo_dir)
 
     assert state == {"upstream": "cafef00d", "local": "cafef00d", "ahead": 0}

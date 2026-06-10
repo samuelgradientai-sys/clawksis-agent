@@ -64,24 +64,22 @@ def test_fetch_account_usage_codex(monkeypatch):
     )
     monkeypatch.setattr(
         "agent.account_usage.httpx.Client",
-        lambda timeout=15.0: _Client(
-            {
-                "plan_type": "pro",
-                "rate_limit": {
-                    "primary_window": {
-                        "used_percent": 15,
-                        "reset_at": 1_900_000_000,
-                        "limit_window_seconds": 18000,
-                    },
-                    "secondary_window": {
-                        "used_percent": 40,
-                        "reset_at": 1_900_500_000,
-                        "limit_window_seconds": 604800,
-                    },
+        lambda timeout=15.0: _Client({
+            "plan_type": "pro",
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 15,
+                    "reset_at": 1_900_000_000,
+                    "limit_window_seconds": 18000,
                 },
-                "credits": {"has_credits": True, "balance": 12.5},
-            }
-        ),
+                "secondary_window": {
+                    "used_percent": 40,
+                    "reset_at": 1_900_500_000,
+                    "limit_window_seconds": 604800,
+                },
+            },
+            "credits": {"has_credits": True, "balance": 12.5},
+        }),
     )
 
     snapshot = fetch_account_usage("openai-codex")
@@ -91,7 +89,9 @@ def test_fetch_account_usage_codex(monkeypatch):
     assert len(snapshot.windows) == 2
     assert snapshot.windows[0].label == "Session"
     assert snapshot.windows[0].used_percent == 15.0
-    assert snapshot.windows[0].reset_at == datetime.fromtimestamp(1_900_000_000, tz=timezone.utc)
+    assert snapshot.windows[0].reset_at == datetime.fromtimestamp(
+        1_900_000_000, tz=timezone.utc
+    )
     assert "Credits balance: $12.50" in snapshot.details
 
 
@@ -118,7 +118,9 @@ def test_render_account_usage_lines_includes_reset_and_provider():
     assert "Credits balance: $9.99" in lines[3]
 
 
-def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_deprecated_rate_limit(monkeypatch):
+def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_deprecated_rate_limit(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.account_usage.resolve_runtime_provider",
         lambda requested, explicit_base_url=None, explicit_api_key=None: {
@@ -129,25 +131,23 @@ def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_depreca
     )
     monkeypatch.setattr(
         "agent.account_usage.httpx.Client",
-        lambda timeout=10.0: _RoutingClient(
-            {
-                "https://openrouter.ai/api/v1/credits": {
-                    "data": {"total_credits": 300.0, "total_usage": 10.92}
-                },
-                "https://openrouter.ai/api/v1/key": {
-                    "data": {
-                        "limit": 100.0,
-                        "limit_remaining": 70.0,
-                        "limit_reset": "monthly",
-                        "usage": 12.5,
-                        "usage_daily": 0.5,
-                        "usage_weekly": 2.0,
-                        "usage_monthly": 8.0,
-                        "rate_limit": {"requests": -1, "interval": "10s"},
-                    }
-                },
-            }
-        ),
+        lambda timeout=10.0: _RoutingClient({
+            "https://openrouter.ai/api/v1/credits": {
+                "data": {"total_credits": 300.0, "total_usage": 10.92}
+            },
+            "https://openrouter.ai/api/v1/key": {
+                "data": {
+                    "limit": 100.0,
+                    "limit_remaining": 70.0,
+                    "limit_reset": "monthly",
+                    "usage": 12.5,
+                    "usage_daily": 0.5,
+                    "usage_weekly": 2.0,
+                    "usage_monthly": 8.0,
+                    "rate_limit": {"requests": -1, "interval": "10s"},
+                }
+            },
+        }),
     )
 
     snapshot = fetch_account_usage("openrouter")
@@ -161,11 +161,18 @@ def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_depreca
         ),
     )
     assert "Credits balance: $289.08" in snapshot.details
-    assert "API key usage: $12.50 total • $0.50 today • $2.00 this week • $8.00 this month" in snapshot.details
-    assert all("-1 requests / 10s" not in line for line in render_account_usage_lines(snapshot))
+    assert (
+        "API key usage: $12.50 total • $0.50 today • $2.00 this week • $8.00 this month"
+        in snapshot.details
+    )
+    assert all(
+        "-1 requests / 10s" not in line for line in render_account_usage_lines(snapshot)
+    )
 
 
-def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit(monkeypatch):
+def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.account_usage.resolve_runtime_provider",
         lambda requested, explicit_base_url=None, explicit_api_key=None: {
@@ -176,23 +183,21 @@ def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit
     )
     monkeypatch.setattr(
         "agent.account_usage.httpx.Client",
-        lambda timeout=10.0: _RoutingClient(
-            {
-                "https://openrouter.ai/api/v1/credits": {
-                    "data": {"total_credits": 100.0, "total_usage": 25.5}
-                },
-                "https://openrouter.ai/api/v1/key": {
-                    "data": {
-                        "limit": None,
-                        "limit_remaining": None,
-                        "usage": 25.5,
-                        "usage_daily": 1.25,
-                        "usage_weekly": 4.5,
-                        "usage_monthly": 18.0,
-                    }
-                },
-            }
-        ),
+        lambda timeout=10.0: _RoutingClient({
+            "https://openrouter.ai/api/v1/credits": {
+                "data": {"total_credits": 100.0, "total_usage": 25.5}
+            },
+            "https://openrouter.ai/api/v1/key": {
+                "data": {
+                    "limit": None,
+                    "limit_remaining": None,
+                    "usage": 25.5,
+                    "usage_daily": 1.25,
+                    "usage_weekly": 4.5,
+                    "usage_monthly": 18.0,
+                }
+            },
+        }),
     )
 
     snapshot = fetch_account_usage("openrouter")
@@ -200,4 +205,7 @@ def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit
     assert snapshot is not None
     assert snapshot.windows == ()
     assert "Credits balance: $74.50" in snapshot.details
-    assert "API key usage: $25.50 total • $1.25 today • $4.50 this week • $18.00 this month" in snapshot.details
+    assert (
+        "API key usage: $25.50 total • $1.25 today • $4.50 this week • $18.00 this month"
+        in snapshot.details
+    )

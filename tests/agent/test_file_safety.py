@@ -6,28 +6,18 @@ Run with:  python -m pytest tests/agent/test_file_safety.py -v
 
 """
 
-
-
 import os
 
 from unittest.mock import patch
 
 
-
 import pytest
 
 
-
 from agent.file_safety import (
-
     _BLOCKED_PROJECT_ENV_BASENAMES,
-
     get_read_block_error,
-
 )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -37,35 +27,22 @@ from agent.file_safety import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestEnvFileReadBlocking:
-
     """Secret-bearing .env files must be blocked by get_read_block_error."""
 
-
-
-    @pytest.mark.parametrize("basename", [
-
-        ".env",
-
-        ".env.local",
-
-        ".env.development",
-
-        ".env.production",
-
-        ".env.test",
-
-        ".env.staging",
-
-        ".envrc",
-
-    ])
-
+    @pytest.mark.parametrize(
+        "basename",
+        [
+            ".env",
+            ".env.local",
+            ".env.development",
+            ".env.production",
+            ".env.test",
+            ".env.staging",
+            ".envrc",
+        ],
+    )
     def test_blocked_env_basenames(self, basename):
-
         """All secret-bearing .env basenames are blocked regardless of directory."""
 
         path = f"/tmp/project/{basename}"
@@ -78,64 +55,48 @@ class TestEnvFileReadBlocking:
 
         assert "secret-bearing" in error.lower() or "environment file" in error.lower()
 
-
-
     def test_blocked_env_in_subdirectory(self):
-
         """Nested .env files are also blocked."""
 
         error = get_read_block_error("/home/user/app/services/api/.env.production")
 
         assert error is not None
 
-
-
     def test_blocked_env_absolute_path(self):
-
         """Absolute paths to .env files are blocked."""
 
         error = get_read_block_error("/opt/myapp/.env")
 
         assert error is not None
 
-
-
     def test_allowed_env_example(self):
-
-        """"The .env.example file is explicitly allowed — it's documentation, not a secret."""
+        """ "The .env.example file is explicitly allowed — it's documentation, not a secret."""
 
         error = get_read_block_error("/tmp/project/.env.example")
 
         assert error is None
 
-
-
     def test_allowed_env_sample(self):
-
         """Other .env variants like .env.sample are allowed."""
 
         error = get_read_block_error("/tmp/project/.env.sample")
 
         assert error is None
 
-
-
     def test_allowed_non_env_files(self):
-
         """Regular files are not affected by the env guard."""
 
-        for path in ["/tmp/project/config.yaml", "/tmp/project/main.py",
-
-                     "/tmp/project/README.md", "/tmp/project/.gitignore"]:
-
+        for path in [
+            "/tmp/project/config.yaml",
+            "/tmp/project/main.py",
+            "/tmp/project/README.md",
+            "/tmp/project/.gitignore",
+        ]:
             error = get_read_block_error(path)
 
             assert error is None, f"{path} should be allowed"
 
-
-
     def test_allowed_clawk_env(self):
-
         """Clawksis' own .env inside CLAWK_HOME is NOT blocked by this rule
 
         (it's handled by other mechanisms). Only project-local .env is blocked."""
@@ -150,18 +111,11 @@ class TestEnvFileReadBlocking:
 
         assert error is not None
 
-
-
     def test_blocked_set_is_lowercase(self):
-
         """All entries in the blocked set are lowercase for case-insensitive matching."""
 
         for name in _BLOCKED_PROJECT_ENV_BASENAMES:
-
             assert name == name.lower(), f"{name} should be lowercase"
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -171,17 +125,10 @@ class TestEnvFileReadBlocking:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCacheFileReadBlocking:
-
     """Internal Clawksis cache files must remain blocked."""
 
-
-
     def test_hub_index_cache_blocked(self, tmp_path):
-
         """Hub index-cache reads are blocked."""
 
         clawk_home = tmp_path / ".clawksis"
@@ -192,20 +139,14 @@ class TestCacheFileReadBlocking:
 
         cache.write_text("{}")
 
-
-
         with patch("agent.file_safety._clawk_home_path", return_value=clawk_home):
-
             error = get_read_block_error(str(cache))
 
             assert error is not None
 
             assert "internal Clawksis cache" in error
 
-
-
     def test_hub_directory_blocked(self, tmp_path):
-
         """Hub directory reads are blocked."""
 
         clawk_home = tmp_path / ".clawksis"
@@ -216,16 +157,10 @@ class TestCacheFileReadBlocking:
 
         hub.write_text("{}")
 
-
-
         with patch("agent.file_safety._clawk_home_path", return_value=clawk_home):
-
             error = get_read_block_error(str(hub))
 
             assert error is not None
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -235,34 +170,22 @@ class TestCacheFileReadBlocking:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCombinedGuards:
-
     """Both guards should work independently without interference."""
 
-
-
     def test_env_guard_works_regardless_of_clawk_home(self, tmp_path):
-
         """The env basename guard does not depend on CLAWK_HOME resolution."""
 
         clawk_home = tmp_path / ".clawksis"
 
         clawk_home.mkdir()
 
-
-
         with patch("agent.file_safety._clawk_home_path", return_value=clawk_home):
-
             # Regular project .env should still be blocked
 
             error = get_read_block_error("/workspace/.env")
 
             assert error is not None
-
-
 
             # .env.example should still be allowed
 
@@ -270,10 +193,7 @@ class TestCombinedGuards:
 
             assert error is None
 
-
-
     def test_cache_guard_still_works_with_env_guard(self, tmp_path):
-
         """Cache file blocking still works when env guard is active."""
 
         clawk_home = tmp_path / ".clawksis"
@@ -284,13 +204,9 @@ class TestCombinedGuards:
 
         cache.write_text("")
 
-
-
         with patch("agent.file_safety._clawk_home_path", return_value=clawk_home):
-
             error = get_read_block_error(str(cache))
 
             assert error is not None
 
             assert "internal Clawksis cache" in error
-

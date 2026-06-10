@@ -8,6 +8,7 @@ JSONL file gone.  When a row has no platform id (e.g. agent-processed
 @bot messages whose adapter didn't carry a msg_id, or pre-column legacy
 rows), recall falls through to content-match.
 """
+
 from gateway.session import SessionStore
 from gateway.config import GatewayConfig
 
@@ -15,6 +16,7 @@ from gateway.config import GatewayConfig
 def _pin_db(monkeypatch, tmp_path):
     """Force SessionDB() to write into tmp_path instead of the real ~/.clawksis."""
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
 
@@ -28,17 +30,23 @@ def test_recall_branch_a1_exact_id_match_round_trips_through_db(tmp_path, monkey
 
     sid = "test-yuanbao-recall-a1"
     store._db.create_session(session_id=sid, source="yuanbao:group:G")
-    store.append_to_transcript(sid, {
-        "role": "user",
-        "content": "sensitive content",
-        "timestamp": 1.0,
-        "message_id": "platform-msg-abc",
-    })
-    store.append_to_transcript(sid, {
-        "role": "assistant",
-        "content": "ack",
-        "timestamp": 2.0,
-    })
+    store.append_to_transcript(
+        sid,
+        {
+            "role": "user",
+            "content": "sensitive content",
+            "timestamp": 1.0,
+            "message_id": "platform-msg-abc",
+        },
+    )
+    store.append_to_transcript(
+        sid,
+        {
+            "role": "assistant",
+            "content": "ack",
+            "timestamp": 2.0,
+        },
+    )
 
     history = store.load_transcript(sid)
     # The user row must carry its platform id back so the recall guard can
@@ -70,19 +78,25 @@ def test_recall_branch_a2_content_match_when_no_platform_id(tmp_path, monkeypatc
     store._db.create_session(session_id=sid, source="yuanbao:group:G")
     # No message_id on the dict — simulates an agent-processed message
     # that did not carry the platform msg_id through.
-    store.append_to_transcript(sid, {
-        "role": "user",
-        "content": "sensitive content",
-        "timestamp": 1.0,
-    })
+    store.append_to_transcript(
+        sid,
+        {
+            "role": "user",
+            "content": "sensitive content",
+            "timestamp": 1.0,
+        },
+    )
 
     history = store.load_transcript(sid)
     assert all("message_id" not in m for m in history)
 
     # Branch A2: content match recovers the target.
     target = next(
-        (m for m in history
-         if m.get("role") == "user" and m.get("content") == "sensitive content"),
+        (
+            m
+            for m in history
+            if m.get("role") == "user" and m.get("content") == "sensitive content"
+        ),
         None,
     )
     assert target is not None

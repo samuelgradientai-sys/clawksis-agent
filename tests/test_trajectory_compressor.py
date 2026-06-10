@@ -1,7 +1,5 @@
 """Tests for trajectory_compressor.py — config, metrics, and compression logic."""
 
-
-
 import importlib
 
 import os
@@ -13,25 +11,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch, MagicMock
 
 
-
 import pytest
 
 
-
 from trajectory_compressor import (
-
     CompressionConfig,
-
     TrajectoryMetrics,
-
     AggregateMetrics,
-
     TrajectoryCompressor,
-
 )
-
-
-
 
 
 def test_import_loads_env_from_clawk_home(tmp_path, monkeypatch):
@@ -42,40 +30,25 @@ def test_import_loads_env_from_clawk_home(tmp_path, monkeypatch):
 
     (home / ".env").write_text("OPENROUTER_API_KEY=from-clawk-home\n", encoding="utf-8")
 
-
-
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-
-
 
     sys.modules.pop("trajectory_compressor", None)
 
     importlib.import_module("trajectory_compressor")
 
-
-
     assert os.getenv("OPENROUTER_API_KEY") == "from-clawk-home"
 
 
-
-
-
 def test_generate_summary_kimi_omits_temperature():
-
     """Kimi models should have temperature omitted — server manages it."""
 
     config = CompressionConfig(
-
         summarization_model="kimi-for-coding",
-
         temperature=0.3,
-
         summary_target_tokens=100,
-
         max_retries=1,
-
     )
 
     compressor = TrajectoryCompressor.__new__(TrajectoryCompressor)
@@ -89,43 +62,33 @@ def test_generate_summary_kimi_omits_temperature():
     compressor.client = MagicMock()
 
     compressor.client.chat.completions.create.return_value = SimpleNamespace(
-
-        choices=[SimpleNamespace(message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary"))]
-
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary")
+            )
+        ]
     )
-
-
 
     metrics = TrajectoryMetrics()
 
     result = compressor._generate_summary("tool output", metrics)
 
-
-
     assert result.startswith("[CONTEXT SUMMARY]:")
 
-    assert "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
-
-
-
+    assert (
+        "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
+    )
 
 
 def test_generate_summary_public_moonshot_kimi_k2_5_omits_temperature():
-
     """kimi-k2.5 on the public Moonshot API should not get a forced temperature."""
 
     config = CompressionConfig(
-
         summarization_model="kimi-k2.5",
-
         base_url="https://api.moonshot.ai/v1",
-
         temperature=0.3,
-
         summary_target_tokens=100,
-
         max_retries=1,
-
     )
 
     compressor = TrajectoryCompressor.__new__(TrajectoryCompressor)
@@ -139,43 +102,33 @@ def test_generate_summary_public_moonshot_kimi_k2_5_omits_temperature():
     compressor.client = MagicMock()
 
     compressor.client.chat.completions.create.return_value = SimpleNamespace(
-
-        choices=[SimpleNamespace(message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary"))]
-
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary")
+            )
+        ]
     )
-
-
 
     metrics = TrajectoryMetrics()
 
     result = compressor._generate_summary("tool output", metrics)
 
-
-
     assert result.startswith("[CONTEXT SUMMARY]:")
 
-    assert "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
-
-
-
+    assert (
+        "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
+    )
 
 
 def test_generate_summary_public_moonshot_cn_kimi_k2_5_omits_temperature():
-
     """kimi-k2.5 on api.moonshot.cn should not get a forced temperature."""
 
     config = CompressionConfig(
-
         summarization_model="kimi-k2.5",
-
         base_url="https://api.moonshot.cn/v1",
-
         temperature=0.3,
-
         summary_target_tokens=100,
-
         max_retries=1,
-
     )
 
     compressor = TrajectoryCompressor.__new__(TrajectoryCompressor)
@@ -189,25 +142,22 @@ def test_generate_summary_public_moonshot_cn_kimi_k2_5_omits_temperature():
     compressor.client = MagicMock()
 
     compressor.client.chat.completions.create.return_value = SimpleNamespace(
-
-        choices=[SimpleNamespace(message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary"))]
-
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary")
+            )
+        ]
     )
-
-
 
     metrics = TrajectoryMetrics()
 
     result = compressor._generate_summary("tool output", metrics)
 
-
-
     assert result.startswith("[CONTEXT SUMMARY]:")
 
-    assert "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
-
-
-
+    assert (
+        "temperature" not in compressor.client.chat.completions.create.call_args.kwargs
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -217,11 +167,7 @@ def test_generate_summary_public_moonshot_cn_kimi_k2_5_omits_temperature():
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestCompressionConfig:
-
     def test_defaults(self):
 
         config = CompressionConfig()
@@ -233,8 +179,6 @@ class TestCompressionConfig:
         assert config.protect_last_n_turns == 4
 
         assert config.skip_under_target is True
-
-
 
     def test_from_yaml(self, tmp_path):
 
@@ -333,10 +277,7 @@ metrics:
 
         assert config.metrics_output_file == "my_metrics.json"
 
-
-
     def test_from_yaml_partial(self, tmp_path):
-
         """Only specified sections override defaults."""
 
         yaml_file = tmp_path / "config.yaml"
@@ -353,8 +294,6 @@ metrics:
 
         assert config.num_workers == 4
 
-
-
     def test_from_yaml_empty(self, tmp_path):
 
         yaml_file = tmp_path / "config.yaml"
@@ -366,9 +305,6 @@ metrics:
         assert config.target_max_tokens == 15250  # all defaults
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # TrajectoryMetrics
@@ -376,11 +312,7 @@ metrics:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestTrajectoryMetrics:
-
     def test_to_dict(self):
 
         m = TrajectoryMetrics()
@@ -413,8 +345,6 @@ class TestTrajectoryMetrics:
 
         assert d["compression_region"]["start_idx"] == -1
 
-
-
     def test_default_values(self):
 
         m = TrajectoryMetrics()
@@ -428,9 +358,6 @@ class TestTrajectoryMetrics:
         assert d["skipped_under_target"] is False
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # AggregateMetrics
@@ -438,11 +365,7 @@ class TestTrajectoryMetrics:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestAggregateMetrics:
-
     def test_empty_to_dict(self):
 
         agg = AggregateMetrics()
@@ -454,8 +377,6 @@ class TestAggregateMetrics:
         assert d["averages"]["avg_compression_ratio"] == 1.0
 
         assert d["averages"]["avg_tokens_saved_per_compressed"] == 0
-
-
 
     def test_add_compressed_trajectory(self):
 
@@ -489,8 +410,6 @@ class TestAggregateMetrics:
 
         assert len(agg.compression_ratios) == 1
 
-
-
     def test_add_skipped_trajectory(self):
 
         agg = AggregateMetrics()
@@ -508,8 +427,6 @@ class TestAggregateMetrics:
         assert agg.trajectories_skipped_under_target == 1
 
         assert agg.trajectories_compressed == 0
-
-
 
     def test_add_over_limit_trajectory(self):
 
@@ -531,14 +448,11 @@ class TestAggregateMetrics:
 
         assert agg.trajectories_still_over_limit == 1
 
-
-
     def test_multiple_trajectories_aggregation(self):
 
         agg = AggregateMetrics()
 
         for i in range(3):
-
             m = TrajectoryMetrics()
 
             m.original_tokens = 10000
@@ -565,10 +479,7 @@ class TestAggregateMetrics:
 
         assert d["averages"]["avg_compression_ratio"] == 0.5
 
-
-
     def test_to_dict_no_division_by_zero(self):
-
         """Ensure no ZeroDivisionError with empty data."""
 
         agg = AggregateMetrics()
@@ -580,9 +491,6 @@ class TestAggregateMetrics:
         assert d["tokens"]["overall_compression_ratio"] == 0.0
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # TrajectoryCompressor._find_protected_indices
@@ -590,20 +498,16 @@ class TestAggregateMetrics:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def _make_compressor(config=None):
-
     """Create a TrajectoryCompressor with mocked tokenizer and summarizer."""
 
     if config is None:
-
         config = CompressionConfig()
 
-    with patch.object(TrajectoryCompressor, '_init_tokenizer'), \
-         patch.object(TrajectoryCompressor, '_init_summarizer'):
-
+    with (
+        patch.object(TrajectoryCompressor, "_init_tokenizer"),
+        patch.object(TrajectoryCompressor, "_init_summarizer"),
+    ):
         compressor = TrajectoryCompressor(config)
 
     # Provide a simple token counter for tests (1 token per 4 chars)
@@ -615,37 +519,22 @@ def _make_compressor(config=None):
     return compressor
 
 
-
-
-
 class TestFindProtectedIndices:
-
     def test_basic_trajectory(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
             {"from": "system", "value": "You are an agent."},
-
             {"from": "human", "value": "Do something."},
-
             {"from": "gpt", "value": "I will use a tool."},
-
             {"from": "tool", "value": "Tool result."},
-
             {"from": "gpt", "value": "More work."},
-
             {"from": "tool", "value": "Another result."},
-
             {"from": "gpt", "value": "Work continues."},
-
             {"from": "tool", "value": "Result 3."},
-
             {"from": "gpt", "value": "Done."},
-
             {"from": "human", "value": "Thanks."},
-
         ]
 
         protected, start, end = tc._find_protected_indices(trajectory)
@@ -676,20 +565,14 @@ class TestFindProtectedIndices:
 
         assert end <= 6
 
-
-
     def test_short_trajectory_all_protected(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
             {"from": "system", "value": "sys"},
-
             {"from": "human", "value": "hi"},
-
             {"from": "gpt", "value": "hello"},
-
         ]
 
         protected, start, end = tc._find_protected_indices(trajectory)
@@ -700,8 +583,6 @@ class TestFindProtectedIndices:
 
         assert start >= end  # Nothing to compress
 
-
-
     def test_protect_last_n_zero(self):
 
         config = CompressionConfig()
@@ -711,23 +592,14 @@ class TestFindProtectedIndices:
         tc = _make_compressor(config)
 
         trajectory = [
-
             {"from": "system", "value": "sys"},
-
             {"from": "human", "value": "q"},
-
             {"from": "gpt", "value": "a"},
-
             {"from": "tool", "value": "r"},
-
             {"from": "gpt", "value": "b"},
-
             {"from": "tool", "value": "r2"},
-
             {"from": "gpt", "value": "c"},
-
             {"from": "tool", "value": "r3"},
-
         ]
 
         protected, start, end = tc._find_protected_indices(trajectory)
@@ -744,31 +616,21 @@ class TestFindProtectedIndices:
 
         assert 7 not in protected
 
-
-
     def test_no_system_turn(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
             {"from": "human", "value": "hi"},
-
             {"from": "gpt", "value": "hello"},
-
             {"from": "tool", "value": "data"},
-
             {"from": "gpt", "value": "result"},
-
             {"from": "human", "value": "thanks"},
-
         ]
 
         protected, start, end = tc._find_protected_indices(trajectory)
 
         assert 0 in protected  # first human
-
-
 
     def test_disable_protect_first_system(self):
 
@@ -779,31 +641,19 @@ class TestFindProtectedIndices:
         tc = _make_compressor(config)
 
         trajectory = [
-
             {"from": "system", "value": "sys"},
-
             {"from": "human", "value": "q"},
-
             {"from": "gpt", "value": "a"},
-
             {"from": "tool", "value": "r"},
-
             {"from": "gpt", "value": "b"},
-
             {"from": "tool", "value": "r2"},
-
             {"from": "gpt", "value": "c"},
-
             {"from": "tool", "value": "r3"},
-
         ]
 
         protected, _, _ = tc._find_protected_indices(trajectory)
 
         assert 0 not in protected  # system not protected
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -813,23 +663,15 @@ class TestFindProtectedIndices:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestExtractTurnContent:
-
     def test_basic_extraction(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
             {"from": "gpt", "value": "I will search."},
-
             {"from": "tool", "value": "Search result: found it."},
-
             {"from": "gpt", "value": "Great, done."},
-
         ]
 
         content = tc._extract_turn_content_for_summary(trajectory, 0, 2)
@@ -846,16 +688,12 @@ class TestExtractTurnContent:
 
         assert "[Turn 2" not in content
 
-
-
     def test_long_content_truncated(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
             {"from": "tool", "value": "x" * 5000},
-
         ]
 
         content = tc._extract_turn_content_for_summary(trajectory, 0, 1)
@@ -863,8 +701,6 @@ class TestExtractTurnContent:
         assert "...[truncated]..." in content
 
         assert len(content) < 5000
-
-
 
     def test_empty_range(self):
 
@@ -877,9 +713,6 @@ class TestExtractTurnContent:
         assert content == ""
 
 
-
-
-
 # ---------------------------------------------------------------------------
 
 # TrajectoryCompressor.count_tokens / count_trajectory_tokens
@@ -887,18 +720,12 @@ class TestExtractTurnContent:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestTokenCounting:
-
     def test_count_tokens_empty(self):
 
         tc = _make_compressor()
 
         assert tc.count_tokens("") == 0
-
-
 
     def test_count_tokens_basic(self):
 
@@ -908,41 +735,29 @@ class TestTokenCounting:
 
         assert tc.count_tokens("12345678") == 2
 
-
-
     def test_count_trajectory_tokens(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
-            {"from": "system", "value": "12345678"},   # 2 tokens
-
-            {"from": "human", "value": "1234567890ab"}, # 3 tokens
-
+            {"from": "system", "value": "12345678"},  # 2 tokens
+            {"from": "human", "value": "1234567890ab"},  # 3 tokens
         ]
 
         assert tc.count_trajectory_tokens(trajectory) == 5
-
-
 
     def test_count_turn_tokens(self):
 
         tc = _make_compressor()
 
         trajectory = [
-
-            {"from": "system", "value": "1234"},     # 1 token
-
+            {"from": "system", "value": "1234"},  # 1 token
             {"from": "human", "value": "12345678"},  # 2 tokens
-
         ]
 
         result = tc.count_turn_tokens(trajectory)
 
         assert result == [1, 2]
-
-
 
     def test_count_tokens_fallback_on_error(self):
 
@@ -955,11 +770,7 @@ class TestTokenCounting:
         assert tc.count_tokens("12345678") == 2
 
 
-
-
-
 class TestGenerateSummary:
-
     def test_generate_summary_handles_none_content(self):
 
         tc = _make_compressor()
@@ -967,25 +778,16 @@ class TestGenerateSummary:
         tc.client = MagicMock()
 
         tc.client.chat.completions.create.return_value = SimpleNamespace(
-
             choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
-
         )
 
         metrics = TrajectoryMetrics()
 
-
-
         summary = tc._generate_summary("Turn content", metrics)
-
-
 
         assert summary == "[CONTEXT SUMMARY]:"
 
-
-
     @pytest.mark.asyncio
-
     async def test_generate_summary_async_handles_none_content(self):
 
         tc = _make_compressor()
@@ -993,24 +795,15 @@ class TestGenerateSummary:
         mock_client = MagicMock()
 
         mock_client.chat.completions.create = AsyncMock(
-
             return_value=SimpleNamespace(
-
                 choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
-
             )
-
         )
 
         tc._get_async_client = MagicMock(return_value=mock_client)
 
         metrics = TrajectoryMetrics()
 
-
-
         summary = await tc._generate_summary_async("Turn content", metrics)
 
-
-
         assert summary == "[CONTEXT SUMMARY]:"
-
