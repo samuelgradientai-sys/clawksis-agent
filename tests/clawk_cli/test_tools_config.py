@@ -837,7 +837,8 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
     assert "terminal" not in saved
 
 
-def test_visible_providers_include_nous_subscription_when_logged_in(monkeypatch):
+def test_visible_providers_exclude_nous_subscription_when_logged_in(monkeypatch):
+    """Clawksis is BYOK-only — Nous rows never appear, even for paid logins."""
 
     config = {"model": {"provider": "nous"}}
 
@@ -853,29 +854,19 @@ def test_visible_providers_include_nous_subscription_when_logged_in(monkeypatch)
 
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
 
-    # The managed Nous row is listed (not necessarily first — "Local Browser"
+    # Nous Subscription is filtered out of every picker (see _visible_providers).
 
-    # sorts first so a fresh-install Enter lands on the free local backend).
+    assert not any(p["name"].startswith("Nous Subscription") for p in providers)
 
-    assert any(p["name"].startswith("Nous Subscription") for p in providers)
+    # "Local Browser" must be the index-0 default so pressing Enter lands on the
 
-    # "Local Browser" must be the index-0 default so pressing Enter never
-
-    # walks a user into a paid Nous Portal login.
+    # free, no-key local backend.
 
     assert providers[0]["name"] == "Local Browser"
 
 
-def test_visible_providers_show_nous_subscription_when_logged_out(monkeypatch):
-    """Nous-managed Tool Gateway rows are always listed, even logged out.
-
-
-
-    Selecting one triggers an inline Portal login (entitlement is checked at
-
-    selection time, not visibility time).
-
-    """
+def test_visible_providers_hide_nous_subscription_when_logged_out(monkeypatch):
+    """Logged-out users never see a Nous row — the gateway is deprecated."""
 
     config = {"model": {"provider": "openrouter"}}
 
@@ -891,21 +882,13 @@ def test_visible_providers_show_nous_subscription_when_logged_out(monkeypatch):
 
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
 
-    assert any(p["name"].startswith("Nous Subscription") for p in providers)
+    assert not any(p["name"].startswith("Nous Subscription") for p in providers)
 
 
-def test_visible_providers_show_nous_subscription_when_paid_access_is_false(
+def test_visible_providers_hide_nous_subscription_when_paid_access_is_false(
     monkeypatch,
 ):
-    """Logged-in-but-unpaid users still see the managed rows.
-
-
-
-    The paid-access gate moved from visibility to selection time — the row is
-
-    shown; ``ensure_nous_portal_access`` blocks activation if still unpaid.
-
-    """
+    """Logged-in-but-unpaid users also get no Nous row — it is filtered out."""
 
     config = {"model": {"provider": "nous"}}
 
@@ -921,10 +904,10 @@ def test_visible_providers_show_nous_subscription_when_paid_access_is_false(
 
     providers = _visible_providers(TOOL_CATEGORIES["browser"], config)
 
-    assert any(p["name"].startswith("Nous Subscription") for p in providers)
+    assert not any(p["name"].startswith("Nous Subscription") for p in providers)
 
 
-def test_visible_providers_force_fresh_shows_nous_subscription_after_upgrade(
+def test_visible_providers_force_fresh_still_hides_nous_subscription(
     monkeypatch,
 ):
 
@@ -956,11 +939,10 @@ def test_visible_providers_force_fresh_shows_nous_subscription_after_upgrade(
         force_fresh=True,
     )
 
-    # The managed Nous row reappears after the entitlement upgrade. It is no
+    # Even with a fresh paid-entitlement fetch, the Nous row stays filtered
+    # out — but force_fresh must still propagate to the features lookup.
 
-    # longer asserted to be first — "Local Browser" sorts first by design.
-
-    assert any(p["name"].startswith("Nous Subscription") for p in providers)
+    assert not any(p["name"].startswith("Nous Subscription") for p in providers)
 
     assert ("features", True) in calls
 

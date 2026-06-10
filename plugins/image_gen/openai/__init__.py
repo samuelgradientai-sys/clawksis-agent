@@ -222,6 +222,7 @@ class OpenAIImageGenProvider(ImageGenProvider):
             "name": "OpenAI",
             "badge": "paid",
             "tag": "gpt-image-2 at low/medium/high quality tiers",
+            "desc": "OpenAI's gpt-image-2 image model; needs your own OpenAI API key (pay per image).",
             "env_vars": [
                 {
                     "key": "OPENAI_API_KEY",

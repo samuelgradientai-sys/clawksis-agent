@@ -207,6 +207,7 @@ class TavilyWebSearchProvider(WebSearchProvider):
             "name": "Tavily",
             "badge": "paid",
             "tag": "Search + extract in one provider.",
+            "desc": "Search and page-reading in one API built for AI; needs a Tavily API key.",
             "env_vars": [
                 {
                     "key": "TAVILY_API_KEY",

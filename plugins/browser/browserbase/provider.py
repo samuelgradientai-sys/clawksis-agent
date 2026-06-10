@@ -375,6 +375,7 @@ class BrowserbaseBrowserProvider(BrowserProvider):
             "name": "Browserbase",
             "badge": "paid",
             "tag": "Cloud browser with stealth and proxies",
+            "desc": "Cloud browser with stealth and proxies for tough sites; needs a Browserbase account (paid).",
             "env_vars": [
                 {
                     "key": "BROWSERBASE_API_KEY",

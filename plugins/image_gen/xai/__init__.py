@@ -214,6 +214,7 @@ class XAIImageGenProvider(ImageGenProvider):
             "name": "xAI Grok Imagine (image)",
             "badge": "paid",
             "tag": "grok-imagine-image — text-to-image; uses xAI Grok OAuth or XAI_API_KEY",
+            "desc": "Grok's image model from xAI; uses your Grok account or an xAI API key.",
             "env_vars": [],
             "post_setup": "xai_grok",
         }

@@ -393,6 +393,7 @@ class XAIVideoGenProvider(VideoGenProvider):
             "name": "xAI Grok Imagine",
             "badge": "paid",
             "tag": "grok-imagine-video for text-to-video; grok-imagine-video-1.5-preview for image-to-video; uses xAI Grok OAuth or XAI_API_KEY",
+            "desc": "Grok's video models from xAI; uses your Grok account or an xAI API key.",
             "env_vars": [],
             "post_setup": "xai_grok",
         }

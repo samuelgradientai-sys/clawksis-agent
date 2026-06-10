@@ -130,6 +130,7 @@ class SearXNGWebSearchProvider(WebSearchProvider):
             "name": "SearXNG",
             "badge": "free · self-hosted",
             "tag": "Free, privacy-respecting metasearch. Point SEARXNG_URL at your instance.",
+            "desc": "Free private metasearch you self-host; point SEARXNG_URL at your own instance.",
             "env_vars": [
                 {
                     "key": "SEARXNG_URL",

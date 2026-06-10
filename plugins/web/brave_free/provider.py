@@ -130,6 +130,7 @@ class BraveFreeWebSearchProvider(WebSearchProvider):
             "name": "Brave Search (Free)",
             "badge": "free",
             "tag": "Free-tier API key — 2k queries/mo, search only.",
+            "desc": "Brave's web search on a free API key (2k searches/month); search only, no page reading.",
             "env_vars": [
                 {
                     "key": "BRAVE_SEARCH_API_KEY",

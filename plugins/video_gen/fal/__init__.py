@@ -603,6 +603,7 @@ class FALVideoGenProvider(VideoGenProvider):
             "name": "FAL",
             "badge": "paid",
             "tag": "LTX, Pixverse, Veo 3.1, Seedance 2.0, Kling 4K, Happy Horse — text-to-video & image-to-video",
+            "desc": "Many video models (Veo, Kling, Seedance, etc.) through FAL; needs a FAL API key (paid).",
             "env_vars": [
                 {
                     "key": "FAL_KEY",

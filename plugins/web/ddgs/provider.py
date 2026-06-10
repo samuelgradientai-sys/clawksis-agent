@@ -138,6 +138,7 @@ class DDGSWebSearchProvider(WebSearchProvider):
             "name": "DuckDuckGo (ddgs)",
             "badge": "free · no key · search only",
             "tag": "Search via the ddgs Python package — no API key (pair with any extract provider)",
+            "desc": "Free DuckDuckGo-style search, no API key; pair it with an extractor to read pages.",
             "env_vars": [],
             # Trigger `_run_post_setup("ddgs")` after the user picks this row
             # so the ddgs Python package gets pip-installed on first selection.
