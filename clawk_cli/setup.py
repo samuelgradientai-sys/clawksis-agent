@@ -4490,6 +4490,32 @@ def run_setup_wizard(args):
 
     migration_ran = False
 
+    # ── Menú de modo ──
+    # Apenas corrés `clawk setup` (sin flags) te deja elegir cómo configurar.
+    # Los otros caminos ya retornaron arriba: --portal (one-shot) y
+    # `clawk setup <section>` (sección puntual). --quick salta este menú y va
+    # directo al quick flow para no romper ese atajo.
+    if not quick_requested:
+        mode_idx = prompt_choice(
+            "¿Cómo querés configurar Clawksis?",
+            [
+                "Quick Setup — configurar sólo lo que falta",
+                "Full Setup — revisar todas las secciones",
+                "Example — sección de ejemplo",
+            ],
+            1,
+        )
+        if mode_idx == 0:
+            _run_quick_setup(config, clawk_home)
+            return
+        if mode_idx == 2:
+            setup_example(config)
+            save_config(config)
+            print()
+            print_success("Example configuration complete!")
+            return
+        # mode_idx == 1 → Full Setup: cae al flujo de abajo sin cambios.
+
     if is_existing:
         # Existing install — default is the full-wizard reconfigure flow.
 
