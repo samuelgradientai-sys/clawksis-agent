@@ -435,16 +435,6 @@ TOOL_CATEGORIES = {
                 "tts_provider": "edge",
             },
             {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed OpenAI TTS billed to your subscription",
-                "env_vars": [],
-                "tts_provider": "openai",
-                "requires_nous_auth": True,
-                "managed_nous_feature": "tts",
-                "override_env_vars": ["VOICE_TOOLS_OPENAI_KEY", "OPENAI_API_KEY"],
-            },
-            {
                 "name": "OpenAI TTS",
                 "badge": "paid",
                 "tag": "High quality voices",
@@ -570,18 +560,7 @@ TOOL_CATEGORIES = {
         #     Uses the fal plugin as the underlying backend but has a
         #     distinct setup UX.
         # Mirrors the shape browser/video_gen ship today.
-        "providers": [
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed FAL image generation billed to your subscription",
-                "env_vars": [],
-                "requires_nous_auth": True,
-                "managed_nous_feature": "image_gen",
-                "override_env_vars": ["FAL_KEY"],
-                "imagegen_backend": "fal",
-            },
-        ],
+        "providers": [],
     },
     "video_gen": {
         "name": "Video Generation",
@@ -590,22 +569,7 @@ TOOL_CATEGORIES = {
         # FAL video generation billed via the Nous Portal.  Plugin-backed
         # provider rows (FAL BYOK, xAI, …) are injected at runtime by
         # ``_plugin_video_gen_providers()`` in ``_visible_providers``.
-        "providers": [
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed FAL video generation billed to your subscription",
-                "env_vars": [],
-                "requires_nous_auth": True,
-                "managed_nous_feature": "video_gen",
-                "override_env_vars": ["FAL_KEY"],
-                # The underlying plugin backend — when the user picks
-                # "Nous Subscription" we set video_gen.provider = "fal"
-                # and video_gen.use_gateway = True so the FAL plugin
-                # routes through the managed queue gateway.
-                "video_gen_plugin_name": "fal",
-            },
-        ],
+        "providers": [],
     },
     "x_search": {
         "name": "X (Twitter) Search",
