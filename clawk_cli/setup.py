@@ -581,10 +581,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # Web tools (Exa, Parallel, Firecrawl, or Tavily)
 
-    if subscription_features.web.managed_by_nous:
-        tool_status.append(("Web Search & Extract (Nous subscription)", True, None))
-
-    elif subscription_features.web.available:
+    if subscription_features.web.available:
         label = "Web Search & Extract"
 
         if subscription_features.web.current_provider:
@@ -605,10 +602,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     browser_provider = subscription_features.browser.current_provider
 
-    if subscription_features.browser.managed_by_nous:
-        tool_status.append(("Browser Automation (Nous Browser Use)", True, None))
-
-    elif subscription_features.browser.available:
+    if subscription_features.browser.available:
         label = "Browser Automation"
 
         if browser_provider:
@@ -642,10 +636,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # provider (OpenAI, etc.)
 
-    if subscription_features.image_gen.managed_by_nous:
-        tool_status.append(("Image Generation (Nous subscription)", True, None))
-
-    elif subscription_features.image_gen.available:
+    if subscription_features.image_gen.available:
         tool_status.append(("Image Generation", True, None))
 
     else:
@@ -690,10 +681,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # users who don't care about video gen with a "missing" status line.
 
-    if subscription_features.video_gen.managed_by_nous:
-        tool_status.append(("Video Generation (FAL via Nous subscription)", True, None))
-
-    else:
+    if not subscription_features.video_gen.managed_by_nous:
         try:
             from agent.video_gen_registry import list_providers as _list_video_providers
 
@@ -723,14 +711,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     tts_provider = cfg_get(config, "tts", "provider", default="edge")
 
-    if subscription_features.tts.managed_by_nous:
-        tool_status.append((
-            "Text-to-Speech (OpenAI via Nous subscription)",
-            True,
-            None,
-        ))
-
-    elif tts_provider == "elevenlabs" and get_env_value("ELEVENLABS_API_KEY"):
+    if tts_provider == "elevenlabs" and get_env_value("ELEVENLABS_API_KEY"):
         tool_status.append(("Text-to-Speech (ElevenLabs)", True, None))
 
     elif tts_provider == "openai" and (
@@ -786,22 +767,12 @@ def _print_setup_summary(config: dict, clawk_home):
     else:
         tool_status.append(("Text-to-Speech (Edge TTS)", True, None))
 
-    if subscription_features.modal.managed_by_nous:
-        tool_status.append(("Modal Execution (Nous subscription)", True, None))
-
-    elif cfg_get(config, "terminal", "backend") == "modal":
+    if cfg_get(config, "terminal", "backend") == "modal":
         if subscription_features.modal.direct_override:
             tool_status.append(("Modal Execution (direct Modal)", True, None))
 
         else:
             tool_status.append(("Modal Execution", False, "run 'clawk setup terminal'"))
-
-    elif managed_nous_tools_enabled() and subscription_features.nous_auth_present:
-        tool_status.append((
-            "Modal Execution (optional via Nous subscription)",
-            True,
-            None,
-        ))
 
     # Home Assistant
 
@@ -1851,56 +1822,10 @@ def setup_terminal_backend(config: dict):
 
         print_info("Serverless cloud sandboxes. Each session gets its own container.")
 
-        from tools.managed_tool_gateway import is_managed_tool_gateway_ready
-
-        from tools.tool_backend_helpers import normalize_modal_mode
-
-        managed_modal_available = bool(
-            managed_nous_tools_enabled()
-            and get_nous_subscription_features(config).nous_auth_present
-            and is_managed_tool_gateway_ready("modal")
-        )
-
-        modal_mode = normalize_modal_mode(cfg_get(config, "terminal", "modal_mode"))
-
+        # Modal siempre BYOK: usás tu propia cuenta de Modal.
         use_managed_modal = False
 
-        if managed_modal_available:
-            modal_choices = [
-                "Use my Nous subscription",
-                "Use my own Modal account",
-            ]
-
-            if modal_mode == "managed":
-                default_modal_idx = 0
-
-            elif modal_mode == "direct":
-                default_modal_idx = 1
-
-            else:
-                default_modal_idx = 1 if get_env_value("MODAL_TOKEN_ID") else 0
-
-            modal_mode_idx = prompt_choice(
-                "Select how Modal execution should be billed:",
-                modal_choices,
-                default_modal_idx,
-            )
-
-            use_managed_modal = modal_mode_idx == 0
-
-        if use_managed_modal:
-            config["terminal"]["modal_mode"] = "managed"
-
-            print_info(
-                "Modal execution will use the managed Nous gateway and bill to your subscription."
-            )
-
-            if get_env_value("MODAL_TOKEN_ID") or get_env_value("MODAL_TOKEN_SECRET"):
-                print_info(
-                    "Direct Modal credentials are still configured, but this backend is pinned to managed mode."
-                )
-
-        else:
+        if not use_managed_modal:
             config["terminal"]["modal_mode"] = "direct"
 
             print_info("Requires a Modal account: https://modal.com")
