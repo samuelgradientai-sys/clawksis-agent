@@ -634,17 +634,6 @@ TOOL_CATEGORIES = {
                 "post_setup": "agent_browser",
             },
             {
-                "name": "Nous Subscription (Browser Use cloud)",
-                "badge": "subscription",
-                "tag": "Managed Browser Use billed to your subscription",
-                "env_vars": [],
-                "browser_provider": "browser-use",
-                "requires_nous_auth": True,
-                "managed_nous_feature": "browser",
-                "override_env_vars": ["BROWSER_USE_API_KEY"],
-                "post_setup": "agent_browser",
-            },
-            {
                 "name": "Camofox",
                 "badge": "free · local",
                 "tag": "Anti-detection browser (Firefox/Camoufox)",
