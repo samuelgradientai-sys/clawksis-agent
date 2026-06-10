@@ -38,7 +38,7 @@ readme = "README.md"
 
 requires-python = ">=3.11,<3.14"
 
-authors = [{ name = "Nous Research" }]
+authors = [{ name = "Gradient AI" }, { name = "Samuel Gomez" }]
 
 license = "MIT"
 
