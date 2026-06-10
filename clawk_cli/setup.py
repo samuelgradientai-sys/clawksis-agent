@@ -1100,6 +1100,50 @@ def setup_model_provider(config: dict, *, quick: bool = False):
 
         print_info("You can try again later with: clawk model")
 
+    # Guarantee a model was actually chosen. select_provider_and_model() leads
+    # with a provider picker and only asks for the model *inside* the chosen
+    # provider's flow, so leaving the picker "unchanged", cancelling a
+    # provider's auth sub-menu, or an error swallowed above can all exit with
+    # no model set. Insist on the model step until one is chosen (Ctrl+C opts
+    # out) so `clawk setup` always ends up asking for the model.
+    def _selected_model_default() -> str:
+        m = load_config().get("model")
+
+        if isinstance(m, dict):
+            return str(m.get("default") or "").strip()
+
+        return str(m or "").strip()
+
+    _model_retries = 0
+
+    while not _selected_model_default() and _model_retries < 2:
+        _model_retries += 1
+
+        print()
+
+        print_warning("No model selected yet — Clawksis needs one to run.")
+
+        print_info("Pick a provider, then choose a model (Ctrl+C to skip for now).")
+
+        try:
+            select_provider_and_model()
+
+        except (SystemExit, KeyboardInterrupt):
+            print()
+
+            print_info("Skipped — set a model later with: clawk model")
+
+            break
+
+        except Exception as exc:
+            logger.debug("retry select_provider_and_model error: %s", exc)
+
+            print_warning(f"Provider setup encountered an error: {exc}")
+
+            print_info("You can try again later with: clawk model")
+
+            break
+
     # Re-sync the wizard's config dict from what cmd_model saved to disk.
 
     # This is critical: cmd_model writes to disk via its own load/save cycle,
@@ -4744,11 +4788,23 @@ def _run_quick_setup(config: dict, clawk_home):
 
     current_ver, latest_ver = check_config_version()
 
+    # A configured default model is mandatory, but an empty ``model.default``
+    # is NOT reported by get_missing_config_fields() (the key exists, it is
+    # just blank), so detect it explicitly and treat it as a missing required
+    # item. Otherwise `clawk setup --quick` would silently leave the install
+    # with no model — the exact gap this fix closes.
+    _qm = config.get("model")
+
+    _qm_default = (_qm.get("default") if isinstance(_qm, dict) else _qm) or ""
+
+    model_missing = not str(_qm_default).strip()
+
     has_anything_missing = (
         missing_required
         or missing_optional
         or missing_config
         or current_ver < latest_ver
+        or model_missing
     )
 
     if not has_anything_missing:
@@ -4761,6 +4817,12 @@ def _run_quick_setup(config: dict, clawk_home):
         print_info("or pick a specific section from the menu.")
 
         return
+
+    # Mandatory model first: when none is set, run the same model flow that
+    # `clawk setup` / `clawk model` use so quick setup always asks for it.
+    # setup_model_provider() re-syncs ``config`` from disk in place.
+    if model_missing:
+        setup_model_provider(config, quick=True)
 
     # Handle missing required env vars
 
