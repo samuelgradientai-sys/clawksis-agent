@@ -1392,13 +1392,6 @@ def _setup_tts_provider(config: dict):
 
     providers = []
 
-    if managed_nous_tools_enabled() and subscription_features.nous_auth_present:
-        choices.append(
-            "Nous Subscription (managed OpenAI TTS, billed to your subscription)"
-        )
-
-        providers.append("nous-openai")
-
     choices.extend([
         "Edge TTS (free, cloud-based, no setup needed)",
         "ElevenLabs (premium quality, needs API key)",
