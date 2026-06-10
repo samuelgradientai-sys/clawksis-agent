@@ -10295,12 +10295,18 @@ class _Spinner:
         self._stop = None
         self._thread = None
         self._tty = False
+        # Snapshot of the real output stream taken at __enter__. The spinner
+        # animates on THIS, not the live ``sys.stdout``, so it stays visible
+        # even when a caller (e.g. _quiet_step) redirects sys.stdout to a
+        # capture buffer while the wrapped phase runs.
+        self._out = None
 
     def __enter__(self):
         import threading
 
+        self._out = sys.stdout
         try:
-            self._tty = bool(sys.stdout.isatty())
+            self._tty = bool(self._out.isatty())
         except Exception:
             self._tty = False
         if not self._tty:
@@ -10317,20 +10323,93 @@ class _Spinner:
 
         purple = "\033[38;2;108;79;214m"
         rst = "\033[0m"
+        out = self._out or sys.stdout
         for frame in itertools.cycle(self._FRAMES):
             if self._stop.is_set():
                 break
-            sys.stdout.write(f"\r  {purple}{frame}{rst} {self._label}…   ")
-            sys.stdout.flush()
+            try:
+                out.write(f"\r  {purple}{frame}{rst} {self._label}…   ")
+                out.flush()
+            except (ValueError, OSError):
+                break
             _t.sleep(0.08)
 
     def __exit__(self, *_exc):
+        out = self._out or sys.stdout
         if self._tty and self._stop:
             self._stop.set()
             if self._thread:
                 self._thread.join(timeout=1)
-            sys.stdout.write("\r" + " " * (len(self._label) + 14) + "\r")
-            sys.stdout.flush()
+            try:
+                out.write("\r" + " " * (len(self._label) + 14) + "\r")
+                out.flush()
+            except (ValueError, OSError):
+                pass
+        return False
+
+
+class _quiet_step:
+    """Run a noisy, NON-interactive update phase under a single-line spinner,
+    hiding its routine output so ``clawk update`` shows only progress
+    spinners + (at the end) the list of new commits.
+
+    Builds on the ``with _Spinner(...)`` pattern already used for npm
+    installs, but also captures the phase's own ``print()`` chatter. Safety:
+
+      * Any captured line containing a warning/error glyph (``⚠`` / ``✗``) is
+        still surfaced on success — problems are never hidden.
+      * If the phase raises (including ``SystemExit`` from a rollback path),
+        the ENTIRE captured buffer is flushed before the exception
+        propagates, so failure causes and tracebacks stay visible.
+      * Exceptions are never suppressed (``__exit__`` returns False).
+
+    Pass ``verbose=True`` (``clawk update --verbose``) to stream everything
+    live instead. Do NOT wrap a phase that calls ``input()`` — stdout is
+    redirected, so the prompt would render invisibly.
+    """
+
+    def __init__(self, label: str, *, verbose: bool = False):
+        self._label = label
+        self._verbose = verbose
+        self._buf = None
+        self._real = None
+        self._spinner = None
+
+    def __enter__(self):
+        if self._verbose:
+            print(f"→ {self._label}...")
+            return self
+        import io as _io
+
+        self._real = sys.stdout
+        self._buf = _io.StringIO()
+        self._spinner = _Spinner(self._label)
+        self._spinner.__enter__()
+        sys.stdout = self._buf
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._verbose:
+            return False
+        # Restore real stdout BEFORE stopping the spinner so its line-clear
+        # lands on the terminal, then surface captured output as needed.
+        sys.stdout = self._real
+        try:
+            self._spinner.__exit__(exc_type, exc, tb)
+        except Exception:
+            pass
+        captured = self._buf.getvalue()
+        if exc_type is not None:
+            if captured.strip():
+                self._real.write(
+                    captured if captured.endswith("\n") else captured + "\n"
+                )
+                self._real.flush()
+        elif captured:
+            for line in captured.splitlines():
+                if "⚠" in line or "✗" in line:
+                    self._real.write(line + "\n")
+            self._real.flush()
         return False
 
 
@@ -10412,7 +10491,7 @@ def _run_npm_install_deterministic(
     )
 
 
-def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
+def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) -> bool:
     """Build the web UI frontend if npm is available.
 
 
@@ -10529,8 +10608,27 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     # half-state. Streaming + idle-kill makes failures observable AND
 
     # recoverable (the stale-dist fallback below handles the kill path).
+    #
+    # quiet=True (the `clawk update` default) runs the build CAPTURED instead,
+    # so a single spinner stands in for the whole wall of Vite output. The
+    # surrounding _quiet_step spinner proves liveness, and on failure the
+    # captured tail is surfaced below exactly like the streamed path.
 
-    r2 = _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+    def _run_build():
+        if quiet:
+            return subprocess.run(
+                [npm, "run", "build"],
+                cwd=web_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "CI": "1"},
+            )
+
+        return _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+
+    r2 = _run_build()
 
     if r2.returncode != 0:
         # Retry once after a short delay — covers boot-time races on Windows
@@ -10541,7 +10639,7 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
 
         _time.sleep(3)
 
-        r2 = _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+        r2 = _run_build()
 
     if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
@@ -12997,12 +13095,40 @@ def _run_install_with_heartbeat(
     t.start()
 
     try:
+        # Capture output (instead of streaming) so a `clawk update` reads as
+        # clean progress, not a wall of pip/uv resolver noise. The heartbeat
+        # above still proves liveness. On failure the captured tail is
+        # persisted to the update log so a real break stays debuggable; the
+        # caller decides what to surface on the terminal.
         subprocess.run(
             cmd,
             cwd=PROJECT_ROOT,
             check=True,
             env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
+
+    except subprocess.CalledProcessError as exc:
+        try:
+            combined = ((exc.stdout or "") + (exc.stderr or "")).strip()
+
+            if combined:
+                log_path = get_clawk_home() / "logs" / "update.log"
+
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                with log_path.open("a", encoding="utf-8", errors="replace") as fh:
+                    fh.write(f"\n--- install failed: {' '.join(cmd)} ---\n")
+
+                    fh.write(combined + "\n")
+
+        except Exception:
+            pass
+
+        raise
 
     finally:
         done.set()
@@ -15444,6 +15570,53 @@ def _build_tui_bundle_for_update() -> None:
         print(f"  ⚠ TUI build skipped ({exc}) — it rebuilds on next chat launch")
 
 
+def _print_new_commits(git_cmd, root, old_sha, *, max_commits: int = 20) -> None:
+    """Print a clean 'What's new' list of the commits this update pulled in.
+
+    Mirrors the install one-liner's finish: after the progress spinners the
+    user sees exactly what changed. No-op when the range is empty, when the
+    pre-pull SHA is unknown, or when git fails.
+    """
+    if not old_sha:
+        return
+
+    try:
+        result = subprocess.run(
+            git_cmd
+            + ["log", "--no-merges", "--pretty=format:%h %s", f"{old_sha}..HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+
+    except Exception:
+        return
+
+    lines = [ln.strip() for ln in (result.stdout or "").splitlines() if ln.strip()]
+
+    if not lines:
+        return
+
+    purple = "\033[38;2;108;79;214m"
+
+    rst = "\033[0m"
+
+    plural = "s" if len(lines) != 1 else ""
+
+    print()
+
+    print(f"  {purple}What's new{rst} — {len(lines)} new commit{plural}:")
+
+    for ln in lines[:max_commits]:
+        print(f"    • {ln}")
+
+    if len(lines) > max_commits:
+        print(f"    … and {len(lines) - max_commits} more")
+
+
 def _cmd_update_impl(args, gateway_mode: bool):
     """Body of ``cmd_update`` — kept separate so the wrapper can always
 
@@ -15458,6 +15631,12 @@ def _cmd_update_impl(args, gateway_mode: bool):
     )
 
     assume_yes = bool(getattr(args, "yes", False))
+
+    # Clean output by default: noisy phases (deps, builds, skills sync) run
+    # under progress spinners that capture their output, so the run reads like
+    # the install one-liner — spinners + the new-commit list. `--verbose`
+    # restores the full streamed logs for debugging.
+    verbose = bool(getattr(args, "verbose", False))
 
     from clawk_cli.banner import print_clawksis_banner
 
@@ -16111,9 +16290,11 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
         _refresh_active_lazy_features()
 
-        _update_node_dependencies()
+        with _quiet_step("Updating Node dependencies", verbose=verbose):
+            _update_node_dependencies()
 
-        _build_web_ui(PROJECT_ROOT / "web")
+        with _quiet_step("Building dashboard", verbose=verbose):
+            _build_web_ui(PROJECT_ROOT / "web", quiet=not verbose)
 
         _build_tui_bundle_for_update()
 
@@ -16187,6 +16368,9 @@ def _cmd_update_impl(args, gateway_mode: bool):
         print()
 
         print("✓ Code updated!")
+
+        # Show what changed — the install-one-liner-style "What's new" list.
+        _print_new_commits(git_cmd, PROJECT_ROOT, pre_pull_sha)
 
         # After git pull, source files on disk are newer than cached Python
 
