@@ -18290,6 +18290,20 @@ def cmd_dashboard(args):
 
         sys.exit(1 if remaining else 0)
 
+    # --start only makes sense together with --remote (it launches the dashboard
+    # on the remote host over the SSH session).
+    if getattr(args, "start", False) and not getattr(args, "remote", None):
+        print("--start requires --remote USER@HOST.")
+        sys.exit(2)
+
+    # --remote: open a dashboard running on another host through an SSH tunnel.
+    # This is 100% client-side — the server (127.0.0.1 bind + auth gate) runs on
+    # the remote — so return before importing fastapi/uvicorn or building the web
+    # UI locally.  --stop/--status above stay local.
+    if getattr(args, "remote", None):
+        _run_dashboard_remote(args)
+        return
+
     # Attach gui.log early so dashboard startup/build failures are captured in
 
     # the same logs directory as every other Clawksis surface.
@@ -18401,6 +18415,165 @@ def cmd_dashboard(args):
         open_browser=not args.no_open,
         allow_public=getattr(args, "insecure", False),
     )
+
+
+def _build_dashboard_ssh_cmd(target, port, start, extra_ssh):
+    """Build the ``ssh`` argv that tunnels (and optionally starts) a remote dashboard.
+
+    Pure and side-effect-free so it can be unit-tested without a network.
+
+    Args:
+        target: the SSH destination, ``USER@HOST``.
+        port: the port to forward — local ``127.0.0.1:PORT`` to the remote's
+            ``127.0.0.1:PORT`` (the remote dashboard stays bound to loopback).
+        start: when True, also launch ``clawk dashboard`` on the remote over the
+            session (``-t`` allocates a TTY); when False just hold the tunnel
+            open (``-N``) and assume the dashboard is already running.
+        extra_ssh: extra ssh options passed through verbatim (from ``--ssh-opt``).
+    """
+    cmd = [
+        "ssh",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-L",
+        f"{port}:127.0.0.1:{port}",
+        *list(extra_ssh or []),
+    ]
+    if start:
+        cmd += [
+            "-t",
+            target,
+            f"clawk dashboard --no-open --host 127.0.0.1 --port {port}",
+        ]
+    else:
+        cmd += ["-N", target]
+    return cmd
+
+
+def _dashboard_open_browser(url):
+    """Open ``url`` in the local default browser, per-platform with a fallback.
+
+    Skips the attempt on headless Linux (no ``DISPLAY`` / ``WAYLAND_DISPLAY``),
+    where the registered browser may be a TUI program that hijacks the terminal
+    — mirrors the open-browser guard in ``web_server.start_server``.
+    """
+    if (
+        sys.platform == "linux"
+        and not os.environ.get("DISPLAY")
+        and not os.environ.get("WAYLAND_DISPLAY")
+    ):
+        print(f"→ Headless host detected — open the dashboard manually: {url}")
+        return
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", url])
+        elif os.name == "nt":
+            os.startfile(url)  # type: ignore[attr-defined]
+        elif sys.platform == "linux":
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            import webbrowser
+
+            webbrowser.open(url)
+    except Exception:
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+        except Exception:
+            print(f"→ Open the dashboard manually: {url}")
+
+
+def _run_dashboard_remote(args):
+    """Open a remote dashboard over an SSH tunnel (client-side; see ``--remote``).
+
+    Forwards ``127.0.0.1:PORT`` to the remote's loopback, optionally starting
+    ``clawk dashboard`` there (``--start``), and opens the browser locally once
+    the dashboard actually answers HTTP.  ``ssh`` runs in the foreground; Ctrl+C
+    tears the tunnel down cleanly.  The remote bind and auth gate are untouched.
+    """
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+
+    target = args.remote
+    port = args.port
+    url = f"http://127.0.0.1:{port}/"
+
+    def _http_ready():
+        # A real HTTP probe, NOT a bare TCP connect: `ssh -L` accepts the local
+        # connection the instant ssh links up — before (or even without) the
+        # remote dashboard serving — so a TCP check false-positives and we'd
+        # open the browser onto a dead "page unavailable".  Any HTTP response
+        # (including the auth gate's 401/403) means the dashboard is truly up.
+        try:
+            urllib.request.urlopen(url, timeout=2).close()
+            return True
+        except urllib.error.HTTPError:
+            return True
+        except Exception:
+            return False
+
+    # Already serving locally (a tunnel from a previous run)?  Just open it.
+    if _http_ready():
+        print(f"→ 127.0.0.1:{port} is already serving — opening the dashboard.")
+        _dashboard_open_browser(url)
+        return
+
+    cmd = _build_dashboard_ssh_cmd(
+        target, port, getattr(args, "start", False), getattr(args, "ssh_opt", None)
+    )
+
+    started = getattr(args, "start", False)
+    # A first-run `--start` builds the web UI on the remote, which can take a
+    # while; wait generously, and open the browser only once it truly answers.
+    deadline_s = 120 if started else 30
+
+    # Open the browser once the dashboard answers HTTP (background thread so ssh
+    # can stay in the foreground).
+    def _wait_and_open():
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            if _http_ready():
+                _dashboard_open_browser(url)
+                return
+            time.sleep(0.75)
+        # Never came up — don't open a dead page; explain why instead.
+        if not started:
+            print(
+                f"\n⚠ Nothing is serving on the remote's 127.0.0.1:{port} "
+                f"(tunnel is up, but the dashboard isn't). Re-run with --start "
+                "to launch it there, or start `clawk dashboard` on the remote."
+            )
+        else:
+            print(
+                f"\n⚠ The remote dashboard didn't answer within {deadline_s}s "
+                f"(first run builds the web UI). Open {url} once it's ready."
+            )
+
+    threading.Thread(target=_wait_and_open, daemon=True).start()
+
+    print(f"→ Opening {target} dashboard at {url} over SSH (Ctrl+C to close).")
+    try:
+        rc = subprocess.call(cmd)
+    except KeyboardInterrupt:
+        print("\n→ Closed the dashboard tunnel.")
+        return
+
+    # 0 = clean, 130 = SIGINT, 255 = ssh connection/auth error (ssh prints its
+    # own diagnostics there).  Surface anything else.
+    if rc not in (0, 130, 255):
+        print(f"⚠ ssh exited with code {rc}.")
+        sys.exit(rc)
 
 
 def cmd_dashboard_register(args):
@@ -22746,6 +22919,39 @@ Examples:
         "--status",
         action="store_true",
         help="List running clawk dashboard processes and exit",
+    )
+
+    # Client-side remote mode: open a dashboard running on another host over an
+    # SSH tunnel, removing the manual `ssh -L` step.  The remote bind (127.0.0.1)
+    # and the auth gate are unchanged — everything here happens locally.
+    dashboard_parser.add_argument(
+        "--remote",
+        metavar="USER@HOST",
+        default=None,
+        help=(
+            "Open a dashboard running on USER@HOST over SSH: forwards the local "
+            "port to the remote's 127.0.0.1 and opens the browser locally "
+            "(no manual `ssh -L` needed)."
+        ),
+    )
+    dashboard_parser.add_argument(
+        "--start",
+        action="store_true",
+        help=(
+            "With --remote, also start `clawk dashboard` on the remote host over "
+            "the SSH session (otherwise it is assumed to be already running)."
+        ),
+    )
+    dashboard_parser.add_argument(
+        "--ssh-opt",
+        dest="ssh_opt",
+        metavar="OPT",
+        action="append",
+        default=None,
+        help=(
+            "Extra option forwarded to ssh (repeatable), e.g. "
+            "`--ssh-opt -i --ssh-opt ~/.ssh/key` or `--ssh-opt -p --ssh-opt 2222`."
+        ),
     )
 
     dashboard_parser.set_defaults(func=cmd_dashboard)

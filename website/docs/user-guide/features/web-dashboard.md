@@ -58,6 +58,12 @@ This starts a local web server and opens `http://127.0.0.1:9119` in your browser
 
 | `--insecure` | off | Allow binding to non-localhost hosts (**DANGEROUS** — exposes API keys on the network; pair with a firewall and strong auth) |
 
+| `--remote` | — | `USER@HOST` — open a dashboard running on a remote host over an SSH tunnel, no manual `ssh -L`. The remote stays bound to `127.0.0.1`; this is entirely client-side |
+
+| `--start` | — | With `--remote`, also start `clawk dashboard` on the remote host over the SSH session (otherwise it's assumed already running) |
+
+| `--ssh-opt` | — | Extra option forwarded to `ssh` (repeatable), e.g. `--ssh-opt -p --ssh-opt 2222` |
+
 
 
 ```bash
@@ -77,6 +83,20 @@ clawk dashboard --host 0.0.0.0
 # Start without opening browser
 
 clawk dashboard --no-open
+
+
+
+# Open a dashboard running on a remote host over an SSH tunnel
+
+# (forwards 127.0.0.1:9119 and opens your local browser — no manual ssh -L)
+
+clawk dashboard --remote user@vps
+
+
+
+# Same, but also start the dashboard on the remote first (custom ssh port)
+
+clawk dashboard --remote user@vps --start --ssh-opt -p --ssh-opt 2222
 
 ```
 

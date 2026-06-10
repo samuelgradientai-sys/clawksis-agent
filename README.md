@@ -97,6 +97,7 @@ clawk doctor
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
 | `clawk dashboard` | Abrir el dashboard web |
+| `clawk dashboard --remote USER@HOST` | Abrir un dashboard remoto vía túnel SSH (sin `ssh -L` manual; agregá `--start` para arrancarlo en el remoto, `--ssh-opt` para opciones de ssh) |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
 
 ### Login y credenciales
