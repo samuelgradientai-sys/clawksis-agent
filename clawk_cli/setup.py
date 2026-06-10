@@ -4164,6 +4164,12 @@ def _run_portal_one_shot(config: dict) -> None:
 
     """
 
+    # Nous Portal was removed: Clawksis is BYOK (bring your own key).
+    # This legacy command no longer runs the Nous onboarding flow.
+    print("Nous Portal has been removed — Clawksis is BYOK (bring your own key).")
+    print("Run 'clawk model' to pick a provider, or 'clawk auth add <provider>'.")
+    return
+
     from clawk_cli.config import load_config
 
     print_clawksis_banner()
@@ -4514,19 +4520,10 @@ def run_setup_wizard(args):
         if migration_ran:
             config = load_config()
 
-        setup_mode = prompt_choice(
-            "How would you like to set up Clawksis?",
-            [
-                "Quick Setup (Clawksis Provider) — free OAuth login, no API keys, model + tools (recommended)",
-                "Full setup — configure every provider, tool & option yourself (bring your own keys)",
-            ],
-            0,
-        )
-
-        if setup_mode == 0:
-            _run_first_time_quick_setup(config, clawk_home, is_existing)
-
-            return
+        # Nous "Quick Setup" was removed: Clawksis is BYOK (bring your own key).
+        # First run goes straight to provider selection (Full Setup below):
+        # pick your provider (OpenRouter / Anthropic / OpenAI / DeepSeek / ...)
+        # and paste your own API key, or log in via OAuth (clawk auth add <id>).
 
     # ── Full Setup — run all sections ──
 

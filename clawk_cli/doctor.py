@@ -1743,14 +1743,11 @@ def run_doctor(args):
         if should_fix:
             soul_path.parent.mkdir(parents=True, exist_ok=True)
 
-            soul_path.write_text(
-                "# Clawksis Persona\n\n"
-                "<!-- Edit this file to customize how Clawksis communicates. -->\n\n"
-                "You are Clawksis, a helpful AI assistant.\n",
-                encoding="utf-8",
-            )
+            from clawk_cli.default_soul import DEFAULT_SOUL_MD
 
-            check_ok(f"Created {_DHH}/SOUL.md with basic template")
+            soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
+
+            check_ok(f"Created {_DHH}/SOUL.md with bundled persona")
 
             fixed_count += 1
 

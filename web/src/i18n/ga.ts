@@ -112,7 +112,7 @@ export const ga: Translations = {
 
     footer: {
 
-      org: "Nous Research",
+      org: "Gradient AI",
 
     },
 

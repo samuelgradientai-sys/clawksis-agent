@@ -9543,6 +9543,121 @@ def cmd_debug(args):
     run_debug(args)
 
 
+def _edit_home_md(path, action, seed_text=None):
+    """Open / show / locate a markdown file under CLAWK_HOME."""
+    import shutil
+    import subprocess
+
+    if not path.exists() and seed_text is not None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(seed_text, encoding="utf-8")
+        except Exception:
+            pass
+
+    if action == "path":
+        print(str(path))
+        return
+
+    if action == "show":
+        if not path.exists():
+            print(f"{path} does not exist yet -- nothing stored.")
+            return
+        try:
+            print(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            print(f"Could not read {path}: {exc}")
+        return
+
+    if not path.exists():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(seed_text or "", encoding="utf-8")
+        except Exception:
+            pass
+
+    editor = os.getenv("EDITOR") or os.getenv("VISUAL")
+    if not editor:
+        candidates = (
+            ["notepad", "code", "vim", "vi", "nano"]
+            if sys.platform == "win32"
+            else ["nano", "vim", "vi", "code", "notepad"]
+        )
+        for _c in candidates:
+            if shutil.which(_c):
+                editor = _c
+                break
+
+    if not editor:
+        print("No editor found ($EDITOR not set). File is at:")
+        print(f"  {path}")
+        return
+
+    print(f"Opening {path} in {editor}...")
+    subprocess.run([editor, str(path)])
+
+
+def cmd_soul(args):
+    """Open, show, or locate the agent persona file (SOUL.md) in CLAWK_HOME."""
+    import shutil
+    import subprocess
+    from clawk_cli.config import get_clawk_home
+
+    soul_path = get_clawk_home() / "SOUL.md"
+
+    if not soul_path.exists():
+        try:
+            from clawk_cli.default_soul import DEFAULT_SOUL_MD
+
+            soul_path.parent.mkdir(parents=True, exist_ok=True)
+            soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
+        except Exception:
+            pass
+
+    action = getattr(args, "soul_command", None)
+
+    if action == "path":
+        print(str(soul_path))
+        return
+
+    if action == "show":
+        try:
+            print(soul_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            print(f"Could not read {soul_path}: {exc}")
+        return
+
+    editor = os.getenv("EDITOR") or os.getenv("VISUAL")
+    if not editor:
+        candidates = (
+            ["notepad", "code", "vim", "vi", "nano"]
+            if sys.platform == "win32"
+            else ["nano", "vim", "vi", "code", "notepad"]
+        )
+        for _cmd in candidates:
+            if shutil.which(_cmd):
+                editor = _cmd
+                break
+
+    if not editor:
+        print("No editor found ($EDITOR not set). SOUL.md is at:")
+        print(f"  {soul_path}")
+        return
+
+    print(f"Opening {soul_path} in {editor}...")
+    subprocess.run([editor, str(soul_path)])
+
+
+def cmd_user(args):
+    """View or edit the stored user profile (memories/USER.md)."""
+    from clawk_cli.config import get_clawk_home
+
+    _edit_home_md(
+        get_clawk_home() / "memories" / "USER.md",
+        getattr(args, "user_command", None),
+    )
+
+
 def cmd_config(args):
     """Configuration management."""
 
@@ -10186,6 +10301,13 @@ def _run_npm_install_deterministic(
 
     """
 
+    # Suppress vanity postinstall banners (e.g. unicode-animations' UNICODE
+    # ASCII art) that write straight to /dev/tty and so bypass capture_output.
+    # Those scripts self-skip when a CI env var is set — see
+    # node_modules/unicode-animations/scripts/postinstall.cjs (exits early on
+    # CI / CONTINUOUS_INTEGRATION / GITHUB_ACTIONS).
+    npm_env = {**os.environ, "CI": "1"}
+
     lockfile = cwd / "package-lock.json"
 
     if lockfile.exists():
@@ -10199,6 +10321,7 @@ def _run_npm_install_deterministic(
             encoding="utf-8",
             errors="replace",
             check=False,
+            env=npm_env,
         )
 
         if ci_result.returncode == 0:
@@ -10218,6 +10341,7 @@ def _run_npm_install_deterministic(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=npm_env,
     )
 
 
@@ -15078,6 +15202,10 @@ def _cmd_update_impl(args, gateway_mode: bool):
     )
 
     assume_yes = bool(getattr(args, "yes", False))
+
+    from clawk_cli.banner import print_clawksis_banner
+
+    print_clawksis_banner()
 
     print("∇ Updating Clawksis...")
 
@@ -20670,6 +20798,34 @@ Examples:
     config_parser.set_defaults(func=cmd_config)
 
     # =========================================================================
+    # soul -- view/edit the agent persona file (SOUL.md)
+    # =========================================================================
+    soul_parser = subparsers.add_parser(
+        "soul",
+        help="View or edit the agent persona file (SOUL.md)",
+        description="Open ~/.clawksis/SOUL.md (the agent personality) in your editor.",
+    )
+    soul_subparsers = soul_parser.add_subparsers(dest="soul_command")
+    soul_subparsers.add_parser("edit", help="Open SOUL.md in $EDITOR (default action)")
+    soul_subparsers.add_parser("show", help="Print SOUL.md contents")
+    soul_subparsers.add_parser("path", help="Print SOUL.md file path")
+    soul_parser.set_defaults(func=cmd_soul)
+
+    # =========================================================================
+    # user -- view/edit the stored user profile (memories/USER.md)
+    # =========================================================================
+    user_parser = subparsers.add_parser(
+        "user",
+        help="View or edit the stored user profile (USER.md)",
+        description="Open ~/.clawksis/memories/USER.md in your editor.",
+    )
+    user_subparsers = user_parser.add_subparsers(dest="user_command")
+    user_subparsers.add_parser("edit", help="Open USER.md in $EDITOR (default action)")
+    user_subparsers.add_parser("show", help="Print USER.md contents")
+    user_subparsers.add_parser("path", help="Print USER.md file path")
+    user_parser.set_defaults(func=cmd_user)
+
+    # =========================================================================
 
     # pairing command
 
@@ -21293,6 +21449,8 @@ Examples:
     )
 
     memory_sub.add_parser("status", help="Show current memory provider config")
+    memory_sub.add_parser("show", help="Print stored memory (memories/MEMORY.md)")
+    memory_sub.add_parser("edit", help="Open memories/MEMORY.md in your editor")
 
     memory_sub.add_parser("off", help="Disable external provider (built-in only)")
 
@@ -21318,6 +21476,15 @@ Examples:
     def cmd_memory(args):
 
         sub = getattr(args, "memory_command", None)
+
+        if sub in ("show", "edit"):
+            from clawk_cli.config import get_clawk_home
+
+            _edit_home_md(
+                get_clawk_home() / "memories" / "MEMORY.md",
+                "show" if sub == "show" else "edit",
+            )
+            return
 
         if sub == "off":
             from clawk_cli.config import load_config, save_config
