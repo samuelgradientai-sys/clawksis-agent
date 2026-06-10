@@ -90,11 +90,11 @@ export function ArtLines({ lines }: { lines: [string, string][] }) {
 
 // comfortably without forcing wrap or truncation drift on box-drawing edges.
 
-const TAG_FULL = 'Nous Research · Messenger of the Digital Gods'
+const TAG_FULL = 'Gradient AI · The agent that finds a way'
 
-const TAG_MID = 'Messenger of the Digital Gods'
+const TAG_MID = 'The agent that finds a way'
 
-const TAG_TINY = 'Nous Research'
+const TAG_TINY = 'Gradient AI'
 
 const HIDE_BELOW = 34
 
@@ -574,7 +574,7 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
 
             {info.model.split('/').pop()}
 
-            <Text color={t.color.muted}> · Nous Research</Text>
+            <Text color={t.color.muted}> · Gradient AI</Text>
 
           </Text>
 
@@ -636,7 +636,7 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
 
               {info.model.split('/').pop()}
 
-              <Text color={t.color.muted}> · Nous Research</Text>
+              <Text color={t.color.muted}> · Gradient AI</Text>
 
             </Text>
 
