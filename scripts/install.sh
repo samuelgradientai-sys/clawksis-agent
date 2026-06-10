@@ -2113,7 +2113,20 @@ print_success() {
         echo -e "${YELLOW}⚡ 'clawk' was linked into $(get_command_link_display_dir), which is already on PATH in Termux.${NC}"
         echo ""
     elif [ "$ROOT_FHS_LAYOUT" = true ]; then
-        echo -e "${YELLOW}⚡ 'clawk' was linked into /usr/local/bin and is ready to use — no shell reload needed.${NC}"
+        echo -e "${YELLOW}⚡ 'clawk' was linked into /usr/local/bin and is ready to use.${NC}"
+        # /usr/local/bin is on PATH, so a NEW shell always finds clawk. But two things
+        # can make the CURRENT shell fail with "No such file or directory":
+        #   1) another 'clawk' earlier on PATH (e.g. a leftover ~/.local/bin/clawk from
+        #      an older install) shadows ours — a new shell would fail too; or
+        #   2) the running shell cached (hashed) clawk's old location from a prior install.
+        # Detect (1) and always offer the one-liner fix for (2).
+        _clawk_resolved="$(command -v clawk 2>/dev/null || true)"
+        if [ -n "$_clawk_resolved" ] && [ "$_clawk_resolved" != "/usr/local/bin/clawk" ]; then
+            echo -e "${YELLOW}   ⚠ Another 'clawk' is earlier on your PATH: ${_clawk_resolved}${NC}"
+            echo -e "${YELLOW}     Remove it (or fix PATH order) so /usr/local/bin/clawk wins.${NC}"
+        fi
+        echo -e "${YELLOW}   If 'clawk' still says \"No such file or directory\", your shell cached an old path — run:${NC}"
+        echo -e "${GREEN}     hash -r${NC}${YELLOW}   (bash/zsh) — then 'clawk' works without reopening the shell.${NC}"
         echo ""
     else
         echo -e "${YELLOW}⚡ Reload your shell to use 'clawk' command:${NC}"
