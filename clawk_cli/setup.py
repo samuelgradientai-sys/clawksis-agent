@@ -4323,6 +4323,71 @@ def _run_portal_one_shot(config: dict) -> None:
     print_info("  Run `clawk` to start chatting.")
 
 
+# Welcome check-in delivery target: the messaging channel the operator
+# configured during setup, identified by its home-channel env var being set.
+# Mirrors cron.scheduler._HOME_TARGET_ENV_VARS, kept local so setup never has
+# to import the scheduler. Ordered by how likely a fresh user is to reach for
+# the channel.
+_WELCOME_DELIVER_HOME_ENV = [
+    ("telegram", "TELEGRAM_HOME_CHANNEL"),
+    ("whatsapp", "WHATSAPP_HOME_CHANNEL"),
+    ("discord", "DISCORD_HOME_CHANNEL"),
+    ("slack", "SLACK_HOME_CHANNEL"),
+    ("signal", "SIGNAL_HOME_CHANNEL"),
+    ("matrix", "MATRIX_HOME_ROOM"),
+    ("mattermost", "MATTERMOST_HOME_CHANNEL"),
+    ("bluebubbles", "BLUEBUBBLES_HOME_CHANNEL"),
+    ("sms", "SMS_HOME_CHANNEL"),
+    ("email", "EMAIL_HOME_ADDRESS"),
+    ("dingtalk", "DINGTALK_HOME_CHANNEL"),
+    ("feishu", "FEISHU_HOME_CHANNEL"),
+    ("wecom", "WECOM_HOME_CHANNEL"),
+    ("weixin", "WEIXIN_HOME_CHANNEL"),
+    ("qqbot", "QQBOT_HOME_CHANNEL"),
+]
+
+
+def _resolve_welcome_deliver_target() -> str:
+    """Return the messaging channel the operator just configured (the one whose
+    home channel is set) so the welcome check-in lands where they'll see it.
+    Falls back to ``"local"`` when no channel is wired up yet."""
+
+    for platform, env_var in _WELCOME_DELIVER_HOME_ENV:
+        if get_env_value(env_var):
+            return platform
+
+    return "local"
+
+
+def _seed_welcome_checkin() -> None:
+    """Seed the one-time welcome check-in cron job (idempotent, best-effort).
+
+    A failure here must never break setup completion, so the whole body is
+    guarded — a missing scheduler dep or cron error just skips the check-in."""
+
+    try:
+        from cron.jobs import seed_welcome_checkin_job
+
+        deliver = _resolve_welcome_deliver_target()
+
+        job = seed_welcome_checkin_job(deliver=deliver)
+
+        if not job:
+            return
+
+        when = job.get("schedule_display") or job.get("next_run_at") or "tomorrow"
+
+        where = "saved locally" if deliver == "local" else f"delivered via {deliver}"
+
+        print_info(
+            f"Scheduled a one-time welcome check-in for {when} ({where}) — "
+            "Clawksis will reach out proactively."
+        )
+
+    except Exception as exc:
+        logger.debug("welcome check-in seeding skipped: %s", exc)
+
+
 def run_setup_wizard(args):
     """Run the interactive setup wizard.
 
@@ -4644,6 +4709,11 @@ def run_setup_wizard(args):
 
         print_info(f"  cp {_backup_path} {config_path}")
 
+    # Fresh installs get one proactive welcome check-in cron, seeded here so the
+    # installer (not the agent) owns it. Idempotent — never duplicates.
+    if not is_existing:
+        _seed_welcome_checkin()
+
     _print_setup_summary(config, clawk_home)
 
 
@@ -4757,6 +4827,11 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
         print_info("  Connect Telegram/Discord:  clawk setup gateway")
 
     print()
+
+    # Fresh installs get one proactive welcome check-in cron, seeded here so the
+    # installer (not the agent) owns it. Idempotent — never duplicates.
+    if not is_existing:
+        _seed_welcome_checkin()
 
     _print_setup_summary(config, clawk_home)
 
