@@ -15078,6 +15078,18 @@ def cmd_update(args):
 
     gateway_mode = getattr(args, "gateway", False)
 
+    # Quiet by default on an interactive terminal: show only the commit count
+    # and a purple progress bar, routing the verbose git/pip/npm/skills output
+    # to a log (surfaced only on failure). `--verbose` keeps full streaming.
+    if (
+        not gateway_mode
+        and not getattr(args, "verbose", False)
+        and sys.stdout.isatty()
+        and (PROJECT_ROOT / ".git").exists()
+    ):
+        _run_update_quiet(args, gateway_mode)
+        return
+
     # Protect against mid-update terminal disconnects (SIGHUP) and tolerate
 
     # writes to a closed stdout.  No-op in gateway mode.  See
@@ -15091,6 +15103,143 @@ def cmd_update(args):
 
     finally:
         _finalize_update_output(_update_io_state)
+
+
+def _run_update_quiet(args, gateway_mode):
+    """Quiet ``clawk update``: print the new-commit count + a purple progress
+    bar, and route the verbose git/pip/npm/skills output to a log file that is
+    surfaced only if the update fails. Wraps ``_cmd_update_impl`` without
+    touching it — stdin is fed EOF so internal prompts never block."""
+    import tempfile
+    import threading
+    import time
+
+    PURPLE = "\033[38;2;108;79;214m"  # Clawksis brand (#6C4FD6)
+    RED = "\033[0;31m"
+    NC = "\033[0m"
+
+    from clawk_cli.banner import print_clawksis_banner
+
+    print_clawksis_banner()
+
+    branch = _resolve_update_branch(args)
+    git_cmd = ["git"]
+    if sys.platform == "win32":
+        git_cmd = ["git", "-c", "windows.appendAtomically=false"]
+
+    # Same query the real update uses, fetched quietly, so the count matches.
+    subprocess.run(
+        git_cmd + ["fetch", "origin"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    rv = subprocess.run(
+        git_cmd + ["rev-list", f"HEAD..origin/{branch}", "--count"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        count = int(rv.stdout.strip())
+    except (ValueError, AttributeError):
+        count = -1
+
+    if count == 0:
+        print(f"{PURPLE}∇{NC} Ya estás en la última versión.")
+        return
+    if count > 0:
+        s = "s" if count != 1 else ""
+        print(f"{PURPLE}∇{NC} {count} commit{s} nuevo{s} — actualizando…")
+    else:
+        print(f"{PURPLE}∇{NC} Actualizando…")
+
+    log = tempfile.NamedTemporaryFile(
+        mode="w",
+        prefix="clawksis-update-",
+        suffix=".log",
+        delete=False,
+        encoding="utf-8",
+    )
+    real_out = os.dup(1)
+    real_err = os.dup(2)
+    stop = threading.Event()
+
+    def _spin():
+        width = 28
+        pos = 0
+        direction = 1
+        while not stop.is_set():
+            cells = ["░"] * width
+            for k in range(max(0, pos - 2), min(width, pos + 3)):
+                cells[k] = "█"
+            try:
+                os.write(real_out, f"\r{PURPLE}[{''.join(cells)}]{NC} ".encode())
+            except OSError:
+                break
+            pos += direction
+            if pos >= width - 1 or pos <= 0:
+                direction = -direction
+            time.sleep(0.08)
+
+    spinner = threading.Thread(target=_spin, daemon=True)
+    ok = False
+    exit_code = 0
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        devnull = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(log.fileno(), 1)
+        os.dup2(log.fileno(), 2)
+        os.dup2(devnull, 0)
+        os.close(devnull)
+        spinner.start()
+        try:
+            _cmd_update_impl(args, gateway_mode=gateway_mode)
+            ok = True
+        except SystemExit as exc:
+            exit_code = (
+                exc.code
+                if isinstance(exc.code, int)
+                else (0 if exc.code is None else 1)
+            )
+            ok = exit_code == 0
+        except Exception:
+            import traceback
+
+            traceback.print_exc()  # → log (fd 2)
+            ok = False
+            exit_code = 1
+    finally:
+        stop.set()
+        spinner.join(timeout=1.0)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(real_out, 1)
+        os.dup2(real_err, 2)
+        os.close(real_out)
+        os.close(real_err)
+        log.flush()
+        log.close()
+        sys.stdout.write("\r\033[2K")  # clear the spinner line
+        sys.stdout.flush()
+
+    if ok:
+        print(f"{PURPLE}✓{NC} Clawksis actualizado a la última versión.")
+        try:
+            os.unlink(log.name)
+        except OSError:
+            pass
+    else:
+        print(f"{RED}✗ La actualización falló.{NC}")
+        try:
+            with open(log.name, encoding="utf-8", errors="replace") as fh:
+                tail = fh.read().splitlines()[-40:]
+            if tail:
+                print("────────────────────────────────────────────────────────────")
+                print("\n".join(tail))
+                print("────────────────────────────────────────────────────────────")
+        except OSError:
+            pass
+        print(f"Log completo: {log.name}")
+        sys.exit(exit_code or 1)
 
 
 def _cmd_update_pip(args):
@@ -22485,6 +22634,12 @@ Examples:
         action="store_true",
         default=False,
         help="Windows: proceed with the update even when another clawk.exe is detected. The concurrent process will likely cause WinError 32 warnings and may leave a reboot-deferred .exe replacement.",
+    )
+
+    update_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show the full streaming output instead of just the commit count + progress bar",
     )
 
     update_parser.set_defaults(func=cmd_update)
