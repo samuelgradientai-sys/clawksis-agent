@@ -1,164 +1,118 @@
 import { type DragEvent as ReactDragEvent, useCallback, useRef, useState } from 'react'
 
-
-
-import { dragHasAttachments } from '@/app/chat/composer/inline-refs'
-
-
+import {
+  dragHasAttachments,
+  dragHasSession,
+  readSessionDrag,
+  type SessionDragPayload
+} from '@/app/chat/composer/inline-refs'
 
 import { type DroppedFile, extractDroppedFiles, CLAWK_PATHS_MIME } from './use-composer-actions'
 
+export type DragKind = 'files' | 'session' | null
 
+const dragKindOf = (event: ReactDragEvent): DragKind => {
+  if (dragHasSession(event.dataTransfer)) {
+    return 'session'
+  }
 
-const hasFiles = (event: ReactDragEvent) => dragHasAttachments(event.dataTransfer, CLAWK_PATHS_MIME)
+  if (dragHasAttachments(event.dataTransfer, CLAWK_PATHS_MIME)) {
+    return 'files'
+  }
 
-
-
-interface FileDropZoneOptions {
-
-  /** When false the zone ignores drags entirely. */
-
-  enabled?: boolean
-
-  onDropFiles: (files: DroppedFile[]) => void
-
+  return null
 }
 
-
+interface FileDropZoneOptions {
+  /** When false the zone ignores drags entirely. */
+  enabled?: boolean
+  onDropFiles: (files: DroppedFile[]) => void
+  onDropSession?: (session: SessionDragPayload) => void
+}
 
 /**
-
- * "Drop files anywhere in this region" affordance. An enter/leave depth counter
-
- * keeps nested children from flickering the active state; `onDropCapture` clears
-
- * it even when a nested target (the composer) handles the drop and stops
-
- * propagation before our bubble-phase `onDrop` would fire.
-
+ * "Drop anywhere in this region" affordance for files *and* in-app session
+ * links. An enter/leave depth counter keeps nested children from flickering the
+ * active state; `onDropCapture` clears it even when a nested target (the
+ * composer) handles the drop and stops propagation before our bubble-phase
+ * `onDrop` would fire.
  *
-
- * Spread `dropHandlers` onto the container; render an overlay off `dragActive`.
-
+ * Spread `dropHandlers` onto the container; render an overlay off `dragKind`.
  */
-
-export function useFileDropZone({ enabled = true, onDropFiles }: FileDropZoneOptions) {
-
-  const [dragActive, setDragActive] = useState(false)
-
+export function useFileDropZone({ enabled = true, onDropFiles, onDropSession }: FileDropZoneOptions) {
+  const [dragKind, setDragKind] = useState<DragKind>(null)
   const depth = useRef(0)
 
-
-
   const reset = useCallback(() => {
-
     depth.current = 0
-
-    setDragActive(false)
-
+    setDragKind(null)
   }, [])
 
-
-
   const onDragEnter = useCallback(
-
     (event: ReactDragEvent) => {
+      const kind = enabled ? dragKindOf(event) : null
 
-      if (!enabled || !hasFiles(event)) {
-
+      if (!kind) {
         return
-
       }
 
-
-
       event.preventDefault()
-
       depth.current += 1
-
-      setDragActive(true)
-
+      setDragKind(kind)
     },
-
     [enabled]
-
   )
-
-
 
   const onDragOver = useCallback(
-
     (event: ReactDragEvent) => {
-
-      if (!enabled || !hasFiles(event)) {
-
+      if (!enabled || !dragKindOf(event)) {
         return
-
       }
 
-
-
       event.preventDefault()
-
       event.dataTransfer.dropEffect = 'copy'
-
     },
-
     [enabled]
-
   )
 
-
-
   const onDragLeave = useCallback(() => {
-
     if (enabled && --depth.current <= 0) {
-
       reset()
-
     }
-
   }, [enabled, reset])
 
-
-
   const onDrop = useCallback(
-
     (event: ReactDragEvent) => {
+      const kind = enabled ? dragKindOf(event) : null
 
-      if (!enabled || !hasFiles(event)) {
-
+      if (!kind) {
         return
-
       }
 
-
-
       event.preventDefault()
-
       reset()
 
+      if (kind === 'session') {
+        const session = readSessionDrag(event.dataTransfer)
 
+        if (session) {
+          onDropSession?.(session)
+        }
+
+        return
+      }
 
       const files = extractDroppedFiles(event.dataTransfer)
 
-
-
       if (files.length) {
-
         onDropFiles(files)
-
       }
-
     },
-
-    [enabled, onDropFiles, reset]
-
+    [enabled, onDropFiles, onDropSession, reset]
   )
 
-
-
-  return { dragActive, dropHandlers: { onDragEnter, onDragLeave, onDragOver, onDrop, onDropCapture: reset } }
-
+  return {
+    dragKind,
+    dropHandlers: { onDragEnter, onDragLeave, onDragOver, onDrop, onDropCapture: reset }
+  }
 }
-
