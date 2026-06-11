@@ -22,7 +22,9 @@ import { useActiveEventChannel } from "@/lib/eventChannelStore";
 import { ActivityFeedView } from "../visualization/ActivityFeedView";
 import type { AgentMessage } from "../visualization/CommsGraphView";
 import { CommsGraphView } from "../visualization/CommsGraphView";
+import { useAgentEventsFeed } from "../visualization/agentEventsFeed";
 import { useGatewayFeed } from "../visualization/gatewayFeed";
+import { useMergedFeed } from "../visualization/mergedFeed";
 import {
   getOfficeProvider,
   loadOfficeProviderId,
@@ -43,7 +45,12 @@ const VISUALS: { id: VisualId; label: string; hint: string }[] = [
 
 export default function VisualizationPage() {
   const channel = useActiveEventChannel();
-  const feed = useGatewayFeed(channel);
+  // WS feed = the chat PTY (rich: subagent.* / message.*). Poll feed = the
+  // cross-process agent-events log (ALL agents: chat + gateway + cron). Merged
+  // and de-duped so the office covers every agent, not just the chat session.
+  const wsFeed = useGatewayFeed(channel);
+  const pollFeed = useAgentEventsFeed();
+  const feed = useMergedFeed(wsFeed, pollFeed);
   const [active, setActive] = useState<VisualId>("office");
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [officeProviderId, setOfficeProviderId] = useState<string>(loadOfficeProviderId);
@@ -92,7 +99,7 @@ export default function VisualizationPage() {
             }`}
           />
           <span className="text-muted-foreground">
-            {feed.connected ? "Live" : channel ? "Connecting…" : "No live session"}
+            {feed.connected ? "Live" : "Connecting…"}
           </span>
         </div>
       </header>
@@ -116,11 +123,8 @@ export default function VisualizationPage() {
       </nav>
 
       <div className="relative min-h-0 flex-1">
-        {!channel ? (
-          <EmptyState />
-        ) : (
-          <div className="h-full">
-            {active === "office" && (
+        <div className="h-full">
+          {active === "office" && (
               <div className="flex h-full flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <label htmlFor="office-visual" className="font-medium">
@@ -154,21 +158,7 @@ export default function VisualizationPage() {
             {active === "activity" && <ActivityFeedView feed={feed} />}
             {active === "graph" && <CommsGraphView feed={feed} messages={messages} />}
           </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card/30 text-center">
-      <p className="text-base font-medium">No live agent session yet</p>
-      <p className="max-w-md text-sm text-muted-foreground">
-        Open <span className="font-semibold">Chat</span> and send a message to
-        start a session. Its tool activity will stream here in real time — as
-        animated characters, an activity feed, or a delegation graph.
-      </p>
     </div>
   );
 }

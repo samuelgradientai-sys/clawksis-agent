@@ -11903,6 +11903,31 @@ async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
     return {"messages": messages}
 
 
+@app.get("/api/visualization/agent-events")
+async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
+    """Return recent tool-activity events across ALL agents (oldest-first).
+
+    Reads the cross-process ``agent_events.db`` that every agent (chat, gateway
+    platforms, cron) writes to via ``model_tools.handle_function_call``. This is
+    what lets the Visualization office show agents from every channel, not just
+    the dashboard chat PTY. Returns an empty list when nothing has run yet.
+    """
+
+    try:
+        import agent_events
+
+        events = await asyncio.to_thread(
+            agent_events.read_recent,
+            limit=limit,
+            since_id=since_id if since_id > 0 else None,
+        )
+
+    except Exception:
+        events = []
+
+    return {"events": events}
+
+
 # ---------------------------------------------------------------------------
 
 # Dashboard plugin system

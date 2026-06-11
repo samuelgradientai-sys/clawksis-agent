@@ -244,7 +244,17 @@ export class PixelBridge {
   // ── Internals ─────────────────────────────────────────────────────────────
 
   private defaultLabel(sid: string): string {
-    return sid === MAIN_SESSION_KEY ? "Chat" : `Session ${sid.slice(0, 8)}`;
+    if (sid === MAIN_SESSION_KEY) return "Chat";
+    // Platform sessions look like "telegram:12345" / "cron:job" — make them
+    // readable as "Telegram · 12345".
+    const idx = sid.indexOf(":");
+    if (idx > 0) {
+      const platform = sid.slice(0, idx);
+      const id = sid.slice(idx + 1);
+      const cap = platform.charAt(0).toUpperCase() + platform.slice(1);
+      return `${cap} · ${id.slice(0, 10)}`;
+    }
+    return `Session ${sid.slice(0, 8)}`;
   }
 
   private ensureAgent(key: string, label: string, fromRoster = false): AgentEntry | null {
