@@ -239,6 +239,16 @@ TOOLSETS = {
         "tools": ["mirofish"],
         "includes": [],
     },
+    "agent_comms": {
+        "description": (
+            "Peer-to-peer agent messaging: agent_message (send a note to "
+            "another agent by name, or 'all') and agent_inbox (read messages "
+            "addressed to you). Off by default; enable in `clawk tools` → "
+            "Agent Messaging. Backs the dashboard Visualization comms graph."
+        ),
+        "tools": ["agent_message", "agent_inbox"],
+        "includes": [],
+    },
     "moa": {
         "description": "Advanced reasoning and problem-solving tools",
         "tools": ["mixture_of_agents"],

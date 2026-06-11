@@ -66,6 +66,8 @@ import { useSearchParams } from "react-router-dom";
 
 import { ChatSidebar } from "@/components/ChatSidebar";
 
+import { setActiveEventChannel } from "@/lib/eventChannelStore";
+
 import { usePageHeader } from "@/contexts/usePageHeader";
 
 import { useI18n } from "@/i18n";
@@ -349,6 +351,14 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const resumeParam = searchParams.get("resume");
 
   const channel = useMemo(() => generateChannelId(), [resumeParam]);
+
+  // Publish this PTY's gateway event channel so the Visualization section can
+  // subscribe to the same live feed without spawning a second PTY. Cleared on
+  // unmount so the visualizer falls back to its "no live session" empty state.
+  useEffect(() => {
+    setActiveEventChannel(channel);
+    return () => setActiveEventChannel(null);
+  }, [channel]);
 
 
 

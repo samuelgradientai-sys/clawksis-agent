@@ -11798,6 +11798,113 @@ async def set_dashboard_theme(body: ThemeSetBody):
 
 # ---------------------------------------------------------------------------
 
+# Visualization section (pixel office + comms graph)
+
+# ---------------------------------------------------------------------------
+
+
+def _visualization_layout_path() -> Path:
+    """Path to the persisted pixel-office layout (~/.clawksis/visualization/)."""
+
+    vdir = get_clawk_home() / "visualization"
+
+    vdir.mkdir(parents=True, exist_ok=True)
+
+    return vdir / "office-layout.json"
+
+
+# Cap the persisted layout to a sane size — a 64x64 office with furniture
+# serializes well under this; the bound just stops a malformed/huge PUT from
+# writing an unbounded blob to disk.
+_MAX_LAYOUT_BYTES = 2 * 1024 * 1024
+
+
+def _read_visualization_layout() -> Any:
+    """Blocking read+parse of the saved layout (run via to_thread)."""
+
+    import json as _json
+
+    path = _visualization_layout_path()
+
+    if not path.exists():
+        return None
+
+    try:
+        return _json.loads(path.read_text(encoding="utf-8"))
+
+    except Exception:
+        return None
+
+
+def _write_visualization_layout(payload: str) -> None:
+    """Blocking write of the serialized layout (run via to_thread)."""
+
+    _visualization_layout_path().write_text(payload, encoding="utf-8")
+
+
+@app.get("/api/visualization/layout")
+async def get_visualization_layout():
+    """Return the saved pixel-office layout, or ``{"layout": null}`` if none."""
+
+    layout = await asyncio.to_thread(_read_visualization_layout)
+
+    return {"layout": layout}
+
+
+class VisualizationLayoutBody(BaseModel):
+    layout: Any
+
+
+@app.put("/api/visualization/layout")
+async def set_visualization_layout(body: VisualizationLayoutBody):
+    """Persist the pixel-office layout edited in the dashboard."""
+
+    import json as _json
+
+    if body.layout is None:
+        raise HTTPException(status_code=400, detail="layout is required")
+
+    payload = _json.dumps(body.layout)
+
+    if len(payload.encode("utf-8")) > _MAX_LAYOUT_BYTES:
+        raise HTTPException(status_code=413, detail="layout too large")
+
+    try:
+        await asyncio.to_thread(_write_visualization_layout, payload)
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"failed to save layout: {exc}")
+
+    return {"ok": True}
+
+
+@app.get("/api/visualization/agent-messages")
+async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
+    """Return recent peer-to-peer agent messages (for the comms graph).
+
+    Reads the same ``agent_comms.db`` the ``agent_message`` tool writes to.
+    Returns an empty list when the agent-messaging toolset has never run.
+    """
+
+    try:
+        from tools.agent_comms_tool import read_recent_messages
+
+        # Offload the synchronous SQLite I/O so it doesn't block the event loop
+        # (matches the convention used elsewhere in this file).
+        messages = await asyncio.to_thread(
+            read_recent_messages,
+            limit=limit,
+            since_id=since_id if since_id > 0 else None,
+        )
+
+    except Exception:
+        messages = []
+
+    return {"messages": messages}
+
+
+# ---------------------------------------------------------------------------
+
 # Dashboard plugin system
 
 # ---------------------------------------------------------------------------

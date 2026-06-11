@@ -164,6 +164,8 @@ import WebhooksPage from "@/pages/WebhooksPage";
 
 import SystemPage from "@/pages/SystemPage";
 
+import VisualizationPage from "@/pages/VisualizationPage";
+
 import ChatPage from "@/pages/ChatPage";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -250,6 +252,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
 
   "/sessions": SessionsPage,
 
+  "/visualization": VisualizationPage,
+
   "/analytics": AnalyticsPage,
 
   "/models": ModelsPage,
@@ -311,6 +315,16 @@ const BUILTIN_NAV_REST: NavItem[] = [
     label: "Sessions",
 
     icon: MessageSquare,
+
+  },
+
+  {
+
+    path: "/visualization",
+
+    label: "Visualization",
+
+    icon: Eye,
 
   },
 

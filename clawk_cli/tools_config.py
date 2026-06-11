@@ -147,6 +147,8 @@ CONFIGURABLE_TOOLSETS = [
     ("claude_code_cli", "🟣 Claude Code CLI (Anthropic)", "claude_code"),
     ("opencode_cli", "🟧 OpenCode CLI (open source)", "opencode_run"),
     ("mirofish", "🐟 MiroFish (opinion simulation)", "mirofish"),
+    # Peer-to-peer agent messaging (drives the Visualization comms graph).
+    ("agent_comms", "💬 Agent Messaging", "agent_message, agent_inbox"),
 ]
 
 
@@ -220,6 +222,7 @@ _DEFAULT_OFF_TOOLSETS = {
     "claude_code_cli",
     "opencode_cli",
     "mirofish",
+    "agent_comms",
 }
 
 
