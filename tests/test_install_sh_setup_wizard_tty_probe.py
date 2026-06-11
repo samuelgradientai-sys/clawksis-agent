@@ -25,7 +25,13 @@ INSTALL_SH = REPO_ROOT / "scripts" / "install.sh"
 
 # Every function in scripts/install.sh that previously gated on a bare
 # ``[ -e /dev/tty ]`` check before redirecting stdin from ``/dev/tty``.
-GATED_FUNCTIONS = ("run_setup_wizard", "install_system_packages", "maybe_start_gateway")
+#
+# Note: ``install_system_packages`` was removed from this list after Bug #14
+# refactor. That function now consults ``HAS_USABLE_SUDO`` (set once by
+# ``detect_sudo_capability`` at startup) instead of re-detecting sudo + probing
+# /dev/tty per call. Centralized detection means there's no per-call gate to
+# verify here.
+GATED_FUNCTIONS = ("run_setup_wizard", "maybe_start_gateway")
 
 
 def _extract_function_body(name: str) -> str:

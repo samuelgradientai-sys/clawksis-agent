@@ -78,6 +78,10 @@ NODE_VERSION="22"
 #   and keeps Docker bind-mounted /root/ volumes lean.
 ROOT_FHS_LAYOUT=false
 SUDO_INSTALL_ACKNOWLEDGED=false
+# Bug #14 fix: detectar sudo UNA SOLA VEZ al inicio. Cada función que necesite
+# instalar paquetes del sistema consulta esta variable en vez de re-detectar
+# (lo que causaba 3+ prompts independientes que se colgaban en VPS sin sudo).
+HAS_USABLE_SUDO=""  # set by detect_sudo_capability(): "true" | "false"
 DETECTED_BROWSER_EXECUTABLE=""
 
 # Options
@@ -113,6 +117,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-setup)
             RUN_SETUP=false
+            # Bug #12 fix: --skip-setup implies fully non-interactive. The flag
+            # previously only suppressed the wizard at the end, but the installer
+            # still asked about ffmpeg / build-tools mid-flow. Anyone running
+            # --skip-setup wants automation; surprise prompts in the middle hang
+            # CI, Ansible, Terraform, container builds, etc.
+            NON_INTERACTIVE=true
             shift
             ;;
         --skip-browser|--no-playwright)
@@ -486,6 +496,41 @@ get_clawk_command_path() {
 # ============================================================================
 # System detection
 # ============================================================================
+
+detect_sudo_capability() {
+    # Single source of truth: HAS_USABLE_SUDO is set ONCE here.
+    #
+    # The installer historically asked about sudo in 3+ places (ffmpeg, ripgrep,
+    # build-essential, browser deps) and re-prompted each time. On VPS where the
+    # service user has no sudo, each prompt hung waiting for a password that
+    # didn't exist — bug #14. With this gate, all sudo-requiring steps consult
+    # this flag and quietly skip when sudo isn't usable.
+    if [ "$(id -u)" -eq 0 ]; then
+        HAS_USABLE_SUDO=true   # already root, no need for sudo
+        return 0
+    fi
+
+    if ! command -v sudo >/dev/null 2>&1; then
+        HAS_USABLE_SUDO=false
+        log_info "sudo not available — system-package installs will be skipped."
+        return 0
+    fi
+
+    # `sudo -n` returns success only when sudo can run WITHOUT prompting for
+    # a password (NOPASSWD entry, valid timestamp cache, or already root).
+    if sudo -n true 2>/dev/null; then
+        HAS_USABLE_SUDO=true
+        return 0
+    fi
+
+    # sudo exists but needs a password. In non-interactive mode we cannot ask,
+    # so skip silently. In interactive mode we still set false here; individual
+    # callers may re-prompt if they have a good reason to.
+    HAS_USABLE_SUDO=false
+    if [ "$NON_INTERACTIVE" = true ] || [ "$IS_INTERACTIVE" != true ]; then
+        log_info "sudo requires a password and no TTY for prompts — system-package installs will be skipped."
+    fi
+}
 
 detect_os() {
     case "$(uname -s)" in
@@ -879,7 +924,7 @@ install_node() {
         return 0
     fi
 
-    log_info "Extracting to ~/.clawksis/node/..."
+    log_info "Extracting to $CLAWK_HOME/node/..."
     if [[ "$tarball_name" == *.tar.xz ]]; then
         tar xf "$tmp_dir/$tarball_name" -C "$tmp_dir"
     else
@@ -915,7 +960,7 @@ install_node() {
 
     local installed_ver
     installed_ver=$("$CLAWK_HOME/node/bin/node" --version 2>/dev/null)
-    log_success "Node.js $installed_ver installed to ~/.clawksis/node/"
+    log_success "Node.js $installed_ver installed to $CLAWK_HOME/node/"
     HAS_NODE=true
 }
 
@@ -1060,47 +1105,34 @@ install_system_packages() {
                 [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
                 return 0
             fi
-        # Passwordless sudo — just install
-        elif command -v sudo &> /dev/null && sudo -n true 2>/dev/null; then
+        # Bug #14 fix: consult HAS_USABLE_SUDO instead of re-detecting.
+        # Previously each step did its own sudo check + prompt, hanging the
+        # installer on VPS where the service user has no sudo.
+        elif [ "$HAS_USABLE_SUDO" = true ]; then
             log_info "Installing ${pkgs[*]}..."
             if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd; then
                 [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
                 [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
                 return 0
             fi
-        # sudo needs password — ask once for everything
-        elif command -v sudo &> /dev/null; then
-            if [ "$IS_INTERACTIVE" = true ]; then
-                echo ""
-                log_info "sudo is needed ONLY to install optional system packages (${pkgs[*]}) via your package manager."
-                log_info "Clawksis itself does not require or retain root access."
-                if prompt_yes_no "Install ${description}? (requires sudo)" "no"; then
-                    if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd; then
-                        [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                        [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
-                        return 0
-                    fi
+        # sudo exists but isn't usable (no password cache, no NOPASSWD, no TTY).
+        # Only re-prompt when we're truly interactive — never auto-trigger a
+        # password prompt that would hang in CI / scripts / VPS-without-sudo.
+        elif command -v sudo &> /dev/null && [ "$IS_INTERACTIVE" = true ] && [ "$NON_INTERACTIVE" != true ]; then
+            echo ""
+            log_info "sudo is needed ONLY to install optional system packages (${pkgs[*]}) via your package manager."
+            log_info "Clawksis itself does not require or retain root access."
+            if prompt_yes_no "Install ${description}? (requires sudo)" "no"; then
+                if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd; then
+                    [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
+                    [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
+                    return 0
                 fi
-            elif (: </dev/tty) 2>/dev/null; then
-                # Non-interactive (e.g. curl | bash) but a terminal is available.
-                # Read the prompt from /dev/tty (same approach the setup wizard uses).
-                # Probe by actually opening /dev/tty: a bare existence test passes
-                # in Docker builds where the device node is in the mount namespace
-                # but opening fails with ENXIO. See #16746.
-                echo ""
-                log_info "sudo is needed ONLY to install optional system packages (${pkgs[*]}) via your package manager."
-                log_info "Clawksis itself does not require or retain root access."
-                if prompt_yes_no "Install ${description}?" "yes"; then
-                    if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd < /dev/tty; then
-                        [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                        [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
-                        return 0
-                    fi
-                fi
-            else
-                log_warn "Non-interactive mode and no terminal available — cannot install system packages"
-                log_info "Install manually after setup completes: sudo $install_cmd"
             fi
+        else
+            # No sudo, no root, no interactive — skip cleanly with guidance.
+            log_warn "Skipping ${pkgs[*]} install — sudo not usable in this environment."
+            log_info "Install manually after setup: sudo $install_cmd"
         fi
     fi
 
@@ -1341,18 +1373,22 @@ install_deps() {
         done
         if [ "$need_build_tools" = true ]; then
             log_info "Some build tools may be needed for Python packages..."
-            if command -v sudo &> /dev/null; then
-                if sudo -n true 2>/dev/null; then
+            # Bug #14 fix: consult HAS_USABLE_SUDO instead of re-detecting.
+            if [ "$HAS_USABLE_SUDO" = true ]; then
+                sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
+                log_success "Build tools installed"
+            elif command -v sudo &> /dev/null && [ "$IS_INTERACTIVE" = true ] && [ "$NON_INTERACTIVE" != true ]; then
+                # Truly interactive — fine to ask. Default 'no' so a stray Enter
+                # doesn't trigger a sudo password prompt that would hang.
+                log_info "sudo is needed ONLY to install build tools (build-essential, python3-dev, libffi-dev) via apt."
+                log_info "Clawksis itself does not require or retain root access."
+                if prompt_yes_no "Install build tools?" "no"; then
                     sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
                     log_success "Build tools installed"
-                else
-                    log_info "sudo is needed ONLY to install build tools (build-essential, python3-dev, libffi-dev) via apt."
-                    log_info "Clawksis itself does not require or retain root access."
-                    if prompt_yes_no "Install build tools?" "yes"; then
-                        sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
-                        log_success "Build tools installed"
-                    fi
                 fi
+            else
+                log_info "Build tools (build-essential, python3-dev, libffi-dev) not installed — sudo not usable."
+                log_info "If a Python package fails to build, install them manually: sudo apt install build-essential python3-dev libffi-dev"
             fi
         fi
     fi
@@ -1681,13 +1717,13 @@ copy_config_templates() {
     if [ ! -f "$CLAWK_HOME/.env" ]; then
         if [ -f "$INSTALL_DIR/.env.example" ]; then
             cp "$INSTALL_DIR/.env.example" "$CLAWK_HOME/.env"
-            log_success "Created ~/.clawksis/.env from template"
+            log_success "Created $CLAWK_HOME/.env from template"
         else
             touch "$CLAWK_HOME/.env"
-            log_success "Created ~/.clawksis/.env"
+            log_success "Created $CLAWK_HOME/.env"
         fi
     else
-        log_info "~/.clawksis/.env already exists, keeping it"
+        log_info "$CLAWK_HOME/.env already exists, keeping it"
     fi
     # Restrict .env permissions — this file holds API keys and tokens.
     # 0600 ensures only the file owner can read/write, matching standard
@@ -1699,10 +1735,10 @@ copy_config_templates() {
     if [ ! -f "$CLAWK_HOME/config.yaml" ]; then
         if [ -f "$INSTALL_DIR/cli-config.yaml.example" ]; then
             cp "$INSTALL_DIR/cli-config.yaml.example" "$CLAWK_HOME/config.yaml"
-            log_success "Created ~/.clawksis/config.yaml from template"
+            log_success "Created $CLAWK_HOME/config.yaml from template"
         fi
     else
-        log_info "~/.clawksis/config.yaml already exists, keeping it"
+        log_info "$CLAWK_HOME/config.yaml already exists, keeping it"
     fi
 
     # SOUL.md (global persona) is intentionally NOT created here. It is seeded
@@ -1710,7 +1746,7 @@ copy_config_templates() {
     # _ensure_default_soul_md() during config init, so the in-repo persona stays
     # the single source of truth and ships with every install.
 
-    log_success "Configuration directory ready: ~/.clawksis/"
+    log_success "Configuration directory ready: $CLAWK_HOME/"
 
     # Seed bundled skills into ~/.clawksis/skills/ (manifest-based, one-time per skill)
     if [ "$NO_SKILLS" = true ]; then
@@ -1724,14 +1760,14 @@ copy_config_templates() {
         log_info "Skipping bundled skills (--no-skills). Wrote $CLAWK_HOME/.no-bundled-skills"
         log_info "  Future 'clawk update' runs will not inject bundled skills. Delete the marker to opt back in."
     else
-        log_info "Syncing bundled skills to ~/.clawksis/skills/ ..."
+        log_info "Syncing bundled skills to $CLAWK_HOME/skills/ ..."
         if "$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/tools/skills_sync.py" 2>/dev/null; then
-            log_success "Skills synced to ~/.clawksis/skills/"
+            log_success "Skills synced to $CLAWK_HOME/skills/"
         else
             # Fallback: simple directory copy if Python sync fails
             if [ -d "$INSTALL_DIR/skills" ] && [ ! "$(ls -A "$CLAWK_HOME/skills/" 2>/dev/null | grep -v '.bundled_manifest')" ]; then
                 cp -r "$INSTALL_DIR/skills/"* "$CLAWK_HOME/skills/" 2>/dev/null || true
-                log_success "Skills copied to ~/.clawksis/skills/"
+                log_success "Skills copied to $CLAWK_HOME/skills/"
             fi
         fi
     fi
@@ -2097,7 +2133,7 @@ maybe_start_gateway() {
             fi
             nohup $CLAWK_CMD gateway > "$CLAWK_HOME/logs/gateway.log" 2>&1 &
             GATEWAY_PID=$!
-            log_success "Gateway started (PID $GATEWAY_PID). Logs: ~/.clawksis/logs/gateway.log"
+            log_success "Gateway started (PID $GATEWAY_PID). Logs: $CLAWK_HOME/logs/gateway.log"
             log_info "To stop: kill $GATEWAY_PID"
             log_info "To restart later: clawk gateway"
             if [ "$DISTRO" = "termux" ]; then
@@ -2110,6 +2146,37 @@ maybe_start_gateway() {
 }
 
 print_success() {
+    # Bug #16 fix: verificar que el binario clawk realmente quedó instalado
+    # antes de decir "Installation Complete". El installer reportaba éxito
+    # incluso cuando el entry point no se creaba (caso de instalaciones en
+    # CLAWK_INSTALL_DIR custom donde el venv quedaba en otro path).
+    local _clawk_bin=""
+    for _candidate in \
+        "$INSTALL_DIR/venv/bin/clawk" \
+        "$INSTALL_DIR/.venv/bin/clawk" \
+        "$HOME/.local/bin/clawk" \
+        "/usr/local/bin/clawk"; do
+        if [ -x "$_candidate" ]; then
+            _clawk_bin="$_candidate"
+            break
+        fi
+    done
+
+    if [ -z "$_clawk_bin" ]; then
+        echo ""
+        echo -e "${YELLOW}${BOLD}"
+        echo "┌─────────────────────────────────────────────────────────┐"
+        echo "│     ⚠  Installation completed with warnings             │"
+        echo "└─────────────────────────────────────────────────────────┘"
+        echo -e "${NC}"
+        log_warn "The 'clawk' command was not found in the expected locations."
+        log_warn "Dependencies installed, but the entry point is missing."
+        log_info "Look for the binary under: $INSTALL_DIR/venv/bin/  or  $INSTALL_DIR/.venv/bin/"
+        log_info "Then re-run the installer or report this as a bug."
+        echo ""
+        return 0
+    fi
+
     echo ""
     echo -e "${GREEN}${BOLD}"
     echo "┌─────────────────────────────────────────────────────────┐"
@@ -2259,6 +2326,7 @@ ensure_browser() {
 
 ensure_mode() {
     detect_os
+    detect_sudo_capability
 
     IFS=',' read -ra DEPS <<< "$ENSURE_DEPS"
     for dep in "${DEPS[@]}"; do
@@ -2297,6 +2365,7 @@ ensure_mode() {
 postinstall_mode() {
     print_banner
     detect_os
+    detect_sudo_capability
 
     log_info "Post-install mode: setting up Clawksis for pip install"
 
@@ -2465,6 +2534,7 @@ run_stage_body() {
         prerequisites)
             print_banner
             detect_os
+            detect_sudo_capability
             resolve_install_layout
             install_uv
             check_python
@@ -2475,12 +2545,14 @@ run_stage_body() {
             ;;
         repository)
             detect_os
+            detect_sudo_capability
             resolve_install_layout
             check_git
             clone_repo
             ;;
         venv)
             detect_os
+            detect_sudo_capability
             resolve_install_layout
             require_install_dir
             install_uv
@@ -2646,9 +2718,11 @@ main() {
     setup_venv
 
     progress_bar "Instalando dependencias Python..."
+    log_info "  (esto puede tardar 2-5 minutos en la primera instalación)"
     install_deps
 
     progress_bar "Instalando dependencias Node (browser tools)..."
+    log_info "  (esto puede tardar 1-3 minutos)"
     install_node_deps
 
     progress_bar "Instalando CLIs de agentes (Claude Code + Codex, ultimas versiones)..."
