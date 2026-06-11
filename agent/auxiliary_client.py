@@ -2333,7 +2333,9 @@ def _try_openrouter(
         or_key = explicit_api_key or _pool_runtime_api_key(entry)
 
         if not or_key:
-            _mark_provider_unhealthy("openrouter", ttl=60)
+            _mark_provider_unhealthy(
+                "openrouter", ttl=60, reason="not configured", quiet=True
+            )
 
             return None, None
 
@@ -2350,7 +2352,9 @@ def _try_openrouter(
     or_key = explicit_api_key or os.getenv("OPENROUTER_API_KEY")
 
     if not or_key:
-        _mark_provider_unhealthy("openrouter", ttl=60)
+        _mark_provider_unhealthy(
+            "openrouter", ttl=60, reason="not configured", quiet=True
+        )
 
         return None, None
 
@@ -2398,7 +2402,9 @@ def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
                 _remaining,
             )
 
-            _mark_provider_unhealthy("nous", ttl=_remaining)
+            _mark_provider_unhealthy(
+                "nous", ttl=_remaining, reason="rate limit", quiet=True
+            )
 
             return None, None
 
@@ -2410,12 +2416,12 @@ def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
     runtime = _resolve_nous_runtime_api(force_refresh=False)
 
     if runtime is None and not nous:
-        logger.warning(
+        logger.debug(
             "Auxiliary Nous client unavailable: no Nous authentication found "
-            "(run: clawk auth)."
+            "(expected under BYOK; Nous is an optional aux fallback)."
         )
 
-        _mark_provider_unhealthy("nous", ttl=60)
+        _mark_provider_unhealthy("nous", ttl=60, reason="not configured", quiet=True)
 
         return None, None
 
@@ -2481,12 +2487,12 @@ def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
         api_key = _nous_api_key(nous or {})
 
         if not api_key:
-            logger.warning(
+            logger.debug(
                 "Auxiliary Nous client unavailable: no usable inference JWT found "
-                "(run: clawk auth add nous)."
+                "(expected under BYOK; Nous is an optional aux fallback)."
             )
 
-            _mark_provider_unhealthy("nous", ttl=60)
+            _mark_provider_unhealthy("nous", ttl=60, reason="not configured", quiet=True)
 
             return None, None
 
@@ -3514,12 +3520,29 @@ def _normalize_chain_label(provider: str) -> str:
     return _AUX_UNHEALTHY_LABEL_ALIASES.get(p, p)
 
 
-def _mark_provider_unhealthy(provider: str, ttl: Optional[float] = None) -> None:
-    """Mark ``provider`` as recently-402'd, hidden from chain iteration
+def _mark_provider_unhealthy(
+    provider: str,
+    ttl: Optional[float] = None,
+    *,
+    reason: str = "payment / credit error",
+    quiet: bool = False,
+) -> None:
+    """Mark ``provider`` as recently-failed, hidden from chain iteration
 
     until the TTL expires. Called from the payment-fallback branches in
 
-    ``call_llm`` and ``acall_llm`` after a confirmed payment error.
+    ``call_llm`` and ``acall_llm`` after a confirmed payment error, and from
+
+    the per-provider ``_try_*`` helpers when a provider is simply not
+
+    configured.
+
+    ``reason`` describes the real cause (e.g. "payment / credit error",
+    "not configured", "rate limit") so the log doesn't misreport a missing
+    key as a billing failure. ``quiet=True`` logs at DEBUG instead of
+    WARNING — used for the "not configured" / expected-skip cases that would
+    otherwise spam the log (e.g. vestigial BYOK fallbacks probed on every
+    vision-backend resolution).
 
     """
 
@@ -3532,11 +3555,14 @@ def _mark_provider_unhealthy(provider: str, ttl: Optional[float] = None) -> None
 
     _aux_unhealthy_until[label] = expires_at
 
-    logger.warning(
-        "Auxiliary: marking %s unhealthy for %ds (payment / credit error). "
+    log = logger.debug if quiet else logger.warning
+
+    log(
+        "Auxiliary: marking %s unhealthy for %ds (%s). "
         "Subsequent auxiliary calls will skip it until %s.",
         label,
         int(ttl if ttl is not None else _AUX_UNHEALTHY_TTL_SECONDS),
+        reason,
         time.strftime("%H:%M:%S", time.localtime(expires_at)),
     )
 
