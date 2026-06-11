@@ -1,19 +1,23 @@
 /**
- * Pixel office visual — the vendored pixel-agents webview in an iframe,
- * fed with REAL Clawksis gateway events through PixelBridge.
+ * Office visual — a swappable iframe office visualizer (default: the vendored
+ * pixel-agents webview), fed with REAL Clawksis gateway events via PixelBridge.
  *
- * Lifecycle:
- *  1. iframe loads /pixel-office/index.html (browser runtime → browserMock
- *     loads sprites/floor/walls/furniture + default layout, then posts
- *     {__pixelAgentsReady} up to us).
- *  2. We fetch the saved office layout (GET /api/visualization/layout) and,
- *     if present, post a layoutLoaded override into the iframe.
+ * The provider is selectable (see officeProviders.ts). Only providers that
+ * speak the pixel-agents postMessage protocol get the live event bridge +
+ * layout persistence; other providers render as a plain iframe.
+ *
+ * Pixel-agents lifecycle:
+ *  1. iframe loads the provider index.html (browser runtime → browserMock loads
+ *     sprites + default layout, then posts {__pixelAgentsReady} up to us).
+ *  2. We fetch the saved office layout (GET /api/visualization/layout) and post
+ *     a layoutLoaded override into the iframe.
  *  3. PixelBridge translates the live event feed into pixel-agents messages
  *     (queued until ready, then flushed in order).
  *  4. Outbound webview messages arrive as {__pixelAgentsOut}; saveLayout is
  *     persisted via PUT /api/visualization/layout so the office editor works.
- *  5. A sessions-roster poll keeps desks honestly occupied for agents that
- *     exist but don't stream events yet (Telegram/WhatsApp/cron sessions).
+ *
+ * The parent re-mounts this component on provider change (via `key`), so refs
+ * and the bridge always start fresh for a new provider.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,17 +25,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CLAWK_BASE_PATH, fetchJSON } from "@/lib/api";
 
 import type { GatewayFeed } from "./gatewayFeed";
+import type { OfficeProvider } from "./officeProviders";
 import { PixelBridge } from "./pixelBridge";
 
 const ROSTER_POLL_MS = 7000;
 const ROSTER_LIMIT = 10;
 
-// Roster = show *other* active sessions (Telegram/WhatsApp/cron) as idle
-// desks. Disabled for now: today only the dashboard-chat PTY publishes events,
-// and that same session ALSO appears in /api/sessions — but the event stream's
-// session_id can't be reliably correlated to the /api/sessions id, so enabling
-// the roster risks a duplicate desk for the live chat. Re-enable once the
-// backend exposes a session id shared between the event feed and the roster.
+// Roster = show *other* active sessions (Telegram/WhatsApp/cron) as idle desks.
+// Disabled for now: today only the dashboard-chat PTY publishes events, and that
+// same session ALSO appears in /api/sessions — but the event stream's session_id
+// can't be reliably correlated to the /api/sessions id, so enabling the roster
+// risks a duplicate desk for the live chat. Re-enable once the backend exposes a
+// session id shared between the event feed and the roster.
 const ENABLE_ROSTER = false;
 
 interface SessionRow {
@@ -45,14 +50,16 @@ interface SessionRow {
 
 interface PixelOfficeViewProps {
   feed: GatewayFeed;
+  provider: OfficeProvider;
 }
 
-export function PixelOfficeView({ feed }: PixelOfficeViewProps) {
+export function PixelOfficeView({ feed, provider }: PixelOfficeViewProps) {
+  const isPixelAgents = provider.protocol === "pixel-agents";
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
 
-  // Post-or-queue transport: pixel messages sent before the iframe finishes
-  // its asset/layout boot are buffered and flushed on the ready signal.
+  // Post-or-queue transport: pixel messages sent before the iframe finishes its
+  // asset/layout boot are buffered and flushed on the ready signal.
   const queueRef = useRef<Array<Record<string, unknown>>>([]);
   const readyRef = useRef(false);
 
@@ -70,6 +77,7 @@ export function PixelOfficeView({ feed }: PixelOfficeViewProps) {
 
   // Window message handler: iframe → host (ready signal + outbound shim).
   useEffect(() => {
+    if (!isPixelAgents) return;
     const onMessage = (ev: MessageEvent) => {
       const data = ev.data as Record<string, unknown> | null;
       if (!data || typeof data !== "object") return;
@@ -116,14 +124,17 @@ export function PixelOfficeView({ feed }: PixelOfficeViewProps) {
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [isPixelAgents]);
 
   // Live events → bridge.
-  useEffect(() => feed.subscribe((ev) => bridge.handleEvent(ev)), [feed, bridge]);
+  useEffect(() => {
+    if (!isPixelAgents) return;
+    return feed.subscribe((ev) => bridge.handleEvent(ev));
+  }, [isPixelAgents, feed, bridge]);
 
   // Roster poll: show active sessions as present characters.
   useEffect(() => {
-    if (!ENABLE_ROSTER) return;
+    if (!isPixelAgents || !ENABLE_ROSTER) return;
     let stopped = false;
 
     const poll = async () => {
@@ -155,21 +166,23 @@ export function PixelOfficeView({ feed }: PixelOfficeViewProps) {
       stopped = true;
       clearInterval(t);
     };
-  }, [bridge]);
+  }, [isPixelAgents, bridge]);
 
   useEffect(() => () => bridge.dispose(), [bridge]);
 
+  const showLoading = isPixelAgents && !ready;
+
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-black/40">
-      {!ready && (
+    <div className="relative h-full min-h-[70vh] w-full overflow-hidden rounded-lg border border-border bg-black/40">
+      {showLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
-          Loading pixel office…
+          Loading office…
         </div>
       )}
       <iframe
         ref={iframeRef}
-        title="Pixel Agents office"
-        src={`${CLAWK_BASE_PATH}/pixel-office/index.html`}
+        title={`${provider.label} office`}
+        src={`${CLAWK_BASE_PATH}${provider.src}`}
         className="h-full w-full border-0"
         sandbox="allow-scripts allow-same-origin"
       />

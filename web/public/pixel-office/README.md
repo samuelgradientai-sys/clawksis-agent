@@ -13,22 +13,37 @@ The dashboard embeds it in an iframe and feeds it **real** Clawksis gateway
 events: `web/src/visualization/PixelOfficeView.tsx` opens the live event feed
 (`/api/events`) and `pixelBridge.ts` translates `tool.start` / `subagent.*` /
 `message.*` events into `agentToolStart` / `agentStatus` / `subagentToolStart`
-messages. Two small patches in the upstream source make this work in an iframe:
+messages. The office visual is also swappable — see
+`web/src/visualization/officeProviders.ts` to register another standalone build.
+
+## Patches to upstream
+
+Two iframe-mode patches:
 
 - `webview-ui/src/vscodeApi.ts` — outbound `postMessage` forwards to the parent
   window (`{__pixelAgentsOut}`) instead of a console no-op.
 - `webview-ui/src/browserMock.ts` — signals the host (`{__pixelAgentsReady}`)
   once assets + default layout are loaded.
 
+Two rendering enhancements (in `webview-ui/src/office/engine/renderer.ts` +
+`webview-ui/src/constants.ts`):
+
+- **Activity labels** — a persistent label above every active character showing
+  the tool it's using (`renderActivityLabels`), so the office reads at a glance.
+- **Delegation links** — a marching-ants line from each sub-agent to its parent
+  (`renderDelegationLines`), so a delegate_task hand-off is visible as a
+  connection between the two agents.
+
 ## Rebuilding
 
 After changing the upstream webview source:
 
 ```sh
-cd <pixel-agents>/webview-ui && npm install && npx vite build
+cd <pixel-agents>/webview-ui && npm install && npx tsc --noEmit && npx vite build
 # bundle lands in <pixel-agents>/dist/webview — copy it here (minus screenshots):
 cp -r <pixel-agents>/dist/webview/. web/public/pixel-office/
 rm -f web/public/pixel-office/Screenshot*.jpg
+# (this README is not part of the build — keep it / re-add it after copying)
 ```
 
-Do **not** hand-edit files in this directory — they are build output.
+Do **not** hand-edit the JS/CSS/asset files here — they are build output.

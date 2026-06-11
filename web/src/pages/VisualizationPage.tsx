@@ -23,6 +23,12 @@ import { ActivityFeedView } from "../visualization/ActivityFeedView";
 import type { AgentMessage } from "../visualization/CommsGraphView";
 import { CommsGraphView } from "../visualization/CommsGraphView";
 import { useGatewayFeed } from "../visualization/gatewayFeed";
+import {
+  getOfficeProvider,
+  loadOfficeProviderId,
+  OFFICE_PROVIDERS,
+  saveOfficeProviderId,
+} from "../visualization/officeProviders";
 import { PixelOfficeView } from "../visualization/PixelOfficeView";
 
 const MSG_POLL_MS = 6000;
@@ -40,6 +46,13 @@ export default function VisualizationPage() {
   const feed = useGatewayFeed(channel);
   const [active, setActive] = useState<VisualId>("office");
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [officeProviderId, setOfficeProviderId] = useState<string>(loadOfficeProviderId);
+  const officeProvider = getOfficeProvider(officeProviderId);
+
+  const onPickProvider = (id: string) => {
+    setOfficeProviderId(id);
+    saveOfficeProviderId(id);
+  };
 
   // Poll persisted peer-to-peer agent messages while the graph is visible.
   useEffect(() => {
@@ -107,7 +120,37 @@ export default function VisualizationPage() {
           <EmptyState />
         ) : (
           <div className="h-full">
-            {active === "office" && <PixelOfficeView feed={feed} />}
+            {active === "office" && (
+              <div className="flex h-full flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <label htmlFor="office-visual" className="font-medium">
+                    Visual:
+                  </label>
+                  <select
+                    id="office-visual"
+                    value={officeProviderId}
+                    onChange={(e) => onPickProvider(e.target.value)}
+                    className="rounded-md border border-border bg-card/60 px-2 py-1 text-foreground"
+                  >
+                    {OFFICE_PROVIDERS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  {officeProvider.credit && (
+                    <span className="opacity-70">· {officeProvider.credit}</span>
+                  )}
+                </div>
+                <div className="min-h-0 flex-1">
+                  <PixelOfficeView
+                    key={officeProvider.id}
+                    provider={officeProvider}
+                    feed={feed}
+                  />
+                </div>
+              </div>
+            )}
             {active === "activity" && <ActivityFeedView feed={feed} />}
             {active === "graph" && <CommsGraphView feed={feed} messages={messages} />}
           </div>
