@@ -1,0 +1,48 @@
+name: upstream-watch
+
+# Vigila los releases de NousResearch/hermes-agent. Si hay uno mas nuevo que
+# el ultimo sync registrado en tools/upstream/sync_state.json, abre un issue
+# con las release notes y los comandos para traerlo.
+
+on:
+  schedule:
+    - cron: "23 11 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comparar ultimo release de upstream vs sync_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LATEST=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq .tag_name)
+          SYNCED=$(jq -r '.last_synced_tag' tools/upstream/sync_state.json)
+          echo "upstream: $LATEST | ultimo sync: $SYNCED"
+          if [ "$LATEST" = "$SYNCED" ]; then
+            echo "Al dia."
+            exit 0
+          fi
+          EXISTS=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title $LATEST" --json number --jq 'length')
+          if [ "$EXISTS" != "0" ]; then
+            echo "Ya hay un issue abierto para $LATEST."
+            exit 0
+          fi
+          NOTES=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq '.body' | head -c 6000)
+          {
+            printf 'Upstream publico [`%s`](https://github.com/NousResearch/hermes-agent/releases/tag/%s) y el fork esta sincronizado hasta `%s`.\n\n' "$LATEST" "$LATEST" "$SYNCED"
+            printf 'Para traerlo:\n\n```bash\npython tools/upstream/sync.py --target %s          # dry-run\npython tools/upstream/sync.py --target %s --apply  # aplicar\n```\n\n' "$LATEST" "$LATEST"
+            printf '## Release notes de upstream\n\n%s\n' "$NOTES"
+          } > /tmp/issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Upstream Hermes $LATEST disponible (ultimo sync: $SYNCED)" \
+            --body-file /tmp/issue-body.md

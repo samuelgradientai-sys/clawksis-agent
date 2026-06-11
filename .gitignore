@@ -239,3 +239,6 @@ RELEASE_v*.md
 
 web/node_modules/
 node_modules/
+
+# Material de merges manuales del sync con upstream (ver tools/upstream/README.md)
+tools/upstream/pending/
