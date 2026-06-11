@@ -276,6 +276,7 @@ class KreaImageGenProvider(ImageGenProvider):
             "name": "Krea",
             "badge": "paid",
             "tag": "Krea 2 foundation model — Medium ($0.03) + Large ($0.06). Strong style transfer + moodboards.",
+            "desc": "Krea 2 image model with strong style transfer; paid per image, needs a Krea API key.",
             "env_vars": [
                 {
                     "key": "KREA_API_KEY",

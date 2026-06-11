@@ -281,6 +281,7 @@ class ParallelWebSearchProvider(WebSearchProvider):
             "name": "Parallel",
             "badge": "paid",
             "tag": "Objective-tuned search + parallel page extraction.",
+            "desc": "Goal-tuned search that reads many pages at once; needs a Parallel API key (paid).",
             "env_vars": [
                 {
                     "key": "PARALLEL_API_KEY",

@@ -208,6 +208,7 @@ class ExaWebSearchProvider(WebSearchProvider):
             "name": "Exa",
             "badge": "paid",
             "tag": "Semantic + neural web search with content extraction.",
+            "desc": "Meaning-based search that also pulls page content; needs an Exa API key (paid).",
             "env_vars": [
                 {
                     "key": "EXA_API_KEY",

@@ -91,6 +91,7 @@ class FalImageGenProvider(ImageGenProvider):
             "name": "FAL.ai",
             "badge": "paid",
             "tag": "Pick from flux-2-klein, flux-2-pro, gpt-image, nano-banana, etc.",
+            "desc": "Many image models (Flux, GPT-Image, Nano-Banana, etc.) through FAL; needs a FAL API key.",
             "env_vars": [
                 {
                     "key": "FAL_KEY",

@@ -1100,6 +1100,50 @@ def setup_model_provider(config: dict, *, quick: bool = False):
 
         print_info("You can try again later with: clawk model")
 
+    # Guarantee a model was actually chosen. select_provider_and_model() leads
+    # with a provider picker and only asks for the model *inside* the chosen
+    # provider's flow, so leaving the picker "unchanged", cancelling a
+    # provider's auth sub-menu, or an error swallowed above can all exit with
+    # no model set. Insist on the model step until one is chosen (Ctrl+C opts
+    # out) so `clawk setup` always ends up asking for the model.
+    def _selected_model_default() -> str:
+        m = load_config().get("model")
+
+        if isinstance(m, dict):
+            return str(m.get("default") or "").strip()
+
+        return str(m or "").strip()
+
+    _model_retries = 0
+
+    while not _selected_model_default() and _model_retries < 2:
+        _model_retries += 1
+
+        print()
+
+        print_warning("No model selected yet — Clawksis needs one to run.")
+
+        print_info("Pick a provider, then choose a model (Ctrl+C to skip for now).")
+
+        try:
+            select_provider_and_model()
+
+        except (SystemExit, KeyboardInterrupt):
+            print()
+
+            print_info("Skipped — set a model later with: clawk model")
+
+            break
+
+        except Exception as exc:
+            logger.debug("retry select_provider_and_model error: %s", exc)
+
+            print_warning(f"Provider setup encountered an error: {exc}")
+
+            print_info("You can try again later with: clawk model")
+
+            break
+
     # Re-sync the wizard's config dict from what cmd_model saved to disk.
 
     # This is critical: cmd_model writes to disk via its own load/save cycle,
@@ -4279,6 +4323,141 @@ def _run_portal_one_shot(config: dict) -> None:
     print_info("  Run `clawk` to start chatting.")
 
 
+# Welcome check-in delivery target: the messaging channel the operator
+# configured during setup, identified by its home-channel env var being set.
+# Mirrors cron.scheduler._HOME_TARGET_ENV_VARS, kept local so setup never has
+# to import the scheduler. Ordered by how likely a fresh user is to reach for
+# the channel.
+_WELCOME_DELIVER_HOME_ENV = [
+    ("telegram", "TELEGRAM_HOME_CHANNEL"),
+    ("whatsapp", "WHATSAPP_HOME_CHANNEL"),
+    ("discord", "DISCORD_HOME_CHANNEL"),
+    ("slack", "SLACK_HOME_CHANNEL"),
+    ("signal", "SIGNAL_HOME_CHANNEL"),
+    ("matrix", "MATRIX_HOME_ROOM"),
+    ("mattermost", "MATTERMOST_HOME_CHANNEL"),
+    ("bluebubbles", "BLUEBUBBLES_HOME_CHANNEL"),
+    ("sms", "SMS_HOME_CHANNEL"),
+    ("email", "EMAIL_HOME_ADDRESS"),
+    ("dingtalk", "DINGTALK_HOME_CHANNEL"),
+    ("feishu", "FEISHU_HOME_CHANNEL"),
+    ("wecom", "WECOM_HOME_CHANNEL"),
+    ("weixin", "WEIXIN_HOME_CHANNEL"),
+    ("qqbot", "QQBOT_HOME_CHANNEL"),
+]
+
+
+def _resolve_welcome_deliver_target() -> str:
+    """Return the messaging channel the operator just configured (the one whose
+    home channel is set) so the welcome check-in lands where they'll see it.
+    Falls back to ``"local"`` when no channel is wired up yet."""
+
+    for platform, env_var in _WELCOME_DELIVER_HOME_ENV:
+        if get_env_value(env_var):
+            return platform
+
+    return "local"
+
+
+def _seed_welcome_checkin() -> None:
+    """Seed the one-time welcome check-in cron job (idempotent, best-effort).
+
+    A failure here must never break setup completion, so the whole body is
+    guarded — a missing scheduler dep or cron error just skips the check-in."""
+
+    try:
+        from cron.jobs import seed_welcome_checkin_job
+
+        deliver = _resolve_welcome_deliver_target()
+
+        job = seed_welcome_checkin_job(deliver=deliver)
+
+        if not job:
+            return
+
+        when = job.get("schedule_display") or job.get("next_run_at") or "tomorrow"
+
+        where = "saved locally" if deliver == "local" else f"delivered via {deliver}"
+
+        print_info(
+            f"Scheduled a one-time welcome check-in for {when} ({where}) — "
+            "Clawksis will reach out proactively."
+        )
+
+    except Exception as exc:
+        logger.debug("welcome check-in seeding skipped: %s", exc)
+
+
+def _install_coding_clis() -> None:
+    """Install the external coding-agent CLIs at install time (best-effort).
+
+    Codex, Claude Code, and OpenCode are installed globally via npm so the
+    agent can delegate coding tasks to them out of the box. Whether each is
+    actually *used* stays a per-toolset toggle in ``clawk tools`` — they ship
+    OFF by default; install only makes them available. MiroFish is a Docker
+    server, not a CLI, so it's left to its own setup hook.
+
+    Honors ``CLAWK_SKIP_CODING_CLIS=1`` to opt out. Never raises — a missing
+    npm or a failed install only prints a hint, it never breaks setup.
+    """
+
+    if str(os.environ.get("CLAWK_SKIP_CODING_CLIS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        logger.debug("coding-CLI install skipped via CLAWK_SKIP_CODING_CLIS")
+
+        return
+
+    try:
+        from clawk_cli.tools_config import _install_npm_cli
+    except Exception as exc:
+        logger.debug("coding-CLI install skipped (import failed): %s", exc)
+
+        return
+
+    print()
+
+    print_header("External Coding Agents")
+
+    print_info("Installing Codex, Claude Code, and OpenCode so your agent can")
+
+    print_info("delegate coding tasks. Toggle each later in `clawk tools`.")
+
+    try:
+        _install_npm_cli(
+            "@openai/codex",
+            "codex",
+            "Codex CLI",
+            login_hint="Auth: codex login (ChatGPT) or OPENAI_API_KEY.",
+        )
+
+        _install_npm_cli(
+            "@anthropic-ai/claude-code",
+            "claude",
+            "Claude Code CLI",
+            login_hint="Auth: run `claude` once, or set ANTHROPIC_API_KEY.",
+        )
+
+        _install_npm_cli(
+            "opencode-ai",
+            "opencode",
+            "OpenCode CLI",
+            login_hint="Auth: opencode auth login.",
+        )
+
+    except Exception as exc:
+        logger.debug("coding-CLI install error: %s", exc)
+
+        print_warning(f"Coding-CLI install encountered an error: {exc}")
+
+    print_info(
+        "MiroFish (opinion simulation) runs as a Docker server — configure it "
+        "in `clawk tools` → MiroFish. Not auto-installed."
+    )
+
+
 def run_setup_wizard(args):
     """Run the interactive setup wizard.
 
@@ -4600,6 +4779,13 @@ def run_setup_wizard(args):
 
         print_info(f"  cp {_backup_path} {config_path}")
 
+    # Fresh installs get one proactive welcome check-in cron, seeded here so the
+    # installer (not the agent) owns it. Idempotent — never duplicates.
+    if not is_existing:
+        _install_coding_clis()
+
+        _seed_welcome_checkin()
+
     _print_setup_summary(config, clawk_home)
 
 
@@ -4714,6 +4900,13 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
 
     print()
 
+    # Fresh installs get one proactive welcome check-in cron, seeded here so the
+    # installer (not the agent) owns it. Idempotent — never duplicates.
+    if not is_existing:
+        _install_coding_clis()
+
+        _seed_welcome_checkin()
+
     _print_setup_summary(config, clawk_home)
 
 
@@ -4744,11 +4937,23 @@ def _run_quick_setup(config: dict, clawk_home):
 
     current_ver, latest_ver = check_config_version()
 
+    # A configured default model is mandatory, but an empty ``model.default``
+    # is NOT reported by get_missing_config_fields() (the key exists, it is
+    # just blank), so detect it explicitly and treat it as a missing required
+    # item. Otherwise `clawk setup --quick` would silently leave the install
+    # with no model — the exact gap this fix closes.
+    _qm = config.get("model")
+
+    _qm_default = (_qm.get("default") if isinstance(_qm, dict) else _qm) or ""
+
+    model_missing = not str(_qm_default).strip()
+
     has_anything_missing = (
         missing_required
         or missing_optional
         or missing_config
         or current_ver < latest_ver
+        or model_missing
     )
 
     if not has_anything_missing:
@@ -4761,6 +4966,12 @@ def _run_quick_setup(config: dict, clawk_home):
         print_info("or pick a specific section from the menu.")
 
         return
+
+    # Mandatory model first: when none is set, run the same model flow that
+    # `clawk setup` / `clawk model` use so quick setup always asks for it.
+    # setup_model_provider() re-syncs ``config`` from disk in place.
+    if model_missing:
+        setup_model_provider(config, quick=True)
 
     # Handle missing required env vars
 

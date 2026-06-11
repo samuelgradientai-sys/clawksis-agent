@@ -445,6 +445,7 @@ class OpenAICodexImageGenProvider(ImageGenProvider):
             "name": "OpenAI (Codex auth)",
             "badge": "free",
             "tag": "gpt-image-2 via ChatGPT/Codex OAuth — no API key required",
+            "desc": "OpenAI's gpt-image-2 billed to your ChatGPT/Codex login — no API key needed.",
             "env_vars": [],
             "post_setup_hint": (
                 "Sign in with `clawk auth codex` (or `clawk setup` → Codex) "

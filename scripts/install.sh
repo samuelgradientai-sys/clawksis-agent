@@ -46,6 +46,14 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
+PURPLE='\033[38;2;108;79;214m'  # Clawksis brand (#6C4FD6), truecolor
+
+# Keep a handle to the real terminal (fd 3 = stdout, fd 4 = stderr) so the
+# progress bars and errors stay visible even while the noisy install phases
+# have their stdout/stderr routed to a log file — see main() / _on_exit.
+exec 3>&1 4>&2
+_INSTALL_LOG=""
+_QUIET=0
 
 # Configuration
 REPO_URL_SSH="git@github.com:samuelgradientai-sys/clawksis-agent.git"
@@ -246,19 +254,18 @@ progress_bar() {
     local pct=$((INSTALL_STEP * 100 / INSTALL_TOTAL))
     local filled=$((pct * 30 / 100))
     local empty=$((30 - filled))
-    local WINE='\033[38;5;160m'
     local DIM='\033[2m'
     local NC_='\033[0m'
     local bar=""
     local i
     for ((i=0; i<filled; i++)); do bar="${bar}█"; done
     for ((i=0; i<empty; i++)); do bar="${bar}░"; done
-    printf "\n${WINE}[%b] %3d%%${NC_} ${DIM}(%d/%d)${NC_} %s\n" "$bar" "$pct" "$INSTALL_STEP" "$INSTALL_TOTAL" "$label"
+    printf "\n${PURPLE}[%b] %3d%%${NC_} ${DIM}(%d/%d)${NC_} %s\n" "$bar" "$pct" "$INSTALL_STEP" "$INSTALL_TOTAL" "$label" >&3
 }
 
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1" >&3
 }
 
 json_escape() {
@@ -2561,8 +2568,37 @@ run_stage_protocol() {
 # Main
 # ============================================================================
 
+# EXIT handler armed only during the quiet install phases: if anything fails
+# while output is routed to the log, surface the tail so the error isn't lost.
+_on_exit() {
+    local rc=$?
+    trap - EXIT
+    if [ "${_QUIET:-0}" = "1" ] && [ "$rc" -ne 0 ]; then
+        {
+            echo ""
+            printf "%b\n" "${RED}✗ La instalación falló (código $rc).${NC}"
+            if [ -n "$_INSTALL_LOG" ] && [ -s "$_INSTALL_LOG" ]; then
+                echo "Últimas líneas del log:"
+                echo "────────────────────────────────────────────────────────────"
+                tail -n 40 "$_INSTALL_LOG" 2>/dev/null
+                echo "────────────────────────────────────────────────────────────"
+                echo "Log completo en: $_INSTALL_LOG"
+            fi
+        } >&3 2>/dev/null
+    fi
+}
+
 main() {
     print_banner
+
+    # Quiet install: route the verbose phase output (uv/pip/npm/git/playwright,
+    # apt/brew, …) to a log file and show ONLY the purple progress bars on the
+    # real terminal (fd 3). On failure _on_exit surfaces the log so nothing is
+    # lost. Interactive prompts use /dev/tty directly, so they still work.
+    _INSTALL_LOG="$(mktemp "${TMPDIR:-/tmp}/clawksis-install.XXXXXX.log" 2>/dev/null || echo "${TMPDIR:-/tmp}/clawksis-install.log")"
+    trap '_on_exit' EXIT
+    _QUIET=1
+    exec >>"$_INSTALL_LOG" 2>&1
 
     progress_bar "Detectando sistema operativo..."
     detect_os
@@ -2598,6 +2634,10 @@ main() {
 
     progress_bar "Preparando configuracion y skills..."
     copy_config_templates
+
+    # Restore normal terminal output for the interactive wizard + final summary.
+    exec 1>&3 2>&4
+    _QUIET=0
 
     progress_bar "Listo. Iniciando asistente de configuracion..."
     run_setup_wizard

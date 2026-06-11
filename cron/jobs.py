@@ -1085,6 +1085,58 @@ def create_job(
     return job
 
 
+WELCOME_CHECKIN_NAME = "Welcome check-in"
+
+
+def seed_welcome_checkin_job(
+    deliver: Optional[str] = None,
+    prompt: Optional[str] = None,
+    name: str = WELCOME_CHECKIN_NAME,
+) -> Optional[Dict[str, Any]]:
+    """Idempotently seed the one-time welcome check-in cron job at install.
+
+    Creates exactly one job named ``WELCOME_CHECKIN_NAME`` scheduled for
+    tomorrow at a natural, slightly-random hour (09:00-18:00) in the user's
+    configured timezone. ``deliver`` should be the messaging channel the
+    operator configured during setup (e.g. ``"telegram"``); it falls back to
+    ``"local"`` when no channel is wired up yet. Returns the created job dict,
+    or ``None`` when a welcome check-in already exists -- so re-running setup
+    never creates a duplicate.
+    """
+
+    import random
+
+    for job in load_jobs():
+        if isinstance(job, dict) and job.get("name") == name:
+            return None
+
+    run_at = (_clawk_now() + timedelta(days=1)).replace(
+        hour=random.randint(9, 18),
+        minute=random.randint(0, 59),
+        second=0,
+        microsecond=0,
+    )
+    schedule = run_at.strftime("%Y-%m-%dT%H:%M")
+
+    if prompt is None:
+        prompt = (
+            "This is your one-time welcome check-in, scheduled when the operator "
+            "first set up Clawksis about a day ago. Greet them warmly in their "
+            "own language, briefly recap what got configured during setup, ask "
+            "how it's going, and proactively propose one useful next step. Keep "
+            "it short and genuine -- a real chief-of-staff checking in, never "
+            "spam."
+        )
+
+    return create_job(
+        prompt=prompt,
+        schedule=schedule,
+        name=name,
+        deliver=deliver or "local",
+        repeat=1,
+    )
+
+
 def get_job(job_id: str) -> Optional[Dict[str, Any]]:
     """Get a job by ID."""
 

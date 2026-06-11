@@ -9395,6 +9395,73 @@ def _model_flow_anthropic(config, current_model=""):
         print("No change.")
 
 
+def cmd_connect(args):
+    """Save your personal Clawksis API key (issued by the clawksis.com portal).
+
+    Distinct from ``clawk login``, which authenticates an LLM inference
+    provider.  The key is stored in ``~/.clawksis/.env`` as ``CLAWKSIS_API_KEY``
+    (reusing the same ``api_key`` env plumbing) and is never printed or logged.
+    When ``CLAWKSIS_PORTAL_URL`` is set, the key is verified against the portal
+    first (best-effort: a unreachable portal warns but still saves).
+    """
+    import getpass
+    import json
+    import urllib.error
+    import urllib.request
+
+    from clawk_cli.config import get_env_value, save_env_value
+
+    key = (args.key or getpass.getpass("Clawksis API key: ")).strip()
+    if not key:
+        print("No API key provided.")
+        sys.exit(2)
+
+    account = None
+    portal = (
+        os.environ.get("CLAWKSIS_PORTAL_URL")
+        or get_env_value("CLAWKSIS_PORTAL_URL")
+        or ""
+    ).rstrip("/")
+    if portal and not getattr(args, "no_verify", False):
+        try:
+            req = urllib.request.Request(
+                f"{portal}/api/keys/verify",
+                data=json.dumps({"api_key": key}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(
+                req, timeout=getattr(args, "timeout", 15.0)
+            ) as resp:
+                body = json.loads((resp.read() or b"{}").decode("utf-8"))
+            if body.get("valid") is False:
+                print("✗ The portal rejected that API key.")
+                sys.exit(1)
+            account = body.get("user") or body.get("account") or body.get("email")
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            # Best-effort verification — save anyway so offline setup still works.
+            print(
+                f"⚠ Could not reach {portal} to verify ({exc}); saving locally anyway."
+            )
+
+    save_env_value("CLAWKSIS_API_KEY", key)
+    # NEVER echo the key itself.
+    if account:
+        print(f"✓ Connected to Clawksis as {account}. Key saved to ~/.clawksis/.env.")
+    else:
+        print("✓ Clawksis API key saved to ~/.clawksis/.env.")
+
+
+def cmd_disconnect(args):
+    """Remove the stored personal Clawksis API key (see ``clawk connect``)."""
+    from clawk_cli.config import remove_env_value
+
+    if remove_env_value("CLAWKSIS_API_KEY"):
+        print("✓ Removed your stored Clawksis API key.")
+    else:
+        print("No Clawksis API key was stored.")
+
+
 def cmd_login(args):
     """Authenticate Clawksis CLI with a provider."""
 
@@ -10228,12 +10295,18 @@ class _Spinner:
         self._stop = None
         self._thread = None
         self._tty = False
+        # Snapshot of the real output stream taken at __enter__. The spinner
+        # animates on THIS, not the live ``sys.stdout``, so it stays visible
+        # even when a caller (e.g. _quiet_step) redirects sys.stdout to a
+        # capture buffer while the wrapped phase runs.
+        self._out = None
 
     def __enter__(self):
         import threading
 
+        self._out = sys.stdout
         try:
-            self._tty = bool(sys.stdout.isatty())
+            self._tty = bool(self._out.isatty())
         except Exception:
             self._tty = False
         if not self._tty:
@@ -10250,20 +10323,93 @@ class _Spinner:
 
         purple = "\033[38;2;108;79;214m"
         rst = "\033[0m"
+        out = self._out or sys.stdout
         for frame in itertools.cycle(self._FRAMES):
             if self._stop.is_set():
                 break
-            sys.stdout.write(f"\r  {purple}{frame}{rst} {self._label}…   ")
-            sys.stdout.flush()
+            try:
+                out.write(f"\r  {purple}{frame}{rst} {self._label}…   ")
+                out.flush()
+            except (ValueError, OSError):
+                break
             _t.sleep(0.08)
 
     def __exit__(self, *_exc):
+        out = self._out or sys.stdout
         if self._tty and self._stop:
             self._stop.set()
             if self._thread:
                 self._thread.join(timeout=1)
-            sys.stdout.write("\r" + " " * (len(self._label) + 14) + "\r")
-            sys.stdout.flush()
+            try:
+                out.write("\r" + " " * (len(self._label) + 14) + "\r")
+                out.flush()
+            except (ValueError, OSError):
+                pass
+        return False
+
+
+class _quiet_step:
+    """Run a noisy, NON-interactive update phase under a single-line spinner,
+    hiding its routine output so ``clawk update`` shows only progress
+    spinners + (at the end) the list of new commits.
+
+    Builds on the ``with _Spinner(...)`` pattern already used for npm
+    installs, but also captures the phase's own ``print()`` chatter. Safety:
+
+      * Any captured line containing a warning/error glyph (``⚠`` / ``✗``) is
+        still surfaced on success — problems are never hidden.
+      * If the phase raises (including ``SystemExit`` from a rollback path),
+        the ENTIRE captured buffer is flushed before the exception
+        propagates, so failure causes and tracebacks stay visible.
+      * Exceptions are never suppressed (``__exit__`` returns False).
+
+    Pass ``verbose=True`` (``clawk update --verbose``) to stream everything
+    live instead. Do NOT wrap a phase that calls ``input()`` — stdout is
+    redirected, so the prompt would render invisibly.
+    """
+
+    def __init__(self, label: str, *, verbose: bool = False):
+        self._label = label
+        self._verbose = verbose
+        self._buf = None
+        self._real = None
+        self._spinner = None
+
+    def __enter__(self):
+        if self._verbose:
+            print(f"→ {self._label}...")
+            return self
+        import io as _io
+
+        self._real = sys.stdout
+        self._buf = _io.StringIO()
+        self._spinner = _Spinner(self._label)
+        self._spinner.__enter__()
+        sys.stdout = self._buf
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._verbose:
+            return False
+        # Restore real stdout BEFORE stopping the spinner so its line-clear
+        # lands on the terminal, then surface captured output as needed.
+        sys.stdout = self._real
+        try:
+            self._spinner.__exit__(exc_type, exc, tb)
+        except Exception:
+            pass
+        captured = self._buf.getvalue()
+        if exc_type is not None:
+            if captured.strip():
+                self._real.write(
+                    captured if captured.endswith("\n") else captured + "\n"
+                )
+                self._real.flush()
+        elif captured:
+            for line in captured.splitlines():
+                if "⚠" in line or "✗" in line:
+                    self._real.write(line + "\n")
+            self._real.flush()
         return False
 
 
@@ -10345,7 +10491,7 @@ def _run_npm_install_deterministic(
     )
 
 
-def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
+def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) -> bool:
     """Build the web UI frontend if npm is available.
 
 
@@ -10462,8 +10608,27 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     # half-state. Streaming + idle-kill makes failures observable AND
 
     # recoverable (the stale-dist fallback below handles the kill path).
+    #
+    # quiet=True (the `clawk update` default) runs the build CAPTURED instead,
+    # so a single spinner stands in for the whole wall of Vite output. The
+    # surrounding _quiet_step spinner proves liveness, and on failure the
+    # captured tail is surfaced below exactly like the streamed path.
 
-    r2 = _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+    def _run_build():
+        if quiet:
+            return subprocess.run(
+                [npm, "run", "build"],
+                cwd=web_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "CI": "1"},
+            )
+
+        return _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+
+    r2 = _run_build()
 
     if r2.returncode != 0:
         # Retry once after a short delay — covers boot-time races on Windows
@@ -10474,7 +10639,7 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
 
         _time.sleep(3)
 
-        r2 = _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+        r2 = _run_build()
 
     if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
@@ -12930,12 +13095,40 @@ def _run_install_with_heartbeat(
     t.start()
 
     try:
+        # Capture output (instead of streaming) so a `clawk update` reads as
+        # clean progress, not a wall of pip/uv resolver noise. The heartbeat
+        # above still proves liveness. On failure the captured tail is
+        # persisted to the update log so a real break stays debuggable; the
+        # caller decides what to surface on the terminal.
         subprocess.run(
             cmd,
             cwd=PROJECT_ROOT,
             check=True,
             env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
+
+    except subprocess.CalledProcessError as exc:
+        try:
+            combined = ((exc.stdout or "") + (exc.stderr or "")).strip()
+
+            if combined:
+                log_path = get_clawk_home() / "logs" / "update.log"
+
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                with log_path.open("a", encoding="utf-8", errors="replace") as fh:
+                    fh.write(f"\n--- install failed: {' '.join(cmd)} ---\n")
+
+                    fh.write(combined + "\n")
+
+        except Exception:
+            pass
+
+        raise
 
     finally:
         done.set()
@@ -15078,6 +15271,18 @@ def cmd_update(args):
 
     gateway_mode = getattr(args, "gateway", False)
 
+    # Quiet by default on an interactive terminal: show only the commit count
+    # and a purple progress bar, routing the verbose git/pip/npm/skills output
+    # to a log (surfaced only on failure). `--verbose` keeps full streaming.
+    if (
+        not gateway_mode
+        and not getattr(args, "verbose", False)
+        and sys.stdout.isatty()
+        and (PROJECT_ROOT / ".git").exists()
+    ):
+        _run_update_quiet(args, gateway_mode)
+        return
+
     # Protect against mid-update terminal disconnects (SIGHUP) and tolerate
 
     # writes to a closed stdout.  No-op in gateway mode.  See
@@ -15091,6 +15296,143 @@ def cmd_update(args):
 
     finally:
         _finalize_update_output(_update_io_state)
+
+
+def _run_update_quiet(args, gateway_mode):
+    """Quiet ``clawk update``: print the new-commit count + a purple progress
+    bar, and route the verbose git/pip/npm/skills output to a log file that is
+    surfaced only if the update fails. Wraps ``_cmd_update_impl`` without
+    touching it — stdin is fed EOF so internal prompts never block."""
+    import tempfile
+    import threading
+    import time
+
+    PURPLE = "\033[38;2;108;79;214m"  # Clawksis brand (#6C4FD6)
+    RED = "\033[0;31m"
+    NC = "\033[0m"
+
+    from clawk_cli.banner import print_clawksis_banner
+
+    print_clawksis_banner()
+
+    branch = _resolve_update_branch(args)
+    git_cmd = ["git"]
+    if sys.platform == "win32":
+        git_cmd = ["git", "-c", "windows.appendAtomically=false"]
+
+    # Same query the real update uses, fetched quietly, so the count matches.
+    subprocess.run(
+        git_cmd + ["fetch", "origin"], cwd=PROJECT_ROOT, capture_output=True, text=True
+    )
+    rv = subprocess.run(
+        git_cmd + ["rev-list", f"HEAD..origin/{branch}", "--count"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        count = int(rv.stdout.strip())
+    except (ValueError, AttributeError):
+        count = -1
+
+    if count == 0:
+        print(f"{PURPLE}∇{NC} Ya estás en la última versión.")
+        return
+    if count > 0:
+        s = "s" if count != 1 else ""
+        print(f"{PURPLE}∇{NC} {count} commit{s} nuevo{s} — actualizando…")
+    else:
+        print(f"{PURPLE}∇{NC} Actualizando…")
+
+    log = tempfile.NamedTemporaryFile(
+        mode="w",
+        prefix="clawksis-update-",
+        suffix=".log",
+        delete=False,
+        encoding="utf-8",
+    )
+    real_out = os.dup(1)
+    real_err = os.dup(2)
+    stop = threading.Event()
+
+    def _spin():
+        width = 28
+        pos = 0
+        direction = 1
+        while not stop.is_set():
+            cells = ["░"] * width
+            for k in range(max(0, pos - 2), min(width, pos + 3)):
+                cells[k] = "█"
+            try:
+                os.write(real_out, f"\r{PURPLE}[{''.join(cells)}]{NC} ".encode())
+            except OSError:
+                break
+            pos += direction
+            if pos >= width - 1 or pos <= 0:
+                direction = -direction
+            time.sleep(0.08)
+
+    spinner = threading.Thread(target=_spin, daemon=True)
+    ok = False
+    exit_code = 0
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        devnull = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(log.fileno(), 1)
+        os.dup2(log.fileno(), 2)
+        os.dup2(devnull, 0)
+        os.close(devnull)
+        spinner.start()
+        try:
+            _cmd_update_impl(args, gateway_mode=gateway_mode)
+            ok = True
+        except SystemExit as exc:
+            exit_code = (
+                exc.code
+                if isinstance(exc.code, int)
+                else (0 if exc.code is None else 1)
+            )
+            ok = exit_code == 0
+        except Exception:
+            import traceback
+
+            traceback.print_exc()  # → log (fd 2)
+            ok = False
+            exit_code = 1
+    finally:
+        stop.set()
+        spinner.join(timeout=1.0)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(real_out, 1)
+        os.dup2(real_err, 2)
+        os.close(real_out)
+        os.close(real_err)
+        log.flush()
+        log.close()
+        sys.stdout.write("\r\033[2K")  # clear the spinner line
+        sys.stdout.flush()
+
+    if ok:
+        print(f"{PURPLE}✓{NC} Clawksis actualizado a la última versión.")
+        try:
+            os.unlink(log.name)
+        except OSError:
+            pass
+    else:
+        print(f"{RED}✗ La actualización falló.{NC}")
+        try:
+            with open(log.name, encoding="utf-8", errors="replace") as fh:
+                tail = fh.read().splitlines()[-40:]
+            if tail:
+                print("────────────────────────────────────────────────────────────")
+                print("\n".join(tail))
+                print("────────────────────────────────────────────────────────────")
+        except OSError:
+            pass
+        print(f"Log completo: {log.name}")
+        sys.exit(exit_code or 1)
 
 
 def _cmd_update_pip(args):
@@ -15188,6 +15530,93 @@ def _cmd_update_pip(args):
     print("✓ Update complete! Restart clawk to use the new version.")
 
 
+def _build_tui_bundle_for_update() -> None:
+    """Rebuild the TUI bundle (``ui-tui/dist/entry.js``) during ``clawk update``.
+
+    ``clawk update`` rebuilds the web UI but historically left the TUI bundle
+    stale, so the chat pane's banner kept the old branding until the next TUI
+    launch rebuilt it. Building it here keeps the post-update state complete and
+    the first chat fast. No-op on packaged installs without an ``ui-tui/`` source
+    tree or when node/npm is unavailable (the launch-time build is the fallback);
+    never fatal.
+    """
+    tui_dir = PROJECT_ROOT / "ui-tui"
+    if not (tui_dir / "package.json").is_file():
+        return
+    try:
+        _ensure_tui_node()
+        npm = shutil.which("npm")
+        if not npm:
+            print(
+                "  ⚠ TUI build skipped (npm not found) — it rebuilds on next chat launch"
+            )
+            return
+        result = subprocess.run(
+            [npm, "run", "build"],
+            cwd=tui_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print("  ✓ TUI rebuilt")
+        else:
+            print("  ⚠ TUI build failed (the chat pane will rebuild it on next launch)")
+            tail = "\n".join(
+                f"{result.stdout or ''}{result.stderr or ''}".strip().splitlines()[-15:]
+            )
+            if tail:
+                print(tail)
+    except Exception as exc:
+        print(f"  ⚠ TUI build skipped ({exc}) — it rebuilds on next chat launch")
+
+
+def _print_new_commits(git_cmd, root, old_sha, *, max_commits: int = 20) -> None:
+    """Print a clean 'What's new' list of the commits this update pulled in.
+
+    Mirrors the install one-liner's finish: after the progress spinners the
+    user sees exactly what changed. No-op when the range is empty, when the
+    pre-pull SHA is unknown, or when git fails.
+    """
+    if not old_sha:
+        return
+
+    try:
+        result = subprocess.run(
+            git_cmd
+            + ["log", "--no-merges", "--pretty=format:%h %s", f"{old_sha}..HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+
+    except Exception:
+        return
+
+    lines = [ln.strip() for ln in (result.stdout or "").splitlines() if ln.strip()]
+
+    if not lines:
+        return
+
+    purple = "\033[38;2;108;79;214m"
+
+    rst = "\033[0m"
+
+    plural = "s" if len(lines) != 1 else ""
+
+    print()
+
+    print(f"  {purple}What's new{rst} — {len(lines)} new commit{plural}:")
+
+    for ln in lines[:max_commits]:
+        print(f"    • {ln}")
+
+    if len(lines) > max_commits:
+        print(f"    … and {len(lines) - max_commits} more")
+
+
 def _cmd_update_impl(args, gateway_mode: bool):
     """Body of ``cmd_update`` — kept separate so the wrapper can always
 
@@ -15202,6 +15631,12 @@ def _cmd_update_impl(args, gateway_mode: bool):
     )
 
     assume_yes = bool(getattr(args, "yes", False))
+
+    # Clean output by default: noisy phases (deps, builds, skills sync) run
+    # under progress spinners that capture their output, so the run reads like
+    # the install one-liner — spinners + the new-commit list. `--verbose`
+    # restores the full streamed logs for debugging.
+    verbose = bool(getattr(args, "verbose", False))
 
     from clawk_cli.banner import print_clawksis_banner
 
@@ -15855,9 +16290,13 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
         _refresh_active_lazy_features()
 
-        _update_node_dependencies()
+        with _quiet_step("Updating Node dependencies", verbose=verbose):
+            _update_node_dependencies()
 
-        _build_web_ui(PROJECT_ROOT / "web")
+        with _quiet_step("Building dashboard", verbose=verbose):
+            _build_web_ui(PROJECT_ROOT / "web", quiet=not verbose)
+
+        _build_tui_bundle_for_update()
 
         # Rebuild the desktop app if the source tree changed since the last
 
@@ -15929,6 +16368,9 @@ def _cmd_update_impl(args, gateway_mode: bool):
         print()
 
         print("✓ Code updated!")
+
+        # Show what changed — the install-one-liner-style "What's new" list.
+        _print_new_commits(git_cmd, PROJECT_ROOT, pre_pull_sha)
 
         # After git pull, source files on disk are newer than cached Python
 
@@ -18290,6 +18732,36 @@ def cmd_dashboard(args):
 
         sys.exit(1 if remaining else 0)
 
+    # --start only makes sense together with --remote (it launches the dashboard
+    # on the remote host over the SSH session).
+    if getattr(args, "start", False) and not getattr(args, "remote", None):
+        print("--start requires --remote USER@HOST.")
+        sys.exit(2)
+
+    # --remote: open a dashboard running on another host through an SSH tunnel.
+    # This is 100% client-side — the server (127.0.0.1 bind + auth gate) runs on
+    # the remote — so return before importing fastapi/uvicorn or building the web
+    # UI locally.  --stop/--status above stay local.
+    if getattr(args, "remote", None):
+        _run_dashboard_remote(args)
+        return
+
+    # On a remote SSH session bound to loopback, run the server DETACHED so it
+    # survives the SSH session ending — otherwise SIGHUP kills it on logout and
+    # you have to re-run it. The parent prints the access notice and returns the
+    # prompt; the backgrounded child keeps serving. --no-detach disables this,
+    # `clawk dashboard --stop` kills it.
+    if (
+        os.name == "posix"
+        and args.host in ("127.0.0.1", "localhost", "::1")
+        and (os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"))
+        and sys.stdout.isatty()
+        and not os.environ.get("CLAWK_DASHBOARD_DETACHED")
+        and not getattr(args, "no_detach", False)
+    ):
+        _run_dashboard_detached(args)
+        return
+
     # Attach gui.log early so dashboard startup/build failures are captured in
 
     # the same logs directory as every other Clawksis surface.
@@ -18401,6 +18873,269 @@ def cmd_dashboard(args):
         open_browser=not args.no_open,
         allow_public=getattr(args, "insecure", False),
     )
+
+
+def _build_dashboard_ssh_cmd(target, port, start, extra_ssh):
+    """Build the ``ssh`` argv that tunnels (and optionally starts) a remote dashboard.
+
+    Pure and side-effect-free so it can be unit-tested without a network.
+
+    Args:
+        target: the SSH destination, ``USER@HOST``.
+        port: the port to forward — local ``127.0.0.1:PORT`` to the remote's
+            ``127.0.0.1:PORT`` (the remote dashboard stays bound to loopback).
+        start: when True, also launch ``clawk dashboard`` on the remote over the
+            session (``-t`` allocates a TTY); when False just hold the tunnel
+            open (``-N``) and assume the dashboard is already running.
+        extra_ssh: extra ssh options passed through verbatim (from ``--ssh-opt``).
+    """
+    cmd = [
+        "ssh",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-L",
+        f"{port}:127.0.0.1:{port}",
+        *list(extra_ssh or []),
+    ]
+    if start:
+        cmd += [
+            "-t",
+            target,
+            f"clawk dashboard --no-open --host 127.0.0.1 --port {port}",
+        ]
+    else:
+        cmd += ["-N", target]
+    return cmd
+
+
+def _dashboard_open_browser(url):
+    """Open ``url`` in the local default browser, per-platform with a fallback.
+
+    Skips the attempt on headless Linux (no ``DISPLAY`` / ``WAYLAND_DISPLAY``),
+    where the registered browser may be a TUI program that hijacks the terminal
+    — mirrors the open-browser guard in ``web_server.start_server``.
+    """
+    if (
+        sys.platform == "linux"
+        and not os.environ.get("DISPLAY")
+        and not os.environ.get("WAYLAND_DISPLAY")
+    ):
+        print(f"→ Headless host detected — open the dashboard manually: {url}")
+        return
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", url])
+        elif os.name == "nt":
+            os.startfile(url)  # type: ignore[attr-defined]
+        elif sys.platform == "linux":
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            import webbrowser
+
+            webbrowser.open(url)
+    except Exception:
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+        except Exception:
+            print(f"→ Open the dashboard manually: {url}")
+
+
+def _run_dashboard_detached(args):
+    """Launch the dashboard backgrounded + detached from the SSH session so it
+    survives logout, wait until it serves, then print the access notice and the
+    PID. Stop it with ``clawk dashboard --stop``."""
+    import time
+    import urllib.error
+    import urllib.request
+
+    host = args.host
+    port = args.port
+
+    try:
+        from clawk_cli.config import get_clawk_home
+
+        log_dir = get_clawk_home() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "dashboard.log"
+    except Exception:
+        import tempfile
+
+        log_path = Path(tempfile.gettempdir()) / "clawksis-dashboard.log"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "clawk_cli.main",
+        "dashboard",
+        "--no-open",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    if getattr(args, "skip_build", False):
+        cmd.append("--skip-build")
+    if getattr(args, "insecure", False):
+        cmd.append("--insecure")
+
+    env = dict(os.environ, CLAWK_DASHBOARD_DETACHED="1")
+    logf = open(log_path, "a", encoding="utf-8")
+    devnull = open(os.devnull, "rb")
+    try:
+        # start_new_session=True (setsid) detaches it from the controlling
+        # terminal, so closing the SSH session no longer sends it SIGHUP.
+        proc = subprocess.Popen(
+            cmd,
+            stdout=logf,
+            stderr=logf,
+            stdin=devnull,
+            start_new_session=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+    finally:
+        devnull.close()
+        logf.close()
+
+    # Wait until it actually answers HTTP (a first run builds the web UI).
+    url = f"http://127.0.0.1:{port}/"
+    up = False
+    for _ in range(180):  # ~90s
+        if proc.poll() is not None:
+            break
+        try:
+            urllib.request.urlopen(url, timeout=2).close()
+            up = True
+            break
+        except urllib.error.HTTPError:
+            up = True
+            break
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+    _p = "\033[38;2;108;79;214m"
+    _b = "\033[1m"
+    _x = "\033[0m"
+    _r = "\033[0;31m"
+
+    if not up:
+        print(f"{_r}✗ No se pudo iniciar el dashboard en segundo plano.{_x}")
+        print(f"  Log: {log_path}")
+        try:
+            with open(log_path, encoding="utf-8", errors="replace") as fh:
+                tail = fh.read().splitlines()[-30:]
+            if tail:
+                print("\n".join(tail))
+        except OSError:
+            pass
+        sys.exit(1)
+
+    try:
+        from clawk_cli.web_server import print_dashboard_remote_hint
+
+        print_dashboard_remote_hint(port)
+    except Exception:
+        pass
+    print(
+        f"\n{_p}{_b}✓ Dashboard corriendo en segundo plano (PID {proc.pid}) — "
+        f"sobrevive al cierre de SSH.{_x}\n"
+        f"  Pará el dashboard con:  {_b}clawk dashboard --stop{_x}   ·   log: {log_path}"
+    )
+
+
+def _run_dashboard_remote(args):
+    """Open a remote dashboard over an SSH tunnel (client-side; see ``--remote``).
+
+    Forwards ``127.0.0.1:PORT`` to the remote's loopback, optionally starting
+    ``clawk dashboard`` there (``--start``), and opens the browser locally once
+    the dashboard actually answers HTTP.  ``ssh`` runs in the foreground; Ctrl+C
+    tears the tunnel down cleanly.  The remote bind and auth gate are untouched.
+    """
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+
+    target = args.remote
+    port = args.port
+    url = f"http://127.0.0.1:{port}/"
+
+    def _http_ready():
+        # A real HTTP probe, NOT a bare TCP connect: `ssh -L` accepts the local
+        # connection the instant ssh links up — before (or even without) the
+        # remote dashboard serving — so a TCP check false-positives and we'd
+        # open the browser onto a dead "page unavailable".  Any HTTP response
+        # (including the auth gate's 401/403) means the dashboard is truly up.
+        try:
+            urllib.request.urlopen(url, timeout=2).close()
+            return True
+        except urllib.error.HTTPError:
+            return True
+        except Exception:
+            return False
+
+    # Already serving locally (a tunnel from a previous run)?  Just open it.
+    if _http_ready():
+        print(f"→ 127.0.0.1:{port} is already serving — opening the dashboard.")
+        _dashboard_open_browser(url)
+        return
+
+    cmd = _build_dashboard_ssh_cmd(
+        target, port, getattr(args, "start", False), getattr(args, "ssh_opt", None)
+    )
+
+    started = getattr(args, "start", False)
+    # A first-run `--start` builds the web UI on the remote, which can take a
+    # while; wait generously, and open the browser only once it truly answers.
+    deadline_s = 120 if started else 30
+
+    # Open the browser once the dashboard answers HTTP (background thread so ssh
+    # can stay in the foreground).
+    def _wait_and_open():
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            if _http_ready():
+                _dashboard_open_browser(url)
+                return
+            time.sleep(0.75)
+        # Never came up — don't open a dead page; explain why instead.
+        if not started:
+            print(
+                f"\n⚠ Nothing is serving on the remote's 127.0.0.1:{port} "
+                f"(tunnel is up, but the dashboard isn't). Re-run with --start "
+                "to launch it there, or start `clawk dashboard` on the remote."
+            )
+        else:
+            print(
+                f"\n⚠ The remote dashboard didn't answer within {deadline_s}s "
+                f"(first run builds the web UI). Open {url} once it's ready."
+            )
+
+    threading.Thread(target=_wait_and_open, daemon=True).start()
+
+    print(f"→ Opening {target} dashboard at {url} over SSH (Ctrl+C to close).")
+    try:
+        rc = subprocess.call(cmd)
+    except KeyboardInterrupt:
+        print("\n→ Closed the dashboard tunnel.")
+        return
+
+    # 0 = clean, 130 = SIGINT, 255 = ssh connection/auth error (ssh prints its
+    # own diagnostics there).  Surface anything else.
+    if rc not in (0, 130, 255):
+        print(f"⚠ ssh exited with code {rc}.")
+        sys.exit(rc)
 
 
 def cmd_dashboard_register(args):
@@ -19767,6 +20502,43 @@ def main():
     )
 
     logout_parser.set_defaults(func=cmd_logout)
+
+    # =========================================================================
+    # connect / disconnect — personal Clawksis API key (clawksis.com portal).
+    # Separate from login/logout (which handle LLM provider auth).
+    # =========================================================================
+    connect_parser = subparsers.add_parser(
+        "connect",
+        help="Save your personal Clawksis API key (from the clawksis.com portal)",
+        description=(
+            "Store the personal API key issued by your Clawksis portal in "
+            "~/.clawksis/.env. Distinct from `clawk login`, which authenticates "
+            "an LLM inference provider."
+        ),
+    )
+    connect_parser.add_argument(
+        "--key",
+        default=None,
+        help="The API key (omit to be prompted for it without echo).",
+    )
+    connect_parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Skip the portal verification call even if CLAWKSIS_PORTAL_URL is set.",
+    )
+    connect_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="Verification request timeout in seconds (default: 15).",
+    )
+    connect_parser.set_defaults(func=cmd_connect)
+
+    disconnect_parser = subparsers.add_parser(
+        "disconnect",
+        help="Remove your stored personal Clawksis API key",
+    )
+    disconnect_parser.set_defaults(func=cmd_disconnect)
 
     auth_parser = subparsers.add_parser(
         "auth",
@@ -22314,6 +23086,12 @@ Examples:
         help="Windows: proceed with the update even when another clawk.exe is detected. The concurrent process will likely cause WinError 32 warnings and may leave a reboot-deferred .exe replacement.",
     )
 
+    update_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show the full streaming output instead of just the commit count + progress bar",
+    )
+
     update_parser.set_defaults(func=cmd_update)
 
     # =========================================================================
@@ -22746,6 +23524,46 @@ Examples:
         "--status",
         action="store_true",
         help="List running clawk dashboard processes and exit",
+    )
+
+    # Client-side remote mode: open a dashboard running on another host over an
+    # SSH tunnel, removing the manual `ssh -L` step.  The remote bind (127.0.0.1)
+    # and the auth gate are unchanged — everything here happens locally.
+    dashboard_parser.add_argument(
+        "--remote",
+        metavar="USER@HOST",
+        default=None,
+        help=(
+            "Open a dashboard running on USER@HOST over SSH: forwards the local "
+            "port to the remote's 127.0.0.1 and opens the browser locally "
+            "(no manual `ssh -L` needed)."
+        ),
+    )
+    dashboard_parser.add_argument(
+        "--start",
+        action="store_true",
+        help=(
+            "With --remote, also start `clawk dashboard` on the remote host over "
+            "the SSH session (otherwise it is assumed to be already running)."
+        ),
+    )
+    dashboard_parser.add_argument(
+        "--ssh-opt",
+        dest="ssh_opt",
+        metavar="OPT",
+        action="append",
+        default=None,
+        help=(
+            "Extra option forwarded to ssh (repeatable), e.g. "
+            "`--ssh-opt -i --ssh-opt ~/.ssh/key` or `--ssh-opt -p --ssh-opt 2222`."
+        ),
+    )
+
+    dashboard_parser.add_argument(
+        "--no-detach",
+        dest="no_detach",
+        action="store_true",
+        help="Run in the foreground even over SSH (don't auto-background; it will stop on logout)",
     )
 
     dashboard_parser.set_defaults(func=cmd_dashboard)

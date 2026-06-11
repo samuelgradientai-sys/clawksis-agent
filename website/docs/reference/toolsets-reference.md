@@ -118,6 +118,14 @@ Or in-session:
 
 | `delegation` | `delegate_task` | Spawn isolated subagent instances for parallel work. |
 
+| `codex_cli` | `codex_exec` | Delegate a coding task to OpenAI's Codex CLI (`codex exec`), run headless. Off by default; enable in `clawk tools` → Codex CLI. Installed at setup; schema registered only when the `codex` binary is on `$PATH`. |
+
+| `claude_code_cli` | `claude_code` | Delegate a coding task to Anthropic's Claude Code CLI (`claude -p`), run headless. Off by default; enable in `clawk tools` → Claude Code CLI. Registered only when `claude` is on `$PATH`. |
+
+| `opencode_cli` | `opencode_run` | Delegate a coding task to the open-source OpenCode CLI (`opencode run`). Off by default; enable in `clawk tools` → OpenCode CLI. Registered only when `opencode` is on `$PATH`. |
+
+| `mirofish` | `mirofish` | Run MiroFish multi-agent opinion/social simulations via its REST API. Off by default; enable in `clawk tools` → MiroFish. Registered only when a MiroFish server answers `/health` (env `MIROFISH_BASE_URL`, default `http://localhost:5001`). |
+
 | `discord` | `discord` | Core Discord text/embed/DM actions (gateway-only). Active on the `clawk-discord` toolset. |
 
 | `discord_admin` | `discord_admin` | Discord moderation (bans, role changes, channel management). Active on the `clawk-discord` toolset; requires the bot to hold the relevant Discord permissions. |

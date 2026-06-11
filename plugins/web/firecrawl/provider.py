@@ -802,10 +802,8 @@ class FirecrawlWebSearchProvider(WebSearchProvider):
         return {
             "name": "Firecrawl",
             "badge": "paid · optional gateway",
-            "tag": (
-                "Full search + extract; supports direct API and "
-                "Nous tool-gateway routing."
-            ),
+            "tag": "Full search + extract (search + scrape) in one provider.",
+            "desc": "Managed Firecrawl cloud for search plus full-page scraping; needs a Firecrawl API key.",
             "env_vars": [
                 {
                     "key": "FIRECRAWL_API_KEY",

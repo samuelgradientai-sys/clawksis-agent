@@ -392,24 +392,45 @@ class TestCmdUpdateBranchFallback:
             (ws_flags, PROJECT_ROOT),
         ]
 
-        if len(npm_calls) > 2:
-            # The web/ install runs from the workspace root when the root
+        # After the two installs, `clawk update` runs (all CAPTURED via
+        # subprocess.run in the default quiet update): optionally the web/ ci
+        # install (when the root lockfile exists — npm hoists node_modules
+        # upward), the Vite web build, and the TUI bundle rebuild. The web
+        # build no longer goes through the streaming idle-timeout helper.
 
-            # lockfile exists (npm workspaces hoist node_modules upward).
+        web_build = (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "web")
 
-            assert npm_calls[2:] == [
-                (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT),
-            ]
+        ui_tui_build = (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "ui-tui")
 
-        # The web UI build itself went through the streaming helper.
+        ci_install = (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT)
 
-        mock_idle.assert_called_once()
+        other_npm = npm_calls[2:]
 
-        idle_args, idle_kwargs = mock_idle.call_args
+        assert web_build in other_npm, other_npm
 
-        assert idle_args[0] == ["/usr/bin/npm", "run", "build"]
+        assert ui_tui_build in other_npm, other_npm
 
-        assert idle_kwargs["cwd"] == PROJECT_ROOT / "web"
+        assert all(c in [ci_install, web_build, ui_tui_build] for c in other_npm), (
+            other_npm
+        )
+
+        # Quiet update captures the web build instead of streaming it, so the
+        # idle-timeout streaming helper is NOT used.
+
+        mock_idle.assert_not_called()
+
+        # Both `npm run build` calls (web + TUI) ran via subprocess.run with
+        # capture_output=True.
+
+        build_runs = [
+            c
+            for c in mock_run.call_args_list
+            if c.args and c.args[0][:3] == ["/usr/bin/npm", "run", "build"]
+        ]
+
+        assert len(build_runs) == 2
+
+        assert all(c.kwargs.get("capture_output") is True for c in build_runs)
 
         # Root npm installs capture output (capture_output=True) so npm's
         # noise — the unicode-animations postinstall ASCII banner, EBADENGINE

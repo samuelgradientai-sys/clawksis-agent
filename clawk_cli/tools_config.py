@@ -140,6 +140,13 @@ CONFIGURABLE_TOOLSETS = [
         "🖱️  Computer Use (macOS)",
         "background desktop control via cua-driver",
     ),
+    # External coding agents — installed once, toggled here. Each tool only
+    # exposes its schema when its CLI/server is present (check_fn), so an
+    # enabled-but-uninstalled entry simply stays dormant.
+    ("codex_cli", "🤖 Codex CLI (OpenAI)", "codex_exec"),
+    ("claude_code_cli", "🟣 Claude Code CLI (Anthropic)", "claude_code"),
+    ("opencode_cli", "🟧 OpenCode CLI (open source)", "opencode_run"),
+    ("mirofish", "🐟 MiroFish (opinion simulation)", "mirofish"),
 ]
 
 
@@ -208,6 +215,11 @@ _DEFAULT_OFF_TOOLSETS = {
     "video",
     "video_gen",
     "x_search",
+    # External coding agents — opt-in; require their CLI/server installed.
+    "codex_cli",
+    "claude_code_cli",
+    "opencode_cli",
+    "mirofish",
 }
 
 
@@ -415,6 +427,7 @@ TOOL_CATEGORIES = {
                 "name": "Microsoft Edge TTS",
                 "badge": "★ recommended · free",
                 "tag": "Good quality, no API key needed",
+                "desc": "Free Microsoft voice engine — no account or API key required.",
                 "env_vars": [],
                 "tts_provider": "edge",
             },
@@ -432,6 +445,7 @@ TOOL_CATEGORIES = {
                 "name": "OpenAI TTS",
                 "badge": "paid",
                 "tag": "High quality voices",
+                "desc": "Premium OpenAI voices; uses your own OpenAI API key (pay per use).",
                 "env_vars": [
                     {
                         "key": "VOICE_TOOLS_OPENAI_KEY",
@@ -444,6 +458,7 @@ TOOL_CATEGORIES = {
             {
                 "name": "xAI TTS",
                 "tag": "Grok voices — uses xAI Grok OAuth or XAI_API_KEY",
+                "desc": "Grok's voices from xAI; signs in with your Grok account or API key.",
                 "env_vars": [],
                 "tts_provider": "xai",
                 "post_setup": "xai_grok",
@@ -452,6 +467,7 @@ TOOL_CATEGORIES = {
                 "name": "ElevenLabs",
                 "badge": "paid",
                 "tag": "Most natural voices",
+                "desc": "The most life-like AI voices; needs a paid ElevenLabs account.",
                 "env_vars": [
                     {
                         "key": "ELEVENLABS_API_KEY",
@@ -466,6 +482,7 @@ TOOL_CATEGORIES = {
                 "name": "Mistral (Voxtral TTS)",
                 "badge": "paid",
                 "tag": "Multilingual, native Opus",
+                "desc": "Multilingual voices from Mistral; needs a paid Mistral API key.",
                 "env_vars": [
                     {
                         "key": "MISTRAL_API_KEY",
@@ -479,6 +496,7 @@ TOOL_CATEGORIES = {
                 "name": "Google Gemini TTS",
                 "badge": "preview",
                 "tag": "30 prebuilt voices, controllable via prompts",
+                "desc": "Google's preview voices, steerable by prompt; needs a Gemini API key.",
                 "env_vars": [
                     {
                         "key": "GEMINI_API_KEY",
@@ -492,6 +510,7 @@ TOOL_CATEGORIES = {
                 "name": "KittenTTS",
                 "badge": "local · free",
                 "tag": "Lightweight local ONNX TTS (~25MB), no API key",
+                "desc": "Tiny voice engine that runs offline on your machine — no API key.",
                 "env_vars": [],
                 "tts_provider": "kittentts",
                 "post_setup": "kittentts",
@@ -500,6 +519,7 @@ TOOL_CATEGORIES = {
                 "name": "Piper",
                 "badge": "local · free",
                 "tag": "Local neural TTS, 44 languages (voices ~20-90MB)",
+                "desc": "Offline neural voices in 44 languages, downloaded locally — no key.",
                 "env_vars": [],
                 "tts_provider": "piper",
                 "post_setup": "piper",
@@ -535,6 +555,7 @@ TOOL_CATEGORIES = {
                 "name": "Firecrawl Self-Hosted",
                 "badge": "free · self-hosted",
                 "tag": "Run your own Firecrawl instance (Docker)",
+                "desc": "Crawl the web through your own Firecrawl server (Docker), not the cloud.",
                 "web_backend": "firecrawl",
                 "env_vars": [
                     {
@@ -611,6 +632,7 @@ TOOL_CATEGORIES = {
                 "name": "xAI Grok OAuth (SuperGrok / Premium+)",
                 "badge": "subscription",
                 "tag": "Browser login at accounts.x.ai — no API key required",
+                "desc": "Search X using your Grok subscription — log in via the browser, no key.",
                 "env_vars": [],
                 "post_setup": "xai_grok",
             },
@@ -618,6 +640,7 @@ TOOL_CATEGORIES = {
                 "name": "xAI API key",
                 "badge": "paid",
                 "tag": "Direct xAI API billing via XAI_API_KEY",
+                "desc": "Search X by paying xAI directly with an API key.",
                 "env_vars": [
                     {
                         "key": "XAI_API_KEY",
@@ -650,6 +673,7 @@ TOOL_CATEGORIES = {
                 "name": "Local Browser",
                 "badge": "★ recommended · free",
                 "tag": "Headless Chromium, no API key needed",
+                "desc": "Runs a hidden Chrome on this machine — free, no account needed.",
                 "env_vars": [],
                 "browser_provider": "local",
                 "post_setup": "agent_browser",
@@ -669,6 +693,7 @@ TOOL_CATEGORIES = {
                 "name": "Camofox",
                 "badge": "free · local",
                 "tag": "Anti-detection browser (Firefox/Camoufox)",
+                "desc": "A stealth Firefox that avoids bot-detection; point it at your Camofox server.",
                 "env_vars": [
                     {
                         "key": "CAMOFOX_URL",
@@ -776,6 +801,60 @@ TOOL_CATEGORIES = {
                     },
                 ],
                 "post_setup": "langfuse",
+            },
+        ],
+    },
+    "codex_cli": {
+        "name": "Codex CLI (OpenAI)",
+        "icon": "🤖",
+        "providers": [
+            {
+                "name": "OpenAI Codex",
+                "tag": "Installs the `codex` CLI. Auth via `codex login` (ChatGPT) or OPENAI_API_KEY.",
+                "env_vars": [],
+                "post_setup": "codex_cli",
+            },
+        ],
+    },
+    "claude_code_cli": {
+        "name": "Claude Code CLI (Anthropic)",
+        "icon": "🟣",
+        "providers": [
+            {
+                "name": "Anthropic Claude Code",
+                "tag": "Installs the `claude` CLI. Auth via Claude subscription login or ANTHROPIC_API_KEY.",
+                "env_vars": [],
+                "post_setup": "claude_code_cli",
+            },
+        ],
+    },
+    "opencode_cli": {
+        "name": "OpenCode CLI (open source)",
+        "icon": "🟧",
+        "providers": [
+            {
+                "name": "OpenCode",
+                "tag": "Installs the `opencode` CLI. Configure a provider with `opencode auth login`.",
+                "env_vars": [],
+                "post_setup": "opencode_cli",
+            },
+        ],
+    },
+    "mirofish": {
+        "name": "MiroFish (opinion simulation)",
+        "icon": "🐟",
+        "providers": [
+            {
+                "name": "MiroFish server",
+                "tag": "Runs as a Docker service (REST API on :5001). Point elsewhere via MIROFISH_BASE_URL.",
+                "env_vars": [
+                    {
+                        "key": "MIROFISH_BASE_URL",
+                        "prompt": "MiroFish server URL",
+                        "default": "http://localhost:5001",
+                    },
+                ],
+                "post_setup": "mirofish",
             },
         ],
     },
@@ -1191,6 +1270,67 @@ def _run_cua_driver_installer(label: str = "Installing", verbose: bool = True) -
         _print_warning(f"    cua-driver {label.lower()} failed: {e}")
 
         return False
+
+
+def _install_npm_cli(
+    pkg: str, bin_name: str, label: str, *, login_hint: str = ""
+) -> None:
+    """Install a global npm-distributed coding CLI from a post-setup hook.
+
+    Idempotent: if ``bin_name`` already resolves on PATH we skip the install and
+    just print the auth hint. npm is required; when it's missing we print the
+    manual command instead of failing the whole setup flow.
+    """
+
+    import shutil
+    import subprocess
+
+    if shutil.which(bin_name):
+        _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+        return
+
+    npm_bin = shutil.which("npm")
+
+    if not npm_bin:
+        _print_warning(f"    npm not found — cannot auto-install {label}.")
+
+        _print_info(f"    Install Node.js, then run: npm install -g {pkg}")
+
+        return
+
+    _print_info(f"    Installing {label} (npm install -g {pkg})...")
+
+    try:
+        result = subprocess.run(
+            [npm_bin, "install", "-g", pkg],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+
+    except subprocess.TimeoutExpired:
+        _print_warning(f"    {label} install timed out (>10min).")
+
+        _print_info(f"    Run manually: npm install -g {pkg}")
+
+        return
+
+    if result.returncode == 0 and shutil.which(bin_name):
+        _print_success(f"    {label} installed")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+    else:
+        _print_warning(f"    {label} install failed:")
+
+        _print_info(f"      {(result.stderr or '').strip()[:300]}")
+
+        _print_info(f"    Run manually: npm install -g {pkg}")
 
 
 def _run_post_setup(post_setup_key: str):
@@ -1736,6 +1876,55 @@ def _run_post_setup(post_setup_key: str):
         else:
             _print_info(
                 "    xAI will remain inactive until credentials are configured."
+            )
+
+    elif post_setup_key == "codex_cli":
+        _install_npm_cli(
+            "@openai/codex",
+            "codex",
+            "Codex CLI",
+            login_hint="Authenticate with: codex login  (ChatGPT), or set OPENAI_API_KEY.",
+        )
+
+    elif post_setup_key == "claude_code_cli":
+        _install_npm_cli(
+            "@anthropic-ai/claude-code",
+            "claude",
+            "Claude Code CLI",
+            login_hint="Authenticate by running `claude` once, or set ANTHROPIC_API_KEY.",
+        )
+
+    elif post_setup_key == "opencode_cli":
+        _install_npm_cli(
+            "opencode-ai",
+            "opencode",
+            "OpenCode CLI",
+            login_hint="Configure a provider with: opencode auth login.",
+        )
+
+    elif post_setup_key == "mirofish":
+        # MiroFish is a Docker service, not a CLI binary — we can't `pip`/`npm`
+        # it. Print the stand-up steps; the tool's check_fn activates it once
+        # the server answers /health.
+        base = (
+            get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001"
+        ).rstrip("/")
+
+        _print_info("    MiroFish runs as a server (Docker), not a CLI binary. Setup:")
+
+        _print_info(
+            "      git clone https://github.com/666ghj/MiroFish && cd MiroFish"
+        )
+
+        _print_info("      cp .env.example .env   # set LLM_API_KEY and ZEP_API_KEY")
+
+        _print_info("      docker compose up -d   # REST API on http://localhost:5001")
+
+        _print_info(f"    The MiroFish tool activates once {base}/health responds.")
+
+        if not shutil.which("docker"):
+            _print_warning(
+                "    docker not found on PATH — install Docker to run MiroFish."
             )
 
 
@@ -2356,12 +2545,27 @@ def _toolset_has_keys(
 # ─── Menu Helpers ─────────────────────────────────────────────────────────────
 
 
-def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
-    """Single-select menu (arrow keys). Delegates to curses_radiolist."""
+def _prompt_choice(
+    question: str,
+    choices: list,
+    default: int = 0,
+    descriptions: list | None = None,
+) -> int:
+    """Single-select menu (arrow keys). Delegates to curses_radiolist.
+
+    ``descriptions`` is an optional per-choice list of short secondary lines
+    rendered dimmed beneath each row (blank entries stay single-line).
+    """
 
     from clawk_cli.curses_ui import curses_radiolist
 
-    return curses_radiolist(question, choices, selected=default, cancel_returns=default)
+    return curses_radiolist(
+        question,
+        choices,
+        selected=default,
+        cancel_returns=default,
+        descriptions=descriptions,
+    )
 
 
 # ─── Token Estimation ────────────────────────────────────────────────────────
@@ -2594,6 +2798,7 @@ def _plugin_image_gen_providers() -> list[dict]:
             "badge": schema.get("badge", ""),
             "tag": schema.get("tag", ""),
             "env_vars": schema.get("env_vars", []),
+            "desc": schema.get("desc", ""),
             "image_gen_plugin_name": provider.name,
         }
 
@@ -2649,6 +2854,7 @@ def _plugin_video_gen_providers() -> list[dict]:
             "badge": schema.get("badge", ""),
             "tag": schema.get("tag", ""),
             "env_vars": schema.get("env_vars", []),
+            "desc": schema.get("desc", ""),
             "video_gen_plugin_name": provider.name,
         }
 
@@ -2740,6 +2946,7 @@ def _plugin_web_search_providers() -> list[dict]:
             "badge": schema.get("badge", ""),
             "tag": schema.get("tag", ""),
             "env_vars": schema.get("env_vars", []),
+            "desc": schema.get("desc", ""),
             "web_backend": name,
             "web_search_plugin_name": name,
         }
@@ -2828,6 +3035,7 @@ def _plugin_browser_providers() -> list[dict]:
             "badge": schema.get("badge", ""),
             "tag": schema.get("tag", ""),
             "env_vars": schema.get("env_vars", []),
+            "desc": schema.get("desc", ""),
             "browser_provider": name,
             "browser_plugin_name": name,
         }
@@ -2912,6 +3120,7 @@ def _plugin_tts_providers() -> list[dict]:
             "badge": schema.get("badge", ""),
             "tag": schema.get("tag", ""),
             "env_vars": schema.get("env_vars", []),
+            "desc": schema.get("desc", ""),
             # Selecting this row writes ``tts.provider: <name>`` — the
             # same write-path used by hardcoded rows. The plugin
             # dispatcher picks it up automatically from there.
@@ -2973,6 +3182,15 @@ def _visible_providers(
     visible = []
 
     for provider in cat.get("providers", []):
+        # Clawksis is BYOK-only — the Nous Subscription managed gateway is
+        # deprecated and must never appear in any picker. Drop every Nous-
+        # backed row (managed Tool Gateway features AND pure pre-auth UX
+        # rows). The nous_* machinery stays in-tree but dormant; the checks
+        # below are kept harmless for callers that still inspect the flags.
+
+        if provider.get("managed_nous_feature") or provider.get("requires_nous_auth"):
+            continue
+
         # Nous-managed Tool Gateway rows stay visible regardless of auth —
 
         # selecting one drives an inline Portal login. A `requires_nous_auth`
@@ -3318,6 +3536,8 @@ def _configure_tool_category(
 
         provider_choices = []
 
+        provider_descs = []
+
         for p in providers:
             badge = f" [{p['badge']}]" if p.get("badge") else ""
 
@@ -3358,9 +3578,15 @@ def _configure_tool_category(
 
             provider_choices.append(f"{p['name']}{badge}{tag}{configured}{sub_marker}")
 
+            # Plain-language line shown dimmed beneath the row so a
+            # non-technical user understands what the option actually is.
+            provider_descs.append(p.get("desc", ""))
+
         # Add skip option
 
         provider_choices.append("Skip — keep defaults / configure later")
+
+        provider_descs.append("Keep your current setup; you can change this anytime.")
 
         # Detect current provider as default
 
@@ -3370,7 +3596,9 @@ def _configure_tool_category(
             force_fresh=force_fresh,
         )
 
-        provider_idx = _prompt_choice(f"  {title}:", provider_choices, default_idx)
+        provider_idx = _prompt_choice(
+            f"  {title}:", provider_choices, default_idx, descriptions=provider_descs
+        )
 
         # Skip selected
 
@@ -4616,6 +4844,8 @@ def _configure_tool_category_for_reconfig(
 
         provider_choices = []
 
+        provider_descs = []
+
         for p in providers:
             badge = f" [{p['badge']}]" if p.get("badge") else ""
 
@@ -4637,6 +4867,8 @@ def _configure_tool_category_for_reconfig(
 
             provider_choices.append(f"{p['name']}{badge}{tag}{configured}")
 
+            provider_descs.append(p.get("desc", ""))
+
         default_idx = _detect_active_provider_index(
             providers,
             config,
@@ -4644,7 +4876,10 @@ def _configure_tool_category_for_reconfig(
         )
 
         provider_idx = _prompt_choice(
-            "  Select provider:", provider_choices, default_idx
+            "  Select provider:",
+            provider_choices,
+            default_idx,
+            descriptions=provider_descs,
         )
 
         _reconfigure_provider(

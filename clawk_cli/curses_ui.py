@@ -257,6 +257,38 @@ def _scroll_for_cursor(
     return max(0, min(scroll_offset, max(0, total_rows - visible_rows)))
 
 
+def _scroll_for_cursor_variable(
+    scroll_offset: int,
+    cursor_pos: int,
+    avail_lines: int,
+    filtered: List[int],
+    row_height: Callable[[int], int],
+) -> int:
+    """Scroll clamp for variable-height rows (e.g. items with a 2nd desc line).
+
+    ``avail_lines`` is the number of *screen lines* available for items (not a
+    count of items). Grows the offset until the cursor row fits, measuring the
+    cumulative height from ``scroll_offset`` down to and including the cursor.
+    Lists here are short (≤~12 rows) so the O(n²) walk is negligible.
+    """
+
+    if cursor_pos < scroll_offset:
+        return cursor_pos
+
+    while scroll_offset < cursor_pos:
+        used = sum(
+            max(1, row_height(filtered[pos]))
+            for pos in range(scroll_offset, cursor_pos + 1)
+        )
+
+        if used <= avail_lines:
+            break
+
+        scroll_offset += 1
+
+    return scroll_offset
+
+
 def _handle_active_search_key(
     curses_mod, key: int, search: _SearchState
 ) -> tuple[bool, bool, bool]:
@@ -491,6 +523,7 @@ def _run_curses_menu(
     cancel_value,
     searchable=False,
     search_labels=None,
+    row_height=None,
 ):
     """Shared curses single-/multi-select event loop.
 
@@ -641,9 +674,15 @@ def _run_curses_menu(
 
                 visible_rows = max(1, max_y - items_start - reserve_bottom)
 
-                scroll_offset = _scroll_for_cursor(
-                    scroll_offset, cursor_pos, visible_rows, len(filtered)
-                )
+                if row_height is None:
+                    scroll_offset = _scroll_for_cursor(
+                        scroll_offset, cursor_pos, visible_rows, len(filtered)
+                    )
+
+                else:
+                    scroll_offset = _scroll_for_cursor_variable(
+                        scroll_offset, cursor_pos, visible_rows, filtered, row_height
+                    )
 
                 if use_search and search.query and not filtered:
                     try:
@@ -654,19 +693,40 @@ def _run_curses_menu(
                     except curses.error:
                         pass
 
-                for draw_i, filtered_pos in enumerate(
-                    range(
-                        scroll_offset, min(len(filtered), scroll_offset + visible_rows)
-                    )
-                ):
-                    i = filtered[filtered_pos]
+                if row_height is None:
+                    # Fixed 1-screen-row-per-item layout (unchanged path).
+                    for draw_i, filtered_pos in enumerate(
+                        range(
+                            scroll_offset,
+                            min(len(filtered), scroll_offset + visible_rows),
+                        )
+                    ):
+                        i = filtered[filtered_pos]
 
-                    y = draw_i + items_start
+                        y = draw_i + items_start
 
-                    if y >= max_y - reserve_bottom:
-                        break
+                        if y >= max_y - reserve_bottom:
+                            break
 
-                    draw_row(stdscr, y, i, i == cursor, max_x)
+                        draw_row(stdscr, y, i, i == cursor, max_x)
+
+                else:
+                    # Variable-height rows: each item may span >1 screen line
+                    # (e.g. a dim description line). Stop once the next item
+                    # would not fully fit in the item area.
+                    y = items_start
+
+                    for filtered_pos in range(scroll_offset, len(filtered)):
+                        i = filtered[filtered_pos]
+
+                        h = max(1, row_height(i))
+
+                        if y + h > max_y - reserve_bottom:
+                            break
+
+                        draw_row(stdscr, y, i, i == cursor, max_x)
+
+                        y += h
 
                 if draw_footer is not None:
                     draw_footer(stdscr, max_y, max_x)
@@ -890,6 +950,7 @@ def curses_radiolist(
     *,
     cancel_returns: int | None = None,
     description: str | None = None,
+    descriptions: List[str] | None = None,
     searchable: bool = False,
 ) -> int:
     """Curses single-select radio list. Returns the selected index.
@@ -912,6 +973,14 @@ def curses_radiolist(
 
             curses screen clear.
 
+        descriptions: Optional per-item secondary text. When an item has a
+
+            non-empty entry, a dim description line is drawn directly beneath
+
+            it (so each row spans two screen lines). Length must match
+
+            ``items``; rows with an empty/blank entry stay single-line.
+
         searchable: When true, ``/`` opens a type-to-filter prompt. The
 
             returned value is always the original item index, not a filtered
@@ -927,6 +996,18 @@ def curses_radiolist(
 
     if description:
         desc_lines = description.splitlines()
+
+    # Per-item secondary lines. Normalise to exactly len(items) entries so
+    # row_height(i)/_draw_row can index safely; blanks mean "single-line row".
+    item_descs: list[str] = list(descriptions or [])
+
+    item_descs += [""] * (len(items) - len(item_descs))
+
+    has_item_descs = any((d or "").strip() for d in item_descs)
+
+    def _row_height(i: int) -> int:
+
+        return 2 if (i < len(item_descs) and (item_descs[i] or "").strip()) else 1
 
     def _draw_header(stdscr, max_y, max_x, search=None):
 
@@ -997,6 +1078,15 @@ def curses_radiolist(
         try:
             stdscr.addnstr(y, 0, line, max_x - 1, attr)
 
+            # Secondary description line, indented to align under the label
+            # and dimmed so it reads as supporting context, not a choice.
+            desc = item_descs[i] if i < len(item_descs) else ""
+
+            if (desc or "").strip():
+                stdscr.addnstr(
+                    y + 1, 0, f"        {desc.strip()}", max_x - 1, curses.A_DIM
+                )
+
         except curses.error:
             pass
 
@@ -1015,11 +1105,12 @@ def curses_radiolist(
         on_action=_on_action,
         reserve_bottom=1,
         fallback=lambda: _radio_numbered_fallback(
-            title, items, selected, cancel_returns
+            title, items, selected, cancel_returns, item_descs
         ),
         cancel_value=cancel_returns,
         searchable=searchable,
         search_labels=list(items) if searchable else None,
+        row_height=_row_height if has_item_descs else None,
     )
 
 
@@ -1028,8 +1119,11 @@ def _radio_numbered_fallback(
     items: List[str],
     selected: int,
     cancel_returns: int,
+    descriptions: List[str] | None = None,
 ) -> int:
     """Text-based numbered fallback for radio selection."""
+
+    descs = list(descriptions or [])
 
     print(color(f"\n  {title}", Colors.YELLOW))
 
@@ -1039,6 +1133,11 @@ def _radio_numbered_fallback(
         marker = color("(\u25cf)", Colors.GREEN) if i == selected else "(\u25cb)"
 
         print(f"  {marker} {i + 1:>2}. {label}")
+
+        desc = descs[i] if i < len(descs) else ""
+
+        if (desc or "").strip():
+            print(color(f"          {desc.strip()}", Colors.DIM))
 
     print()
 

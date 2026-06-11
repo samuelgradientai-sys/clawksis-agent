@@ -808,6 +808,7 @@ class XAIWebSearchProvider(WebSearchProvider):
                 "Agentic web search via Grok's web_search tool — uses xAI "
                 "Grok OAuth or XAI_API_KEY."
             ),
+            "desc": "Live web + X search through xAI's Grok; uses your Grok account or xAI API key.",
             "env_vars": [],
             "post_setup": "xai_grok",
         }

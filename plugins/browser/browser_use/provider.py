@@ -424,6 +424,7 @@ class BrowserUseBrowserProvider(BrowserProvider):
             "name": "Browser Use",
             "badge": "paid",
             "tag": "Cloud browser with remote execution",
+            "desc": "Runs the browser in Browser Use's cloud; needs a Browser Use API key (paid).",
             "env_vars": [
                 {
                     "key": "BROWSER_USE_API_KEY",

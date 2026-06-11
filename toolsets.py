@@ -203,6 +203,42 @@ TOOLSETS = {
         "tools": ["terminal", "process"],
         "includes": [],
     },
+    "codex_cli": {
+        "description": (
+            "Delegate coding tasks to OpenAI's Codex CLI (`codex exec`). "
+            "Off by default; enable in `clawk tools` → Codex CLI. The tool "
+            "only appears when the `codex` binary is installed."
+        ),
+        "tools": ["codex_exec"],
+        "includes": [],
+    },
+    "claude_code_cli": {
+        "description": (
+            "Delegate coding tasks to Anthropic's Claude Code CLI (`claude -p`). "
+            "Off by default; enable in `clawk tools` → Claude Code CLI. The tool "
+            "only appears when the `claude` binary is installed."
+        ),
+        "tools": ["claude_code"],
+        "includes": [],
+    },
+    "opencode_cli": {
+        "description": (
+            "Delegate coding tasks to the open-source OpenCode CLI "
+            "(`opencode run`). Off by default; enable in `clawk tools` → "
+            "OpenCode CLI. The tool only appears when `opencode` is installed."
+        ),
+        "tools": ["opencode_run"],
+        "includes": [],
+    },
+    "mirofish": {
+        "description": (
+            "Run MiroFish multi-agent social/opinion simulations via its REST "
+            "API. Off by default; enable in `clawk tools` → MiroFish. The tool "
+            "only appears when a MiroFish server answers /health."
+        ),
+        "tools": ["mirofish"],
+        "includes": [],
+    },
     "moa": {
         "description": "Advanced reasoning and problem-solving tools",
         "tools": ["mixture_of_agents"],
