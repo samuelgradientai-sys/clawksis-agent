@@ -2286,15 +2286,15 @@ class TestIsRateLimitError:
 class TestGetProviderChain:
     """_get_provider_chain() resolves functions at call time (testable)."""
 
-    def test_returns_four_entries(self):
+    def test_returns_three_entries(self):
 
         chain = _get_provider_chain()
 
-        assert len(chain) == 4
+        assert len(chain) == 3
 
         labels = [label for label, _ in chain]
 
-        assert labels == ["openrouter", "nous", "local/custom", "api-key"]
+        assert labels == ["openrouter", "local/custom", "api-key"]
 
         # Codex is deliberately NOT in this chain — see _get_provider_chain
 
@@ -2303,6 +2303,12 @@ class TestGetProviderChain:
         # guessing a model to fall back on breaks more often than it helps.
 
         assert "openai-codex" not in labels
+
+        # Nous is deliberately NOT in this chain either — Clawksis is BYOK;
+
+        # Nous Portal resolves only when explicitly configured.
+
+        assert "nous" not in labels
 
     def test_picks_up_patched_functions(self):
         """Patches on _try_* functions must be visible in the chain."""
@@ -2352,8 +2358,8 @@ class TestTryPaymentFallback:
         with (
             patch("agent.auxiliary_client._try_openrouter", return_value=(None, None)),
             patch(
-                "agent.auxiliary_client._try_nous",
-                return_value=(mock_client, "nous-model"),
+                "agent.auxiliary_client._try_custom_endpoint",
+                return_value=(mock_client, "custom-model"),
             ),
             patch(
                 "agent.auxiliary_client._read_main_provider", return_value="openrouter"
@@ -2365,15 +2371,14 @@ class TestTryPaymentFallback:
 
         assert client is mock_client
 
-        assert model == "nous-model"
+        assert model == "custom-model"
 
-        assert label == "nous"
+        assert label == "local/custom"
 
     def test_returns_none_when_no_fallback(self):
 
         with (
             patch("agent.auxiliary_client._try_openrouter", return_value=(None, None)),
-            patch("agent.auxiliary_client._try_nous", return_value=(None, None)),
             patch(
                 "agent.auxiliary_client._try_custom_endpoint", return_value=(None, None)
             ),
@@ -2417,7 +2422,7 @@ class TestTryPaymentFallback:
 
 
 
-        When OR/Nous/custom/api-key all fail, payment-fallback returns None —
+        When OR/custom/api-key all fail, payment-fallback returns None —
 
         Codex is never tried with a guessed model.
 
@@ -2425,7 +2430,6 @@ class TestTryPaymentFallback:
 
         with (
             patch("agent.auxiliary_client._try_openrouter", return_value=(None, None)),
-            patch("agent.auxiliary_client._try_nous", return_value=(None, None)),
             patch(
                 "agent.auxiliary_client._try_custom_endpoint", return_value=(None, None)
             ),
@@ -5436,9 +5440,9 @@ class TestAuxUnhealthyCache:
             _mark_provider_unhealthy,
         )
 
-        nous_client = MagicMock()
+        custom_client = MagicMock()
 
-        # Mark OpenRouter unhealthy → chain should skip it and pick nous.
+        # Mark OpenRouter unhealthy → chain should skip it and pick custom.
 
         _mark_provider_unhealthy("openrouter")
 
@@ -5447,11 +5451,8 @@ class TestAuxUnhealthyCache:
             patch("agent.auxiliary_client._read_main_model", return_value=""),
             patch("agent.auxiliary_client._try_openrouter") as or_try,
             patch(
-                "agent.auxiliary_client._try_nous",
-                return_value=(nous_client, "nous-model"),
-            ),
-            patch(
-                "agent.auxiliary_client._try_custom_endpoint", return_value=(None, None)
+                "agent.auxiliary_client._try_custom_endpoint",
+                return_value=(custom_client, "custom-model"),
             ),
             patch(
                 "agent.auxiliary_client._resolve_api_key_provider",
@@ -5460,9 +5461,9 @@ class TestAuxUnhealthyCache:
         ):
             client, model = _resolve_auto()
 
-        assert client is nous_client
+        assert client is custom_client
 
-        assert model == "nous-model"
+        assert model == "custom-model"
 
         # The skipped provider's _try_* should NOT have been called at all.
 
@@ -5480,7 +5481,7 @@ class TestAuxUnhealthyCache:
             _mark_provider_unhealthy,
         )
 
-        nous_client = MagicMock()
+        custom_client = MagicMock()
 
         _mark_provider_unhealthy("openrouter")
 
@@ -5495,11 +5496,8 @@ class TestAuxUnhealthyCache:
             patch("agent.auxiliary_client.resolve_provider_client") as step1,
             patch("agent.auxiliary_client._try_openrouter") as or_try,
             patch(
-                "agent.auxiliary_client._try_nous",
-                return_value=(nous_client, "n-model"),
-            ),
-            patch(
-                "agent.auxiliary_client._try_custom_endpoint", return_value=(None, None)
+                "agent.auxiliary_client._try_custom_endpoint",
+                return_value=(custom_client, "custom-model"),
             ),
             patch(
                 "agent.auxiliary_client._resolve_api_key_provider",
@@ -5512,11 +5510,11 @@ class TestAuxUnhealthyCache:
 
         step1.assert_not_called()
 
-        # Step-2 also skipped openrouter and landed on nous
+        # Step-2 also skipped openrouter and landed on custom
 
         or_try.assert_not_called()
 
-        assert client is nous_client
+        assert client is custom_client
 
     def test_payment_fallback_skips_unhealthy(self):
         """_try_payment_fallback also consults the unhealthy cache so a 402
@@ -5530,11 +5528,11 @@ class TestAuxUnhealthyCache:
             _mark_provider_unhealthy,
         )
 
-        nous_client = MagicMock()
+        api_client = MagicMock()
 
         # Mark BOTH the failed provider (openrouter) and a sibling (custom)
 
-        # unhealthy. The chain should still find nous.
+        # unhealthy. The chain should still find the api-key rung.
 
         _mark_provider_unhealthy("local/custom")
 
@@ -5543,23 +5541,19 @@ class TestAuxUnhealthyCache:
                 "agent.auxiliary_client._read_main_provider", return_value="openrouter"
             ),
             patch("agent.auxiliary_client._try_openrouter") as or_try,
-            patch(
-                "agent.auxiliary_client._try_nous",
-                return_value=(nous_client, "n-model"),
-            ),
             patch("agent.auxiliary_client._try_custom_endpoint") as custom_try,
             patch(
                 "agent.auxiliary_client._resolve_api_key_provider",
-                return_value=(None, None),
+                return_value=(api_client, "api-model"),
             ),
         ):
             client, model, label = _try_payment_fallback(
                 "openrouter", task="compression"
             )
 
-        assert client is nous_client
+        assert client is api_client
 
-        assert label == "nous"
+        assert label == "api-key"
 
         # OR is skipped via skip_chain_labels (failed provider), custom via unhealthy cache.
 

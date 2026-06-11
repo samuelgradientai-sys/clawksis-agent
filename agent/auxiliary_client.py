@@ -18,15 +18,13 @@ Resolution order for text tasks (auto mode):
 
   2. OpenRouter  (OPENROUTER_API_KEY)
 
-  3. Nous Portal (~/.clawksis/auth.json active provider)
+  3. Custom endpoint (config.yaml model.base_url + OPENAI_API_KEY)
 
-  4. Custom endpoint (config.yaml model.base_url + OPENAI_API_KEY)
+  4. Native Anthropic
 
-  5. Native Anthropic
+  5. Direct API-key providers (z.ai/GLM, Kimi/Moonshot, MiniMax, MiniMax-CN)
 
-  6. Direct API-key providers (z.ai/GLM, Kimi/Moonshot, MiniMax, MiniMax-CN)
-
-  7. None
+  6. None
 
 
 
@@ -36,13 +34,19 @@ Resolution order for vision/multimodal tasks (auto mode):
 
   2. OpenRouter
 
-  3. Nous Portal
+  3. Native Anthropic
 
-  4. Native Anthropic
+  4. Custom endpoint (for local vision models: Qwen-VL, LLaVA, Pixtral, etc.)
 
-  5. Custom endpoint (for local vision models: Qwen-VL, LLaVA, Pixtral, etc.)
+  5. None
 
-  6. None
+
+
+Nous Portal is intentionally NOT in either auto chain — Clawksis is BYOK.
+
+Nous resolves only when explicitly configured (active provider in
+
+~/.clawksis/auth.json or a per-task auxiliary.<task>.provider override).
 
 
 
@@ -3429,11 +3433,18 @@ def _get_provider_chain() -> List[tuple]:
 
     a caller explicitly requests it with a model.
 
+
+
+    NOTE: ``nous`` is also NOT in this chain.  Clawksis is BYOK — Nous
+
+    Portal is never probed automatically; it only resolves when the user
+
+    explicitly configures it (active provider or per-task override).
+
     """
 
     return [
         ("openrouter", _try_openrouter),
-        ("nous", _try_nous),
         ("local/custom", _try_custom_endpoint),
         ("api-key", _resolve_api_key_provider),
     ]
@@ -4827,9 +4838,11 @@ def _resolve_auto(
 
          switches to a cheap fallback model for side tasks.
 
-      2. OpenRouter → Nous → custom → Codex → API-key providers (fallback
+      2. OpenRouter → custom → API-key providers (fallback chain, only
 
-         chain, only used when the main provider has no working client).
+         used when the main provider has no working client).  Nous and
+
+         Codex are explicit-only — never probed automatically.
 
     """
 
@@ -6320,7 +6333,17 @@ def get_async_text_auxiliary_client(
     )
 
 
+# Aggregators auto-probed as vision fallbacks.  ``nous`` is deliberately
+# NOT here — Clawksis is BYOK and never probes Nous Portal automatically.
 _VISION_AUTO_PROVIDER_ORDER = (
+    "openrouter",
+)
+
+
+# Providers with a dedicated strict vision backend, valid for EXPLICIT
+# selection only (user-configured main provider or per-task override).
+# Superset of the auto order: keeps dormant Nous support reachable.
+_VISION_STRICT_PROVIDERS = (
     "openrouter",
     "nous",
 )
@@ -6428,7 +6451,7 @@ def get_available_vision_backends() -> List[str]:
 
 
 
-    Order: active provider → OpenRouter → Nous → stop.  This is the single
+    Order: active provider → OpenRouter → stop.  This is the single
 
     source of truth for setup, tool gating, and runtime auto-routing of
 
@@ -6443,7 +6466,7 @@ def get_available_vision_backends() -> List[str]:
     main_provider = _read_main_provider()
 
     if main_provider and main_provider not in {"auto", ""}:
-        if main_provider in _VISION_AUTO_PROVIDER_ORDER:
+        if main_provider in _VISION_STRICT_PROVIDERS:
             if _strict_vision_backend_available(main_provider):
                 available.append(main_provider)
 
@@ -6453,7 +6476,7 @@ def get_available_vision_backends() -> List[str]:
             if client is not None:
                 available.append(main_provider)
 
-    # 2. OpenRouter, 3. Nous — skip if already covered by main provider.
+    # 2. OpenRouter — skip if already covered by main provider.
 
     for p in _VISION_AUTO_PROVIDER_ORDER:
         if p not in available and _strict_vision_backend_available(p):
@@ -6550,9 +6573,7 @@ def resolve_vision_provider_client(
 
         #   2. OpenRouter  (vision-capable aggregator fallback)
 
-        #   3. Nous Portal (vision-capable aggregator fallback)
-
-        #   4. Stop
+        #   3. Stop — Nous Portal is explicit-only (BYOK), never auto-probed.
 
         main_provider = _read_main_provider()
 
@@ -6660,7 +6681,7 @@ def resolve_vision_provider_client(
 
         return None, None, None
 
-    if requested in _VISION_AUTO_PROVIDER_ORDER:
+    if requested in _VISION_STRICT_PROVIDERS:
         sync_client, default_model = _resolve_strict_vision_backend(
             requested, resolved_model
         )
