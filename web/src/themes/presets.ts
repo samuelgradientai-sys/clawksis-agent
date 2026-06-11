@@ -56,6 +56,8 @@ const DEFAULT_TYPOGRAPHY: ThemeTypography = {
 
   letterSpacing: "0",
 
+  fontWeight: "500",
+
 };
 
 

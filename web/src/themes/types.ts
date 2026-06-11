@@ -116,6 +116,12 @@ export interface ThemeTypography {
 
   letterSpacing: string;
 
+  /** Base font-weight for body copy. Example: `"400"`, `"500"`. Defaults
+
+   *  to `"500"` (medium) so the dashboard reads slightly bold overall. */
+
+  fontWeight?: string;
+
 }
 
 

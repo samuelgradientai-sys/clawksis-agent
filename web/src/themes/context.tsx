@@ -180,6 +180,8 @@ function typographyVars(typo: ThemeTypography): Record<string, string> {
 
     "--theme-letter-spacing": typo.letterSpacing,
 
+    "--theme-font-weight": typo.fontWeight ?? "500",
+
   };
 
 }

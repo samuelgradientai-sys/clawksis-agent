@@ -1244,7 +1244,7 @@ export default function App() {
 
                       "px-5 pt-2.5 pb-1",
 
-                      "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
+                      "font-mondwest font-bold text-display text-xs tracking-[0.12em] text-text-tertiary",
 
                       isDesktopCollapsed && "lg:hidden",
 
@@ -1608,7 +1608,7 @@ function SidebarNavLink({
 
             "px-5 py-2.5",
 
-            "font-mondwest text-display uppercase text-sm tracking-[0.12em]",
+            "font-mondwest font-bold text-display uppercase text-sm tracking-[0.12em]",
 
             "whitespace-nowrap transition-colors cursor-pointer",
 
@@ -1796,7 +1796,7 @@ function SidebarSystemActions({
 
           "px-5 pt-0.5 pb-0.5",
 
-          "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
+          "font-mondwest font-bold text-display text-xs tracking-[0.12em] text-text-tertiary",
 
           collapsed && "lg:hidden",
 
@@ -1922,7 +1922,7 @@ function SystemActionButton({
 
           "px-5 py-2.5",
 
-          "font-mondwest text-display text-xs tracking-[0.1em]",
+          "font-mondwest font-bold text-display text-xs tracking-[0.1em]",
 
           "whitespace-nowrap transition-colors cursor-pointer",
 
