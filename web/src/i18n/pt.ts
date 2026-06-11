@@ -492,6 +492,10 @@ export const pt: Translations = {
 
       onceAt: "Executar em",
 
+      onceUseCalendar: "Calendário",
+
+      onceUseManual: "Manual",
+
       customLabel: "Expressão cron",
 
       customPlaceholder: "0 9 * * *",

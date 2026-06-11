@@ -492,6 +492,10 @@ export const tr: Translations = {
 
       onceAt: "Çalıştırma zamanı",
 
+      onceUseCalendar: "Takvim",
+
+      onceUseManual: "Manuel",
+
       customLabel: "Cron ifadesi",
 
       customPlaceholder: "0 9 * * *",
