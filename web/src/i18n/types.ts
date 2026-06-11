@@ -536,6 +536,10 @@ export interface Translations {
 
       onceAt: string;
 
+      onceUseCalendar: string;
+
+      onceUseManual: string;
+
       customLabel: string;
 
       customPlaceholder: string;

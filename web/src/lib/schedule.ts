@@ -40,6 +40,11 @@ export type ScheduleMode =
 /** Unit used by interval mode. Backend parses ``m``/``h``/``d`` suffixes. */
 export type IntervalUnit = "minutes" | "hours" | "days";
 
+/** How the "once" date is picked: a visual month-grid calendar (day +
+ * time-of-day inputs) or the original datetime-local field for users
+ * who prefer typing the timestamp directly. */
+export type OncePickerMode = "calendar" | "manual";
+
 /** Cron weekday convention: Sunday = 0 .. Saturday = 6. Matches what
  * croniter expects on the backend (no need to remap on submit). */
 export const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -64,8 +69,20 @@ export interface ScheduleBuilderState {
    * croniter ``L`` extension isn't enabled in the parse_schedule regex). */
   dayOfMonth: number;
 
-  /** Once mode: ``YYYY-MM-DDTHH:MM`` from <input type=datetime-local>. */
+  /** Once mode: ``YYYY-MM-DDTHH:MM`` from <input type=datetime-local>.
+   * Only used when ``onceMode`` is ``manual``. */
   onceAt: string;
+
+  /** Once mode: which picker UI is active. Calendar is the default —
+   * clicking a day beats typing a timestamp for most users; manual
+   * stays available as the power-user escape hatch. */
+  onceMode: OncePickerMode;
+
+  /** Once mode (calendar): ``YYYY-MM-DD`` from the month-grid picker. */
+  onceDate: string;
+
+  /** Once mode (calendar): "HH:MM" 24h format from <input type=time>. */
+  onceTime: string;
 
   /** Custom mode: raw user-typed cron expression. Stored separately so
    * flipping between modes doesn't erase the user's work. */
@@ -83,6 +100,9 @@ export const DEFAULT_SCHEDULE_STATE: ScheduleBuilderState = {
   weekdays: [1, 2, 3, 4, 5],
   dayOfMonth: 1,
   onceAt: "",
+  onceMode: "calendar",
+  onceDate: "",
+  onceTime: "09:00",
   custom: "",
 };
 
@@ -134,6 +154,14 @@ export function buildScheduleString(state: ScheduleBuilderState): string {
       return `${parsed.minute} ${parsed.hour} ${dom} * *`;
     }
     case "once": {
+      if (state.onceMode === "calendar") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(state.onceDate)) return "";
+        const parsed = parseTimeOfDay(state.onceTime);
+        if (!parsed) return "";
+        // Same "YYYY-MM-DDTHH:MM:SS" shape as the manual branch below,
+        // assembled from the calendar's day + the time-of-day input.
+        return `${state.onceDate}T${pad2(parsed.hour)}:${pad2(parsed.minute)}:00`;
+      }
       const v = state.onceAt.trim();
       if (!v) return "";
       // <input type=datetime-local> already emits the

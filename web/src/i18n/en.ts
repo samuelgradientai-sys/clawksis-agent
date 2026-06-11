@@ -498,6 +498,10 @@ export const en: Translations = {
 
       onceAt: "Run at",
 
+      onceUseCalendar: "Calendar",
+
+      onceUseManual: "Manual",
+
       customLabel: "Cron expression",
 
       customPlaceholder: "0 9 * * *",

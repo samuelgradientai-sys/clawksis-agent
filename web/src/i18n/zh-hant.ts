@@ -492,6 +492,10 @@ export const zhHant: Translations = {
 
       onceAt: "執行時間",
 
+      onceUseCalendar: "日曆",
+
+      onceUseManual: "手動",
+
       customLabel: "cron 運算式",
 
       customPlaceholder: "0 9 * * *",
