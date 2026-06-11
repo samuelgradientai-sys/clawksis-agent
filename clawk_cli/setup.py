@@ -4324,36 +4324,55 @@ def _run_portal_one_shot(config: dict) -> None:
 
 
 # Welcome check-in delivery target: the messaging channel the operator
-# configured during setup, identified by its home-channel env var being set.
-# Mirrors cron.scheduler._HOME_TARGET_ENV_VARS, kept local so setup never has
-# to import the scheduler. Ordered by how likely a fresh user is to reach for
-# the channel.
-_WELCOME_DELIVER_HOME_ENV = [
-    ("telegram", "TELEGRAM_HOME_CHANNEL"),
-    ("whatsapp", "WHATSAPP_HOME_CHANNEL"),
-    ("discord", "DISCORD_HOME_CHANNEL"),
-    ("slack", "SLACK_HOME_CHANNEL"),
-    ("signal", "SIGNAL_HOME_CHANNEL"),
-    ("matrix", "MATRIX_HOME_ROOM"),
-    ("mattermost", "MATTERMOST_HOME_CHANNEL"),
-    ("bluebubbles", "BLUEBUBBLES_HOME_CHANNEL"),
-    ("sms", "SMS_HOME_CHANNEL"),
-    ("email", "EMAIL_HOME_ADDRESS"),
-    ("dingtalk", "DINGTALK_HOME_CHANNEL"),
-    ("feishu", "FEISHU_HOME_CHANNEL"),
-    ("wecom", "WECOM_HOME_CHANNEL"),
-    ("weixin", "WEIXIN_HOME_CHANNEL"),
-    ("qqbot", "QQBOT_HOME_CHANNEL"),
+# configured during setup. Each entry is (platform, credential env var,
+# home-channel env var). Home vars mirror cron.scheduler._HOME_TARGET_ENV_VARS;
+# credential vars mirror the platform tables in clawk_cli.status / gateway
+# config — kept local so setup never has to import the scheduler. Ordered by
+# how likely a fresh user is to reach for the channel.
+_WELCOME_DELIVER_CHANNELS = [
+    ("telegram", "TELEGRAM_BOT_TOKEN", "TELEGRAM_HOME_CHANNEL"),
+    ("whatsapp", "WHATSAPP_ENABLED", "WHATSAPP_HOME_CHANNEL"),
+    ("discord", "DISCORD_BOT_TOKEN", "DISCORD_HOME_CHANNEL"),
+    ("slack", "SLACK_BOT_TOKEN", "SLACK_HOME_CHANNEL"),
+    ("signal", "SIGNAL_HTTP_URL", "SIGNAL_HOME_CHANNEL"),
+    ("matrix", "MATRIX_ACCESS_TOKEN", "MATRIX_HOME_ROOM"),
+    ("mattermost", "MATTERMOST_TOKEN", "MATTERMOST_HOME_CHANNEL"),
+    ("bluebubbles", "BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_HOME_CHANNEL"),
+    ("sms", "TWILIO_ACCOUNT_SID", "SMS_HOME_CHANNEL"),
+    ("email", "EMAIL_ADDRESS", "EMAIL_HOME_ADDRESS"),
+    ("dingtalk", "DINGTALK_CLIENT_ID", "DINGTALK_HOME_CHANNEL"),
+    ("feishu", "FEISHU_APP_ID", "FEISHU_HOME_CHANNEL"),
+    ("wecom", "WECOM_BOT_ID", "WECOM_HOME_CHANNEL"),
+    ("weixin", "WEIXIN_ACCOUNT_ID", "WEIXIN_HOME_CHANNEL"),
+    ("qqbot", "QQ_APP_ID", "QQBOT_HOME_CHANNEL"),
 ]
 
 
 def _resolve_welcome_deliver_target() -> str:
-    """Return the messaging channel the operator just configured (the one whose
-    home channel is set) so the welcome check-in lands where they'll see it.
-    Falls back to ``"local"`` when no channel is wired up yet."""
+    """Return the messaging channel the operator configured during setup so the
+    welcome check-in lands where they'll see it.
 
-    for platform, env_var in _WELCOME_DELIVER_HOME_ENV:
-        if get_env_value(env_var):
+    Two passes: first a platform whose home channel is already set (delivery is
+    guaranteed), then a platform with credentials but the home channel deferred
+    ("set later with /set-home") — the scheduler resolves the actual chat at
+    fire time, so a /set-home before the job fires still lands it there, and an
+    unresolved target degrades to the locally saved output. Falls back to
+    ``"local"`` when no channel is wired up at all."""
+
+    for platform, _credential_var, home_var in _WELCOME_DELIVER_CHANNELS:
+        if get_env_value(home_var):
+            return platform
+
+    for platform, credential_var, _home_var in _WELCOME_DELIVER_CHANNELS:
+        value = get_env_value(credential_var)
+
+        # WHATSAPP_ENABLED is a boolean flag, not a token — "false"/"0"/"no"
+        # means the channel is explicitly off, not configured.
+        if credential_var == "WHATSAPP_ENABLED":
+            if str(value).lower() not in {"true", "1", "yes"}:
+                continue
+
+        if value:
             return platform
 
     return "local"
@@ -4456,6 +4475,23 @@ def _install_coding_clis() -> None:
         "MiroFish (opinion simulation) runs as a Docker server — configure it "
         "in `clawk tools` → MiroFish. Not auto-installed."
     )
+
+
+def _upgrade_welcome_checkin_delivery() -> None:
+    """After a gateway (re)configuration, point a still-pending welcome
+    check-in that was seeded with local delivery at the channel that now
+    exists. Best-effort like seeding — a failure never breaks setup."""
+
+    try:
+        from cron.jobs import upgrade_welcome_checkin_delivery
+
+        deliver = _resolve_welcome_deliver_target()
+
+        if upgrade_welcome_checkin_delivery(deliver):
+            print_info(f"Welcome check-in will now be delivered via {deliver}.")
+
+    except Exception as exc:
+        logger.debug("welcome check-in delivery upgrade skipped: %s", exc)
 
 
 def run_setup_wizard(args):
@@ -4576,6 +4612,11 @@ def run_setup_wizard(args):
                 func(config)
 
                 save_config(config)
+
+                # Connecting a channel after install must redirect a pending
+                # welcome check-in that was seeded with local delivery.
+                if key == "gateway":
+                    _upgrade_welcome_checkin_delivery()
 
                 print()
 
@@ -4780,11 +4821,14 @@ def run_setup_wizard(args):
         print_info(f"  cp {_backup_path} {config_path}")
 
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
-    # installer (not the agent) owns it. Idempotent — never duplicates.
+    # installer (not the agent) owns it. Idempotent — never duplicates. On
+    # existing installs only retarget a pending local welcome, never create one.
     if not is_existing:
         _install_coding_clis()
 
         _seed_welcome_checkin()
+    else:
+        _upgrade_welcome_checkin_delivery()
 
     _print_setup_summary(config, clawk_home)
 
@@ -4901,11 +4945,14 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
     print()
 
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
-    # installer (not the agent) owns it. Idempotent — never duplicates.
+    # installer (not the agent) owns it. Idempotent — never duplicates. On
+    # existing installs only retarget a pending local welcome, never create one.
     if not is_existing:
         _install_coding_clis()
 
         _seed_welcome_checkin()
+    else:
+        _upgrade_welcome_checkin_delivery()
 
     _print_setup_summary(config, clawk_home)
 
