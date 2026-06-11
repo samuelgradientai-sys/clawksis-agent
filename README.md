@@ -84,6 +84,8 @@ clawk doctor
 
 ## Comandos
 
+> 💡 Todos los comandos tienen ayuda integrada: `clawk <comando> --help` muestra subcomandos y flags completos.
+
 ### Básicos
 | Comando | Qué hace |
 |---|---|
@@ -91,14 +93,28 @@ clawk doctor
 | `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
 | `clawk -z "mensaje"` | Respuesta directa one-shot (sin modo interactivo) |
 | `clawk -m <modelo>` | Override de modelo para esa sesión |
+| `clawk -c` · `clawk -r <sesión>` | Continuar la última sesión / retomar una sesión por nombre |
 | `clawk model` | Elegir modelo y proveedor por defecto |
-| `clawk tools` | Activar/desactivar herramientas por plataforma |
+| `clawk fallback` | Proveedores de respaldo (se usan cuando el modelo primario falla) |
+| `clawk tools` | Activar/desactivar herramientas por plataforma (incluye CLIs de coding externas: Codex, Claude Code, OpenCode) |
 | `clawk status` | Estado de todos los componentes |
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
 | `clawk dashboard` | Abrir el dashboard web |
 | `clawk dashboard --remote USER@HOST` | Abrir un dashboard remoto vía túnel SSH (sin `ssh -L` manual; agregá `--start` para arrancarlo en el remoto, `--ssh-opt` para opciones de ssh) |
+| `clawk desktop` (alias `gui`) | Compilar y abrir la app de escritorio nativa |
+| `clawk version` | Mostrar versión |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
+
+### Configuración (`clawk config`)
+| Comando | Qué hace |
+|---|---|
+| `clawk config show` | Ver la configuración actual |
+| `clawk config edit` | Abrir `config.yaml` en tu editor |
+| `clawk config set <clave> <valor>` | Setear un valor (ej: `clawk config set model gpt-5`, `clawk config set terminal.backend tmux`) |
+| `clawk config path` · `clawk config env-path` | Imprimir la ruta de `config.yaml` / de `.env` |
+| `clawk config check` | Detectar configuración faltante o desactualizada |
+| `clawk config migrate` | Actualizar el config con opciones nuevas |
 
 ### Login y credenciales
 | Comando | Qué hace |
@@ -108,51 +124,107 @@ clawk doctor
 | `clawk auth add <provider> --type oauth` | Otros OAuth: `xai-oauth`, `qwen-oauth`, `google-gemini-cli`, `minimax-oauth` |
 | `clawk auth list` | Listar credenciales del pool (marca la activa) |
 | `clawk auth status <provider>` | Ver si estás logueado, scope y expiración |
+| `clawk auth remove <provider> <target>` | Quitar una credencial del pool (por índice, id o label) |
+| `clawk auth reset <provider>` | Limpiar el estado de agotamiento de las credenciales de un proveedor |
 | `clawk auth logout <provider>` | Cerrar sesión y limpiar credenciales |
-| `clawk config edit` | Editar `config.yaml` en tu editor |
+| `clawk login` · `clawk logout` | Login/logout OAuth directo con un proveedor de inferencia (device-flow) |
+| `clawk secrets` | Fuentes externas de secretos — Bitwarden Secrets Manager (`setup`, `status`, `sync`, `disable`, `install`) |
 
 > 💡 Los logins OAuth (Claude, Codex…) son 100% navegador — **no instalan ninguna CLI**.
+
+### Cron — tareas programadas (`clawk cron`)
+
+El scheduler corre dentro del gateway. Los schedules aceptan intervalos (`30m`), lenguaje natural (`every 2h`) o cron clásico (`0 9 * * *`).
+
+| Comando | Qué hace |
+|---|---|
+| `clawk cron list` · `--all` | Listar jobs programados (con `--all` incluye los deshabilitados) |
+| `clawk cron create "<schedule>" "<prompt>"` (alias `add`) | Crear un job programado |
+| `clawk cron edit <job_id> [flags]` | Editar schedule, prompt, nombre, skills, script, workdir o perfil de un job |
+| `clawk cron run <job_id>` | Disparar un job en el próximo tick del scheduler |
+| `clawk cron pause <job_id>` · `clawk cron resume <job_id>` | Pausar / reanudar un job |
+| `clawk cron remove <job_id>` (alias `rm`, `delete`) | Eliminar un job |
+| `clawk cron status` | Ver si el scheduler está corriendo |
+| `clawk cron tick` | Ejecutar los jobs vencidos una vez y salir (debug) |
+
+Flags de `create` / `edit`:
+
+- `--name <nombre>` — nombre legible del job
+- `--deliver <destino>` — a dónde va el resultado: `origin`, `local`, `telegram`, `discord`, `signal` o `<plataforma>:<chat_id>`
+- `--repeat <N>` — cantidad de repeticiones
+- `--skill <skill>` (repetible) — adjuntar skills al job; `edit` además acepta `--add-skill`, `--remove-skill` y `--clear-skills`
+- `--script <ruta>` — script en `~/.clawksis/scripts/`; su stdout se inyecta al prompt del agente en cada corrida
+- `--no-agent` — sin LLM: el script ES el job y su stdout se entrega tal cual (stdout vacío = silencio); patrón watchdog clásico. En `edit`, `--agent` lo revierte
+- `--workdir </ruta>` — directorio de trabajo del job (inyecta AGENTS.md / CLAUDE.md / .cursorrules de ese directorio)
+- `--profile <nombre>` — perfil de Clawksis bajo el que corre el job (`default` = perfil raíz)
+
+```bash
+# Resumen cada mañana a las 9 por Telegram
+clawk cron add "0 9 * * *" "Armá un resumen de mi día y novedades importantes" --name resumen-diario --deliver telegram
+
+# Watchdog de disco sin LLM, cada 30 minutos
+clawk cron add 30m --script check_disk.sh --no-agent --name disco
+```
 
 ### Personalidad, memoria y perfil
 | Comando | Qué hace |
 |---|---|
-| `clawk soul` | Ver/editar la **personalidad** del agente (SOUL.md) |
+| `clawk soul` · `clawk soul show` · `clawk soul path` | Ver/editar la **personalidad** del agente (SOUL.md) |
 | `clawk memory show` · `clawk memory edit` | Ver / **editar** la memoria del agente (MEMORY.md) |
-| `clawk user` · `clawk user edit` | Ver / **editar** el perfil del usuario (USER.md) |
+| `clawk memory setup` · `status` · `off` · `reset` | Configurar / consultar / apagar el proveedor externo de memoria |
+| `clawk user` · `clawk user show` · `clawk user path` | Ver / **editar** el perfil del usuario (USER.md) |
 
 ### Mensajería y proactividad
 | Comando | Qué hace |
 |---|---|
 | `clawk gateway run` | Gateway de mensajería en primer plano |
 | `clawk gateway install` | Gateway como servicio del sistema (boot + auto-restart) |
-| `clawk gateway status` | Ver si el gateway está corriendo |
-| `clawk cron` | Tareas programadas (`list`, `add`, `trigger`…) |
-| `clawk webhook` | Webhooks dinámicos (suscripciones a eventos) |
-| `clawk pairing` | Códigos de pairing para autorizar usuarios |
-| `clawk send` | Enviar un mensaje a una plataforma (scripts/cron/CI) |
+| `clawk gateway start` · `stop` · `restart` · `status` | Controlar el servicio del gateway |
+| `clawk gateway setup` | Configurar plataformas de mensajería |
+| `clawk gateway uninstall` | Quitar el servicio del sistema |
+| `clawk webhook subscribe <nombre>` (alias `add`) | Crear un webhook dinámico (activación del agente por eventos, ruta `/webhooks/<nombre>`) |
+| `clawk webhook list` · `remove <nombre>` · `test <nombre>` | Listar / quitar / probar suscripciones webhook |
+| `clawk hooks list` · `test <evento>` · `revoke <cmd>` · `doctor` | Hooks de shell declarados en `config.yaml` (allowlist de consentimiento incluida) |
+| `clawk pairing list` · `approve <código>` · `revoke` | Aprobar/revocar usuarios por código de pairing |
+| `clawk send` | Enviar un mensaje a una plataforma ya configurada (scripts/cron/CI — sin LLM ni gateway corriendo) |
 | `clawk whatsapp` · `clawk slack` | Integración WhatsApp / Slack |
 
 ### Capacidades (skills, plugins, MCP)
 | Comando | Qué hace |
 |---|---|
-| `clawk skills` | Buscar, instalar y gestionar skills |
-| `clawk plugins` | Instalar / actualizar / quitar plugins |
-| `clawk mcp` | Gestionar servidores MCP (y correr Clawksis como MCP server) |
-| `clawk bundles` | Bundles de skills (alias de varias skills) |
-| `clawk curator` | Mantenimiento automático de skills (status/run/pause) |
+| `clawk skills` | Buscar, instalar y gestionar skills (`browse`, `search`, `install`, `list`, `inspect`, `update`, `audit`, `uninstall`, `publish`, `snapshot`, `tap`…) |
+| `clawk plugins` | Plugins (`install`, `update`, `remove`, `list`, `enable`, `disable`) |
+| `clawk mcp` | Servidores MCP (`add`, `remove`, `list`, `test`, `login`, `install`) y correr Clawksis como MCP server (`serve`) |
+| `clawk bundles` | Bundles de skills — alias de varias skills (`list`, `show`, `create`, `delete`, `reload`) |
+| `clawk curator` | Mantenimiento automático de skills (`status`, `run`, `pause`, `resume`, `pin`, `unpin`, `restore`, `prune`…) |
+| `clawk computer-use` | Backend Computer Use / cua-driver (macOS) |
 
 ### Sesiones y mantenimiento
 | Comando | Qué hace |
 |---|---|
-| `clawk sessions` | Historial de sesiones (list/rename/export/prune/delete) |
-| `clawk logs` | Ver y filtrar logs |
+| `clawk sessions` | Historial de sesiones (`list`, `rename`, `export`, `prune`, `delete`, `stats`, `browse`) |
+| `clawk logs` | Ver y filtrar logs (agent / errors / gateway / gui) |
 | `clawk insights` | Uso y analytics |
 | `clawk backup` · `clawk import` | Backup / restaurar `~/.clawksis/` |
-| `clawk checkpoints` | Inspeccionar / limpiar checkpoints |
-| `clawk profile` | Perfiles (instancias aisladas de Clawksis) |
-| `clawk security` | Auditoría supply-chain (OSV.dev) |
-| `clawk kanban` | Tablero de colaboración (tareas, links, comentarios) |
-| `clawk version` | Mostrar versión |
+| `clawk checkpoints` | Checkpoints del filesystem (`status`, `list`, `prune`, `clear`) |
+| `clawk profile` | Perfiles — instancias aisladas de Clawksis (`list`, `create`, `use`, `show`, `delete`, `export`, `import`…) |
+| `clawk security audit` | Auditoría supply-chain (OSV.dev) |
+| `clawk kanban` | Tablero de colaboración (tareas, links, comentarios, swarm) |
+
+### Avanzados y soporte
+| Comando | Qué hace |
+|---|---|
+| `clawk completion <bash\|zsh\|fish>` | Script de autocompletado para tu shell |
+| `clawk acp` | Correr Clawksis como servidor ACP para editores (VS Code, Zed, JetBrains) |
+| `clawk claw migrate` · `clawk claw cleanup` | Migrar settings, memorias, skills y API keys desde OpenClaw |
+| `clawk migrate` | Migrar configuración de modelos retirados o settings deprecados |
+| `clawk proxy start` · `status` | Proxy local OpenAI-compatible hacia los proveedores OAuth |
+| `clawk postinstall` | Instalar dependencias no-Python para installs por pip (node, browser, ripgrep, ffmpeg) |
+| `clawk dump` | Resumen plano del setup para soporte/debugging |
+| `clawk debug` | Herramientas de debug (compartir logs y system info para soporte) |
+| `clawk prompt-size` | Desglose en bytes del system prompt + schemas de tools |
+
+> Los plugins instalados pueden registrar comandos top-level propios — usá `clawk <plugin> --help` para verlos.
 
 ---
 
