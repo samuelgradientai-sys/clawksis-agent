@@ -5,6 +5,10 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+defusedxml = pytest.importorskip(
+    "defusedxml", reason="wecom extra not installed (pip install 'clawksis-agent[wecom]')"
+)
+
 from gateway.config import PlatformConfig
 from gateway.platforms.wecom_callback import WecomCallbackAdapter
 from gateway.platforms.wecom_crypto import WXBizMsgCrypt

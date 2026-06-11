@@ -77,6 +77,7 @@ NODE_VERSION="22"
 #   data still at /root/.clawksis (CLAWK_HOME).  Matches Claude Code / Codex CLI
 #   and keeps Docker bind-mounted /root/ volumes lean.
 ROOT_FHS_LAYOUT=false
+SUDO_INSTALL_ACKNOWLEDGED=false
 DETECTED_BROWSER_EXECUTABLE=""
 
 # Options
@@ -386,6 +387,30 @@ is_termux() {
 #
 # Always no-op when the user set --dir or $CLAWK_INSTALL_DIR.
 resolve_install_layout() {
+    # `curl ... | sudo bash` trap: SUDO_USER set means a normal user escalated.
+    # The install then lands in root's world (data in /root/.clawksis, FHS code
+    # layout) and the human's own account ends up with no config, no sessions,
+    # and a `clawk` that reads root's state. Warn loudly and require explicit
+    # confirmation; the right call for almost everyone is to re-run WITHOUT sudo.
+    if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ] && [ "$SUDO_INSTALL_ACKNOWLEDGED" != true ]; then
+        log_warn "Running under sudo (invoked by user '${SUDO_USER}')."
+        log_warn "Clawksis is designed to install per-user, WITHOUT sudo:"
+        log_warn "  data/config →  ~/.clawksis of the installing user"
+        log_warn "Installing as root puts data in /root/.clawksis — your normal"
+        log_warn "account '${SUDO_USER}' will NOT see this install."
+        echo ""
+        log_info "Recommended: exit and re-run as your normal user:"
+        log_info "  curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash"
+        echo ""
+        if prompt_yes_no "Continue installing as root anyway?" "no"; then
+            SUDO_INSTALL_ACKNOWLEDGED=true
+            log_warn "Proceeding with root install (FHS layout)."
+        else
+            log_error "Install aborted. Re-run without sudo as '${SUDO_USER}'."
+            exit 1
+        fi
+    fi
+
     if [ "$INSTALL_DIR_EXPLICIT" = true ]; then
         log_info "Install directory: $INSTALL_DIR (explicit)"
         return 0

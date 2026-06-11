@@ -5956,9 +5956,17 @@ class TelegramAdapter(BasePlatformAdapter):
                     reply_to_mode=self._reply_to_mode,
                 )
 
-                def _reset_opened_files() -> None:
+                def _reset_opened_files(_files=opened_files) -> None:
 
-                    for fh in opened_files:
+                    # Default-arg binding: capture THIS chunk's list now.
+
+                    # `opened_files` is rebound each loop iteration, so a
+
+                    # late-bound closure could seek(0) the wrong chunk's
+
+                    # file handles if the retry fires after rebinding.
+
+                    for fh in _files:
                         try:
                             fh.seek(0)
 

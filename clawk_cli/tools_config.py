@@ -1272,6 +1272,70 @@ def _run_cua_driver_installer(label: str = "Installing", verbose: bool = True) -
         return False
 
 
+def _npm_global_bin_dir(npm_bin: str) -> str:
+    """Return npm's global bin directory ("" when undeterminable).
+
+    `npm install -g` places binaries in `<prefix>/bin` (POSIX) or `<prefix>`
+    (Windows). When that directory is not on PATH — the default for non-root
+    installs with a user-scoped prefix like ~/.npm-global — `shutil.which()`
+    can't see an already-installed CLI, so every `clawk setup` run would
+    reinstall it and then report the install as failed. Resolving the real
+    bin dir breaks that loop.
+    """
+
+    import os
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [npm_bin, "prefix", "-g"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+    except Exception:
+        return ""
+
+    prefix = (result.stdout or "").strip()
+
+    if result.returncode != 0 or not prefix:
+        return ""
+
+    if os.name == "nt":
+        return prefix
+
+    return os.path.join(prefix, "bin")
+
+
+def _resolve_npm_cli(bin_name: str, npm_bin: str = "") -> str:
+    """Absolute path to *bin_name*, checking PATH then npm's global bin dir."""
+
+    import os
+    import shutil
+
+    found = shutil.which(bin_name)
+
+    if found:
+        return found
+
+    if not npm_bin:
+        return ""
+
+    bin_dir = _npm_global_bin_dir(npm_bin)
+
+    if not bin_dir:
+        return ""
+
+    candidate = os.path.join(bin_dir, bin_name)
+
+    for path in (candidate, candidate + ".cmd", candidate + ".exe"):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+
+    return ""
+
+
 def _install_npm_cli(
     pkg: str, bin_name: str, label: str, *, login_hint: str = ""
 ) -> None:
@@ -1285,15 +1349,28 @@ def _install_npm_cli(
     import shutil
     import subprocess
 
-    if shutil.which(bin_name):
-        _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+    npm_bin = shutil.which("npm") or ""
+
+    already = _resolve_npm_cli(bin_name, npm_bin)
+
+    if already:
+        if shutil.which(bin_name):
+            _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+
+        else:
+            import os
+
+            _print_success(f"    {label} is already installed ({already})")
+
+            _print_warning(
+                f"    {os.path.dirname(already)} is not on PATH — add it to your "
+                f"shell profile so `{bin_name}` works everywhere."
+            )
 
         if login_hint:
             _print_info(f"    {login_hint}")
 
         return
-
-    npm_bin = shutil.which("npm")
 
     if not npm_bin:
         _print_warning(f"    npm not found — cannot auto-install {label}.")
@@ -1319,8 +1396,23 @@ def _install_npm_cli(
 
         return
 
+    installed_at = _resolve_npm_cli(bin_name, npm_bin)
+
     if result.returncode == 0 and shutil.which(bin_name):
         _print_success(f"    {label} installed")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+    elif result.returncode == 0 and installed_at:
+        import os
+
+        _print_success(f"    {label} installed ({installed_at})")
+
+        _print_warning(
+            f"    {os.path.dirname(installed_at)} is not on PATH — add it to "
+            f"your shell profile so `{bin_name}` works everywhere."
+        )
 
         if login_hint:
             _print_info(f"    {login_hint}")

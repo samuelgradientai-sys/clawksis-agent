@@ -3171,6 +3171,56 @@ def run_doctor(args):
             f"(60 req/hr rate limit — set in {_DHH}/.env for better rates)",
         )
 
+    _section("Cron Scheduler")
+
+    # The cron scheduler lives inside the gateway process: jobs only fire
+
+    # while a gateway is running. `clawk doctor` previously verified that
+
+    # croniter was importable and ~/.clawksis/cron/ existed, but never that
+
+    # the scheduler itself was alive — so a fresh install with scheduled
+
+    # jobs and no gateway looked healthy while silently never firing.
+
+    try:
+        from clawk_cli.gateway import find_gateway_pids as _find_gw_pids
+
+        from cron.jobs import list_jobs as _cron_list_jobs
+
+        _gw_pids = _find_gw_pids()
+
+        try:
+            _active_jobs = _cron_list_jobs(include_disabled=False)
+
+        except Exception:
+            _active_jobs = []
+
+        if _gw_pids:
+            check_ok(
+                "Cron scheduler running",
+                f"(gateway PID {', '.join(map(str, _gw_pids))} — "
+                f"{len(_active_jobs)} active job(s))",
+            )
+
+        elif _active_jobs:
+            check_warn(
+                "Cron scheduler not running",
+                f"({len(_active_jobs)} active job(s) will NOT fire)",
+            )
+
+            check_info("Jobs only fire while the gateway is running.")
+
+            check_info("Start it: clawk gateway install   (or: clawk gateway)")
+
+        else:
+            check_ok(
+                "Cron scheduler idle", "(no gateway, no active jobs — nothing to fire)"
+            )
+
+    except Exception as _cron_exc:
+        check_warn("Cron scheduler check skipped", f"({_cron_exc})")
+
     _section("Memory Provider")
 
     _active_memory_provider = ""
