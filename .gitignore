@@ -264,3 +264,4 @@ business_ops/reports/*.json
 
 !business_ops/examples/
 !business_ops/examples/sample_sales.csv
+README.md.backup-*
