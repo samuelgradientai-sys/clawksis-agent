@@ -22,9 +22,23 @@ const MAX_EVENTS = 600;
 const SEEN_MAX = 4000;
 
 function dedupKey(ev: GatewayEvent): string | null {
-  const toolId = (ev.payload as { tool_id?: unknown }).tool_id;
-  if (toolId === undefined || toolId === null || toolId === "") return null;
-  return `${ev.type}:${String(toolId)}`;
+  const p = ev.payload as { tool_id?: unknown; subagent_id?: unknown };
+  const toolId = p.tool_id;
+  if (toolId !== undefined && toolId !== null && toolId !== "") {
+    return `${ev.type}:${String(toolId)}`;
+  }
+  // Sub-agent start/complete arrive on both the WS feed and the poll log for
+  // the chat session — dedupe by subagent id. (subagent.tool/thinking have no
+  // stable id and the bridge tolerates the occasional repeat.)
+  if (
+    (ev.type === "subagent.start" || ev.type === "subagent.complete") &&
+    p.subagent_id !== undefined &&
+    p.subagent_id !== null &&
+    p.subagent_id !== ""
+  ) {
+    return `${ev.type}:${String(p.subagent_id)}`;
+  }
+  return null;
 }
 
 export function useMergedFeed(a: GatewayFeed, b: GatewayFeed): GatewayFeed {

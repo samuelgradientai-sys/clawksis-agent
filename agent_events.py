@@ -93,10 +93,25 @@ def _drain() -> None:
                 kind TEXT NOT NULL,
                 tool_name TEXT NOT NULL,
                 summary TEXT,
-                ok INTEGER
+                ok INTEGER,
+                subagent_id TEXT,
+                parent_id TEXT,
+                depth INTEGER,
+                goal TEXT
             )
             """
         )
+        # Forward-migrate DBs created before the subagent columns existed.
+        for _col, _decl in (
+            ("subagent_id", "TEXT"),
+            ("parent_id", "TEXT"),
+            ("depth", "INTEGER"),
+            ("goal", "TEXT"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE agent_events ADD COLUMN {_col} {_decl}")
+            except Exception:
+                pass  # column already exists
         conn.commit()
     except Exception:
         logger.warning("agent_events writer failed to open DB", exc_info=True)
@@ -110,8 +125,9 @@ def _drain() -> None:
         try:
             conn.execute(
                 "INSERT INTO agent_events "
-                "(ts, session_id, task_id, tool_call_id, kind, tool_name, summary, ok) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(ts, session_id, task_id, tool_call_id, kind, tool_name, summary, ok, "
+                "subagent_id, parent_id, depth, goal) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     item.get("ts", time.time()),
                     item.get("session_id") or "",
@@ -121,6 +137,10 @@ def _drain() -> None:
                     item.get("tool_name") or "",
                     item.get("summary"),
                     item.get("ok"),
+                    item.get("subagent_id"),
+                    item.get("parent_id"),
+                    item.get("depth"),
+                    item.get("goal"),
                 ),
             )
             conn.commit()
@@ -205,6 +225,39 @@ def emit_tool_complete(
     })
 
 
+def emit_subagent_event(
+    *,
+    event_type: str,
+    session_id: Optional[str],
+    subagent_id: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    depth: Optional[int] = None,
+    goal: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    text: Optional[str] = None,
+) -> None:
+    """Record a sub-agent lifecycle event (subagent.start/tool/complete/...).
+
+    Lets the dashboard office draw the delegation tree (sub-agent characters +
+    parent→child link lines) for EVERY agent, not just the dashboard chat (which
+    already gets these over the WS feed). Non-blocking, never raises.
+    """
+    _enqueue({
+        "ts": time.time(),
+        "session_id": session_id or "",
+        "task_id": None,
+        "tool_call_id": None,
+        "kind": event_type or "subagent.tool",
+        "tool_name": tool_name or "",
+        "summary": _truncate(text or goal),
+        "ok": None,
+        "subagent_id": subagent_id,
+        "parent_id": parent_id,
+        "depth": depth if isinstance(depth, int) else None,
+        "goal": _truncate(goal),
+    })
+
+
 def read_recent(limit: int = 300, since_id: Optional[int] = None) -> list:
     """Dashboard helper: recent events across all agents, oldest-first.
 
@@ -218,7 +271,8 @@ def read_recent(limit: int = 300, since_id: Optional[int] = None) -> list:
         conn = sqlite3.connect(str(path), timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
         sql = (
-            "SELECT id, ts, session_id, task_id, tool_call_id, kind, tool_name, summary, ok "
+            "SELECT id, ts, session_id, task_id, tool_call_id, kind, tool_name, summary, ok, "
+            "subagent_id, parent_id, depth, goal "
             "FROM agent_events"
         )
         params: list = []
@@ -246,6 +300,10 @@ def read_recent(limit: int = 300, since_id: Optional[int] = None) -> list:
             "tool_name": r[6],
             "summary": r[7],
             "ok": r[8],
+            "subagent_id": r[9],
+            "parent_id": r[10],
+            "depth": r[11],
+            "goal": r[12],
         }
         for r in rows
     ]

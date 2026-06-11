@@ -29,6 +29,46 @@ interface AgentEventRow {
   tool_name: string;
   summary?: string | null;
   ok?: number | null;
+  subagent_id?: string | null;
+  parent_id?: string | null;
+  depth?: number | null;
+  goal?: string | null;
+}
+
+function rowToEvent(r: AgentEventRow, id: number): GatewayEvent {
+  const ts = r.ts ? r.ts * 1000 : Date.now();
+  const sessionId = r.session_id || null;
+
+  // Sub-agent lifecycle (delegate_task) — drives the office delegation tree.
+  if (r.kind.startsWith("subagent.")) {
+    return {
+      id,
+      type: r.kind,
+      sessionId,
+      payload: {
+        subagent_id: r.subagent_id ?? undefined,
+        parent_id: r.parent_id ?? undefined,
+        depth: r.depth ?? undefined,
+        goal: r.goal ?? undefined,
+        tool_name: r.tool_name || undefined,
+        text: r.summary ?? undefined,
+      },
+      ts,
+    };
+  }
+
+  // Flat tool activity.
+  const isStart = r.kind === "start";
+  const toolId = r.tool_call_id ?? `ev-${String(r.id)}`;
+  return {
+    id,
+    type: isStart ? "tool.start" : "tool.complete",
+    sessionId,
+    payload: isStart
+      ? { tool_id: toolId, name: r.tool_name, context: r.summary ?? "" }
+      : { tool_id: toolId, name: r.tool_name },
+    ts,
+  };
 }
 
 const POLL_MS = 1500;
@@ -64,19 +104,7 @@ export function useAgentEventsFeed(): GatewayFeed {
 
         sinceRef.current = rows.reduce((m, r) => Math.max(m, r.id), sinceRef.current);
 
-        const mapped: GatewayEvent[] = rows.map((r) => {
-          const isStart = r.kind === "start";
-          const toolId = r.tool_call_id ?? `ev-${String(r.id)}`;
-          return {
-            id: nextIdRef.current++,
-            type: isStart ? "tool.start" : "tool.complete",
-            sessionId: r.session_id || null,
-            payload: isStart
-              ? { tool_id: toolId, name: r.tool_name, context: r.summary ?? "" }
-              : { tool_id: toolId, name: r.tool_name },
-            ts: r.ts ? r.ts * 1000 : Date.now(),
-          };
-        });
+        const mapped: GatewayEvent[] = rows.map((r) => rowToEvent(r, nextIdRef.current++));
 
         for (const ev of mapped) {
           for (const cb of listenersRef.current) {
