@@ -1378,8 +1378,10 @@ def init_agent(
                     if not _fb_resolved:
                         raise RuntimeError(
                             f"Provider '{_explicit}' is set in config.yaml but no API key "
-                            f"was found. Set the {_env_hint} environment "
-                            f"variable, or switch to a different provider with `clawk model`."
+                            f"was found. Add {_env_hint} to the .env file under your "
+                            f"Clawksis home (a shell `export` is not visible to background "
+                            f"services like the gateway), or switch to a different "
+                            f"provider with `clawk model`."
                         )
 
                 if not getattr(agent, "_fallback_activated", False):

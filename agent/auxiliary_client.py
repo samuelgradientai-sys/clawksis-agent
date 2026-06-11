@@ -8012,8 +8012,10 @@ def call_llm(
             if _explicit and _explicit not in {"auto", "openrouter", "custom"}:
                 raise RuntimeError(
                     f"Provider '{_explicit}' is set in config.yaml but no API key "
-                    f"was found. Set the {_explicit.upper()}_API_KEY environment "
-                    f"variable, or switch to a different provider with `clawk model`."
+                    f"was found. Add {_explicit.upper()}_API_KEY to the .env file "
+                    f"under your Clawksis home (a shell `export` is not visible to "
+                    f"background services like the gateway), or switch to a "
+                    f"different provider with `clawk model`."
                 )
 
             # For auto/custom with no credentials, try the full auto chain
@@ -8752,8 +8754,10 @@ async def async_call_llm(
             if _explicit and _explicit not in {"auto", "openrouter", "custom"}:
                 raise RuntimeError(
                     f"Provider '{_explicit}' is set in config.yaml but no API key "
-                    f"was found. Set the {_explicit.upper()}_API_KEY environment "
-                    f"variable, or switch to a different provider with `clawk model`."
+                    f"was found. Add {_explicit.upper()}_API_KEY to the .env file "
+                    f"under your Clawksis home (a shell `export` is not visible to "
+                    f"background services like the gateway), or switch to a "
+                    f"different provider with `clawk model`."
                 )
 
             if not resolved_base_url:

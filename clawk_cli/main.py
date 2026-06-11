@@ -7801,6 +7801,70 @@ def _model_flow_copilot_acp(config, current_model=""):
     print(f"Default model set to: {selected} (via {pconfig.name})")
 
 
+def _persist_env_only_key(key_env: str, value: str) -> None:
+
+    """Write a kept API key to ``.env`` when it only lives in the process env.
+
+
+
+    ``clawk setup`` / ``clawk model`` accept a key exported in the user's
+
+    shell as "already configured ✓", but background services (the gateway
+
+    under systemd/launchd) never inherit shell exports — they read
+
+    ``CLAWK_HOME/.env``.  Keeping an env-only key without persisting it
+
+    leaves config.yaml pointing at a provider whose credential vanishes
+
+    outside this shell: the terminal keeps working while Telegram/WhatsApp
+
+    replies fail with "Provider X is set in config.yaml but no API key
+
+    was found".
+
+
+
+    Bitwarden-sourced values are deliberately NOT copied to disk — the user
+
+    chose to keep those secrets out of ``.env``.  Managed installs never
+
+    write ``.env`` from here either.  Best-effort: persistence failures
+
+    must not block the setup flow.
+
+    """
+
+    if not key_env or not value:
+        return
+
+    try:
+        from clawk_cli.config import (
+            get_env_path,
+            is_managed,
+            load_env,
+            save_env_value,
+        )
+
+        from clawk_cli.env_loader import get_secret_source
+
+        if is_managed() or get_secret_source(key_env):
+            return
+
+        if (load_env().get(key_env) or "").strip() == value:
+            return
+
+        save_env_value(key_env, value)
+
+        print(
+            f"  Saved {key_env} to {get_env_path()} so background "
+            f"services (e.g. the gateway) can use it too."
+        )
+
+    except Exception:
+        pass
+
+
 def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
     """Shared API-key entry point for ``clawk setup`` / ``clawk model``.
 
@@ -7903,6 +7967,8 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
         if not new_key:
             print("  No change.")
 
+            _persist_env_only_key(key_env, existing_key)
+
             print()
 
             return existing_key, False
@@ -7924,7 +7990,11 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
 
         return "", True
 
-    # Keep (default, or any other input)
+    # Keep (default, or any other input).  An env-only key (shell export)
+
+    # gets persisted so the gateway resolves the same credential later.
+
+    _persist_env_only_key(key_env, existing_key)
 
     print()
 
