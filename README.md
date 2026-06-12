@@ -2,15 +2,46 @@
   <img src="assets/banner.png" alt="Clawksis" width="80%">
 </p>
 
-# Clawksis
+<h1 align="center">Clawksis</h1>
 
-Agente de IA autónomo que corre en tu propio servidor. Habla con él desde Telegram, WhatsApp o Discord mientras trabaja en un VPS. Aprende de cada sesión, crea skills propias y mejora con el uso.
+<p align="center">
+  <b>Tu agente de IA autónomo, self-hosted.</b><br>
+  Hablale desde Telegram, WhatsApp o Discord mientras trabaja en tu VPS.<br>
+  Aprende de cada sesión, crea sus propias skills y mejora con el uso.
+</p>
 
 <p align="center">
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT"></a>
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/issues"><img src="https://img.shields.io/badge/Issues-GitHub-red?style=for-the-badge" alt="Issues"></a>
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/DOCUMENTATION.md"><img src="https://img.shields.io/badge/Docs-Timeline-6C4FD6?style=for-the-badge" alt="Documentación"></a>
 </p>
+
+---
+
+## Tabla de contenidos
+
+- [Características](#características)
+- [Instalación](#instalación)
+- [Primeros pasos](#primeros-pasos)
+- [Proveedores soportados](#proveedores-soportados)
+- [Comandos](#comandos)
+- [Self-hosted: acceso por dominio](#self-hosted-acceso-por-dominio)
+- [Mensajería](#mensajería)
+- [Problemas comunes](#problemas-comunes)
+- [Actualizar](#actualizar) · [Desinstalar](#desinstalar) · [Licencia](#licencia)
+
+---
+
+## Características
+
+- 🏠 **100% self-hosted** — corre en tu propio servidor o VPS. Vos tenés el control: sin nube de terceros y sin límites impuestos por nadie.
+- 💬 **Mensajería multiplataforma** — chateá con tu agente desde Telegram, WhatsApp, Discord, Slack o Signal. Te responde donde estés.
+- 🧠 **Aprende y evoluciona** — recuerda contexto entre sesiones (`MEMORY.md`), tiene personalidad propia (`SOUL.md`) y crea sus propias skills con el uso.
+- 🔌 **+30 proveedores LLM** — Claude, GPT, Gemini, Grok, DeepSeek, Qwen, Kimi y más. Conectá por **OAuth** (usá tu suscripción Claude Pro/Max o ChatGPT Plus, sin API key) o por API key.
+- ⏰ **Proactivo, no solo reactivo** — tareas programadas (cron), webhooks y hooks de shell: el agente te escribe **a vos** cuando pasa algo.
+- 🧩 **Extensible** — skills, plugins, servidores MCP y bundles. Un ecosistema que crece con vos.
+- 🖥️ **CLI + Dashboard web + App de escritorio** — usalo como prefieras, incluido acceso remoto por dominio con HTTPS.
+- 📦 **Multiplataforma** — Linux, macOS, Windows y Android (Termux).
 
 ---
 
@@ -25,7 +56,7 @@ clawk setup
 >
 > **Android/Termux:** el mismo `curl` detecta Termux automáticamente.
 
-El instalador descarga el código, crea un virtualenv Python, instala dependencias de Node, construye el dashboard web y enlaza `clawk` en tu PATH.
+El instalador descarga el código, crea un virtualenv de Python, instala las dependencias de Node, construye el dashboard web y enlaza `clawk` en tu `PATH`.
 
 ---
 
@@ -48,9 +79,12 @@ clawk doctor
 
 ## Proveedores soportados
 
-**Comando para conectar cualquiera:** `clawk model` (menú interactivo que te lleva de la mano), o directo por proveedor con **`clawk auth add <id>`** (los de las tablas). `clawk auth add` auto-detecta: los OAuth hacen el login en el navegador, los de API key te piden la key y la guardan en `~/.clawksis/.env`. `auto` (default) usa lo que tengas configurado.
+La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú interactivo que te lleva de la mano). Para ir directo, usá **`clawk auth add <id>`**: auto-detecta el tipo, hace el login OAuth en el navegador o te pide la API key y la guarda en `~/.clawksis/.env`. El valor por defecto (`auto`) usa lo que tengas configurado.
+
+> 💡 **Tip:** `clawk auth add <id> --api-key TU_KEY` la pega sin prompt. Para ver o cambiar el modelo después: `clawk model`.
 
 ### Con login OAuth (sin API key)
+
 | Proveedor | id | Cómo conectarlo |
 |---|---|---|
 | **Claude** (Anthropic, Pro/Max) | `anthropic` | `clawk auth add anthropic --type oauth` |
@@ -61,7 +95,10 @@ clawk doctor
 | **MiniMax** | `minimax-oauth` | `clawk auth add minimax-oauth --type oauth` |
 | **GitHub Copilot** | `copilot` | `GITHUB_TOKEN` |
 
-### Con API key (te pide la key y la guarda en `~/.clawksis/.env`)
+> 💡 Los logins OAuth (Claude, Codex…) son 100% navegador — **no instalan ninguna CLI**.
+
+### Con API key (Clawksis te pide la key y la guarda en `~/.clawksis/.env`)
+
 | Proveedor | Comando | Variable `.env` |
 |---|---|---|
 | **OpenRouter** (acceso a casi todo) | `clawk auth add openrouter` | `OPENROUTER_API_KEY` |
@@ -82,33 +119,49 @@ clawk doctor
 | **LM Studio** (local) | `clawk model` → LM Studio | opcional `LM_API_KEY` |
 | **Cualquier OpenAI-compatible** | `clawk model` → Custom | `base_url` + key |
 
-> 💡 Tip: `clawk auth add <id> --api-key TU_KEY` la pega sin prompt. Para ver/cambiar el modelo después: `clawk model`.
+---
 
 ## Comandos
 
 > 💡 Todos los comandos tienen ayuda integrada: `clawk <comando> --help` muestra subcomandos y flags completos.
 
-### Básicos
+### Esenciales
+
 | Comando | Qué hace |
 |---|---|
 | `clawk` | Chat interactivo con el agente en la terminal |
 | `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
 | `clawk -z "mensaje"` | Respuesta directa one-shot (sin modo interactivo) |
-| `clawk -m <modelo>` | Override de modelo para esa sesión |
-| `clawk -c` · `clawk -r <sesión>` | Continuar la última sesión / retomar una sesión por nombre |
 | `clawk model` | Elegir modelo y proveedor por defecto |
-| `clawk fallback` | Proveedores de respaldo (se usan cuando el modelo primario falla) |
-| `clawk tools` | Activar/desactivar herramientas por plataforma (incluye CLIs de coding externas: Codex, Claude Code, OpenCode) |
 | `clawk status` | Estado de todos los componentes |
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
 | `clawk dashboard` | Abrir el dashboard web |
+| `clawk gateway install` | Mensajería como servicio del sistema |
+| `clawk cron add "<schedule>" "<prompt>"` | Programar una tarea recurrente |
+| `clawk skills` | Buscar, instalar y gestionar skills |
+
+La referencia completa está organizada por categoría — expandí la que necesites:
+
+<details>
+<summary><b>Básicos y sesión</b></summary>
+
+| Comando | Qué hace |
+|---|---|
+| `clawk -m <modelo>` | Override de modelo para esa sesión |
+| `clawk -c` · `clawk -r <sesión>` | Continuar la última sesión / retomar una sesión por nombre |
+| `clawk fallback` | Proveedores de respaldo (se usan cuando el modelo primario falla) |
+| `clawk tools` | Activar/desactivar herramientas por plataforma (incluye CLIs de coding externas: Codex, Claude Code, OpenCode) |
 | `clawk dashboard --remote USER@HOST` | Abrir un dashboard remoto vía túnel SSH (sin `ssh -L` manual; agregá `--start` para arrancarlo en el remoto, `--ssh-opt` para opciones de ssh) |
 | `clawk desktop` (alias `gui`) | Compilar y abrir la app de escritorio nativa |
 | `clawk version` | Mostrar versión |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
 
-### Configuración (`clawk config`)
+</details>
+
+<details>
+<summary><b>Configuración (<code>clawk config</code>)</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk config show` | Ver la configuración actual |
@@ -118,7 +171,11 @@ clawk doctor
 | `clawk config check` | Detectar configuración faltante o desactualizada |
 | `clawk config migrate` | Actualizar el config con opciones nuevas |
 
-### Login y credenciales
+</details>
+
+<details>
+<summary><b>Login y credenciales</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk auth add anthropic --type oauth` | **Login con Claude** (suscripción Pro/Max, estilo Claude Code). En remoto/headless agregá `--manual-paste` |
@@ -132,9 +189,10 @@ clawk doctor
 | `clawk login` · `clawk logout` | Login/logout OAuth directo con un proveedor de inferencia (device-flow) |
 | `clawk secrets` | Fuentes externas de secretos — Bitwarden Secrets Manager (`setup`, `status`, `sync`, `disable`, `install`) |
 
-> 💡 Los logins OAuth (Claude, Codex…) son 100% navegador — **no instalan ninguna CLI**.
+</details>
 
-### Cron — tareas programadas (`clawk cron`)
+<details>
+<summary><b>Cron — tareas programadas (<code>clawk cron</code>)</b></summary>
 
 El scheduler corre dentro del gateway. Los schedules aceptan intervalos (`30m`), lenguaje natural (`every 2h`) o cron clásico (`0 9 * * *`).
 
@@ -149,7 +207,7 @@ El scheduler corre dentro del gateway. Los schedules aceptan intervalos (`30m`),
 | `clawk cron status` | Ver si el scheduler está corriendo |
 | `clawk cron tick` | Ejecutar los jobs vencidos una vez y salir (debug) |
 
-Flags de `create` / `edit`:
+**Flags de `create` / `edit`:**
 
 - `--name <nombre>` — nombre legible del job
 - `--deliver <destino>` — a dónde va el resultado: `origin`, `local`, `telegram`, `discord`, `signal` o `<plataforma>:<chat_id>`
@@ -157,7 +215,7 @@ Flags de `create` / `edit`:
 - `--skill <skill>` (repetible) — adjuntar skills al job; `edit` además acepta `--add-skill`, `--remove-skill` y `--clear-skills`
 - `--script <ruta>` — script en `~/.clawksis/scripts/`; su stdout se inyecta al prompt del agente en cada corrida
 - `--no-agent` — sin LLM: el script ES el job y su stdout se entrega tal cual (stdout vacío = silencio); patrón watchdog clásico. En `edit`, `--agent` lo revierte
-- `--workdir </ruta>` — directorio de trabajo del job (inyecta AGENTS.md / CLAUDE.md / .cursorrules de ese directorio)
+- `--workdir </ruta>` — directorio de trabajo del job (inyecta `AGENTS.md` / `CLAUDE.md` / `.cursorrules` de ese directorio)
 - `--profile <nombre>` — perfil de Clawksis bajo el que corre el job (`default` = perfil raíz)
 
 ```bash
@@ -168,15 +226,23 @@ clawk cron add "0 9 * * *" "Armá un resumen de mi día y novedades importantes"
 clawk cron add 30m --script check_disk.sh --no-agent --name disco
 ```
 
-### Personalidad, memoria y perfil
+</details>
+
+<details>
+<summary><b>Personalidad, memoria y perfil</b></summary>
+
 | Comando | Qué hace |
 |---|---|
-| `clawk soul` · `clawk soul show` · `clawk soul path` | Ver/editar la **personalidad** del agente (SOUL.md) |
-| `clawk memory show` · `clawk memory edit` | Ver / **editar** la memoria del agente (MEMORY.md) |
+| `clawk soul` · `clawk soul show` · `clawk soul path` | Ver/editar la **personalidad** del agente (`SOUL.md`) |
+| `clawk memory show` · `clawk memory edit` | Ver / **editar** la memoria del agente (`MEMORY.md`) |
 | `clawk memory setup` · `status` · `off` · `reset` | Configurar / consultar / apagar el proveedor externo de memoria |
-| `clawk user` · `clawk user show` · `clawk user path` | Ver / **editar** el perfil del usuario (USER.md) |
+| `clawk user` · `clawk user show` · `clawk user path` | Ver / **editar** el perfil del usuario (`USER.md`) |
 
-### Mensajería y proactividad
+</details>
+
+<details>
+<summary><b>Mensajería y proactividad</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk gateway run` | Gateway de mensajería en primer plano |
@@ -191,7 +257,11 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 | `clawk send` | Enviar un mensaje a una plataforma ya configurada (scripts/cron/CI — sin LLM ni gateway corriendo) |
 | `clawk whatsapp` · `clawk slack` | Integración WhatsApp / Slack |
 
-### Capacidades (skills, plugins, MCP)
+</details>
+
+<details>
+<summary><b>Capacidades (skills, plugins, MCP)</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk skills` | Buscar, instalar y gestionar skills (`browse`, `search`, `install`, `list`, `inspect`, `update`, `audit`, `uninstall`, `publish`, `snapshot`, `tap`…) |
@@ -201,7 +271,11 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 | `clawk curator` | Mantenimiento automático de skills (`status`, `run`, `pause`, `resume`, `pin`, `unpin`, `restore`, `prune`…) |
 | `clawk computer-use` | Backend Computer Use / cua-driver (macOS) |
 
-### Sesiones y mantenimiento
+</details>
+
+<details>
+<summary><b>Sesiones y mantenimiento</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk sessions` | Historial de sesiones (`list`, `rename`, `export`, `prune`, `delete`, `stats`, `browse`) |
@@ -213,7 +287,11 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 | `clawk security audit` | Auditoría supply-chain (OSV.dev) |
 | `clawk kanban` | Tablero de colaboración (tareas, links, comentarios, swarm) |
 
-### Avanzados y soporte
+</details>
+
+<details>
+<summary><b>Avanzados y soporte</b></summary>
+
 | Comando | Qué hace |
 |---|---|
 | `clawk completion <bash\|zsh\|fish>` | Script de autocompletado para tu shell |
@@ -225,6 +303,8 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 | `clawk dump` | Resumen plano del setup para soporte/debugging |
 | `clawk debug` | Herramientas de debug (compartir logs y system info para soporte) |
 | `clawk prompt-size` | Desglose en bytes del system prompt + schemas de tools |
+
+</details>
 
 > Los plugins instalados pueden registrar comandos top-level propios — usá `clawk <plugin> --help` para verlos.
 
@@ -286,7 +366,9 @@ Luego entra a `https://tudominio.com` — verás el login y después el dashboar
 
 ---
 
-## Mensajería (Telegram, WhatsApp, Discord)
+## Mensajería
+
+Telegram, WhatsApp, Discord, Slack y Signal.
 
 ```bash
 # Telegram — requiere bot token de @BotFather
@@ -296,7 +378,7 @@ clawk gateway install --telegram --token TU_BOT_TOKEN
 clawk gateway status
 ```
 
-Agrega tokens en `~/.clawksis/.env`:
+Agregá los tokens en `~/.clawksis/.env`:
 
 ```bash
 TELEGRAM_BOT_TOKEN=tu_token
@@ -330,7 +412,7 @@ clawk doctor           # diagnóstico completo
 ```bash
 clawk doctor
 ```
-Muestra Python version, configuración, herramientas disponibles y qué configurar para activar funciones opcionales (búsqueda web, generación de imágenes, etc.).
+Muestra la versión de Python, la configuración, las herramientas disponibles y qué configurar para activar funciones opcionales (búsqueda web, generación de imágenes, etc.).
 
 ---
 
@@ -357,5 +439,3 @@ Elimina el código y el comando `clawk`. Tu configuración en `~/.clawksis/` no 
 ## Licencia
 
 MIT. Basado en [hermes-agent](https://github.com/NousResearch/hermes-agent) de Nous Research — copyright original conservado en `LICENSE`.
-
-Modificaciones adicionales © 2026 Gradient AI / Samuel Gomez.
