@@ -10,6 +10,18 @@ Thank you for contributing to Clawksis! This guide covers everything you need: s
 
 
 
+## Documentation
+
+Clawksis docs live in a few places: this guide (contributing + architecture), the project `README.md` (install + full command reference), and the `website/` docs site plus the in-app **Docs** page in the dashboard.
+
+For a dated, day-by-day development log — what shipped each day, the command to run it, and what it's for — see **[DOCUMENTATION.md](DOCUMENTATION.md)**.
+
+
+
+---
+
+
+
 ## Contribution Priorities
 
 
