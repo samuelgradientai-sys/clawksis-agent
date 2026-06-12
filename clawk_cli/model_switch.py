@@ -80,39 +80,39 @@ logger = logging.getLogger(__name__)
 
 
 _CLAWK_MODEL_WARNING = (
-    "Nous Research Clawksis 3 & 4 models are NOT agentic and are not designed "
+    "Nous Research Hermes 3 & 4 models are NOT agentic and are not designed "
     "for use with Clawksis. They lack the tool-calling capabilities "
     "required for agent workflows. Consider using an agentic model instead "
     "(Claude, GPT, Gemini, DeepSeek, etc.)."
 )
 
 
-# Match only the real Nous Research Clawksis 3 / Clawksis 4 chat families.
+# Match only the real Nous Research Hermes 3 / Hermes 4 chat families.
 
-# The previous substring check (`"clawk" in name.lower()`) false-positived on
+# A bare substring check would false-positive on unrelated local Modelfiles
 
-# unrelated local Modelfiles like ``clawk-brain:qwen3-14b-ctx16k`` that just
+# like ``clawk-brain:qwen3-14b-ctx16k`` that carry the project's own "clawk"
 
-# happen to carry "clawk" in their tag but are fully tool-capable.
+# tag but are fully tool-capable, so we anchor on the "hermes" model family.
 
 #
 
 # Positive examples the regex must match:
 
-#   NousResearch/Clawksis-3-Llama-3.1-70B, clawk-4-405b, openrouter/clawk3:70b
+#   NousResearch/Hermes-3-Llama-3.1-70B, hermes-4-405b, openrouter/hermes3:70b
 
 # Negative examples it must NOT match:
 
 #   clawk-brain:qwen3-14b-ctx16k, qwen3:14b, claude-opus-4-6
 
 _NOUS_CLAWK_NON_AGENTIC_RE = re.compile(
-    r"(?:^|[/:])clawk[-_ ]?[34](?:[-_.:]|$)",
+    r"(?:^|[/:])hermes[-_ ]?[34](?:[-_.:]|$)",
     re.IGNORECASE,
 )
 
 
 def is_nous_clawk_non_agentic(model_name: str) -> bool:
-    """Return True if *model_name* is a real Nous Clawksis 3/4 chat model.
+    """Return True if *model_name* is a real Nous Hermes 3/4 chat model.
 
 
 
@@ -131,7 +131,7 @@ def is_nous_clawk_non_agentic(model_name: str) -> bool:
 
 
 def _check_clawk_model_warning(model_name: str) -> str:
-    """Return a warning string if *model_name* is a Nous Clawksis 3/4 chat model."""
+    """Return a warning string if *model_name* is a Nous Hermes 3/4 chat model."""
 
     if is_nous_clawk_non_agentic(model_name):
         return _CLAWK_MODEL_WARNING

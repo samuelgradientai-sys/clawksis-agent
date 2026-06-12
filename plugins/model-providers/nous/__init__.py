@@ -54,8 +54,8 @@ nous = NousProfile(
     description="Nous Research — Clawksis model family",
     signup_url="https://nousresearch.com/",
     fallback_models=(
-        "clawk-3-405b",
-        "clawk-3-70b",
+        "hermes-3-405b",
+        "hermes-3-70b",
     ),
     base_url="https://inference.nousresearch.com/v1",
     auth_type="oauth_device_code",
