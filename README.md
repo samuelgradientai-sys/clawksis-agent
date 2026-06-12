@@ -18,6 +18,7 @@ Agente de IA autónomo que corre en tu propio servidor. Habla con él desde Tele
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
+clawk setup
 ```
 
 > **Windows:** `iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)`
