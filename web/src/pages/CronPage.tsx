@@ -430,7 +430,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="create-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -450,7 +450,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="cron-profile">Profile</Label>
                 <Select
@@ -625,18 +625,19 @@ export default function CronPage() {
                 )}
               </div>
 
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={creating}
-                  prefix={creating ? <Spinner /> : undefined}
-                >
-                  {creating ? t.common.creating : t.common.create}
-                </Button>
-              </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleCreate}
+                disabled={creating}
+                prefix={creating ? <Spinner /> : undefined}
+              >
+                {creating ? t.common.creating : t.common.create}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
@@ -651,7 +652,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="edit-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -671,7 +672,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="edit-cron-name">{t.cron.nameOptional}</Label>
                 <Input
@@ -730,19 +731,19 @@ export default function CronPage() {
                   </Select>
                 </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleEdit}
-                  disabled={saving}
-                  prefix={saving ? <Spinner /> : undefined}
-                >
-                  {saving ? t.common.loading : "Save changes"}
-                </Button>
-              </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleEdit}
+                disabled={saving}
+                prefix={saving ? <Spinner /> : undefined}
+              >
+                {saving ? t.common.loading : "Save changes"}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
