@@ -75,7 +75,10 @@ function friendlyModel(model: string): string {
   if (m.includes("qwen")) return "Qwen";
   if (m.includes("llama")) return "Llama";
   if (m.includes("mistral")) return "Mistral";
-  return model; // unknown family → show the raw id
+  // Unknown family — never leak the exact variant id. Use the first segment as
+  // a short family name (e.g. "cohere-command-r" → "Cohere").
+  const fam = model.split(/[-_/:.\s]/)[0];
+  return fam ? fam.charAt(0).toUpperCase() + fam.slice(1) : "AI";
 }
 
 export class PixelBridge {
