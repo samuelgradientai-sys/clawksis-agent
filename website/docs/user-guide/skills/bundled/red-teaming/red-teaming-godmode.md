@@ -811,7 +811,7 @@ Claude Sonnet 4 is robust against all current techniques for clearly harmful con
 
 4. **ULTRAPLINIAN costs money** — Racing 55 models means 55 API calls. Use `fast` tier (10 models) for quick tests, `ultra` only when you need maximum coverage.
 
-5. **Clawksis models don't need jailbreaking** — nousresearch/clawk-3-* and clawk-4-* are already uncensored. Use them directly for the fastest path.
+5. **Hermes models don't need jailbreaking** — nousresearch/hermes-3-* and hermes-4-* are already uncensored. Use them directly for the fastest path.
 
 6. **Encoding escalation order matters** — Plain → Leetspeak → Bubble → Braille → Morse. Each level is less readable, so try the lightest encoding that works.
 

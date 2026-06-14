@@ -240,7 +240,7 @@ rm -rf "$HOME/.clawksis/clawksis-agent/venv"
 
 # Reset a stuck macOS microphone prompt (macOS only)
 
-tccutil reset Microphone com.nousresearch.clawk
+tccutil reset Microphone com.clawksis.app
 
 ```
 
