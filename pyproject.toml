@@ -518,6 +518,13 @@ locales = ["locales/*.yaml"]
 
 [tool.setuptools.package-data]
 
+# Vendored models.dev registry snapshot — the offline-first floor for
+# model-capability lookups (agent/models_dev.py). Sealed installs (pip wheel,
+# Nix store venv, CI sandboxes) have no network and no disk cache on first run,
+# so without this the registry collapses to {} and every capability lookup
+# (context length, vision/tools support) silently degrades.
+agent = ["models_dev_snapshot.json"]
+
 clawk_cli = ["web_dist/**/*", "tui_dist/**/*", "scripts/install.sh", "scripts/install.ps1"]
 
 gateway = ["assets/**/*"]

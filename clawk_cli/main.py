@@ -2161,7 +2161,9 @@ def _ensure_tui_node() -> None:
     if not helper.is_file():
         return
 
-    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
+    from clawk_constants import get_clawk_home
+
+    clawk_home = str(get_clawk_home())
 
     try:
         # Helper writes logs to stderr; we ask bash to print `command -v node`
