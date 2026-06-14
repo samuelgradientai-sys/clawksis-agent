@@ -27,7 +27,7 @@ Registro **día por día** de lo que se construyó en Clawksis desde su primer p
 
 > Todos los comandos usan el binario `clawk`. Cualquiera acepta `clawk <comando> --help` para ver subcomandos y flags.
 
-Índice rápido: [04 jun](#2026-06-04--nace-clawksis) · [05 jun](#2026-06-05--dashboard-real--marca-morada) · [08 jun](#2026-06-08--persona-proactiva-comandos-auth) · [09 jun](#2026-06-09--independencia-de-nous--byok) · [10 jun](#2026-06-10--acceso-remoto-setup-pulido-agentes-de-coding) · [11 jun](#2026-06-11--visualización--sync-upstream)
+Índice rápido: [04 jun](#2026-06-04--nace-clawksis) · [05 jun](#2026-06-05--dashboard-real--marca-morada) · [08 jun](#2026-06-08--persona-proactiva-comandos-auth) · [09 jun](#2026-06-09--independencia-de-nous--byok) · [10 jun](#2026-06-10--acceso-remoto-setup-pulido-agentes-de-coding) · [11 jun](#2026-06-11--visualización--sync-upstream) · [13 jun](#2026-06-13--integración-de-ramas-a-main--sync-v202665)
 
 ---
 
@@ -185,6 +185,31 @@ Se sacó Nous de las cadenas de fallback automáticas del cliente auxiliar; se s
 
 **Tipografía más gruesa + fondo animado + persist de keys env-only** · `59d14c72` `b53dd467`
 - `b53dd467`: las API keys env-only ahora se persisten para que el gateway pueda resolverlas.
+
+---
+
+---
+
+## 2026-06-13 — Integración de ramas a main + sync v2026.6.5
+
+Día de **limpieza e integración**: se llevaron a `main` las ramas de trabajo que quedaban abiertas, tras una **revisión multi-agente** (review + verificación adversarial independiente por rama) para no arrastrar bugs ni código de demo a producción.
+
+**Integradas a `main` vía cherry-pick limpio** (historia lineal, SHAs nuevos):
+- **`authors` del paquete → Gradient AI / Samuel Gomez** · de `chore/independencia-nous` — metadato de `pyproject.toml`, cierre de la independencia de marca.
+- **Fix del instalador: `hash -r`** · de `fix/installer-stale-clawk-hash` — el install ya no afirma "no shell reload needed"; detecta un `clawk` fantasma antes en el PATH y guía `hash -r`. Para qué sirve: que tras reinstalar no te quede el binario viejo cacheado por el shell.
+- **Welcome check-in al canal elegido en el setup** · de `feat/installer-welcome-checkin` (+14 tests) — el cron de bienvenida apunta al canal que configuraste (Telegram/WhatsApp/…), no solo al que ya tenía su env var; hace upgrade in-place de un welcome pendiente cuando luego conectás un canal. Nunca degrada ni crea jobs.
+- **Barrido de Nous de los menús del setup** · 3 commits de `demo/setup-example-section` (`quitar Nous Portal/Subscription de menús`, `barrido en menús de providers`, `barrido de menciones inertes`). Comando: `clawk setup`.
+  - ⚠️ **Excluido a propósito**: los 2 commits `demo(setup)` de esa misma rama (menú de modo Quick/Full/**Example** + `setup_example()`) eran *scaffolding* de demostración que se le mostraría a todo usuario del instalador público. No fueron a `main`.
+- **Limpieza**: se quitó el import muerto `managed_nous_tools_enabled` que quedó sin uso tras el barrido.
+
+**Merge de `sync/upstream-v2026.6.5`** · merge `4369c1f79` — parte limpia del sync curado con Hermes v2026.6.5 (164 archivos: módulo i18n del desktop, `telegram_managed_bot`, discord voice_mixer, profiles store, des-doble-espaciado del fork), conservando los cambios recientes de `main`. Arreglos aplicados **antes** de mergear (regresión detectada en la review):
+- **URLs de instalación rotas** → revertidas en 13 archivos (docs EN + zh-Hans, `CONTRIBUTING.md`, bundle del plugin achievements): el rebrand a medias había dejado `clawksis-agent.nousresearch.com` (host inexistente). Ahora `raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.{sh,ps1}` y `/desktop`→`releases/latest`.
+- **`telegram_managed_bot.DEFAULT_API_URL`**: host roto → `""` (fail-closed, overrideable por `TELEGRAM_ONBOARDING_URL`).
+- Conflicto `tools/upstream/sync_state.json` → versión `v2026.6.5`. Quitados 4 PNGs de screenshots de un PR de upstream (cruft).
+
+**Verificación**: 26 archivos `.py` compilan, `install.sh` pasa `bash -n`, 14/14 tests de welcome-checkin contra el árbol final, 0 marcadores de conflicto, 0 URLs rotas.
+
+**Cierre de ramas/PRs**: PRs **#19** y **#20** auto-cerrados por el merge; **#13/#17/#18** cerrados a mano (entraron por cherry-pick, GitHub no los reconoce como mergeados). Ramas integradas borradas. Se **preservó `Andresito`** (su trabajo no está en `main`).
 
 ---
 
