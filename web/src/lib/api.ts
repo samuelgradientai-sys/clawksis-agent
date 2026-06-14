@@ -2955,6 +2955,8 @@ export interface CronJob {
 
   next_run_at?: string | null;
 
+  last_status?: string | null;
+
   last_error?: string | null;
 
 }

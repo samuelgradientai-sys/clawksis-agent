@@ -20709,7 +20709,10 @@ def main():
 
     cron_list = cron_subparsers.add_parser("list", help="List scheduled jobs")
 
-    cron_list.add_argument("--all", action="store_true", help="Include disabled jobs")
+    # Bug #28 fix: --all es ahora redundante (default es mostrar todos),
+    # se mantiene por retrocompatibilidad con scripts existentes.
+    cron_list.add_argument("--all", action="store_true", help="(deprecated, ya es default) Incluir jobs pausados")
+    cron_list.add_argument("--active-only", action="store_true", dest="active_only", help="Filtrar para mostrar solo jobs activos (no pausados)")
 
     # cron create/add
 
