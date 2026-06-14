@@ -849,6 +849,7 @@ def create_job(
     workdir: Optional[str] = None,
     profile: Optional[str] = None,
     no_agent: bool = False,
+    stop_after_alert: bool = False,
 ) -> Dict[str, Any]:
     """
 
@@ -945,6 +946,14 @@ def create_job(
                 delivery). Requires ``script`` to be set. Ideal for classic
 
                 watchdogs and periodic alerts that don't need LLM reasoning.
+
+        stop_after_alert: When True, the scheduler auto-pauses the job after its
+
+                first real (non-[SILENT]), successfully-delivered message. Use
+
+                for one-time condition alerts ("notify me when X happens") so the
+
+                job stops instead of re-running forever. Default False (recurring).
 
 
 
@@ -1051,6 +1060,7 @@ def create_job(
         "base_url": normalized_base_url,
         "script": normalized_script,
         "no_agent": normalized_no_agent,
+        "stop_after_alert": bool(stop_after_alert),
         "context_from": context_from,
         "schedule": parsed_schedule,
         "schedule_display": parsed_schedule.get("display", schedule),
