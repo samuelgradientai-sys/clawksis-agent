@@ -633,7 +633,12 @@ PLATFORM_HINTS = {
         "cannot ask questions, request clarification, or wait for follow-up. Execute "
         "the task fully and autonomously, making reasonable decisions where needed. "
         "Your final response is automatically delivered to the job's configured "
-        "destination — put the primary content directly in your response."
+        "destination — put the primary content directly in your response. "
+        "Reply in the user's language (see the USER PROFILE / user.md when present) "
+        "and write naturally, like a person — never a robotic, templated alert. "
+        "A cron can be a real task, not just a reminder: actually do the work this "
+        "run rather than restating it. If the job waits on a condition, check it "
+        'silently and reply with exactly "[SILENT]" until the condition is met.'
     ),
     "cli": (
         "You are a CLI AI Agent. Try not to use markdown but simple text "
