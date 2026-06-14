@@ -44,8 +44,6 @@ from typing import Optional, Dict, Any
 from clawk_cli.nous_subscription import get_nous_subscription_features
 from clawk_cli.banner import print_clawksis_banner
 
-from tools.tool_backend_helpers import managed_nous_tools_enabled
-
 from utils import base_url_hostname
 
 from clawk_constants import get_optional_skills_dir
