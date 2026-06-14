@@ -74,12 +74,21 @@ function rowToEvent(r: AgentEventRow, id: number): GatewayEvent {
 const POLL_MS = 1500;
 const MAX_EVENTS = 500;
 
+interface SessionMeta {
+  title?: string;
+  source?: string;
+  model?: string;
+}
+
 export function useAgentEventsFeed(): GatewayFeed {
   const [events, setEvents] = useState<GatewayEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const listenersRef = useRef(new Set<(ev: GatewayEvent) => void>());
   const nextIdRef = useRef(1);
   const sinceRef = useRef(0);
+  // Accumulated session_id -> {title, source, model} so events keep their meta
+  // even when a later poll batch doesn't re-include it.
+  const metaRef = useRef<Record<string, SessionMeta>>({});
 
   const subscribe = useCallback((cb: (ev: GatewayEvent) => void) => {
     listenersRef.current.add(cb);
@@ -93,11 +102,15 @@ export function useAgentEventsFeed(): GatewayFeed {
 
     const poll = async () => {
       try {
-        const res = await fetchJSON<{ events?: AgentEventRow[] }>(
-          `/api/visualization/agent-events?since_id=${String(sinceRef.current)}&limit=300`,
-        );
+        const res = await fetchJSON<{
+          events?: AgentEventRow[];
+          sessions?: Record<string, SessionMeta>;
+        }>(`/api/visualization/agent-events?since_id=${String(sinceRef.current)}&limit=300`);
         if (stopped) return;
         setConnected(true);
+
+        // Merge in session metadata (title/source/model) so we can label desks.
+        if (res.sessions) Object.assign(metaRef.current, res.sessions);
 
         const allRows = res.events ?? [];
         if (allRows.length === 0) return;
@@ -110,7 +123,16 @@ export function useAgentEventsFeed(): GatewayFeed {
         const rows = allRows.filter((r) => r.session_id);
         if (rows.length === 0) return;
 
-        const mapped: GatewayEvent[] = rows.map((r) => rowToEvent(r, nextIdRef.current++));
+        const mapped: GatewayEvent[] = rows.map((r) => {
+          const ev = rowToEvent(r, nextIdRef.current++);
+          const m = ev.sessionId ? metaRef.current[ev.sessionId] : undefined;
+          if (m) {
+            ev.payload.session_title = m.title ?? "";
+            ev.payload.session_source = m.source ?? "";
+            ev.payload.session_model = m.model ?? "";
+          }
+          return ev;
+        });
 
         for (const ev of mapped) {
           for (const cb of listenersRef.current) {

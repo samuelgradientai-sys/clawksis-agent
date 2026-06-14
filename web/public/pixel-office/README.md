@@ -34,6 +34,14 @@ Two rendering enhancements (in `webview-ui/src/office/engine/renderer.ts` +
   (`renderDelegationLines`), so a delegate_task hand-off is visible as a
   connection between the two agents.
 
+Plus session identity (in `office/types.ts`, `officeState.addAgent`,
+`hooks/useExtensionMessages.ts`, `office/components/ToolOverlay.tsx`):
+
+- **Session name + model** — `Character.model`; the overlay shows the real
+  session title (`folderName`) and a model/channel line. A new `agentMeta`
+  message ({id, folderName?, model?}) updates them when the session metadata
+  resolves after the desk was created.
+
 ## Rebuilding
 
 After changing the upstream webview source:

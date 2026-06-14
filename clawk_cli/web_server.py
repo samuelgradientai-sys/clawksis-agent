@@ -11903,6 +11903,67 @@ async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
     return {"messages": messages}
 
 
+# Session metadata (title/source/model) cache for the Visualization office.
+# Rebuilt at most every TTL seconds so the per-1.5s events poll stays cheap.
+_VIZ_SESSION_META: Dict[str, Any] = {"ts": 0.0, "data": {}}
+_VIZ_SESSION_META_TTL = 10.0
+
+
+def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
+    """Map session_id -> {title, source, model} from the sessions store (blocking)."""
+
+    out: Dict[str, Dict[str, str]] = {}
+
+    try:
+        from clawk_state import SessionDB
+
+        db = SessionDB()
+
+        try:
+            rows = db.list_sessions_rich(
+                limit=300,
+                offset=0,
+                min_message_count=0,
+                include_archived=True,
+                archived_only=False,
+                order_by_last_active=True,
+            )
+
+            for s in rows:
+                sid = s.get("id")
+
+                if not sid:
+                    continue
+
+                out[sid] = {
+                    "title": (s.get("title") or "").strip(),
+                    "source": (s.get("source") or "").strip(),
+                    "model": (s.get("model") or "").strip(),
+                }
+
+        finally:
+            db.close()
+
+    except Exception:
+        _log.debug("viz session meta build failed", exc_info=True)
+
+    return out
+
+
+async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
+    now = time.time()
+
+    if now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL or not _VIZ_SESSION_META["data"]:
+        data = await asyncio.to_thread(_build_viz_session_meta)
+
+        if data:
+            _VIZ_SESSION_META["data"] = data
+
+            _VIZ_SESSION_META["ts"] = now
+
+    return _VIZ_SESSION_META["data"]
+
+
 @app.get("/api/visualization/agent-events")
 async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
     """Return recent tool-activity events across ALL agents (oldest-first).
@@ -11910,7 +11971,9 @@ async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
     Reads the cross-process ``agent_events.db`` that every agent (chat, gateway
     platforms, cron) writes to via ``model_tools.handle_function_call``. This is
     what lets the Visualization office show agents from every channel, not just
-    the dashboard chat PTY. Returns an empty list when nothing has run yet.
+    the dashboard chat PTY. Also returns a ``sessions`` map (session_id ->
+    {title, source, model}) so the office can label desks with the real session
+    name + model instead of the raw id. Returns empties when nothing has run.
     """
 
     try:
@@ -11925,7 +11988,20 @@ async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
     except Exception:
         events = []
 
-    return {"events": events}
+    sessions: Dict[str, Dict[str, str]] = {}
+
+    try:
+        sids = {e.get("session_id") for e in events if e.get("session_id")}
+
+        if sids:
+            meta = await _viz_session_meta_cached()
+
+            sessions = {sid: meta[sid] for sid in sids if sid in meta}
+
+    except Exception:
+        sessions = {}
+
+    return {"events": events, "sessions": sessions}
 
 
 # ---------------------------------------------------------------------------
