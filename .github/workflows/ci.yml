@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       # ruff lives in the `dev` optional-dependency group, which `uv run`
       # does not install by default — without this sync the step dies with
       # "Failed to spawn: ruff / No such file or directory".
@@ -28,6 +28,6 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync --all-extras
       - run: uv run pytest tests/ -x -q --timeout=30
