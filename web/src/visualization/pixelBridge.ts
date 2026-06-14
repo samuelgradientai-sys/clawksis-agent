@@ -54,6 +54,30 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
+/** Map a raw model id to a short, human family name (GPT / DeepSeek / Claude…). */
+function friendlyModel(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes("deepseek")) return "DeepSeek";
+  if (
+    m.includes("claude") ||
+    m.includes("opus") ||
+    m.includes("sonnet") ||
+    m.includes("haiku") ||
+    m.includes("anthropic")
+  ) {
+    return "Claude";
+  }
+  if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3") || m.includes("openai")) {
+    return "GPT";
+  }
+  if (m.includes("gemini")) return "Gemini";
+  if (m.includes("grok")) return "Grok";
+  if (m.includes("qwen")) return "Qwen";
+  if (m.includes("llama")) return "Llama";
+  if (m.includes("mistral")) return "Mistral";
+  return model; // unknown family → show the raw id
+}
+
 export class PixelBridge {
   private post: PixelPost;
   private agents = new Map<string, AgentEntry>();
@@ -312,11 +336,13 @@ export class PixelBridge {
     return this.meta.get(key)?.title || fallback;
   }
 
-  /** The "model · channel" line under the desk title (undefined if unknown). */
+  /** The "CHANNEL · Model" line under the desk title (undefined if unknown). */
   private modelLineFor(key: string): string | undefined {
     const m = this.meta.get(key);
     if (!m) return undefined;
-    const parts = [m.model, m.source].filter((x): x is string => !!x);
+    const parts: string[] = [];
+    if (m.source) parts.push(m.source.toUpperCase()); // e.g. TELEGRAM
+    if (m.model) parts.push(friendlyModel(m.model)); // e.g. DeepSeek
     return parts.length ? parts.join(" · ") : undefined;
   }
 
