@@ -143,8 +143,8 @@ def _send_imap_id(imap: "imaplib.IMAP4") -> None:
         imap.xatom(
             "ID",
             f'("name" "clawksis-agent" "version" "{_clawk_version}" '
-            '"vendor" "NousResearch" '
-            '"support-email" "noreply@nousresearch.com")',
+            '"vendor" "Gradient AI" '
+            '"support-email" "noreply@clawksis.com")',
         )
 
     except Exception as e:  # noqa: BLE001 — best-effort, never fatal

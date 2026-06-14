@@ -121,6 +121,14 @@ CONTENT_MAP = [
     ("hermes", "clawk"),
 ]
 
+# IDs de modelo de Nous (Hermes-3 / Hermes-4 y sus variantes, incluidos los
+# slugs de OpenRouter ``nousresearch/hermes-*``). El blanket hermes->clawk de
+# arriba los corrompe a ``clawk-3``/``clawk-4``, que NO existen en ningun
+# proveedor y fallan en runtime. Se preservan haciendo stash/unstash alrededor
+# del CONTENT_MAP (ver ``rebrand``). "Hermes" como producto/agente SI se
+# rebrandea; solo los nombres de modelo Herme quedan intactos.
+_MODEL_ID_RE = re.compile(r"(?:nousresearch/)?[Hh]ermes[ _-]?[34][\w.\-]*")
+
 # Solo estos tipos de archivo se rebrandean en contenido (igual que rebrand.sh).
 REBRAND_EXTS = {
     ".py", ".toml", ".json", ".md", ".sh", ".ps1", ".yml", ".yaml",
@@ -163,8 +171,20 @@ def rebrand(content: bytes, path: str) -> bytes:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
         return content
+    # Stash IDs de modelo Hermes detras de placeholders inertes (NUL-delimitados,
+    # imposibles en fuente) para que el blanket hermes->clawk no los corrompa.
+    stash: dict[str, str] = {}
+
+    def _stash(m: "re.Match[str]") -> str:
+        key = f"\x00MODELID{len(stash)}\x00"
+        stash[key] = m.group(0)
+        return key
+
+    text = _MODEL_ID_RE.sub(_stash, text)
     for old, new in CONTENT_MAP:
         text = text.replace(old, new)
+    for key, orig in stash.items():
+        text = text.replace(key, orig)
     return text.encode("utf-8")
 
 

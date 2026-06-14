@@ -1373,9 +1373,9 @@ def _run_post_setup(post_setup_key: str):
         if _running_in_docker():
             _print_warning("    Chromium is missing but you're running in Docker.")
 
-            _print_info("    Pull the latest image to get the bundled Chromium:")
+            _print_info("    Rebuild the image to get the bundled Chromium:")
 
-            _print_info("      docker pull ghcr.io/nousresearch/clawksis-agent:latest")
+            _print_info("      docker compose build")
 
             return
 

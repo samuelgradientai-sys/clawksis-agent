@@ -5566,8 +5566,10 @@ class TelegramAdapter(BasePlatformAdapter):
 
         script_name, extra_args, success_label, is_state_verb = entry
 
+        from clawk_constants import get_clawk_home
+
         script_path = (
-            _Path.home() / ".clawksis" / "scripts" / "gmail-triage" / script_name
+            get_clawk_home() / "scripts" / "gmail-triage" / script_name
         )
 
         if not script_path.exists():

@@ -238,11 +238,11 @@ clawk config set model.default anthropic/claude-sonnet-4.6
 
 
 
-### Don't pick Clawksis-4 for agent work
+### Don't pick Hermes-4 for agent work
 
 
 
-Clawksis-4-70B and Clawksis-4-405B are available on the Portal at deep discounts, but they're **chat/reasoning models**, not tool-call-tuned. They will struggle with multi-step agent loops. Use them via [Nous Chat](https://chat.nousresearch.com) for conversation/research work, or through the [subscription proxy](/user-guide/features/subscription-proxy) from non-agent tools. For Clawksis itself, stick to the frontier agentic models above.
+Hermes-4-70B and Hermes-4-405B are available on the Portal at deep discounts, but they're **chat/reasoning models**, not tool-call-tuned. They will struggle with multi-step agent loops. Use them via [Nous Chat](https://chat.nousresearch.com) for conversation/research work, or through the [subscription proxy](/user-guide/features/subscription-proxy) from non-agent tools. For Clawksis itself, stick to the frontier agentic models above.
 
 
 

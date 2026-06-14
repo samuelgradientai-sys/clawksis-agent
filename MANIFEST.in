@@ -1,3 +1,7 @@
+# Vendored models.dev snapshot (offline-first floor for model-capability
+# lookups). package-data ships it in the wheel; this ships it in the sdist.
+include agent/models_dev_snapshot.json
+
 graft skills
 
 graft optional-skills

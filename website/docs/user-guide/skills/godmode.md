@@ -60,7 +60,7 @@ Five proven jailbreak system prompts, each paired with a specific target model. 
 
 | `og_godmode` | GPT-4o | Classic GODMODE format with l33t-speak and refusal suppression |
 
-| `zero_refusal` | Clawksis 4 405B | Already uncensored — uses Pliny Love divider as formality |
+| `zero_refusal` | Hermes 4 405B | Already uncensored — uses Pliny Love divider as formality |
 
 
 
@@ -486,7 +486,7 @@ Claude Sonnet 4 is robust against all current techniques for clearly harmful con
 
 
 
-4. **Clawksis models don't need jailbreaking** — `nousresearch/clawk-3-*` and `clawk-4-*` are already uncensored. Use them directly.
+4. **Hermes models don't need jailbreaking** — `nousresearch/hermes-3-*` and `hermes-4-*` are already uncensored. Use them directly.
 
 
 

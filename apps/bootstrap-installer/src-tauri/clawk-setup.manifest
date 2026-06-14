@@ -40,7 +40,7 @@
 
         processorArchitecture="*"
 
-        name="NousResearch.Clawksis.Setup"
+        name="GradientAI.Clawksis.Setup"
 
         type="win32"
 

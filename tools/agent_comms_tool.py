@@ -114,10 +114,12 @@ def _handle_agent_inbox(args, **kw):
         )
         if since_id is not None:
             try:
-                sql += " AND id > ?"
-                params.append(int(since_id))
+                since_val = int(since_id)
             except (TypeError, ValueError):
-                pass
+                since_val = None
+            if since_val is not None:
+                sql += " AND id > ?"
+                params.append(since_val)
         sql += " ORDER BY id DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(sql, params).fetchall()

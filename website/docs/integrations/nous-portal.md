@@ -80,7 +80,7 @@ The Portal proxies a curated catalog of agentic models from across the ecosystem
 
 | **StepFun** | Step 3.5 Flash |
 
-| **Clawksis** | Clawksis-4-70B, Clawksis-4-405B (chat, see [note below](#a-note-on-clawk-4)) |
+| **Clawksis** | Hermes-4-70B, Hermes-4-405B (chat, see [note below](#a-note-on-hermes-4)) |
 
 | **+ everything else** | 280+ additional models — the full agentic frontier |
 
@@ -146,15 +146,15 @@ Because everything routes through one OAuth-authenticated Portal session, you do
 
 
 
-## A note on Clawksis 4
+## A note on Hermes 4
 
 
 
-Nous Research's own **Clawksis 4** family (Clawksis-4-70B, Clawksis-4-405B) is available through the Portal at heavily discounted rates. These are **frontier hybrid-reasoning chat models** — strong at math, science, instruction following, schema adherence, roleplay, and long-form writing.
+Nous Research's own **Hermes 4** family (Hermes-4-70B, Hermes-4-405B) is available through the Portal at heavily discounted rates. These are **frontier hybrid-reasoning chat models** — strong at math, science, instruction following, schema adherence, roleplay, and long-form writing.
 
 
 
-They are **not recommended for use inside Clawksis**, however. Clawksis 4 is tuned for chat and reasoning, not the rapid-fire tool-calling loop the agent relies on. Use them for [Nous Chat](https://chat.nousresearch.com), for research workflows, or via the [subscription proxy](/user-guide/features/subscription-proxy) from other tooling — but for agent work, pick a frontier agentic model from the catalog instead:
+They are **not recommended for use inside Clawksis**, however. Hermes 4 is tuned for chat and reasoning, not the rapid-fire tool-calling loop the agent relies on. Use them for [Nous Chat](https://chat.nousresearch.com), for research workflows, or via the [subscription proxy](/user-guide/features/subscription-proxy) from other tooling — but for agent work, pick a frontier agentic model from the catalog instead:
 
 
 

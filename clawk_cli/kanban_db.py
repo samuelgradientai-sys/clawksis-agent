@@ -10222,11 +10222,13 @@ def _kanban_worker_skill_available(clawk_home: Optional[str]) -> bool:
 
     from pathlib import Path as _Path
 
-    # An unset CLAWK_HOME means the worker falls back to the default root
+    from clawk_constants import get_clawk_home
 
-    # home (``~/.clawksis``), which ships the bundled skill.
+    # An unset CLAWK_HOME means the worker falls back to the platform-native
 
-    base = _Path(clawk_home) if clawk_home else (_Path.home() / ".clawksis")
+    # default root home (``~/.clawksis``), which ships the bundled skill.
+
+    base = _Path(clawk_home) if clawk_home else get_clawk_home()
 
     skills_root = base / "skills"
 
