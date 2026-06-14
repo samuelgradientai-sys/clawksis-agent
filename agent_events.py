@@ -173,6 +173,10 @@ def _truncate(text: Optional[str]) -> Optional[str]:
 def _enqueue(item: dict) -> None:
     if _disabled:
         return
+    # Skip unattributable activity (no session_id) — it can't be tied to an
+    # agent/desk and would otherwise render as a phantom "empty" desk.
+    if not item.get("session_id"):
+        return
     try:
         _ensure_worker()
         _q.put_nowait(item)

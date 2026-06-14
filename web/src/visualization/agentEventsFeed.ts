@@ -99,10 +99,16 @@ export function useAgentEventsFeed(): GatewayFeed {
         if (stopped) return;
         setConnected(true);
 
-        const rows = res.events ?? [];
-        if (rows.length === 0) return;
+        const allRows = res.events ?? [];
+        if (allRows.length === 0) return;
 
-        sinceRef.current = rows.reduce((m, r) => Math.max(m, r.id), sinceRef.current);
+        // Advance the cursor over ALL rows (so we don't re-fetch), but skip
+        // rows with no session_id — they can't be attributed to a desk and
+        // would render as a phantom "empty" agent (already filtered at the
+        // writer too; this also covers rows logged before that fix).
+        sinceRef.current = allRows.reduce((m, r) => Math.max(m, r.id), sinceRef.current);
+        const rows = allRows.filter((r) => r.session_id);
+        if (rows.length === 0) return;
 
         const mapped: GatewayEvent[] = rows.map((r) => rowToEvent(r, nextIdRef.current++));
 
