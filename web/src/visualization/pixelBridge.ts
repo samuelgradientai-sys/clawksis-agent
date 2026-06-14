@@ -54,32 +54,6 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
-/** Map a raw model id to a short, human family name (GPT / DeepSeek / Claude…). */
-function friendlyModel(model: string): string {
-  const m = model.toLowerCase();
-  if (m.includes("deepseek")) return "DeepSeek";
-  if (
-    m.includes("claude") ||
-    m.includes("opus") ||
-    m.includes("sonnet") ||
-    m.includes("haiku") ||
-    m.includes("anthropic")
-  ) {
-    return "Claude";
-  }
-  if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3") || m.includes("openai")) {
-    return "GPT";
-  }
-  if (m.includes("gemini")) return "Gemini";
-  if (m.includes("grok")) return "Grok";
-  if (m.includes("qwen")) return "Qwen";
-  if (m.includes("llama")) return "Llama";
-  if (m.includes("mistral")) return "Mistral";
-  // Unknown family — never leak the exact variant id. Use the first segment as
-  // a short family name (e.g. "cohere-command-r" → "Cohere").
-  const fam = model.split(/[-_/:.\s]/)[0];
-  return fam ? fam.charAt(0).toUpperCase() + fam.slice(1) : "AI";
-}
 
 export class PixelBridge {
   private post: PixelPost;
@@ -339,13 +313,13 @@ export class PixelBridge {
     return this.meta.get(key)?.title || fallback;
   }
 
-  /** The "CHANNEL · Model" line under the desk title (undefined if unknown). */
+  /** The "CHANNEL · model" line under the desk title (undefined if unknown). */
   private modelLineFor(key: string): string | undefined {
     const m = this.meta.get(key);
     if (!m) return undefined;
     const parts: string[] = [];
     if (m.source) parts.push(m.source.toUpperCase()); // e.g. TELEGRAM
-    if (m.model) parts.push(friendlyModel(m.model)); // e.g. DeepSeek
+    if (m.model) parts.push(m.model); // exact model id, e.g. deepseek-v4-flash
     return parts.length ? parts.join(" · ") : undefined;
   }
 
