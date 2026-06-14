@@ -424,7 +424,7 @@ clawksis-agent/
 
 ├── tests/                    # Test suite
 
-├── website/                  # Documentation site (clawksis-agent.nousresearch.com)
+├── website/                  # Documentation site (Docusaurus)
 
 │
 
