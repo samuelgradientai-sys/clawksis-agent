@@ -3633,11 +3633,28 @@ def cmd_cookbook(args):
 
     installed_set = set(status.get("models") or [])
 
+    query = (getattr(args, "query", None) or "").strip().lower()
+
+    if query:
+        rows = [
+            r
+            for r in rows
+            if query
+            in f"{r['name']} {r['family']} {r['ollama']} {r['use_case']}".lower()
+        ]
+
     print("  Models that fit your machine (✅ fits · ⚠️ tight/slow · ❌ too big):")
 
     print("  The agent needs function-calling — prefer models marked 'tools'.")
 
     print()
+
+    if not rows:
+        print(f"  No models match '{query}'.")
+        print("  Browse the full library at https://ollama.com/library —")
+        print("  then run any tag with:   clawk cookbook --run <tag>")
+        print()
+        return
 
     for r in rows:
         icon = _TIER_ICON.get(r["fit"]["tier"], "•")
@@ -20017,6 +20034,13 @@ def main():
             "Detects your hardware, lists open models that fit, and can pull one "
             "with Ollama and set it as the agent's model."
         ),
+    )
+
+    cookbook_parser.add_argument(
+        "query",
+        nargs="?",
+        metavar="SEARCH",
+        help="Filter the model list by name/family/tag/use-case (e.g. qwen, coding, 7b).",
     )
 
     cookbook_parser.add_argument(

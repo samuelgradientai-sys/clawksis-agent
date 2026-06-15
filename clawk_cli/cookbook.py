@@ -207,6 +207,63 @@ CATALOG: List[Dict[str, Any]] = [
         "Top reasoning",
         size_gb=43.0,
     ),
+    # ── more tool-capable general models ─────────────────────────────────────
+    _m("Qwen2.5 1.5B", "Qwen", 1.5, "qwen2.5:1.5b", 32768, True, "Tiny + tools"),
+    _m("Qwen3 0.6B", "Qwen", 0.6, "qwen3:0.6b", 40960, True, "Tiny, newer gen + tools"),
+    _m("Qwen3 1.7B", "Qwen", 1.7, "qwen3:1.7b", 40960, True, "Tiny + tools"),
+    _m("Qwen3 4B", "Qwen", 4.0, "qwen3:4b", 40960, True, "Small + tools"),
+    _m("Qwen3 8B", "Qwen", 8.2, "qwen3:8b", 40960, True, "General + tools"),
+    _m("Qwen3 14B", "Qwen", 14.8, "qwen3:14b", 40960, True, "Capable + tools"),
+    _m("Qwen3 30B-A3B", "Qwen", 30.0, "qwen3:30b-a3b", 40960, True, "MoE, fast + tools", size_gb=18.0),
+    _m("Qwen3 32B", "Qwen", 32.8, "qwen3:32b", 40960, True, "High quality + tools"),
+    _m("Llama 3.1 70B", "Llama", 70.0, "llama3.1:70b", 131072, True, "Frontier + tools", size_gb=43.0),
+    _m("Mistral Small 24B", "Mistral", 24.0, "mistral-small:24b", 32768, True, "Strong + tools"),
+    _m("Mixtral 8x22B", "Mistral", 141.0, "mixtral:8x22b", 65536, True, "Big MoE + tools", size_gb=80.0),
+    _m("Command R+ 104B", "Cohere", 104.0, "command-r-plus:104b", 131072, True, "RAG + tools (large)", size_gb=62.0),
+    _m("Granite 3.1 2B", "IBM", 2.5, "granite3.1-dense:2b", 131072, True, "Small enterprise + tools"),
+    _m("Granite 3.1 8B", "IBM", 8.0, "granite3.1-dense:8b", 131072, True, "Enterprise + tools"),
+    _m("Hermes 3 8B", "Hermes", 8.0, "hermes3:8b", 131072, True, "Tool-use tuned"),
+    _m("Hermes 3 70B", "Hermes", 70.0, "hermes3:70b", 131072, True, "Tool-use tuned (large)", size_gb=43.0),
+    _m("Aya Expanse 8B", "Cohere", 8.0, "aya-expanse:8b", 8192, True, "Multilingual + tools"),
+    _m("Aya Expanse 32B", "Cohere", 32.0, "aya-expanse:32b", 8192, True, "Multilingual + tools"),
+    _m("Nemotron Mini 4B", "NVIDIA", 4.0, "nemotron-mini:4b", 4096, True, "Small + tools"),
+    _m("Nemotron 70B", "NVIDIA", 70.0, "nemotron:70b", 131072, True, "Tuned + tools (large)", size_gb=43.0),
+    _m("SmolLM2 1.7B", "SmolLM", 1.7, "smollm2:1.7b", 8192, True, "Tiny + tools"),
+    # ── more coding models ───────────────────────────────────────────────────
+    _m("Qwen2.5-Coder 1.5B", "Qwen", 1.5, "qwen2.5-coder:1.5b", 32768, True, "Tiny coding + tools"),
+    _m("Qwen2.5-Coder 3B", "Qwen", 3.0, "qwen2.5-coder:3b", 32768, True, "Small coding + tools"),
+    _m("Qwen2.5-Coder 14B", "Qwen", 14.8, "qwen2.5-coder:14b", 32768, True, "Coding + tools"),
+    _m("DeepSeek-Coder-V2 16B", "DeepSeek", 16.0, "deepseek-coder-v2:16b", 131072, False, "Coding MoE", size_gb=9.0),
+    _m("CodeLlama 7B", "Llama", 7.0, "codellama:7b", 16384, False, "Code completion"),
+    _m("CodeLlama 13B", "Llama", 13.0, "codellama:13b", 16384, False, "Code completion", size_gb=7.4),
+    _m("CodeLlama 34B", "Llama", 34.0, "codellama:34b", 16384, False, "Code completion", size_gb=19.0),
+    _m("StarCoder2 3B", "StarCoder", 3.0, "starcoder2:3b", 16384, False, "Code"),
+    _m("StarCoder2 15B", "StarCoder", 15.0, "starcoder2:15b", 16384, False, "Code"),
+    # ── more reasoning (DeepSeek-R1 sizes) ──────────────────────────────────
+    _m("DeepSeek-R1 1.5B", "DeepSeek", 1.5, "deepseek-r1:1.5b", 65536, False, "Tiny reasoning"),
+    _m("DeepSeek-R1 7B", "DeepSeek", 7.0, "deepseek-r1:7b", 65536, False, "Reasoning"),
+    _m("DeepSeek-R1 32B", "DeepSeek", 32.8, "deepseek-r1:32b", 65536, False, "Strong reasoning"),
+    # ── Gemma 3 + Phi (no tools) ─────────────────────────────────────────────
+    _m("Gemma 3 1B", "Gemma", 1.0, "gemma3:1b", 32768, False, "Tiny chat"),
+    _m("Gemma 3 4B", "Gemma", 4.0, "gemma3:4b", 131072, False, "Small chat (vision)"),
+    _m("Gemma 3 12B", "Gemma", 12.0, "gemma3:12b", 131072, False, "Capable chat"),
+    _m("Gemma 3 27B", "Gemma", 27.0, "gemma3:27b", 131072, False, "Large chat", size_gb=16.0),
+    _m("Phi-3.5 Mini 3.8B", "Phi", 3.8, "phi3.5:3.8b", 131072, False, "Small reasoning"),
+    _m("Phi-4 Mini 3.8B", "Phi", 3.8, "phi4-mini:3.8b", 131072, False, "Small reasoning"),
+    # ── vision (multimodal; no tools) ────────────────────────────────────────
+    _m("Llama 3.2 Vision 11B", "Llama", 11.0, "llama3.2-vision:11b", 131072, False, "Vision + chat"),
+    _m("LLaVA 7B", "LLaVA", 7.0, "llava:7b", 4096, False, "Vision + chat"),
+    _m("LLaVA 13B", "LLaVA", 13.0, "llava:13b", 4096, False, "Vision + chat", size_gb=8.0),
+    _m("Moondream 1.8B", "Moondream", 1.8, "moondream:1.8b", 2048, False, "Tiny vision"),
+    # ── small/older general (no tools) ───────────────────────────────────────
+    _m("TinyLlama 1.1B", "TinyLlama", 1.1, "tinyllama:1.1b", 2048, False, "Tiny CPU chat"),
+    _m("SmolLM2 360M", "SmolLM", 0.36, "smollm2:360m", 8192, False, "Ultra-tiny"),
+    _m("Dolphin 3 8B", "Dolphin", 8.0, "dolphin3:8b", 131072, False, "Uncensored chat"),
+    _m("OLMo 2 7B", "OLMo", 7.0, "olmo2:7b", 4096, False, "Open research model"),
+    _m("Yi 9B", "Yi", 9.0, "yi:9b", 4096, False, "Bilingual chat"),
+    _m("Yi 34B", "Yi", 34.0, "yi:34b", 4096, False, "Bilingual chat", size_gb=19.0),
+    _m("Zephyr 7B", "Zephyr", 7.0, "zephyr:7b", 32768, False, "Chat"),
+    _m("OpenChat 7B", "OpenChat", 7.0, "openchat:7b", 8192, False, "Chat"),
 ]
 
 
@@ -334,6 +391,60 @@ def fit_model(model: Dict[str, Any], hw: Dict[str, Any]) -> Dict[str, Any]:
 
 _TIER_RANK = {"perfect": 0, "good": 1, "marginal": 2, "no_fit": 3}
 
+# Family fragments known to support function-calling, used to guess tool_use for
+# installed models that aren't in the curated catalog (e.g. anything you pull by
+# free-text tag). Conservative: unknown families default to no-tools.
+_TOOL_FAMILIES = (
+    "qwen2.5",
+    "qwen3",
+    "llama3.1",
+    "llama3.2",
+    "llama3.3",
+    "mistral",
+    "mixtral",
+    "command-r",
+    "granite3",
+    "hermes3",
+    "nemotron",
+    "aya-expanse",
+    "smollm2",
+    "firefunction",
+    "cogito",
+)
+
+
+def _guess_tool_use(tag: str) -> bool:
+    t = tag.lower()
+    # llama3.2-vision / llava etc. are multimodal, not tool-callers.
+    if "vision" in t or "llava" in t or "moondream" in t:
+        return False
+    return any(fam in t for fam in _TOOL_FAMILIES)
+
+
+def _extra_installed_row(tag: str) -> Dict[str, Any]:
+    """A synthetic catalog row for a pulled model that isn't in the catalog.
+
+    It's already on disk, so it always "fits"; we just can't know its exact
+    size/context, and tool support is a best-effort guess from the name.
+    """
+    base = tag.split(":", 1)[0]
+    return {
+        "id": f"installed:{tag}",
+        "name": tag,
+        "family": base,
+        "params_b": 0.0,
+        "ollama": tag,
+        "quant": "",
+        "size_gb": 0.0,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "context": 0,
+        "tool_use": _guess_tool_use(tag),
+        "use_case": "Pulled locally",
+        "fit": {"mode": "cpu", "tier": "good", "reason": "already pulled"},
+        "installed": True,
+    }
+
 
 def catalog_with_fit(
     hw: Optional[Dict[str, Any]] = None, installed: Optional[List[str]] = None
@@ -343,11 +454,18 @@ def catalog_with_fit(
     Sorted by: best fit → tool-capable first → larger first. Tool-capable wins
     within a tier because the agent needs function-calling for most tasks; a
     no-tools model (e.g. phi3, gemma2) errors the moment a tool is invoked.
+
+    Any model you've already pulled that isn't in the curated catalog is appended
+    too (so anything you `ollama pull` by free-text tag shows up with a Use
+    button). The full Ollama library is browsable at ollama.com/library.
     """
     hw = hw or detect_hardware()
-    installed_set = set(installed or [])
+    installed_list = list(installed or [])
+    installed_set = set(installed_list)
     rows: List[Dict[str, Any]] = []
+    catalog_tags = set()
     for model in CATALOG:
+        catalog_tags.add(model["ollama"])
         fit = fit_model(model, hw)
         rows.append({
             **model,
@@ -361,7 +479,11 @@ def catalog_with_fit(
             -r["params_b"],
         )
     )
-    return rows
+    # Surface pulled-but-uncatalogued models at the top (they're what you have).
+    extras = [
+        _extra_installed_row(tag) for tag in installed_list if tag not in catalog_tags
+    ]
+    return extras + rows
 
 
 # ── Ollama integration ────────────────────────────────────────────────────────

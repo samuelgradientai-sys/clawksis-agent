@@ -216,9 +216,9 @@ Día de **limpieza e integración**: se llevaron a `main` las ramas de trabajo q
 ## 2026-06-14 — Cookbook de modelos locales
 
 **Cookbook — modelos locales** · `acb09bb92`
-Ver qué LLMs abiertos corren en tu máquina (según RAM/CPU/GPU+VRAM detectados), bajarlos con **Ollama** y usarlos como modelo del agente. Catálogo curado (~25 modelos: Qwen/Llama/Mistral/DeepSeek/Phi/Gemma/Cohere) con un veredicto de "fit" por modelo (entra perfecto / entra / justo / muy grande) y flag de soporte de tools. Inspirado en el Cookbook de Odysseus (AGPL — solo el concepto, datos/código propios).
-- Comando: `clawk cookbook` (lista hardware + modelos que entran); `clawk cookbook --run <id|tag>` (baja con Ollama + lo deja como modelo activo); `clawk cookbook --use <id|tag>`; `clawk cookbook --hardware`.
-- Dashboard: pestaña **Cookbook** (`clawk dashboard` → Cookbook) — tu hardware, estado de Ollama y botones Run/Use por modelo.
+Ver qué LLMs abiertos corren en tu máquina (según RAM/CPU/GPU+VRAM detectados), bajarlos con **Ollama** y usarlos como modelo del agente. Catálogo curado (~76 modelos: Qwen/Llama/Mistral/Mixtral/DeepSeek/Phi/Gemma/Cohere/IBM/Hermes/NVIDIA/vision/coding) con un veredicto de "fit" por modelo (entra perfecto / entra / justo / muy grande) y flag de soporte de tools. Los modelos con tools van primero (el agente necesita function-calling; uno sin tools como phi3/gemma falla al delegar). Inspirado en el Cookbook de Odysseus (AGPL — solo el concepto, datos/código propios).
+- Comando: `clawk cookbook` (lista hardware + modelos que entran); `clawk cookbook <texto>` (filtra por nombre/familia/tag/uso, ej. `clawk cookbook qwen`); `clawk cookbook --run <id|tag>` (baja con Ollama + lo deja como modelo activo, sirve para CUALQUIER tag de ollama.com/library aunque no esté en el catálogo); `clawk cookbook --use <id|tag>`; `clawk cookbook --hardware`.
+- Dashboard: pestaña **Cookbook** (`clawk dashboard` → Cookbook) — tu hardware, estado de Ollama, **buscador**, y botones Run/Use por modelo. Si escribís un tag que no está en la lista, ofrece bajarlo igual; cualquier modelo ya bajado aparece arriba con su botón Use.
 - Para qué sirve: correr un LLM 100% local (privacidad / sin costo de API) y usarlo en el agente en un clic.
 - Requiere **Ollama** instalado en la máquina del agente para bajar/correr (https://ollama.com); reusa el soporte local existente (provider `custom` → `localhost:11434/v1`).
 

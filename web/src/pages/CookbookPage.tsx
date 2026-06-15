@@ -67,6 +67,7 @@ export default function CookbookPage() {
   // tag -> "pulling" | "done" | "error: ..."
   const [pulling, setPulling] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const load = useCallback(async () => {
@@ -164,6 +165,21 @@ export default function CookbookPage() {
   const ollama = data?.ollama ?? {};
   const models = data?.models ?? [];
 
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? models.filter((m) =>
+        `${m.name} ${m.family} ${m.ollama} ${m.use_case}`.toLowerCase().includes(q),
+      )
+    : models;
+  // Free-text tag the user typed that isn't in our list yet — offer to pull it
+  // straight from the Ollama library (ollama.com/library has hundreds more).
+  const looksLikeTag = /^[a-z0-9][a-z0-9._/-]*(:[a-z0-9._-]+)?$/i.test(query.trim());
+  const tagKnown = models.some((m) => m.ollama.toLowerCase() === q);
+  const customTag = query.trim();
+  const showCustomPull =
+    !!q && looksLikeTag && !tagKnown && !!ollama.installed;
+  const customPull = pulling[customTag];
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -208,6 +224,26 @@ export default function CookbookPage() {
         </div>
       </div>
 
+      {/* Search */}
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search models (qwen, llama, coding, 7b…) or paste any Ollama tag"
+          className="w-full rounded-md border border-border bg-card/40 px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus:border-[var(--color-primary)]"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="shrink-0 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {notice && (
         <div className="rounded-md border border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 px-3 py-2 text-sm">
           {notice}
@@ -220,7 +256,40 @@ export default function CookbookPage() {
         <div className="text-sm text-rose-400">{error}</div>
       ) : (
         <div className="grid gap-2">
-          {models.map((m) => {
+          {/* Pull any tag from the Ollama library, even if not in our catalog. */}
+          {showCustomPull && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Run any model</span>
+                  <span className="font-mono text-xs text-muted-foreground">{customTag}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Not in the list? Pull it straight from the Ollama library
+                  (browse all at ollama.com/library).
+                </div>
+              </div>
+              {customPull === "pulling" || customPull === "done" ? (
+                <span className="text-xs text-muted-foreground">
+                  {customPull === "done" ? "pulled ✓ — find it below" : "pulling…"}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onPull(customTag)}
+                  className="rounded-md border border-[var(--color-primary)] bg-[var(--color-primary)]/15 px-3 py-1 text-xs"
+                >
+                  Pull “{customTag}”
+                </button>
+              )}
+            </div>
+          )}
+          {filtered.length === 0 && !showCustomPull && (
+            <div className="text-sm text-muted-foreground">
+              No models match “{query}”.
+            </div>
+          )}
+          {filtered.map((m) => {
             const tier = TIER_STYLE[m.fit.tier];
             const pull = pulling[m.ollama];
             const isPulling = pull === "pulling";

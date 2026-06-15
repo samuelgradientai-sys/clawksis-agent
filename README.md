@@ -134,7 +134,7 @@ La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú
 | `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
 | `clawk -z "mensaje"` | Respuesta directa one-shot (sin modo interactivo) |
 | `clawk model` | Elegir modelo y proveedor por defecto |
-| `clawk cookbook` | Ver qué modelos abiertos corren en tu máquina, bajarlos (Ollama) y usarlos |
+| `clawk cookbook` | Ver/buscar (`clawk cookbook qwen`) qué modelos abiertos corren en tu máquina, bajarlos (Ollama) y usarlos |
 | `clawk status` | Estado de todos los componentes |
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
