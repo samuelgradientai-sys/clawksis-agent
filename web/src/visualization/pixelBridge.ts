@@ -54,12 +54,15 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
+
 export class PixelBridge {
   private post: PixelPost;
   private agents = new Map<string, AgentEntry>();
   private nextId = 1;
   private subagentToolSeq = 1;
   private warnedFull = false;
+  // session key -> {title, source, model}, accumulated from event payloads.
+  private meta = new Map<string, { title?: string; source?: string; model?: string }>();
 
   constructor(post: PixelPost) {
     this.post = post;
@@ -102,6 +105,16 @@ export class PixelBridge {
   handleEvent(ev: GatewayEvent): void {
     const p = ev.payload;
     const sid = ev.sessionId ?? MAIN_SESSION_KEY;
+
+    // Session metadata (real title + model + channel) may ride on any event —
+    // store it and refresh the desk label so it shows the session name + model
+    // instead of the raw id.
+    const mTitle = asString(p.session_title);
+    const mSource = asString(p.session_source);
+    const mModel = asString(p.session_model);
+    if (mTitle || mSource || mModel) {
+      this.applyMeta(sid, { title: mTitle, source: mSource, model: mModel });
+    }
 
     switch (ev.type) {
       case "tool.start": {
@@ -286,8 +299,55 @@ export class PixelBridge {
       fromRoster,
     };
     this.agents.set(key, entry);
-    this.post({ type: "agentCreated", id: entry.id, folderName: label });
+    this.post({
+      type: "agentCreated",
+      id: entry.id,
+      folderName: this.folderNameFor(key, label),
+      model: this.modelLineFor(key),
+    });
     return entry;
+  }
+
+  /** Desk title — the real session title if known, else the fallback label. */
+  private folderNameFor(key: string, fallback: string): string {
+    return this.meta.get(key)?.title || fallback;
+  }
+
+  /** The "CHANNEL · model" line under the desk title (undefined if unknown). */
+  private modelLineFor(key: string): string | undefined {
+    const m = this.meta.get(key);
+    if (!m) return undefined;
+    const parts: string[] = [];
+    if (m.source) parts.push(m.source.toUpperCase()); // e.g. TELEGRAM
+    if (m.model) parts.push(m.model); // exact model id, e.g. deepseek-v4-flash
+    return parts.length ? parts.join(" · ") : undefined;
+  }
+
+  /** Store/refresh session metadata; update an existing desk's label + model. */
+  private applyMeta(
+    key: string,
+    m: { title?: string; source?: string; model?: string },
+  ): void {
+    const prev = this.meta.get(key) ?? {};
+    const next = {
+      title: m.title || prev.title,
+      source: m.source || prev.source,
+      model: m.model || prev.model,
+    };
+    // No change → skip the post.
+    if (next.title === prev.title && next.source === prev.source && next.model === prev.model) {
+      return;
+    }
+    this.meta.set(key, next);
+    const entry = this.agents.get(key);
+    if (entry) {
+      this.post({
+        type: "agentMeta",
+        id: entry.id,
+        folderName: this.folderNameFor(key, entry.label),
+        model: this.modelLineFor(key),
+      });
+    }
   }
 
   /** Evict the oldest idle event-created desk; returns true if one was freed. */
