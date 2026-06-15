@@ -241,13 +241,18 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
           return;
         }
 
-        setTools((prev) =>
-          prev.map((t) =>
-            t.status === "running" && t.name === p.name
-              ? { ...t, preview: p.preview }
-              : t,
-          ),
-        );
+        setTools((prev) => {
+          // Update only the first running tool with this name. Return the SAME
+          // array when nothing matches (no re-render) and give a fresh object
+          // only to the touched row, so memo(ToolCall) skips every other row.
+          const i = prev.findIndex(
+            (t) => t.status === "running" && t.name === p.name,
+          );
+          if (i === -1) return prev;
+          const next = prev.slice();
+          next[i] = { ...next[i], preview: p.preview };
+          return next;
+        });
       } else if (type === "tool.complete") {
         const p = payload as
           | {

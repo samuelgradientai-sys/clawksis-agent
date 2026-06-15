@@ -107,10 +107,12 @@ interface ActivityFeedViewProps {
 export function ActivityFeedView({ feed }: ActivityFeedViewProps) {
   const rows = useMemo(
     () =>
+      // Only the newest 200 are rendered, so slice BEFORE describing/reversing
+      // the whole (up to 500-event) buffer. Same output, ~3x less work.
       feed.events
+        .slice(-200)
         .map(describe)
-        .reverse()
-        .slice(0, 200),
+        .reverse(),
     [feed.events],
   );
 

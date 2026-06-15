@@ -66,6 +66,7 @@ export default function VisualizationPage() {
     if (active !== "graph") return;
     let stopped = false;
     const poll = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetchJSON<{ messages?: AgentMessage[] }>(
           "/api/visualization/agent-messages?limit=200",
@@ -77,9 +78,14 @@ export default function VisualizationPage() {
     };
     void poll();
     const t = setInterval(() => void poll(), MSG_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       stopped = true;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [active]);
 

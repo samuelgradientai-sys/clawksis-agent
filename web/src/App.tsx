@@ -2,6 +2,8 @@ import {
 
   lazy,
 
+  memo,
+
   Suspense,
 
   useCallback,
@@ -120,8 +122,6 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 
 import { cn } from "@/lib/utils";
 
-import { Backdrop } from "@/components/Backdrop";
-
 import { SidebarFooter } from "@/components/SidebarFooter";
 
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
@@ -177,7 +177,18 @@ const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
 
 const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
 
-const ChatPage = lazy(() => import("@/pages/ChatPage"));
+// memo so a re-render of the App shell (e.g. the 10s sidebar status poll) does
+// NOT re-render the persistent chat host. Its only prop, `isActive`, is a
+// primitive, so the shallow compare is correct. The xterm/PTY lives in refs and
+// effects keyed on [channel], so this never tears down the terminal session.
+const ChatPage = memo(lazy(() => import("@/pages/ChatPage")));
+
+// The decorative WebGL/motion backdrop isn't needed for first paint — defer it
+// (and the `motion` vendor chunk it pulls) so the shell renders immediately and
+// the background fades in. Named export, hence the .then() default-mapping.
+const Backdrop = lazy(() =>
+  import("@/components/Backdrop").then((m) => ({ default: m.Backdrop })),
+);
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -1015,7 +1026,11 @@ export default function App() {
 
       <SelectionSwitcher />
 
-      <Backdrop />
+      <Suspense fallback={null}>
+
+        <Backdrop />
+
+      </Suspense>
 
       <PluginSlot name="backdrop" />
 

@@ -71,7 +71,7 @@ function rowToEvent(r: AgentEventRow, id: number): GatewayEvent {
   };
 }
 
-const POLL_MS = 1500;
+const POLL_MS = 3000;
 const MAX_EVENTS = 500;
 
 interface SessionMeta {
@@ -101,6 +101,9 @@ export function useAgentEventsFeed(): GatewayFeed {
     let stopped = false;
 
     const poll = async () => {
+      // Don't poll while the tab is hidden — the office isn't on screen, and
+      // this is the most frequent poller in the app. We catch up on return.
+      if (document.hidden) return;
       try {
         const res = await fetchJSON<{
           events?: AgentEventRow[];
@@ -157,9 +160,14 @@ export function useAgentEventsFeed(): GatewayFeed {
 
     void poll();
     const t = setInterval(() => void poll(), POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       stopped = true;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
