@@ -92,24 +92,32 @@ import { useTheme } from "@/themes";
 //
 // This is strictly gated (see the onData handler): only a lone printable ASCII
 // char, never while the terminal is "busy" (model streaming / overlays / large
-// repaints, detected by output-burst size), and only when enabled. It can be
-// turned off with `localStorage['clawk-local-echo'] = 'off'` or
-// `window.__CLAWK_LOCAL_ECHO__ = false`.
+// repaints, detected by output-burst size), and only when enabled.
+//
+// OPT-IN (off by default). Over a high-latency PTY the optimistic glyph races
+// Ink's full-frame repaint: every keystroke triggers a small line-repaint that
+// redraws the input line authoritatively and erases optimistic chars typed
+// after it, so fast typing looks like it stutters / re-types and the line can
+// desync on Enter. Reliable typing matters more than shaving per-char latency,
+// so this stays off unless a user on a low-latency link opts in with
+// `localStorage['clawk-local-echo'] = 'on'` or `window.__CLAWK_LOCAL_ECHO__ = true`.
 const LOCAL_ECHO_BUSY_BYTES = 160;
 const LOCAL_ECHO_BUSY_MS = 250;
 
 function localEchoEnabled(): boolean {
   try {
-    if (
-      typeof window !== "undefined" &&
-      (window as unknown as { __CLAWK_LOCAL_ECHO__?: boolean })
-        .__CLAWK_LOCAL_ECHO__ === false
-    ) {
-      return false;
+    if (typeof window !== "undefined") {
+      const forced = (window as unknown as { __CLAWK_LOCAL_ECHO__?: boolean })
+        .__CLAWK_LOCAL_ECHO__;
+
+      if (forced === true) return true;
+
+      if (forced === false) return false;
     }
-    return localStorage.getItem("clawk-local-echo") !== "off";
+
+    return localStorage.getItem("clawk-local-echo") === "on";
   } catch {
-    return true;
+    return false;
   }
 }
 
