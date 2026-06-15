@@ -223,6 +223,7 @@ def init_agent(
     save_trajectories: bool = False,
     verbose_logging: bool = False,
     quiet_mode: bool = False,
+    tool_progress_mode: str = "all",
     ephemeral_system_prompt: str = None,
     log_prefix_chars: int = 100,
     log_prefix: str = "",
@@ -374,6 +375,10 @@ def init_agent(
     agent.model = model
 
     agent.max_iterations = max_iterations
+
+    # Per-tool progress verbosity ("off"/"new"/"all"/"verbose"); read defensively
+    # elsewhere via getattr(agent, "tool_progress_mode", "all").
+    agent.tool_progress_mode = tool_progress_mode
 
     # Shared iteration budget — parent creates, children inherit.
 

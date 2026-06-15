@@ -1643,6 +1643,8 @@ def list_authenticated_providers(
     custom_providers: list | None = None,
     max_models: int = 8,
     current_model: str = "",
+    *,
+    force_fresh_nous_tier: bool = False,
 ) -> List[dict]:
     """Detect which providers have credentials and list their curated models.
 
