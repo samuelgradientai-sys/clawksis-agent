@@ -1234,13 +1234,13 @@ export const es: Translations = {
 
     assignee: "Asignado a",
 
-    allProfiles: "Todos los perfiles",
+    allProfiles: "Todos los agentes",
 
     showArchived: "Mostrar archivados",
 
-    lanesByProfile: "Carriles por perfil",
+    lanesByProfile: "Agrupar por agente",
 
-    nudgeDispatcher: "Avisar al dispatcher",
+    nudgeDispatcher: "Buscar tareas ahora",
 
     refresh: "Actualizar",
 
@@ -1276,7 +1276,7 @@ export const es: Translations = {
 
     createdBy: "Creado por",
 
-    result: "Result",
+    result: "Resultado",
 
     comments: "Comentarios",
 
@@ -1418,41 +1418,41 @@ export const es: Translations = {
 
     columnLabels: {
 
-      triage: "Clasificación",
+      triage: "Ideas",
 
       todo: "Por hacer",
 
-      scheduled: "Programado",
+      scheduled: "Programadas",
 
-      ready: "Listo",
+      ready: "Listas",
 
       running: "En curso",
 
-      blocked: "Bloqueado",
+      blocked: "Trabadas",
 
-      done: "Hecho",
+      done: "Hechas",
 
-      archived: "Archivado",
+      archived: "Archivadas",
 
     },
 
     columnHelp: {
 
-      triage: "Ideas en bruto — un specifier desarrollará la especificación",
+      triage: "Tirá una idea suelta, en tus palabras. La convertimos en una tarea lista y elegimos el agente.",
 
-      todo: "Esperando dependencias o sin asignar",
+      todo: "Esperando que termine otra tarea o que le asignes un agente.",
 
-      scheduled: "Esperando un retraso conocido o un seguimiento programado",
+      scheduled: "Con fecha u hora: arrancan solas cuando llega el momento.",
 
-      ready: "Dependencias satisfechas; asigna un perfil para despachar",
+      ready: "Listas para arrancar. Un agente las toma solo.",
 
-      running: "Reclamado por un worker — en ejecución",
+      running: "Un agente la está haciendo ahora mismo.",
 
-      blocked: "El worker pidió intervención humana",
+      blocked: "El agente se trabó y necesita tu ayuda.",
 
-      done: "Completado",
+      done: "Terminada.",
 
-      archived: "Archivado",
+      archived: "Archivada.",
 
     },
 
@@ -1501,6 +1501,30 @@ export const es: Translations = {
     logTruncated: "(mostrando los últimos 100 KB — registro completo en ",
 
     logAt: ")",
+
+    simpleModeLabel: "🟢 Modo simple",
+
+    simpleModeHint: "Estás en modo simple: ves solo lo esencial. Tocá para mostrar las opciones avanzadas (tableros, etiquetas, carriles y orquestación).",
+
+    advancedModeLabel: "⚙️ Modo avanzado",
+
+    advancedModeHint: "Estás en modo avanzado. Tocá para volver al modo simple.",
+
+    guideReopenLabel: "¿Cómo funciona?",
+
+    guideReopenHint: "Volver a mostrar la guía rápida",
+
+    guideHide: "Ocultar esta guía",
+
+    guideTitle: "¿Cómo funciona este tablero?",
+
+    guideLead: "Es como un pizarrón de tareas, pero las hacen tus agentes de IA. Vos tirás la idea y la tarjeta avanza sola.",
+
+    guideStep1: "Escribí una idea suelta, en tus palabras, en la columna «Ideas» (tocá el botón +). No tiene que estar perfecta.",
+
+    guideStep2: "El sistema la convierte en una tarea clara y elige qué agente la hace.",
+
+    guideStep3: "La tarjeta avanza sola: Listas → En curso → Hecho. Vos solo mirás, y ayudás si alguna queda «Trabada».",
 
   },
 

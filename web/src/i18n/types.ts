@@ -1584,6 +1584,32 @@ export interface Translations {
 
     logAt: string;
 
+    // Simple/advanced view toggle + onboarding guide (Clawksis simple-mode UX).
+    // Optional so non-English locales fall back to the plugin's literal.
+    simpleModeLabel?: string;
+
+    simpleModeHint?: string;
+
+    advancedModeLabel?: string;
+
+    advancedModeHint?: string;
+
+    guideReopenLabel?: string;
+
+    guideReopenHint?: string;
+
+    guideHide?: string;
+
+    guideTitle?: string;
+
+    guideLead?: string;
+
+    guideStep1?: string;
+
+    guideStep2?: string;
+
+    guideStep3?: string;
+
   };
 
 }

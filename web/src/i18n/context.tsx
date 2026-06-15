@@ -152,6 +152,19 @@ function getInitialLocale(): Locale {
 
     if (stored && isLocale(stored)) return stored;
 
+    // No explicit choice yet: follow the browser's language so Spanish-first
+
+    // (LATAM) users land on Spanish without hunting for the switcher. Maps
+
+    // e.g. "es-AR" -> "es"; falls back to English for unsupported languages.
+
+    const nav =
+      (navigator.languages && navigator.languages[0]) || navigator.language || "";
+
+    const base = nav.toLowerCase().split("-")[0];
+
+    if (base && isLocale(base)) return base as Locale;
+
   } catch {
 
     // SSR or privacy mode
