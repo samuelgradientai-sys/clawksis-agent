@@ -1403,6 +1403,7 @@ def _emit_post_tool_call_hook(
     status: Optional[str] = None,
     error_type: Optional[str] = None,
     error_message: Optional[str] = None,
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Emit the ``post_tool_call`` observer hook.
 
@@ -1445,6 +1446,7 @@ def _emit_post_tool_call_hook(
             status=status,
             error_type=error_type,
             error_message=error_message,
+            middleware_trace=list(middleware_trace or []),
         )
 
     except Exception as _hook_err:
