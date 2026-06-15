@@ -2033,8 +2033,6 @@ def handle_max_iterations(agent, messages: list, api_call_count: int) -> str:
 
         _summary_temperature = None if _omit_summary_temperature else _raw_summary_temp
 
-        _is_nous = "nousresearch" in agent._base_url_lower
-
         # LM Studio uses top-level `reasoning_effort` (not extra_body.reasoning).
 
         # Mirror ChatCompletionsTransport.build_kwargs() so the summary path
@@ -2059,11 +2057,6 @@ def handle_max_iterations(agent, messages: list, api_call_count: int) -> str:
 
             else:
                 summary_extra_body["reasoning"] = {"enabled": True, "effort": "medium"}
-
-        if _is_nous:
-            from agent.portal_tags import nous_portal_tags as _portal_tags
-
-            summary_extra_body["tags"] = _portal_tags()
 
         if agent.api_mode == "codex_responses":
             codex_kwargs = agent._build_api_kwargs(api_messages)

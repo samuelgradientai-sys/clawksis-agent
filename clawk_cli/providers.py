@@ -80,11 +80,6 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         is_aggregator=True,
         base_url_env_var="OPENROUTER_BASE_URL",
     ),
-    "nous": ClawksisOverlay(
-        transport="openai_chat",
-        auth_type="oauth_device_code",
-        base_url_override="https://inference-api.nousresearch.com/v1",
-    ),
     "openai-codex": ClawksisOverlay(
         transport="codex_responses",
         auth_type="oauth_external",
@@ -390,7 +385,6 @@ ALIASES: Dict[str, str] = {
 
 
 _LABEL_OVERRIDES: Dict[str, str] = {
-    "nous": "Nous Portal",
     "openai-codex": "OpenAI Codex",
     "copilot-acp": "GitHub Copilot ACP",
     "stepfun": "StepFun Step Plan",
