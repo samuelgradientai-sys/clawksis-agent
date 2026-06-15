@@ -12115,11 +12115,33 @@ async def post_cookbook_pull(body: CookbookTagBody):
 
 @app.get("/api/cookbook/pull-status")
 async def get_cookbook_pull_status(tag: str):
-    """Background pull status for a tag: pulling / done / error / "" (unknown)."""
+    """Background pull status for a tag: pulling / validating / done / error."""
 
     from clawk_cli import cookbook
 
     return {"tag": tag, "status": cookbook.pull_status(tag)}
+
+
+@app.post("/api/cookbook/install-ollama")
+async def post_cookbook_install_ollama():
+    """Install Ollama on the clawk host (background) so the Cookbook works here.
+
+    "We ship Ollama with clawk" — install it on demand on the machine where the
+    agent runs. Poll /install-ollama-status. Best-effort (Linux / macOS-brew).
+    """
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_ollama_install)
+
+
+@app.get("/api/cookbook/install-ollama-status")
+async def get_cookbook_install_ollama_status():
+    """Ollama install progress: installing / done / error / "" (unknown)."""
+
+    from clawk_cli import cookbook
+
+    return {"status": cookbook.ollama_install_status()}
 
 
 @app.post("/api/cookbook/use")
