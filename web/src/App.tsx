@@ -54,8 +54,6 @@ import {
 
   Eye,
 
-  Network,
-
   FileText,
 
   Globe,
@@ -167,7 +165,6 @@ import WebhooksPage from "@/pages/WebhooksPage";
 import SystemPage from "@/pages/SystemPage";
 
 import VisualizationPage from "@/pages/VisualizationPage";
-import AgentStructurePage from "@/pages/AgentStructurePage";
 import CookbookPage from "@/pages/CookbookPage";
 
 import ChatPage from "@/pages/ChatPage";
@@ -258,8 +255,6 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
 
   "/visualization": VisualizationPage,
 
-  "/agent-structure": AgentStructurePage,
-
   "/analytics": AnalyticsPage,
 
   "/models": ModelsPage,
@@ -333,16 +328,6 @@ const BUILTIN_NAV_REST: NavItem[] = [
     label: "Visualization",
 
     icon: Eye,
-
-  },
-
-  {
-
-    path: "/agent-structure",
-
-    label: "Agent Structure",
-
-    icon: Network,
 
   },
 
