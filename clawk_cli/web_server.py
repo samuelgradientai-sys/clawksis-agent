@@ -12028,6 +12028,61 @@ async def get_cookbook_catalog():
         return {"hardware": {}, "ollama": {}, "models": []}
 
 
+@app.get("/api/cookbook/search")
+async def get_cookbook_search(q: str):
+    """Live search of the FULL Ollama library (scraped) for models matching *q*.
+
+    Returns catalog-shaped rows (one per size tag) with fit + installed flags,
+    so ANY model in ollama.com/library is findable — not just the curated set.
+    Returns [] if ollama.com is unreachable.
+    """
+
+    query = (q or "").strip()
+    if not query:
+        return {"models": []}
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "models": cookbook.rows_with_fit(
+                    cookbook.search_ollama_library(query), hw, installed
+                )
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"models": []}
+
+
+@app.get("/api/cookbook/library")
+async def get_cookbook_library():
+    """The FULL Ollama library (scraped, cached ~30 min) with fit + installed."""
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.rows_with_fit(
+                    cookbook.full_ollama_library(), hw, installed
+                ),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
 @app.get("/api/cookbook/ollama")
 async def get_cookbook_ollama():
     """Ollama status (installed / running / pulled models)."""
