@@ -1,38 +1,21 @@
 import type { SessionInfo } from '@/types/clawk'
 
-
-
 import { sessionTitle } from './chat-runtime'
-
-
+import { sessionSourceSearchTerms } from './session-source'
 
 export function sessionMatchesSearch(session: SessionInfo, query: string): boolean {
-
   const needle = query.trim().toLowerCase()
 
-
-
   if (!needle) {
-
     return true
-
   }
 
-
-
   return [
-
     session.id,
-
     session._lineage_root_id ?? '',
-
     sessionTitle(session),
-
     session.preview ?? '',
-
-    session.cwd ?? ''
-
+    session.cwd ?? '',
+    ...sessionSourceSearchTerms(session.source)
   ].some(value => value.toLowerCase().includes(needle))
-
 }
-
