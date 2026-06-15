@@ -319,22 +319,25 @@ export default function CronPage() {
     try {
       const isPaused = getJobState(job) === "paused";
       const profile = getJobProfile(job);
-      if (isPaused) {
-        await api.resumeCronJob(job.id, profile);
-        showToast(
-          `${t.cron.resume}: "${truncateText(getJobTitle(job), 30)}"`,
-          "success",
-        );
-      } else {
-        await api.pauseCronJob(job.id, profile);
-        showToast(
-          `${t.cron.pause}: "${truncateText(getJobTitle(job), 30)}"`,
-          "success",
-        );
-      }
-      loadJobs();
+      // Bug #29 fix: usar la respuesta del API para actualizar el estado local.
+      // Antes hacíamos loadJobs() inmediatamente después de pause/resume, lo que
+      // podía leer data stale del backend antes que el cambio se propagara.
+      // Ahora el API devuelve el CronJob actualizado y reemplazamos solo ese.
+      const updatedJob = isPaused
+        ? await api.resumeCronJob(job.id, profile)
+        : await api.pauseCronJob(job.id, profile);
+      showToast(
+        `${isPaused ? t.cron.resume : t.cron.pause}: "${truncateText(getJobTitle(job), 30)}"`,
+        "success",
+      );
+      // Reemplazar solo el job afectado en el estado local — sin race condition
+      setJobs((prev) =>
+        prev.map((j) => (j.id === updatedJob.id ? updatedJob : j)),
+      );
     } catch (e) {
       showToast(`${t.status.error}: ${e}`, "error");
+      // Si falló, sincronizar con el backend para no quedar fuera de sync
+      loadJobs();
     }
   };
 
@@ -430,7 +433,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="create-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -450,7 +453,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="cron-profile">Profile</Label>
                 <Select
@@ -625,18 +628,19 @@ export default function CronPage() {
                 )}
               </div>
 
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={creating}
-                  prefix={creating ? <Spinner /> : undefined}
-                >
-                  {creating ? t.common.creating : t.common.create}
-                </Button>
-              </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleCreate}
+                disabled={creating}
+                prefix={creating ? <Spinner /> : undefined}
+              >
+                {creating ? t.common.creating : t.common.create}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
@@ -651,7 +655,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="edit-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -671,7 +675,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="edit-cron-name">{t.cron.nameOptional}</Label>
                 <Input
@@ -730,19 +734,19 @@ export default function CronPage() {
                   </Select>
                 </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleEdit}
-                  disabled={saving}
-                  prefix={saving ? <Spinner /> : undefined}
-                >
-                  {saving ? t.common.loading : "Save changes"}
-                </Button>
-              </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleEdit}
+                disabled={saving}
+                prefix={saving ? <Spinner /> : undefined}
+              >
+                {saving ? t.common.loading : "Save changes"}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
@@ -816,7 +820,25 @@ export default function CronPage() {
                     <span className="font-mono-ui">
                       {getJobScheduleDisplay(job, scheduleDescribeStrings)}
                     </span>
-                    <span>
+                    <span className="flex items-center gap-1">
+                      {job.last_run_at && job.last_status === "ok" && (
+                        <span
+                          className="inline-block text-success"
+                          title="Última ejecución exitosa"
+                          aria-label="ok"
+                        >
+                          ✓
+                        </span>
+                      )}
+                      {job.last_run_at && job.last_status === "error" && (
+                        <span
+                          className="inline-block text-destructive"
+                          title="Última ejecución falló"
+                          aria-label="error"
+                        >
+                          ✗
+                        </span>
+                      )}
                       {t.cron.last}: {formatTime(job.last_run_at)}
                     </span>
                     <span>

@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import platform
+import shutil
+import sys
+import time
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def read_uptime_seconds() -> float | None:
+    try:
+        content = Path("/proc/uptime").read_text(encoding="utf-8").split()
+        return float(content[0])
+    except Exception:
+        return None
+
+
+def read_meminfo() -> dict:
+    meminfo = {}
+
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if ":" not in line:
+                continue
+
+            key, value = line.split(":", 1)
+            parts = value.strip().split()
+
+            if not parts:
+                continue
+
+            number = int(parts[0])
+            unit = parts[1] if len(parts) > 1 else ""
+
+            if unit.lower() == "kb":
+                meminfo[key] = number * 1024
+            else:
+                meminfo[key] = number
+
+    except Exception:
+        pass
+
+    return meminfo
+
+
+def percent(part: float, total: float) -> float | None:
+    if total <= 0:
+        return None
+    return round((part / total) * 100, 2)
+
+
+def bytes_to_gb(value: int | float | None) -> float | None:
+    if value is None:
+        return None
+    return round(float(value) / (1024 ** 3), 2)
+
+
+def collect_health() -> dict:
+    uptime_seconds = read_uptime_seconds()
+    meminfo = read_meminfo()
+
+    mem_total = meminfo.get("MemTotal")
+    mem_available = meminfo.get("MemAvailable")
+    mem_used = mem_total - mem_available if mem_total is not None and mem_available is not None else None
+
+    disk = shutil.disk_usage("/")
+
+    try:
+        load_avg = os.getloadavg()
+    except Exception:
+        load_avg = None
+
+    checks = []
+    overall_status = "ok"
+
+    disk_used_percent = percent(disk.used, disk.total)
+    mem_available_percent = percent(mem_available, mem_total) if mem_total and mem_available else None
+
+    if disk_used_percent is not None:
+        if disk_used_percent >= 95:
+            checks.append({"name": "disk_root", "status": "degraded", "message": "Root disk usage is very high."})
+            overall_status = "degraded"
+        elif disk_used_percent >= 90:
+            checks.append({"name": "disk_root", "status": "warning", "message": "Root disk usage is high."})
+            if overall_status == "ok":
+                overall_status = "warning"
+        else:
+            checks.append({"name": "disk_root", "status": "ok", "message": "Root disk usage is acceptable."})
+
+    if mem_available_percent is not None:
+        if mem_available_percent <= 5:
+            checks.append({"name": "memory", "status": "degraded", "message": "Available memory is critically low."})
+            overall_status = "degraded"
+        elif mem_available_percent <= 10:
+            checks.append({"name": "memory", "status": "warning", "message": "Available memory is low."})
+            if overall_status == "ok":
+                overall_status = "warning"
+        else:
+            checks.append({"name": "memory", "status": "ok", "message": "Available memory is acceptable."})
+
+    payload = {
+        "version": VERSION,
+        "status": overall_status,
+        "generated_at_epoch": int(time.time()),
+        "repo_root": str(REPO_ROOT),
+        "system": {
+            "hostname": platform.node(),
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "current_user": getpass.getuser(),
+            "uid": os.getuid() if hasattr(os, "getuid") else None,
+        },
+        "uptime": {
+            "seconds": round(uptime_seconds, 2) if uptime_seconds is not None else None,
+            "hours": round(uptime_seconds / 3600, 2) if uptime_seconds is not None else None,
+        },
+        "load_average": {
+            "one_min": load_avg[0] if load_avg else None,
+            "five_min": load_avg[1] if load_avg else None,
+            "fifteen_min": load_avg[2] if load_avg else None,
+        },
+        "memory": {
+            "total_gb": bytes_to_gb(mem_total),
+            "used_gb": bytes_to_gb(mem_used),
+            "available_gb": bytes_to_gb(mem_available),
+            "available_percent": mem_available_percent,
+        },
+        "disk_root": {
+            "total_gb": bytes_to_gb(disk.total),
+            "used_gb": bytes_to_gb(disk.used),
+            "free_gb": bytes_to_gb(disk.free),
+            "used_percent": disk_used_percent,
+        },
+        "checks": checks,
+    }
+
+    return payload
+
+
+def print_human(payload: dict) -> None:
+    print("CLAWKSIS_SYSTEM_HEALTH")
+    print(f"status={payload['status']}")
+    print(f"host={payload['system']['hostname']}")
+    print(f"user={payload['system']['current_user']}")
+    print(f"platform={payload['system']['platform']}")
+    print(f"python={payload['system']['python_version']}")
+    print(f"uptime_hours={payload['uptime']['hours']}")
+    print(f"load_1m={payload['load_average']['one_min']}")
+    print(f"memory_available_gb={payload['memory']['available_gb']}")
+    print(f"memory_available_percent={payload['memory']['available_percent']}")
+    print(f"disk_used_percent={payload['disk_root']['used_percent']}")
+    print()
+
+    print("CHECKS:")
+    for check in payload["checks"]:
+        print(f"  {check['name']}: {check['status']} - {check['message']}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Read-only system health report for Clawksis")
+    parser.add_argument("--json", action="store_true", help="Print health report as JSON")
+    parser.add_argument("--version", action="store_true", help="Print command version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    payload = collect_health()
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print_human(payload)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

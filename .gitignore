@@ -242,3 +242,29 @@ node_modules/
 
 # Material de merges manuales del sync con upstream (ver tools/upstream/README.md)
 tools/upstream/pending/
+
+# BEGIN LOCAL RUNTIME IGNORE
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# END LOCAL RUNTIME IGNORE
+
+# BEGIN LOCAL OPS GENERATED REPORTS
+local_ops/reports/*.json
+!local_ops/reports/.gitkeep
+# END LOCAL OPS GENERATED REPORTS
+
+# BEGIN BUSINESS OPS GENERATED REPORTS
+business_ops/reports/*.md
+business_ops/reports/*.json
+!business_ops/reports/.gitkeep
+# END BUSINESS OPS GENERATED REPORTS
+
+!business_ops/examples/
+!business_ops/examples/sample_sales.csv
+README.md.backup-*

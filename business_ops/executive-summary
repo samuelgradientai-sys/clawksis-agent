@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+REPORT_COMMANDS = [
+    {
+        "name": "weekly_sales",
+        "command": ["./business_ops/weekly-sales-report"],
+    },
+    {
+        "name": "customer_insights",
+        "command": ["./business_ops/customer-insights"],
+    },
+    {
+        "name": "product_performance",
+        "command": ["./business_ops/product-performance"],
+    },
+    {
+        "name": "sales_rep_performance",
+        "command": ["./business_ops/sales-rep-performance"],
+    },
+]
+
+
+def money(value: float | int | None) -> str:
+    if value is None:
+        return "0"
+    return f"{float(value):,.0f}"
+
+
+def run_report(command: list[str], input_path: Path) -> dict:
+    result = subprocess.run(
+        [*command, "--input", str(input_path), "--json"],
+        cwd=REPO_ROOT,
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Report failed: {' '.join(command)}\nSTDOUT={result.stdout}\nSTDERR={result.stderr}"
+        )
+
+    return json.loads(result.stdout)
+
+
+def collect_reports(input_path: Path) -> dict:
+    reports = {}
+
+    for item in REPORT_COMMANDS:
+        reports[item["name"]] = run_report(item["command"], input_path)
+
+    return reports
+
+
+def build_executive_summary(reports: dict) -> dict:
+    weekly = reports["weekly_sales"]
+    customers = reports["customer_insights"]
+    products = reports["product_performance"]
+    reps = reports["sales_rep_performance"]
+
+    weekly_summary = weekly.get("summary", {})
+    customer_summary = customers.get("summary", {})
+    product_summary = products.get("summary", {})
+    rep_summary = reps.get("summary", {})
+
+    leaders = {
+        "product": weekly.get("leaders", {}).get("product", {}),
+        "region": weekly.get("leaders", {}).get("region", {}),
+        "sales_rep": weekly.get("leaders", {}).get("sales_rep", {}),
+        "customer": (customers.get("top_customers") or [{}])[0],
+    }
+
+    risks = []
+
+    if customer_summary.get("top_3_customer_share_percent", 0) >= 70:
+        risks.append({
+            "level": "high",
+            "area": "customers",
+            "message": "Alta concentración de ventas en pocos clientes."
+        })
+    elif customer_summary.get("top_3_customer_share_percent", 0) >= 50:
+        risks.append({
+            "level": "medium",
+            "area": "customers",
+            "message": "Concentración moderada de ventas en clientes principales."
+        })
+
+    if product_summary.get("top_3_product_share_percent", 0) >= 80:
+        risks.append({
+            "level": "high",
+            "area": "products",
+            "message": "Alta dependencia de pocos productos."
+        })
+    elif product_summary.get("top_3_product_share_percent", 0) >= 60:
+        risks.append({
+            "level": "medium",
+            "area": "products",
+            "message": "Concentración moderada en productos principales."
+        })
+
+    if rep_summary.get("top_sales_rep_share_percent", 0) >= 70:
+        risks.append({
+            "level": "high",
+            "area": "sales_team",
+            "message": "Alta dependencia de un solo vendedor."
+        })
+    elif rep_summary.get("top_sales_rep_share_percent", 0) >= 50:
+        risks.append({
+            "level": "medium",
+            "area": "sales_team",
+            "message": "Concentración moderada en el vendedor líder."
+        })
+
+    if not risks:
+        risks.append({
+            "level": "low",
+            "area": "general",
+            "message": "No se detectaron concentraciones críticas en clientes, productos o vendedores."
+        })
+
+    findings = []
+    for key in ("weekly_sales", "customer_insights", "product_performance", "sales_rep_performance"):
+        findings.extend(reports[key].get("findings", [])[:2])
+
+    recommendations = [
+        "Priorizar acciones comerciales sobre el producto y región líderes.",
+        "Crear seguimiento específico para clientes de mayor valor y clientes de una sola compra.",
+        "Replicar prácticas del vendedor líder en el resto del equipo comercial.",
+        "Monitorear descuentos para proteger margen y rentabilidad.",
+        "Revisar semanalmente concentración por clientes, productos y vendedores."
+    ]
+
+    return {
+        "version": VERSION,
+        "report_type": "executive-summary",
+        "period": weekly.get("period"),
+        "summary": {
+            "net_sales": weekly_summary.get("net_sales"),
+            "gross_sales": weekly_summary.get("gross_sales"),
+            "orders": weekly_summary.get("orders"),
+            "customers": weekly_summary.get("customers"),
+            "units_sold": weekly_summary.get("units_sold"),
+            "average_ticket": weekly_summary.get("average_ticket"),
+            "products": product_summary.get("products"),
+            "sales_reps": rep_summary.get("sales_reps"),
+            "repeat_customers": customer_summary.get("repeat_customers"),
+            "one_time_customers": customer_summary.get("one_time_customers"),
+        },
+        "leaders": leaders,
+        "risk_summary": risks,
+        "key_findings": findings,
+        "executive_recommendations": recommendations,
+        "source_reports": {
+            "weekly_sales": weekly,
+            "customer_insights": customers,
+            "product_performance": products,
+            "sales_rep_performance": reps,
+        },
+    }
+
+
+def render_markdown(report: dict) -> str:
+    summary = report["summary"]
+    leaders = report["leaders"]
+
+    lines = [
+        "# Resumen ejecutivo comercial",
+        "",
+        f"**Periodo:** {report['period']['start']} a {report['period']['end']}",
+        "",
+        "## Indicadores principales",
+        "",
+        f"- Ventas brutas: {money(summary['gross_sales'])}",
+        f"- Ventas netas: {money(summary['net_sales'])}",
+        f"- Órdenes: {summary['orders']}",
+        f"- Clientes únicos: {summary['customers']}",
+        f"- Unidades vendidas: {money(summary['units_sold'])}",
+        f"- Ticket promedio: {money(summary['average_ticket'])}",
+        f"- Productos analizados: {summary['products']}",
+        f"- Vendedores analizados: {summary['sales_reps']}",
+        f"- Clientes recurrentes: {summary['repeat_customers']}",
+        f"- Clientes de una sola compra: {summary['one_time_customers']}",
+        "",
+        "## Líderes comerciales",
+        "",
+        f"- Producto líder: {leaders['product'].get('name')} ({money(leaders['product'].get('value'))})",
+        f"- Región líder: {leaders['region'].get('name')} ({money(leaders['region'].get('value'))})",
+        f"- Vendedor líder: {leaders['sales_rep'].get('name')} ({money(leaders['sales_rep'].get('value'))})",
+        f"- Cliente principal: {leaders['customer'].get('customer')} ({money(leaders['customer'].get('net_sales'))})",
+        "",
+        "## Riesgos detectados",
+        "",
+    ]
+
+    for risk in report["risk_summary"]:
+        lines.append(f"- **{risk['level']}** | {risk['area']}: {risk['message']}")
+
+    lines.extend([
+        "",
+        "## Hallazgos clave",
+        "",
+    ])
+
+    for finding in report["key_findings"]:
+        lines.append(f"- {finding}")
+
+    lines.extend([
+        "",
+        "## Recomendaciones ejecutivas",
+        "",
+    ])
+
+    for recommendation in report["executive_recommendations"]:
+        lines.append(f"- {recommendation}")
+
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate an executive sales summary from business reports")
+    parser.add_argument("--input", required=True, help="CSV input file")
+    parser.add_argument("--json", action="store_true", help="Print report as JSON")
+    parser.add_argument("--markdown", action="store_true", help="Print report as Markdown")
+    parser.add_argument("--output", help="Optional output file path")
+    parser.add_argument("--version", action="store_true", help="Print version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    input_path = Path(args.input)
+    reports = collect_reports(input_path)
+    report = build_executive_summary(reports)
+
+    if args.json:
+        output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    else:
+        output = render_markdown(report)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

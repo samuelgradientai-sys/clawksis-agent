@@ -837,30 +837,6 @@ class AudioTranscriptionRequest(BaseModel):
     mime_type: Optional[str] = None
 
 
-class ModelAssignment(BaseModel):
-    """Payload for POST /api/model/set — assign a provider/model to a slot.
-
-
-
-    scope="main"        → writes model.provider + model.default
-
-    scope="auxiliary"   → writes auxiliary.<task>.provider + auxiliary.<task>.model
-
-    scope="auxiliary" with task=""  → applied to every auxiliary.* slot
-
-    scope="auxiliary" with task="__reset__"  → resets every slot to provider="auto"
-
-    """
-
-    scope: str
-
-    provider: str
-
-    model: str
-
-    task: str = ""
-
-
 _AUDIO_MIME_EXTENSIONS: Dict[str, str] = {
     "audio/aac": ".aac",
     "audio/flac": ".flac",

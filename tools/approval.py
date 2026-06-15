@@ -1299,7 +1299,17 @@ def prompt_dangerous_approval(
 
             result = {"choice": ""}
 
-            def get_input():
+            def get_input(_result=result):
+
+                # Default-arg binding: a thread abandoned after timeout stays
+
+                # blocked on input(). When the user later types an answer for
+
+                # a NEWER prompt, the stale thread must write into ITS OWN
+
+                # dict — never into the rebound `result` of a later approval,
+
+                # or a leftover keystroke could approve the wrong command.
 
                 try:
                     prompt = (
@@ -1308,10 +1318,10 @@ def prompt_dangerous_approval(
                         else t("approval.prompt_short")
                     )
 
-                    result["choice"] = input(prompt).strip().lower()
+                    _result["choice"] = input(prompt).strip().lower()
 
                 except (EOFError, OSError):
-                    result["choice"] = ""
+                    _result["choice"] = ""
 
             thread = threading.Thread(target=get_input, daemon=True)
 

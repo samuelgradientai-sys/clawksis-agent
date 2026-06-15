@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import time
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def run_json(command: list[str], timeout: int = 20) -> tuple[bool, dict, str]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+        if result.returncode != 0:
+            return False, {}, (result.stderr or result.stdout or "").strip()
+
+        return True, json.loads(result.stdout), ""
+
+    except Exception as exc:
+        return False, {}, f"{type(exc).__name__}: {exc}"
+
+
+def run_text(command: list[str], timeout: int = 20) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return result.returncode == 0, (result.stdout + result.stderr).strip()
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def collect_report() -> dict:
+    system_ok, system_data, system_error = run_json(["./local_ops/system-health", "--json"])
+    services_ok, services_data, services_error = run_json(["./local_ops/service-status", "--json"])
+    capabilities_ok, capabilities_data, capabilities_error = run_json(["./local_ops/capabilities", "--json"])
+    audit_ok, audit_text = run_text(["./local_ops/security-audit"])
+
+    available_capabilities = []
+    planned_capabilities = []
+
+    if capabilities_ok:
+        for item in capabilities_data.get("capabilities", []):
+            safe_item = {
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "risk": item.get("risk"),
+                "mode": item.get("mode"),
+                "description": item.get("description"),
+            }
+
+            if item.get("status") == "available":
+                available_capabilities.append(safe_item)
+            elif item.get("status") == "planned":
+                planned_capabilities.append(safe_item)
+
+    service_summary = []
+
+    if services_ok:
+        for service in services_data.get("services", []):
+            service_summary.append({
+                "name": service.get("name"),
+                "active_state": service.get("active_state"),
+                "sub_state": service.get("sub_state"),
+                "description": service.get("description"),
+            })
+
+    checks = [
+        {
+            "name": "system_health",
+            "status": system_data.get("status", "failed") if system_ok else "failed",
+            "message": "System health report available." if system_ok else system_error,
+        },
+        {
+            "name": "service_status",
+            "status": "ok" if services_ok else "failed",
+            "message": "Allowlisted services were checked." if services_ok else services_error,
+        },
+        {
+            "name": "capabilities",
+            "status": "ok" if capabilities_ok else "failed",
+            "message": "Capabilities manifest available." if capabilities_ok else capabilities_error,
+        },
+        {
+            "name": "security_audit",
+            "status": "ok" if audit_ok and "SECURITY_AUDIT_STATUS=OK" in audit_text else "failed",
+            "message": "Security audit passed." if audit_ok else audit_text[-300:],
+        },
+    ]
+
+    overall_status = "ok"
+
+    for check in checks:
+        if check["status"] in ("failed", "degraded"):
+            overall_status = "degraded"
+            break
+        if check["status"] == "warning" and overall_status == "ok":
+            overall_status = "warning"
+
+    return {
+        "version": VERSION,
+        "report_type": "client-safe-summary",
+        "generated_at_epoch": int(time.time()),
+        "overall_status": overall_status,
+        "privacy": {
+            "safe_for_client": True,
+            "excludes": [
+                "secrets",
+                "tokens",
+                "private keys",
+                "internal usernames",
+                "internal hostnames",
+                "absolute repository paths",
+                "full git diff",
+                "raw logs"
+            ]
+        },
+        "summary": {
+            "system_status": system_data.get("status") if system_ok else "unknown",
+            "services_checked": len(service_summary),
+            "available_capabilities": len(available_capabilities),
+            "planned_capabilities": len(planned_capabilities),
+            "security_audit": "ok" if audit_ok and "SECURITY_AUDIT_STATUS=OK" in audit_text else "failed",
+        },
+        "services": service_summary,
+        "available_capabilities": available_capabilities,
+        "planned_capabilities": planned_capabilities,
+        "checks": checks,
+    }
+
+
+def print_human(report: dict) -> None:
+    print("CLAWKSIS_CLIENT_REPORT")
+    print(f"overall_status={report['overall_status']}")
+    print(f"system_status={report['summary']['system_status']}")
+    print(f"services_checked={report['summary']['services_checked']}")
+    print(f"available_capabilities={report['summary']['available_capabilities']}")
+    print(f"planned_capabilities={report['summary']['planned_capabilities']}")
+    print(f"security_audit={report['summary']['security_audit']}")
+    print()
+
+    print("SERVICES:")
+    if report["services"]:
+        for service in report["services"]:
+            print(f"  - {service['name']}: {service['active_state']} / {service['sub_state']}")
+    else:
+        print("  none")
+    print()
+
+    print("AVAILABLE_CAPABILITIES:")
+    for item in report["available_capabilities"]:
+        print(f"  - {item['name']}: {item['description']}")
+    print()
+
+    print("CLIENT_PRIVACY:")
+    print("  safe_for_client=true")
+    print("  excludes secrets, tokens, private keys, raw logs, internal users, hostnames and full git diffs")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Client-safe Clawksis product report")
+    parser.add_argument("--json", action="store_true", help="Print client-safe report as JSON")
+    parser.add_argument("--version", action="store_true", help="Print command version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    report = collect_report()
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print_human(report)
+
+    return 0 if report["overall_status"] in ("ok", "warning") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def run_git(args: list[str], *, timeout: int = 10) -> dict:
+    started = time.time()
+
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+        return {
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "duration_seconds": round(time.time() - started, 3),
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+            "command": ["git", *args],
+        }
+
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "returncode": 124,
+            "duration_seconds": round(time.time() - started, 3),
+            "stdout": "",
+            "stderr": "git command timed out",
+            "command": ["git", *args],
+        }
+
+
+def collect_status(max_commits: int) -> dict:
+    root = run_git(["rev-parse", "--show-toplevel"])
+    branch = run_git(["branch", "--show-current"])
+    head = run_git(["rev-parse", "--short", "HEAD"])
+    upstream = run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    status = run_git(["status", "--short", "--untracked-files=all"])
+    last_commits = run_git(["log", f"--max-count={max_commits}", "--oneline", "--decorate"])
+
+    changed_files = [
+        line for line in status["stdout"].splitlines()
+        if line.strip()
+    ]
+
+    payload = {
+        "version": VERSION,
+        "status": "ok" if root["ok"] else "failed",
+        "repo_root": root["stdout"] if root["ok"] else str(REPO_ROOT),
+        "branch": branch["stdout"],
+        "head": head["stdout"],
+        "upstream": upstream["stdout"] if upstream["ok"] else None,
+        "is_dirty": len(changed_files) > 0,
+        "changed_file_count": len(changed_files),
+        "changed_files": changed_files,
+        "last_commits": [
+            line for line in last_commits["stdout"].splitlines()
+            if line.strip()
+        ],
+        "checks": {
+            "root": root,
+            "branch": branch,
+            "head": head,
+            "upstream": upstream,
+            "status": status,
+            "last_commits": last_commits,
+        },
+    }
+
+    return payload
+
+
+def print_human(payload: dict) -> None:
+    print("CLAWKSIS_REPO_STATUS")
+    print(f"status={payload['status']}")
+    print(f"repo_root={payload['repo_root']}")
+    print(f"branch={payload['branch']}")
+    print(f"head={payload['head']}")
+    print(f"upstream={payload['upstream']}")
+    print(f"is_dirty={str(payload['is_dirty']).lower()}")
+    print(f"changed_file_count={payload['changed_file_count']}")
+    print()
+
+    print("CHANGED_FILES:")
+    if payload["changed_files"]:
+        for item in payload["changed_files"]:
+            print(f"  {item}")
+    else:
+        print("  none")
+
+    print()
+    print("LAST_COMMITS:")
+    if payload["last_commits"]:
+        for item in payload["last_commits"]:
+            print(f"  {item}")
+    else:
+        print("  none")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Read-only Git repository status for Clawksis")
+    parser.add_argument("--json", action="store_true", help="Print status as JSON")
+    parser.add_argument("--max-commits", type=int, default=5, help="Number of commits to show")
+    parser.add_argument("--version", action="store_true", help="Print command version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    if args.max_commits < 1 or args.max_commits > 20:
+        print("STATUS=error\nMESSAGE=max-commits must be between 1 and 20", file=sys.stderr)
+        return 2
+
+    payload = collect_status(args.max_commits)
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print_human(payload)
+
+    return 0 if payload["status"] == "ok" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

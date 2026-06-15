@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+
+REQUIRED_COLUMNS = {
+    "date",
+    "order_id",
+    "customer",
+    "product",
+    "quantity",
+    "unit_price",
+    "discount",
+    "region",
+    "sales_rep",
+}
+
+
+def money(value: float) -> str:
+    return f"{value:,.0f}"
+
+
+def parse_float(value: str) -> float:
+    value = str(value).strip()
+    if not value:
+        return 0.0
+    return float(value)
+
+
+def parse_date(value: str):
+    return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+
+
+def load_sales(path: Path) -> list[dict]:
+    if not path.exists():
+        raise FileNotFoundError(f"Input file not found: {path}")
+
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        columns = set(reader.fieldnames or [])
+
+        missing = sorted(REQUIRED_COLUMNS - columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+        rows = []
+        for raw in reader:
+            quantity = parse_float(raw["quantity"])
+            unit_price = parse_float(raw["unit_price"])
+            discount = parse_float(raw["discount"])
+            gross_sales = quantity * unit_price
+            net_sales = gross_sales - discount
+
+            rows.append({
+                "date": parse_date(raw["date"]),
+                "order_id": raw["order_id"].strip(),
+                "customer": raw["customer"].strip(),
+                "product": raw["product"].strip(),
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "discount": discount,
+                "region": raw["region"].strip(),
+                "sales_rep": raw["sales_rep"].strip(),
+                "gross_sales": gross_sales,
+                "net_sales": net_sales,
+            })
+
+    if not rows:
+        raise ValueError("Input file has no sales rows")
+
+    return rows
+
+
+def build_report(rows: list[dict]) -> dict:
+    rep_net_sales = defaultdict(float)
+    rep_gross_sales = defaultdict(float)
+    rep_discounts = defaultdict(float)
+    rep_units = defaultdict(float)
+    rep_orders = defaultdict(set)
+    rep_customers = defaultdict(set)
+    rep_products = defaultdict(set)
+
+    for row in rows:
+        rep = row["sales_rep"]
+        rep_net_sales[rep] += row["net_sales"]
+        rep_gross_sales[rep] += row["gross_sales"]
+        rep_discounts[rep] += row["discount"]
+        rep_units[rep] += row["quantity"]
+        rep_orders[rep].add(row["order_id"])
+        rep_customers[rep].add(row["customer"])
+        rep_products[rep].add(row["product"])
+
+    total_net_sales = sum(rep_net_sales.values())
+    total_gross_sales = sum(rep_gross_sales.values())
+    total_discounts = sum(rep_discounts.values())
+    total_orders = len({row["order_id"] for row in rows})
+    total_units = sum(row["quantity"] for row in rows)
+
+    reps = []
+
+    for rep, net_sales in rep_net_sales.items():
+        gross_sales = rep_gross_sales[rep]
+        discounts = rep_discounts[rep]
+        orders = len(rep_orders[rep])
+        customers = len(rep_customers[rep])
+        products = len(rep_products[rep])
+        units = rep_units[rep]
+
+        reps.append({
+            "sales_rep": rep,
+            "net_sales": net_sales,
+            "gross_sales": gross_sales,
+            "discount": discounts,
+            "orders": orders,
+            "customers": customers,
+            "products": products,
+            "units": units,
+            "average_order_value": net_sales / orders if orders else 0,
+            "sales_share_percent": round((net_sales / total_net_sales * 100), 2) if total_net_sales else 0,
+            "discount_rate_percent": round((discounts / gross_sales * 100), 2) if gross_sales else 0,
+        })
+
+    reps_by_revenue = sorted(reps, key=lambda item: item["net_sales"], reverse=True)
+    reps_by_orders = sorted(reps, key=lambda item: item["orders"], reverse=True)
+    reps_by_ticket = sorted(reps, key=lambda item: item["average_order_value"], reverse=True)
+    reps_by_discount_rate = sorted(reps, key=lambda item: item["discount_rate_percent"], reverse=True)
+
+    revenue_leader = reps_by_revenue[0] if reps_by_revenue else None
+    orders_leader = reps_by_orders[0] if reps_by_orders else None
+    ticket_leader = reps_by_ticket[0] if reps_by_ticket else None
+    discount_leader = reps_by_discount_rate[0] if reps_by_discount_rate else None
+
+    top_rep_share = revenue_leader["sales_share_percent"] if revenue_leader else 0
+
+    findings = []
+
+    if revenue_leader:
+        findings.append(
+            f"El vendedor con mayor ingreso fue {revenue_leader['sales_rep']} con {money(revenue_leader['net_sales'])} en ventas netas."
+        )
+
+    if orders_leader:
+        findings.append(
+            f"El vendedor con más órdenes fue {orders_leader['sales_rep']} con {orders_leader['orders']} órdenes."
+        )
+
+    if ticket_leader:
+        findings.append(
+            f"El mayor ticket promedio lo tuvo {ticket_leader['sales_rep']} con {money(ticket_leader['average_order_value'])}."
+        )
+
+    if discount_leader and discount_leader["discount_rate_percent"] > 0:
+        findings.append(
+            f"El vendedor con mayor tasa de descuento fue {discount_leader['sales_rep']} con {discount_leader['discount_rate_percent']:.1f}%."
+        )
+
+    if top_rep_share >= 70:
+        findings.append("Existe alta dependencia de un solo vendedor; conviene reducir el riesgo comercial.")
+    elif top_rep_share >= 50:
+        findings.append("La concentración en el vendedor líder es moderada; conviene monitorearla.")
+    else:
+        findings.append("Las ventas están relativamente distribuidas entre vendedores.")
+
+    recommendations = [
+        "Replicar prácticas del vendedor con mayor ingreso en el resto del equipo.",
+        "Revisar si los descuentos están generando ventas rentables o reduciendo margen.",
+        "Dar seguimiento a vendedores con bajo volumen de órdenes.",
+        "Analizar oportunidades de entrenamiento para mejorar ticket promedio y conversión.",
+    ]
+
+    return {
+        "version": VERSION,
+        "report_type": "sales-rep-performance",
+        "summary": {
+            "sales_reps": len(reps),
+            "net_sales": total_net_sales,
+            "gross_sales": total_gross_sales,
+            "total_discount": total_discounts,
+            "orders": total_orders,
+            "units_sold": total_units,
+            "top_sales_rep_share_percent": top_rep_share,
+        },
+        "leaders": {
+            "revenue": revenue_leader,
+            "orders": orders_leader,
+            "average_ticket": ticket_leader,
+            "discount_rate": discount_leader,
+        },
+        "sales_reps_by_revenue": reps_by_revenue,
+        "sales_reps_by_orders": reps_by_orders,
+        "sales_reps_by_average_ticket": reps_by_ticket,
+        "sales_reps_by_discount_rate": reps_by_discount_rate,
+        "findings": findings,
+        "recommendations": recommendations,
+    }
+
+
+def render_markdown(report: dict) -> str:
+    summary = report["summary"]
+    leaders = report["leaders"]
+
+    lines = [
+        "# Desempeño de vendedores",
+        "",
+        "## Resumen ejecutivo",
+        "",
+        f"- Vendedores analizados: {summary['sales_reps']}",
+        f"- Ventas brutas: {money(summary['gross_sales'])}",
+        f"- Descuentos: {money(summary['total_discount'])}",
+        f"- Ventas netas: {money(summary['net_sales'])}",
+        f"- Órdenes: {summary['orders']}",
+        f"- Unidades vendidas: {money(summary['units_sold'])}",
+        f"- Participación del vendedor líder: {summary['top_sales_rep_share_percent']:.1f}%",
+        "",
+        "## Líderes",
+        "",
+    ]
+
+    if leaders["revenue"]:
+        lines.append(f"- Mayor ingreso: {leaders['revenue']['sales_rep']} ({money(leaders['revenue']['net_sales'])})")
+
+    if leaders["orders"]:
+        lines.append(f"- Más órdenes: {leaders['orders']['sales_rep']} ({leaders['orders']['orders']})")
+
+    if leaders["average_ticket"]:
+        lines.append(f"- Mayor ticket promedio: {leaders['average_ticket']['sales_rep']} ({money(leaders['average_ticket']['average_order_value'])})")
+
+    if leaders["discount_rate"]:
+        lines.append(f"- Mayor tasa de descuento: {leaders['discount_rate']['sales_rep']} ({leaders['discount_rate']['discount_rate_percent']:.1f}%)")
+
+    lines.extend([
+        "",
+        "## Ranking por ingresos",
+        "",
+    ])
+
+    for item in report["sales_reps_by_revenue"]:
+        lines.append(
+            f"- {item['sales_rep']}: {money(item['net_sales'])} | órdenes: {item['orders']} | ticket promedio: {money(item['average_order_value'])} | descuento: {item['discount_rate_percent']:.1f}%"
+        )
+
+    lines.extend([
+        "",
+        "## Hallazgos",
+        "",
+    ])
+
+    for finding in report["findings"]:
+        lines.append(f"- {finding}")
+
+    lines.extend([
+        "",
+        "## Recomendaciones",
+        "",
+    ])
+
+    for recommendation in report["recommendations"]:
+        lines.append(f"- {recommendation}")
+
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Analyze sales representative performance from a sales CSV file")
+    parser.add_argument("--input", required=True, help="CSV input file")
+    parser.add_argument("--json", action="store_true", help="Print report as JSON")
+    parser.add_argument("--markdown", action="store_true", help="Print report as Markdown")
+    parser.add_argument("--output", help="Optional output file path")
+    parser.add_argument("--version", action="store_true", help="Print version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    rows = load_sales(Path(args.input))
+    report = build_report(rows)
+
+    if args.json:
+        output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    else:
+        output = render_markdown(report)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

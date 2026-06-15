@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+TIPOS = {
+    "ejecutivo": "executive",
+    "semanal": "weekly",
+    "clientes": "customers",
+    "productos": "products",
+    "vendedores": "sales_reps",
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Comando corto de reportes comerciales para Clawksis")
+    parser.add_argument(
+        "--input",
+        default="business_ops/examples/sample_sales.csv",
+        help="Archivo CSV de ventas. Por defecto usa el archivo de ejemplo.",
+    )
+    parser.add_argument(
+        "--tipo",
+        choices=sorted(TIPOS),
+        default="ejecutivo",
+        help="Tipo de reporte: ejecutivo, semanal, clientes, productos o vendedores.",
+    )
+    parser.add_argument("--json", action="store_true", help="Salida JSON")
+    parser.add_argument("--markdown", action="store_true", help="Salida Markdown")
+    parser.add_argument("--output", help="Ruta opcional para guardar el reporte")
+    parser.add_argument("--version", action="store_true", help="Mostrar versión")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    command = [
+        "./business_ops/report",
+        "--type",
+        TIPOS[args.tipo],
+        "--input",
+        args.input,
+    ]
+
+    if args.json:
+        command.append("--json")
+    else:
+        command.append("--markdown")
+
+    if args.output:
+        command.extend(["--output", args.output])
+
+    result = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+
+    if result.stdout:
+        print(result.stdout, end="")
+
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

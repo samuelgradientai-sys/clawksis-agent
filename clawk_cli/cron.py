@@ -59,8 +59,16 @@ def _cron_api(**kwargs):
     return json.loads(cronjob_tool(**kwargs))
 
 
-def cron_list(show_all: bool = False):
-    """List all scheduled jobs."""
+def cron_list(show_all: bool = True):
+    """List scheduled jobs.
+
+    Bug #28 fix: por default ahora muestra TODOS los jobs (activos y pausados).
+    Antes el default era show_all=False, que filtraba los pausados de la lista
+    — así un usuario que pausaba un job desde el dashboard veía "No scheduled
+    jobs" en la CLI y creía que se había borrado. Cada job se muestra con un
+    badge claro de su estado ([active] verde / [paused] amarillo).
+    """
+
     from cron.jobs import list_jobs
 
     jobs = list_jobs(include_disabled=show_all)
@@ -394,8 +402,13 @@ def cron_command(args):
     subcmd = getattr(args, "cron_command", None)
 
     if subcmd is None or subcmd == "list":
-        show_all = getattr(args, "all", False)
-        cron_list(show_all)
+        # Bug #28 fix: default es show_all=True (mostrar también pausados).
+        # --all queda como no-op para retrocompatibilidad. --active-only filtra
+        # solo activos (útil para scripts que quieren contar trabajos vivos).
+        active_only = getattr(args, "active_only", False)
+
+        cron_list(show_all=not active_only)
+
         return 0
 
     if subcmd == "status":

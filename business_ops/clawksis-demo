@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "CLAWKSIS_BUSINESS_DEMO_STATUS=start"
+
+./business_ops/ventas-resumen
+
+for tipo in ejecutivo semanal clientes productos vendedores; do
+  ./business_ops/ventas --tipo "$tipo" --json | python3 -m json.tool >/dev/null
+  echo "report_${tipo}=ok"
+done
+
+echo "CLAWKSIS_BUSINESS_DEMO_STATUS=ok"

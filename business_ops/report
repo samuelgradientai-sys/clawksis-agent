@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+REPORT_TYPES = {
+    "weekly": "./business_ops/weekly-sales-report",
+    "customers": "./business_ops/customer-insights",
+    "products": "./business_ops/product-performance",
+    "sales_reps": "./business_ops/sales-rep-performance",
+    "executive": "./business_ops/executive-summary",
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Business report router for Clawksis")
+    parser.add_argument("--type", required=True, choices=sorted(REPORT_TYPES), help="Report type")
+    parser.add_argument("--input", required=True, help="Sales CSV input file")
+    parser.add_argument("--json", action="store_true", help="Output JSON")
+    parser.add_argument("--markdown", action="store_true", help="Output Markdown")
+    parser.add_argument("--output", help="Optional output path")
+    parser.add_argument("--version", action="store_true", help="Print version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    command = [
+        REPORT_TYPES[args.type],
+        "--input",
+        args.input,
+    ]
+
+    if args.json:
+        command.append("--json")
+    else:
+        command.append("--markdown")
+
+    if args.output:
+        command.extend(["--output", args.output])
+
+    result = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    if result.stdout:
+        print(result.stdout, end="")
+
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
