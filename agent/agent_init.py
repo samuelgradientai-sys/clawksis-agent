@@ -103,6 +103,38 @@ from utils import base_url_host_matches
 logger = logging.getLogger("run_agent")
 
 
+def _model_is_local_endpoint(provider: str, base_url: str) -> bool:
+    """True for local model backends (Ollama / LM Studio / localhost endpoints).
+
+    Used to relax the 64K minimum-context guard: local models routinely ship a
+    smaller context window, and hard-failing them would make the cookbook /
+    local-model flow unusable. Cloud providers stay subject to the strict
+    minimum.
+    """
+
+    p = (provider or "").strip().lower()
+
+    if p in {
+        "ollama",
+        "lmstudio",
+        "lm-studio",
+        "lm_studio",
+        "local",
+        "vllm",
+        "llamacpp",
+        "llama.cpp",
+        "llama-cpp",
+    }:
+        return True
+
+    host = (base_url or "").strip().lower()
+
+    return any(
+        marker in host
+        for marker in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
+    )
+
+
 def _ra():
     """Lazy reference to ``run_agent`` so callers can patch
 
@@ -2391,20 +2423,38 @@ def init_agent(
 
     agent.compression_enabled = compression_enabled
 
-    # Reject models whose context window is below the minimum required
-
-    # for reliable tool-calling workflows (64K tokens).
+    # Reject models whose context window is below the minimum required for
+    # reliable tool-calling workflows (64K tokens) — EXCEPT local models
+    # (Ollama / LM Studio / localhost endpoints), which routinely ship a
+    # smaller window. Hard-failing those would brick the cookbook/local-model
+    # flow, so we warn and run with the model's real window instead. Cloud
+    # models keep the strict guard.
 
     _ctx = getattr(agent.context_compressor, "context_length", 0)
 
     if _ctx and _ctx < MINIMUM_CONTEXT_LENGTH:
-        raise ValueError(
-            f"Model {agent.model} has a context window of {_ctx:,} tokens, "
-            f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
-            f"by Clawksis.  Choose a model with at least "
-            f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
-            f"model.context_length in config.yaml to override."
-        )
+        if _model_is_local_endpoint(
+            getattr(agent, "provider", "") or "",
+            getattr(agent, "base_url", "") or "",
+        ):
+            logger.warning(
+                "Model %s has a %s-token context window, below the %s minimum, "
+                "but it is a LOCAL model — running with its real (reduced) "
+                "window instead of refusing. Long tool-calling workflows may "
+                "degrade; raise it with model.context_length in config.yaml.",
+                agent.model,
+                f"{_ctx:,}",
+                f"{MINIMUM_CONTEXT_LENGTH:,}",
+            )
+
+        else:
+            raise ValueError(
+                f"Model {agent.model} has a context window of {_ctx:,} tokens, "
+                f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
+                f"by Clawksis.  Choose a model with at least "
+                f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
+                f"model.context_length in config.yaml to override."
+            )
 
     # Inject context engine tool schemas (e.g. lcm_grep, lcm_describe, lcm_expand).
 
