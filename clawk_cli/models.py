@@ -4997,6 +4997,32 @@ def validate_requested_model(
 
     requested_for_lookup = requested
 
+    # Local Ollama is a first-class provider, NOT the generic "custom" probe
+    # path it normalizes into (_PROVIDER_ALIASES still maps "ollama" -> "custom"
+    # for other callers). The user picks the model from a list populated live
+    # from the running daemon (list_authenticated_providers -> cookbook), so
+    # accept it without a second blocking probe: a transient /v1/models hiccup
+    # must never REJECT a switch to a model we just listed. Best-effort
+    # recognize against the local endpoint; never reject a local model.
+    if (provider or "").strip().lower() == "ollama":
+        recognized = False
+
+        try:
+            api_models = probe_api_models(api_key, base_url).get("models")
+
+            if api_models is not None:
+                recognized = requested_for_lookup in set(api_models)
+
+        except Exception:
+            pass
+
+        return {
+            "accepted": True,
+            "persist": True,
+            "recognized": recognized,
+            "message": None,
+        }
+
     if normalized == "copilot":
         requested_for_lookup = (
             normalize_copilot_model_id(
