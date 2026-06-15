@@ -10840,6 +10840,31 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
         r2 = _run_build()
 
     if r2.returncode != 0:
+        # Typecheck-resilient fallback. `npm run build` is `tsc -b && vite
+        # build`, so a TypeScript error anywhere aborts the build before Vite
+        # ever runs — even when the app itself bundles and runs fine (a stale
+        # or mid-sync checkout where the chronically-red `tsc -b` is the only
+        # blocker). Fall back to a Vite-only build (esbuild transpile, no
+        # typecheck) so the dashboard can still come up instead of hard-
+        # failing and sending the user chasing TS errors. `npm run build`
+        # stays the primary path so dev/CI keep their typecheck gate; a
+        # genuinely broken bundle still fails this Vite step too.
+
+        _say("  ⚠ build failed (likely tsc) — retrying Vite-only (skipping typecheck)")
+
+        r3 = _run_with_idle_timeout([npm, "run", "build:vite"], cwd=web_dir)
+
+        if r3.returncode == 0:
+            _say("  ✓ Web UI built (typecheck skipped)")
+
+            return True
+
+        # Vite-only failed too: the real blocker is a bundler error, so prefer
+        # r3's output for diagnostics below.
+        if (r3.stdout or "") or (r3.stderr or ""):
+            r2 = r3
+
+    if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
 
         # using subprocess.run kept them split. Pull from whichever has
