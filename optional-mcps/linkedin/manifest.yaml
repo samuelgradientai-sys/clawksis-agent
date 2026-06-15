@@ -1,0 +1,61 @@
+# Clawksis-approved MCP catalog entry.
+# Presence in this directory = approval. Merged via PR review.
+#
+# Schema version 1.
+manifest_version: 1
+
+name: linkedin
+description: Find leads, read profiles/companies, and run personalized outreach (connect + message) on LinkedIn via an open-source, self-hosted MCP.
+source: https://github.com/stickerdaniel/linkedin-mcp-server
+
+# Launched with uvx — the package fetch IS the install, so no separate
+# `install:` block is needed (same pattern as npx servers). Requires `uv`
+# on PATH (https://docs.astral.sh/uv/). stdio transport, runs locally.
+transport:
+  type: stdio
+  command: "uvx"
+  args:
+    - "mcp-server-linkedin@latest"
+
+# No API key. The server drives a real browser session: the first tool call
+# (or `uvx mcp-server-linkedin@latest --login`) opens a LinkedIn login window
+# and caches the session under ~/.linkedin-mcp/profile/. It's the operator's
+# own account on their own machine — nothing is pasted into chat.
+auth:
+  type: none
+
+# Tool selection at install time. LinkedIn automation can get an account
+# restricted, so — like the n8n entry — the two *mutating* tools
+# (`send_message`, `connect_with_person`) are pruned from the default. They
+# appear in the install-time checklist and the operator opts in per their own
+# threat model. Everything else is read/discovery only.
+tools:
+  default_enabled:
+    - get_my_profile
+    - get_person_profile
+    - search_people
+    - get_company_profile
+    - search_companies
+    - search_jobs
+    - get_job_details
+    - get_inbox
+    - get_conversation
+    - search_conversations
+    - get_feed
+    - get_sidebar_profiles
+
+post_install: |
+  This server automates your real LinkedIn account through a browser session.
+  LinkedIn's ToS prohibits automation and aggressive use gets accounts
+  restricted/banned — there is no "safe at scale". Use low daily volume,
+  personalize every message, and keep yourself in the loop.
+
+  First-time login (opens a browser window to sign in once):
+    uvx mcp-server-linkedin@latest --login
+
+  The two action tools — `send_message` and `connect_with_person` — are OFF by
+  default. Enable them in the checklist (or `clawk mcp configure linkedin`)
+  only when you're ready to send, and review every draft first.
+
+  Use the `linkedin-outreach` skill for the lead-gen + outreach playbook and
+  the conservative daily caps. Start a new Clawksis session to load the tools.
