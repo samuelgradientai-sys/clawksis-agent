@@ -30,7 +30,15 @@ Set your provider with `clawk model` or by editing `~/.clawksis/.env`. See the [
 
 ### Does it work on Windows?
 
-**Not natively.** Clawksis requires a Unix-like environment. On Windows, install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) and run Clawksis from inside it. The standard install command works perfectly in WSL2:
+**Yes, natively.** Clawksis supports native Windows via the PowerShell installer — no WSL required. Run in PowerShell:
+
+```powershell
+iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
+```
+
+The installer provisions a PortableGit that backs the terminal tool's shell. See the [Windows (Native) Guide](../user-guide/windows-native.md) for details.
+
+WSL2 remains a fully supported alternative. To run Clawksis inside WSL2, install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) and use the standard install command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
@@ -626,7 +634,7 @@ No. Each messaging platform (Telegram, Discord, etc.) requires exclusive access 
 
 ### Do profiles share memory or sessions?
 
-No. Each profile has its own memory store, session database, and skills directory. They are completely isolated. If you want to start a new profile with existing memories and sessions, use `clawk profile create newname --clone-all` to copy everything from the current profile.
+No. Each profile has its own memory store, session database, and skills directory. They are completely isolated. If you want to start a new profile with existing memories and sessions, use `clawk profile create newname --clone-all` to copy everything from the current profile, or add `--clone-from <profile>` to copy from a specific source profile.
 
 ### What happens when I run `clawk update`?
 
