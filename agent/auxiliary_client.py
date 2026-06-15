@@ -42,11 +42,7 @@ Resolution order for vision/multimodal tasks (auto mode):
 
 
 
-Nous Portal is intentionally NOT in either auto chain — Clawksis is BYOK.
-
-Nous resolves only when explicitly configured (active provider in
-
-~/.clawksis/auth.json or a per-task auxiliary.<task>.provider override).
+Nous Portal is no longer a supported auxiliary provider — Clawksis is BYOK.
 
 
 
@@ -584,37 +580,9 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
     return {}
 
 
-# Nous Portal extra_body for product attribution.
-
-# Nous Portal is no longer a supported provider, so there are no product
-
-# attribution tags to attach. Kept as a no-op so the public callers
-
-# (``get_auxiliary_extra_body``) keep working without special-casing.
-
-def _nous_extra_body() -> dict:
-    """Return the auxiliary ``extra_body`` dict (currently empty)."""
-
-    return {}
-
-
-# Backwards-compatible module attribute. Some callers (tests, third-party
-
-# plugins) read ``NOUS_EXTRA_BODY`` directly; keep it as a snapshot.
-
-NOUS_EXTRA_BODY = _nous_extra_body()
-
-
-# Set at resolve time — True if the auxiliary client points to Nous Portal
-
-auxiliary_is_nous: bool = False
-
-
 # Default auxiliary models per provider
 
 _OPENROUTER_MODEL = "google/gemini-3-flash-preview"
-
-_NOUS_MODEL = "google/gemini-3-flash-preview"
 
 _NOUS_DEFAULT_BASE_URL = "https://inference-api.nousresearch.com/v1"
 
@@ -1905,76 +1873,6 @@ def _read_nous_auth() -> Optional[dict]:
         return None
 
 
-def _nous_api_key(provider: dict) -> str:
-    """Extract a usable Nous inference JWT from stored auth state."""
-
-    from clawk_cli.auth import _nous_invoke_jwt_is_usable
-
-    for token_key, expiry_key in (
-        ("agent_key", "agent_key_expires_at"),
-        ("access_token", "expires_at"),
-    ):
-        token = provider.get(token_key)
-
-        if not isinstance(token, str) or not token.strip():
-            continue
-
-        if _nous_invoke_jwt_is_usable(
-            token,
-            scope=provider.get("scope"),
-            expires_at=provider.get(expiry_key),
-        ):
-            return token
-
-    return ""
-
-
-def _nous_base_url() -> str:
-    """Resolve the Nous inference base URL from env or default."""
-
-    return os.getenv("NOUS_INFERENCE_BASE_URL", _NOUS_DEFAULT_BASE_URL)
-
-
-def _resolve_nous_runtime_api(
-    *, force_refresh: bool = False
-) -> Optional[tuple[str, str]]:
-    """Return fresh Nous runtime credentials when available.
-
-
-
-    This mirrors the main agent's 401 recovery path and keeps auxiliary
-
-    clients aligned with the singleton auth store + JWT refresh flow instead of
-
-    relying only on whatever raw tokens happen to be sitting in auth.json
-
-    or the credential pool.
-
-    """
-
-    try:
-        from clawk_cli.auth import resolve_nous_runtime_credentials
-
-        creds = resolve_nous_runtime_credentials(
-            timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-            force_refresh=force_refresh,
-        )
-
-    except Exception as exc:
-        logger.debug("Auxiliary Nous runtime credential resolution failed: %s", exc)
-
-        return None
-
-    api_key = str(creds.get("api_key") or "").strip()
-
-    base_url = str(creds.get("base_url") or "").strip().rstrip("/")
-
-    if not api_key or not base_url:
-        return None
-
-    return api_key, base_url
-
-
 def _resolve_xai_oauth_for_aux() -> Optional[Tuple[str, str]]:
     """Resolve a fresh xAI OAuth (api_key, base_url) for auxiliary clients.
 
@@ -2362,174 +2260,6 @@ def _describe_openrouter_unavailable() -> str:
         return "OPENROUTER_API_KEY not set"
 
     return "no usable OpenRouter credentials found"
-
-
-def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
-
-    nous = _read_nous_auth()
-
-    runtime = _resolve_nous_runtime_api(force_refresh=False)
-
-    if runtime is None and not nous:
-        logger.debug(
-            "Auxiliary Nous client unavailable: no Nous authentication found "
-            "(expected under BYOK; Nous is an optional aux fallback)."
-        )
-
-        _mark_provider_unhealthy("nous", ttl=60, reason="not configured", quiet=True)
-
-        return None, None
-
-    if runtime is None and nous:
-        logger.debug(
-            "Auxiliary Nous: runtime JWT refresh failed; checking stored "
-            "auth.json token."
-        )
-
-    global auxiliary_is_nous
-
-    auxiliary_is_nous = True
-
-    logger.debug("Auxiliary client: Nous Portal")
-
-    # Ask the Portal which model it currently recommends for this task type.
-
-    # The /api/nous/recommended-models endpoint is the authoritative source:
-
-    # it distinguishes paid vs free tier recommendations, and get_nous_recommended_aux_model
-
-    # auto-detects the caller's tier via check_nous_free_tier().  Fall back to
-
-    # _NOUS_MODEL (google/gemini-3-flash-preview) when the Portal is unreachable
-
-    # or returns a null recommendation for this task type.
-
-    model = _NOUS_MODEL
-
-    try:
-        from clawk_cli.models import get_nous_recommended_aux_model
-
-        recommended = get_nous_recommended_aux_model(vision=vision)
-
-        if recommended:
-            model = recommended
-
-            logger.debug(
-                "Auxiliary/%s: using Portal-recommended model %s",
-                "vision" if vision else "text",
-                model,
-            )
-
-        else:
-            logger.debug(
-                "Auxiliary/%s: no Portal recommendation, falling back to %s",
-                "vision" if vision else "text",
-                model,
-            )
-
-    except Exception as exc:
-        logger.debug(
-            "Auxiliary/%s: recommended-models lookup failed (%s); falling back to %s",
-            "vision" if vision else "text",
-            exc,
-            model,
-        )
-
-    if runtime is not None:
-        api_key, base_url = runtime
-
-    else:
-        api_key = _nous_api_key(nous or {})
-
-        if not api_key:
-            logger.debug(
-                "Auxiliary Nous client unavailable: no usable inference JWT found "
-                "(expected under BYOK; Nous is an optional aux fallback)."
-            )
-
-            _mark_provider_unhealthy("nous", ttl=60, reason="not configured", quiet=True)
-
-            return None, None
-
-        base_url = str(
-            (nous or {}).get("inference_base_url") or _nous_base_url()
-        ).rstrip("/")
-
-    return (
-        OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-        ),
-        model,
-    )
-
-
-def _refresh_nous_recommended_model(
-    *, vision: bool, stale_model: Optional[str]
-) -> Optional[str]:
-    """Re-fetch the Nous Portal's recommended model after a stale-model 404.
-
-
-
-    Long-lived processes (gateway, watchers) cache the Portal's
-
-    ``recommended-models`` payload for 10 minutes and, in practice, can pin a
-
-    model for the whole process lifetime. When that model is later dropped from
-
-    the Nous → OpenRouter catalog, every auxiliary call 404s with
-
-    "model does not exist". This forces a fresh Portal fetch and returns a
-
-    model name to retry with:
-
-
-
-      * the Portal's current recommendation for the task, if it differs from
-
-        the model that just failed; otherwise
-
-      * ``_NOUS_MODEL`` (google/gemini-3-flash-preview), the known-good default,
-
-        if it too differs from the failed model.
-
-
-
-    Returns ``None`` when no usable alternative is available (e.g. the Portal
-
-    still recommends the exact model that just 404'd and the default also
-
-    matches it) — callers should then let the original error propagate.
-
-    """
-
-    stale = (stale_model or "").strip().lower()
-
-    fresh: Optional[str] = None
-
-    try:
-        from clawk_cli.models import get_nous_recommended_aux_model
-
-        fresh = get_nous_recommended_aux_model(vision=vision, force_refresh=True)
-
-    except Exception as exc:
-        logger.debug(
-            "Nous recommended-model refresh failed (%s); using default %s",
-            exc,
-            _NOUS_MODEL,
-        )
-
-    if fresh and fresh.strip().lower() != stale:
-        return fresh
-
-    # Portal recommendation unchanged or unavailable — fall back to the
-
-    # hardcoded known-good default, but only if it's actually different.
-
-    if _NOUS_MODEL.strip().lower() != stale:
-        return _NOUS_MODEL
-
-    return None
 
 
 def _read_main_model() -> str:
@@ -3049,7 +2779,7 @@ def _try_azure_foundry(
 
 
 
-    Mirrors the ``_try_anthropic`` / ``_try_nous`` shape but delegates to
+    Mirrors the ``_try_anthropic`` shape but delegates to
 
     :func:`clawk_cli.runtime_provider._resolve_azure_foundry_runtime` —
 
@@ -3302,7 +3032,6 @@ def _try_anthropic(explicit_api_key: str = None) -> Tuple[Optional[Any], Optiona
 
 _AUTO_PROVIDER_LABELS = {
     "_try_openrouter": "openrouter",
-    "_try_nous": "nous",
     "_try_custom_endpoint": "local/custom",
     "_resolve_api_key_provider": "api-key",
 }
@@ -3455,7 +3184,6 @@ _aux_unhealthy_logged_at: Dict[str, float] = {}
 
 _AUX_UNHEALTHY_LABEL_ALIASES = {
     "openrouter": "openrouter",
-    "nous": "nous",
     "custom": "local/custom",
     "local/custom": "local/custom",
     "openai-codex": "openai-codex",
@@ -3658,22 +3386,6 @@ def _is_payment_error(exc: Exception) -> bool:
             return True
 
     return False
-
-
-def _nous_portal_account_has_fresh_paid_access() -> bool:
-    """Return True only when the fresh Nous account API says paid access is allowed."""
-
-    try:
-        from clawk_cli.nous_account import get_nous_portal_account_info
-
-        account_info = get_nous_portal_account_info(force_fresh=True)
-
-        return account_info.paid_service_access is True
-
-    except Exception as exc:
-        logger.debug("Auxiliary Nous paid-entitlement refresh check failed: %s", exc)
-
-        return False
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
@@ -4406,21 +4118,6 @@ def _refresh_provider_credentials(provider: str) -> bool:
 
             return True
 
-        if normalized == "nous":
-            from clawk_cli.auth import resolve_nous_runtime_credentials
-
-            creds = resolve_nous_runtime_credentials(
-                timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-                force_refresh=True,
-            )
-
-            if not str(creds.get("api_key", "") or "").strip():
-                return False
-
-            _evict_cached_clients(normalized)
-
-            return True
-
         if normalized == "anthropic":
             from agent.anthropic_adapter import (
                 read_claude_code_credentials,
@@ -4529,7 +4226,6 @@ def _try_payment_fallback(
 
     _alias_to_label = {
         "openrouter": "openrouter",
-        "nous": "nous",
         "openai-codex": "openai-codex",
         "codex": "openai-codex",
         "custom": "local/custom",
@@ -4781,7 +4477,7 @@ def _resolve_auto(
 
          session search, etc.) use the same model the user configured for
 
-         chat.  Users on OpenRouter/Nous get their chosen chat model; users
+         chat.  Users on OpenRouter get their chosen chat model; users
 
          on DeepSeek/ZAI/Alibaba get theirs; etc.  Running aux tasks on the
 
@@ -4791,15 +4487,13 @@ def _resolve_auto(
 
       2. OpenRouter → custom → API-key providers (fallback chain, only
 
-         used when the main provider has no working client).  Nous and
+         used when the main provider has no working client).  Codex is
 
-         Codex are explicit-only — never probed automatically.
+         explicit-only — never probed automatically.
 
     """
 
-    global auxiliary_is_nous, _stale_base_url_warned
-
-    auxiliary_is_nous = False  # Reset — _try_nous() will set True if it wins
+    global _stale_base_url_warned
 
     runtime = _normalize_main_runtime(main_runtime)
 
@@ -5379,36 +5073,6 @@ def resolve_provider_client(
             logger.warning(
                 "resolve_provider_client: openrouter requested but %s",
                 _describe_openrouter_unavailable(),
-            )
-
-            return None, None
-
-        final_model = _normalize_resolved_model(model or default, provider)
-
-        return (
-            _to_async_client(client, final_model, is_vision=is_vision)
-            if async_mode
-            else (client, final_model)
-        )
-
-    # ── Nous Portal (OAuth) ──────────────────────────────────────────
-
-    if provider == "nous":
-        # Detect vision tasks: either explicit model override from
-
-        # _PROVIDER_VISION_MODELS, or caller passed a known vision model.
-
-        _is_vision = (
-            model in _PROVIDER_VISION_MODELS.values()
-            or (model or "").strip().lower() == "mimo-v2-omni"
-        )
-
-        client, default = _try_nous(vision=_is_vision)
-
-        if client is None:
-            logger.warning(
-                "resolve_provider_client: nous requested "
-                "but Nous Portal not configured (run: clawk auth)"
             )
 
             return None, None
@@ -6186,9 +5850,6 @@ def resolve_provider_client(
     elif pconfig.auth_type in {"oauth_device_code", "oauth_external"}:
         # OAuth providers — route through their specific try functions
 
-        if provider == "nous":
-            return resolve_provider_client("nous", model, async_mode)
-
         if provider == "openai-codex":
             return resolve_provider_client("openai-codex", model, async_mode)
 
@@ -6293,10 +5954,8 @@ _VISION_AUTO_PROVIDER_ORDER = (
 
 # Providers with a dedicated strict vision backend, valid for EXPLICIT
 # selection only (user-configured main provider or per-task override).
-# Superset of the auto order: keeps dormant Nous support reachable.
 _VISION_STRICT_PROVIDERS = (
     "openrouter",
-    "nous",
 )
 
 
@@ -6370,9 +6029,6 @@ def _resolve_strict_vision_backend(
 
     if provider == "openrouter":
         return _try_openrouter(model=model)
-
-    if provider == "nous":
-        return _try_nous(vision=True)
 
     if provider == "openai-codex":
         # Route through resolve_provider_client so the caller's explicit
@@ -6516,15 +6172,9 @@ def resolve_vision_provider_client(
 
         #      that differs from the chat model (e.g. xiaomi → mimo-v2-omni,
 
-        #      zai → glm-5v-turbo). Nous is the exception: it has a dedicated
-
-        #      strict vision backend with tier-aware defaults, so it must not
-
-        #      fall through to the user's text chat model here.
+        #      zai → glm-5v-turbo).
 
         #   2. OpenRouter  (vision-capable aggregator fallback)
-
-        #   3. Stop — Nous Portal is explicit-only (BYOK), never auto-probed.
 
         main_provider = _read_main_provider()
 
@@ -6533,21 +6183,7 @@ def resolve_vision_provider_client(
         if main_provider and main_provider not in {"auto", ""}:
             vision_model = _PROVIDER_VISION_MODELS.get(main_provider, main_model)
 
-            if main_provider == "nous":
-                sync_client, default_model = _resolve_strict_vision_backend(
-                    main_provider, vision_model
-                )
-
-                if sync_client is not None:
-                    logger.info(
-                        "Vision auto-detect: using main provider %s (%s)",
-                        main_provider,
-                        default_model or resolved_model or main_model,
-                    )
-
-                    return _finalize(main_provider, sync_client, default_model)
-
-            elif main_provider in _PROVIDERS_WITHOUT_VISION:
+            if main_provider in _PROVIDERS_WITHOUT_VISION:
                 # Kimi Coding Plan's /coding endpoint (Anthropic Messages wire)
 
                 # does not accept image input — Kimi's own docs say "Current
@@ -6701,13 +6337,15 @@ def get_auxiliary_extra_body() -> dict:
 
 
 
-    Includes Nous Portal product tags when the auxiliary client is backed
+    No provider currently needs auxiliary ``extra_body`` tags, so this is a
 
-    by Nous Portal. Returns empty dict otherwise.
+    no-op kept for callers (e.g. tools/web_tools.py, clawk_cli/goals.py) that
+
+    pass its result through to the auxiliary client.
 
     """
 
-    return _nous_extra_body() if auxiliary_is_nous else {}
+    return {}
 
 
 def auxiliary_max_tokens_param(value: int) -> dict:
@@ -6843,63 +6481,6 @@ def _store_cached_client(
                 pass
 
         _client_cache[cache_key] = (client, default_model, bound_loop)
-
-
-def _refresh_nous_auxiliary_client(
-    *,
-    cache_provider: str,
-    model: Optional[str],
-    async_mode: bool,
-    base_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    api_mode: Optional[str] = None,
-    main_runtime: Optional[Dict[str, Any]] = None,
-    is_vision: bool = False,
-) -> Tuple[Optional[Any], Optional[str]]:
-    """Refresh Nous runtime creds, rebuild the client, and replace the cache entry."""
-
-    runtime = _resolve_nous_runtime_api(force_refresh=True)
-
-    if runtime is None:
-        return None, model
-
-    fresh_key, fresh_base_url = runtime
-
-    sync_client = OpenAI(api_key=fresh_key, base_url=fresh_base_url)
-
-    final_model = model
-
-    current_loop = None
-
-    if async_mode:
-        try:
-            import asyncio as _aio
-
-            current_loop = _aio.get_event_loop()
-
-        except RuntimeError:
-            pass
-
-        client, final_model = _to_async_client(
-            sync_client, final_model or "", is_vision=is_vision
-        )
-
-    else:
-        client = sync_client
-
-    cache_key = _client_cache_key(
-        cache_provider,
-        async_mode=async_mode,
-        base_url=base_url,
-        api_key=api_key,
-        api_mode=api_mode,
-        main_runtime=main_runtime,
-        is_vision=is_vision,
-    )
-
-    _store_cached_client(cache_key, client, final_model, bound_loop=current_loop)
-
-    return client, final_model
 
 
 def neuter_async_httpx_del() -> None:
@@ -8174,124 +7755,11 @@ def call_llm(
 
                 first_err = retry_err
 
-        # ── Stale-model self-heal (Nous Portal recommendation drift) ───
-
-        # A long-lived process can pin a Portal-recommended model that has
-
-        # since been dropped from the Nous → OpenRouter catalog, so every
-
-        # auxiliary call 404s with "model does not exist". Force a fresh
-
-        # Portal fetch and retry once with the current recommendation (or the
-
-        # known-good default). Only applies to Nous-routed calls.
-
-        _heal_is_nous = resolved_provider == "nous" or base_url_host_matches(
-            _base_info, "inference-api.nousresearch.com"
-        )
-
-        if _is_model_not_found_error(first_err) and _heal_is_nous:
-            healed_model = _refresh_nous_recommended_model(
-                vision=(task == "vision"), stale_model=kwargs.get("model")
-            )
-
-            if healed_model and healed_model != kwargs.get("model"):
-                logger.warning(
-                    "Auxiliary %s: model %r no longer in Nous catalog; "
-                    "retrying with refreshed recommendation %r",
-                    task or "call",
-                    kwargs.get("model"),
-                    healed_model,
-                )
-
-                kwargs["model"] = healed_model
-
-                try:
-                    return _validate_llm_response(
-                        client.chat.completions.create(**kwargs), task
-                    )
-
-                except Exception as retry_err:
-                    first_err = retry_err
-
-        # ── Nous auth refresh parity with main agent ──────────────────
-
-        client_is_nous = resolved_provider == "nous" or base_url_host_matches(
-            _base_info, "inference-api.nousresearch.com"
-        )
-
-        if (
-            _is_payment_error(first_err)
-            and client_is_nous
-            and _nous_portal_account_has_fresh_paid_access()
-        ):
-            refreshed_client, refreshed_model = _refresh_nous_auxiliary_client(
-                cache_provider=resolved_provider or "nous",
-                model=final_model,
-                async_mode=False,
-                base_url=resolved_base_url,
-                api_key=resolved_api_key,
-                api_mode=resolved_api_mode,
-                main_runtime=main_runtime,
-                is_vision=(task == "vision"),
-            )
-
-            if refreshed_client is not None:
-                logger.info(
-                    "Auxiliary %s: refreshed Nous runtime credentials after paid account check, retrying",
-                    task or "call",
-                )
-
-                if refreshed_model and refreshed_model != kwargs.get("model"):
-                    kwargs["model"] = refreshed_model
-
-                try:
-                    return _validate_llm_response(
-                        refreshed_client.chat.completions.create(**kwargs), task
-                    )
-
-                except Exception as retry_err:
-                    if not (
-                        _is_auth_error(retry_err)
-                        or _is_payment_error(retry_err)
-                        or _is_connection_error(retry_err)
-                        or _is_rate_limit_error(retry_err)
-                    ):
-                        raise
-
-                    first_err = retry_err
-
-        if _is_auth_error(first_err) and client_is_nous:
-            refreshed_client, refreshed_model = _refresh_nous_auxiliary_client(
-                cache_provider=resolved_provider or "nous",
-                model=final_model,
-                async_mode=False,
-                base_url=resolved_base_url,
-                api_key=resolved_api_key,
-                api_mode=resolved_api_mode,
-                main_runtime=main_runtime,
-                is_vision=(task == "vision"),
-            )
-
-            if refreshed_client is not None:
-                logger.info(
-                    "Auxiliary %s: refreshed Nous runtime credentials after 401, retrying",
-                    task or "call",
-                )
-
-                if refreshed_model and refreshed_model != kwargs.get("model"):
-                    kwargs["model"] = refreshed_model
-
-                return _validate_llm_response(
-                    refreshed_client.chat.completions.create(**kwargs), task
-                )
-
         # ── Auth refresh retry ───────────────────────────────────────
 
         if (
             _is_auth_error(first_err)
             and resolved_provider not in {"auto", "", None}
-            and not client_is_nous
         ):
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
@@ -8879,120 +8347,11 @@ async def async_call_llm(
 
                 first_err = retry_err
 
-        # ── Stale-model self-heal (Nous Portal recommendation drift) ───
-
-        # See the sync call_llm() path for the rationale: a long-lived process
-
-        # can pin a Portal-recommended model that has since been dropped from
-
-        # the Nous → OpenRouter catalog, 404'ing every auxiliary call. Force a
-
-        # fresh Portal fetch and retry once with the current recommendation.
-
-        _heal_is_nous = resolved_provider == "nous" or base_url_host_matches(
-            _client_base, "inference-api.nousresearch.com"
-        )
-
-        if _is_model_not_found_error(first_err) and _heal_is_nous:
-            healed_model = _refresh_nous_recommended_model(
-                vision=(task == "vision"), stale_model=kwargs.get("model")
-            )
-
-            if healed_model and healed_model != kwargs.get("model"):
-                logger.warning(
-                    "Auxiliary %s (async): model %r no longer in Nous catalog; "
-                    "retrying with refreshed recommendation %r",
-                    task or "call",
-                    kwargs.get("model"),
-                    healed_model,
-                )
-
-                kwargs["model"] = healed_model
-
-                try:
-                    return _validate_llm_response(
-                        await client.chat.completions.create(**kwargs), task
-                    )
-
-                except Exception as retry_err:
-                    first_err = retry_err
-
-        # ── Nous auth refresh parity with main agent ──────────────────
-
-        client_is_nous = resolved_provider == "nous" or base_url_host_matches(
-            _client_base, "inference-api.nousresearch.com"
-        )
-
-        if (
-            _is_payment_error(first_err)
-            and client_is_nous
-            and _nous_portal_account_has_fresh_paid_access()
-        ):
-            refreshed_client, refreshed_model = _refresh_nous_auxiliary_client(
-                cache_provider=resolved_provider or "nous",
-                model=final_model,
-                async_mode=True,
-                base_url=resolved_base_url,
-                api_key=resolved_api_key,
-                api_mode=resolved_api_mode,
-                is_vision=(task == "vision"),
-            )
-
-            if refreshed_client is not None:
-                logger.info(
-                    "Auxiliary %s (async): refreshed Nous runtime credentials after paid account check, retrying",
-                    task or "call",
-                )
-
-                if refreshed_model and refreshed_model != kwargs.get("model"):
-                    kwargs["model"] = refreshed_model
-
-                try:
-                    return _validate_llm_response(
-                        await refreshed_client.chat.completions.create(**kwargs), task
-                    )
-
-                except Exception as retry_err:
-                    if not (
-                        _is_auth_error(retry_err)
-                        or _is_payment_error(retry_err)
-                        or _is_connection_error(retry_err)
-                        or _is_rate_limit_error(retry_err)
-                    ):
-                        raise
-
-                    first_err = retry_err
-
-        if _is_auth_error(first_err) and client_is_nous:
-            refreshed_client, refreshed_model = _refresh_nous_auxiliary_client(
-                cache_provider=resolved_provider or "nous",
-                model=final_model,
-                async_mode=True,
-                base_url=resolved_base_url,
-                api_key=resolved_api_key,
-                api_mode=resolved_api_mode,
-                is_vision=(task == "vision"),
-            )
-
-            if refreshed_client is not None:
-                logger.info(
-                    "Auxiliary %s (async): refreshed Nous runtime credentials after 401, retrying",
-                    task or "call",
-                )
-
-                if refreshed_model and refreshed_model != kwargs.get("model"):
-                    kwargs["model"] = refreshed_model
-
-                return _validate_llm_response(
-                    await refreshed_client.chat.completions.create(**kwargs), task
-                )
-
         # ── Auth refresh retry (mirrors sync call_llm) ───────────────
 
         if (
             _is_auth_error(first_err)
             and resolved_provider not in {"auto", "", None}
-            and not client_is_nous
         ):
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
