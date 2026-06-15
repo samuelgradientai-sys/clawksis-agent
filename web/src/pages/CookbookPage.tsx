@@ -76,6 +76,8 @@ export default function CookbookPage() {
   const [browseAll, setBrowseAll] = useState(false);
   const [libraryRows, setLibraryRows] = useState<CookbookModel[] | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  // "" | "installing" | "done" | "error: ..." for installing Ollama on this host.
+  const [ollamaInstall, setOllamaInstall] = useState("");
   const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const load = useCallback(async () => {
@@ -142,6 +144,45 @@ export default function CookbookPage() {
       setLibraryLoading(false);
     }
   }, [libraryRows]);
+
+  // Install Ollama on the host where clawk runs (so the Cookbook works directly).
+  const onInstallOllama = useCallback(async () => {
+    setNotice(null);
+    setOllamaInstall("installing");
+    try {
+      const res = await fetchJSON<{ ok: boolean; status?: string; error?: string }>(
+        "/api/cookbook/install-ollama",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+      );
+      if (!res.ok) {
+        setOllamaInstall(`error: ${res.error ?? "failed"}`);
+        return;
+      }
+      if (res.status === "done") {
+        setOllamaInstall("done");
+        void load();
+        return;
+      }
+      const timer = setInterval(() => {
+        void (async () => {
+          try {
+            const s = await fetchJSON<{ status: string }>(
+              "/api/cookbook/install-ollama-status",
+            );
+            setOllamaInstall(s.status);
+            if (s.status === "done" || s.status.startsWith("error")) {
+              clearInterval(timer);
+              if (s.status === "done") void load();
+            }
+          } catch {
+            // transient — keep polling
+          }
+        })();
+      }, 3000);
+    } catch {
+      setOllamaInstall("error: request failed");
+    }
+  }, [load]);
 
   const pollPull = useCallback(
     (tag: string) => {
@@ -274,13 +315,32 @@ export default function CookbookPage() {
           </div>
         </div>
         <div className="rounded-lg border border-border bg-card/40 p-3 text-sm">
-          <div className="mb-1 font-medium">Ollama</div>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-medium">Ollama</span>
+            {!ollama.installed &&
+              ollamaInstall !== "done" &&
+              (ollamaInstall === "installing" ? (
+                <span className="text-xs text-muted-foreground">installing…</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onInstallOllama()}
+                  className="rounded-md border border-[var(--color-primary)] bg-[var(--color-primary)]/15 px-2 py-0.5 text-xs"
+                >
+                  Install Ollama
+                </button>
+              ))}
+          </div>
           <div className="text-muted-foreground">
             {ollama.installed
               ? ollama.running
                 ? `Running · ${String(ollama.models?.length ?? 0)} model(s) pulled`
-                : "Installed but not running — start it with `ollama serve`."
-              : "Not installed — get it at ollama.com to run models locally."}
+                : "Installed — it starts automatically when you pull a model."
+              : ollamaInstall.startsWith("error")
+                ? ollamaInstall
+                : ollamaInstall === "installing"
+                  ? "Installing Ollama on this machine (where clawk runs)…"
+                  : "Not installed. Click Install — clawk sets it up on this host so you can run models locally."}
           </div>
         </div>
       </div>
