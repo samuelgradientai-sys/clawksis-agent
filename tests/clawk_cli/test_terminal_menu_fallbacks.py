@@ -2,6 +2,7 @@
 cannot initialize (e.g. non-TTY, curses unavailable, terminal error)."""
 
 import subprocess
+from types import SimpleNamespace
 
 from clawk_cli.config import load_config, save_config
 
@@ -24,6 +25,46 @@ def test_prompt_model_selection_falls_back_on_menu_runtime_error(monkeypatch):
     assert selected == "model-b"
 
 
+def test_prompt_model_selection_requires_expensive_confirmation(monkeypatch, capsys):
+    from clawk_cli.auth import _prompt_model_selection
+
+    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", _raise_menu)
+    monkeypatch.setattr(
+        "clawk_cli.model_cost_guard.expensive_model_warning",
+        lambda *_args, **_kwargs: SimpleNamespace(message="EXPENSIVE MODEL WARNING"),
+    )
+    responses = iter(["1", "n"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+
+    selected = _prompt_model_selection(
+        ["openai/gpt-5.5-pro"],
+        confirm_provider="nous",
+    )
+
+    out = capsys.readouterr().out
+    assert selected is None
+    assert "EXPENSIVE MODEL WARNING" in out
+
+
+def test_prompt_model_selection_allows_confirmed_expensive_model(monkeypatch):
+    from clawk_cli.auth import _prompt_model_selection
+
+    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", _raise_menu)
+    monkeypatch.setattr(
+        "clawk_cli.model_cost_guard.expensive_model_warning",
+        lambda *_args, **_kwargs: SimpleNamespace(message="EXPENSIVE MODEL WARNING"),
+    )
+    responses = iter(["1", "y"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+
+    selected = _prompt_model_selection(
+        ["openai/gpt-5.5-pro"],
+        confirm_provider="nous",
+    )
+
+    assert selected == "openai/gpt-5.5-pro"
+
+
 def test_prompt_reasoning_effort_falls_back_on_menu_runtime_error(monkeypatch):
     from clawk_cli.main import _prompt_reasoning_effort_selection
 
@@ -31,9 +72,7 @@ def test_prompt_reasoning_effort_falls_back_on_menu_runtime_error(monkeypatch):
     responses = iter(["3"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
 
-    selected = _prompt_reasoning_effort_selection(
-        ["low", "medium", "high"], current_effort=""
-    )
+    selected = _prompt_reasoning_effort_selection(["low", "medium", "high"], current_effort="")
 
     assert selected == "high"
 
@@ -62,17 +101,12 @@ def test_remove_custom_provider_falls_back_on_menu_runtime_error(tmp_path, monke
     ]
 
 
-def test_named_custom_provider_model_picker_falls_back_on_menu_runtime_error(
-    tmp_path, monkeypatch
-):
+def test_named_custom_provider_model_picker_falls_back_on_menu_runtime_error(tmp_path, monkeypatch):
     from clawk_cli.main import _model_flow_named_custom
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", _raise_menu)
-    monkeypatch.setattr(
-        "clawk_cli.models.fetch_api_models",
-        lambda *args, **kwargs: ["model-a", "model-b"],
-    )
+    monkeypatch.setattr("clawk_cli.models.fetch_api_models", lambda *args, **kwargs: ["model-a", "model-b"])
     monkeypatch.setattr("clawk_cli.auth.deactivate_provider", lambda: None)
 
     cfg = load_config()

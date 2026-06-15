@@ -24,7 +24,6 @@ import gateway.run as gw_mod
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 class _FakeGateway:
     """Minimal stand-in with just enough state for ``stop()`` to run."""
 
@@ -85,6 +84,12 @@ class _FakeGateway:
     def _evict_cached_agent(self, key):
         pass
 
+    def _release_running_agent_state(self, session_key, **_kwargs):
+        agent = self._running_agents.pop(session_key, None)
+        self._running_agents_ts.pop(session_key, None)
+        self._cleanup_agent_resources(agent)
+        return agent is not None
+
 
 def _make_mock_agent():
     a = MagicMock()
@@ -96,7 +101,6 @@ def _make_mock_agent():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
 
 class TestCachedAgentCleanupOnShutdown:
     """Verify that ``stop()`` calls ``_cleanup_agent_resources`` on idle
