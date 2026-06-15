@@ -1466,6 +1466,8 @@ def handle_function_call(
     skip_pre_tool_call_hook: bool = False,
     enabled_toolsets: Optional[List[str]] = None,
     disabled_toolsets: Optional[List[str]] = None,
+    skip_tool_request_middleware: bool = False,
+    tool_request_middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
 
