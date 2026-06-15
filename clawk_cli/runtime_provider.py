@@ -30,10 +30,8 @@ from clawk_cli.auth import (
     DEFAULT_QWEN_BASE_URL,
     DEFAULT_XAI_OAUTH_BASE_URL,
     PROVIDER_REGISTRY,
-    _agent_key_is_usable,
     format_auth_error,
     resolve_provider,
-    resolve_nous_runtime_credentials,
     resolve_codex_runtime_credentials,
     resolve_xai_oauth_runtime_credentials,
     resolve_qwen_runtime_credentials,
@@ -545,9 +543,6 @@ def _resolve_runtime_from_pool_entry(
 
     elif provider == "xai":
         api_mode = "codex_responses"
-
-    elif provider == "nous":
-        api_mode = "chat_completions"
 
     elif provider == "copilot":
         api_mode = _copilot_runtime_api_mode(
@@ -1709,52 +1704,6 @@ def _resolve_explicit_runtime(
             "requested_provider": requested_provider,
         }
 
-    if provider == "nous":
-        state = auth_mod.get_provider_auth_state("nous") or {}
-
-        base_url = explicit_base_url or str(
-            state.get("inference_base_url") or auth_mod.DEFAULT_NOUS_INFERENCE_URL
-        ).strip().rstrip("/")
-
-        # Only use the agent_key compatibility field for inference when it
-
-        # contains a NAS invoke JWT; raw OAuth access_token fallback is handled
-
-        # by resolve_nous_runtime_credentials().
-
-        api_key = explicit_api_key or (
-            str(state.get("agent_key") or "").strip()
-            if _agent_key_is_usable(
-                state,
-                max(60, int(os.getenv("CLAWK_NOUS_MIN_KEY_TTL_SECONDS", "1800"))),
-            )
-            else ""
-        )
-
-        expires_at = state.get("agent_key_expires_at") or state.get("expires_at")
-
-        if not api_key:
-            creds = resolve_nous_runtime_credentials(
-                timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-            )
-
-            api_key = creds.get("api_key", "")
-
-            expires_at = creds.get("expires_at")
-
-            if not explicit_base_url:
-                base_url = creds.get("base_url", "").rstrip("/") or base_url
-
-        return {
-            "provider": "nous",
-            "api_mode": "chat_completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "source": "explicit",
-            "expires_at": expires_at,
-            "requested_provider": requested_provider,
-        }
-
     # Azure Foundry: user-configured endpoint with selectable API mode
 
     if provider == "azure-foundry":
@@ -1978,34 +1927,6 @@ def resolve_runtime_provider(
                 entry, "access_token", ""
             )
 
-        # For Nous, the pool entry's runtime_api_key is the agent_key
-
-        # compatibility field. It must be an invoke JWT. The pool doesn't
-
-        # refresh it during selection (that would trigger network calls in
-
-        # non-runtime contexts like `clawk auth list`).  If the key is
-
-        # expired, clear pool_api_key so we fall through to
-
-        # resolve_nous_runtime_credentials() which handles refresh.
-
-        if provider == "nous" and entry is not None and pool_api_key:
-            min_ttl = max(60, int(os.getenv("CLAWK_NOUS_MIN_KEY_TTL_SECONDS", "1800")))
-
-            nous_state = {
-                "agent_key": getattr(entry, "agent_key", None),
-                "agent_key_expires_at": getattr(entry, "agent_key_expires_at", None),
-                "scope": getattr(entry, "scope", None),
-            }
-
-            if not _agent_key_is_usable(nous_state, min_ttl):
-                logger.debug(
-                    "Nous pool entry agent_key expired/missing, falling through to runtime resolution"
-                )
-
-                pool_api_key = ""
-
         if entry is not None and pool_api_key:
             return _resolve_runtime_from_pool_entry(
                 provider=provider,
@@ -2014,35 +1935,6 @@ def resolve_runtime_provider(
                 model_cfg=model_cfg,
                 pool=pool,
                 target_model=target_model,
-            )
-
-    if provider == "nous":
-        try:
-            creds = resolve_nous_runtime_credentials(
-                timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-            )
-
-            return {
-                "provider": "nous",
-                "api_mode": "chat_completions",
-                "base_url": creds.get("base_url", "").rstrip("/"),
-                "api_key": creds.get("api_key", ""),
-                "source": creds.get("source", "portal"),
-                "expires_at": creds.get("expires_at"),
-                "requested_provider": requested_provider,
-            }
-
-        except AuthError:
-            if requested_provider != "auto":
-                raise
-
-            # Auto-detected Nous but credentials are stale/revoked —
-
-            # fall through to env-var providers (e.g. OpenRouter).
-
-            logger.info(
-                "Auto-detected Nous provider but credentials failed; "
-                "falling through to next provider."
             )
 
     if provider == "openai-codex":

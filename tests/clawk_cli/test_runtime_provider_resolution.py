@@ -1258,44 +1258,6 @@ def test_named_custom_provider_falls_back_to_openai_api_key(monkeypatch):
     assert resolved["requested_provider"] == "custom:local-llm"
 
 
-def test_named_custom_provider_does_not_shadow_builtin_provider(monkeypatch):
-
-    monkeypatch.setattr(
-        rp,
-        "load_config",
-        lambda: {
-            "custom_providers": [
-                {
-                    "name": "nous",
-                    "base_url": "http://localhost:1234/v1",
-                    "api_key": "shadow-key",
-                }
-            ]
-        },
-    )
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kwargs: {
-            "base_url": "https://inference-api.nousresearch.com/v1",
-            "api_key": "nous-runtime-key",
-            "source": "portal",
-            "expires_at": None,
-        },
-    )
-
-    resolved = rp.resolve_runtime_provider(requested="nous")
-
-    assert resolved["provider"] == "nous"
-
-    assert resolved["base_url"] == "https://inference-api.nousresearch.com/v1"
-
-    assert resolved["api_key"] == "nous-runtime-key"
-
-    assert resolved["requested_provider"] == "nous"
-
-
 def test_named_custom_provider_wins_over_builtin_alias(monkeypatch):
     """A custom_providers entry named after a built-in *alias* (not a canonical
 
@@ -1333,11 +1295,10 @@ def test_named_custom_provider_wins_over_builtin_alias(monkeypatch):
 
 
 def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
-    """Companion to the test above: ``nous`` is a canonical provider name
+    """Companion to the test above: ``openrouter`` is a canonical provider name
 
-    (``resolve_provider('nous') == 'nous'``), so a custom entry with that name
-
-    should NOT be returned — the built-in wins as before.
+    (``resolve_provider('openrouter') == 'openrouter'``), so a custom entry with
+    that name should NOT be returned — the built-in wins as before.
 
     """
 
@@ -1347,7 +1308,7 @@ def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
         lambda: {
             "custom_providers": [
                 {
-                    "name": "nous",
+                    "name": "openrouter",
                     "base_url": "http://localhost:1234/v1",
                     "api_key": "shadow-key",
                 }
@@ -1355,7 +1316,7 @@ def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
         },
     )
 
-    entry = rp._get_named_custom_provider("nous")
+    entry = rp._get_named_custom_provider("openrouter")
 
     assert entry is None
 
@@ -2104,63 +2065,6 @@ def test_custom_provider_no_key_gets_placeholder(monkeypatch):
     assert resolved["base_url"] == "http://localhost:8080/v1"
 
 
-def test_auto_detected_nous_auth_failure_falls_through_to_openrouter(monkeypatch):
-    """When auto-detect picks Nous but credentials are revoked, fall through to OpenRouter."""
-
-    from clawk_cli.auth import AuthError
-
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
-
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
-
-    monkeypatch.setattr(rp, "load_config", lambda: {})
-
-    # resolve_provider returns "nous" (stale active_provider in auth.json)
-
-    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "nous")
-
-    # load_pool returns empty pool so we hit the direct credential resolution
-
-    monkeypatch.setattr(
-        rp,
-        "load_pool",
-        lambda p: type(
-            "P",
-            (),
-            {
-                "has_credentials": lambda self: False,
-            },
-        )(),
-    )
-
-    # Nous credential resolution fails with revoked token
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kw: (_ for _ in ()).throw(
-            AuthError(
-                "Refresh session has been revoked",
-                provider="nous",
-                code="invalid_grant",
-                relogin_required=True,
-            )
-        ),
-    )
-
-    # With requested="auto", should fall through to OpenRouter
-
-    resolved = rp.resolve_runtime_provider(requested="auto")
-
-    assert resolved["provider"] == "openrouter"
-
-    assert resolved["api_key"] == "test-or-key"
-
-
 def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatch):
     """When auto-detect picks Codex but credentials are revoked, fall through to OpenRouter."""
 
@@ -2208,50 +2112,6 @@ def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatc
     assert resolved["provider"] == "openrouter"
 
     assert resolved["api_key"] == "test-or-key"
-
-
-def test_explicit_nous_auth_failure_still_raises(monkeypatch):
-    """When user explicitly requests Nous and auth fails, the error should propagate."""
-
-    from clawk_cli.auth import AuthError
-
-    import pytest
-
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
-
-    monkeypatch.setattr(rp, "load_config", lambda: {})
-
-    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "nous")
-
-    monkeypatch.setattr(
-        rp,
-        "load_pool",
-        lambda p: type(
-            "P",
-            (),
-            {
-                "has_credentials": lambda self: False,
-            },
-        )(),
-    )
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kw: (_ for _ in ()).throw(
-            AuthError(
-                "Refresh session has been revoked",
-                provider="nous",
-                code="invalid_grant",
-                relogin_required=True,
-            )
-        ),
-    )
-
-    # With explicit "nous", should raise — don't silently switch providers
-
-    with pytest.raises(AuthError, match="Refresh session has been revoked"):
-        rp.resolve_runtime_provider(requested="nous")
 
 
 def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
