@@ -550,3 +550,92 @@ class TestCronWithGatewayOrigin:
 
         finally:
             clear_session_vars(tokens)
+
+
+# ---------------------------------------------------------------------------
+
+# Regression: cron tick fires INSIDE the gateway process, which sets
+
+# CLAWK_EXEC_ASK=1 (gateway/run.py).  The cron-mode branch must win over the
+
+# gateway/ask routing — otherwise the command falls through to submit_pending()
+
+# with no listener and the terminal tool returns a never-resolving
+
+# "pending_approval" (exit_code -1), hanging the job.
+
+# ---------------------------------------------------------------------------
+
+
+class TestCronInsideGatewayProcessDoesNotHang:
+    """CLAWK_CRON_SESSION + CLAWK_EXEC_ASK (the real gateway runtime) must apply
+    cron_mode, never return status=pending_approval."""
+
+    def _base_env(self, monkeypatch):
+
+        monkeypatch.setenv("CLAWK_CRON_SESSION", "1")
+
+        # The gateway process sets this at startup (gateway/run.py:1712); the
+        # cron ticker runs in that same process, so it is present at tick time.
+
+        monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
+
+        monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
+
+        monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
+
+        monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
+
+    def test_dangerous_command_blocked_not_pending(self, monkeypatch):
+        """Dangerous command + cron + exec_ask: BLOCKED via cron_mode, NOT pending."""
+
+        self._base_env(monkeypatch)
+
+        from unittest.mock import patch as mock_patch
+
+        with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
+            result = check_all_command_guards("rm -rf /tmp/stuff", "local")
+
+        assert not result["approved"]
+
+        assert result.get("status") != "pending_approval"
+
+        assert not result.get("approval_pending")
+
+        assert "BLOCKED" in result["message"]
+
+    def test_sensitive_read_not_pending(self, monkeypatch):
+        """The exact failing command (cat auth.json) must not hang on approval."""
+
+        self._base_env(monkeypatch)
+
+        from unittest.mock import patch as mock_patch
+
+        with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
+            result = check_all_command_guards(
+                "cat ~/.clawksis/auth.json", "local"
+            )
+
+        # Non-dangerous read → allowed; the key invariant is "no pending hang".
+
+        assert result.get("status") != "pending_approval"
+
+        assert not result.get("approval_pending")
+
+    def test_approve_mode_allows_dangerous_not_pending(self, monkeypatch):
+        """cron_mode=approve + exec_ask: dangerous command passes, never pending."""
+
+        self._base_env(monkeypatch)
+
+        from unittest.mock import patch as mock_patch
+
+        with mock_patch(
+            "tools.approval._get_cron_approval_mode", return_value="approve"
+        ):
+            result = check_all_command_guards("rm -rf /tmp/stuff", "local")
+
+        assert result["approved"]
+
+        assert result.get("status") != "pending_approval"
+
+        assert not result.get("approval_pending")
