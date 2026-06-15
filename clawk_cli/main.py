@@ -3635,6 +3635,8 @@ def cmd_cookbook(args):
 
     print("  Models that fit your machine (✅ fits · ⚠️ tight/slow · ❌ too big):")
 
+    print("  The agent needs function-calling — prefer models marked 'tools'.")
+
     print()
 
     for r in rows:

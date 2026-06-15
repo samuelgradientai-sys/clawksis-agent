@@ -340,7 +340,9 @@ def catalog_with_fit(
 ) -> List[Dict[str, Any]]:
     """Return the catalog enriched with a per-model fit verdict + installed flag.
 
-    Sorted best-fit first, then by size descending within a tier.
+    Sorted by: best fit → tool-capable first → larger first. Tool-capable wins
+    within a tier because the agent needs function-calling for most tasks; a
+    no-tools model (e.g. phi3, gemma2) errors the moment a tool is invoked.
     """
     hw = hw or detect_hardware()
     installed_set = set(installed or [])
@@ -352,7 +354,13 @@ def catalog_with_fit(
             "fit": fit,
             "installed": model["ollama"] in installed_set,
         })
-    rows.sort(key=lambda r: (_TIER_RANK.get(r["fit"]["tier"], 9), -r["params_b"]))
+    rows.sort(
+        key=lambda r: (
+            _TIER_RANK.get(r["fit"]["tier"], 9),
+            0 if r["tool_use"] else 1,
+            -r["params_b"],
+        )
+    )
     return rows
 
 

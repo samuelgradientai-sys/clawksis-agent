@@ -147,7 +147,11 @@ export default function CookbookPage() {
         },
       );
       if (res.ok) {
-        setNotice(`Agent model set to ${model.name} (${model.ollama}) via local Ollama.`);
+        setNotice(
+          model.tool_use
+            ? `Agent model set to ${model.name} (${model.ollama}) via local Ollama.`
+            : `⚠ Set to ${model.name} (${model.ollama}), but this model does NOT support tools — the agent will error the moment it needs one (e.g. delegating a subagent). Pick a model marked "tools ✓".`,
+        );
       } else {
         setNotice(`Could not switch model: ${res.error ?? "failed"}`);
       }
@@ -167,6 +171,10 @@ export default function CookbookPage() {
           <h1 className="text-xl font-semibold">Cookbook — local models</h1>
           <p className="text-sm text-muted-foreground">
             Open LLMs you can run on this machine, and use as the agent&apos;s model.
+          </p>
+          <p className="mt-0.5 text-xs text-amber-400/90">
+            The agent uses tools — pick a model marked “tools ✓”. “no tools”
+            models error the moment the agent calls a tool (e.g. delegating).
           </p>
         </div>
         <button
@@ -241,7 +249,11 @@ export default function CookbookPage() {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {m.use_case} · ~{m.size_gb}GB · {m.fit.mode.toUpperCase()} ·{" "}
-                    {m.tool_use ? "tools ✓" : "no tools"}
+                    {m.tool_use ? (
+                      <span className="text-emerald-400">tools ✓</span>
+                    ) : (
+                      <span className="text-amber-400">no tools ⚠</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
