@@ -929,12 +929,26 @@ def _apply_main_model_assignment(
     if not isinstance(model_cfg, dict):
         model_cfg = {}
 
+    provider_norm = provider.strip().lower()
+
     model_cfg["provider"] = provider
 
     model_cfg["default"] = model
 
-    if provider.strip().lower() == "custom" and base_url.strip():
+    if provider_norm == "custom" and base_url.strip():
         model_cfg["base_url"] = base_url.strip()
+
+    elif provider_norm == "ollama":
+        # Local Ollama daemon: persist the OpenAI-compatible /v1 endpoint and a
+        # dummy api_key so the runtime resolver wires the local server without an
+        # auth prompt (Ollama ignores the key). Honor a caller-supplied base_url
+        # (LAN/remote Ollama) over the localhost default.
+        from clawk_cli.runtime_provider import DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        model_cfg["base_url"] = base_url.strip() or DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        if not str(model_cfg.get("api_key") or "").strip():
+            model_cfg["api_key"] = "ollama"
 
     elif model_cfg.get("base_url"):
         model_cfg["base_url"] = ""
@@ -12115,11 +12129,33 @@ async def post_cookbook_pull(body: CookbookTagBody):
 
 @app.get("/api/cookbook/pull-status")
 async def get_cookbook_pull_status(tag: str):
-    """Background pull status for a tag: pulling / done / error / "" (unknown)."""
+    """Background pull status for a tag: pulling / validating / done / error."""
 
     from clawk_cli import cookbook
 
     return {"tag": tag, "status": cookbook.pull_status(tag)}
+
+
+@app.post("/api/cookbook/install-ollama")
+async def post_cookbook_install_ollama():
+    """Install Ollama on the clawk host (background) so the Cookbook works here.
+
+    "We ship Ollama with clawk" — install it on demand on the machine where the
+    agent runs. Poll /install-ollama-status. Best-effort (Linux / macOS-brew).
+    """
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_ollama_install)
+
+
+@app.get("/api/cookbook/install-ollama-status")
+async def get_cookbook_install_ollama_status():
+    """Ollama install progress: installing / done / error / "" (unknown)."""
+
+    from clawk_cli import cookbook
+
+    return {"status": cookbook.ollama_install_status()}
 
 
 @app.post("/api/cookbook/use")

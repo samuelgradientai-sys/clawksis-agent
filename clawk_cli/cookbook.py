@@ -561,6 +561,104 @@ def ollama_status() -> Dict[str, Any]:
     }
 
 
+def start_ollama_serve(wait_seconds: float = 12.0) -> bool:
+    """Best-effort: ensure the Ollama daemon is running on THIS host (where clawk
+    runs), starting it if it's installed but stopped. Returns True if running.
+
+    Models pull/run on the clawk host, so the daemon must be up here. Prefer the
+    systemd service the official installer sets up; fall back to spawning
+    ``ollama serve`` detached.
+    """
+    if not ollama_installed():
+        return False
+    if ollama_running():
+        return True
+    try:
+        subprocess.run(
+            ["systemctl", "start", "ollama"], capture_output=True, timeout=15
+        )
+    except Exception:
+        pass
+    if not ollama_running():
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        if ollama_running():
+            return True
+        time.sleep(0.5)
+    return ollama_running()
+
+
+# Background Ollama-install tracking (the "we ship Ollama with clawk" path:
+# install it on the clawk host on demand so the Cookbook works out of the box).
+_ollama_install_status = ""
+_ollama_install_lock = threading.Lock()
+
+
+def ollama_install_status() -> str:
+    with _ollama_install_lock:
+        return _ollama_install_status
+
+
+def _do_install_ollama() -> None:
+    try:
+        sysname = platform.system()
+        if sysname == "Linux":
+            proc = subprocess.run(
+                "curl -fsSL https://ollama.com/install.sh | sh",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+            ok = proc.returncode == 0
+            err = (proc.stderr or "install failed").strip()[:200]
+        elif sysname == "Darwin" and shutil.which("brew"):
+            proc = subprocess.run(
+                ["brew", "install", "ollama"],
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+            ok = proc.returncode == 0
+            err = (proc.stderr or "install failed").strip()[:200]
+        else:
+            ok = False
+            err = "Auto-install supported on Linux (and macOS w/ Homebrew). On this OS, install Ollama from ollama.com."
+        with _ollama_install_lock:
+            global _ollama_install_status
+            _ollama_install_status = "done" if ok else ("error: " + err)
+        if ok:
+            start_ollama_serve()
+    except Exception as exc:
+        with _ollama_install_lock:
+            _ollama_install_status = f"error: {exc}"
+
+
+def start_ollama_install() -> Dict[str, Any]:
+    """Install Ollama on the clawk host in the background. Poll install-status."""
+    if ollama_installed():
+        start_ollama_serve()
+        return {"ok": True, "status": "done"}
+    with _ollama_install_lock:
+        global _ollama_install_status
+        if _ollama_install_status == "installing":
+            return {"ok": True, "status": "installing"}
+        _ollama_install_status = "installing"
+    threading.Thread(
+        target=_do_install_ollama, name="ollama-install", daemon=True
+    ).start()
+    return {"ok": True, "status": "installing"}
+
+
 # Background pull tracking: tag -> "pulling" | "done" | "error: ...".
 _pull_status: Dict[str, str] = {}
 _pull_lock = threading.Lock()
@@ -573,6 +671,9 @@ def pull_status(tag: str) -> str:
 
 def _do_pull(tag: str) -> None:
     try:
+        # The model installs on THIS host (where clawk runs). Make sure the
+        # daemon is up first — `ollama pull` needs it.
+        start_ollama_serve()
         proc = subprocess.run(
             ["ollama", "pull", tag], capture_output=True, text=True, timeout=3600
         )
@@ -605,7 +706,11 @@ def _do_pull(tag: str) -> None:
 def start_pull(tag: str) -> Dict[str, Any]:
     """Kick off `ollama pull <tag>` in the background. Returns immediately."""
     if not ollama_installed():
-        return {"ok": False, "error": "ollama is not installed (see ollama.com)."}
+        return {
+            "ok": False,
+            "error": "Ollama isn't installed on this host yet.",
+            "needs_install": True,
+        }
     with _pull_lock:
         if _pull_status.get(tag) == "pulling":
             return {"ok": True, "status": "pulling", "tag": tag}
@@ -619,7 +724,12 @@ def start_pull(tag: str) -> Dict[str, Any]:
 def pull_blocking(tag: str) -> Dict[str, Any]:
     """Pull synchronously (for the CLI), then validate it runs. Returns {ok, ...}."""
     if not ollama_installed():
-        return {"ok": False, "error": "ollama is not installed (see ollama.com)."}
+        return {
+            "ok": False,
+            "error": "Ollama isn't installed. Run `clawk cookbook --install-ollama` or install from ollama.com.",
+            "needs_install": True,
+        }
+    start_ollama_serve()  # model installs on this host; ensure the daemon is up
     try:
         proc = subprocess.run(["ollama", "pull", tag], timeout=3600)
         if proc.returncode != 0:

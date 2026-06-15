@@ -199,6 +199,14 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         base_url_override="https://ollama.com/v1",
         base_url_env_var="OLLAMA_BASE_URL",
     ),
+    # Local Ollama daemon (OpenAI-compatible /v1). First-class provider so the
+    # Cookbook's locally-pulled models can be selected in the model picker and
+    # resolve end-to-end. No API key required; the runtime resolver supplies a
+    # non-empty dummy key. Distinct from "ollama-cloud" (ollama.com).
+    "ollama": ClawksisOverlay(
+        transport="openai_chat",
+        base_url_override="http://localhost:11434/v1",
+    ),
     # Azure Foundry: supports both OpenAI-style and Anthropic-style endpoints.
     # The transport is determined at runtime from config.yaml model.api_mode.
     "azure-foundry": ClawksisOverlay(
@@ -328,7 +336,11 @@ ALIASES: Dict[str, str] = {
     "lmstudio": "lmstudio",
     "lm-studio": "lmstudio",
     "lm_studio": "lmstudio",
-    "ollama": "custom",  # bare "ollama" = local; use "ollama-cloud" for cloud
+    # bare "ollama" = local Ollama daemon (first-class overlay provider);
+    # use "ollama-cloud" for ollama.com. Kept self-mapped so get_provider()
+    # reaches the overlay instead of collapsing to bare "custom" (which carries
+    # no base_url and would route a local model to OpenRouter).
+    "ollama": "ollama",
     "vllm": "local",
     "llamacpp": "local",
     "llama.cpp": "local",
@@ -350,6 +362,7 @@ _LABEL_OVERRIDES: Dict[str, str] = {
     "lmstudio": "LM Studio",
     "local": "Local endpoint",
     "bedrock": "AWS Bedrock",
+    "ollama": "Ollama (local)",
     "ollama-cloud": "Ollama Cloud",
     "xai-oauth": "xAI Grok OAuth (SuperGrok / Premium+)",
 }
