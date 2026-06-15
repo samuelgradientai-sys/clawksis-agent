@@ -182,6 +182,13 @@ export const es: Translations = {
 
     webUi: "Web UI",
 
+    managingProfile: "Gestionando el perfil",
+
+    currentProfileOption: "este panel ({name})",
+
+    managingProfileBanner:
+      "Gestionando el perfil “{name}” — la configuración, las claves, las skills, los MCP, el modelo y los chats nuevos se aplican a ese perfil.",
+
   },
 
 
@@ -567,6 +574,15 @@ export const es: Translations = {
   profiles: {
 
     newProfile: "Nuevo perfil",
+
+    manageSkills: "Gestionar skills y herramientas",
+
+    activeSetHint:
+      "Se aplica a las nuevas ejecuciones de CLI/gateway. Este panel sigue gestionando su propio perfil — usá “Gestionar skills y herramientas” para editar {name}.",
+
+    cloneFrom: "Clonar configuración de",
+
+    cloneFromNone: "Ninguno (en blanco)",
 
     name: "Nombre",
 
@@ -965,6 +981,18 @@ export const es: Translations = {
     title: "Tema",
 
     switchTheme: "Cambiar tema",
+
+    fontTitle: "Fuente",
+
+    fontDefault: "Predeterminada del tema",
+
+    fontDefaultHint: "Usar la fuente del tema activo",
+
+    fontSans: "Sans",
+
+    fontSerif: "Serif",
+
+    fontMono: "Mono",
 
   },
 

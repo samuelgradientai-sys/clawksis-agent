@@ -222,6 +222,12 @@ export interface Translations {
 
     webUi: string;
 
+    managingProfileBanner?: string;
+
+    managingProfile?: string;
+
+    currentProfileOption?: string;
+
   };
 
 
@@ -692,6 +698,14 @@ export interface Translations {
 
     newProfile: string;
 
+    manageSkills?: string;
+
+    activeSetHint?: string;
+
+    cloneFrom?: string;
+
+    cloneFromNone?: string;
+
     name: string;
 
     namePlaceholder: string;
@@ -1079,6 +1093,18 @@ export interface Translations {
     title: string;
 
     switchTheme: string;
+
+    fontTitle?: string;
+
+    fontDefault?: string;
+
+    fontDefaultHint?: string;
+
+    fontSans?: string;
+
+    fontSerif?: string;
+
+    fontMono?: string;
 
   };
 

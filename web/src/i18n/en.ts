@@ -188,6 +188,13 @@ export const en: Translations = {
 
     webUi: "Web UI",
 
+    managingProfile: "Managing profile",
+
+    currentProfileOption: "this dashboard ({name})",
+
+    managingProfileBanner:
+      "Managing profile “{name}” — config, keys, skills, MCPs, model, and new chats apply to that profile.",
+
   },
 
 
@@ -573,6 +580,15 @@ export const en: Translations = {
   profiles: {
 
     newProfile: "New Profile",
+
+    manageSkills: "Manage skills & tools",
+
+    activeSetHint:
+      "Applies to new CLI/gateway runs. This dashboard still manages its own profile — use “Manage skills & tools” to edit {name}.",
+
+    cloneFrom: "Clone config from",
+
+    cloneFromNone: "None (blank)",
 
     name: "Name",
 
@@ -1035,6 +1051,18 @@ export const en: Translations = {
     title: "Theme",
 
     switchTheme: "Switch theme",
+
+    fontTitle: "Font",
+
+    fontDefault: "Theme default",
+
+    fontDefaultHint: "Use the active theme's font",
+
+    fontSans: "Sans",
+
+    fontSerif: "Serif",
+
+    fontMono: "Mono",
 
   },
 
