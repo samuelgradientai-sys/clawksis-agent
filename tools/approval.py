@@ -1932,6 +1932,43 @@ def check_all_command_guards(
     if _YOLO_MODE_FROZEN or is_current_session_yolo_enabled() or approval_mode == "off":
         return {"approved": True, "message": None}
 
+    # Cron sessions have NO user present to approve — handled authoritatively
+    # here, BEFORE the is_cli/is_gateway/is_ask routing below.  The gateway
+    # process sets CLAWK_EXEC_ASK=1 (gateway/run.py) and the cron ticker runs
+    # inside that process, so a cron tick sees is_ask=True; without this early
+    # branch the command would skip cron_mode, fall through to the gateway/ask
+    # approval path, find no notify callback registered for the cron session,
+    # and return a never-resolving "pending_approval" (terminal exit_code -1)
+    # — the job hangs.  Mirrors check_execute_code_guard's cron handling.
+
+    if env_var_enabled("CLAWK_CRON_SESSION"):
+        if _get_cron_approval_mode() == "deny":
+            is_dangerous, _pk, _cron_desc = detect_dangerous_command(command)
+
+            if is_dangerous:
+                return {
+                    "approved": False,
+                    "message": (
+                        f"BLOCKED: Command flagged as dangerous ({_cron_desc}) "
+                        "but cron jobs run without a user present to approve it. "
+                        "Find an alternative approach that avoids this command. "
+                        "To allow dangerous commands in cron jobs, set "
+                        "approvals.cron_mode: approve in config.yaml."
+                    ),
+                    "pattern_key": _pk,
+                    "description": _cron_desc,
+                    "outcome": "blocked",
+                    "user_consent": False,
+                }
+
+            # Non-dangerous command in a cron: allow (preserves prior behavior).
+
+            return {"approved": True, "message": None}
+
+        # cron_mode == "approve": trusted cron profile — allow dangerous too.
+
+        return {"approved": True, "message": None}
+
     is_cli = env_var_enabled("CLAWK_INTERACTIVE")
 
     is_gateway = _is_gateway_approval_context()
@@ -1943,26 +1980,6 @@ def check_all_command_guards(
     # flows, we do not block on approvals and we skip external guard work.
 
     if not is_cli and not is_gateway and not is_ask:
-        # Cron sessions: respect cron_mode config
-
-        if env_var_enabled("CLAWK_CRON_SESSION"):
-            if _get_cron_approval_mode() == "deny":
-                # Run detection to get a description for the block message
-
-                is_dangerous, _pk, description = detect_dangerous_command(command)
-
-                if is_dangerous:
-                    return {
-                        "approved": False,
-                        "message": (
-                            f"BLOCKED: Command flagged as dangerous ({description}) "
-                            "but cron jobs run without a user present to approve it. "
-                            "Find an alternative approach that avoids this command. "
-                            "To allow dangerous commands in cron jobs, set "
-                            "approvals.cron_mode: approve in config.yaml."
-                        ),
-                    }
-
         return {"approved": True, "message": None}
 
     # --- Phase 1: Gather findings from both checks ---
