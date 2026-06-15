@@ -929,12 +929,26 @@ def _apply_main_model_assignment(
     if not isinstance(model_cfg, dict):
         model_cfg = {}
 
+    provider_norm = provider.strip().lower()
+
     model_cfg["provider"] = provider
 
     model_cfg["default"] = model
 
-    if provider.strip().lower() == "custom" and base_url.strip():
+    if provider_norm == "custom" and base_url.strip():
         model_cfg["base_url"] = base_url.strip()
+
+    elif provider_norm == "ollama":
+        # Local Ollama daemon: persist the OpenAI-compatible /v1 endpoint and a
+        # dummy api_key so the runtime resolver wires the local server without an
+        # auth prompt (Ollama ignores the key). Honor a caller-supplied base_url
+        # (LAN/remote Ollama) over the localhost default.
+        from clawk_cli.runtime_provider import DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        model_cfg["base_url"] = base_url.strip() or DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        if not str(model_cfg.get("api_key") or "").strip():
+            model_cfg["api_key"] = "ollama"
 
     elif model_cfg.get("base_url"):
         model_cfg["base_url"] = ""

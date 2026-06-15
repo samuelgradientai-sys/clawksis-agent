@@ -2823,6 +2823,40 @@ def list_authenticated_providers(
 
             _section4_emitted_slugs.add(slug.lower())
 
+    # Local Ollama daemon (Cookbook): surface a first-class "ollama" provider
+    # row listing the models the user has pulled locally, but only when the
+    # daemon is actually running. Lazy import + best-effort: never let a missing
+    # cookbook module or an Ollama hiccup break provider listing. Selecting a
+    # model here persists provider="ollama", which resolve_runtime_provider
+    # resolves to the local /v1 endpoint with a dummy key.
+
+    if "ollama" not in seen_slugs:
+        try:
+            from clawk_cli import cookbook as _cookbook
+
+            if _cookbook.ollama_running():
+                _ollama_models = [m for m in _cookbook.ollama_models() if m]
+
+                if _ollama_models:
+                    _ollama_is_current = _norm_url(current_base_url) == _norm_url(
+                        _cookbook.OLLAMA_OPENAI_URL
+                    ) or str(current_provider or "").strip().lower() == "ollama"
+
+                    results.append({
+                        "slug": "ollama",
+                        "name": "Ollama (local)",
+                        "is_current": _ollama_is_current,
+                        "is_user_defined": False,
+                        "models": _ollama_models[:max_models],
+                        "total_models": len(_ollama_models),
+                        "source": "local",
+                    })
+
+                    seen_slugs.add("ollama")
+
+        except Exception:
+            pass
+
     # Sort: current provider first, then by model count descending
 
     results.sort(key=lambda r: (not r["is_current"], -r["total_models"]))

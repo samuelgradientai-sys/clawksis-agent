@@ -48,6 +48,12 @@ from clawk_constants import OPENROUTER_BASE_URL
 from utils import base_url_host_matches, base_url_hostname
 
 
+# Local Ollama daemon's OpenAI-compatible endpoint. Mirrors
+# clawk_cli.cookbook.OLLAMA_OPENAI_URL; duplicated here to avoid importing the
+# (heavier, optional) cookbook module into the hot runtime-resolution path.
+DEFAULT_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
+
+
 def _normalize_custom_provider_name(value: str) -> str:
 
     return value.strip().lower().replace(" ", "-")
@@ -1779,6 +1785,67 @@ def _resolve_explicit_runtime(
     return None
 
 
+def _resolve_ollama_runtime(
+    *,
+    requested_provider: str,
+    explicit_api_key: Optional[str] = None,
+    explicit_base_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Resolve the local Ollama provider to its OpenAI-compatible /v1 endpoint.
+
+    Ollama needs no auth, but the OpenAI SDK requires a non-empty api_key, so a
+    dummy ("ollama") is supplied when no real key is configured (matching
+    cookbook.use_model). Base URL precedence: explicit override > config
+    ``model.base_url`` (only when the configured provider is ollama, to avoid a
+    stale URL from another provider leaking in) > the localhost default.
+    """
+
+    model_cfg = _get_model_config()
+
+    cfg_provider = str(model_cfg.get("provider") or "").strip().lower()
+
+    cfg_base_url = ""
+
+    if cfg_provider == "ollama":
+        cfg_base_url = str(model_cfg.get("base_url") or "").strip().rstrip("/")
+
+    base_url = (
+        (explicit_base_url or "").strip().rstrip("/")
+        or cfg_base_url
+        or DEFAULT_OLLAMA_LOCAL_BASE_URL
+    )
+
+    # Ollama ignores the key; honor a real one if the user set it, else a
+    # non-empty placeholder so the OpenAI SDK doesn't reject the client.
+    cfg_api_key = str(model_cfg.get("api_key") or "").strip() if cfg_provider == "ollama" else ""
+
+    api_key = (
+        (explicit_api_key or "").strip()
+        or cfg_api_key
+        or os.getenv("OLLAMA_API_KEY", "").strip()
+        or "ollama"
+    )
+
+    # Ollama's OpenAI-compatible endpoint speaks chat_completions; honor an
+    # explicit config api_mode only when the configured provider is ollama.
+    api_mode = "chat_completions"
+
+    if cfg_provider == "ollama":
+        configured_mode = _parse_api_mode(model_cfg.get("api_mode"))
+
+        if configured_mode:
+            api_mode = configured_mode
+
+    return {
+        "provider": "ollama",
+        "api_mode": api_mode,
+        "base_url": base_url,
+        "api_key": api_key,
+        "source": "explicit" if (explicit_api_key or explicit_base_url) else "config",
+        "requested_provider": requested_provider,
+    }
+
+
 def resolve_runtime_provider(
     *,
     requested: Optional[str] = None,
@@ -1854,6 +1921,19 @@ def resolve_runtime_provider(
         )
 
         return azure_runtime
+
+    # Local Ollama daemon (OpenAI-compatible /v1). Resolve here — BEFORE the
+    # alias table collapses "ollama" → "custom" — so a bare `provider: ollama`
+    # (from the model picker / Cookbook) gets the local /v1 base_url + a dummy
+    # api_key instead of silently falling through to OpenRouter. Honors an
+    # explicit base_url override and a config `model.base_url` (when the
+    # configured provider is ollama) so LAN/remote Ollama endpoints still work.
+    if requested_provider == "ollama":
+        return _resolve_ollama_runtime(
+            requested_provider=requested_provider,
+            explicit_api_key=explicit_api_key,
+            explicit_base_url=explicit_base_url,
+        )
 
     custom_runtime = _resolve_named_custom_runtime(
         requested_provider=requested_provider,
