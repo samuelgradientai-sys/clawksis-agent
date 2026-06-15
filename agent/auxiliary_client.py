@@ -586,44 +586,21 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
 
 # Nous Portal extra_body for product attribution.
 
-# Callers should pass this as extra_body in chat.completions.create()
+# Nous Portal is no longer a supported provider, so there are no product
 
-# when the auxiliary client is backed by Nous Portal.
+# attribution tags to attach. Kept as a no-op so the public callers
 
-#
-
-# The tags are computed from agent.portal_tags so the client= marker stays
-
-# in lockstep with clawk_cli.__version__ across every Portal call site
-
-# (main loop, aux, compression, web_extract). Do not inline a literal here;
-
-# see agent/portal_tags.py for the rationale.
-
-from agent.portal_tags import nous_portal_tags as _nous_portal_tags
-
+# (``get_auxiliary_extra_body``) keep working without special-casing.
 
 def _nous_extra_body() -> dict:
-    """Return a fresh Nous Portal ``extra_body`` dict.
+    """Return the auxiliary ``extra_body`` dict (currently empty)."""
 
-
-
-    Computed at call time so a hot-reloaded ``clawk_cli.__version__`` is
-
-    reflected without restarting long-running processes.
-
-    """
-
-    return {"tags": _nous_portal_tags()}
+    return {}
 
 
 # Backwards-compatible module attribute. Some callers (tests, third-party
 
-# plugins) read ``NOUS_EXTRA_BODY`` directly; keep it as a snapshot of the
-
-# current tags. Callers that need the freshest value should call
-
-# ``_nous_extra_body()`` or import ``nous_portal_tags`` directly.
+# plugins) read ``NOUS_EXTRA_BODY`` directly; keep it as a snapshot.
 
 NOUS_EXTRA_BODY = _nous_extra_body()
 
@@ -2388,32 +2365,6 @@ def _describe_openrouter_unavailable() -> str:
 
 
 def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
-
-    # Check cross-session rate limit guard before attempting Nous —
-
-    # if another session already recorded a 429, skip Nous entirely
-
-    # to avoid piling more requests onto the tapped RPH bucket.
-
-    try:
-        from agent.nous_rate_guard import nous_rate_limit_remaining
-
-        _remaining = nous_rate_limit_remaining()
-
-        if _remaining is not None and _remaining > 0:
-            logger.debug(
-                "Auxiliary: skipping Nous Portal (rate-limited, resets in %.0fs)",
-                _remaining,
-            )
-
-            _mark_provider_unhealthy(
-                "nous", ttl=_remaining, reason="rate limit", quiet=True
-            )
-
-            return None, None
-
-    except Exception:
-        pass
 
     nous = _read_nous_auth()
 
@@ -7878,9 +7829,6 @@ def _build_call_kwargs(
     # Provider-specific extra_body
 
     merged_extra = dict(extra_body or {})
-
-    if provider == "nous" or auxiliary_is_nous:
-        merged_extra.setdefault("tags", []).extend(_nous_portal_tags())
 
     if merged_extra:
         kwargs["extra_body"] = merged_extra
