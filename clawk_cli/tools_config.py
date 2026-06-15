@@ -45,12 +45,7 @@ from clawk_cli.config import (
 
 from clawk_cli.colors import Colors, color
 
-from clawk_cli.nous_subscription import (
-    apply_nous_managed_defaults,
-    get_nous_subscription_features,
-)
-
-from clawk_cli.nous_account import format_nous_portal_entitlement_message
+from clawk_cli.nous_subscription import get_nous_subscription_features
 
 from tools.tool_backend_helpers import fal_key_is_configured
 
@@ -2457,7 +2452,7 @@ def _toolset_has_keys(
 
         feature = features.features.get(ts_key)
 
-        if feature and (feature.available or feature.managed_by_nous):
+        if feature and feature.available:
             return True
 
     # Check TOOL_CATEGORIES first (provider-aware)
@@ -3461,23 +3456,6 @@ def _configure_tool_category(
 
         # Plain text labels only (no ANSI codes in menu items)
 
-        # When the user is logged into Nous, surface a marker on providers
-
-        # whose access is included in their subscription so it's visually
-
-        # obvious which options cost extra vs. cost nothing on top of Nous.
-
-        try:
-            _nous_logged_in = bool(
-                get_nous_subscription_features(
-                    config,
-                    force_fresh=force_fresh,
-                ).nous_auth_present
-            )
-
-        except Exception:
-            _nous_logged_in = False
-
         provider_choices = []
 
         provider_descs = []
@@ -3501,26 +3479,7 @@ def _configure_tool_category(
                 else:
                     configured = " [configured]"
 
-            # Mark Nous-managed entries. Logged-in paid subscribers get the
-
-            # "included" star; everyone else gets a "via Nous Portal" hint so
-
-            # it's clear selecting the row triggers a Portal login. The rows
-
-            # are always shown now (see _visible_providers) — selecting one
-
-            # drives an inline login + entitlement check.
-
-            sub_marker = ""
-
-            if p.get("managed_nous_feature"):
-                if _nous_logged_in:
-                    sub_marker = "  ★ Included with your Nous subscription"
-
-                else:
-                    sub_marker = "  ★ via Nous Portal (login on select)"
-
-            provider_choices.append(f"{p['name']}{badge}{tag}{configured}{sub_marker}")
+            provider_choices.append(f"{p['name']}{badge}{tag}{configured}")
 
             # Plain-language line shown dimmed beneath the row so a
             # non-technical user understands what the option actually is.
@@ -4314,31 +4273,6 @@ def _configure_provider(
 
             return
 
-    # Pure pre-auth UX rows (requires_nous_auth without a managed gateway
-
-    # feature) keep the old gate. Managed rows are handled by the inline
-
-    # login above, so don't double-check them here.
-
-    if provider.get("requires_nous_auth") and not managed_feature:
-        features = get_nous_subscription_features(config, force_fresh=force_fresh)
-
-        entitled = bool(
-            features.account_info and features.account_info.paid_service_access is True
-        )
-
-        if not features.nous_auth_present or not entitled:
-            message = format_nous_portal_entitlement_message(
-                features.account_info,
-                capability=f"{provider.get('name', 'Nous Subscription')}",
-            )
-
-            _print_warning(
-                f"  {message or 'Nous Subscription is only available after logging into Nous Portal.'}"
-            )
-
-            return
-
     # Set TTS provider in config if applicable
 
     if provider.get("tts_provider"):
@@ -4434,44 +4368,6 @@ def _configure_provider(
     # Prompt for each required env var
 
     all_configured = True
-
-    # If this BYOK provider lives in a category that ALSO has a
-
-    # Nous-managed sibling, show a single dim hint so users know
-
-    # they can avoid the key entirely via a Portal subscription.
-
-    # Suppressed when the user is already authed to Nous.
-
-    _show_portal_hint = False
-
-    if env_vars and not managed_feature and not provider.get("requires_nous_auth"):
-        try:
-            _has_managed_sibling = False
-
-            for _cat_key, _cat in TOOL_CATEGORIES.items():
-                _providers = _cat.get("providers", [])
-
-                if provider in _providers and any(
-                    sib.get("managed_nous_feature") for sib in _providers
-                ):
-                    _has_managed_sibling = True
-
-                    break
-
-            if _has_managed_sibling:
-                _features = get_nous_subscription_features(
-                    config,
-                    force_fresh=force_fresh,
-                )
-
-                _show_portal_hint = not _features.nous_auth_present
-
-        except Exception:
-            _show_portal_hint = False
-
-    if _show_portal_hint:
-        _print_info("  Available through Nous Portal subscription.")
 
     for var in env_vars:
         existing = get_env_value(var["key"])
@@ -4865,29 +4761,6 @@ def _reconfigure_provider(
 
             return
 
-    # Pure pre-auth UX rows keep the old gate; managed rows already handled
-
-    # by the inline login above.
-
-    if provider.get("requires_nous_auth") and not managed_feature:
-        features = get_nous_subscription_features(config, force_fresh=force_fresh)
-
-        entitled = bool(
-            features.account_info and features.account_info.paid_service_access is True
-        )
-
-        if not features.nous_auth_present or not entitled:
-            message = format_nous_portal_entitlement_message(
-                features.account_info,
-                capability=f"{provider.get('name', 'Nous Subscription')}",
-            )
-
-            _print_warning(
-                f"  {message or 'Nous Subscription is only available after logging into Nous Portal.'}"
-            )
-
-            return
-
     if provider.get("tts_provider"):
         tts_cfg = config.setdefault("tts", {})
 
@@ -5245,24 +5118,6 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
 
                     print(color(f"  - {label}", Colors.RED))
 
-            auto_configured = apply_nous_managed_defaults(
-                config,
-                enabled_toolsets=new_enabled,
-                force_fresh=True,
-            )
-
-            for ts_key in sorted(auto_configured):
-                label = next(
-                    (l for k, l, _ in CONFIGURABLE_TOOLSETS if k == ts_key), ts_key
-                )
-
-                print(
-                    color(
-                        f"  ✓ {label}: using your Nous subscription defaults",
-                        Colors.GREEN,
-                    )
-                )
-
             # Walk through ALL selected tools that have provider options or
 
             # need API keys.  This ensures browser (Local vs Browserbase),
@@ -5275,7 +5130,6 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
                 ts_key
                 for ts_key in sorted(new_enabled)
                 if (TOOL_CATEGORIES.get(ts_key) or TOOLSET_ENV_REQUIREMENTS.get(ts_key))
-                and ts_key not in auto_configured
             ]
 
             if to_configure:
