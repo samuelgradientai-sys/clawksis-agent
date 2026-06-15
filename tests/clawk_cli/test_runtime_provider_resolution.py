@@ -3375,16 +3375,19 @@ def test_minimax_oauth_pool_forces_anthropic_messages_despite_stale_config(monke
 
 
 @pytest.mark.parametrize(
-    "alias,base_url",
+    "alias,base_url,expected_provider",
     [
-        ("ollama", "http://192.168.0.103:11434/v1"),
-        ("vllm", "http://192.168.0.103:8000/v1"),
-        ("llamacpp", "http://192.168.0.103:8080/v1"),
-        ("llama-cpp", "http://192.168.0.103:8080/v1"),
+        # "ollama" is a first-class provider now (its own overlay + runtime
+        # short-circuit), so it resolves to provider="ollama" — still honoring
+        # the configured LAN base_url and NOT falling through to OpenRouter.
+        ("ollama", "http://192.168.0.103:11434/v1", "ollama"),
+        ("vllm", "http://192.168.0.103:8000/v1", "custom"),
+        ("llamacpp", "http://192.168.0.103:8080/v1", "custom"),
+        ("llama-cpp", "http://192.168.0.103:8080/v1", "custom"),
     ],
 )
 def test_custom_aliases_with_lan_base_url_route_to_custom_not_openrouter(
-    monkeypatch, alias, base_url
+    monkeypatch, alias, base_url, expected_provider
 ):
     """provider: ollama|vllm|llamacpp + LAN IP must NOT fall through to OpenRouter."""
 
@@ -3408,18 +3411,21 @@ def test_custom_aliases_with_lan_base_url_route_to_custom_not_openrouter(
 
     resolved = rp.resolve_runtime_provider()
 
-    assert resolved["provider"] == "custom", (
-        f"alias {alias!r} with LAN base_url should resolve to provider=custom, "
-        f"got {resolved['provider']!r}"
+    assert resolved["provider"] == expected_provider, (
+        f"alias {alias!r} with LAN base_url should resolve to "
+        f"provider={expected_provider!r}, got {resolved['provider']!r}"
     )
 
     assert resolved["base_url"] == base_url.rstrip("/"), (
         f"base_url should be the configured LAN endpoint, got {resolved['base_url']!r}"
     )
 
+    # The key invariant for every alias: never silently routed to OpenRouter.
+    assert resolved["provider"] != "openrouter"
+
 
 def test_custom_alias_with_loopback_base_url_routes_to_custom(monkeypatch):
-    """provider: ollama + loopback should also route to custom (regression guard)."""
+    """provider: ollama + loopback resolves to the first-class ollama provider."""
 
     monkeypatch.setattr(
         rp,
@@ -3433,9 +3439,13 @@ def test_custom_alias_with_loopback_base_url_routes_to_custom(monkeypatch):
 
     resolved = rp.resolve_runtime_provider()
 
-    assert resolved["provider"] == "custom"
+    # "ollama" is now a first-class provider (was previously aliased to custom);
+    # it must still honor the loopback base_url and never hit OpenRouter.
+    assert resolved["provider"] == "ollama"
 
     assert resolved["base_url"] == "http://localhost:11434/v1"
+
+    assert resolved["api_key"]  # non-empty dummy so the OpenAI SDK accepts it
 
 
 def test_trustworthy_check_accepts_custom_aliases():
