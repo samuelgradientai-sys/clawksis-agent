@@ -722,9 +722,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [themeName, setThemeName] = useState<string>(() => {
 
-    if (typeof window === "undefined") return "default";
+    if (typeof window === "undefined") return "midnight";
 
-    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "default";
+    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "midnight";
 
     const migrated = migrateThemeName(stored);
 
