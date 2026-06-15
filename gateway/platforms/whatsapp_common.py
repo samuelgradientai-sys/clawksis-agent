@@ -54,7 +54,7 @@ class WhatsAppBehaviorMixin:
     MAX_MESSAGE_LENGTH: int = 4096
     supports_code_blocks = True  # WhatsApp renders fenced code blocks (monospace)
 
-    DEFAULT_REPLY_PREFIX: str = "⚕ *Clawksis*\n────────────\n"
+    DEFAULT_REPLY_PREFIX: str = "∇ *Clawksis*\n────────────\n"
 
     @property
     def enforces_own_access_policy(self) -> bool:
