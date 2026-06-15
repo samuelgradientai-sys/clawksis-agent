@@ -1,27 +1,16 @@
 """Tests for subprocess env sanitization in LocalEnvironment.
 
-
-
 Verifies that Clawksis-managed provider, tool, and gateway env vars are
-
 stripped from subprocess environments so external CLIs are not silently
-
 misrouted or handed Clawksis secrets.
 
-
-
 See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/1002
-
 See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/1264
-
 """
 
 import os
-
 import threading
-
 from unittest.mock import MagicMock, patch
-
 
 from tools.environments.local import (
     LocalEnvironment,
@@ -34,22 +23,15 @@ def _make_fake_popen(captured: dict):
     """Return a fake Popen constructor that records the env kwarg."""
 
     def fake_popen(cmd, **kwargs):
-
         captured["env"] = kwargs.get("env", {})
-
         proc = MagicMock()
-
         proc.poll.return_value = 0
-
         proc.returncode = 0
-
         proc.stdout = MagicMock(
             __iter__=lambda s: iter([]),
             __next__=lambda s: (_ for _ in ()).throw(StopIteration),
         )
-
         proc.stdin = MagicMock()
-
         return proc
 
     return fake_popen
@@ -57,19 +39,14 @@ def _make_fake_popen(captured: dict):
 
 def _run_with_env(extra_os_env=None, self_env=None):
     """Execute a command via LocalEnvironment with mocked Popen
-
     and return the env dict passed to the subprocess."""
-
     captured = {}
-
     fake_interrupt = threading.Event()
-
     test_environ = {
         "PATH": "/usr/bin:/bin",
         "HOME": "/home/user",
         "USER": "testuser",
     }
-
     if extra_os_env:
         test_environ.update(extra_os_env)
 
@@ -91,7 +68,6 @@ class TestProviderEnvBlocklist:
 
     def test_blocked_vars_are_stripped(self):
         """OPENAI_BASE_URL and other provider vars must not appear in subprocess env."""
-
         leaked_vars = {
             "OPENAI_BASE_URL": "http://localhost:8000/v1",
             "OPENAI_API_KEY": "sk-fake-key",
@@ -99,7 +75,6 @@ class TestProviderEnvBlocklist:
             "ANTHROPIC_API_KEY": "ant-fake-key",
             "LLM_MODEL": "anthropic/claude-opus-4-6",
         }
-
         result_env = _run_with_env(extra_os_env=leaked_vars)
 
         for var in leaked_vars:
@@ -107,9 +82,7 @@ class TestProviderEnvBlocklist:
 
     def test_registry_derived_vars_are_stripped(self):
         """Vars from the provider registry (ANTHROPIC_TOKEN, ZAI_API_KEY, etc.)
-
         must also be blocked — not just the hand-written extras."""
-
         registry_vars = {
             "ANTHROPIC_TOKEN": "ant-tok",
             "CLAUDE_CODE_OAUTH_TOKEN": "cc-tok",
@@ -122,7 +95,6 @@ class TestProviderEnvBlocklist:
             "DEEPSEEK_API_KEY": "deepseek-key",
             "NVIDIA_API_KEY": "nvidia-key",
         }
-
         result_env = _run_with_env(extra_os_env=registry_vars)
 
         for var in registry_vars:
@@ -130,25 +102,15 @@ class TestProviderEnvBlocklist:
 
     def test_bedrock_bearer_token_is_stripped(self):
         """The Bedrock-specific bearer token is a Clawksis inference secret
-
         (analogous to OPENAI_API_KEY) and must not leak into subprocesses.
 
-
-
         Regression for #32314: AWS_BEARER_TOKEN_BEDROCK leaked into terminal /
-
         execute_code children because the ``bedrock`` ProviderConfig declares
-
         ``api_key_env_vars=()`` (auth_type="aws_sdk") and the blocklist builder
-
         only consulted that field. The reporter caught it when ``opencode
-
         models`` run inside a Clawksis terminal enumerated the entire Bedrock
-
         catalog off the leaked bearer token.
-
         """
-
         result_env = _run_with_env(
             extra_os_env={
                 "AWS_BEARER_TOKEN_BEDROCK": "bedrock-bearer-secret",
@@ -161,31 +123,18 @@ class TestProviderEnvBlocklist:
 
     def test_general_aws_credential_chain_is_preserved(self):
         """The GENERAL AWS credential chain must STILL pass through to
-
         subprocesses — this is the no-regression guard for #32314.
 
-
-
         Per SECURITY.md §3.2 the local terminal is the user's trusted operator
-
         shell. A user running ``aws``/``terraform``/``cdk``/``boto3`` in the
-
         agent terminal must keep the same AWS access their own shell has.
-
         Stripping these would (a) break every user who does AWS work in the
-
         agent terminal — not just Bedrock users, since the registry is iterated
-
         unconditionally — and (b) be unrecoverable, because env_passthrough.py
-
         refuses to re-allow anything in _CLAWK_PROVIDER_ENV_BLOCKLIST
-
         (GHSA-rhgp-j443-p4rf). Only the Bedrock inference bearer token is
-
         Clawksis-managed; the rest belongs to the user.
-
         """
-
         general_chain = {
             "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
             "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -198,7 +147,6 @@ class TestProviderEnvBlocklist:
             "AWS_WEB_IDENTITY_TOKEN_FILE": "/var/run/secrets/token",
             "AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/example",
         }
-
         result_env = _run_with_env(extra_os_env=general_chain)
 
         for var, value in general_chain.items():
@@ -209,7 +157,6 @@ class TestProviderEnvBlocklist:
 
     def test_non_registry_provider_vars_are_stripped(self):
         """Extra provider vars not in PROVIDER_REGISTRY must also be blocked."""
-
         extra_provider_vars = {
             "GOOGLE_API_KEY": "google-key",
             "MISTRAL_API_KEY": "mistral-key",
@@ -221,7 +168,6 @@ class TestProviderEnvBlocklist:
             "XAI_API_KEY": "xai-key",
             "HELICONE_API_KEY": "helicone-key",
         }
-
         result_env = _run_with_env(extra_os_env=extra_provider_vars)
 
         for var in extra_provider_vars:
@@ -229,7 +175,6 @@ class TestProviderEnvBlocklist:
 
     def test_tool_and_gateway_vars_are_stripped(self):
         """Tool and gateway secrets/config must not leak into subprocess env."""
-
         leaked_vars = {
             "TELEGRAM_BOT_TOKEN": "bot-token",
             "TELEGRAM_HOME_CHANNEL": "12345",
@@ -250,7 +195,6 @@ class TestProviderEnvBlocklist:
             "MODAL_TOKEN_SECRET": "modal-secret",
             "DAYTONA_API_KEY": "daytona-key",
         }
-
         result_env = _run_with_env(extra_os_env=leaked_vars)
 
         for var in leaked_vars:
@@ -258,20 +202,15 @@ class TestProviderEnvBlocklist:
 
     def test_safe_vars_are_preserved(self):
         """Standard env vars (PATH, HOME, USER) must still be passed through."""
-
         result_env = _run_with_env()
 
         assert "HOME" in result_env
-
         assert result_env["HOME"] == "/home/user"
-
         assert "USER" in result_env
-
         assert "PATH" in result_env
 
     def test_self_env_blocked_vars_also_stripped(self):
         """Blocked vars in self.env are stripped; non-blocked vars pass through."""
-
         result_env = _run_with_env(
             self_env={
                 "OPENAI_BASE_URL": "http://custom:9999/v1",
@@ -280,9 +219,7 @@ class TestProviderEnvBlocklist:
         )
 
         assert "OPENAI_BASE_URL" not in result_env
-
         assert "MY_CUSTOM_VAR" in result_env
-
         assert result_env["MY_CUSTOM_VAR"] == "keep-this"
 
 
@@ -291,7 +228,6 @@ class TestForceEnvOptIn:
 
     def test_force_prefix_passes_blocked_var(self):
         """_CLAWK_FORCE_OPENAI_API_KEY in self.env should inject OPENAI_API_KEY."""
-
         result_env = _run_with_env(
             self_env={
                 f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY": "sk-explicit",
@@ -299,16 +235,12 @@ class TestForceEnvOptIn:
         )
 
         assert "OPENAI_API_KEY" in result_env
-
         assert result_env["OPENAI_API_KEY"] == "sk-explicit"
-
         # The force-prefixed key itself must not appear
-
         assert f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY" not in result_env
 
     def test_force_prefix_overrides_os_environ_block(self):
         """Force-prefix in self.env wins even when os.environ has the blocked var."""
-
         result_env = _run_with_env(
             extra_os_env={"OPENAI_BASE_URL": "http://leaked/v1"},
             self_env={
@@ -324,7 +256,6 @@ class TestBlocklistCoverage:
 
     def test_issue_1002_offenders(self):
         """Blocklist includes the main offenders from issue #1002."""
-
         must_block = {
             "OPENAI_BASE_URL",
             "OPENAI_API_KEY",
@@ -332,14 +263,11 @@ class TestBlocklistCoverage:
             "ANTHROPIC_API_KEY",
             "LLM_MODEL",
         }
-
         assert must_block.issubset(_CLAWK_PROVIDER_ENV_BLOCKLIST)
 
     def test_registry_vars_are_in_blocklist(self):
         """Every api_key_env_var and base_url_env_var from PROVIDER_REGISTRY
-
         must appear in the blocklist — ensures no drift."""
-
         from clawk_cli.auth import PROVIDER_REGISTRY
 
         for pconfig in PROVIDER_REGISTRY.values():
@@ -347,7 +275,6 @@ class TestBlocklistCoverage:
                 assert var in _CLAWK_PROVIDER_ENV_BLOCKLIST, (
                     f"Registry var {var} (provider={pconfig.id}) missing from blocklist"
                 )
-
             if pconfig.base_url_env_var:
                 assert pconfig.base_url_env_var in _CLAWK_PROVIDER_ENV_BLOCKLIST, (
                     f"Registry base_url_env_var {pconfig.base_url_env_var} "
@@ -356,24 +283,16 @@ class TestBlocklistCoverage:
 
     def test_bedrock_bearer_token_is_in_blocklist(self):
         """auth_type='aws_sdk' providers contribute their Clawksis-managed
-
         inference token (the Bedrock bearer) to the blocklist, keyed off
-
         auth_type so any future SDK-cred provider is covered automatically."""
-
         assert "AWS_BEARER_TOKEN_BEDROCK" in _CLAWK_PROVIDER_ENV_BLOCKLIST
 
     def test_general_aws_chain_not_in_blocklist(self):
         """The general AWS credential chain must NOT be in the blocklist —
-
         no-regression guard for #32314. These belong to the user's trusted
-
         operator shell (SECURITY.md §3.2), not to Clawksis, and blocklisting
-
         them would be unrecoverable via env_passthrough (GHSA-rhgp-j443-p4rf).
-
         """
-
         general_chain = {
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
@@ -386,9 +305,7 @@ class TestBlocklistCoverage:
             "AWS_WEB_IDENTITY_TOKEN_FILE",
             "AWS_ROLE_ARN",
         }
-
         leaked_block = general_chain & _CLAWK_PROVIDER_ENV_BLOCKLIST
-
         assert not leaked_block, (
             f"General AWS chain vars must stay inheritable, but these are "
             f"blocklisted: {sorted(leaked_block)} (capability regression, #32314)"
@@ -396,15 +313,11 @@ class TestBlocklistCoverage:
 
     def test_extra_auth_vars_covered(self):
         """Non-registry auth vars (ANTHROPIC_TOKEN, CLAUDE_CODE_OAUTH_TOKEN)
-
         must also be in the blocklist."""
-
         extras = {"ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"}
-
         assert extras.issubset(_CLAWK_PROVIDER_ENV_BLOCKLIST)
 
     def test_non_registry_provider_vars_are_in_blocklist(self):
-
         extras = {
             "GOOGLE_API_KEY",
             "DEEPSEEK_API_KEY",
@@ -417,29 +330,24 @@ class TestBlocklistCoverage:
             "XAI_API_KEY",
             "HELICONE_API_KEY",
         }
-
         assert extras.issubset(_CLAWK_PROVIDER_ENV_BLOCKLIST)
 
     def test_optional_tool_and_messaging_vars_are_in_blocklist(self):
         """Tool/messaging vars from OPTIONAL_ENV_VARS should stay covered."""
-
         from clawk_cli.config import OPTIONAL_ENV_VARS
 
         for name, metadata in OPTIONAL_ENV_VARS.items():
             category = metadata.get("category")
-
             if category in {"tool", "messaging"}:
                 assert name in _CLAWK_PROVIDER_ENV_BLOCKLIST, (
                     f"Optional env var {name} (category={category}) missing from blocklist"
                 )
-
             elif category == "setting" and metadata.get("password"):
                 assert name in _CLAWK_PROVIDER_ENV_BLOCKLIST, (
                     f"Secret setting env var {name} missing from blocklist"
                 )
 
     def test_gateway_runtime_vars_are_in_blocklist(self):
-
         extras = {
             "TELEGRAM_HOME_CHANNEL",
             "TELEGRAM_HOME_CHANNEL_NAME",
@@ -478,7 +386,6 @@ class TestBlocklistCoverage:
             "MODAL_TOKEN_SECRET",
             "DAYTONA_API_KEY",
         }
-
         assert extras.issubset(_CLAWK_PROVIDER_ENV_BLOCKLIST)
 
 
@@ -486,43 +393,104 @@ class TestSanePathIncludesHomebrew:
     """Verify _SANE_PATH includes macOS Homebrew directories."""
 
     def test_sane_path_includes_homebrew_bin(self):
-
         from tools.environments.local import _SANE_PATH
 
         assert "/opt/homebrew/bin" in _SANE_PATH
 
     def test_sane_path_includes_homebrew_sbin(self):
-
         from tools.environments.local import _SANE_PATH
 
         assert "/opt/homebrew/sbin" in _SANE_PATH
 
     def test_make_run_env_appends_homebrew_on_minimal_path(self):
-        """When PATH is minimal (no /usr/bin), _make_run_env should append
-
-        _SANE_PATH which now includes Homebrew dirs."""
-
-        from tools.environments.local import _make_run_env
+        """When PATH is minimal, _make_run_env appends missing sane entries."""
+        from tools.environments.local import _SANE_PATH, _make_run_env
 
         minimal_env = {"PATH": "/some/custom/bin"}
-
         with patch.dict(os.environ, minimal_env, clear=True):
             result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert path_entries[0] == "/some/custom/bin"
+        for entry in _SANE_PATH.split(":"):
+            assert entry in path_entries
 
-        assert "/opt/homebrew/bin" in result["PATH"]
-
-        assert "/opt/homebrew/sbin" in result["PATH"]
-
-    def test_make_run_env_does_not_duplicate_on_full_path(self):
-        """When PATH already has /usr/bin, _make_run_env should not append."""
-
+    def test_make_run_env_fills_missing_homebrew_when_usr_bin_present(self):
+        """macOS launchd PATH can include /usr/bin while missing Homebrew."""
         from tools.environments.local import _make_run_env
 
-        full_env = {"PATH": "/usr/bin:/bin"}
-
-        with patch.dict(os.environ, full_env, clear=True):
+        launchd_env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
+        with patch.dict(os.environ, launchd_env, clear=True):
             result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert "/opt/homebrew/bin" in path_entries
+        assert "/opt/homebrew/sbin" in path_entries
 
-        # Should keep existing PATH unchanged
+    def test_make_run_env_does_not_duplicate_existing_sane_entries(self):
+        from tools.environments.local import _make_run_env
 
-        assert result["PATH"] == "/usr/bin:/bin"
+        existing_env = {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"}
+        with patch.dict(os.environ, existing_env, clear=True):
+            result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert path_entries.count("/opt/homebrew/bin") == 1
+        assert path_entries.count("/usr/local/bin") == 1
+        assert path_entries.count("/usr/bin") == 1
+
+    def test_make_run_env_real_launchd_path_gains_homebrew(self):
+        """The literal macOS launchd PATH is the production trigger for #35613."""
+        from tools.environments.local import _make_run_env
+
+        launchd_env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
+        with patch.dict(os.environ, launchd_env, clear=True):
+            result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert "/opt/homebrew/bin" in path_entries
+        assert "/opt/homebrew/sbin" in path_entries
+        # Original entries keep their leading precedence.
+        assert path_entries[:4] == ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+
+    def test_make_run_env_collapses_duplicate_caller_entries(self):
+        """Duplicates already present in the caller PATH are de-duplicated."""
+        from tools.environments.local import _make_run_env
+
+        dup_env = {"PATH": "/usr/bin:/usr/bin:/custom/bin:/custom/bin:/bin"}
+        with patch.dict(os.environ, dup_env, clear=True):
+            result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert path_entries.count("/usr/bin") == 1
+        assert path_entries.count("/custom/bin") == 1
+        # First-occurrence order is preserved for the caller entries.
+        assert path_entries[:3] == ["/usr/bin", "/custom/bin", "/bin"]
+
+    def test_make_run_env_strips_empty_path_entries(self):
+        """Leading/trailing/double colons (== CWD on POSIX) are dropped."""
+        from tools.environments.local import _make_run_env
+
+        empty_env = {"PATH": "/usr/bin::/bin:"}
+        with patch.dict(os.environ, empty_env, clear=True):
+            result = _make_run_env({})
+        path_entries = result["PATH"].split(":")
+        assert "" not in path_entries
+        assert "/usr/bin" in path_entries
+        assert "/opt/homebrew/bin" in path_entries
+
+    def test_make_run_env_leaves_windows_path_unchanged(self, monkeypatch):
+        from tools.environments import local as local_mod
+        from tools.environments.local import _make_run_env
+
+        windows_env = {"PATH": r"C:\Windows\System32;C:\Program Files\Git\bin"}
+        monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
+        with patch.dict(os.environ, windows_env, clear=True):
+            result = _make_run_env({})
+        assert result["PATH"] == windows_env["PATH"]
+
+    def test_make_run_env_preserves_windows_mixed_case_path_key(self, monkeypatch):
+        from tools.environments import local as local_mod
+        from tools.environments.local import _make_run_env
+
+        windows_env = {"Path": r"C:\Windows\System32;C:\Program Files\Git\bin"}
+        monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
+        with patch.object(local_mod.os, "environ", windows_env):
+            result = _make_run_env({})
+        assert result["Path"] == windows_env["Path"]
+        assert "PATH" not in result

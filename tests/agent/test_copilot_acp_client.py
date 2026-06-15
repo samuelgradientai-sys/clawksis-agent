@@ -2,40 +2,28 @@
 
 from __future__ import annotations
 
-
 import io
-
 import json
-
 import os
-
 import tempfile
-
 import unittest
-
 from pathlib import Path
-
 from unittest.mock import patch
-
 
 from agent.copilot_acp_client import CopilotACPClient
 
 
 class _FakeProcess:
     def __init__(self) -> None:
-
         self.stdin = io.StringIO()
 
 
 class CopilotACPClientSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
-
         self.client = CopilotACPClient(acp_cwd="/tmp")
 
     def _dispatch(self, message: dict, *, cwd: str) -> dict:
-
         process = _FakeProcess()
-
         handled = self.client._handle_server_message(
             message,
             process=process,
@@ -43,17 +31,12 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
             text_parts=[],
             reasoning_parts=[],
         )
-
         self.assertTrue(handled)
-
         payload = process.stdin.getvalue().strip()
-
         self.assertTrue(payload)
-
         return json.loads(payload)
 
     def test_request_permission_is_not_auto_allowed(self) -> None:
-
         response = self._dispatch(
             {
                 "jsonrpc": "2.0",
@@ -65,20 +48,15 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
         )
 
         outcome = ((response.get("result") or {}).get("outcome") or {}).get("outcome")
-
         self.assertEqual(outcome, "cancelled")
 
     def test_read_text_file_blocks_internal_clawk_hub_files(self) -> None:
-
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir) / "home"
-
             blocked = (
                 home / ".clawksis" / "skills" / ".hub" / "index-cache" / "entry.json"
             )
-
             blocked.parent.mkdir(parents=True, exist_ok=True)
-
             blocked.write_text('{"token":"sk-test-secret-1234567890"}')
 
             with patch.dict(
@@ -99,20 +77,14 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
         self.assertIn("error", response)
 
     def test_read_text_file_redacts_sensitive_content(self) -> None:
-
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-
             secret_file = root / "config.env"
-
             secret_file.write_text("OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012")
 
             # agent.redact snapshots CLAWK_REDACT_SECRETS at import time into
-
             # _REDACT_ENABLED, so patching os.environ is a no-op. Flip the
-
             # module-level constant directly for the duration of the call.
-
             with patch("agent.redact._REDACT_ENABLED", True):
                 response = self._dispatch(
                     {
@@ -125,18 +97,13 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                 )
 
         content = (response.get("result") or {}).get("content") or ""
-
         self.assertNotIn("abc123def456", content)
-
         self.assertIn("OPENAI_API_KEY=", content)
 
     def test_write_text_file_reuses_write_denylist(self) -> None:
-
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir) / "home"
-
             target = home / ".ssh" / "id_rsa"
-
             target.parent.mkdir(parents=True, exist_ok=True)
 
             with patch(
@@ -158,18 +125,13 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                 )
 
         self.assertIn("error", response)
-
         self.assertFalse(target.exists())
 
     def test_write_text_file_respects_safe_root(self) -> None:
-
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-
             safe_root = root / "workspace"
-
             safe_root.mkdir()
-
             outside = root / "outside.txt"
 
             with patch.dict(
@@ -189,7 +151,6 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                 )
 
         self.assertIn("error", response)
-
         self.assertFalse(outside.exists())
 
 
@@ -199,14 +160,11 @@ if __name__ == "__main__":
 
 # ── HOME env propagation tests (from PR #11285) ─────────────────────
 
-
 from unittest.mock import patch as _patch
-
 import pytest
 
 
 def _make_home_client(tmp_path):
-
     return CopilotACPClient(
         api_key="copilot-acp",
         base_url="acp://copilot",
@@ -217,32 +175,26 @@ def _make_home_client(tmp_path):
 
 
 def _fake_popen_capture(captured):
-
     def _fake(cmd, **kwargs):
-
         captured["cmd"] = cmd
-
         captured["kwargs"] = kwargs
-
         raise FileNotFoundError("copilot not found")
 
     return _fake
 
 
-def test_run_prompt_prefers_profile_home_when_available(monkeypatch, tmp_path):
-
+def test_run_prompt_preserves_real_home_when_profile_home_available(
+    monkeypatch, tmp_path
+):
     clawk_home = tmp_path / "clawk"
+    (clawk_home / "home").mkdir(parents=True)
+    real_home = tmp_path / "real-home"
+    real_home.mkdir()
 
-    profile_home = clawk_home / "home"
-
-    profile_home.mkdir(parents=True)
-
-    monkeypatch.delenv("HOME", raising=False)
-
+    monkeypatch.setenv("HOME", str(real_home))
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     captured = {}
-
     client = _make_home_client(tmp_path)
 
     with _patch(
@@ -252,17 +204,15 @@ def test_run_prompt_prefers_profile_home_when_available(monkeypatch, tmp_path):
         with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
             client._run_prompt("hello", timeout_seconds=1)
 
-    assert captured["kwargs"]["env"]["HOME"] == str(profile_home)
+    assert captured["kwargs"]["env"]["HOME"] == str(real_home)
+    assert captured["kwargs"]["env"]["CLAWK_REAL_HOME"] == str(real_home)
 
 
 def test_run_prompt_passes_home_when_parent_env_is_clean(monkeypatch, tmp_path):
-
     monkeypatch.delenv("HOME", raising=False)
-
     monkeypatch.delenv("CLAWK_HOME", raising=False)
 
     captured = {}
-
     client = _make_home_client(tmp_path)
 
     with _patch(
@@ -273,5 +223,4 @@ def test_run_prompt_passes_home_when_parent_env_is_clean(monkeypatch, tmp_path):
             client._run_prompt("hello", timeout_seconds=1)
 
     assert "env" in captured["kwargs"]
-
     assert captured["kwargs"]["env"]["HOME"]
