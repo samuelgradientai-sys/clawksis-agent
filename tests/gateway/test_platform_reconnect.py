@@ -194,6 +194,110 @@ class TestStartupPlatformIsolation:
         assert runner._create_adapter.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_platforms_connect_concurrently(self, tmp_path):
+        """Platforms must connect CONCURRENTLY, not 30s-per-platform serially.
+
+        Each adapter's connect blocks until BOTH platforms have started (a
+        barrier). If the gateway connected platforms sequentially, the first
+        connect would hang on the barrier forever — the second never starts —
+        so the inner wait times out and both platforms fail. Both ending up
+        connected is only possible if the connects overlap.
+        """
+
+        runner = _make_runner()
+
+        runner.config = GatewayConfig(
+            platforms={
+                Platform.TELEGRAM: PlatformConfig(enabled=True, token="test"),
+                Platform.FEISHU: PlatformConfig(enabled=True, token="test"),
+            },
+            sessions_dir=tmp_path,
+        )
+
+        runner.hooks = MagicMock()
+
+        runner.hooks.loaded_hooks = []
+
+        runner.hooks.emit = AsyncMock()
+
+        runner._suspend_stuck_loop_sessions = MagicMock(return_value=0)
+
+        runner._update_runtime_status = MagicMock()
+
+        runner._update_platform_runtime_status = MagicMock()
+
+        runner._sync_voice_mode_state_to_adapter = MagicMock()
+
+        runner._send_update_notification = AsyncMock(return_value=True)
+
+        runner._send_restart_notification = AsyncMock()
+
+        adapters = {
+            Platform.TELEGRAM: StubAdapter(platform=Platform.TELEGRAM),
+            Platform.FEISHU: StubAdapter(platform=Platform.FEISHU),
+        }
+
+        runner._create_adapter = MagicMock(
+            side_effect=lambda platform, _config: adapters[platform]
+        )
+
+        started = 0
+
+        both_started = asyncio.Event()
+
+        async def _barrier_connect(_adapter, _platform):
+            nonlocal started
+
+            started += 1
+
+            if started >= 2:
+                both_started.set()
+
+            # Sequential startup would deadlock here (the second connect never
+            # runs), so the wait times out and the platform fails.
+            await asyncio.wait_for(both_started.wait(), timeout=2)
+
+            return True
+
+        runner._connect_adapter_with_timeout = _barrier_connect
+
+        def fake_create_task(coro):
+
+            coro.close()
+
+            return MagicMock()
+
+        with patch("gateway.status.write_runtime_status"):
+            with patch("clawk_cli.plugins.discover_plugins"):
+                with patch("clawk_cli.config.load_config", return_value={}):
+                    with patch("agent.shell_hooks.register_from_config"):
+                        with patch(
+                            "tools.process_registry.process_registry.recover_from_checkpoint",
+                            return_value=0,
+                        ):
+                            with patch(
+                                "gateway.channel_directory.build_channel_directory",
+                                new=AsyncMock(return_value={"platforms": {}}),
+                            ):
+                                with patch(
+                                    "gateway.run.asyncio.create_task",
+                                    side_effect=fake_create_task,
+                                ):
+                                    assert (
+                                        await asyncio.wait_for(
+                                            runner.start(), timeout=10
+                                        )
+                                        is True
+                                    )
+
+        # Both connected → the connects overlapped (barrier released).
+        assert Platform.TELEGRAM in runner.adapters
+
+        assert Platform.FEISHU in runner.adapters
+
+        assert not runner._failed_platforms
+
+    @pytest.mark.asyncio
     async def test_connect_adapter_timeout_raises_retryable_exception(
         self, monkeypatch
     ):
