@@ -55,76 +55,6 @@ def test_get_nous_subscription_features_recognizes_direct_exa_backend(monkeypatc
     assert features.web.current_provider == "exa"
 
 
-def test_get_nous_subscription_features_force_fresh_forwards_account_request(monkeypatch):
-    calls = []
-
-    def fake_account_info(*, force_fresh=False):
-        calls.append(force_fresh)
-        return _account(logged_in=True, paid=True)
-
-    monkeypatch.setattr(ns, "get_env_value", lambda name: "")
-    monkeypatch.setattr(ns, "get_nous_portal_account_info", fake_account_info)
-    monkeypatch.setattr(ns, "_toolset_enabled", lambda config, key: False)
-    monkeypatch.setattr(ns, "_has_agent_browser", lambda: False)
-    monkeypatch.setattr(ns, "resolve_openai_audio_api_key", lambda: "")
-    monkeypatch.setattr(ns, "has_direct_modal_credentials", lambda: False)
-    monkeypatch.setattr(ns, "is_managed_tool_gateway_ready", lambda vendor: False)
-
-    features = ns.get_nous_subscription_features({}, force_fresh=True)
-
-    assert features.account_info is not None
-    assert features.account_info.paid_service_access is True
-    assert calls == [True]
-
-
-def test_get_nous_subscription_features_prefers_managed_modal_in_auto_mode(monkeypatch):
-    monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
-    monkeypatch.setattr(ns, "get_env_value", lambda name: "")
-    monkeypatch.setattr(
-        ns, "get_nous_portal_account_info", lambda: _account(logged_in=True, paid=True)
-    )
-    monkeypatch.setattr(ns, "_toolset_enabled", lambda config, key: key == "terminal")
-    monkeypatch.setattr(ns, "_has_agent_browser", lambda: False)
-    monkeypatch.setattr(ns, "resolve_openai_audio_api_key", lambda: "")
-    monkeypatch.setattr(ns, "has_direct_modal_credentials", lambda: True)
-    monkeypatch.setattr(ns, "is_managed_tool_gateway_ready", lambda vendor: vendor == "modal")
-
-    features = ns.get_nous_subscription_features(
-        {"terminal": {"backend": "modal", "modal_mode": "auto"}}
-    )
-
-    assert features.modal.available is True
-    assert features.modal.active is True
-    assert features.modal.managed_by_nous is True
-    assert features.modal.direct_override is False
-
-
-def test_get_nous_subscription_features_marks_browser_use_as_managed_when_gateway_ready(monkeypatch):
-    monkeypatch.setattr(ns, "get_env_value", lambda name: "")
-    monkeypatch.setattr(
-        ns, "get_nous_portal_account_info", lambda: _account(logged_in=True, paid=True)
-    )
-    monkeypatch.setattr(ns, "_toolset_enabled", lambda config, key: key == "browser")
-    monkeypatch.setattr(ns, "_has_agent_browser", lambda: True)
-    monkeypatch.setattr(ns, "resolve_openai_audio_api_key", lambda: "")
-    monkeypatch.setattr(ns, "has_direct_modal_credentials", lambda: False)
-    monkeypatch.setattr(
-        ns,
-        "is_managed_tool_gateway_ready",
-        lambda vendor: vendor == "browser-use",
-    )
-
-    features = ns.get_nous_subscription_features(
-        {"browser": {"cloud_provider": "browser-use"}}
-    )
-
-    assert features.browser.available is True
-    assert features.browser.active is True
-    assert features.browser.managed_by_nous is True
-    assert features.browser.direct_override is False
-    assert features.browser.current_provider == "Browser Use"
-
-
 def test_get_nous_subscription_features_uses_direct_browserbase_when_no_managed_gateway(monkeypatch):
     """When direct Browserbase keys are set and no managed gateway is available,
     the unconfigured fallback should pick Browserbase as a direct provider."""
@@ -476,48 +406,6 @@ def test_prompt_enable_tool_gateway_paid_user_offers_video(monkeypatch):
     assert "video" in blob
 
 
-def test_apply_nous_managed_defaults_writes_video_gen_config(monkeypatch):
-    """apply_nous_managed_defaults must write video_gen.provider and
-    video_gen.use_gateway when a Nous subscriber selects video_gen
-    without a direct FAL_KEY."""
-    monkeypatch.setattr(ns, "managed_nous_tools_enabled", lambda **kw: True)
-    monkeypatch.delenv("FAL_KEY", raising=False)
-    monkeypatch.setattr(ns, "fal_key_is_configured", lambda: False)
-    monkeypatch.setattr(
-        ns, "get_nous_portal_account_info",
-        lambda **kw: _account(logged_in=True, paid=True),
-    )
-
-    config = {"model": {"provider": "nous"}}
-    changed = ns.apply_nous_managed_defaults(
-        config, enabled_toolsets=["video_gen"],
-    )
-
-    assert "video_gen" in changed
-    assert config["video_gen"]["provider"] == "fal"
-    assert config["video_gen"]["use_gateway"] is True
-
-
-def test_apply_nous_managed_defaults_writes_image_gen_config(monkeypatch):
-    """apply_nous_managed_defaults must write image_gen.use_gateway
-    when a Nous subscriber selects image_gen without a direct FAL_KEY."""
-    monkeypatch.setattr(ns, "managed_nous_tools_enabled", lambda **kw: True)
-    monkeypatch.delenv("FAL_KEY", raising=False)
-    monkeypatch.setattr(ns, "fal_key_is_configured", lambda: False)
-    monkeypatch.setattr(
-        ns, "get_nous_portal_account_info",
-        lambda **kw: _account(logged_in=True, paid=True),
-    )
-
-    config = {"model": {"provider": "nous"}}
-    changed = ns.apply_nous_managed_defaults(
-        config, enabled_toolsets=["image_gen"],
-    )
-
-    assert "image_gen" in changed
-    assert config["image_gen"]["use_gateway"] is True
-
-
 def test_apply_nous_managed_defaults_skips_fal_tools_when_key_present(monkeypatch):
     """When FAL_KEY is set, apply_nous_managed_defaults should not touch
     image_gen or video_gen config — the user's direct key takes precedence."""
@@ -538,32 +426,6 @@ def test_apply_nous_managed_defaults_skips_fal_tools_when_key_present(monkeypatc
     assert "video_gen" not in changed
     assert "image_gen" not in config
     assert "video_gen" not in config
-
-
-def test_apply_nous_managed_defaults_preserves_existing_video_gen_section(monkeypatch):
-    """When video_gen config already exists as a dict, the function should
-    update it in-place rather than replacing it."""
-    monkeypatch.setattr(ns, "managed_nous_tools_enabled", lambda **kw: True)
-    monkeypatch.delenv("FAL_KEY", raising=False)
-    monkeypatch.setattr(ns, "fal_key_is_configured", lambda: False)
-    monkeypatch.setattr(
-        ns, "get_nous_portal_account_info",
-        lambda **kw: _account(logged_in=True, paid=True),
-    )
-
-    config = {
-        "model": {"provider": "nous"},
-        "video_gen": {"model": "pixverse-v6"},
-    }
-    changed = ns.apply_nous_managed_defaults(
-        config, enabled_toolsets=["video_gen"],
-    )
-
-    assert "video_gen" in changed
-    assert config["video_gen"]["provider"] == "fal"
-    assert config["video_gen"]["use_gateway"] is True
-    # Pre-existing keys should be preserved
-    assert config["video_gen"]["model"] == "pixverse-v6"
 
 
 # ---------------------------------------------------------------------------

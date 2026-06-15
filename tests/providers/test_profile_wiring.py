@@ -233,52 +233,6 @@ class TestOpenRouterProfileParity:
         assert profile["extra_body"]["reasoning"] == legacy["extra_body"]["reasoning"]
 
 
-class TestNousProfileParity:
-    def test_tags(self, transport):
-
-        legacy = transport.build_kwargs(
-            model="clawk-3",
-            messages=_msgs(),
-            tools=None,
-            provider_profile=get_provider_profile("nous"),
-        )
-
-        profile = transport.build_kwargs(
-            model="clawk-3",
-            messages=_msgs(),
-            tools=None,
-            provider_profile=get_provider_profile("nous"),
-        )
-
-        assert profile["extra_body"]["tags"] == legacy["extra_body"]["tags"]
-
-    def test_reasoning_omitted_when_disabled(self, transport):
-
-        rc = {"enabled": False}
-
-        legacy = transport.build_kwargs(
-            model="clawk-3",
-            messages=_msgs(),
-            tools=None,
-            provider_profile=get_provider_profile("nous"),
-            supports_reasoning=True,
-            reasoning_config=rc,
-        )
-
-        profile = transport.build_kwargs(
-            model="clawk-3",
-            messages=_msgs(),
-            tools=None,
-            provider_profile=get_provider_profile("nous"),
-            supports_reasoning=True,
-            reasoning_config=rc,
-        )
-
-        assert "reasoning" not in legacy.get("extra_body", {})
-
-        assert "reasoning" not in profile.get("extra_body", {})
-
-
 class TestQwenProfileParity:
     def test_max_tokens(self, transport):
 
@@ -456,23 +410,6 @@ class TestRequestOverridesParity:
         )
 
         assert kw["extra_body"]["custom_key"] == "custom_val"
-
-    def test_extra_body_override_merges_with_provider_body(self, transport):
-        """Override extra_body merges WITH provider extra_body, not replaces."""
-
-        from agent.portal_tags import nous_portal_tags
-
-        kw = transport.build_kwargs(
-            model="clawk-3",
-            messages=_msgs(),
-            tools=None,
-            provider_profile=get_provider_profile("nous"),
-            request_overrides={"extra_body": {"custom": True}},
-        )
-
-        assert kw["extra_body"]["tags"] == nous_portal_tags()  # from profile
-
-        assert kw["extra_body"]["custom"] is True  # from override
 
     def test_top_level_override(self, transport):
 

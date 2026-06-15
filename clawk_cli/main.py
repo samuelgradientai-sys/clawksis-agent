@@ -3551,6 +3551,115 @@ def cmd_postinstall(args):
         print("✓ Post-install complete.")
 
 
+def _cookbook_resolve(target: str):
+    """Match a catalog entry by id or ollama tag (returns the entry or None)."""
+
+    from clawk_cli import cookbook
+
+    t = (target or "").strip().lower()
+
+    for m in cookbook.CATALOG:
+        if t in (m["id"].lower(), m["ollama"].lower()):
+            return m
+
+    return None
+
+
+def cmd_cookbook(args):
+    """Local-models Cookbook: see what runs on this machine, pull it, use it."""
+
+    from clawk_cli import cookbook
+
+    _TIER_ICON = {"perfect": "✅", "good": "✅", "marginal": "⚠️", "no_fit": "❌"}
+
+    hw = cookbook.detect_hardware()
+
+    print()
+
+    print("🍳 Cookbook — local models")
+
+    gpu = f"{hw['gpu_name']} ({hw['vram_gb']:g}GB VRAM)" if hw.get("gpu_name") else "no GPU"
+
+    print(f"   Hardware: {hw['ram_gb']:g}GB RAM · {hw['cpu_cores']} cores · {gpu}")
+
+    status = cookbook.ollama_status()
+
+    if not status["installed"]:
+        print("   Ollama: not installed → get it at https://ollama.com to run models.")
+
+    elif not status["running"]:
+        print("   Ollama: installed but not running → start it with `ollama serve`.")
+
+    else:
+        print(f"   Ollama: running · {len(status['models'])} model(s) pulled")
+
+    print()
+
+    # Actions: pull+use (--run) or just use (--use).
+    target = getattr(args, "run", None) or getattr(args, "use", None)
+
+    if target:
+        entry = _cookbook_resolve(target)
+
+        tag = entry["ollama"] if entry else target
+
+        if getattr(args, "run", None):
+            print(f"Pulling {tag} (this can take a while)...")
+
+            res = cookbook.pull_blocking(tag)
+
+            if not res.get("ok"):
+                print(f"  ✗ {res.get('error', 'pull failed')}")
+
+                return
+
+            print(f"  ✓ pulled {tag}")
+
+        used = cookbook.use_model(tag)
+
+        if used.get("ok"):
+            print(f"✓ Active model → {tag}  (via {used['base_url']})")
+
+        else:
+            print(f"✗ {used.get('error', 'failed to set model')}")
+
+        return
+
+    if getattr(args, "hardware", False):
+        return  # hardware already printed above
+
+    # Listing: catalog with fit, grouped best-first.
+    rows = cookbook.catalog_with_fit(hw, status.get("models"))
+
+    installed_set = set(status.get("models") or [])
+
+    print("  Models that fit your machine (✅ fits · ⚠️ tight/slow · ❌ too big):")
+
+    print("  The agent needs function-calling — prefer models marked 'tools'.")
+
+    print()
+
+    for r in rows:
+        icon = _TIER_ICON.get(r["fit"]["tier"], "•")
+
+        mark = " [installed]" if r["ollama"] in installed_set else ""
+
+        tools = "tools" if r["tool_use"] else "no-tools"
+
+        print(
+            f"  {icon} {r['name']:<22} {r['ollama']:<22} "
+            f"{r['fit']['mode']:<4} {tools:<8} ~{r['size_gb']:g}GB{mark}"
+        )
+
+    print()
+
+    print("  Run + use one:   clawk cookbook --run qwen2.5:7b")
+
+    print("  Use an installed one without pulling:   clawk cookbook --use llama3.1:8b")
+
+    print()
+
+
 def cmd_model(args):
     """Select default model — starts with provider selection, then model picker."""
 
@@ -19894,6 +20003,41 @@ def main():
     )
 
     model_parser.set_defaults(func=cmd_model)
+
+    # =========================================================================
+
+    # cookbook command — discover/run local models (Ollama)
+
+    # =========================================================================
+
+    cookbook_parser = subparsers.add_parser(
+        "cookbook",
+        help="Discover and run local LLMs that fit your machine (via Ollama)",
+        description=(
+            "Detects your hardware, lists open models that fit, and can pull one "
+            "with Ollama and set it as the agent's model."
+        ),
+    )
+
+    cookbook_parser.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Only show detected hardware (RAM/CPU/GPU/VRAM) and exit.",
+    )
+
+    cookbook_parser.add_argument(
+        "--run",
+        metavar="MODEL",
+        help="Pull (ollama) the given catalog id or tag, then set it as the model.",
+    )
+
+    cookbook_parser.add_argument(
+        "--use",
+        metavar="MODEL",
+        help="Set an already-pulled local model (id or tag) as the agent's model.",
+    )
+
+    cookbook_parser.set_defaults(func=cmd_cookbook)
 
     # =========================================================================
 

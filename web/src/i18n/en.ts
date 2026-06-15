@@ -1586,6 +1586,30 @@ export const en: Translations = {
 
     logAt: ")",
 
+    simpleModeLabel: "🟢 Simple mode",
+
+    simpleModeHint: "You're in simple mode: only the essentials are shown. Click to reveal advanced options (boards, tags, lanes and orchestration).",
+
+    advancedModeLabel: "⚙️ Advanced mode",
+
+    advancedModeHint: "You're in advanced mode. Click to go back to simple mode.",
+
+    guideReopenLabel: "How does this work?",
+
+    guideReopenHint: "Show the quick guide again",
+
+    guideHide: "Hide this guide",
+
+    guideTitle: "How does this board work?",
+
+    guideLead: "It's like a task board, but your AI agents do the work. You drop an idea and the card moves on its own.",
+
+    guideStep1: "Write a rough idea, in your own words, in the «Ideas» column (tap the + button). It doesn't have to be perfect.",
+
+    guideStep2: "The system turns it into a clear task and picks which agent does it.",
+
+    guideStep3: "The card moves on its own: Ready → In progress → Done. You just watch, and help if one gets «Stuck».",
+
   },
 
 };

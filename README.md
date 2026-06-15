@@ -117,6 +117,7 @@ La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú
 | **KiloCode** | `clawk auth add kilocode` | `KILOCODE_API_KEY` |
 | **Azure / Foundry** | `clawk auth add azure-foundry` | API key o Entra ID |
 | **LM Studio** (local) | `clawk model` → LM Studio | opcional `LM_API_KEY` |
+| **Modelos locales (Ollama)** | `clawk cookbook` → ver qué corre, bajar y usar | Ollama instalado |
 | **Cualquier OpenAI-compatible** | `clawk model` → Custom | `base_url` + key |
 
 ---
@@ -133,6 +134,7 @@ La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú
 | `clawk setup` | Wizard de configuración (proveedor, modelo, API key) |
 | `clawk -z "mensaje"` | Respuesta directa one-shot (sin modo interactivo) |
 | `clawk model` | Elegir modelo y proveedor por defecto |
+| `clawk cookbook` | Ver qué modelos abiertos corren en tu máquina, bajarlos (Ollama) y usarlos |
 | `clawk status` | Estado de todos los componentes |
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |

@@ -342,15 +342,12 @@ def get_nous_subscription_features(
 
     provider_is_nous = str(model_cfg.get("provider") or "").strip().lower() == "nous"
 
-    try:
-        if force_fresh:
-            account_info = get_nous_portal_account_info(force_fresh=True)
-
-        else:
-            account_info = get_nous_portal_account_info()
-
-    except Exception:
-        account_info = None
+    # Pure BYOK: tool availability is driven solely by the user's own
+    # config/keys. Nous Portal was removed as a provider, so the managed
+    # subscription account is never consulted — every Nous-managed branch
+    # below evaluates False and the direct_* (BYOK) flags decide. The
+    # ``force_fresh`` param is kept for signature compatibility (no-op now).
+    account_info = None
 
     # Coarse "entitled to any managed tool" gate: paid access OR a live free
 

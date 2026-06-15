@@ -172,18 +172,6 @@ class TestCallSiteWiring:
         assert refresh_count == 2, f"expected 2 refresh sites, found {refresh_count}"
         assert mint_count == 0, f"expected 0 mint sites, found {mint_count}"
 
-    def test_proxy_adapter_also_validates(self):
-        """The Nous proxy adapter applies the validator as defense-in-depth
-        even though auth.py already validates at the source, so a future
-        bypass at the source layer still gets caught at the forward
-        boundary."""
-        from pathlib import Path
-        import clawk_cli.proxy.adapters.nous_portal as _nous_adapter
-
-        source = Path(_nous_adapter.__file__).read_text(encoding="utf-8")
-        assert "_validate_nous_inference_url_from_network" in source
-
-
 class TestEnvOverrideNotGated:
     """The documented dev/staging env-var override must keep working.
 
