@@ -172,6 +172,47 @@ export default defineConfig({
 
     emptyOutDir: true,
 
+    // Pages are route-split via React.lazy (see App.tsx). On top of that, pull
+    // the always-loaded vendor libs into their own cacheable chunks so the app
+    // shell stays small and these rarely-changing deps survive redeploys in the
+    // browser cache. We DON'T list lazy-only heavy deps (recharts, xterm) here —
+    // forcing them into a manual chunk would hoist them back into the eager load;
+    // Rollup already keeps them inside their dynamic page chunk.
+
+    chunkSizeWarningLimit: 800,
+
+    rollupOptions: {
+
+      output: {
+
+        manualChunks(id) {
+
+          if (
+
+            /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(
+
+              id,
+
+            )
+
+          ) {
+
+            return "vendor-react";
+
+          }
+
+          if (/[\\/]node_modules[\\/]motion[\\/]/.test(id)) {
+
+            return "vendor-motion";
+
+          }
+
+        },
+
+      },
+
+    },
+
   },
 
   server: {

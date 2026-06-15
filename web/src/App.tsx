@@ -1,5 +1,9 @@
 import {
 
+  lazy,
+
+  Suspense,
+
   useCallback,
 
   useEffect,
@@ -11,6 +15,8 @@ import {
   useState,
 
   type ComponentType,
+
+  type LazyExoticComponent,
 
   type ReactNode,
 
@@ -132,42 +138,46 @@ import { useSystemActions } from "@/contexts/useSystemActions";
 
 import type { SystemAction } from "@/contexts/system-actions-context";
 
-import ConfigPage from "@/pages/ConfigPage";
+// Route pages are code-split (React.lazy) so each one ships as its own chunk
+// and is only downloaded when the user navigates to it. This keeps the initial
+// bundle small instead of shipping every page (recharts, xterm, etc.) up front.
+const ConfigPage = lazy(() => import("@/pages/ConfigPage"));
 
-import DocsPage from "@/pages/DocsPage";
+const DocsPage = lazy(() => import("@/pages/DocsPage"));
 
-import EnvPage from "@/pages/EnvPage";
+const EnvPage = lazy(() => import("@/pages/EnvPage"));
 
-import SessionsPage from "@/pages/SessionsPage";
+const SessionsPage = lazy(() => import("@/pages/SessionsPage"));
 
-import LogsPage from "@/pages/LogsPage";
+const LogsPage = lazy(() => import("@/pages/LogsPage"));
 
-import AnalyticsPage from "@/pages/AnalyticsPage";
+const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
 
-import ModelsPage from "@/pages/ModelsPage";
+const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
 
-import CronPage from "@/pages/CronPage";
+const CronPage = lazy(() => import("@/pages/CronPage"));
 
-import ProfilesPage from "@/pages/ProfilesPage";
+const ProfilesPage = lazy(() => import("@/pages/ProfilesPage"));
 
-import SkillsPage from "@/pages/SkillsPage";
+const SkillsPage = lazy(() => import("@/pages/SkillsPage"));
 
-import PluginsPage from "@/pages/PluginsPage";
+const PluginsPage = lazy(() => import("@/pages/PluginsPage"));
 
-import McpPage from "@/pages/McpPage";
+const McpPage = lazy(() => import("@/pages/McpPage"));
 
-import PairingPage from "@/pages/PairingPage";
+const PairingPage = lazy(() => import("@/pages/PairingPage"));
 
-import ChannelsPage from "@/pages/ChannelsPage";
+const ChannelsPage = lazy(() => import("@/pages/ChannelsPage"));
 
-import WebhooksPage from "@/pages/WebhooksPage";
+const WebhooksPage = lazy(() => import("@/pages/WebhooksPage"));
 
-import SystemPage from "@/pages/SystemPage";
+const SystemPage = lazy(() => import("@/pages/SystemPage"));
 
-import VisualizationPage from "@/pages/VisualizationPage";
-import CookbookPage from "@/pages/CookbookPage";
+const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
 
-import ChatPage from "@/pages/ChatPage";
+const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
+
+const ChatPage = lazy(() => import("@/pages/ChatPage"));
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -194,6 +204,31 @@ import type { StatusResponse } from "@/lib/api";
 function RootRedirect() {
 
   return <Navigate to="/sessions" replace />;
+
+}
+
+
+
+// Suspense fallback while a lazily-loaded page chunk downloads.
+function PageLoading() {
+
+  return (
+
+    <div
+
+      className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-8"
+
+      aria-busy="true"
+
+      aria-live="polite"
+
+    >
+
+      <Spinner />
+
+    </div>
+
+  );
 
 }
 
@@ -247,7 +282,10 @@ const CHAT_NAV_ITEM: NavItem = {
 
  */
 
-const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
+// A route target may be an eagerly-loaded component or a lazily-loaded one.
+type RouteComponent = ComponentType | LazyExoticComponent<ComponentType>;
+
+const BUILTIN_ROUTES_CORE: Record<string, RouteComponent> = {
 
   "/": RootRedirect,
 
@@ -559,7 +597,7 @@ function partitionSidebarNav(
 
 function buildRoutes(
 
-  builtinRoutes: Record<string, ComponentType>,
+  builtinRoutes: Record<string, RouteComponent>,
 
   manifests: PluginManifest[],
 
@@ -750,6 +788,18 @@ export default function App() {
   const isChatRoute = normalizedPath === "/chat";
 
   const embeddedChat = isDashboardEmbeddedChatEnabled();
+
+  // The persistent chat host (xterm/PTY/WebSocket) is heavy, so don't mount it
+  // — and don't download its lazy chunk — until the user first opens /chat.
+  // Once mounted it stays mounted (display:none toggle) so the session survives
+  // navigation. The landing route is /sessions, so chat stays deferred on boot.
+  const [chatEverActive, setChatEverActive] = useState(false);
+
+  useEffect(() => {
+
+    if (isChatRoute) setChatEverActive(true);
+
+  }, [isChatRoute]);
 
 
 
@@ -1461,31 +1511,37 @@ export default function App() {
 
               >
 
-                <Routes>
+                <Suspense fallback={<PageLoading />}>
 
-                  {routes.map(({ key, path, element }) => (
+                  <Routes>
 
-                    <Route key={key} path={path} element={element} />
+                    {routes.map(({ key, path, element }) => (
 
-                  ))}
+                      <Route key={key} path={path} element={element} />
 
-                  <Route
+                    ))}
 
-                    path="*"
+                    <Route
 
-                    element={
+                      path="*"
 
-                      <UnknownRouteFallback pluginsLoading={pluginsLoading} />
+                      element={
 
-                    }
+                        <UnknownRouteFallback pluginsLoading={pluginsLoading} />
 
-                  />
+                      }
 
-                </Routes>
+                    />
+
+                  </Routes>
+
+                </Suspense>
 
 
 
                 {embeddedChat &&
+
+                  chatEverActive &&
 
                   !chatOverriddenByPlugin &&
 
@@ -1533,7 +1589,11 @@ export default function App() {
 
                     >
 
-                      <ChatPage isActive={isChatRoute} />
+                      <Suspense fallback={<PageLoading />}>
+
+                        <ChatPage isActive={isChatRoute} />
+
+                      </Suspense>
 
                     </div>
 
