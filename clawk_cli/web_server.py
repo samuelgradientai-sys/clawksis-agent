@@ -12006,6 +12006,109 @@ async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
 
 # ---------------------------------------------------------------------------
 
+# Cookbook — local models (run open LLMs locally via Ollama)
+
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/cookbook/hardware")
+async def get_cookbook_hardware():
+    """Detected hardware (RAM / CPU / GPU + VRAM) for the fit recommender."""
+
+    try:
+        from clawk_cli import cookbook
+
+        hw = await asyncio.to_thread(cookbook.detect_hardware)
+
+    except Exception:
+        hw = {}
+
+    return {"hardware": hw}
+
+
+@app.get("/api/cookbook/catalog")
+async def get_cookbook_catalog():
+    """Curated local-model catalog enriched with a per-model fit verdict.
+
+    Each entry carries ``fit`` ({mode, tier, reason}) for the detected hardware
+    and an ``installed`` flag (already pulled into the local Ollama).
+    """
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.catalog_with_fit(hw, installed),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
+@app.get("/api/cookbook/ollama")
+async def get_cookbook_ollama():
+    """Ollama status (installed / running / pulled models)."""
+
+    try:
+        from clawk_cli import cookbook
+
+        return await asyncio.to_thread(cookbook.ollama_status)
+
+    except Exception:
+        return {"installed": False, "running": False, "models": []}
+
+
+class CookbookTagBody(BaseModel):
+    tag: str
+
+
+@app.post("/api/cookbook/pull")
+async def post_cookbook_pull(body: CookbookTagBody):
+    """Start `ollama pull <tag>` in the background. Poll /pull-status for progress."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_pull, tag)
+
+
+@app.get("/api/cookbook/pull-status")
+async def get_cookbook_pull_status(tag: str):
+    """Background pull status for a tag: pulling / done / error / "" (unknown)."""
+
+    from clawk_cli import cookbook
+
+    return {"tag": tag, "status": cookbook.pull_status(tag)}
+
+
+@app.post("/api/cookbook/use")
+async def post_cookbook_use(body: CookbookTagBody):
+    """Set a local Ollama model as the agent's active model."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    result = await asyncio.to_thread(cookbook.use_model, tag)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "failed"))
+    return result
+
+
+# ---------------------------------------------------------------------------
+
 # Dashboard plugin system
 
 # ---------------------------------------------------------------------------

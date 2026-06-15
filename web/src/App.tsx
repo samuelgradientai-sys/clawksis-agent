@@ -168,6 +168,7 @@ import SystemPage from "@/pages/SystemPage";
 
 import VisualizationPage from "@/pages/VisualizationPage";
 import AgentStructurePage from "@/pages/AgentStructurePage";
+import CookbookPage from "@/pages/CookbookPage";
 
 import ChatPage from "@/pages/ChatPage";
 
@@ -262,6 +263,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/analytics": AnalyticsPage,
 
   "/models": ModelsPage,
+
+  "/cookbook": CookbookPage,
 
   "/logs": LogsPage,
 
@@ -366,6 +369,8 @@ const BUILTIN_NAV_REST: NavItem[] = [
     icon: Cpu,
 
   },
+
+  { path: "/cookbook", label: "Cookbook", icon: Download },
 
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
 
