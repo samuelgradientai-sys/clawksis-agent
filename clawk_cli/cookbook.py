@@ -19,9 +19,12 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import threading
+import time
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
@@ -486,6 +489,44 @@ def catalog_with_fit(
     return extras + rows
 
 
+def rows_with_fit(
+    rows: List[Dict[str, Any]],
+    hw: Optional[Dict[str, Any]] = None,
+    installed: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Attach fit verdict + installed flag to arbitrary catalog-shaped rows.
+
+    Used for the live Ollama-library search/browse results (which are already
+    catalog-shaped). Rows with unknown size (e.g. a bare ``latest`` tag) get a
+    neutral ``unknown`` fit instead of a misleading "fits everything".
+    """
+    hw = hw or detect_hardware()
+    installed_set = set(installed or [])
+    out: List[Dict[str, Any]] = []
+    for model in rows:
+        if model.get("size_gb"):
+            fit = fit_model(model, hw)
+        else:
+            fit = {
+                "mode": "unknown",
+                "tier": "unknown",
+                "reason": "size unknown until pulled",
+            }
+        out.append({
+            **model,
+            "fit": fit,
+            "installed": model["ollama"] in installed_set,
+        })
+    out.sort(
+        key=lambda r: (
+            _TIER_RANK.get(r["fit"]["tier"], 9),
+            0 if r["tool_use"] else 1,
+            -r["params_b"],
+        )
+    )
+    return out
+
+
 # ── Ollama integration ────────────────────────────────────────────────────────
 
 
@@ -535,11 +576,26 @@ def _do_pull(tag: str) -> None:
         proc = subprocess.run(
             ["ollama", "pull", tag], capture_output=True, text=True, timeout=3600
         )
+        if proc.returncode != 0:
+            with _pull_lock:
+                _pull_status[tag] = (
+                    "error: " + (proc.stderr or "pull failed").strip()[:200]
+                )
+            return
+        # Pulled OK — now validate the model actually runs (a tiny generation).
+        # "Installed" is not enough: a bad/corrupt pull or an unsupported arch
+        # only surfaces when you try to run it. The user asked to validate this.
+        with _pull_lock:
+            _pull_status[tag] = "validating"
+        result = validate_model(tag)
         with _pull_lock:
             _pull_status[tag] = (
                 "done"
-                if proc.returncode == 0
-                else ("error: " + (proc.stderr or "pull failed").strip()[:200])
+                if result.get("ok")
+                else (
+                    "error: pulled but failed to run: "
+                    + str(result.get("error", ""))[:160]
+                )
             )
     except Exception as exc:
         with _pull_lock:
@@ -561,14 +617,23 @@ def start_pull(tag: str) -> Dict[str, Any]:
 
 
 def pull_blocking(tag: str) -> Dict[str, Any]:
-    """Pull synchronously (for the CLI). Returns {ok, error?}."""
+    """Pull synchronously (for the CLI), then validate it runs. Returns {ok, ...}."""
     if not ollama_installed():
         return {"ok": False, "error": "ollama is not installed (see ollama.com)."}
     try:
         proc = subprocess.run(["ollama", "pull", tag], timeout=3600)
-        return {"ok": proc.returncode == 0}
+        if proc.returncode != 0:
+            return {"ok": False, "error": "pull failed"}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+    # Validate the pulled model actually runs.
+    result = validate_model(tag)
+    return {
+        "ok": bool(result.get("ok")),
+        "validated": bool(result.get("ok")),
+        "sample": result.get("sample"),
+        "error": result.get("error"),
+    }
 
 
 def use_model(tag: str) -> Dict[str, Any]:
@@ -600,3 +665,174 @@ def use_model(tag: str) -> Dict[str, Any]:
         }
     except Exception as exc:
         return {"ok": False, "error": f"failed to set model: {exc}"}
+
+
+# ── Ollama library (full remote catalog + live search) ────────────────────────
+#
+# The curated CATALOG above is hand-vetted but tiny. The whole point of the
+# Cookbook is "run ANY local model": Ollama's full library (hundreds of models)
+# lives at ollama.com, which has no official JSON API, so we scrape its HTML
+# (stable ``x-test-*`` markers). Results are shaped EXACTLY like CATALOG rows
+# (one row per size tag) so the same fit-recommender + UI render them unchanged.
+# Best-effort: every function returns [] if ollama.com is unreachable, so the
+# curated catalog keeps working offline.
+
+_OLLAMA_WEB = "https://ollama.com"
+_WEB_HEADERS = {"User-Agent": "Mozilla/5.0 (clawksis-cookbook)"}
+
+# TTL caches so repeated browse/search calls don't hammer ollama.com.
+_lib_cache: Dict[str, tuple] = {}  # key -> (monotonic_ts, rows)
+_LIB_TTL_SECONDS = 1800.0  # full library: 30 min
+_SEARCH_TTL_SECONDS = 300.0  # per-query search: 5 min
+
+
+def _web_fetch(url: str, timeout: float = 12.0) -> Optional[str]:
+    try:
+        req = urllib.request.Request(url, headers=_WEB_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if not (200 <= resp.status < 300):
+                return None
+            return resp.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
+def _strip_tags(text: str) -> str:
+    import html as _html
+
+    return _html.unescape(re.sub(r"<[^>]+>", "", text)).strip()
+
+
+def _size_to_params_b(size: str) -> Optional[float]:
+    """'7b'->7.0, '1.5b'->1.5, '500m'->0.5, '8x7b'->56.0. None if unparseable."""
+    s = size.strip().lower()
+    moe = re.fullmatch(r"(\d+)x(\d+(?:\.\d+)?)\s*b", s)  # MoE like 8x7b
+    if moe:
+        return round(int(moe.group(1)) * float(moe.group(2)), 1)
+    b = re.fullmatch(r"(\d+(?:\.\d+)?)\s*b", s)
+    if b:
+        return float(b.group(1))
+    mil = re.fullmatch(r"(\d+(?:\.\d+)?)\s*m", s)
+    if mil:
+        return round(float(mil.group(1)) / 1000.0, 3)
+    return None
+
+
+def _parse_model_cards(html: str) -> List[Dict[str, Any]]:
+    """Parse ollama.com /library or /search HTML into raw model cards."""
+    cards: List[Dict[str, Any]] = []
+    for blk in re.split(r"<li x-test-model", html)[1:]:
+        slug_m = re.search(r'href="/library/([a-zA-Z0-9._-]+)"', blk)
+        if not slug_m:
+            continue
+        slug = slug_m.group(1)
+        title_m = re.search(r"x-test-search-response-title[^>]*>([^<]+)<", blk)
+        title = _strip_tags(title_m.group(1)) if title_m else slug
+        desc_m = re.search(r'<p class="max-w-lg[^"]*"[^>]*>(.*?)</p>', blk, re.DOTALL)
+        desc = _strip_tags(desc_m.group(1)) if desc_m else ""
+        caps = [c.lower() for c in re.findall(r"x-test-capability[^>]*>([^<]+)<", blk)]
+        sizes = [
+            s.strip().lower() for s in re.findall(r"x-test-size[^>]*>([^<]+)<", blk)
+        ]
+        cards.append({
+            "slug": slug,
+            "title": title,
+            "description": desc,
+            "capabilities": caps,
+            "sizes": sizes,
+        })
+    return cards
+
+
+def _cards_to_rows(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Expand parsed cards into CATALOG-shaped rows (one per pullable size tag)."""
+    rows: List[Dict[str, Any]] = []
+    seen: set = set()
+    for card in cards:
+        slug = card["slug"]
+        tool_use = "tools" in card["capabilities"]
+        # Models with no size pills still get a 'latest' row so they're pullable.
+        for size in card["sizes"] or ["latest"]:
+            tag = slug if size == "latest" else f"{slug}:{size}"
+            if tag in seen:
+                continue
+            seen.add(tag)
+            pb = _size_to_params_b(size)
+            sz_gb = round(pb * 0.6, 1) if pb else None
+            rows.append({
+                "id": tag.replace(":", "-"),
+                "name": card["title"] + (f" {size}" if size != "latest" else ""),
+                "family": card["title"],
+                "params_b": pb if pb is not None else 0.0,
+                "ollama": tag,
+                "quant": "Q4_K_M",
+                "size_gb": sz_gb if sz_gb is not None else 0.0,
+                "min_vram_gb": round(sz_gb + 1.5, 1) if sz_gb else 0.0,
+                "min_ram_gb": round(sz_gb + 2.5, 1) if sz_gb else 0.0,
+                "context": 0,  # unknown from the library card
+                "tool_use": tool_use,
+                "use_case": card["description"][:120],
+                "source": "library",
+            })
+    return rows
+
+
+def search_ollama_library(query: str, limit: int = 80) -> List[Dict[str, Any]]:
+    """Live search of the FULL Ollama library for models matching *query*.
+
+    Returns CATALOG-shaped rows (one per size tag). Cached per-query; [] if
+    ollama.com is unreachable.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return []
+    cached = _lib_cache.get(f"q:{q}")
+    if cached and time.monotonic() - cached[0] < _SEARCH_TTL_SECONDS:
+        return cached[1][:limit]
+    html = _web_fetch(f"{_OLLAMA_WEB}/search?q={urllib.parse.quote(q)}")
+    rows = _cards_to_rows(_parse_model_cards(html)) if html else []
+    _lib_cache[f"q:{q}"] = (time.monotonic(), rows)
+    return rows[:limit]
+
+
+def full_ollama_library() -> List[Dict[str, Any]]:
+    """All models in the Ollama library (live, scraped, cached ~30 min)."""
+    cached = _lib_cache.get("__all__")
+    if cached and time.monotonic() - cached[0] < _LIB_TTL_SECONDS:
+        return cached[1]
+    html = _web_fetch(f"{_OLLAMA_WEB}/library")
+    rows = _cards_to_rows(_parse_model_cards(html)) if html else []
+    _lib_cache["__all__"] = (time.monotonic(), rows)
+    return rows
+
+
+def validate_model(tag: str, timeout: float = 120.0) -> Dict[str, Any]:
+    """Smoke-test that a pulled model actually RUNS: a tiny generation via Ollama.
+
+    "Installed" isn't "works" — a corrupt pull or unsupported build only fails
+    when you run it. The first generation also loads the model into memory (can
+    be slow), so the timeout is generous. Returns {ok, sample?|error?}.
+    """
+    if not tag:
+        return {"ok": False, "error": "no tag"}
+    try:
+        body = json.dumps({
+            "model": tag,
+            "prompt": "Reply with exactly: OK",
+            "stream": False,
+            "options": {"num_predict": 8, "temperature": 0},
+        }).encode()
+        req = urllib.request.Request(
+            f"{OLLAMA_BASE_URL}/api/generate",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        sample = (data.get("response") or "").strip()
+        if sample:
+            return {"ok": True, "sample": sample[:80]}
+        return {"ok": False, "error": "model loaded but returned an empty response"}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:200]}

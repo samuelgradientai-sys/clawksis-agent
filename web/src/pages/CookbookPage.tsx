@@ -9,8 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJSON } from "@/lib/api";
 
 interface Fit {
-  mode: "gpu" | "cpu" | "none";
-  tier: "perfect" | "good" | "marginal" | "no_fit";
+  mode: "gpu" | "cpu" | "none" | "unknown";
+  tier: "perfect" | "good" | "marginal" | "no_fit" | "unknown";
   reason: string;
 }
 
@@ -58,6 +58,7 @@ const TIER_STYLE: Record<Fit["tier"], { label: string; cls: string }> = {
   good: { label: "Fits", cls: "border-emerald-500/50 text-emerald-400" },
   marginal: { label: "Tight / slow", cls: "border-amber-500/60 text-amber-400" },
   no_fit: { label: "Too big", cls: "border-rose-500/50 text-rose-400" },
+  unknown: { label: "Size unknown", cls: "border-neutral-500/50 text-neutral-400" },
 };
 
 export default function CookbookPage() {
@@ -68,6 +69,13 @@ export default function CookbookPage() {
   const [pulling, setPulling] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // Live results from the FULL Ollama library (scraped) for the current query.
+  const [remoteRows, setRemoteRows] = useState<CookbookModel[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  // "Browse all" loads the entire Ollama library (hundreds of models).
+  const [browseAll, setBrowseAll] = useState(false);
+  const [libraryRows, setLibraryRows] = useState<CookbookModel[] | null>(null);
+  const [libraryLoading, setLibraryLoading] = useState(false);
   const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const load = useCallback(async () => {
@@ -89,6 +97,51 @@ export default function CookbookPage() {
       for (const t of Object.values(timers)) clearInterval(t);
     };
   }, [load]);
+
+  // Live search of the FULL Ollama library (debounced). This is what makes ANY
+  // model findable — not just the curated catalog. Like the skills search, it
+  // queries a remote source (ollama.com), so it takes a moment.
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setRemoteRows([]);
+      setRemoteLoading(false);
+      return;
+    }
+    setRemoteLoading(true);
+    const handle = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetchJSON<{ models: CookbookModel[] }>(
+            `/api/cookbook/search?q=${encodeURIComponent(term)}`,
+          );
+          setRemoteRows(res.models ?? []);
+        } catch {
+          setRemoteRows([]);
+        } finally {
+          setRemoteLoading(false);
+        }
+      })();
+    }, 450);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const loadLibrary = useCallback(async () => {
+    if (libraryRows) {
+      setBrowseAll(true);
+      return;
+    }
+    setLibraryLoading(true);
+    try {
+      const res = await fetchJSON<CatalogResponse>("/api/cookbook/library");
+      setLibraryRows(res.models ?? []);
+      setBrowseAll(true);
+    } catch {
+      setNotice("Could not load the Ollama library (no internet?).");
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [libraryRows]);
 
   const pollPull = useCallback(
     (tag: string) => {
@@ -166,11 +219,19 @@ export default function CookbookPage() {
   const models = data?.models ?? [];
 
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? models.filter((m) =>
+  // Base list: the curated catalog, or the full library when "browse all" is on.
+  const base = browseAll && libraryRows ? libraryRows : models;
+  const localFiltered = q
+    ? base.filter((m) =>
         `${m.name} ${m.family} ${m.ollama} ${m.use_case}`.toLowerCase().includes(q),
       )
-    : models;
+    : base;
+  // While searching, merge in the live Ollama-library hits (deduped by tag;
+  // local/curated rows win since they carry richer metadata).
+  const localTags = new Set(localFiltered.map((m) => m.ollama));
+  const filtered = q
+    ? [...localFiltered, ...remoteRows.filter((m) => !localTags.has(m.ollama))]
+    : localFiltered;
   // Free-text tag the user typed that isn't in our list yet — offer to pull it
   // straight from the Ollama library (ollama.com/library has hundreds more).
   const looksLikeTag = /^[a-z0-9][a-z0-9._/-]*(:[a-z0-9._-]+)?$/i.test(query.trim());
@@ -224,16 +285,16 @@ export default function CookbookPage() {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search — curated catalog + live search of the FULL Ollama library */}
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search models (qwen, llama, coding, 7b…) or paste any Ollama tag"
+          placeholder="Search ALL Ollama models (qwen, llama, coding, vision…) or paste any tag"
           className="w-full rounded-md border border-border bg-card/40 px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus:border-[var(--color-primary)]"
         />
-        {query && (
+        {query ? (
           <button
             type="button"
             onClick={() => setQuery("")}
@@ -241,8 +302,34 @@ export default function CookbookPage() {
           >
             Clear
           </button>
+        ) : browseAll ? (
+          <button
+            type="button"
+            onClick={() => setBrowseAll(false)}
+            className="shrink-0 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Show curated
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void loadLibrary()}
+            disabled={libraryLoading}
+            className="shrink-0 whitespace-nowrap rounded-md border border-[var(--color-primary)]/60 px-2 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-50"
+          >
+            {libraryLoading ? "Loading…" : "Browse all Ollama"}
+          </button>
         )}
       </div>
+      {(remoteLoading || (browseAll && !!libraryRows)) && (
+        <div className="text-xs text-muted-foreground">
+          {remoteLoading
+            ? "Searching the full Ollama library…"
+            : `Showing the full Ollama library (${String(
+                libraryRows?.length ?? 0,
+              )} entries). Use search to narrow it down.`}
+        </div>
+      )}
 
       {notice && (
         <div className="rounded-md border border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 px-3 py-2 text-sm">
@@ -269,9 +356,15 @@ export default function CookbookPage() {
                   (browse all at ollama.com/library).
                 </div>
               </div>
-              {customPull === "pulling" || customPull === "done" ? (
+              {customPull === "pulling" ||
+              customPull === "validating" ||
+              customPull === "done" ? (
                 <span className="text-xs text-muted-foreground">
-                  {customPull === "done" ? "pulled ✓ — find it below" : "pulling…"}
+                  {customPull === "done"
+                    ? "ready ✓ — find it below"
+                    : customPull === "validating"
+                      ? "validating…"
+                      : "pulling…"}
                 </span>
               ) : (
                 <button
@@ -284,7 +377,7 @@ export default function CookbookPage() {
               )}
             </div>
           )}
-          {filtered.length === 0 && !showCustomPull && (
+          {filtered.length === 0 && !showCustomPull && !remoteLoading && (
             <div className="text-sm text-muted-foreground">
               No models match “{query}”.
             </div>
@@ -335,9 +428,13 @@ export default function CookbookPage() {
                     >
                       Use
                     </button>
-                  ) : isPulling || pull === "done" ? (
+                  ) : isPulling || pull === "validating" || pull === "done" ? (
                     <span className="text-xs text-muted-foreground">
-                      {pull === "done" ? "pulled ✓" : "pulling…"}
+                      {pull === "done"
+                        ? "ready ✓"
+                        : pull === "validating"
+                          ? "validating…"
+                          : "pulling…"}
                     </span>
                   ) : (
                     <button
