@@ -1,20 +1,9 @@
 /**
  * useChatGateway — Hook para conexión JSON-RPC con el gateway de Clawksis.
  *
- * Consume el endpoint /api/ws (no /api/pty del modo terminal). Maneja:
- * - Conexión WebSocket con auth via ws-ticket
- * - Envío de prompt.submit y otros métodos JSON-RPC
- * - Recepción de eventos: message.delta, tool.start, tool.complete, etc.
- * - Estado de mensajes y tool calls en React
- *
- * Diseñado específicamente para el modo "chat moderno" (Fase 2).
- * El modo terminal sigue usando ChatPage.tsx con /api/pty sin tocar.
- *
- * Limitaciones del Nivel 1 (intencionales):
- * - Sin aprobaciones interactivas de tools (auto-aprobadas si están permitidas)
- * - Sin slash commands desde aquí (volver al modo terminal para esos)
- * - Sin adjuntar archivos / imágenes
- * - Sin reconexión automática (basic only)
+ * Fase 2.6.3-fix: corregido el manejo de session init.
+ * Si session.most_recent retorna un ID que ya no existe en disco,
+ * caemos a session.create automáticamente.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -251,6 +240,62 @@ export function useChatGateway(): UseChatGatewayResult {
   useEffect(() => {
     let cancelled = false;
 
+    // Helper: intenta resume, si falla crea sesión nueva
+    async function resolveSession(): Promise<string | null> {
+      // 1. Intentar la sesión más reciente (puede que no exista)
+      try {
+        const recent = (await sendRpc("session.most_recent")) as {
+          session_id?: string;
+        } | null;
+        const sid = recent?.session_id;
+        if (sid) {
+          // Intentar resumir esa sesión
+          try {
+            const resumeResult = (await sendRpc("session.resume", { session_id: sid })) as { session_id?: string; resumed?: string };
+            const liveSid = resumeResult?.session_id ?? sid;
+            console.log("[useChatGateway] resumed session", sid, "→ live sid", liveSid);
+            return liveSid;
+          } catch (resumeErr) {
+            console.warn(
+              "[useChatGateway] resume failed, creating new session",
+              resumeErr,
+            );
+            // Cae a crear sesión nueva abajo
+          }
+        }
+      } catch (err) {
+        console.warn("[useChatGateway] session.most_recent failed", err);
+      }
+
+      // 2. Crear sesión nueva
+      try {
+        const created = (await sendRpc("session.create", {
+          source: "dashboard",
+        })) as { session_id?: string };
+        const newSid = created?.session_id;
+        if (newSid) {
+          console.log("[useChatGateway] created new session", newSid);
+          // Activar la sesión recién creada
+          try {
+            const resumeResult = (await sendRpc("session.resume", { session_id: newSid })) as { session_id?: string };
+            const liveSid = resumeResult?.session_id ?? newSid;
+            return liveSid;
+          } catch (err) {
+            console.warn(
+              "[useChatGateway] resume after create failed (continuing anyway)",
+              err,
+            );
+            return newSid;
+          }
+        }
+      } catch (err) {
+        console.error("[useChatGateway] session.create failed", err);
+        throw err;
+      }
+
+      return null;
+    }
+
     async function connect() {
       setStatus("connecting");
       setErrorMessage(null);
@@ -276,42 +321,42 @@ export function useChatGateway(): UseChatGatewayResult {
           if (cancelled) return;
           setStatus("connected");
           try {
-            const recent = (await sendRpc("session.most_recent")) as {
-              session_id?: string;
-            } | null;
+            const sid = await resolveSession();
             if (cancelled) return;
-            let sid = recent?.session_id;
-            if (!sid) {
-              const created = (await sendRpc("session.create")) as {
-                session_id?: string;
-              };
-              sid = created?.session_id;
-            }
             if (!sid) {
               setErrorMessage("No se pudo crear/obtener sesión");
               return;
             }
-            await sendRpc("session.resume", { session_id: sid });
-            if (cancelled) return;
 
-            const history = (await sendRpc("session.history", {
-              session_id: sid,
-            })) as { messages?: Array<Record<string, unknown>> };
-            if (cancelled) return;
+            // Cargar history (tolerante a errores)
+            try {
+              const history = (await sendRpc("session.history", {
+                session_id: sid,
+              })) as { messages?: Array<Record<string, unknown>> };
+              if (cancelled) return;
 
-            const initialMessages: ChatMessage[] = (history?.messages ?? [])
-              .filter((m) => m.role === "user" || m.role === "assistant")
-              .map((m, i) => ({
-                id: "hist-" + i,
-                role: m.role as "user" | "assistant",
-                content: (m.content as string) ?? "",
-                toolCalls: [],
-                streaming: false,
-                timestamp:
-                  (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
-              }));
-            setMessages(initialMessages);
-            setSession((prev) => ({ ...prev, sessionId: sid! }));
+              const initialMessages: ChatMessage[] = (history?.messages ?? [])
+                .filter((m) => m.role === "user" || m.role === "assistant")
+                .map((m, i) => ({
+                  id: "hist-" + i,
+                  role: m.role as "user" | "assistant",
+                  content: (m.content as string) ?? "",
+                  toolCalls: [],
+                  streaming: false,
+                  timestamp:
+                    (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
+                }));
+              setMessages(initialMessages);
+            } catch (histErr) {
+              console.warn(
+                "[useChatGateway] session.history failed (empty session)",
+                histErr,
+              );
+              // No es fatal — sesión nueva no tiene history
+              setMessages([]);
+            }
+
+            setSession((prev) => ({ ...prev, sessionId: sid }));
           } catch (err) {
             console.error("[useChatGateway] session init failed", err);
             setErrorMessage(
