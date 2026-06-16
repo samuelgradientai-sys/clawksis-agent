@@ -1525,7 +1525,7 @@ DEFAULT_CONFIG = {
     },
     "web": {
         "backend": "",  # shared fallback — applies to both search and extract
-        "search_backend": "",  # per-capability override for web_search (e.g. "searxng")
+        "search_backend": "ddgs",  # default web_search backend: free DuckDuckGo, no key, lazy-installed on first use (search.ddgs in LAZY_DEPS)
         "extract_backend": "",  # per-capability override for web_extract (e.g. "native")
     },
     "browser": {

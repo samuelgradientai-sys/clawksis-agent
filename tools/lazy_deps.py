@@ -153,6 +153,11 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # users never pay this import.
     "provider.azure_identity": ("azure-identity==1.25.3",),
     # ─── Web search backends ───────────────────────────────────────────────
+    # DuckDuckGo (default search backend) — free, no API key. Unpinned to
+    # match the `clawk tools` post_setup install (`pip install -U ddgs`);
+    # ddgs ships frequent scraper fixes and has no stable extract surface to
+    # break, so we track latest rather than freezing a pin.
+    "search.ddgs": ("ddgs",),
     "search.exa": ("exa-py==2.10.2",),
     "search.firecrawl": ("firecrawl-py==4.17.0",),
     "search.parallel": ("parallel-web==0.4.2",),
