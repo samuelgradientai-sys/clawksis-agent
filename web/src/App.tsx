@@ -177,6 +177,15 @@ const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
 
 const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
 
+
+
+// PREVIEW de Fase 2 del chat (modo moderno).
+// Ruta temporal /chat-preview para validación visual antes de mergear a /chat.
+// Eliminar esta línea y la ruta correspondiente cuando se promueva a producción.
+const ChatModernPreview = lazy(
+  () => import("@/components/chat/ChatModern"),
+);
+
 // memo so a re-render of the App shell (e.g. the 10s sidebar status poll) does
 // NOT re-render the persistent chat host. Its only prop, `isActive`, is a
 // primitive, so the shallow compare is correct. The xterm/PTY lives in refs and
@@ -335,6 +344,10 @@ const BUILTIN_ROUTES_CORE: Record<string, RouteComponent> = {
   "/env": EnvPage,
 
   "/docs": DocsPage,
+
+  // PREVIEW Fase 2 del chat — temporal, sin navegación en sidebar.
+  // Acceder manualmente: http://127.0.0.1:9119/chat-preview
+  "/chat-preview": ChatModernPreview,
 
 };
 
