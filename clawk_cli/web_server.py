@@ -7014,6 +7014,16 @@ class CronJobCreate(BaseModel):
 
     no_agent: bool = False
 
+    silent_notice: bool = True
+
+    use_soul: bool = True
+
+    use_user_md: bool = True
+
+    use_memory: bool = False
+
+    fallback_models: List[str] = []
+
 
 class CronJobUpdate(BaseModel):
     updates: dict
@@ -7204,6 +7214,11 @@ async def create_cron_job(body: CronJobCreate, profile: str = "default"):
             enabled_toolsets=body.enabled_toolsets or None,
             workdir=body.workdir or None,
             no_agent=body.no_agent,
+            silent_notice=body.silent_notice,
+            use_soul=body.use_soul,
+            use_user_md=body.use_user_md,
+            use_memory=body.use_memory,
+            fallback_models=body.fallback_models or None,
         )
 
     except Exception as e:

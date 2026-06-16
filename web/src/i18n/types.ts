@@ -580,6 +580,20 @@ export interface Translations {
 
     deliverTo: string;
 
+    silentNotice?: string;
+
+    useSoul?: string;
+
+    useUserMd?: string;
+
+    useMemory?: string;
+
+    contextToggles?: string;
+
+    fallbackModels?: string;
+
+    fallbackModelsHint?: string;
+
     scheduledJobs: string;
 
     noJobs: string;

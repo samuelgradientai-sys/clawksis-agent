@@ -539,6 +539,20 @@ export const es: Translations = {
 
     deliverTo: "Entregar a",
 
+    silentNotice: "Avisar aunque no haya novedad",
+
+    useSoul: "Usar SOUL.md (identidad del asistente)",
+
+    useUserMd: "Usar USER.md (perfil del usuario)",
+
+    useMemory: "Usar MEMORY.md (memoria de largo plazo)",
+
+    contextToggles: "Contexto y entrega",
+
+    fallbackModels: "Modelos de respaldo (opcional)",
+
+    fallbackModelsHint: "Si el modelo principal falla (límite, sobrecarga o error), reintenta con estos. Formato provider:model, separados por coma.",
+
     scheduledJobs: "Tareas programadas",
 
     noJobs: "No hay tareas cron configuradas. Crea una arriba.",

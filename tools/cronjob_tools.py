@@ -833,6 +833,11 @@ def cronjob(
     profile: Optional[str] = None,
     no_agent: Optional[bool] = None,
     stop_after_alert: Optional[bool] = None,
+    silent_notice: Optional[bool] = None,
+    use_soul: Optional[bool] = None,
+    use_user_md: Optional[bool] = None,
+    use_memory: Optional[bool] = None,
+    fallback_models: Optional[Union[str, list]] = None,
     task_id: str = None,
 ) -> str:
     """Unified cron job management tool."""
@@ -926,6 +931,11 @@ def cronjob(
                 profile=_normalize_optional_job_value(profile),
                 no_agent=_no_agent,
                 stop_after_alert=bool(stop_after_alert),
+                silent_notice=True if silent_notice is None else bool(silent_notice),
+                use_soul=True if use_soul is None else bool(use_soul),
+                use_user_md=True if use_user_md is None else bool(use_user_md),
+                use_memory=False if use_memory is None else bool(use_memory),
+                fallback_models=fallback_models,
             )
 
             return json.dumps(
@@ -1123,6 +1133,21 @@ def cronjob(
             if stop_after_alert is not None:
                 updates["stop_after_alert"] = bool(stop_after_alert)
 
+            if silent_notice is not None:
+                updates["silent_notice"] = bool(silent_notice)
+
+            if use_soul is not None:
+                updates["use_soul"] = bool(use_soul)
+
+            if use_user_md is not None:
+                updates["use_user_md"] = bool(use_user_md)
+
+            if use_memory is not None:
+                updates["use_memory"] = bool(use_memory)
+
+            if fallback_models is not None:
+                updates["fallback_models"] = fallback_models
+
             if no_agent is not None:
                 # Toggling no_agent on/off at update time. If flipping to True,
 
@@ -1313,6 +1338,53 @@ Important safety rule: cron-run sessions should not recursively schedule more cr
                     "WHEN TO USE False (default): anything that needs reasoning — summarize a feed, draft a daily briefing, pick interesting items, rephrase data for a human, follow conditional logic based on content."
                 ),
             },
+            "silent_notice": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. When the agent returns [SILENT] (a condition is not met / "
+                    "nothing to report), deliver a short 'nothing new this run' notice so the user "
+                    "knows the job ran. Set False to restore pure silence (deliver nothing) for "
+                    "quiet conditional reminders that should only speak when the condition fires."
+                ),
+            },
+            "use_soul": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. Load the user's SOUL.md identity into the cron agent's system "
+                    "prompt so it keeps the assistant's persona. Set False for neutral, identity-free runs."
+                ),
+            },
+            "use_user_md": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. Inject USER.md (the user profile: language, preferences) into the "
+                    "cron prompt so a scheduled run honours the user's language without a live "
+                    "conversation. Set False to omit it."
+                ),
+            },
+            "use_memory": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Default: False. Load MEMORY.md (long-term memory) into the cron agent. Off by "
+                    "default because non-interactive cron runs can corrupt long-term user "
+                    "representations; enable only for jobs that genuinely need memory context."
+                ),
+            },
+            "fallback_models": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional per-job model fallback chain as 'provider:model' strings "
+                    '(e.g. ["deepseek:deepseek-chat", "openai:gpt-4o-mini"]). If the primary model '
+                    "is exhausted (rate-limit, overload, connection failure), the agent retries down "
+                    "this list. Overrides the config.yaml fallback when set. On update, pass an empty "
+                    "array to clear."
+                ),
+            },
             "context_from": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -1411,6 +1483,11 @@ registry.register(
             profile=args.get("profile"),
             no_agent=args.get("no_agent"),
             stop_after_alert=args.get("stop_after_alert"),
+            silent_notice=args.get("silent_notice"),
+            use_soul=args.get("use_soul"),
+            use_user_md=args.get("use_user_md"),
+            use_memory=args.get("use_memory"),
+            fallback_models=args.get("fallback_models"),
             task_id=kw.get("task_id"),
         )
     )(),

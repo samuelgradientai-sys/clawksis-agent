@@ -952,6 +952,11 @@ export const api = {
       enabled_toolsets?: string[];
       workdir?: string;
       no_agent?: boolean;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
     },
     profile = "default",
   ) =>
@@ -974,7 +979,17 @@ export const api = {
 
     id: string,
 
-    updates: { prompt?: string; schedule?: string; name?: string; deliver?: string },
+    updates: {
+      prompt?: string;
+      schedule?: string;
+      name?: string;
+      deliver?: string;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
+    },
 
     profile = "default",
 
@@ -3105,6 +3120,16 @@ export interface CronJob {
   last_status?: string | null;
 
   last_error?: string | null;
+
+  silent_notice?: boolean;
+
+  use_soul?: boolean;
+
+  use_user_md?: boolean;
+
+  use_memory?: boolean;
+
+  fallback_models?: { provider: string; model: string }[] | null;
 
 }
 
