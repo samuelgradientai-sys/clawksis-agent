@@ -103,6 +103,38 @@ from utils import base_url_host_matches
 logger = logging.getLogger("run_agent")
 
 
+def _model_is_local_endpoint(provider: str, base_url: str) -> bool:
+    """True for local model backends (Ollama / LM Studio / localhost endpoints).
+
+    Used to relax the 64K minimum-context guard: local models routinely ship a
+    smaller context window, and hard-failing them would make the cookbook /
+    local-model flow unusable. Cloud providers stay subject to the strict
+    minimum.
+    """
+
+    p = (provider or "").strip().lower()
+
+    if p in {
+        "ollama",
+        "lmstudio",
+        "lm-studio",
+        "lm_studio",
+        "local",
+        "vllm",
+        "llamacpp",
+        "llama.cpp",
+        "llama-cpp",
+    }:
+        return True
+
+    host = (base_url or "").strip().lower()
+
+    return any(
+        marker in host
+        for marker in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
+    )
+
+
 def _ra():
     """Lazy reference to ``run_agent`` so callers can patch
 
@@ -223,6 +255,7 @@ def init_agent(
     save_trajectories: bool = False,
     verbose_logging: bool = False,
     quiet_mode: bool = False,
+    tool_progress_mode: str = "all",
     ephemeral_system_prompt: str = None,
     log_prefix_chars: int = 100,
     log_prefix: str = "",
@@ -240,11 +273,14 @@ def init_agent(
     thinking_callback: callable = None,
     reasoning_callback: callable = None,
     clarify_callback: callable = None,
+    read_terminal_callback: callable = None,
     step_callback: callable = None,
     stream_delta_callback: callable = None,
     interim_assistant_callback: callable = None,
     tool_gen_callback: callable = None,
     status_callback: callable = None,
+    notice_callback: callable = None,
+    notice_clear_callback: callable = None,
     max_tokens: int = None,
     reasoning_config: Dict[str, Any] = None,
     service_tier: str = None,
@@ -374,6 +410,10 @@ def init_agent(
     agent.model = model
 
     agent.max_iterations = max_iterations
+
+    # Per-tool progress verbosity ("off"/"new"/"all"/"verbose"); read defensively
+    # elsewhere via getattr(agent, "tool_progress_mode", "all").
+    agent.tool_progress_mode = tool_progress_mode
 
     # Shared iteration budget — parent creates, children inherit.
 
@@ -619,6 +659,8 @@ def init_agent(
 
     agent.clarify_callback = clarify_callback
 
+    agent.read_terminal_callback = read_terminal_callback
+
     agent.step_callback = step_callback
 
     agent.stream_delta_callback = stream_delta_callback
@@ -626,6 +668,10 @@ def init_agent(
     agent.interim_assistant_callback = interim_assistant_callback
 
     agent.status_callback = status_callback
+
+    agent.notice_callback = notice_callback
+
+    agent.notice_clear_callback = notice_clear_callback
 
     agent.tool_gen_callback = tool_gen_callback
 
@@ -1378,8 +1424,10 @@ def init_agent(
                     if not _fb_resolved:
                         raise RuntimeError(
                             f"Provider '{_explicit}' is set in config.yaml but no API key "
-                            f"was found. Set the {_env_hint} environment "
-                            f"variable, or switch to a different provider with `clawk model`."
+                            f"was found. Add {_env_hint} to the .env file under your "
+                            f"Clawksis home (a shell `export` is not visible to background "
+                            f"services like the gateway), or switch to a different "
+                            f"provider with `clawk model`."
                         )
 
                 if not getattr(agent, "_fallback_activated", False):
@@ -2375,20 +2423,38 @@ def init_agent(
 
     agent.compression_enabled = compression_enabled
 
-    # Reject models whose context window is below the minimum required
-
-    # for reliable tool-calling workflows (64K tokens).
+    # Reject models whose context window is below the minimum required for
+    # reliable tool-calling workflows (64K tokens) — EXCEPT local models
+    # (Ollama / LM Studio / localhost endpoints), which routinely ship a
+    # smaller window. Hard-failing those would brick the cookbook/local-model
+    # flow, so we warn and run with the model's real window instead. Cloud
+    # models keep the strict guard.
 
     _ctx = getattr(agent.context_compressor, "context_length", 0)
 
     if _ctx and _ctx < MINIMUM_CONTEXT_LENGTH:
-        raise ValueError(
-            f"Model {agent.model} has a context window of {_ctx:,} tokens, "
-            f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
-            f"by Clawksis.  Choose a model with at least "
-            f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
-            f"model.context_length in config.yaml to override."
-        )
+        if _model_is_local_endpoint(
+            getattr(agent, "provider", "") or "",
+            getattr(agent, "base_url", "") or "",
+        ):
+            logger.warning(
+                "Model %s has a %s-token context window, below the %s minimum, "
+                "but it is a LOCAL model — running with its real (reduced) "
+                "window instead of refusing. Long tool-calling workflows may "
+                "degrade; raise it with model.context_length in config.yaml.",
+                agent.model,
+                f"{_ctx:,}",
+                f"{MINIMUM_CONTEXT_LENGTH:,}",
+            )
+
+        else:
+            raise ValueError(
+                f"Model {agent.model} has a context window of {_ctx:,} tokens, "
+                f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
+                f"by Clawksis.  Choose a model with at least "
+                f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
+                f"model.context_length in config.yaml to override."
+            )
 
     # Inject context engine tool schemas (e.g. lcm_grep, lcm_describe, lcm_expand).
 

@@ -137,6 +137,7 @@ AUTH_TYPE_API_KEY = "api_key"
 
 
 SOURCE_MANUAL = "manual"
+SOURCE_MANUAL_DEVICE_CODE = f"{SOURCE_MANUAL}:device_code"
 
 
 STRATEGY_FILL_FIRST = "fill_first"
@@ -583,7 +584,7 @@ def _iter_custom_providers(config: Optional[dict] = None):
 
 
 def get_custom_provider_pool_key(
-    base_url: str, provider_name: Optional[str] = None
+    base_url: Optional[str], provider_name: Optional[str] = None
 ) -> Optional[str]:
     """Look up the custom_providers list in config.yaml and return 'custom:<name>' for a matching base_url.
 

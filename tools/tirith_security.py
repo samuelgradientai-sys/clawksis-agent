@@ -462,6 +462,7 @@ def _verify_cosign(checksums_path: str, sig_path: str, cert_path: str) -> bool |
             capture_output=True,
             text=True,
             timeout=15,
+            stdin=subprocess.DEVNULL,
         )
 
         if result.returncode == 0:
@@ -1169,6 +1170,7 @@ def check_command_security(command: str) -> dict:
             capture_output=True,
             text=True,
             timeout=timeout,
+            stdin=subprocess.DEVNULL,
         )
 
     except OSError as exc:

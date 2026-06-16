@@ -929,12 +929,26 @@ def _apply_main_model_assignment(
     if not isinstance(model_cfg, dict):
         model_cfg = {}
 
+    provider_norm = provider.strip().lower()
+
     model_cfg["provider"] = provider
 
     model_cfg["default"] = model
 
-    if provider.strip().lower() == "custom" and base_url.strip():
+    if provider_norm == "custom" and base_url.strip():
         model_cfg["base_url"] = base_url.strip()
+
+    elif provider_norm == "ollama":
+        # Local Ollama daemon: persist the OpenAI-compatible /v1 endpoint and a
+        # dummy api_key so the runtime resolver wires the local server without an
+        # auth prompt (Ollama ignores the key). Honor a caller-supplied base_url
+        # (LAN/remote Ollama) over the localhost default.
+        from clawk_cli.runtime_provider import DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        model_cfg["base_url"] = base_url.strip() or DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        if not str(model_cfg.get("api_key") or "").strip():
+            model_cfg["api_key"] = "ollama"
 
     elif model_cfg.get("base_url"):
         model_cfg["base_url"] = ""
@@ -11723,7 +11737,7 @@ async def get_dashboard_themes():
 
     config = load_config()
 
-    active = cfg_get(config, "dashboard", "theme", default="default")
+    active = cfg_get(config, "dashboard", "theme", default="midnight")
 
     user_themes = _discover_user_themes()
 
@@ -11770,6 +11784,394 @@ async def set_dashboard_theme(body: ThemeSetBody):
     save_config(config)
 
     return {"ok": True, "theme": body.name}
+
+
+# ---------------------------------------------------------------------------
+
+# Visualization section (pixel office + comms graph)
+
+# ---------------------------------------------------------------------------
+
+
+def _visualization_layout_path() -> Path:
+    """Path to the persisted pixel-office layout (~/.clawksis/visualization/)."""
+
+    vdir = get_clawk_home() / "visualization"
+
+    vdir.mkdir(parents=True, exist_ok=True)
+
+    return vdir / "office-layout.json"
+
+
+# Cap the persisted layout to a sane size — a 64x64 office with furniture
+# serializes well under this; the bound just stops a malformed/huge PUT from
+# writing an unbounded blob to disk.
+_MAX_LAYOUT_BYTES = 2 * 1024 * 1024
+
+
+def _read_visualization_layout() -> Any:
+    """Blocking read+parse of the saved layout (run via to_thread)."""
+
+    import json as _json
+
+    path = _visualization_layout_path()
+
+    if not path.exists():
+        return None
+
+    try:
+        return _json.loads(path.read_text(encoding="utf-8"))
+
+    except Exception:
+        return None
+
+
+def _write_visualization_layout(payload: str) -> None:
+    """Blocking write of the serialized layout (run via to_thread)."""
+
+    _visualization_layout_path().write_text(payload, encoding="utf-8")
+
+
+@app.get("/api/visualization/layout")
+async def get_visualization_layout():
+    """Return the saved pixel-office layout, or ``{"layout": null}`` if none."""
+
+    layout = await asyncio.to_thread(_read_visualization_layout)
+
+    return {"layout": layout}
+
+
+class VisualizationLayoutBody(BaseModel):
+    layout: Any
+
+
+@app.put("/api/visualization/layout")
+async def set_visualization_layout(body: VisualizationLayoutBody):
+    """Persist the pixel-office layout edited in the dashboard."""
+
+    import json as _json
+
+    if body.layout is None:
+        raise HTTPException(status_code=400, detail="layout is required")
+
+    payload = _json.dumps(body.layout)
+
+    if len(payload.encode("utf-8")) > _MAX_LAYOUT_BYTES:
+        raise HTTPException(status_code=413, detail="layout too large")
+
+    try:
+        await asyncio.to_thread(_write_visualization_layout, payload)
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"failed to save layout: {exc}")
+
+    return {"ok": True}
+
+
+@app.get("/api/visualization/agent-messages")
+async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
+    """Return recent peer-to-peer agent messages (for the comms graph).
+
+    Reads the same ``agent_comms.db`` the ``agent_message`` tool writes to.
+    Returns an empty list when the agent-messaging toolset has never run.
+    """
+
+    try:
+        from tools.agent_comms_tool import read_recent_messages
+
+        # Offload the synchronous SQLite I/O so it doesn't block the event loop
+        # (matches the convention used elsewhere in this file).
+        messages = await asyncio.to_thread(
+            read_recent_messages,
+            limit=limit,
+            since_id=since_id if since_id > 0 else None,
+        )
+
+    except Exception:
+        messages = []
+
+    return {"messages": messages}
+
+
+# Session metadata (title/source/model) cache for the Visualization office.
+# Rebuilt at most every TTL seconds so the per-1.5s events poll stays cheap.
+_VIZ_SESSION_META: Dict[str, Any] = {"ts": 0.0, "data": {}}
+_VIZ_SESSION_META_TTL = 10.0
+
+
+def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
+    """Map session_id -> {title, source, model} from the sessions store (blocking)."""
+
+    out: Dict[str, Dict[str, str]] = {}
+
+    try:
+        from clawk_state import SessionDB
+
+        db = SessionDB()
+
+        try:
+            rows = db.list_sessions_rich(
+                limit=300,
+                offset=0,
+                min_message_count=0,
+                include_archived=True,
+                archived_only=False,
+                order_by_last_active=True,
+            )
+
+            for s in rows:
+                sid = s.get("id")
+
+                if not sid:
+                    continue
+
+                out[sid] = {
+                    "title": (s.get("title") or "").strip(),
+                    "source": (s.get("source") or "").strip(),
+                    "model": (s.get("model") or "").strip(),
+                }
+
+        finally:
+            db.close()
+
+    except Exception:
+        _log.debug("viz session meta build failed", exc_info=True)
+
+    return out
+
+
+async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
+    now = time.time()
+
+    if now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL or not _VIZ_SESSION_META["data"]:
+        data = await asyncio.to_thread(_build_viz_session_meta)
+
+        if data:
+            _VIZ_SESSION_META["data"] = data
+
+            _VIZ_SESSION_META["ts"] = now
+
+    return _VIZ_SESSION_META["data"]
+
+
+@app.get("/api/visualization/agent-events")
+async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
+    """Return recent tool-activity events across ALL agents (oldest-first).
+
+    Reads the cross-process ``agent_events.db`` that every agent (chat, gateway
+    platforms, cron) writes to via ``model_tools.handle_function_call``. This is
+    what lets the Visualization office show agents from every channel, not just
+    the dashboard chat PTY. Also returns a ``sessions`` map (session_id ->
+    {title, source, model}) so the office can label desks with the real session
+    name + model instead of the raw id. Returns empties when nothing has run.
+    """
+
+    try:
+        import agent_events
+
+        events = await asyncio.to_thread(
+            agent_events.read_recent,
+            limit=limit,
+            since_id=since_id if since_id > 0 else None,
+        )
+
+    except Exception:
+        events = []
+
+    sessions: Dict[str, Dict[str, str]] = {}
+
+    try:
+        sids = {e.get("session_id") for e in events if e.get("session_id")}
+
+        if sids:
+            meta = await _viz_session_meta_cached()
+
+            sessions = {sid: meta[sid] for sid in sids if sid in meta}
+
+    except Exception:
+        sessions = {}
+
+    return {"events": events, "sessions": sessions}
+
+
+# ---------------------------------------------------------------------------
+
+# Cookbook — local models (run open LLMs locally via Ollama)
+
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/cookbook/hardware")
+async def get_cookbook_hardware():
+    """Detected hardware (RAM / CPU / GPU + VRAM) for the fit recommender."""
+
+    try:
+        from clawk_cli import cookbook
+
+        hw = await asyncio.to_thread(cookbook.detect_hardware)
+
+    except Exception:
+        hw = {}
+
+    return {"hardware": hw}
+
+
+@app.get("/api/cookbook/catalog")
+async def get_cookbook_catalog():
+    """Curated local-model catalog enriched with a per-model fit verdict.
+
+    Each entry carries ``fit`` ({mode, tier, reason}) for the detected hardware
+    and an ``installed`` flag (already pulled into the local Ollama).
+    """
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.catalog_with_fit(hw, installed),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
+@app.get("/api/cookbook/search")
+async def get_cookbook_search(q: str):
+    """Live search of the FULL Ollama library (scraped) for models matching *q*.
+
+    Returns catalog-shaped rows (one per size tag) with fit + installed flags,
+    so ANY model in ollama.com/library is findable — not just the curated set.
+    Returns [] if ollama.com is unreachable.
+    """
+
+    query = (q or "").strip()
+    if not query:
+        return {"models": []}
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "models": cookbook.rows_with_fit(
+                    cookbook.search_ollama_library(query), hw, installed
+                )
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"models": []}
+
+
+@app.get("/api/cookbook/library")
+async def get_cookbook_library():
+    """The FULL Ollama library (scraped, cached ~30 min) with fit + installed."""
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.rows_with_fit(
+                    cookbook.full_ollama_library(), hw, installed
+                ),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
+@app.get("/api/cookbook/ollama")
+async def get_cookbook_ollama():
+    """Ollama status (installed / running / pulled models)."""
+
+    try:
+        from clawk_cli import cookbook
+
+        return await asyncio.to_thread(cookbook.ollama_status)
+
+    except Exception:
+        return {"installed": False, "running": False, "models": []}
+
+
+class CookbookTagBody(BaseModel):
+    tag: str
+
+
+@app.post("/api/cookbook/pull")
+async def post_cookbook_pull(body: CookbookTagBody):
+    """Start `ollama pull <tag>` in the background. Poll /pull-status for progress."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_pull, tag)
+
+
+@app.get("/api/cookbook/pull-status")
+async def get_cookbook_pull_status(tag: str):
+    """Background pull status for a tag: pulling / validating / done / error."""
+
+    from clawk_cli import cookbook
+
+    return {"tag": tag, "status": cookbook.pull_status(tag)}
+
+
+@app.post("/api/cookbook/install-ollama")
+async def post_cookbook_install_ollama():
+    """Install Ollama on the clawk host (background) so the Cookbook works here.
+
+    "We ship Ollama with clawk" — install it on demand on the machine where the
+    agent runs. Poll /install-ollama-status. Best-effort (Linux / macOS-brew).
+    """
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_ollama_install)
+
+
+@app.get("/api/cookbook/install-ollama-status")
+async def get_cookbook_install_ollama_status():
+    """Ollama install progress: installing / done / error / "" (unknown)."""
+
+    from clawk_cli import cookbook
+
+    return {"status": cookbook.ollama_install_status()}
+
+
+@app.post("/api/cookbook/use")
+async def post_cookbook_use(body: CookbookTagBody):
+    """Set a local Ollama model as the agent's active model."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    result = await asyncio.to_thread(cookbook.use_model, tag)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "failed"))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -12104,11 +12506,11 @@ def _merged_plugins_hub() -> Dict[str, Any]:
 
     rows: List[Dict[str, Any]] = []
 
-    for name, version, description, source, dir_str in _discover_all_plugins():
-        if name in disabled_set:
+    for name, version, description, source, dir_str, key in _discover_all_plugins():
+        if name in disabled_set or key in disabled_set:
             runtime_status = "disabled"
 
-        elif name in enabled_set:
+        elif name in enabled_set or key in enabled_set:
             runtime_status = "enabled"
 
         else:

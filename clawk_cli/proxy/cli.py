@@ -49,7 +49,7 @@ def cmd_proxy_start(args: Any) -> int:
 
         return 1
 
-    provider = getattr(args, "provider", None) or "nous"
+    provider = getattr(args, "provider", None) or "xai"
 
     try:
         adapter = get_adapter(provider)
@@ -164,7 +164,7 @@ def cmd_proxy(args: Any) -> int:
         "OAuth-authenticated provider credentials to outbound requests.\n"
         "\n"
         "Subcommands:\n"
-        "  clawk proxy start [--provider nous|xai] [--host 127.0.0.1] [--port 8645]\n"
+        "  clawk proxy start [--provider xai] [--host 127.0.0.1] [--port 8645]\n"
         "      Run the proxy in the foreground.\n"
         "  clawk proxy status\n"
         "      Show which upstream adapters are ready.\n"

@@ -41,8 +41,9 @@ function FloatingPaths({ position }: { position: number }) {
           strokeWidth={path.width}
           transition={{
             // Deterministic per-path variance (no Math.random) so the field
-            // shimmers without every line moving in lockstep.
-            duration: 20 + (path.id % 10),
+            // shimmers without every line moving in lockstep. 10–14s per
+            // cycle keeps the flow visibly passing without being frantic.
+            duration: 10 + (path.id % 5),
             ease: "linear",
             repeat: Number.POSITIVE_INFINITY,
           }}

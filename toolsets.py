@@ -60,6 +60,9 @@ _CLAWK_CORE_TOOLS = [
     # Terminal + process management
     "terminal",
     "process",
+    # Read the desktop GUI's embedded terminal pane (gated on CLAWK_DESKTOP
+    # via check_fn in tools/read_terminal_tool.py — hidden outside the GUI).
+    "read_terminal",
     # File manipulation
     "read_file",
     "write_file",
@@ -237,6 +240,16 @@ TOOLSETS = {
             "only appears when a MiroFish server answers /health."
         ),
         "tools": ["mirofish"],
+        "includes": [],
+    },
+    "agent_comms": {
+        "description": (
+            "Peer-to-peer agent messaging: agent_message (send a note to "
+            "another agent by name, or 'all') and agent_inbox (read messages "
+            "addressed to you). Off by default; enable in `clawk tools` → "
+            "Agent Messaging. Backs the dashboard Visualization comms graph."
+        ),
+        "tools": ["agent_message", "agent_inbox"],
         "includes": [],
     },
     "moa": {
@@ -420,6 +433,51 @@ TOOLSETS = {
         "description": "Safe toolkit without terminal access",
         "tools": [],
         "includes": ["web", "vision", "image_gen"],
+    },
+    # Coding posture (base Clawksis — CLI/TUI/desktop/ACP). Auto-selected in a
+    # code workspace; see agent/coding_context.py. Keeps everything you reach
+    # for while pairing on code and drops the rest (messaging, tts, image_gen,
+    # spotify, home-assistant, cron, computer-use).
+    "coding": {
+        "description": "Coding-focused toolset: files, terminal, search, web docs, skills, todo, delegate, vision, browser",
+        "tools": [
+            "web_search",
+            "web_extract",
+            "terminal",
+            "process",
+            "read_terminal",
+            "read_file",
+            "write_file",
+            "patch",
+            "search_files",
+            "vision_analyze",
+            "skills_list",
+            "skill_view",
+            "skill_manage",
+            "browser_navigate",
+            "browser_snapshot",
+            "browser_click",
+            "browser_type",
+            "browser_scroll",
+            "browser_back",
+            "browser_press",
+            "browser_get_images",
+            "browser_vision",
+            "browser_console",
+            "browser_cdp",
+            "browser_dialog",
+            "todo",
+            "memory",
+            "session_search",
+            "clarify",
+            "execute_code",
+            "delegate_task",
+        ],
+        "includes": [],
+        # Posture toolset: selected per-session by agent/coding_context.py,
+        # never auto-recovered into per-platform tool config (see the
+        # non-configurable-toolset recovery loop in clawk_cli/tools_config.py).
+        "posture": True,
     },
     # ==========================================================================
     # Full Clawksis toolsets (CLI + messaging platforms)

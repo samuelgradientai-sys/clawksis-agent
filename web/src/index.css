@@ -77,6 +77,9 @@
   --theme-base-size: 15px;
   --theme-line-height: 1.55;
   --theme-letter-spacing: 0;
+  /* Medium (500) base weight so body copy reads slightly bold across the
+     dashboard; themes override via `typography.fontWeight`. */
+  --theme-font-weight: 500;
 
   /* Layout tokens. */
   --radius: 0.5rem;
@@ -101,6 +104,7 @@ html {
   font-size: var(--theme-base-size);
   line-height: var(--theme-line-height);
   letter-spacing: var(--theme-letter-spacing);
+  font-weight: var(--theme-font-weight);
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;

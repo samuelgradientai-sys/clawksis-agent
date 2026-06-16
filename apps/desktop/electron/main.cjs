@@ -376,9 +376,9 @@ function resolveClawksisHome() {
 
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
 
-    const localappdata = path.join(process.env.LOCALAPPDATA, 'clawk')
+    const localappdata = path.join(process.env.LOCALAPPDATA, 'clawksis')
 
-    const legacy = path.join(app.getPath('home'), '.clawk')
+    const legacy = path.join(app.getPath('home'), '.clawksis')
 
     // Migrate transparently to LOCALAPPDATA, but honour an existing legacy
 
@@ -390,7 +390,7 @@ function resolveClawksisHome() {
 
   }
 
-  return path.join(app.getPath('home'), '.clawk')
+  return path.join(app.getPath('home'), '.clawksis')
 
 }
 

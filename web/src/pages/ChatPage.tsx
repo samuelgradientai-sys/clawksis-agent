@@ -66,6 +66,8 @@ import { useSearchParams } from "react-router-dom";
 
 import { ChatSidebar } from "@/components/ChatSidebar";
 
+import { setActiveEventChannel } from "@/lib/eventChannelStore";
+
 import { usePageHeader } from "@/contexts/usePageHeader";
 
 import { useI18n } from "@/i18n";
@@ -75,6 +77,49 @@ import { api } from "@/lib/api";
 import { PluginSlot } from "@/plugins";
 
 import { useTheme } from "@/themes";
+
+
+
+// ── Optimistic local echo ────────────────────────────────────────────────
+//
+// The chat is a REMOTE PTY: every keystroke crosses the WebSocket to the VPS,
+// gets rendered by the Ink TUI, and only then comes back — so on a far server
+// each character carries a full network round-trip of typing latency. To make
+// typing feel instant we paint a single printable character locally the moment
+// it's pressed, BEFORE sending it. Ink repaints the whole input frame on its
+// reply, so the authoritative render reconciles the optimistic glyph a moment
+// later (no permanent duplication).
+//
+// This is strictly gated (see the onData handler): only a lone printable ASCII
+// char, never while the terminal is "busy" (model streaming / overlays / large
+// repaints, detected by output-burst size), and only when enabled.
+//
+// OPT-IN (off by default). Over a high-latency PTY the optimistic glyph races
+// Ink's full-frame repaint: every keystroke triggers a small line-repaint that
+// redraws the input line authoritatively and erases optimistic chars typed
+// after it, so fast typing looks like it stutters / re-types and the line can
+// desync on Enter. Reliable typing matters more than shaving per-char latency,
+// so this stays off unless a user on a low-latency link opts in with
+// `localStorage['clawk-local-echo'] = 'on'` or `window.__CLAWK_LOCAL_ECHO__ = true`.
+const LOCAL_ECHO_BUSY_BYTES = 160;
+const LOCAL_ECHO_BUSY_MS = 250;
+
+function localEchoEnabled(): boolean {
+  try {
+    if (typeof window !== "undefined") {
+      const forced = (window as unknown as { __CLAWK_LOCAL_ECHO__?: boolean })
+        .__CLAWK_LOCAL_ECHO__;
+
+      if (forced === true) return true;
+
+      if (forced === false) return false;
+    }
+
+    return localStorage.getItem("clawk-local-echo") === "on";
+  } catch {
+    return false;
+  }
+}
 
 
 
@@ -354,6 +399,14 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const resumeParam = searchParams.get("resume");
 
   const channel = useMemo(() => generateChannelId(), [resumeParam]);
+
+  // Publish this PTY's gateway event channel so the Visualization section can
+  // subscribe to the same live feed without spawning a second PTY. Cleared on
+  // unmount so the visualizer falls back to its "no live session" empty state.
+  useEffect(() => {
+    setActiveEventChannel(channel);
+    return () => setActiveEventChannel(null);
+  }, [channel]);
 
 
 
@@ -1187,15 +1240,39 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
 
 
+    // Local-echo state (shared with the onData handler below, same effect
+    // scope). `echoBusyUntil` suspends optimistic echo for a beat after any
+    // large output burst — model streaming, overlays, or big repaints — since
+    // those mean the terminal is NOT a quiet prompt waiting for input.
+    const localEchoOn = localEchoEnabled();
+
+    let echoBusyUntil = 0;
+
+
+
     ws.onmessage = (ev) => {
 
       if (typeof ev.data === "string") {
+
+        if (localEchoOn && ev.data.length > LOCAL_ECHO_BUSY_BYTES) {
+
+          echoBusyUntil = Date.now() + LOCAL_ECHO_BUSY_MS;
+
+        }
 
         term.write(ev.data);
 
       } else {
 
-        term.write(new Uint8Array(ev.data as ArrayBuffer));
+        const bytes = new Uint8Array(ev.data as ArrayBuffer);
+
+        if (localEchoOn && bytes.length > LOCAL_ECHO_BUSY_BYTES) {
+
+          echoBusyUntil = Date.now() + LOCAL_ECHO_BUSY_MS;
+
+        }
+
+        term.write(bytes);
 
       }
 
@@ -1346,6 +1423,36 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         if (SGR_MOUSE_RE.test(data)) {
 
           return;
+
+        }
+
+
+
+        // Optimistic local echo (see notes at top of file). Paint a lone
+
+        // printable ASCII char immediately so typing feels instant, BUT only
+
+        // at a quiet prompt: skip control chars, ESC/arrow sequences, paste
+
+        // (length > 1), wide/non-ASCII chars, and any moment right after a big
+
+        // output burst (streaming/overlay). Ink's next frame reconciles it.
+
+        if (
+
+          localEchoOn &&
+
+          data.length === 1 &&
+
+          data >= " " &&
+
+          data <= "~" &&
+
+          Date.now() >= echoBusyUntil
+
+        ) {
+
+          term.write(data);
 
         }
 

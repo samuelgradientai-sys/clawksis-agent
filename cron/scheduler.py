@@ -1705,6 +1705,56 @@ def _parse_wake_gate(script_output: str) -> bool:
     return gate.get("wakeAgent", True) is not False
 
 
+_USER_PROFILE_MAX_CHARS = 2000
+
+
+def _load_user_profile_block() -> str:
+    """Read ``~/.clawksis/user.md`` and return a labeled, length-bounded block
+    for injection into cron prompts (or ``""`` if absent/empty/unreadable).
+
+    Scheduled runs have no live conversation, so the agent would otherwise have
+    no signal for the user's language or preferences and tends to default to
+    English. Surfacing the user profile here lets a cron honour rule 1 (always
+    reply in the user's language) without a user present.
+    """
+    try:
+        home = _get_clawk_home()
+    except Exception:
+        return ""
+
+    for name in ("user.md", "USER.md"):
+        path = home / name
+        try:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+        except (OSError, PermissionError):
+            continue
+        if not text:
+            continue
+        if len(text) > _USER_PROFILE_MAX_CHARS:
+            text = text[:_USER_PROFILE_MAX_CHARS] + "\n[... truncated ...]"
+        return (
+            "## USER PROFILE (from user.md)\n"
+            "Honour the user's language and preferences stated here:\n\n"
+            f"{text}"
+        )
+
+    return ""
+
+
+def _cron_configured_language() -> str:
+    """Best-effort configured language code (e.g. ``es``) as a fallback for the
+    cron language rule when no ``user.md`` is present. Resolves env >
+    ``display.language`` config > default via the shared i18n resolver."""
+    try:
+        from agent.i18n import get_language
+
+        return get_language() or ""
+    except Exception:
+        return ""
+
+
 def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     """Build the effective prompt for a cron job, optionally loading one or more skills first.
 
@@ -1839,20 +1889,49 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                 # silent skip — do not pollute the prompt with error messages
 
     # Always prepend cron execution guidance so the agent knows how
+    # delivery works, which language to use, and when to stay silent.
+    # The substrings "automatically delivered", "do NOT use send_message"
+    # and "[SILENT]" are asserted by tests — keep them verbatim.
 
-    # delivery works and can suppress delivery when appropriate.
+    configured_lang = _cron_configured_language()
+    lang_clause = (
+        "LANGUAGE: Reply in the user's language — see the USER PROFILE below "
+        "(user.md) when present"
+        + (
+            f", otherwise use the configured language '{configured_lang}'. "
+            if configured_lang
+            else ", otherwise match the language the user normally writes in. "
+        )
+        + "Never default to English unless that is the user's language. "
+    )
 
     cron_hint = (
-        "[IMPORTANT: You are running as a scheduled cron job. "
+        "[IMPORTANT: You are running as a scheduled cron job. There is no user "
+        "present to answer questions or clarify — act autonomously. "
         "DELIVERY: Your final response will be automatically delivered "
         "to the user — do NOT use send_message or try to deliver "
         "the output yourself. Just produce your report/output as your "
         "final response and the system handles the rest. "
-        "SILENT: If there is genuinely nothing new to report, respond "
-        'with exactly "[SILENT]" (nothing else) to suppress delivery. '
-        "Never combine [SILENT] with content — either report your "
-        "findings normally, or say [SILENT] and nothing more.]\n\n"
+        + lang_clause
+        + "TONE: Write naturally, the way a person would — same tone and shape "
+        "as the messages that already land well with this user. Do not sound "
+        "like an automated system or a templated alert. "
+        "REAL TASK: A cron can be a task, not just a reminder. If the job "
+        "implies getting something done, actually do the work this run using "
+        "your tools — do not merely restate the task and bail. Firing and "
+        "rescheduling without completing the work is a failure. "
+        "CONDITION: If this job waits for a condition to become true, check it "
+        "silently each run. While the condition is NOT met, respond with "
+        'exactly "[SILENT]" (nothing else) to suppress delivery — never send '
+        "useless 'still waiting' pings. Notify only when the condition is "
+        "actually met or there is a real problem to report. Never combine "
+        "[SILENT] with content — either report normally, or say [SILENT] and "
+        "nothing more.]\n\n"
     )
+
+    profile_block = _load_user_profile_block()
+    if profile_block:
+        cron_hint += profile_block + "\n\n"
 
     prompt = cron_hint + prompt
 
@@ -3307,6 +3386,35 @@ def tick(verbose: bool = True, adapters=None, loop=None, sync: bool = True) -> i
                     error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
 
                 mark_job_run(job["id"], success, error, delivery_error=delivery_error)
+
+                # Rule 5 (self-terminate): a one-time condition alert created
+                # with stop_after_alert pauses itself once it has delivered a
+                # real (non-[SILENT]), error-free message — so "notify me when X
+                # happens" stops instead of re-running forever. Recurring jobs
+                # leave the flag False and keep delivering every tick.
+                if (
+                    should_deliver
+                    and success
+                    and not delivery_error
+                    and job.get("stop_after_alert")
+                ):
+                    try:
+                        from cron.jobs import pause_job
+
+                        pause_job(
+                            job["id"],
+                            reason="stop_after_alert: condition met and alert delivered",
+                        )
+                        logger.info(
+                            "Job '%s': stop_after_alert — paused after first delivery",
+                            job["id"],
+                        )
+                    except Exception as _e:
+                        logger.warning(
+                            "stop_after_alert pause failed for job %s: %s",
+                            job["id"],
+                            _e,
+                        )
 
                 return True
 

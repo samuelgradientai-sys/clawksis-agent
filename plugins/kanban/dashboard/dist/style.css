@@ -3164,3 +3164,131 @@
 
 }
 
+
+
+/* ---------------------------------------------------------------------------
+
+ * Simple/advanced mode bar + onboarding guide (Clawksis simple-mode UX).
+
+ * ------------------------------------------------------------------------- */
+
+.clawk-kanban-modebar {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.5rem;
+
+}
+
+
+
+.clawk-kanban-guide {
+
+  position: relative;
+
+  padding: 0.9rem 2.25rem 0.9rem 1rem;
+
+  border: 1px solid color-mix(in srgb, #6C4FD6 45%, var(--color-border));
+
+  border-left: 3px solid #6C4FD6;
+
+  border-radius: var(--radius, 0.5rem);
+
+  background: color-mix(in srgb, #6C4FD6 8%, var(--color-card));
+
+  color: var(--color-foreground);
+
+}
+
+
+
+.clawk-kanban-guide-title {
+
+  font-weight: 600;
+
+  font-size: 0.95rem;
+
+  margin-bottom: 0.25rem;
+
+}
+
+
+
+.clawk-kanban-guide-lead {
+
+  font-size: 0.8rem;
+
+  color: var(--color-muted-foreground);
+
+  margin: 0 0 0.5rem 0;
+
+}
+
+
+
+.clawk-kanban-guide-steps {
+
+  margin: 0;
+
+  padding-left: 1.1rem;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.3rem;
+
+  font-size: 0.82rem;
+
+  line-height: 1.35;
+
+}
+
+
+
+.clawk-kanban-guide-steps li {
+
+  list-style: decimal;
+
+}
+
+
+
+.clawk-kanban-guide-close {
+
+  position: absolute;
+
+  top: 0.45rem;
+
+  right: 0.55rem;
+
+  background: transparent;
+
+  border: none;
+
+  cursor: pointer;
+
+  font-size: 0.85rem;
+
+  line-height: 1;
+
+  color: var(--color-muted-foreground);
+
+  padding: 0.2rem;
+
+  border-radius: var(--radius-sm, 0.25rem);
+
+}
+
+
+
+.clawk-kanban-guide-close:hover {
+
+  color: var(--color-foreground);
+
+  background: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+
+}
+

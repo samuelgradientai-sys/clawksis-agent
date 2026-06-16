@@ -222,6 +222,12 @@ export interface Translations {
 
     webUi: string;
 
+    managingProfileBanner?: string;
+
+    managingProfile?: string;
+
+    currentProfileOption?: string;
+
   };
 
 
@@ -536,6 +542,10 @@ export interface Translations {
 
       onceAt: string;
 
+      onceUseCalendar: string;
+
+      onceUseManual: string;
+
       customLabel: string;
 
       customPlaceholder: string;
@@ -687,6 +697,14 @@ export interface Translations {
   profiles: {
 
     newProfile: string;
+
+    manageSkills?: string;
+
+    activeSetHint?: string;
+
+    cloneFrom?: string;
+
+    cloneFromNone?: string;
 
     name: string;
 
@@ -1075,6 +1093,18 @@ export interface Translations {
     title: string;
 
     switchTheme: string;
+
+    fontTitle?: string;
+
+    fontDefault?: string;
+
+    fontDefaultHint?: string;
+
+    fontSans?: string;
+
+    fontSerif?: string;
+
+    fontMono?: string;
 
   };
 
@@ -1579,6 +1609,32 @@ export interface Translations {
     logTruncated: string;
 
     logAt: string;
+
+    // Simple/advanced view toggle + onboarding guide (Clawksis simple-mode UX).
+    // Optional so non-English locales fall back to the plugin's literal.
+    simpleModeLabel?: string;
+
+    simpleModeHint?: string;
+
+    advancedModeLabel?: string;
+
+    advancedModeHint?: string;
+
+    guideReopenLabel?: string;
+
+    guideReopenHint?: string;
+
+    guideHide?: string;
+
+    guideTitle?: string;
+
+    guideLead?: string;
+
+    guideStep1?: string;
+
+    guideStep2?: string;
+
+    guideStep3?: string;
 
   };
 

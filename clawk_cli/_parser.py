@@ -1,36 +1,22 @@
 """
-
 Top-level argparse construction for the clawk CLI.
 
-
-
 Lives in its own module so other modules (e.g. ``relaunch.py``) can
-
 introspect the parser to discover which flags exist without running the
-
 ``main`` fn.
 
-
-
 Only the top-level parser and the ``chat`` subparser live here. Every other
-
 subparser (model, gateway, sessions, …) is built inline in ``main.py``
-
 because its dispatch is tightly coupled to module-level ``cmd_*`` functions.
-
 """
 
 import argparse
 
 
 # `--profile` / `-p` is consumed by ``main._apply_profile_override`` before
-
 # argparse runs (it sets ``CLAWK_HOME`` and strips itself from ``sys.argv``),
-
 # so it isn't on the parser. Listed here so all "carry over on relaunch"
-
 # metadata lives in one file.
-
 PRE_ARGPARSE_INHERITED_FLAGS: list[tuple[str, bool]] = [
     ("--profile", True),
     ("-p", True),
@@ -39,126 +25,69 @@ PRE_ARGPARSE_INHERITED_FLAGS: list[tuple[str, bool]] = [
 
 def _inherited_flag(parser, *args, **kwargs):
     """Register a flag that ``clawk_cli.relaunch`` should carry over when
-
     the CLI re-execs itself (e.g. after ``sessions browse`` picks a session,
-
     or after the setup wizard launches chat).
 
-
-
     Equivalent to ``parser.add_argument(...)`` plus tagging the resulting
-
     Action with ``inherit_on_relaunch = True`` so the relaunch table builder
-
     can find it via introspection.
-
     """
-
     action = parser.add_argument(*args, **kwargs)
-
     action.inherit_on_relaunch = True
-
     return action
 
 
 _EPILOGUE = """
-
 Examples:
-
     clawk                        Start interactive chat
-
     clawk chat -q "Hello"        Single query mode
-
     clawk --tui                  Launch the modern TUI (or set display.interface: tui)
-
     clawk --cli                  Force the classic REPL (overrides display.interface: tui)
-
     clawk -c                     Resume the most recent session
-
     clawk -c "my project"        Resume a session by name (latest in lineage)
-
     clawk --resume <session_id>  Resume a specific session by ID
-
     clawk setup                  Run setup wizard
-
     clawk logout                 Clear stored authentication
-
     clawk auth add <provider>    Add a pooled credential
-
     clawk auth list              List pooled credentials
-
     clawk auth remove <p> <t>    Remove pooled credential by index, id, or label
-
     clawk auth reset <provider>  Clear exhaustion status for a provider
-
     clawk model                  Select default model
-
     clawk fallback [list]        Show fallback provider chain
-
     clawk fallback add           Add a fallback provider (same picker as `clawk model`)
-
     clawk fallback remove        Remove a fallback provider from the chain
-
     clawk config                 View configuration
-
     clawk config edit            Edit config in $EDITOR
-
     clawk config set model gpt-4 Set a config value
-
     clawk gateway                Run messaging gateway
-
     clawk -s clawksis-agent-dev,github-auth
-
     clawk -w                     Start in isolated git worktree
-
     clawk gateway install        Install gateway background service
-
     clawk sessions list          List past sessions
-
     clawk sessions browse        Interactive session picker
-
     clawk sessions rename ID T   Rename/title a session
-
     clawk logs                   View agent.log (last 50 lines)
-
     clawk logs -f                Follow agent.log in real time
-
     clawk logs errors            View errors.log
-
     clawk logs --since 1h        Lines from the last hour
-
     clawk debug share             Upload debug report for support
-
     clawk update                 Update to latest version
-
     clawk dashboard              Start web UI dashboard (port 9119)
-
     clawk dashboard --stop       Stop running dashboard processes
-
     clawk dashboard --status     List running dashboard processes
 
-
-
 For more help on a command:
-
     clawk <command> --help
-
 """
 
 
 def build_top_level_parser():
     """Build the top-level parser, the subparsers action, and the ``chat`` subparser.
 
-
-
     Returns ``(parser, subparsers, chat_parser)``. The caller wires
-
     ``chat_parser.set_defaults(func=cmd_chat)`` and continues registering
-
     other subparsers via ``subparsers.add_parser(...)``.
-
     """
-
     parser = argparse.ArgumentParser(
         prog="clawk",
         description="Clawksis - AI assistant with tool-calling capabilities",
@@ -169,7 +98,6 @@ def build_top_level_parser():
     parser.add_argument(
         "--version", "-V", action="store_true", help="Show version and exit"
     )
-
     parser.add_argument(
         "-z",
         "--oneshot",
@@ -183,15 +111,10 @@ def build_top_level_parser():
             "auto-bypassed. Intended for scripts / pipes."
         ),
     )
-
     # --model / --provider are accepted at the top level so they can pair
-
     # with -z without needing the `chat` subcommand.  If neither -z nor a
-
     # subcommand consumes them, they fall through harmlessly as None.
-
     # Mirrors `clawk chat --model ... --provider ...` semantics.
-
     _inherited_flag(
         parser,
         "-m",
@@ -202,7 +125,6 @@ def build_top_level_parser():
             "Applies to -z/--oneshot and --tui. Also settable via CLAWK_INFERENCE_MODEL env var."
         ),
     )
-
     _inherited_flag(
         parser,
         "--provider",
@@ -213,14 +135,12 @@ def build_top_level_parser():
             "under model.provider — use `clawk setup` or edit the file to change it."
         ),
     )
-
     parser.add_argument(
         "-t",
         "--toolsets",
         default=None,
         help="Comma-separated toolsets to enable for this invocation. Applies to -z/--oneshot and --tui.",
     )
-
     parser.add_argument(
         "--resume",
         "-r",
@@ -228,7 +148,6 @@ def build_top_level_parser():
         default=None,
         help="Resume a previous session by ID or title",
     )
-
     parser.add_argument(
         "--continue",
         "-c",
@@ -239,7 +158,6 @@ def build_top_level_parser():
         metavar="SESSION_NAME",
         help="Resume a session by name, or the most recent if no name given",
     )
-
     parser.add_argument(
         "--worktree",
         "-w",
@@ -247,7 +165,6 @@ def build_top_level_parser():
         default=False,
         help="Run in an isolated git worktree (for parallel agents)",
     )
-
     _inherited_flag(
         parser,
         "--accept-hooks",
@@ -260,7 +177,6 @@ def build_top_level_parser():
             "runs that can't prompt."
         ),
     )
-
     _inherited_flag(
         parser,
         "--skills",
@@ -269,7 +185,6 @@ def build_top_level_parser():
         default=None,
         help="Preload one or more skills for the session (repeat flag or comma-separate)",
     )
-
     _inherited_flag(
         parser,
         "--yolo",
@@ -277,7 +192,6 @@ def build_top_level_parser():
         default=False,
         help="Bypass all dangerous command approval prompts (use at your own risk)",
     )
-
     _inherited_flag(
         parser,
         "--pass-session-id",
@@ -285,7 +199,6 @@ def build_top_level_parser():
         default=False,
         help="Include the session ID in the agent's system prompt",
     )
-
     _inherited_flag(
         parser,
         "--ignore-user-config",
@@ -293,7 +206,6 @@ def build_top_level_parser():
         default=False,
         help="Ignore ~/.clawksis/config.yaml and fall back to built-in defaults (credentials in .env are still loaded)",
     )
-
     _inherited_flag(
         parser,
         "--ignore-rules",
@@ -301,7 +213,13 @@ def build_top_level_parser():
         default=False,
         help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills",
     )
-
+    _inherited_flag(
+        parser,
+        "--safe-mode",
+        action="store_true",
+        default=False,
+        help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules)",
+    )
     _inherited_flag(
         parser,
         "--tui",
@@ -309,7 +227,6 @@ def build_top_level_parser():
         default=False,
         help="Launch the modern TUI instead of the classic REPL",
     )
-
     _inherited_flag(
         parser,
         "--cli",
@@ -317,7 +234,6 @@ def build_top_level_parser():
         default=False,
         help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
     )
-
     _inherited_flag(
         parser,
         "--dev",
@@ -330,36 +246,26 @@ def build_top_level_parser():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # =========================================================================
-
     # chat command
-
     # =========================================================================
-
     chat_parser = subparsers.add_parser(
         "chat",
         help="Interactive chat with the agent",
         description="Start an interactive chat session with Clawksis",
     )
-
     chat_parser.add_argument(
         "-q", "--query", help="Single query (non-interactive mode)"
     )
-
     chat_parser.add_argument(
         "--image", help="Optional local image path to attach to a single query"
     )
-
     _inherited_flag(
         chat_parser,
-        "-m",
-        "--model",
-        help="Model to use (e.g., anthropic/claude-sonnet-4)",
+        "-m", "--model", help="Model to use (e.g., anthropic/claude-sonnet-4)",
     )
-
     chat_parser.add_argument(
         "-t", "--toolsets", help="Comma-separated toolsets to enable"
     )
-
     _inherited_flag(
         chat_parser,
         "-s",
@@ -368,7 +274,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Preload one or more skills for the session (repeat flag or comma-separate)",
     )
-
     _inherited_flag(
         chat_parser,
         "--provider",
@@ -379,7 +284,6 @@ def build_top_level_parser():
         default=None,
         help="Inference provider (default: auto). Built-in or a user-defined name from `providers:` in config.yaml.",
     )
-
     chat_parser.add_argument(
         "-v",
         "--verbose",
@@ -387,14 +291,12 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Verbose output",
     )
-
     chat_parser.add_argument(
         "-Q",
         "--quiet",
         action="store_true",
         help="Quiet mode for programmatic use: suppress banner, spinner, and tool previews. Only output the final response and session info.",
     )
-
     chat_parser.add_argument(
         "--resume",
         "-r",
@@ -402,7 +304,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Resume a previous session by ID (shown on exit)",
     )
-
     chat_parser.add_argument(
         "--continue",
         "-c",
@@ -413,7 +314,6 @@ def build_top_level_parser():
         metavar="SESSION_NAME",
         help="Resume a session by name, or the most recent if no name given",
     )
-
     chat_parser.add_argument(
         "--worktree",
         "-w",
@@ -421,7 +321,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Run in an isolated git worktree (for parallel agents on the same repo)",
     )
-
     _inherited_flag(
         chat_parser,
         "--accept-hooks",
@@ -433,14 +332,12 @@ def build_top_level_parser():
             "hooks_auto_accept: in config.yaml)."
         ),
     )
-
     chat_parser.add_argument(
         "--checkpoints",
         action="store_true",
         default=False,
         help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)",
     )
-
     chat_parser.add_argument(
         "--max-turns",
         type=int,
@@ -448,7 +345,6 @@ def build_top_level_parser():
         metavar="N",
         help="Maximum tool-calling iterations per conversation turn (default: 90, or agent.max_turns in config)",
     )
-
     _inherited_flag(
         chat_parser,
         "--yolo",
@@ -456,7 +352,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Bypass all dangerous command approval prompts (use at your own risk)",
     )
-
     _inherited_flag(
         chat_parser,
         "--pass-session-id",
@@ -464,7 +359,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Include the session ID in the agent's system prompt",
     )
-
     _inherited_flag(
         chat_parser,
         "--ignore-user-config",
@@ -472,7 +366,6 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Ignore ~/.clawksis/config.yaml and fall back to built-in defaults (credentials in .env are still loaded). Useful for isolated CI runs, reproduction, and third-party integrations.",
     )
-
     _inherited_flag(
         chat_parser,
         "--ignore-rules",
@@ -480,13 +373,18 @@ def build_top_level_parser():
         default=argparse.SUPPRESS,
         help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills. Combine with --ignore-user-config for a fully isolated run.",
     )
-
+    _inherited_flag(
+        chat_parser,
+        "--safe-mode",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules). Use to isolate whether a problem comes from your setup or from Clawksis itself.",
+    )
     chat_parser.add_argument(
         "--source",
         default=None,
         help="Session source tag for filtering (default: cli). Use 'tool' for third-party integrations that should not appear in user session lists.",
     )
-
     _inherited_flag(
         chat_parser,
         "--tui",
@@ -494,7 +392,6 @@ def build_top_level_parser():
         default=False,
         help="Launch the modern TUI instead of the classic REPL",
     )
-
     _inherited_flag(
         chat_parser,
         "--cli",
@@ -502,7 +399,6 @@ def build_top_level_parser():
         default=False,
         help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
     )
-
     _inherited_flag(
         chat_parser,
         "--dev",

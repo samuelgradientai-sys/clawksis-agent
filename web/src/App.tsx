@@ -1,5 +1,11 @@
 import {
 
+  lazy,
+
+  memo,
+
+  Suspense,
+
   useCallback,
 
   useEffect,
@@ -11,6 +17,8 @@ import {
   useState,
 
   type ComponentType,
+
+  type LazyExoticComponent,
 
   type ReactNode,
 
@@ -114,8 +122,6 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 
 import { cn } from "@/lib/utils";
 
-import { Backdrop } from "@/components/Backdrop";
-
 import { SidebarFooter } from "@/components/SidebarFooter";
 
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
@@ -132,39 +138,57 @@ import { useSystemActions } from "@/contexts/useSystemActions";
 
 import type { SystemAction } from "@/contexts/system-actions-context";
 
-import ConfigPage from "@/pages/ConfigPage";
+// Route pages are code-split (React.lazy) so each one ships as its own chunk
+// and is only downloaded when the user navigates to it. This keeps the initial
+// bundle small instead of shipping every page (recharts, xterm, etc.) up front.
+const ConfigPage = lazy(() => import("@/pages/ConfigPage"));
 
-import DocsPage from "@/pages/DocsPage";
+const DocsPage = lazy(() => import("@/pages/DocsPage"));
 
-import EnvPage from "@/pages/EnvPage";
+const EnvPage = lazy(() => import("@/pages/EnvPage"));
 
-import SessionsPage from "@/pages/SessionsPage";
+const SessionsPage = lazy(() => import("@/pages/SessionsPage"));
 
-import LogsPage from "@/pages/LogsPage";
+const LogsPage = lazy(() => import("@/pages/LogsPage"));
 
-import AnalyticsPage from "@/pages/AnalyticsPage";
+const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
 
-import ModelsPage from "@/pages/ModelsPage";
+const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
 
-import CronPage from "@/pages/CronPage";
+const CronPage = lazy(() => import("@/pages/CronPage"));
 
-import ProfilesPage from "@/pages/ProfilesPage";
+const ProfilesPage = lazy(() => import("@/pages/ProfilesPage"));
 
-import SkillsPage from "@/pages/SkillsPage";
+const SkillsPage = lazy(() => import("@/pages/SkillsPage"));
 
-import PluginsPage from "@/pages/PluginsPage";
+const PluginsPage = lazy(() => import("@/pages/PluginsPage"));
 
-import McpPage from "@/pages/McpPage";
+const McpPage = lazy(() => import("@/pages/McpPage"));
 
-import PairingPage from "@/pages/PairingPage";
+const PairingPage = lazy(() => import("@/pages/PairingPage"));
 
-import ChannelsPage from "@/pages/ChannelsPage";
+const ChannelsPage = lazy(() => import("@/pages/ChannelsPage"));
 
-import WebhooksPage from "@/pages/WebhooksPage";
+const WebhooksPage = lazy(() => import("@/pages/WebhooksPage"));
 
-import SystemPage from "@/pages/SystemPage";
+const SystemPage = lazy(() => import("@/pages/SystemPage"));
 
-import ChatPage from "@/pages/ChatPage";
+const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
+
+const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
+
+// memo so a re-render of the App shell (e.g. the 10s sidebar status poll) does
+// NOT re-render the persistent chat host. Its only prop, `isActive`, is a
+// primitive, so the shallow compare is correct. The xterm/PTY lives in refs and
+// effects keyed on [channel], so this never tears down the terminal session.
+const ChatPage = memo(lazy(() => import("@/pages/ChatPage")));
+
+// The decorative WebGL/motion backdrop isn't needed for first paint — defer it
+// (and the `motion` vendor chunk it pulls) so the shell renders immediately and
+// the background fades in. Named export, hence the .then() default-mapping.
+const Backdrop = lazy(() =>
+  import("@/components/Backdrop").then((m) => ({ default: m.Backdrop })),
+);
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -191,6 +215,31 @@ import type { StatusResponse } from "@/lib/api";
 function RootRedirect() {
 
   return <Navigate to="/sessions" replace />;
+
+}
+
+
+
+// Suspense fallback while a lazily-loaded page chunk downloads.
+function PageLoading() {
+
+  return (
+
+    <div
+
+      className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-8"
+
+      aria-busy="true"
+
+      aria-live="polite"
+
+    >
+
+      <Spinner />
+
+    </div>
+
+  );
 
 }
 
@@ -244,15 +293,22 @@ const CHAT_NAV_ITEM: NavItem = {
 
  */
 
-const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
+// A route target may be an eagerly-loaded component or a lazily-loaded one.
+type RouteComponent = ComponentType | LazyExoticComponent<ComponentType>;
+
+const BUILTIN_ROUTES_CORE: Record<string, RouteComponent> = {
 
   "/": RootRedirect,
 
   "/sessions": SessionsPage,
 
+  "/visualization": VisualizationPage,
+
   "/analytics": AnalyticsPage,
 
   "/models": ModelsPage,
+
+  "/cookbook": CookbookPage,
 
   "/logs": LogsPage,
 
@@ -316,6 +372,16 @@ const BUILTIN_NAV_REST: NavItem[] = [
 
   {
 
+    path: "/visualization",
+
+    label: "Visualization",
+
+    icon: Eye,
+
+  },
+
+  {
+
     path: "/analytics",
 
     labelKey: "analytics",
@@ -337,6 +403,8 @@ const BUILTIN_NAV_REST: NavItem[] = [
     icon: Cpu,
 
   },
+
+  { path: "/cookbook", label: "Cookbook", icon: Download },
 
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
 
@@ -540,7 +608,7 @@ function partitionSidebarNav(
 
 function buildRoutes(
 
-  builtinRoutes: Record<string, ComponentType>,
+  builtinRoutes: Record<string, RouteComponent>,
 
   manifests: PluginManifest[],
 
@@ -731,6 +799,18 @@ export default function App() {
   const isChatRoute = normalizedPath === "/chat";
 
   const embeddedChat = isDashboardEmbeddedChatEnabled();
+
+  // The persistent chat host (xterm/PTY/WebSocket) is heavy, so don't mount it
+  // — and don't download its lazy chunk — until the user first opens /chat.
+  // Once mounted it stays mounted (display:none toggle) so the session survives
+  // navigation. The landing route is /sessions, so chat stays deferred on boot.
+  const [chatEverActive, setChatEverActive] = useState(false);
+
+  useEffect(() => {
+
+    if (isChatRoute) setChatEverActive(true);
+
+  }, [isChatRoute]);
 
 
 
@@ -946,7 +1026,11 @@ export default function App() {
 
       <SelectionSwitcher />
 
-      <Backdrop />
+      <Suspense fallback={null}>
+
+        <Backdrop />
+
+      </Suspense>
 
       <PluginSlot name="backdrop" />
 
@@ -1244,7 +1328,7 @@ export default function App() {
 
                       "px-5 pt-2.5 pb-1",
 
-                      "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
+                      "font-mondwest font-bold text-display text-xs tracking-[0.12em] text-text-tertiary",
 
                       isDesktopCollapsed && "lg:hidden",
 
@@ -1442,31 +1526,37 @@ export default function App() {
 
               >
 
-                <Routes>
+                <Suspense fallback={<PageLoading />}>
 
-                  {routes.map(({ key, path, element }) => (
+                  <Routes>
 
-                    <Route key={key} path={path} element={element} />
+                    {routes.map(({ key, path, element }) => (
 
-                  ))}
+                      <Route key={key} path={path} element={element} />
 
-                  <Route
+                    ))}
 
-                    path="*"
+                    <Route
 
-                    element={
+                      path="*"
 
-                      <UnknownRouteFallback pluginsLoading={pluginsLoading} />
+                      element={
 
-                    }
+                        <UnknownRouteFallback pluginsLoading={pluginsLoading} />
 
-                  />
+                      }
 
-                </Routes>
+                    />
+
+                  </Routes>
+
+                </Suspense>
 
 
 
                 {embeddedChat &&
+
+                  chatEverActive &&
 
                   !chatOverriddenByPlugin &&
 
@@ -1514,7 +1604,11 @@ export default function App() {
 
                     >
 
-                      <ChatPage isActive={isChatRoute} />
+                      <Suspense fallback={<PageLoading />}>
+
+                        <ChatPage isActive={isChatRoute} />
+
+                      </Suspense>
 
                     </div>
 
@@ -1608,7 +1702,7 @@ function SidebarNavLink({
 
             "px-5 py-2.5",
 
-            "font-mondwest text-display uppercase text-sm tracking-[0.12em]",
+            "font-mondwest font-bold text-display uppercase text-sm tracking-[0.12em]",
 
             "whitespace-nowrap transition-colors cursor-pointer",
 
@@ -1796,7 +1890,7 @@ function SidebarSystemActions({
 
           "px-5 pt-0.5 pb-0.5",
 
-          "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
+          "font-mondwest font-bold text-display text-xs tracking-[0.12em] text-text-tertiary",
 
           collapsed && "lg:hidden",
 
@@ -1922,7 +2016,7 @@ function SystemActionButton({
 
           "px-5 py-2.5",
 
-          "font-mondwest text-display text-xs tracking-[0.1em]",
+          "font-mondwest font-bold text-display text-xs tracking-[0.1em]",
 
           "whitespace-nowrap transition-colors cursor-pointer",
 

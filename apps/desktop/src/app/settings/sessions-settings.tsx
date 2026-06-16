@@ -1,540 +1,280 @@
 import { useCallback, useEffect, useState } from 'react'
 
-
-
 import { Button } from '@/components/ui/button'
-
-import { deleteSession, listSessions, setSessionArchived } from '@/clawk'
-
+import { Tip } from '@/components/ui/tooltip'
+import { deleteSession, listAllProfileSessions, setSessionArchived } from '@/clawk'
+import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
-
 import { triggerHaptic } from '@/lib/haptics'
-
 import { Archive, ArchiveOff, FolderOpen, Loader2, Trash2 } from '@/lib/icons'
-
 import { notify, notifyError } from '@/store/notifications'
-
-import { setSessions } from '@/store/session'
-
+import { applyConfiguredDefaultProjectDir, ensureDefaultWorkspaceCwd, setSessions } from '@/store/session'
 import type { SessionInfo } from '@/types/clawk'
 
-
-
 import { EmptyState, ListRow, LoadingState, SectionHeading, SettingsContent } from './primitives'
-
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
-
-
 
 const ARCHIVED_FETCH_LIMIT = 200
 
-
-
 function workspaceLabel(cwd: null | string | undefined): string {
-
   const path = cwd?.trim()
 
-
-
   if (!path) {
-
     return ''
-
   }
 
-
-
   return (
-
     path
-
       .replace(/[/\\]+$/, '')
-
       .split(/[/\\]/)
-
       .filter(Boolean)
-
       .pop() ?? path
-
   )
-
 }
-
-
 
 export function SessionsSettings() {
-
+  const { t } = useI18n()
+  const s = t.settings.sessions
   const [sessions, setLocalSessions] = useState<SessionInfo[]>([])
-
   const [loading, setLoading] = useState(true)
-
   const [busyId, setBusyId] = useState<string | null>(null)
 
-
-
   const load = useCallback(async () => {
-
     setLoading(true)
 
-
-
     try {
-
-      const result = await listSessions(ARCHIVED_FETCH_LIMIT, 0, 'only')
-
+      const result = await listAllProfileSessions(ARCHIVED_FETCH_LIMIT, 0, 'only')
       setLocalSessions(result.sessions)
-
     } catch (err) {
-
-      notifyError(err, 'Could not load archived sessions')
-
+      notifyError(err, s.failedLoad)
     } finally {
-
       setLoading(false)
-
     }
-
-  }, [])
-
-
+  }, [s.failedLoad])
 
   useEffect(() => {
-
     void load()
-
   }, [load])
 
-
-
   const unarchive = useCallback(async (session: SessionInfo) => {
-
     setBusyId(session.id)
 
-
-
     try {
-
-      await setSessionArchived(session.id, false)
-
+      await setSessionArchived(session.id, false, session.profile)
       setLocalSessions(prev => prev.filter(s => s.id !== session.id))
-
       // Surface it again in the sidebar without waiting for a full refresh.
-
       setSessions(prev => [{ ...session, archived: false }, ...prev.filter(s => s.id !== session.id)])
-
       triggerHaptic('selection')
-
-      notify({ durationMs: 2_000, kind: 'success', message: 'Restored' })
-
+      notify({ durationMs: 2_000, kind: 'success', message: s.restored })
     } catch (err) {
-
-      notifyError(err, 'Unarchive failed')
-
+      notifyError(err, s.unarchiveFailed)
     } finally {
-
       setBusyId(null)
-
     }
-
-  }, [])
-
-
+  }, [s])
 
   const remove = useCallback(async (session: SessionInfo) => {
-
-    if (!window.confirm(`Permanently delete "${sessionTitle(session)}"? This cannot be undone.`)) {
-
+    if (!window.confirm(s.deleteConfirm(sessionTitle(session)))) {
       return
-
     }
-
-
 
     setBusyId(session.id)
 
-
-
     try {
-
-      await deleteSession(session.id)
-
+      await deleteSession(session.id, session.profile)
       setLocalSessions(prev => prev.filter(s => s.id !== session.id))
-
       triggerHaptic('warning')
-
     } catch (err) {
-
-      notifyError(err, 'Delete failed')
-
+      notifyError(err, s.deleteFailed)
     } finally {
-
       setBusyId(null)
-
     }
-
-  }, [])
-
-
+  }, [s])
 
   useDeepLinkHighlight({
-
     elementId: id => `archived-session-${id}`,
-
     param: 'session',
-
     ready: id => !loading && sessions.some(session => session.id === id)
-
   })
 
-
-
   if (loading) {
-
-    return <LoadingState label="Loading archived sessions…" />
-
+    return <LoadingState label={s.loading} />
   }
 
-
-
   return (
-
     <SettingsContent>
-
       <DefaultProjectDirSetting />
 
-
-
       <SectionHeading
-
         icon={Archive}
-
         meta={sessions.length ? String(sessions.length) : undefined}
-
-        title="Archived sessions"
-
+        title={s.archivedTitle}
       />
-
       <p className="mb-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-
-        Archived chats are hidden from the sidebar but keep all their messages. Ctrl/⌘-click a chat in the sidebar to
-
-        archive it.
-
+        {s.archivedIntro}
       </p>
 
-
-
       {sessions.length === 0 ? (
-
-        <EmptyState description="Archive a chat to hide it here." title="Nothing archived" />
-
+        <EmptyState description={s.emptyArchivedDesc} title={s.emptyArchivedTitle} />
       ) : (
-
         <div className="grid gap-1">
-
           {sessions.map(session => {
-
             const label = workspaceLabel(session.cwd)
-
             const busy = busyId === session.id
 
-
-
             return (
-
               <div className="scroll-mt-6 rounded-lg" id={`archived-session-${session.id}`} key={session.id}>
-
                 <ListRow
-
                   action={
-
                     <div className="flex items-center gap-1.5">
-
                       <Button
-
                         disabled={busy}
-
                         onClick={() => void unarchive(session)}
-
                         size="sm"
-
                         type="button"
-
                         variant="textStrong"
-
                       >
-
                         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ArchiveOff className="size-3.5" />}
-
-                        <span>Unarchive</span>
-
+                        <span>{s.unarchive}</span>
                       </Button>
-
-                      <Button
-
-                        aria-label="Delete permanently"
-
-                        className="text-muted-foreground hover:text-destructive"
-
-                        disabled={busy}
-
-                        onClick={() => void remove(session)}
-
-                        size="icon"
-
-                        title="Delete permanently"
-
-                        type="button"
-
-                        variant="ghost"
-
-                      >
-
-                        <Trash2 className="size-3.5" />
-
-                      </Button>
-
+                      <Tip label={s.deletePermanently}>
+                        <Button
+                          aria-label={s.deletePermanently}
+                          className="text-muted-foreground hover:text-destructive"
+                          disabled={busy}
+                          onClick={() => void remove(session)}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </Tip>
                     </div>
-
                   }
-
                   description={session.preview || undefined}
-
-                  hint={label ? `${label} · ${session.message_count} messages` : `${session.message_count} messages`}
-
+                  hint={label ? `${label} · ${s.messages(session.message_count)}` : s.messages(session.message_count)}
                   title={sessionTitle(session)}
-
                 />
-
               </div>
-
             )
-
           })}
-
         </div>
-
       )}
-
     </SettingsContent>
-
   )
-
 }
 
-
-
 // Lets the user pin the default cwd for new sessions. Without this, packaged
-
 // builds on Windows used to spawn sessions in the install dir (`win-unpacked`
-
 // / Program Files), which buried any files Clawksis wrote there.
-
 function DefaultProjectDirSetting() {
-
+  const { t } = useI18n()
+  const s = t.settings.sessions
   const [dir, setDir] = useState<null | string>(null)
-
   const [fallback, setFallback] = useState<string>('')
-
   const [busy, setBusy] = useState(false)
 
-
-
   useEffect(() => {
-
     // The bridge is only present when running inside Electron. In a Vitest
-
     // / Storybook / non-Electron context `window.clawkDesktop` is
-
     // undefined, so guard the WHOLE call chain rather than chaining
-
     // `?.settings.getDefaultProjectDir().then(...)` (the latter would
-
     // short-circuit to `undefined.then(...)` and throw at runtime).
-
     const settings = window.clawkDesktop?.settings
 
-
-
     if (!settings) {
-
       return
-
     }
-
-
 
     let alive = true
 
-
-
     void settings.getDefaultProjectDir().then(result => {
-
       if (!alive) {
-
         return
-
       }
 
-
-
       setDir(result.dir)
-
       setFallback(result.defaultLabel)
-
+      applyConfiguredDefaultProjectDir(result.dir)
     })
 
-
-
     return () => {
-
       alive = false
-
     }
-
   }, [])
-
-
 
   const choose = useCallback(async () => {
-
     const settings = window.clawkDesktop?.settings
 
-
-
     if (!settings) {
-
       return
-
     }
-
-
 
     setBusy(true)
 
-
-
     try {
-
       const picked = await settings.pickDefaultProjectDir()
 
-
-
       if (picked.canceled || !picked.dir) {
-
         return
-
       }
 
-
-
       const result = await settings.setDefaultProjectDir(picked.dir)
-
       setDir(result.dir)
-
-      notify({ durationMs: 2_000, kind: 'success', message: 'Default project directory updated' })
-
+      applyConfiguredDefaultProjectDir(result.dir)
+      notify({ durationMs: 4_000, kind: 'success', message: s.defaultDirUpdated })
     } catch (err) {
-
-      notifyError(err, 'Could not update default directory')
-
+      notifyError(err, s.updateDirFailed)
     } finally {
-
       setBusy(false)
-
     }
-
-  }, [])
-
-
+  }, [s])
 
   const clear = useCallback(async () => {
-
     const settings = window.clawkDesktop?.settings
 
-
-
     if (!settings) {
-
       return
-
     }
-
-
 
     setBusy(true)
 
-
-
     try {
-
       await settings.setDefaultProjectDir(null)
-
       setDir(null)
-
+      applyConfiguredDefaultProjectDir(null)
+      await ensureDefaultWorkspaceCwd()
     } catch (err) {
-
-      notifyError(err, 'Could not clear default directory')
-
+      notifyError(err, s.clearDirFailed)
     } finally {
-
       setBusy(false)
-
     }
-
-  }, [])
-
-
+  }, [s])
 
   return (
-
     <div className="mb-6">
-
-      <SectionHeading icon={FolderOpen} title="Default project directory" />
-
+      <SectionHeading icon={FolderOpen} title={s.defaultDirTitle} />
       <p className="mb-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-
-        New sessions start in this folder unless you pick another. Leave it unset to use your home directory.
-
+        {s.defaultDirDesc}
       </p>
-
       <ListRow
-
         action={
-
           <div className="flex items-center gap-3">
-
             <Button disabled={busy} onClick={() => void choose()} size="sm" type="button" variant="textStrong">
-
               <FolderOpen className="size-3.5" />
-
-              <span>{dir ? 'Change' : 'Choose'}</span>
-
+              <span>{dir ? s.change : s.choose}</span>
             </Button>
-
             {dir && (
-
               <Button disabled={busy} onClick={() => void clear()} size="sm" type="button" variant="text">
-
-                Clear
-
+                {s.clear}
               </Button>
-
             )}
-
           </div>
-
         }
-
-        description={dir || `Defaults to ${fallback || '~/clawk-projects'}.`}
-
-        title={dir ? dir : 'Not set'}
-
+        description={dir || s.defaultsTo(fallback || '~')}
+        title={dir ? dir : s.notSet}
       />
-
     </div>
-
   )
-
 }
-

@@ -1,8 +1,42 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Clawksis" width="80%">
+</p>
+
+<h1 align="center">Clawksis</h1>
+
+<p align="center">
+  <b>Tu agente de IA autónomo, self-hosted.</b><br>
+  Hablale desde Telegram, WhatsApp o Discord mientras trabaja en tu VPS.<br>
+  Aprende de cada sesión, crea sus propias skills y mejora con el uso.
+</p>
+
+<p align="center">
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT"></a>
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/issues"><img src="https://img.shields.io/badge/Issues-GitHub-red?style=for-the-badge" alt="Issues"></a>
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/DOCUMENTATION.md"><img src="https://img.shields.io/badge/Docs-Timeline-6C4FD6?style=for-the-badge" alt="Documentación"></a>
+</p>
+
+---
+
+
+
 # Contributing to Clawksis
 
 
 
 Thank you for contributing to Clawksis! This guide covers everything you need: setting up your dev environment, understanding the architecture, deciding what to build, and getting your PR merged.
+
+
+
+---
+
+
+
+## Documentation
+
+Clawksis docs live in a few places: this guide (contributing + architecture), the project `README.md` (install + full command reference), and the `website/` docs site plus the in-app **Docs** page in the dashboard.
+
+For a dated, day-by-day development log — what shipped each day, the command to run it, and what it's for — see **[DOCUMENTATION.md](DOCUMENTATION.md)**.
 
 
 
@@ -390,7 +424,7 @@ clawksis-agent/
 
 ├── tests/                    # Test suite
 
-├── website/                  # Documentation site (clawksis-agent.nousresearch.com)
+├── website/                  # Documentation site (Docusaurus)
 
 │
 

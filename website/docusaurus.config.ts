@@ -24,14 +24,10 @@ const config: Config = {
 
   i18n: {
     defaultLocale: 'en',
-    locales: ['en', 'zh-Hans'],
+    locales: ['en'],
     localeConfigs: {
       en: {
         label: 'English',
-      },
-      'zh-Hans': {
-        label: '简体中文',
-        htmlLang: 'zh-Hans',
       },
     },
   },
@@ -43,7 +39,7 @@ const config: Config = {
       /** @type {import("@easyops-cn/docusaurus-search-local").PluginOptions} */
       ({
         hashed: true,
-        language: ['en', 'zh'],
+        language: ['en'],
         indexBlog: false,
         docsRouteBasePath: '/',
         // Disabled: appends ?_highlight=... to URLs (before the #anchor),
@@ -63,6 +59,23 @@ const config: Config = {
           /^user-guide\/skills\/optional\//,
         ],
       }),
+    ],
+  ],
+
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        // Static-host redirects for renamed doc pages (GitHub Pages can't
+        // do server-side redirects). Paths are relative to baseUrl (/docs/).
+        redirects: [
+          {
+            // Renamed in #44470 (Automation Blueprints terminology rebrand)
+            from: '/guides/automation-templates',
+            to: '/guides/automation-blueprints',
+          },
+        ],
+      },
     ],
   ],
 

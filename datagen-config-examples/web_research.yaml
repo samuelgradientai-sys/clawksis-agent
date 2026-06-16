@@ -52,7 +52,7 @@ max_items: 500
 
 # Model to use for generation (override with --model flag)
 
-model: openrouter/nousresearch/clawk-3-llama-3.1-405b
+model: openrouter/nousresearch/hermes-3-llama-3.1-405b
 
 
 

@@ -849,6 +849,7 @@ def create_job(
     workdir: Optional[str] = None,
     profile: Optional[str] = None,
     no_agent: bool = False,
+    stop_after_alert: bool = False,
 ) -> Dict[str, Any]:
     """
 
@@ -945,6 +946,14 @@ def create_job(
                 delivery). Requires ``script`` to be set. Ideal for classic
 
                 watchdogs and periodic alerts that don't need LLM reasoning.
+
+        stop_after_alert: When True, the scheduler auto-pauses the job after its
+
+                first real (non-[SILENT]), successfully-delivered message. Use
+
+                for one-time condition alerts ("notify me when X happens") so the
+
+                job stops instead of re-running forever. Default False (recurring).
 
 
 
@@ -1051,6 +1060,7 @@ def create_job(
         "base_url": normalized_base_url,
         "script": normalized_script,
         "no_agent": normalized_no_agent,
+        "stop_after_alert": bool(stop_after_alert),
         "context_from": context_from,
         "schedule": parsed_schedule,
         "schedule_display": parsed_schedule.get("display", schedule),
@@ -1088,6 +1098,33 @@ def create_job(
 WELCOME_CHECKIN_NAME = "Welcome check-in"
 
 
+def upgrade_welcome_checkin_delivery(
+    deliver: Optional[str], name: str = WELCOME_CHECKIN_NAME
+) -> bool:
+    """Point a pending welcome check-in still set to local delivery at a real
+    channel (e.g. the operator connected Telegram after the job was seeded).
+
+    Never downgrades an already-targeted job, never touches one that already
+    ran, and never creates one. Returns True when a job was updated.
+    """
+
+    if not deliver or deliver == "local":
+        return False
+
+    for job in load_jobs():
+        if (
+            isinstance(job, dict)
+            and job.get("name") == name
+            and (job.get("deliver") or "local") == "local"
+            and not job.get("last_run_at")
+        ):
+            update_job(job["id"], {"deliver": deliver})
+
+            return True
+
+    return False
+
+
 def seed_welcome_checkin_job(
     deliver: Optional[str] = None,
     prompt: Optional[str] = None,
@@ -1101,13 +1138,18 @@ def seed_welcome_checkin_job(
     operator configured during setup (e.g. ``"telegram"``); it falls back to
     ``"local"`` when no channel is wired up yet. Returns the created job dict,
     or ``None`` when a welcome check-in already exists -- so re-running setup
-    never creates a duplicate.
+    never creates a duplicate. An existing pending job seeded as ``"local"``
+    before any channel existed is upgraded in place when a real channel is now
+    available (connecting Telegram right after install must not strand the
+    welcome on local); a job that already ran is never touched.
     """
 
     import random
 
     for job in load_jobs():
         if isinstance(job, dict) and job.get("name") == name:
+            upgrade_welcome_checkin_delivery(deliver, name=name)
+
             return None
 
     run_at = (_clawk_now() + timedelta(days=1)).replace(

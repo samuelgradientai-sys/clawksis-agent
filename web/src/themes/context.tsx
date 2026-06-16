@@ -48,6 +48,18 @@ import type {
 
 import { api } from "@/lib/api";
 
+import {
+
+  FONT_CHOICES,
+
+  THEME_DEFAULT_FONT_ID,
+
+  getFontChoice,
+
+  type FontChoice,
+
+} from "./fonts";
+
 
 
 /** LocalStorage key — pre-applied before the React tree mounts to avoid
@@ -179,6 +191,8 @@ function typographyVars(typo: ThemeTypography): Record<string, string> {
     "--theme-line-height": typo.lineHeight,
 
     "--theme-letter-spacing": typo.letterSpacing,
+
+    "--theme-font-weight": typo.fontWeight ?? "500",
 
   };
 
@@ -602,6 +616,38 @@ function injectFontStylesheet(url: string | undefined) {
 
 
 
+// ---------------------------------------------------------------------------
+// Font override (independent of theme)
+// ---------------------------------------------------------------------------
+
+/** LocalStorage key for the font override (independent of theme). Holds a
+ *  font id from the catalog in `fonts.ts`, or the `THEME_DEFAULT_FONT_ID`
+ *  sentinel / absent = "use the active theme's font". */
+const FONT_STORAGE_KEY = "clawksis-dashboard-font";
+
+/** The active font-override id, mirrored at module scope so `applyTheme`
+ *  can re-assert it after it rewrites the theme's font vars. */
+let _ACTIVE_FONT_OVERRIDE: string = THEME_DEFAULT_FONT_ID;
+
+/** Apply (or clear) the font override on `:root`. When a catalog font is
+ *  active we override the body/display font vars and inject its webfont; the
+ *  theme keeps ownership of `--theme-font-mono` (code/terminal) so picking a
+ *  body font doesn't mangle code blocks. Clearing it lets the theme's own
+ *  font show through again. */
+function applyFontOverride(fontId: string | undefined) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const choice: FontChoice | undefined = getFontChoice(fontId);
+  if (!choice) {
+    root.style.removeProperty("--theme-font-override-sans");
+    return;
+  }
+  injectFontStylesheet(choice.fontUrl);
+  root.style.setProperty("--theme-font-override-sans", choice.stack);
+  root.style.setProperty("--theme-font-sans", choice.stack);
+  root.style.setProperty("--theme-font-display", choice.stack);
+}
+
 function applyTheme(theme: DashboardTheme) {
 
   if (typeof document === "undefined") return;
@@ -702,6 +748,10 @@ function applyTheme(theme: DashboardTheme) {
 
   );
 
+  // Re-assert the font override last: theme application just rewrote the
+  // font vars, so an active override has to win again.
+  applyFontOverride(_ACTIVE_FONT_OVERRIDE);
+
 }
 
 
@@ -720,9 +770,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [themeName, setThemeName] = useState<string>(() => {
 
-    if (typeof window === "undefined") return "default";
+    if (typeof window === "undefined") return "midnight";
 
-    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "default";
+    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "midnight";
 
     const migrated = migrateThemeName(stored);
 
@@ -739,6 +789,42 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return migrated;
 
   });
+
+
+
+  /** Active font-override id (independent of theme). `THEME_DEFAULT_FONT_ID`
+
+   *  = no override; use the active theme's own font. Local-only (localStorage). */
+
+  const [fontId, setFontId] = useState<string>(() => {
+
+    if (typeof window === "undefined") return THEME_DEFAULT_FONT_ID;
+
+    const stored = window.localStorage.getItem(FONT_STORAGE_KEY);
+
+    const valid = stored && getFontChoice(stored) ? stored : THEME_DEFAULT_FONT_ID;
+
+    _ACTIVE_FONT_OVERRIDE = valid;
+
+    return valid;
+
+  });
+
+
+
+  const setFont = useCallback((id: string) => {
+
+    const next = getFontChoice(id) ? id : THEME_DEFAULT_FONT_ID;
+
+    setFontId(next);
+
+    if (typeof window !== "undefined") {
+
+      window.localStorage.setItem(FONT_STORAGE_KEY, next);
+
+    }
+
+  }, []);
 
 
 
@@ -808,9 +894,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
 
+    _ACTIVE_FONT_OVERRIDE = fontId;
+
     applyTheme(resolveTheme(themeName));
 
-  }, [themeName, resolveTheme]);
+  }, [themeName, resolveTheme, fontId]);
 
 
 
@@ -954,9 +1042,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       setTheme,
 
+      fontId,
+
+      fontChoices: FONT_CHOICES,
+
+      setFont,
+
     }),
 
-    [themeName, availableThemes, setTheme, resolveTheme],
+    [themeName, availableThemes, setTheme, resolveTheme, fontId, setFont],
 
   );
 
@@ -994,6 +1088,12 @@ const ThemeContext = createContext<ThemeContextValue>({
 
   setTheme: () => {},
 
+  fontId: THEME_DEFAULT_FONT_ID,
+
+  fontChoices: FONT_CHOICES,
+
+  setFont: () => {},
+
 });
 
 
@@ -1007,6 +1107,18 @@ interface ThemeContextValue {
   theme: DashboardTheme;
 
   themeName: string;
+
+  /** Active font-override id (`THEME_DEFAULT_FONT_ID` = no override). */
+
+  fontId: string;
+
+  /** Curated font catalog for the picker. */
+
+  fontChoices: FontChoice[];
+
+  /** Set the font override (independent of theme). */
+
+  setFont: (id: string) => void;
 
 }
 

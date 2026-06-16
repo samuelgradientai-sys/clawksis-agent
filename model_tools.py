@@ -1304,6 +1304,91 @@ def _tool_result_observer_fields(
     return "ok", None, None
 
 
+def _short_tool_context(function_name: str, function_args: Any) -> Optional[str]:
+    """Best-effort short context string for the agent-events log (no raw dumps).
+
+    Picks a single human-meaningful argument (a command, path, query, ...) and
+    truncates it. Never includes the whole args dict.
+    """
+
+    if not isinstance(function_args, dict):
+        return None
+
+    for key in (
+        "command",
+        "path",
+        "file_path",
+        "query",
+        "url",
+        "prompt",
+        "to",
+        "name",
+        "pattern",
+        "message",
+    ):
+        val = function_args.get(key)
+
+        if isinstance(val, str) and val.strip():
+            return val.strip()[:120]
+
+    return None
+
+
+def _emit_agent_activity_event(
+    kind: str,
+    *,
+    function_name: str,
+    function_args: Any,
+    session_id: Optional[str],
+    task_id: Optional[str],
+    tool_call_id: Optional[str],
+    result: Any = None,
+) -> None:
+    """Mirror a tool start/complete into the cross-process agent-events log.
+
+    Best-effort and non-blocking (the log just enqueues). Wrapped so a logging
+    failure can never affect tool execution. Drives the dashboard Visualization
+    office for ALL agents (chat, gateway platforms, cron), not only the chat PTY.
+    """
+
+    try:
+        import agent_events
+
+        if kind == "start":
+            agent_events.emit_tool_start(
+                session_id=session_id,
+                tool_name=function_name,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
+                context=_short_tool_context(function_name, function_args),
+            )
+
+        else:
+            ok = True
+
+            try:
+                if (
+                    isinstance(result, str)
+                    and result[:1] == "{"
+                    and '"error"' in result[:300]
+                ):
+                    ok = False
+
+            except Exception:
+                pass
+
+            agent_events.emit_tool_complete(
+                session_id=session_id,
+                tool_name=function_name,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
+                ok=ok,
+            )
+
+    except Exception:
+        pass
+
+
 def _emit_post_tool_call_hook(
     *,
     function_name: str,
@@ -1318,6 +1403,7 @@ def _emit_post_tool_call_hook(
     status: Optional[str] = None,
     error_type: Optional[str] = None,
     error_message: Optional[str] = None,
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Emit the ``post_tool_call`` observer hook.
 
@@ -1360,6 +1446,7 @@ def _emit_post_tool_call_hook(
             status=status,
             error_type=error_type,
             error_message=error_message,
+            middleware_trace=list(middleware_trace or []),
         )
 
     except Exception as _hook_err:
@@ -1379,6 +1466,8 @@ def handle_function_call(
     skip_pre_tool_call_hook: bool = False,
     enabled_toolsets: Optional[List[str]] = None,
     disabled_toolsets: Optional[List[str]] = None,
+    skip_tool_request_middleware: bool = False,
+    tool_request_middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
 
@@ -1673,6 +1762,17 @@ def handle_function_call(
 
         # unaffected by wall-clock adjustments during the call.
 
+        # Mirror "tool started" to the cross-process agent-events log so the
+        # dashboard office shows this agent working (all agents, any process).
+        _emit_agent_activity_event(
+            "start",
+            function_name=function_name,
+            function_args=function_args,
+            session_id=session_id,
+            task_id=task_id,
+            tool_call_id=tool_call_id,
+        )
+
         _dispatch_start = time.monotonic()
 
         _approval_tokens = None
@@ -1737,6 +1837,17 @@ def handle_function_call(
                     pass
 
         duration_ms = int((time.monotonic() - _dispatch_start) * 1000)
+
+        # Mirror "tool completed" to the cross-process agent-events log.
+        _emit_agent_activity_event(
+            "complete",
+            function_name=function_name,
+            function_args=function_args,
+            session_id=session_id,
+            task_id=task_id,
+            tool_call_id=tool_call_id,
+            result=result,
+        )
 
         _emit_post_tool_call_hook(
             function_name=function_name,

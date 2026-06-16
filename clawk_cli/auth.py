@@ -294,15 +294,6 @@ class ProviderConfig:
 
 
 PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
-    "nous": ProviderConfig(
-        id="nous",
-        name="Nous Portal",
-        auth_type="oauth_device_code",
-        portal_base_url=DEFAULT_NOUS_PORTAL_URL,
-        inference_base_url=DEFAULT_NOUS_INFERENCE_URL,
-        client_id=DEFAULT_NOUS_CLIENT_ID,
-        scope=DEFAULT_NOUS_SCOPE,
-    ),
     "openai-codex": ProviderConfig(
         id="openai-codex",
         name="OpenAI Codex",
@@ -8776,6 +8767,50 @@ def _reset_config_provider() -> Path:
     return config_path
 
 
+def _confirm_expensive_model_selection(
+    model_id: str,
+    *,
+    provider: str = "",
+    base_url: str = "",
+    api_key: str = "",
+) -> bool:
+    """Prompt before saving a model whose known pricing exceeds guardrails."""
+
+    try:
+        from clawk_cli.model_cost_guard import expensive_model_warning
+
+        warning = expensive_model_warning(
+            model_id,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+        )
+
+    except Exception:
+        warning = None
+
+    if warning is None:
+        return True
+
+    print()
+
+    print("=" * 72)
+
+    print(warning.message)
+
+    print("=" * 72)
+
+    try:
+        response = input("Switch anyway? [y/N]: ").strip().lower()
+
+    except (KeyboardInterrupt, EOFError):
+        print()
+
+        return False
+
+    return response in {"y", "yes"}
+
+
 def _prompt_model_selection(
     model_ids: List[str],
     current_model: str = "",
@@ -8783,6 +8818,9 @@ def _prompt_model_selection(
     unavailable_models: Optional[List[str]] = None,
     portal_url: str = "",
     unavailable_message: str = "",
+    confirm_provider: str = "",
+    confirm_base_url: str = "",
+    confirm_api_key: str = "",
 ) -> Optional[str]:
     """Interactive model selection. Puts current_model first with a marker. Returns chosen model ID or None.
 
@@ -8803,6 +8841,21 @@ def _prompt_model_selection(
     from clawk_cli.models import _format_price_per_mtok
 
     _unavailable = unavailable_models or []
+
+    def _confirmed_selection(mid: str) -> Optional[str]:
+
+        if not mid:
+            return None
+
+        if confirm_provider and not _confirm_expensive_model_selection(
+            mid,
+            provider=confirm_provider,
+            base_url=confirm_base_url,
+            api_key=confirm_api_key,
+        ):
+            return None
+
+        return mid
 
     # Reorder: current model first, then the rest (deduplicated)
 
@@ -8980,7 +9033,7 @@ def _prompt_model_selection(
         print()
 
         if idx < len(ordered):
-            return ordered[idx]
+            return _confirmed_selection(ordered[idx])
 
         elif idx == len(ordered):
             try:
@@ -8989,7 +9042,7 @@ def _prompt_model_selection(
             except (EOFError, KeyboardInterrupt):
                 return None
 
-            return custom if custom else None
+            return _confirmed_selection(custom) if custom else None
 
         return None
 
@@ -9037,12 +9090,12 @@ def _prompt_model_selection(
             idx = int(choice)
 
             if 1 <= idx <= n:
-                return ordered[idx - 1]
+                return _confirmed_selection(ordered[idx - 1])
 
             elif idx == n + 1:
                 custom = input("Enter model name: ").strip()
 
-                return custom if custom else None
+                return _confirmed_selection(custom) if custom else None
 
             elif idx == n + 2:
                 return None

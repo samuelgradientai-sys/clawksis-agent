@@ -7,7 +7,6 @@ Three calling shapes:
 
 All run zero LLM calls.
 """
-
 import json
 import time
 
@@ -32,73 +31,36 @@ def _seed_modpack_sessions(db):
     now = int(time.time())
     # Older session — modpack origin
     db.create_session("s_oldest", source="cli")
-    db._conn.execute(
-        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-        (now - 30000, "Building the Modpack", "s_oldest"),
-    )
-    db.append_message(
-        "s_oldest", role="user", content="Let's build a Minecraft modpack"
-    )
-    db.append_message(
-        "s_oldest", role="assistant", content="Great. Let me scaffold the modpack repo."
-    )
+    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+                     (now - 30000, "Building the Modpack", "s_oldest"))
+    db.append_message("s_oldest", role="user", content="Let's build a Minecraft modpack")
+    db.append_message("s_oldest", role="assistant", content="Great. Let me scaffold the modpack repo.")
     db.append_message("s_oldest", role="user", content="Use NeoForge 1.21.1")
-    db.append_message(
-        "s_oldest",
-        role="assistant",
-        content="Done. Modpack repo created with NeoForge 1.21.1.",
-    )
-    db.append_message(
-        "s_oldest",
-        role="assistant",
-        content="Tier-0 mods installed; modpack smoke test passes.",
-    )
+    db.append_message("s_oldest", role="assistant", content="Done. Modpack repo created with NeoForge 1.21.1.")
+    db.append_message("s_oldest", role="assistant", content="Tier-0 mods installed; modpack smoke test passes.")
 
     # Middle session — modpack quest coverage
     db.create_session("s_middle", source="cli")
-    db._conn.execute(
-        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-        (now - 15000, "Modpack Quest Coverage", "s_middle"),
-    )
-    db.append_message(
-        "s_middle", role="user", content="Deep-dive every modpack reference quest guide"
-    )
-    db.append_message(
-        "s_middle",
-        role="assistant",
-        content="Surveying ATM10 questbook for modpack inspiration.",
-    )
+    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+                     (now - 15000, "Modpack Quest Coverage", "s_middle"))
+    db.append_message("s_middle", role="user", content="Deep-dive every modpack reference quest guide")
+    db.append_message("s_middle", role="assistant", content="Surveying ATM10 questbook for modpack inspiration.")
     db.append_message("s_middle", role="user", content="Update the modpack version too")
-    db.append_message(
-        "s_middle",
-        role="assistant",
-        content="Modpack version bumped 0.4 → 0.8.5; quest coverage page added.",
-    )
+    db.append_message("s_middle", role="assistant", content="Modpack version bumped 0.4 → 0.8.5; quest coverage page added.")
 
     # Newest session — modpack mob spawn fix
     db.create_session("s_newest", source="cli")
-    db._conn.execute(
-        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-        (now - 1000, "Modpack Mob Spawn Fix", "s_newest"),
-    )
+    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+                     (now - 1000, "Modpack Mob Spawn Fix", "s_newest"))
     db.append_message("s_newest", role="user", content="Fix the modpack mob spawning")
-    db.append_message(
-        "s_newest",
-        role="assistant",
-        content="Investigating elite mob gating in the modpack KubeJS.",
-    )
-    db.append_message(
-        "s_newest",
-        role="assistant",
-        content="Shipped commit b850442. Modpack alternator nerfed too.",
-    )
+    db.append_message("s_newest", role="assistant", content="Investigating elite mob gating in the modpack KubeJS.")
+    db.append_message("s_newest", role="assistant", content="Shipped commit b850442. Modpack alternator nerfed too.")
     db._conn.commit()
 
 
 # =========================================================================
 # Schema invariants
 # =========================================================================
-
 
 class TestSchema:
     def test_schema_has_required_params(self):
@@ -159,7 +121,6 @@ class TestFormatTimestamp:
 # Browse shape (no args)
 # =========================================================================
 
-
 class TestBrowseShape:
     def test_no_args_returns_recent_sessions(self, db):
         _seed_modpack_sessions(db)
@@ -184,7 +145,6 @@ class TestBrowseShape:
 # =========================================================================
 # Discovery shape (with query)
 # =========================================================================
-
 
 class TestDiscoveryShape:
     def test_query_returns_anchored_windows(self, db):
@@ -240,9 +200,7 @@ class TestDiscoveryShape:
 
     def test_current_session_filtered_out(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(
-            session_search(query="modpack", db=db, current_session_id="s_newest")
-        )
+        result = json.loads(session_search(query="modpack", db=db, current_session_id="s_newest"))
         sids = [r["session_id"] for r in result["results"]]
         assert "s_newest" not in sids
 
@@ -250,20 +208,14 @@ class TestDiscoveryShape:
 class TestDiscoverySort:
     def test_sort_newest_orders_by_recency(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(
-            session_search(query="modpack", limit=3, sort="newest", db=db)
-        )
+        result = json.loads(session_search(query="modpack", limit=3, sort="newest", db=db))
         # First result should be the most recent session
         first = result["results"][0]
-        assert first["session_id"] == "s_newest" or "Newest" in (
-            first.get("title") or ""
-        )
+        assert first["session_id"] == "s_newest" or "Newest" in (first.get("title") or "")
 
     def test_sort_oldest_orders_by_age(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(
-            session_search(query="modpack", limit=3, sort="oldest", db=db)
-        )
+        result = json.loads(session_search(query="modpack", limit=3, sort="oldest", db=db))
         first = result["results"][0]
         assert first["session_id"] == "s_oldest"
 
@@ -278,9 +230,7 @@ class TestRoleFilter:
     def test_default_excludes_tool_role(self, db):
         db.create_session("s1", source="cli")
         db.append_message("s1", role="user", content="modpack question")
-        db.append_message(
-            "s1", role="tool", content="modpack tool output", tool_name="x"
-        )
+        db.append_message("s1", role="tool", content="modpack tool output", tool_name="x")
         result = json.loads(session_search(query="modpack", db=db))
         # The FTS5 match should be on the user message, not the tool message
         if result["count"] > 0:
@@ -289,9 +239,7 @@ class TestRoleFilter:
 
     def test_explicit_tool_role_includes_tool(self, db):
         db.create_session("s1", source="cli")
-        db.append_message(
-            "s1", role="tool", content="modpack tool output", tool_name="x"
-        )
+        db.append_message("s1", role="tool", content="modpack tool output", tool_name="x")
         result = json.loads(session_search(query="modpack", role_filter="tool", db=db))
         # Should now match the tool message
         if result["count"] > 0:
@@ -302,7 +250,6 @@ class TestRoleFilter:
 # Scroll shape (session_id + around_message_id)
 # =========================================================================
 
-
 class TestScrollShape:
     def test_scroll_returns_window_without_bookends(self, db):
         _seed_modpack_sessions(db)
@@ -312,11 +259,9 @@ class TestScrollShape:
         anchor_mid = disc["results"][0]["match_message_id"]
 
         # Now scroll
-        result = json.loads(
-            session_search(
-                session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
-            )
-        )
+        result = json.loads(session_search(
+            session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
+        ))
         assert result["success"] is True
         assert result["mode"] == "scroll"
         assert "messages" in result
@@ -329,11 +274,9 @@ class TestScrollShape:
         disc = json.loads(session_search(query="modpack", limit=1, db=db))
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
-        result = json.loads(
-            session_search(
-                session_id=anchor_sid, around_message_id=anchor_mid, window=999, db=db
-            )
-        )
+        result = json.loads(session_search(
+            session_id=anchor_sid, around_message_id=anchor_mid, window=999, db=db
+        ))
         assert result["window"] == 20
 
     def test_scroll_window_floor_to_1(self, db):
@@ -341,11 +284,9 @@ class TestScrollShape:
         disc = json.loads(session_search(query="modpack", limit=1, db=db))
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
-        result = json.loads(
-            session_search(
-                session_id=anchor_sid, around_message_id=anchor_mid, window=-5, db=db
-            )
-        )
+        result = json.loads(session_search(
+            session_id=anchor_sid, around_message_id=anchor_mid, window=-5, db=db
+        ))
         assert result["window"] == 1
 
     def test_scroll_returns_messages_before_after_counts(self, db):
@@ -353,11 +294,9 @@ class TestScrollShape:
         disc = json.loads(session_search(query="modpack", limit=1, db=db))
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
-        result = json.loads(
-            session_search(
-                session_id=anchor_sid, around_message_id=anchor_mid, window=3, db=db
-            )
-        )
+        result = json.loads(session_search(
+            session_id=anchor_sid, around_message_id=anchor_mid, window=3, db=db
+        ))
         assert "messages_before" in result
         assert "messages_after" in result
 
@@ -366,27 +305,25 @@ class TestScrollShape:
         disc = json.loads(session_search(query="modpack", limit=1, db=db))
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
-        result = json.loads(
-            session_search(
-                session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
-            )
-        )
+        result = json.loads(session_search(
+            session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
+        ))
         anchor_in_window = [m for m in result["messages"] if m["id"] == anchor_mid]
         assert len(anchor_in_window) == 1
         assert anchor_in_window[0].get("anchor") is True
 
     def test_scroll_missing_anchor_errors(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(
-            session_search(session_id="s_oldest", around_message_id=999999, db=db)
-        )
+        result = json.loads(session_search(
+            session_id="s_oldest", around_message_id=999999, db=db
+        ))
         assert result["success"] is False
         assert "not in" in result.get("error", "")
 
     def test_scroll_missing_session_errors(self, db):
-        result = json.loads(
-            session_search(session_id="nonexistent", around_message_id=1, db=db)
-        )
+        result = json.loads(session_search(
+            session_id="nonexistent", around_message_id=1, db=db
+        ))
         assert result["success"] is False
 
     def test_scroll_rejects_current_session_lineage(self, db):
@@ -396,22 +333,18 @@ class TestScrollShape:
         match = [r for r in disc["results"] if r["session_id"] == "s_oldest"]
         if match:
             mid = match[0]["match_message_id"]
-            result = json.loads(
-                session_search(
-                    session_id="s_oldest",
-                    around_message_id=mid,
-                    db=db,
-                    current_session_id="s_oldest",
-                )
-            )
+            result = json.loads(session_search(
+                session_id="s_oldest", around_message_id=mid, db=db,
+                current_session_id="s_oldest",
+            ))
             assert result["success"] is False
             assert "current session" in result.get("error", "").lower()
 
     def test_scroll_invalid_around_message_id_errors(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(
-            session_search(session_id="s_oldest", around_message_id="not-an-int", db=db)
-        )
+        result = json.loads(session_search(
+            session_id="s_oldest", around_message_id="not-an-int", db=db
+        ))
         assert result["success"] is False
 
 
@@ -423,29 +356,18 @@ class TestScrollPattern:
         db.create_session("s_long", source="cli")
         ids = []
         for i in range(20):
-            ids.append(
-                db.append_message(
-                    "s_long",
-                    role="user" if i % 2 == 0 else "assistant",
-                    content=f"long session msg {i}",
-                )
-            )
+            ids.append(db.append_message("s_long", role="user" if i % 2 == 0 else "assistant",
+                                         content=f"long session msg {i}"))
 
-        v1 = json.loads(
-            session_search(
-                session_id="s_long", around_message_id=ids[5], window=3, db=db
-            )
-        )
+        v1 = json.loads(session_search(
+            session_id="s_long", around_message_id=ids[5], window=3, db=db
+        ))
         last_id = v1["messages"][-1]["id"]
-        v2 = json.loads(
-            session_search(
-                session_id="s_long", around_message_id=last_id, window=3, db=db
-            )
-        )
+        v2 = json.loads(session_search(
+            session_id="s_long", around_message_id=last_id, window=3, db=db
+        ))
         # Forward scroll: v2 should reach further than v1
-        assert max(m["id"] for m in v2["messages"]) > max(
-            m["id"] for m in v1["messages"]
-        )
+        assert max(m["id"] for m in v2["messages"]) > max(m["id"] for m in v1["messages"])
         # Boundary id appears in both
         assert last_id in [m["id"] for m in v1["messages"]]
         assert last_id in [m["id"] for m in v2["messages"]]
@@ -455,7 +377,6 @@ class TestScrollPattern:
 # Shape precedence
 # =========================================================================
 
-
 class TestShapePrecedence:
     def test_scroll_args_beat_query(self, db):
         _seed_modpack_sessions(db)
@@ -463,14 +384,10 @@ class TestShapePrecedence:
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
         # Pass both query and scroll args — scroll should win
-        result = json.loads(
-            session_search(
-                query="modpack",  # would normally trigger discovery
-                session_id=anchor_sid,
-                around_message_id=anchor_mid,
-                db=db,
-            )
-        )
+        result = json.loads(session_search(
+            query="modpack",  # would normally trigger discovery
+            session_id=anchor_sid, around_message_id=anchor_mid, db=db,
+        ))
         assert result["mode"] == "scroll"
 
     def test_empty_query_falls_back_to_browse(self, db):
@@ -482,3 +399,124 @@ class TestShapePrecedence:
         _seed_modpack_sessions(db)
         result = json.loads(session_search(query=None, db=db))  # type: ignore
         assert result["mode"] == "browse"
+
+    def test_session_id_without_anchor_reads(self, db):
+        _seed_modpack_sessions(db)
+        # session_id alone (no anchor, no query) → read shape, not browse.
+        result = json.loads(session_search(session_id="s_oldest", db=db))
+        assert result["mode"] == "read"
+
+
+# =========================================================================
+# Read shape — dump a whole session by id (serves @session links)
+# =========================================================================
+
+class TestReadShape:
+    def test_read_returns_full_session(self, db):
+        _seed_modpack_sessions(db)
+        result = json.loads(session_search(session_id="s_oldest", db=db))
+        assert result["success"] is True
+        assert result["mode"] == "read"
+        assert result["session_id"] == "s_oldest"
+        assert result["message_count"] == 5
+        assert result["truncated"] is False
+        assert len(result["messages"]) == 5
+        assert result["session_meta"]["title"] == "Building the Modpack"
+
+    def test_read_unknown_session_errors(self, db):
+        result = json.loads(session_search(session_id="ghost", db=db))
+        assert result["success"] is False
+
+    def test_read_truncates_large_session(self, db):
+        db.create_session("s_big", source="cli")
+        for i in range(50):
+            db.append_message("s_big", role="user" if i % 2 == 0 else "assistant", content=f"m{i}")
+        db._conn.commit()
+        result = json.loads(session_search(session_id="s_big", db=db))
+        assert result["mode"] == "read"
+        assert result["message_count"] == 50
+        assert result["truncated"] is True
+        assert len(result["messages"]) == 30  # head 20 + tail 10
+
+
+# =========================================================================
+# Cross-profile read — `profile` swaps in another profile's DB (read-only)
+# =========================================================================
+
+class TestCrossProfileRead:
+    def _patch_profiles(self, monkeypatch, home, exists=True):
+        from clawk_cli import profiles as profiles_mod
+        monkeypatch.setattr(profiles_mod, "normalize_profile_name", lambda n: n)
+        monkeypatch.setattr(profiles_mod, "validate_profile_name", lambda n: None)
+        monkeypatch.setattr(profiles_mod, "profile_exists", lambda n: exists)
+        monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda n: home)
+
+    def test_profile_param_reads_other_db(self, db, tmp_path, monkeypatch):
+        other_home = tmp_path / "other_home"
+        other_home.mkdir()
+        other = SessionDB(other_home / "state.db")
+        other.create_session("s_other", source="cli")
+        other._conn.execute(
+            "UPDATE sessions SET title = ? WHERE id = ?", ("Other Profile Chat", "s_other")
+        )
+        other.append_message("s_other", role="user", content="hello from the other profile")
+        other._conn.commit()
+
+        self._patch_profiles(monkeypatch, other_home)
+
+        # s_other lives only in the other profile; the current `db` lacks it.
+        result = json.loads(session_search(session_id="s_other", profile="other", db=db))
+        assert result["success"] is True
+        assert result["mode"] == "read"
+        assert result["session_meta"]["title"] == "Other Profile Chat"
+
+    def test_bare_id_locates_across_profiles(self, db, tmp_path, monkeypatch):
+        # The real-world failure: model dropped the owning profile and passed a
+        # bare id. The tool must scan profiles and find it anyway.
+        other_home = tmp_path / "asdf_home"
+        other_home.mkdir()
+        other = SessionDB(other_home / "state.db")
+        other.create_session("s_far", source="cli")
+        other.append_message("s_far", role="user", content="hi")
+        other._conn.commit()
+
+        from collections import namedtuple
+        from clawk_cli import profiles as profiles_mod
+        Info = namedtuple("Info", "name path")
+        monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda n: tmp_path / "default_home")
+        monkeypatch.setattr(profiles_mod, "list_profiles", lambda: [Info("asdf", other_home)])
+
+        # `db` (current profile) lacks s_far; no profile passed → scan finds it.
+        result = json.loads(session_search(session_id="s_far", db=db))
+        assert result["success"] is True
+        assert result["mode"] == "read"
+        assert result["profile"] == "asdf"
+
+    def test_unknown_profile_errors(self, db, monkeypatch, tmp_path):
+        self._patch_profiles(monkeypatch, tmp_path, exists=False)
+        result = json.loads(session_search(session_id="x", profile="ghost", db=db))
+        assert result["success"] is False
+        assert "ghost" in result.get("error", "")
+
+    def test_combined_value_autosplits(self, db, tmp_path, monkeypatch):
+        # Agent passed the raw "@session:<profile>/<id>" value as session_id with
+        # no separate profile — the tool should recover both.
+        other_home = tmp_path / "other_home"
+        other_home.mkdir()
+        other = SessionDB(other_home / "state.db")
+        other.create_session("s_other", source="cli")
+        other.append_message("s_other", role="user", content="hi")
+        other._conn.commit()
+
+        self._patch_profiles(monkeypatch, other_home)
+
+        # Every permutation the model might send must resolve to (asdf, s_other).
+        for kwargs in (
+            {"session_id": "asdf/s_other"},                    # full value, no profile
+            {"session_id": "asdf/s_other", "profile": "asdf"},  # full value AND profile
+            {"session_id": "s_other", "profile": "asdf"},       # bare id + profile
+        ):
+            result = json.loads(session_search(db=db, **kwargs))
+            assert result["success"] is True, kwargs
+            assert result["mode"] == "read"
+            assert result["session_id"] == "s_other"

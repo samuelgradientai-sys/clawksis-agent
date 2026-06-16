@@ -212,6 +212,81 @@ def test_lmstudio_first_time_empty_uses_placeholder(profile_env):
     assert get_env_value("LM_API_KEY") == LMSTUDIO_NOAUTH_PLACEHOLDER
 
 
+# Env-only keys (shell export) persist on Keep ────────────────────────────────
+
+# Regression: a key exported in the shell was accepted as "configured ✓" but
+
+# never written to .env, so the gateway (systemd) failed with "no API key was
+
+# found" while the interactive terminal kept working.
+
+
+def test_keep_persists_env_only_key(profile_env):
+    """Keeping a key that is NOT in .env writes it there for the gateway."""
+
+    from clawk_cli.config import load_env
+
+    key, abort = _run_prompt(existing_key="sk-shell-export", choice="")
+
+    assert key == "sk-shell-export"
+
+    assert abort is False
+
+    assert load_env().get("DEEPSEEK_API_KEY") == "sk-shell-export"
+
+
+def test_replace_cancelled_persists_env_only_key(profile_env):
+    """Cancelling Replace keeps the env-only key AND persists it."""
+
+    from clawk_cli.config import load_env
+
+    key, abort = _run_prompt(existing_key="sk-shell-export", choice="r", new_key="")
+
+    assert key == "sk-shell-export"
+
+    assert abort is False
+
+    assert load_env().get("DEEPSEEK_API_KEY") == "sk-shell-export"
+
+
+def test_keep_does_not_copy_bitwarden_key_to_disk(profile_env, monkeypatch):
+    """Bitwarden-sourced secrets must never be written into .env."""
+
+    from clawk_cli import env_loader
+
+    from clawk_cli.config import load_env
+
+    monkeypatch.setitem(
+        env_loader._SECRET_SOURCES, "DEEPSEEK_API_KEY", "bitwarden"
+    )
+
+    key, abort = _run_prompt(existing_key="sk-from-bitwarden", choice="")
+
+    assert key == "sk-from-bitwarden"
+
+    assert abort is False
+
+    assert not load_env().get("DEEPSEEK_API_KEY")
+
+
+def test_keep_already_persisted_key_is_silent(profile_env, capsys):
+    """No 'Saved ... to' note when the kept key already lives in .env."""
+
+    from clawk_cli.config import save_env_value
+
+    save_env_value("DEEPSEEK_API_KEY", "sk-existing")
+
+    capsys.readouterr()
+
+    key, abort = _run_prompt(existing_key="sk-existing", choice="")
+
+    assert key == "sk-existing"
+
+    assert abort is False
+
+    assert "Saved DEEPSEEK_API_KEY" not in capsys.readouterr().out
+
+
 def test_lmstudio_replace_empty_does_not_overwrite_with_placeholder(profile_env):
     """On REPLACE with empty input, preserve the user's existing key — do NOT
 

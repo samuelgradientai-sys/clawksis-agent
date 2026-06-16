@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 name = "clawksis-agent"
 
-version = "0.15.1"
+version = "0.16.0"
 
 description = "The self-improving AI agent — creates skills from experience, improves them during use, and runs anywhere"
 
@@ -38,7 +38,7 @@ readme = "README.md"
 
 requires-python = ">=3.11,<3.14"
 
-authors = [{ name = "Nous Research" }]
+authors = [{ name = "Gradient AI" }, { name = "Samuel Gomez" }]
 
 license = "MIT"
 
@@ -517,6 +517,13 @@ locales = ["locales/*.yaml"]
 
 
 [tool.setuptools.package-data]
+
+# Vendored models.dev registry snapshot — the offline-first floor for
+# model-capability lookups (agent/models_dev.py). Sealed installs (pip wheel,
+# Nix store venv, CI sandboxes) have no network and no disk cache on first run,
+# so without this the registry collapses to {} and every capability lookup
+# (context length, vision/tools support) silently degrades.
+agent = ["models_dev_snapshot.json"]
 
 clawk_cli = ["web_dist/**/*", "tui_dist/**/*", "scripts/install.sh", "scripts/install.ps1"]
 

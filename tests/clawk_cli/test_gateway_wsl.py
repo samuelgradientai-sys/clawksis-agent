@@ -14,7 +14,6 @@ import clawk_constants
 # is_wsl() in clawk_constants
 # =============================================================================
 
-
 class TestIsWsl:
     """Test the shared is_wsl() utility."""
 
@@ -62,14 +61,12 @@ class TestIsWsl:
 # _wsl_systemd_operational() in gateway
 # =============================================================================
 
-
 class TestWslSystemdOperational:
     """Test the WSL systemd check."""
 
     def test_running(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             lambda *a, **kw: SimpleNamespace(
                 returncode=0, stdout="running\n", stderr=""
             ),
@@ -78,8 +75,7 @@ class TestWslSystemdOperational:
 
     def test_degraded(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             lambda *a, **kw: SimpleNamespace(
                 returncode=1, stdout="degraded\n", stderr=""
             ),
@@ -88,8 +84,7 @@ class TestWslSystemdOperational:
 
     def test_starting(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             lambda *a, **kw: SimpleNamespace(
                 returncode=1, stdout="starting\n", stderr=""
             ),
@@ -98,8 +93,7 @@ class TestWslSystemdOperational:
 
     def test_offline_no_systemd(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             lambda *a, **kw: SimpleNamespace(
                 returncode=1, stdout="offline\n", stderr=""
             ),
@@ -108,16 +102,14 @@ class TestWslSystemdOperational:
 
     def test_systemctl_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             MagicMock(side_effect=FileNotFoundError),
         )
         assert gateway._wsl_systemd_operational() is False
 
     def test_timeout(self, monkeypatch):
         monkeypatch.setattr(
-            gateway.subprocess,
-            "run",
+            gateway.subprocess, "run",
             MagicMock(side_effect=subprocess.TimeoutExpired("systemctl", 5)),
         )
         assert gateway._wsl_systemd_operational() is False
@@ -126,7 +118,6 @@ class TestWslSystemdOperational:
 # =============================================================================
 # supports_systemd_services() WSL integration
 # =============================================================================
-
 
 class TestSupportsSystemdServicesWSL:
     """Test that supports_systemd_services() handles WSL correctly."""
@@ -165,7 +156,6 @@ class TestSupportsSystemdServicesWSL:
 # WSL messaging in gateway commands
 # =============================================================================
 
-
 class TestGatewayCommandWSLMessages:
     """Test that WSL users see appropriate guidance."""
 
@@ -177,11 +167,17 @@ class TestGatewayCommandWSLMessages:
         monkeypatch.setattr(gateway, "supports_systemd_services", lambda: False)
         monkeypatch.setattr(gateway, "is_macos", lambda: False)
         monkeypatch.setattr(gateway, "is_managed", lambda: False)
+        # CRITICAL: also stub is_windows. Without this, running this test on a
+        # real Windows host falls through to the is_windows() branch *before*
+        # the WSL guidance branch, invoking gateway_windows.install() which
+        # writes a Startup-folder .cmd into the real user's Startup folder
+        # (NOT tmp_path) pointing at a now-vanished pytest fixture path.
+        # The user then sees a broken Clawksis_Gateway.cmd flash a cmd.exe
+        # window on every login. See fix/windows-gateway-reliability.
+        monkeypatch.setattr(gateway, "is_windows", lambda: False)
 
         args = SimpleNamespace(
-            gateway_command="install",
-            force=False,
-            system=False,
+            gateway_command="install", force=False, system=False,
             run_as_user=None,
         )
         with pytest.raises(SystemExit) as exc_info:
@@ -201,6 +197,10 @@ class TestGatewayCommandWSLMessages:
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
         monkeypatch.setattr(gateway, "supports_systemd_services", lambda: False)
         monkeypatch.setattr(gateway, "is_macos", lambda: False)
+        # See test_install_wsl_no_systemd: stub is_windows so a Windows host
+        # running this test does NOT actually spawn a detached gateway via
+        # gateway_windows.start().
+        monkeypatch.setattr(gateway, "is_windows", lambda: False)
 
         args = SimpleNamespace(gateway_command="start", system=False)
         with pytest.raises(SystemExit) as exc_info:
@@ -218,17 +218,18 @@ class TestGatewayCommandWSLMessages:
         monkeypatch.setattr(gateway, "is_macos", lambda: False)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
+        # Stub is_windows so a Windows host running this test does NOT take
+        # the Windows status branch (which reads gateway_windows.is_installed()).
+        monkeypatch.setattr(gateway, "is_windows", lambda: False)
         monkeypatch.setattr(gateway, "find_gateway_pids", lambda: [12345])
         monkeypatch.setattr(gateway, "_runtime_health_lines", lambda: [])
         # Stub out the systemd unit path check
         monkeypatch.setattr(
-            gateway,
-            "get_systemd_unit_path",
+            gateway, "get_systemd_unit_path",
             lambda system=False: SimpleNamespace(exists=lambda: False),
         )
         monkeypatch.setattr(
-            gateway,
-            "get_launchd_plist_path",
+            gateway, "get_launchd_plist_path",
             lambda: SimpleNamespace(exists=lambda: False),
         )
 
@@ -245,16 +246,16 @@ class TestGatewayCommandWSLMessages:
         monkeypatch.setattr(gateway, "is_macos", lambda: False)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
+        # See test_status_wsl_running_manual.
+        monkeypatch.setattr(gateway, "is_windows", lambda: False)
         monkeypatch.setattr(gateway, "find_gateway_pids", lambda: [])
         monkeypatch.setattr(gateway, "_runtime_health_lines", lambda: [])
         monkeypatch.setattr(
-            gateway,
-            "get_systemd_unit_path",
+            gateway, "get_systemd_unit_path",
             lambda system=False: SimpleNamespace(exists=lambda: False),
         )
         monkeypatch.setattr(
-            gateway,
-            "get_launchd_plist_path",
+            gateway, "get_launchd_plist_path",
             lambda: SimpleNamespace(exists=lambda: False),
         )
 

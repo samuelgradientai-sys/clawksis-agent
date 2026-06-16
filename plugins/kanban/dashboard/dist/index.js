@@ -976,6 +976,36 @@
 
     const [configApplied, setConfigApplied] = useState(false);
 
+    // Simple vs advanced view. Simple mode (default) hides boards, tenants,
+    // per-profile lanes, the archived toggle, the nudge button and the
+    // orchestration panel so a first-time user sees only the essentials.
+    // Persisted per-browser so a choice sticks across reloads.
+    const [simpleMode, setSimpleMode] = useState(function () {
+      try { return localStorage.getItem("clawk-kanban-simple") !== "0"; }
+      catch (_e) { return true; }
+    });
+
+    const toggleSimpleMode = useCallback(function () {
+      setSimpleMode(function (prev) {
+        const next = !prev;
+        try { localStorage.setItem("clawk-kanban-simple", next ? "1" : "0"); }
+        catch (_e) { /* private mode — keep in-memory only */ }
+        return next;
+      });
+    }, []);
+
+    // Dismissable onboarding guide. Hidden once the user closes it.
+    const [guideDismissed, setGuideDismissed] = useState(function () {
+      try { return localStorage.getItem("clawk-kanban-guide") === "0"; }
+      catch (_e) { return false; }
+    });
+
+    const dismissGuide = useCallback(function () {
+      setGuideDismissed(true);
+      try { localStorage.setItem("clawk-kanban-guide", "0"); }
+      catch (_e) { /* noop */ }
+    }, []);
+
 
 
     const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -1976,7 +2006,26 @@
 
       h("div", { className: "clawk-kanban flex flex-col gap-4" },
 
-        h(BoardSwitcher, {
+        h("div", { className: "clawk-kanban-modebar" },
+          h(Button, {
+            size: "sm",
+            onClick: toggleSimpleMode,
+            title: simpleMode
+              ? tx(t, "simpleModeHint", "Estás en modo simple: ves solo lo esencial. Tocá para mostrar las opciones avanzadas (tableros, etiquetas, carriles y orquestación).")
+              : tx(t, "advancedModeHint", "Estás en modo avanzado. Tocá para volver al modo simple."),
+          }, simpleMode
+            ? tx(t, "simpleModeLabel", "🟢 Modo simple")
+            : tx(t, "advancedModeLabel", "⚙️ Modo avanzado")),
+          guideDismissed ? h(Button, {
+            size: "sm",
+            onClick: function () { setGuideDismissed(false); },
+            title: tx(t, "guideReopenHint", "Volver a mostrar la guía rápida"),
+          }, tx(t, "guideReopenLabel", "¿Cómo funciona?")) : null,
+        ),
+
+        guideDismissed ? null : h(KanbanGuide, { onDismiss: dismissGuide }),
+
+        simpleMode ? null : h(BoardSwitcher, {
 
           board: board,
 
@@ -2002,7 +2051,7 @@
 
         }) : null,
 
-        h(OrchestrationPanel, null),
+        simpleMode ? null : h(OrchestrationPanel, null),
 
         h(AttentionStrip, {
 
@@ -2015,6 +2064,8 @@
         h(BoardToolbar, {
 
           board: boardData,
+
+          simpleMode: simpleMode,
 
           tenantFilter, setTenantFilter,
 
@@ -3922,6 +3973,58 @@
 
   // -------------------------------------------------------------------------
 
+  // Onboarding guide — plain-language "how it works", dismissable.
+
+  // -------------------------------------------------------------------------
+
+
+
+  function KanbanGuide(props) {
+
+    const { t } = useI18n();
+
+    return h("div", { className: "clawk-kanban-guide" },
+
+      h("button", {
+
+        type: "button",
+
+        className: "clawk-kanban-guide-close",
+
+        onClick: props.onDismiss,
+
+        title: tx(t, "guideHide", "Ocultar esta guía"),
+
+        "aria-label": tx(t, "guideHide", "Ocultar esta guía"),
+
+      }, "✕"),
+
+      h("div", { className: "clawk-kanban-guide-title" },
+
+        tx(t, "guideTitle", "¿Cómo funciona este tablero?")),
+
+      h("p", { className: "clawk-kanban-guide-lead" },
+
+        tx(t, "guideLead", "Es como un pizarrón de tareas, pero las hacen tus agentes de IA. Vos tirás la idea y la tarjeta avanza sola.")),
+
+      h("ol", { className: "clawk-kanban-guide-steps" },
+
+        h("li", null, tx(t, "guideStep1", "Escribí una idea suelta, en tus palabras, en la columna «Ideas» (tocá el botón +). No tiene que estar perfecta.")),
+
+        h("li", null, tx(t, "guideStep2", "El sistema la convierte en una tarea clara y elige qué agente la hace.")),
+
+        h("li", null, tx(t, "guideStep3", "La tarjeta avanza sola: Listas → En curso → Hecho. Vos solo mirás, y ayudás si alguna queda «Trabada».")),
+
+      ),
+
+    );
+
+  }
+
+
+
+  // -------------------------------------------------------------------------
+
   // Toolbar
 
   // -------------------------------------------------------------------------
@@ -3940,7 +4043,7 @@
 
       h("div", { className: "flex flex-col gap-1",
 
-                 title: "Fuzzy-match tasks by id, title, or description. Matches across all columns." },
+                 title: "Buscá tarjetas por texto: id, título o descripción. Busca en todas las columnas." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "search", "Search")),
 
@@ -3958,9 +4061,9 @@
 
       ),
 
-      h("div", { className: "flex flex-col gap-1",
+      props.simpleMode ? null : h("div", { className: "flex flex-col gap-1",
 
-                 title: "Tenants are free-form tags on a task (e.g. customer, project, team). Set them via the task drawer or kanban_create." },
+                 title: "Etiqueta libre para agrupar tareas (cliente, proyecto, equipo). Opción avanzada." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "tenant", "Tenant")),
 
@@ -3984,9 +4087,9 @@
 
       ),
 
-      h("div", { className: "flex flex-col gap-1",
+      props.simpleMode ? null : h("div", { className: "flex flex-col gap-1",
 
-                 title: "Filter by assigned Clawksis profile. Profiles are the named agent identities that claim and work on tasks." },
+                 title: "Filtrar por el agente asignado a la tarea." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "assignee", "Assignee")),
 
@@ -4010,9 +4113,9 @@
 
       ),
 
-      h("label", { className: "flex items-center gap-2 text-xs",
+      props.simpleMode ? null : h("label", { className: "flex items-center gap-2 text-xs",
 
-                   title: "Include archived tasks in the board view. Archived tasks are hidden by default." },
+                   title: "Mostrar también las tareas archivadas (ocultas por defecto)." },
 
         h(Checkbox, {
 
@@ -4026,9 +4129,9 @@
 
       ),
 
-      h("label", { className: "flex items-center gap-2 text-xs",
+      props.simpleMode ? null : h("label", { className: "flex items-center gap-2 text-xs",
 
-                   title: "Group the Running column by assigned profile" },
+                   title: "Agrupar la columna «En curso» por agente." },
 
         h(Checkbox, {
 
@@ -4044,13 +4147,13 @@
 
       h("div", { className: "flex-1" }),
 
-      h(Button, {
+      props.simpleMode ? null : h(Button, {
 
         onClick: props.onNudgeDispatch,
 
         size: "sm",
 
-        title: "Wake the dispatcher to claim ready tasks now instead of waiting for the next tick. Use this after adding tasks if you want them picked up immediately.",
+        title: "Buscar y arrancar tareas listas ahora mismo, sin esperar al chequeo automático (cada ~60s).",
 
       }, tx(t, "nudgeDispatcher", "Nudge dispatcher")),
 
@@ -4060,11 +4163,11 @@
 
         size: "sm",
 
-        title: "Reload the board from the database. The board auto-refreshes on task events; this is for forcing a re-read.",
+        title: "Recargar el tablero. Se actualiza solo cuando hay cambios; esto fuerza una relectura.",
 
       }, tx(t, "refresh", "Refresh")),
 
-      h(Button, {
+      props.simpleMode ? null : h(Button, {
 
         onClick: function () {
 
@@ -4080,7 +4183,7 @@
 
         size: "sm",
 
-        title: "Clear all active filters (search, tenant, assignee, archived).",
+        title: "Limpiar todos los filtros activos (búsqueda, etiqueta, agente, archivados).",
 
       }, tx(t, "clearFilters", "Clear filters")),
 

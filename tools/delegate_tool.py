@@ -1013,6 +1013,46 @@ def _strip_blocked_tools(toolsets: List[str]) -> List[str]:
     return [t for t in toolsets if t not in blocked_toolset_names]
 
 
+_SUBAGENT_LOG_EVENTS = frozenset(
+    {"subagent.start", "subagent.tool", "subagent.thinking", "subagent.complete"}
+)
+
+
+def _log_subagent_event(
+    event_type: str,
+    session_id,
+    payload: Dict[str, Any],
+    tool_name=None,
+    preview=None,
+) -> None:
+    """Mirror a sub-agent lifecycle event to the cross-process agent-events log.
+
+    Best-effort: lets the dashboard office draw the delegation tree (sub-agent
+    characters + parent→child link lines) for EVERY agent, not just the chat
+    (which already receives these over the WS feed). Never raises.
+    """
+
+    if event_type not in _SUBAGENT_LOG_EVENTS:
+        return
+
+    try:
+        import agent_events
+
+        agent_events.emit_subagent_event(
+            event_type=event_type,
+            session_id=session_id,
+            subagent_id=payload.get("subagent_id"),
+            parent_id=payload.get("parent_id"),
+            depth=payload.get("depth"),
+            goal=payload.get("goal"),
+            tool_name=tool_name,
+            text=preview,
+        )
+
+    except Exception:
+        pass
+
+
 def _build_child_progress_callback(
     task_index: int,
     goal: str,
@@ -1058,6 +1098,10 @@ def _build_child_progress_callback(
     spinner = getattr(parent_agent, "_delegate_spinner", None)
 
     parent_cb = getattr(parent_agent, "tool_progress_callback", None)
+
+    # Parent's session id — sub-agent events are logged under it so the office
+    # links the sub-agent character to the parent's desk.
+    _parent_sid = getattr(parent_agent, "session_id", None)
 
     if not spinner and not parent_cb:
         return None  # No display → no callback → zero behavior change
@@ -1107,12 +1151,17 @@ def _build_child_progress_callback(
         event_type: str, tool_name: str = None, preview: str = None, args=None, **kwargs
     ):
 
-        if not parent_cb:
-            return
-
         payload = _identity_kwargs()
 
         payload.update(kwargs)  # caller overrides (e.g. status, duration_seconds)
+
+        # Mirror sub-agent lifecycle to the shared agent-events log (best-effort)
+        # so the dashboard office draws the delegation tree for any agent — done
+        # before the parent_cb guard so it also covers gateway/cron agents.
+        _log_subagent_event(event_type, _parent_sid, payload, tool_name, preview)
+
+        if not parent_cb:
+            return
 
         try:
             parent_cb(event_type, tool_name, preview, args, **payload)

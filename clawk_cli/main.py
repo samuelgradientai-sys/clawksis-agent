@@ -2161,7 +2161,9 @@ def _ensure_tui_node() -> None:
     if not helper.is_file():
         return
 
-    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
+    from clawk_constants import get_clawk_home
+
+    clawk_home = str(get_clawk_home())
 
     try:
         # Helper writes logs to stderr; we ask bash to print `command -v node`
@@ -3547,6 +3549,132 @@ def cmd_postinstall(args):
         print()
 
         print("✓ Post-install complete.")
+
+
+def _cookbook_resolve(target: str):
+    """Match a catalog entry by id or ollama tag (returns the entry or None)."""
+
+    from clawk_cli import cookbook
+
+    t = (target or "").strip().lower()
+
+    for m in cookbook.CATALOG:
+        if t in (m["id"].lower(), m["ollama"].lower()):
+            return m
+
+    return None
+
+
+def cmd_cookbook(args):
+    """Local-models Cookbook: see what runs on this machine, pull it, use it."""
+
+    from clawk_cli import cookbook
+
+    _TIER_ICON = {"perfect": "✅", "good": "✅", "marginal": "⚠️", "no_fit": "❌"}
+
+    hw = cookbook.detect_hardware()
+
+    print()
+
+    print("🍳 Cookbook — local models")
+
+    gpu = f"{hw['gpu_name']} ({hw['vram_gb']:g}GB VRAM)" if hw.get("gpu_name") else "no GPU"
+
+    print(f"   Hardware: {hw['ram_gb']:g}GB RAM · {hw['cpu_cores']} cores · {gpu}")
+
+    status = cookbook.ollama_status()
+
+    if not status["installed"]:
+        print("   Ollama: not installed → get it at https://ollama.com to run models.")
+
+    elif not status["running"]:
+        print("   Ollama: installed but not running → start it with `ollama serve`.")
+
+    else:
+        print(f"   Ollama: running · {len(status['models'])} model(s) pulled")
+
+    print()
+
+    # Actions: pull+use (--run) or just use (--use).
+    target = getattr(args, "run", None) or getattr(args, "use", None)
+
+    if target:
+        entry = _cookbook_resolve(target)
+
+        tag = entry["ollama"] if entry else target
+
+        if getattr(args, "run", None):
+            print(f"Pulling {tag} (this can take a while)...")
+
+            res = cookbook.pull_blocking(tag)
+
+            if not res.get("ok"):
+                print(f"  ✗ {res.get('error', 'pull failed')}")
+
+                return
+
+            print(f"  ✓ pulled {tag}")
+
+        used = cookbook.use_model(tag)
+
+        if used.get("ok"):
+            print(f"✓ Active model → {tag}  (via {used['base_url']})")
+
+        else:
+            print(f"✗ {used.get('error', 'failed to set model')}")
+
+        return
+
+    if getattr(args, "hardware", False):
+        return  # hardware already printed above
+
+    # Listing: catalog with fit, grouped best-first.
+    rows = cookbook.catalog_with_fit(hw, status.get("models"))
+
+    installed_set = set(status.get("models") or [])
+
+    query = (getattr(args, "query", None) or "").strip().lower()
+
+    if query:
+        rows = [
+            r
+            for r in rows
+            if query
+            in f"{r['name']} {r['family']} {r['ollama']} {r['use_case']}".lower()
+        ]
+
+    print("  Models that fit your machine (✅ fits · ⚠️ tight/slow · ❌ too big):")
+
+    print("  The agent needs function-calling — prefer models marked 'tools'.")
+
+    print()
+
+    if not rows:
+        print(f"  No models match '{query}'.")
+        print("  Browse the full library at https://ollama.com/library —")
+        print("  then run any tag with:   clawk cookbook --run <tag>")
+        print()
+        return
+
+    for r in rows:
+        icon = _TIER_ICON.get(r["fit"]["tier"], "•")
+
+        mark = " [installed]" if r["ollama"] in installed_set else ""
+
+        tools = "tools" if r["tool_use"] else "no-tools"
+
+        print(
+            f"  {icon} {r['name']:<22} {r['ollama']:<22} "
+            f"{r['fit']['mode']:<4} {tools:<8} ~{r['size_gb']:g}GB{mark}"
+        )
+
+    print()
+
+    print("  Run + use one:   clawk cookbook --run qwen2.5:7b")
+
+    print("  Use an installed one without pulling:   clawk cookbook --use llama3.1:8b")
+
+    print()
 
 
 def cmd_model(args):
@@ -7801,6 +7929,70 @@ def _model_flow_copilot_acp(config, current_model=""):
     print(f"Default model set to: {selected} (via {pconfig.name})")
 
 
+def _persist_env_only_key(key_env: str, value: str) -> None:
+
+    """Write a kept API key to ``.env`` when it only lives in the process env.
+
+
+
+    ``clawk setup`` / ``clawk model`` accept a key exported in the user's
+
+    shell as "already configured ✓", but background services (the gateway
+
+    under systemd/launchd) never inherit shell exports — they read
+
+    ``CLAWK_HOME/.env``.  Keeping an env-only key without persisting it
+
+    leaves config.yaml pointing at a provider whose credential vanishes
+
+    outside this shell: the terminal keeps working while Telegram/WhatsApp
+
+    replies fail with "Provider X is set in config.yaml but no API key
+
+    was found".
+
+
+
+    Bitwarden-sourced values are deliberately NOT copied to disk — the user
+
+    chose to keep those secrets out of ``.env``.  Managed installs never
+
+    write ``.env`` from here either.  Best-effort: persistence failures
+
+    must not block the setup flow.
+
+    """
+
+    if not key_env or not value:
+        return
+
+    try:
+        from clawk_cli.config import (
+            get_env_path,
+            is_managed,
+            load_env,
+            save_env_value,
+        )
+
+        from clawk_cli.env_loader import get_secret_source
+
+        if is_managed() or get_secret_source(key_env):
+            return
+
+        if (load_env().get(key_env) or "").strip() == value:
+            return
+
+        save_env_value(key_env, value)
+
+        print(
+            f"  Saved {key_env} to {get_env_path()} so background "
+            f"services (e.g. the gateway) can use it too."
+        )
+
+    except Exception:
+        pass
+
+
 def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
     """Shared API-key entry point for ``clawk setup`` / ``clawk model``.
 
@@ -7903,6 +8095,8 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
         if not new_key:
             print("  No change.")
 
+            _persist_env_only_key(key_env, existing_key)
+
             print()
 
             return existing_key, False
@@ -7924,7 +8118,11 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "") -> tuple:
 
         return "", True
 
-    # Keep (default, or any other input)
+    # Keep (default, or any other input).  An env-only key (shell export)
+
+    # gets persisted so the gateway resolves the same credential later.
+
+    _persist_env_only_key(key_env, existing_key)
 
     print()
 
@@ -10640,6 +10838,31 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
         _time.sleep(3)
 
         r2 = _run_build()
+
+    if r2.returncode != 0:
+        # Typecheck-resilient fallback. `npm run build` is `tsc -b && vite
+        # build`, so a TypeScript error anywhere aborts the build before Vite
+        # ever runs — even when the app itself bundles and runs fine (a stale
+        # or mid-sync checkout where the chronically-red `tsc -b` is the only
+        # blocker). Fall back to a Vite-only build (esbuild transpile, no
+        # typecheck) so the dashboard can still come up instead of hard-
+        # failing and sending the user chasing TS errors. `npm run build`
+        # stays the primary path so dev/CI keep their typecheck gate; a
+        # genuinely broken bundle still fails this Vite step too.
+
+        _say("  ⚠ build failed (likely tsc) — retrying Vite-only (skipping typecheck)")
+
+        r3 = _run_with_idle_timeout([npm, "run", "build:vite"], cwd=web_dir)
+
+        if r3.returncode == 0:
+            _say("  ✓ Web UI built (typecheck skipped)")
+
+            return True
+
+        # Vite-only failed too: the real blocker is a bundler error, so prefer
+        # r3's output for diagnostics below.
+        if (r3.stdout or "") or (r3.stderr or ""):
+            r2 = r3
 
     if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
@@ -19822,6 +20045,48 @@ def main():
     )
 
     model_parser.set_defaults(func=cmd_model)
+
+    # =========================================================================
+
+    # cookbook command — discover/run local models (Ollama)
+
+    # =========================================================================
+
+    cookbook_parser = subparsers.add_parser(
+        "cookbook",
+        help="Discover and run local LLMs that fit your machine (via Ollama)",
+        description=(
+            "Detects your hardware, lists open models that fit, and can pull one "
+            "with Ollama and set it as the agent's model."
+        ),
+    )
+
+    cookbook_parser.add_argument(
+        "query",
+        nargs="?",
+        metavar="SEARCH",
+        help="Filter the model list by name/family/tag/use-case (e.g. qwen, coding, 7b).",
+    )
+
+    cookbook_parser.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Only show detected hardware (RAM/CPU/GPU/VRAM) and exit.",
+    )
+
+    cookbook_parser.add_argument(
+        "--run",
+        metavar="MODEL",
+        help="Pull (ollama) the given catalog id or tag, then set it as the model.",
+    )
+
+    cookbook_parser.add_argument(
+        "--use",
+        metavar="MODEL",
+        help="Set an already-pulled local model (id or tag) as the agent's model.",
+    )
+
+    cookbook_parser.set_defaults(func=cmd_cookbook)
 
     # =========================================================================
 

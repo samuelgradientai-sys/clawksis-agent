@@ -80,39 +80,39 @@ logger = logging.getLogger(__name__)
 
 
 _CLAWK_MODEL_WARNING = (
-    "Nous Research Clawksis 3 & 4 models are NOT agentic and are not designed "
+    "Nous Research Hermes 3 & 4 models are NOT agentic and are not designed "
     "for use with Clawksis. They lack the tool-calling capabilities "
     "required for agent workflows. Consider using an agentic model instead "
     "(Claude, GPT, Gemini, DeepSeek, etc.)."
 )
 
 
-# Match only the real Nous Research Clawksis 3 / Clawksis 4 chat families.
+# Match only the real Nous Research Hermes 3 / Hermes 4 chat families.
 
-# The previous substring check (`"clawk" in name.lower()`) false-positived on
+# A bare substring check would false-positive on unrelated local Modelfiles
 
-# unrelated local Modelfiles like ``clawk-brain:qwen3-14b-ctx16k`` that just
+# like ``clawk-brain:qwen3-14b-ctx16k`` that carry the project's own "clawk"
 
-# happen to carry "clawk" in their tag but are fully tool-capable.
+# tag but are fully tool-capable, so we anchor on the "hermes" model family.
 
 #
 
 # Positive examples the regex must match:
 
-#   NousResearch/Clawksis-3-Llama-3.1-70B, clawk-4-405b, openrouter/clawk3:70b
+#   NousResearch/Hermes-3-Llama-3.1-70B, hermes-4-405b, openrouter/hermes3:70b
 
 # Negative examples it must NOT match:
 
 #   clawk-brain:qwen3-14b-ctx16k, qwen3:14b, claude-opus-4-6
 
 _NOUS_CLAWK_NON_AGENTIC_RE = re.compile(
-    r"(?:^|[/:])clawk[-_ ]?[34](?:[-_.:]|$)",
+    r"(?:^|[/:])hermes[-_ ]?[34](?:[-_.:]|$)",
     re.IGNORECASE,
 )
 
 
 def is_nous_clawk_non_agentic(model_name: str) -> bool:
-    """Return True if *model_name* is a real Nous Clawksis 3/4 chat model.
+    """Return True if *model_name* is a real Nous Hermes 3/4 chat model.
 
 
 
@@ -131,7 +131,7 @@ def is_nous_clawk_non_agentic(model_name: str) -> bool:
 
 
 def _check_clawk_model_warning(model_name: str) -> str:
-    """Return a warning string if *model_name* is a Nous Clawksis 3/4 chat model."""
+    """Return a warning string if *model_name* is a Nous Hermes 3/4 chat model."""
 
     if is_nous_clawk_non_agentic(model_name):
         return _CLAWK_MODEL_WARNING
@@ -1643,6 +1643,8 @@ def list_authenticated_providers(
     custom_providers: list | None = None,
     max_models: int = 8,
     current_model: str = "",
+    *,
+    force_fresh_nous_tier: bool = False,
 ) -> List[dict]:
     """Detect which providers have credentials and list their curated models.
 
@@ -2820,6 +2822,40 @@ def list_authenticated_providers(
             seen_slugs.add(slug.lower())
 
             _section4_emitted_slugs.add(slug.lower())
+
+    # Local Ollama daemon (Cookbook): surface a first-class "ollama" provider
+    # row listing the models the user has pulled locally, but only when the
+    # daemon is actually running. Lazy import + best-effort: never let a missing
+    # cookbook module or an Ollama hiccup break provider listing. Selecting a
+    # model here persists provider="ollama", which resolve_runtime_provider
+    # resolves to the local /v1 endpoint with a dummy key.
+
+    if "ollama" not in seen_slugs:
+        try:
+            from clawk_cli import cookbook as _cookbook
+
+            if _cookbook.ollama_running():
+                _ollama_models = [m for m in _cookbook.ollama_models() if m]
+
+                if _ollama_models:
+                    _ollama_is_current = _norm_url(current_base_url) == _norm_url(
+                        _cookbook.OLLAMA_OPENAI_URL
+                    ) or str(current_provider or "").strip().lower() == "ollama"
+
+                    results.append({
+                        "slug": "ollama",
+                        "name": "Ollama (local)",
+                        "is_current": _ollama_is_current,
+                        "is_user_defined": False,
+                        "models": _ollama_models[:max_models],
+                        "total_models": len(_ollama_models),
+                        "source": "local",
+                    })
+
+                    seen_slugs.add("ollama")
+
+        except Exception:
+            pass
 
     # Sort: current provider first, then by model count descending
 

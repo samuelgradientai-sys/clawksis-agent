@@ -100,7 +100,7 @@ const APP = (() => {
 
 // Default CLAWK_HOME for non-sandboxed runs -- matches main.cjs's
 
-// resolveClawksisHome(). On Windows it's %LOCALAPPDATA%\clawk; elsewhere
+// resolveClawksisHome(). On Windows it's %LOCALAPPDATA%\clawksis; elsewhere
 
 // it's ~/.clawksis. The fresh-install sandbox launchFresh() sets its own
 
@@ -110,11 +110,11 @@ const DEFAULT_CLAWK_HOME = (() => {
 
   if (PLATFORM === 'win32' && process.env.LOCALAPPDATA) {
 
-    return path.join(process.env.LOCALAPPDATA, 'clawk')
+    return path.join(process.env.LOCALAPPDATA, 'clawksis')
 
   }
 
-  return path.join(os.homedir(), '.clawk')
+  return path.join(os.homedir(), '.clawksis')
 
 })()
 

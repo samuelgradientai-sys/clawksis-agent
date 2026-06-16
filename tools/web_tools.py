@@ -500,9 +500,7 @@ def _resolve_web_extract_auxiliary(
     if client is not None and _is_nous_auxiliary_client(client):
         from agent.auxiliary_client import get_auxiliary_extra_body
 
-        from agent.portal_tags import nous_portal_tags
-
-        extra_body = get_auxiliary_extra_body() or {"tags": nous_portal_tags()}
+        extra_body = get_auxiliary_extra_body() or {}
 
     return client, effective_model, extra_body
 

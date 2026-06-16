@@ -64,7 +64,7 @@ pub fn clawk_home() -> PathBuf {
 
         if let Some(local_app_data) = dirs::data_local_dir() {
 
-            return local_app_data.join("clawk");
+            return local_app_data.join("clawksis");
 
         }
 
@@ -78,7 +78,7 @@ pub fn clawk_home() -> PathBuf {
 
     if let Some(home) = dirs::home_dir() {
 
-        return home.join(".clawk");
+        return home.join(".clawksis");
 
     }
 
@@ -88,7 +88,7 @@ pub fn clawk_home() -> PathBuf {
 
     // doesn't panic.
 
-    PathBuf::from(".clawk")
+    PathBuf::from(".clawksis")
 
 }
 

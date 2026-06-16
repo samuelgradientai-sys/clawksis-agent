@@ -1,57 +1,34 @@
 """
-
 Single source of truth for provider identity in Clawksis.
-
-
 
 Two data sources, merged at runtime:
 
-
-
 1. **models.dev catalog** — 109+ providers with base URLs, env vars, display
-
    names, and full model metadata (context, cost, capabilities).  This is
-
    the primary database.
 
-
-
 2. **Clawksis overlays** — transport type, auth patterns, aggregator flags,
-
    and additional env vars that models.dev doesn't track.  Small dict,
-
    maintained here.
 
-
-
 3. **User config** (``providers:`` section in config.yaml) — user-defined
-
    endpoints and overrides.  Merged on top of everything else.
 
-
-
 Other modules import from this file.  No parallel registries.
-
 """
 
 from __future__ import annotations
 
-
 import logging
-
 from dataclasses import dataclass
-
 from typing import Any, Dict, List, Optional, Tuple
 
-
 from utils import base_url_host_matches, base_url_hostname
-
 
 logger = logging.getLogger(__name__)
 
 
 # -- Clawksis overlay ----------------------------------------------------------
-
 # Clawksis-specific metadata that models.dev doesn't provide.
 
 
@@ -60,17 +37,12 @@ class ClawksisOverlay:
     """Clawksis-specific provider metadata layered on top of models.dev."""
 
     transport: str = "openai_chat"  # openai_chat | anthropic_messages | codex_responses
-
     is_aggregator: bool = False
-
     auth_type: str = (
         "api_key"  # api_key | oauth_device_code | oauth_external | external_process
     )
-
     extra_env_vars: Tuple[str, ...] = ()  # env vars models.dev doesn't list
-
     base_url_override: str = ""  # override if models.dev URL is wrong/missing
-
     base_url_env_var: str = ""  # env var for user-custom base URL
 
 
@@ -79,11 +51,6 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         transport="openai_chat",
         is_aggregator=True,
         base_url_env_var="OPENROUTER_BASE_URL",
-    ),
-    "nous": ClawksisOverlay(
-        transport="openai_chat",
-        auth_type="oauth_device_code",
-        base_url_override="https://inference-api.nousresearch.com/v1",
     ),
     "openai-codex": ClawksisOverlay(
         transport="codex_responses",
@@ -232,6 +199,14 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         base_url_override="https://ollama.com/v1",
         base_url_env_var="OLLAMA_BASE_URL",
     ),
+    # Local Ollama daemon (OpenAI-compatible /v1). First-class provider so the
+    # Cookbook's locally-pulled models can be selected in the model picker and
+    # resolve end-to-end. No API key required; the runtime resolver supplies a
+    # non-empty dummy key. Distinct from "ollama-cloud" (ollama.com).
+    "ollama": ClawksisOverlay(
+        transport="openai_chat",
+        base_url_override="http://localhost:11434/v1",
+    ),
     # Azure Foundry: supports both OpenAI-style and Anthropic-style endpoints.
     # The transport is determined at runtime from config.yaml model.api_mode.
     "azure-foundry": ClawksisOverlay(
@@ -246,7 +221,6 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
 
 
 # -- Resolved provider -------------------------------------------------------
-
 # The merged result of models.dev + overlay + user config.
 
 
@@ -255,32 +229,20 @@ class ProviderDef:
     """Complete provider definition — merged from all sources."""
 
     id: str
-
     name: str
-
     transport: str  # openai_chat | anthropic_messages | codex_responses
-
     api_key_env_vars: Tuple[str, ...]  # all env vars to check for API key
-
     base_url: str = ""
-
     base_url_env_var: str = ""
-
     is_aggregator: bool = False
-
     auth_type: str = "api_key"
-
     doc: str = ""
-
     source: str = ""  # "models.dev", "clawk", "user-config"
 
 
 # -- Aliases ------------------------------------------------------------------
-
 # Maps human-friendly / legacy names to canonical provider IDs.
-
 # Uses models.dev IDs where possible.
-
 
 ALIASES: Dict[str, str] = {
     # openrouter
@@ -374,7 +336,11 @@ ALIASES: Dict[str, str] = {
     "lmstudio": "lmstudio",
     "lm-studio": "lmstudio",
     "lm_studio": "lmstudio",
-    "ollama": "custom",  # bare "ollama" = local; use "ollama-cloud" for cloud
+    # bare "ollama" = local Ollama daemon (first-class overlay provider);
+    # use "ollama-cloud" for ollama.com. Kept self-mapped so get_provider()
+    # reaches the overlay instead of collapsing to bare "custom" (which carries
+    # no base_url and would route a local model to OpenRouter).
+    "ollama": "ollama",
     "vllm": "local",
     "llamacpp": "local",
     "llama.cpp": "local",
@@ -383,14 +349,10 @@ ALIASES: Dict[str, str] = {
 
 
 # -- Display labels -----------------------------------------------------------
-
 # Built dynamically from models.dev + overlays.  Fallback for providers
-
 # not in the catalog.
 
-
 _LABEL_OVERRIDES: Dict[str, str] = {
-    "nous": "Nous Portal",
     "openai-codex": "OpenAI Codex",
     "copilot-acp": "GitHub Copilot ACP",
     "stepfun": "StepFun Step Plan",
@@ -400,13 +362,13 @@ _LABEL_OVERRIDES: Dict[str, str] = {
     "lmstudio": "LM Studio",
     "local": "Local endpoint",
     "bedrock": "AWS Bedrock",
+    "ollama": "Ollama (local)",
     "ollama-cloud": "Ollama Cloud",
     "xai-oauth": "xAI Grok OAuth (SuperGrok / Premium+)",
 }
 
 
 # -- Transport → API mode mapping ---------------------------------------------
-
 
 TRANSPORT_TO_API_MODE: Dict[str, str] = {
     "openai_chat": "chat_completions",
@@ -422,55 +384,34 @@ TRANSPORT_TO_API_MODE: Dict[str, str] = {
 def normalize_provider(name: str) -> str:
     """Resolve aliases and normalise casing to a canonical provider id.
 
-
-
     Returns the canonical id string.  Does *not* validate that the id
-
     corresponds to a known provider.
-
     """
-
     key = name.strip().lower()
-
     return ALIASES.get(key, key)
 
 
 def get_provider(name: str) -> Optional[ProviderDef]:
     """Look up a built-in provider by id or alias.
 
-
-
     Resolution order:
-
       1. Clawksis overlays (for providers not in models.dev: nous, openai-codex, etc.)
-
       2. models.dev catalog + Clawksis overlay
 
-
-
     User-defined providers from config.yaml (``providers:`` / ``custom_providers:``)
-
     are resolved by :func:`resolve_provider_full`, which layers ``resolve_user_provider``
-
     and ``resolve_custom_provider`` on top of this function. Callers that need
-
     user-config support should use ``resolve_provider_full`` instead.
 
-
-
     Returns a fully-resolved ProviderDef or None.
-
     """
-
     canonical = normalize_provider(name)
 
     # Try to get models.dev data
-
     try:
         from agent.models_dev import get_provider_info as _mdev_provider
 
         mdev_info = _mdev_provider(canonical)
-
     except Exception:
         mdev_info = None
 
@@ -478,21 +419,14 @@ def get_provider(name: str) -> Optional[ProviderDef]:
 
     if mdev_info is not None:
         # Merge models.dev + overlay
-
         transport = overlay.transport if overlay else "openai_chat"
-
         is_agg = overlay.is_aggregator if overlay else False
-
         auth = overlay.auth_type if overlay else "api_key"
-
         base_url_env = overlay.base_url_env_var if overlay else ""
-
         base_url_override = overlay.base_url_override if overlay else ""
 
         # Combine env vars: models.dev env + clawk extra
-
         env_vars = list(mdev_info.env)
-
         if overlay and overlay.extra_env_vars:
             for ev in overlay.extra_env_vars:
                 if ev not in env_vars:
@@ -513,7 +447,6 @@ def get_provider(name: str) -> Optional[ProviderDef]:
 
     if overlay is not None:
         # Clawksis-only provider (not in models.dev)
-
         return ProviderDef(
             id=canonical,
             name=_LABEL_OVERRIDES.get(canonical, canonical),
@@ -531,18 +464,14 @@ def get_provider(name: str) -> Optional[ProviderDef]:
 
 def get_label(provider_id: str) -> str:
     """Get a human-readable display name for a provider."""
-
     canonical = normalize_provider(provider_id)
 
     # Check label overrides first
-
     if canonical in _LABEL_OVERRIDES:
         return _LABEL_OVERRIDES[canonical]
 
     # Try models.dev
-
     pdef = get_provider(canonical)
-
     if pdef:
         return pdef.name
 
@@ -551,69 +480,49 @@ def get_label(provider_id: str) -> str:
 
 def is_aggregator(provider: str) -> bool:
     """Return True when the provider is a multi-model aggregator."""
-
-    pdef = get_provider(provider)
-
+    provider_norm = normalize_provider(provider or "")
+    if provider_norm.startswith("custom:"):
+        return True
+    pdef = get_provider(provider_norm)
     return pdef.is_aggregator if pdef else False
 
 
 def determine_api_mode(provider: str, base_url: str = "") -> str:
     """Determine the API mode (wire protocol) for a provider/endpoint.
 
-
-
     Resolution order:
-
       1. Known provider → transport → TRANSPORT_TO_API_MODE.
-
       2. URL heuristics for unknown / custom providers.
-
       3. Default: 'chat_completions'.
-
     """
-
     pdef = get_provider(provider)
-
     if pdef is not None:
         # Even for known providers, check URL heuristics for special endpoints
-
         # (e.g. kimi /coding endpoint needs anthropic_messages even on 'custom')
-
         if base_url:
             url_lower = base_url.rstrip("/").lower()
-
             if "api.kimi.com/coding" in url_lower:
                 return "anthropic_messages"
-
             if url_lower.endswith("/anthropic") or "api.anthropic.com" in url_lower:
                 return "anthropic_messages"
-
             if "api.openai.com" in url_lower:
                 return "codex_responses"
-
         return TRANSPORT_TO_API_MODE.get(pdef.transport, "chat_completions")
 
     # Direct provider checks for providers not in CLAWK_OVERLAYS
-
     if provider == "bedrock":
         return "bedrock_converse"
 
     # URL-based heuristics for custom / unknown providers
-
     if base_url:
         url_lower = base_url.rstrip("/").lower()
-
         hostname = base_url_hostname(base_url)
-
         if url_lower.endswith("/anthropic") or hostname == "api.anthropic.com":
             return "anthropic_messages"
-
         if hostname == "api.kimi.com" and "/coding" in url_lower:
             return "anthropic_messages"
-
         if hostname == "api.openai.com":
             return "codex_responses"
-
         if hostname.startswith("bedrock-runtime.") and base_url_host_matches(
             base_url, "amazonaws.com"
         ):
@@ -630,44 +539,29 @@ def resolve_user_provider(
 ) -> Optional[ProviderDef]:
     """Resolve a provider from the user's config.yaml ``providers:`` section.
 
-
-
     Args:
-
         name: Provider name as given by the user.
-
         user_config: The ``providers:`` dict from config.yaml.
 
-
-
     Returns:
-
         ProviderDef if found, else None.
-
     """
-
     if not user_config or not isinstance(user_config, dict):
         return None
 
     entry = user_config.get(name)
-
     if not isinstance(entry, dict):
         return None
 
     # Extract fields
-
     display_name = entry.get("name", "") or name
-
     api_url = (
         entry.get("api", "") or entry.get("url", "") or entry.get("base_url", "") or ""
     )
-
     key_env = entry.get("key_env", "") or ""
-
     transport = entry.get("transport", "openai_chat") or "openai_chat"
 
     env_vars: List[str] = []
-
     if key_env:
         env_vars.append(key_env)
 
@@ -686,16 +580,10 @@ def resolve_user_provider(
 def custom_provider_slug(display_name: str) -> str:
     """Build a canonical slug for a custom_providers entry.
 
-
-
     Matches the convention used by runtime_provider and credential_pool
-
     (``custom:<normalized-name>``).  Centralised here so all call-sites
-
     produce identical slugs.
-
     """
-
     return "custom:" + display_name.strip().lower().replace(" ", "-")
 
 
@@ -704,23 +592,17 @@ def resolve_custom_provider(
     custom_providers: Optional[List[Dict[str, Any]]],
 ) -> Optional[ProviderDef]:
     """Resolve a provider from the user's config.yaml ``custom_providers`` list."""
-
     if not custom_providers or not isinstance(custom_providers, list):
         return None
 
     requested = (name or "").strip().lower()
-
     if not requested:
         return None
 
     # If the stored provider is the bare string "custom" (corrupt state
-
     # from a prior model-switch bug), fall back to the first custom
-
     # provider entry so existing configs self-heal.  (GH #17478)
-
     bare_custom_fallback = requested == "custom"
-
     first_valid = None
 
     for entry in custom_providers:
@@ -728,24 +610,20 @@ def resolve_custom_provider(
             continue
 
         display_name = (entry.get("name") or "").strip()
-
         api_url = (
             entry.get("base_url", "")
             or entry.get("url", "")
             or entry.get("api", "")
             or ""
         ).strip()
-
         if not display_name or not api_url:
             continue
 
         # Stash the first valid entry for bare-"custom" fallback
-
         if first_valid is None:
             first_valid = (display_name, api_url)
 
         slug = custom_provider_slug(display_name)
-
         if requested not in {display_name.lower(), slug}:
             continue
 
@@ -761,12 +639,9 @@ def resolve_custom_provider(
         )
 
     # Self-heal: bare "custom" matched nothing — return first valid entry
-
     if bare_custom_fallback and first_valid:
         dname, aurl = first_valid
-
         slug = custom_provider_slug(dname)
-
         return ProviderDef(
             id=slug,
             name=dname,
@@ -788,92 +663,58 @@ def resolve_provider_full(
 ) -> Optional[ProviderDef]:
     """Full resolution chain: built-in → models.dev → user config.
 
-
-
     This is the main entry point for --provider flag resolution.
 
-
-
     Args:
-
         name: Provider name or alias.
-
         user_providers: The ``providers:`` dict from config.yaml (optional).
-
         custom_providers: The ``custom_providers:`` list from config.yaml (optional).
 
-
-
     Returns:
-
         ProviderDef if found, else None.
-
     """
-
     canonical = normalize_provider(name)
-
     raw = name.strip().lower()
 
     # 0. User-defined config providers win over the built-in alias table.
-
     #    A user who declares ``providers.<name>`` in config.yaml has stated
-
     #    explicit intent for that name — it must not be hijacked by a legacy
-
     #    vendor alias (e.g. bare "openai" → "openrouter"). Resolve the raw
-
     #    name against user config FIRST so a configured ``providers.openai``
-
     #    (pointing at api.openai.com) beats the alias that would otherwise
-
     #    silently route to OpenRouter. Only the raw (pre-alias) name is tried
-
     #    here; canonical/alias resolution still happens below.
-
     if user_providers:
         user_pdef = resolve_user_provider(raw, user_providers)
-
         if user_pdef is not None:
             return user_pdef
 
     # 1. Built-in (models.dev + overlays)
-
     pdef = get_provider(canonical)
-
     if pdef is not None:
         return pdef
 
     # 2. User-defined providers from config
-
     if user_providers:
         # Try canonical name
-
         user_pdef = resolve_user_provider(canonical, user_providers)
-
         if user_pdef is not None:
             return user_pdef
-
         # Try original name (in case alias didn't match)
-
         user_pdef = resolve_user_provider(raw, user_providers)
-
         if user_pdef is not None:
             return user_pdef
 
     # 2b. Saved custom providers from config
-
     custom_pdef = resolve_custom_provider(name, custom_providers)
-
     if custom_pdef is not None:
         return custom_pdef
 
     # 3. Try models.dev directly (for providers not in our ALIASES)
-
     try:
         from agent.models_dev import get_provider_info as _mdev_provider
 
         mdev_info = _mdev_provider(canonical)
-
         if mdev_info is not None:
             return ProviderDef(
                 id=canonical,
@@ -883,7 +724,6 @@ def resolve_provider_full(
                 base_url=mdev_info.api,
                 source="models.dev",
             )
-
     except Exception:
         pass
 

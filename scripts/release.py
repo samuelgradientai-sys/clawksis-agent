@@ -1,93 +1,112 @@
 #!/usr/bin/env python3
-
 """Clawksis Release Script
-
-
 
 Generates changelogs and creates GitHub releases with CalVer tags.
 
-
-
 Usage:
-
     # Preview changelog (dry run)
-
     python scripts/release.py
 
-
-
     # Preview with semver bump
-
     python scripts/release.py --bump minor
 
-
-
     # Create the release
-
     python scripts/release.py --bump minor --publish
 
-
-
     # First release (no previous tag)
-
     python scripts/release.py --bump minor --publish --first-release
 
-
-
     # Override CalVer date (e.g. for a belated release)
-
     python scripts/release.py --bump minor --publish --date 2026.3.15
-
 """
 
 import argparse
-
 import json
-
 import re
-
 import shutil
-
 import subprocess
-
 import sys
-
 from collections import defaultdict
-
 from datetime import datetime
-
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
 VERSION_FILE = REPO_ROOT / "clawk_cli" / "__init__.py"
-
 PYPROJECT_FILE = REPO_ROOT / "pyproject.toml"
 
-
 # ACP Registry manifest must stay version-locked with pyproject.toml.
-
 # tests/acp/test_registry_manifest.py enforces this lockstep so the release
-
 # bump touches both files atomically.
-
 ACP_REGISTRY_MANIFEST = REPO_ROOT / "acp_registry" / "agent.json"
 
-
 # ──────────────────────────────────────────────────────────────────────
-
 # Git email → GitHub username mapping
-
 # ──────────────────────────────────────────────────────────────────────
-
 
 # Auto-extracted from noreply emails + manual overrides
-
 AUTHOR_MAP = {
+    "kenmege@yahoo.com": "Kenmege",
+    "dkobi16@gmail.com": "Diyoncrz18",
+    "arnaud@nolimitdevelopment.com": "ali-nld",
+    "sswdarius@gmail.com": "necoweb3",
+    "peterhao@Peters-MacBook-Air.local": "pinguarmy",
+    "adalsteinnhelgason@Aalsteinns-MacBook-Pro-3.local": "AIalliAI",
+    "adalsteinnhelgason@users.noreply.github.com": "AIalliAI",
+    "zhang.hz6666@gmail.com": "HaozheZhang6",
+    "barronlroth@gmail.com": "barronlroth",
+    "ondrej.drapalik@gmail.com": "OndrejDrapalik",
+    "tomasz.panek@gmail.com": "tomekpanek",
+    "philipadsouza@gmail.com": "PhilipAD",
+    "zhuhaoyu0909@icloud.com": "underthestars-zhy",
+    "raysun12142006@gmail.com": "yanxue06",
+    "alberto.regalado@ymail.com": "ARegalado1",
+    "alchemistchaos@protonmail.com": "AlchemistChaos",  # co-author only
+    "gilad@smiti.ai": "giladbau",
+    "yusufalweshdemir@gmail.com": "Dusk1e",
+    "804436395@qq.com": "LaPhilosophie",
+    "maxmitcham@mac.home": "maxtrigify",
+    "ccook@nvms.com": "ccook1963",
+    "kristian@agrointel.no": "kristianvast",
+    "thomas.paquette@gmail.com": "RyTsYdUp",
+    "techxacm@gmail.com": "ProgramCaiCai",
+    "266365592+bmoore210@users.noreply.github.com": "bmoore210",
+    "123150002+deaneeth@users.noreply.github.com": "deaneeth",
+    "157839748+psionic73@users.noreply.github.com": "psionic73",
+    "manishbyatroy@gmail.com": "manishbyatroy",
+    "chilltulpa@gmail.com": "TheGardenGallery",
+    "al@randomsnowflake.me": "randomsnowflake",
+    "zakame@zakame.net": "zakame",
+    "152110621+jiangkoumo@users.noreply.github.com": "jiangkoumo",
+    "834740219@qq.com": "ViewWay",
+    "matt@vestigial.dev": "m4dni5",
+    "harjoth.khara@gmail.com": "harjothkhara",
+    "129007007+HeLLGURD@users.noreply.github.com": "HeLLGURD",
+    "290859878+synapsesx@users.noreply.github.com": "synapsesx",
+    "157689911+itsflownium@users.noreply.github.com": "itsflownium",
+    "dirtyren@users.noreply.github.com": "dirtyren",
+    "github@aldo.pw": "aldoeliacim",
+    "max@c60spaceship.com": "MaxFreedomPollard",
+    "achaljhawar03@gmail.com": "achaljhawar",
+    "claytonchew@ClaytonMacMiniM4.local": "claytonchew",
+    "hbentel@gmail.com": "hbentel",
+    "JustinBao@outlook.com": "justinbao19",
+    "kdunn926@gmail.com": "kdunn926",
+    "mvanhorn@MacBook-Pro.local": "mvanhorn",
+    "470766206@qq.com": "youjunxiaji",
+    "mharris@parallel.ai": "NormallyGaussian",
+    "roger@roger.local": "mollusk",
+    "ted.malone@outlook.com": "temalo",
+    "adityamalik2833@gmail.com": "alarcritty",
+    "islam666@users.noreply.github.com": "islam666",
+    "mnajafian@nvidia.com": "mnajafian-nv",
+    "25539605+lsaether@users.noreply.github.com": "lsaether",
+    "30080538+JimStenstrom@users.noreply.github.com": "JimStenstrom",
+    "rod.boev@gmail.com": "rodboev",
+    "70290504+dangelo352@users.noreply.github.com": "dangelo352",
     "zhaolei.vc@bytedance.com": "zhaoleibd",
     "jeffrobodie@gmail.com": "jeffrobodie-glitch",
     "kyssta-exe@users.noreply.github.com": "kyssta-exe",
+    "ali.zakaee.1997@gmail.com": "ITheEqualizer",
     "copii.list@gmail.com": "stremtec",
     "solaiagent@gmail.com": "solaitken",
     "cryptoworlldz@gmail.com": "worlldz",
@@ -104,12 +123,16 @@ AUTHOR_MAP = {
     "david.gutowsky@gmail.com": "davidgut1982",
     "drpelagik@gmail.com": "SeaXen",
     "lengr@users.noreply.github.com": "LengR",
+    "Kewe63@users.noreply.github.com": "Kewe63",
+    "kewe.3217@gmail.com": "Kewe63",
     "17255546+CharZhou@users.noreply.github.com": "CharZhou",
     "metalclaudbot@gmail.com": "HashClawAI",
     "tonybear55665566@gmail.com": "TonyPepeBear",
     "kaspersniels@gmail.com": "nielskaspers",
+    "daxxpasquini@gmail.com": "bpasquini",
     "kurobaryo@gmail.com": "kurobaryo",
     "scubamount@users.noreply.github.com": "scubamount",
+    "251514042+youngstar-eth@users.noreply.github.com": "youngstar-eth",
     "155192176+alelpoan@users.noreply.github.com": "alelpoan",
     "aman@abacus.ai": "Aman113114-IITD",
     "octavio.turra@gmail.com": "octavioturra",
@@ -131,6 +154,7 @@ AUTHOR_MAP = {
     "wangpuv@hotmail.com": "wangpuv",
     "202622897+ticketclosed-wontfix@users.noreply.github.com": "ticketclosed-wontfix",
     "wuxuebin1993@gmail.com": "victorGPT",
+    "xiaoxingitee@gmail.com": "xiaoxinova",
     "wei.chen.coder@gmail.com": "wenchengxucool",
     "frowte3k@gmail.com": "Frowtek",
     "211828103+julio-cloudvisor@users.noreply.github.com": "julio-cloudvisor",
@@ -196,6 +220,7 @@ AUTHOR_MAP = {
     "AdamPlatin123@outlook.com": "AdamPlatin123",
     "32711803+waefrebeorn@users.noreply.github.com": "waefrebeorn",
     "32869278+dusterbloom@users.noreply.github.com": "dusterbloom",
+    "189737461+basilalshukaili@users.noreply.github.com": "basilalshukaili",
     "liuhao1024@users.noreply.github.com": "liuhao1024",
     "annguyenNous@users.noreply.github.com": "annguyenNous",
     "285874597+annguyenNous@users.noreply.github.com": "annguyenNous",
@@ -213,6 +238,8 @@ AUTHOR_MAP = {
     "30312689+aashizpoudel@users.noreply.github.com": "aashizpoudel",
     "oleksii.lisikh@gmail.com": "olisikh",
     "jithendranaidunara@gmail.com": "JithendraNara",
+    "islam666@users.noreply.github.com": "islam666",
+    "30467832+islam666@users.noreply.github.com": "islam666",
     "jeremy@geocaching.com": "outdoorsea",
     "54763683+thedavidmurray@users.noreply.github.com": "thedavidmurray",
     "leone.parise@gmail.com": "leoneparise",
@@ -333,6 +360,7 @@ AUTHOR_MAP = {
     "rino.alpin@gmail.com": "kunci115",  # PR #27098 salvage (thread-not-found retry)
     "hayka-pacha@users.noreply.github.com": "hayka-pacha",  # PR #25270 salvage (registry-aware mcp_ prefix strip)
     "237601532+chromalinx@users.noreply.github.com": "chromalinx",  # PR #27014 salvage (commands for groups+DM)
+    "chromalinx@users.noreply.github.com": "chromalinx",  # PR #37026 salvage (SSL CA guard)
     "booker1207@gmail.com": "booker1207",  # PR #25132 salvage (gate profile bots by allowed topics)
     "kiranvk2011@gmail.com": "kiranvk-2011",  # PR #24815 salvage (image documents → vision)
     "kosmonaut-t@centrum.cz": "rak135",  # PR #25960 salvage (Windows /restart)
@@ -474,6 +502,7 @@ AUTHOR_MAP = {
     "20nik.nosov21@gmail.com": "nik1t7n",
     "90299797+nik1t7n@users.noreply.github.com": "nik1t7n",
     "suncokret@protonmail.com": "suncokret12",
+    "WompaJango@protonmail.com": "WompaJango",
     "mio.imoto.ai@gmail.com": "mioimotoai-lgtm",
     "aamirjawaid@microsoft.com": "heyitsaamir",
     "johnnncenaaa77@gmail.com": "johnncenae",
@@ -936,6 +965,8 @@ AUTHOR_MAP = {
     "michel.belleau@malaiwah.com": "malaiwah",
     "gnanasekaran.sekareee@gmail.com": "gnanam1990",
     "jz.pentest@gmail.com": "0xyg3n",
+    "56406949+RaumfahrerSpiffy@users.noreply.github.com": "Spaceman-Spiffy",  # PR #35586 (renamed account)
+    "ian@culling.ca": "ianculling",  # PR #36087
     "7093928+0xyg3n@users.noreply.github.com": "0xyg3n",
     "nftpoetrist@gmail.com": "nftpoetrist",  # PR #18982
     "millerc79@users.noreply.github.com": "millerc79",  # PR #19033
@@ -973,7 +1004,9 @@ AUTHOR_MAP = {
     "limkuan24@gmail.com": "WideLee",
     "aviralarora002@gmail.com": "AviArora02-commits",
     "draixagent@gmail.com": "draix",
+    "martin.alca@gmail.com": "draix",
     "junminliu@gmail.com": "JimLiu",
+    "juraj@bednar.io": "jooray",
     "jarvischer@gmail.com": "maxchernin",
     "levantam.98.2324@gmail.com": "LVT382009",
     "zhurongcheng@rcrai.com": "heykb",
@@ -1034,6 +1067,7 @@ AUTHOR_MAP = {
     "zhang9w0v5@qq.com": "zhang9w0v5",
     "fuleinist@outlook.com": "fuleinist",
     "43494187+Llugaes@users.noreply.github.com": "Llugaes",
+    "xiangji.chen@centurygame.com": "Llugaes",
     "fengtianyu88@users.noreply.github.com": "fengtianyu88",
     "l.moncany@gmail.com": "lmoncany",
     "fatinghenji@users.noreply.github.com": "fatinghenji",
@@ -1094,6 +1128,7 @@ AUTHOR_MAP = {
     "holynn@placeholder.local": "holynn-q",
     "agent@clawk.local": "jacdevos",
     "sunsky.lau@gmail.com": "liuhao1024",
+    "rob@rbrtbn.com": "rbrtbn",
     "haaasined@gmail.com": "VinciZhu",
     "fabianoeq@gmail.com": "rodrigoeqnit",
     "178342791+sgtworkman@users.noreply.github.com": "sgtworkman",
@@ -1199,6 +1234,16 @@ AUTHOR_MAP = {
     "chenzeshi@live.com": "chen1749144759",
     "mor.aleksandr@yahoo.com": "MorAlekss",
     "276649498+ztexydt-cqh@users.noreply.github.com": "ztexydt-cqh",
+    # v0.16.0 additions
+    "teknium@nous.dev": "teknium1",
+    "alaamohanad169@gmail.com": "alaamohanad169-ship-it",
+    "archer@ouyangdeMac-mini.local": "Archerouyang",  # display name 欧阳
+    "batosk2@gmail.com": "Sarbai",  # git email for PR #33438 author (display: Брагарник Дмитро)
+    "info@aminvakil.com": "aminvakil",
+    "nikpolale@gmail.com": "polnikale",
+    "sarveshagl1327@gmail.com": "sarvesh1327",  # salvaged via #38655
+    "sohyuanchin@gmail.com": "wysie",
+    "bedirhan@codeway.co": "bedirhancode",
     "ash@users.noreply.github.com": "ash",
     "andrewho.sf@gmail.com": "andrewhosf",
     # April 2026 Honcho bug-fix consolidation (#15381)
@@ -1228,10 +1273,12 @@ AUTHOR_MAP = {
     "teknium@clawksis-agent": "teknium1",
     "web3blind@gmail.com": "web3blind",
     "ztzheng@163.com": "chengoak",  # PR #17467
+    "zwcf5200@163.com": "zwcf5200",  # PR #38661 (SSH remote cwd fix)
     "24110240104@m.fudan.edu.cn": "YuShu",  # co-author only
     "charliekerfoot@gmail.com": "CharlieKerfoot",  # PR #18951
     # Debug share upload-time redaction (May 2026)
     "dhuysamen@gmail.com": "GodsBoy",  # PR #19318
+    "github@nadyaclawk.anonaddy.com": "ruangraung",  # PR #42308
     "mrcoferland@gmail.com": "mrcoferland",  # PR #19023
     "chenlinfeng@ruije.com.cn": "noOne-list",  # PR #19050
     "briansu@Mac-mini.attlocal.net": "likejudy",  # PR #19052
@@ -1254,6 +1301,7 @@ AUTHOR_MAP = {
     "leon@sgp43.com": "LeonSGP43",  # PR #18739 salvage of #14570
     "miniding@miniding.home": "Foolafroos",  # PR #20329 French locale
     "montbra@gmail.com": "Montbra",  # PR #20897 salvage of #16189 (TUI voice PTT)
+    "275835513+paulb26@users.noreply.github.com": "paulb26",  # PR #24135 salvage (pty-bridge killpg)
     "promptsiren@gmail.com": "firefly",  # PR #18123 salvage of #16660 (ContextVars)
     "wtyopenclaw@gmail.com": "WuTianyi123",  # PR #20275 salvage of #13723 (feishu markdown)
     "zhicheng.han@mathematik.uni-goettingen.de": "hanzckernel",  # PR #20311 (api-server approval events)
@@ -1459,6 +1507,7 @@ AUTHOR_MAP = {
     # v0.15.0 additions
     "glen@workmanfirearms.com": "sgtworkman",
     "jorge.fuenmayort@gmail.com": "jfuenmayor",
+    "josh.dow@prepad.io": "joshuadow",  # PR #43004 salvage (desktop WS session rebind)
     "mordred@inaugust.com": "emonty",
     "rodrigoeq@hotmail.com": "rodrigoeqnit",
     "soliva.johnpaul@icloud.com": "jonpol01",
@@ -1480,30 +1529,32 @@ AUTHOR_MAP = {
     "nicsequenzy@gmail.com": "polnikale",  # PR #35717 (discover Playwright headless_shell browser)
     "wasdhkzk@gmail.com": "whyhkzk",  # PR #32407 (sandbox-mirror inner-container guard; commits authored as whyhkzk + zhukun)
     "leonard@sellem.me": "leonardsellem",  # PR #37405 (desktop WS origin guard on remote/Tailscale binds)
+    "42903577+ohMyJason@users.noreply.github.com": "ohMyJason",  # PR #29810 (discover_models in custom_providers section 4)
+    "singhsanidhya741@gmail.com": "sanidhyasin",  # PR #40403 salvage (model.default_headers for custom OpenAI-compatible providers, #40033)
+    "josephjohnson.joel@gmail.com": "JoelJJohnson",  # PR #39913 salvage (Windows ConPTY dashboard chat bridge)
+    "andreas@schwarz-ketsch.de": "Nea74",  # PR #40022 co-author credit (same Windows ConPTY bridge design)
+    "chanhokyim@gmail.com": "joel611",  # PR #33958 salvage (DISCORD_ALLOWED_ROLES role_authorized gateway flag)
+    "desg38@gmail.com": "dschnurbusch",  # PR #42373 salvage (archive compressed conversation lineages)
+    "bsmith@bramarstrategicservices.com": "bcsmith528",  # PR #20589 salvage (register_slack_action_handler plugin API)
+    "sunsky.lau@gmail.com": "liuhao1024",  # PR #45494 salvage (claim session slot before auto-resume task; #45456)
 }
 
 
 def git(*args, cwd=None):
     """Run a git command and return stdout."""
-
     result = subprocess.run(
         ["git"] + list(args),
-        capture_output=True,
-        text=True,
+        capture_output=True, text=True,
         cwd=cwd or str(REPO_ROOT),
     )
-
     if result.returncode != 0:
         print(f"git {' '.join(args)} failed: {result.stderr}", file=sys.stderr)
-
         return ""
-
     return result.stdout.strip()
 
 
 def git_result(*args, cwd=None):
     """Run a git command and return the full CompletedProcess."""
-
     return subprocess.run(
         ["git"] + list(args),
         capture_output=True,
@@ -1514,66 +1565,47 @@ def git_result(*args, cwd=None):
 
 def get_last_tag():
     """Get the most recent CalVer tag."""
-
     tags = git("tag", "--list", "v20*", "--sort=-v:refname")
-
     if tags:
         return tags.split("\n")[0]
-
     return None
 
 
 def next_available_tag(base_tag: str) -> tuple[str, str]:
     """Return a tag/calver pair, suffixing same-day releases when needed."""
-
     if not git("tag", "--list", base_tag):
         return base_tag, base_tag.removeprefix("v")
 
     suffix = 2
-
     while git("tag", "--list", f"{base_tag}.{suffix}"):
         suffix += 1
-
     tag_name = f"{base_tag}.{suffix}"
-
     return tag_name, tag_name.removeprefix("v")
 
 
 def get_current_version():
     """Read current semver from __init__.py."""
-
     content = VERSION_FILE.read_text()
-
     match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
-
     return match.group(1) if match else "0.0.0"
 
 
 def bump_version(current: str, part: str) -> str:
     """Bump a semver version string."""
-
     parts = current.split(".")
-
     if len(parts) != 3:
         parts = ["0", "0", "0"]
-
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
 
     if part == "major":
         major += 1
-
         minor = 0
-
         patch = 0
-
     elif part == "minor":
         minor += 1
-
         patch = 0
-
     elif part == "patch":
         patch += 1
-
     else:
         raise ValueError(f"Unknown bump part: {part}")
 
@@ -1582,92 +1614,64 @@ def bump_version(current: str, part: str) -> str:
 
 def update_version_files(semver: str, calver_date: str):
     """Update version strings in source files."""
-
     # Update __init__.py
-
     content = VERSION_FILE.read_text()
-
     content = re.sub(
         r'__version__\s*=\s*"[^"]+"',
         f'__version__ = "{semver}"',
         content,
     )
-
     content = re.sub(
         r'__release_date__\s*=\s*"[^"]+"',
         f'__release_date__ = "{calver_date}"',
         content,
     )
-
     VERSION_FILE.write_text(content)
 
     # Update pyproject.toml
-
     pyproject = PYPROJECT_FILE.read_text()
-
     pyproject = re.sub(
         r'^version\s*=\s*"[^"]+"',
         f'version = "{semver}"',
         pyproject,
         flags=re.MULTILINE,
     )
-
     PYPROJECT_FILE.write_text(pyproject)
 
     # Keep the desktop Electron app's package.json version in lockstep with the
-
     # Python package version. The desktop About panel reads the live Clawksis
-
     # version at runtime, but app.getVersion()/packaging metadata still come
-
     # from this field, so it must track pyproject to avoid drift.
-
     desktop_pkg = REPO_ROOT / "apps" / "desktop" / "package.json"
-
     if desktop_pkg.exists():
         pkg_text = desktop_pkg.read_text(encoding="utf-8")
-
         pkg_text = re.sub(
             r'("version"\s*:\s*)"[^"]+"',
             rf'\g<1>"{semver}"',
             pkg_text,
             count=1,
         )
-
         desktop_pkg.write_text(pkg_text, encoding="utf-8")
 
     # Update ACP Registry manifest + npm launcher (must stay version-locked
-
     # with pyproject — enforced by tests/acp/test_registry_manifest.py).
-
     _update_acp_registry_versions(semver)
 
 
 def _update_acp_registry_versions(semver: str) -> None:
     """Bump the ACP Registry manifest's version + uvx package pin in lockstep
-
     with pyproject.
 
-
-
     Skips silently if the manifest is missing — older release branches predate
-
     the ACP Registry assets.
-
     """
-
     if ACP_REGISTRY_MANIFEST.exists():
         manifest = json.loads(ACP_REGISTRY_MANIFEST.read_text(encoding="utf-8"))
-
         manifest["version"] = semver
-
         uvx = manifest.get("distribution", {}).get("uvx", {})
-
         if "package" in uvx:
             uvx["package"] = f"clawksis-agent[acp]=={semver}"
-
         # Preserve trailing newline + 2-space indent the file already uses.
-
         ACP_REGISTRY_MANIFEST.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )
@@ -1676,25 +1680,16 @@ def _update_acp_registry_versions(semver: str) -> None:
 def build_release_artifacts(semver: str) -> list[Path]:
     """Build sdist/wheel artifacts for the current release.
 
-
-
     Tries ``uv build`` first (matching the CI workflow), falls back to
-
     ``python -m build`` if uv is unavailable.
-
     """
-
     dist_dir = REPO_ROOT / "dist"
-
     shutil.rmtree(dist_dir, ignore_errors=True)
 
     # Prefer uv build (matches CI workflow), fall back to python -m build.
-
     uv_bin = shutil.which("uv")
-
     if uv_bin:
         cmd = [uv_bin, "build", "--sdist", "--wheel"]
-
     else:
         cmd = [sys.executable, "-m", "build", "--sdist", "--wheel"]
 
@@ -1704,95 +1699,62 @@ def build_release_artifacts(semver: str) -> list[Path]:
         capture_output=True,
         text=True,
     )
-
     if result.returncode != 0:
         print("  ⚠ Could not build Python release artifacts.")
-
         stderr = result.stderr.strip()
-
         stdout = result.stdout.strip()
-
         if stderr:
             print(f"    {stderr.splitlines()[-1]}")
-
         elif stdout:
             print(f"    {stdout.splitlines()[-1]}")
-
         print("    Install uv or the 'build' package to attach sdist/wheel assets.")
-
         return []
 
     artifacts = sorted(p for p in dist_dir.iterdir() if p.is_file())
-
     matching = [p for p in artifacts if semver in p.name]
-
     if not matching:
         print("  ⚠ Built artifacts did not match the expected release version.")
-
         return []
-
     return matching
 
 
 def resolve_author(name: str, email: str) -> str:
     """Resolve a git author to a GitHub @mention."""
-
     # Try email lookup first
-
     gh_user = AUTHOR_MAP.get(email)
-
     if gh_user:
         return f"@{gh_user}"
 
     # Try noreply pattern
-
     noreply_match = re.match(r"(\d+)\+(.+)@users\.noreply\.github\.com", email)
-
     if noreply_match:
         return f"@{noreply_match.group(2)}"
 
     # Try username@users.noreply.github.com
-
     noreply_match2 = re.match(r"(.+)@users\.noreply\.github\.com", email)
-
     if noreply_match2:
         return f"@{noreply_match2.group(1)}"
 
     # Fallback to git name
-
     return name
 
 
 def categorize_commit(subject: str) -> str:
     """Categorize a commit by its conventional commit prefix."""
-
     subject_lower = subject.lower()
 
     # Match conventional commit patterns
-
     patterns = {
         "breaking": [r"^breaking[\s:(]", r"^!:", r"BREAKING CHANGE"],
         "features": [r"^feat[\s:(]", r"^feature[\s:(]", r"^add[\s:(]"],
         "fixes": [r"^fix[\s:(]", r"^bugfix[\s:(]", r"^bug[\s:(]", r"^hotfix[\s:(]"],
-        "improvements": [
-            r"^improve[\s:(]",
-            r"^perf[\s:(]",
-            r"^enhance[\s:(]",
-            r"^refactor[\s:(]",
-            r"^cleanup[\s:(]",
-            r"^clean[\s:(]",
-            r"^update[\s:(]",
-            r"^optimize[\s:(]",
-        ],
+        "improvements": [r"^improve[\s:(]", r"^perf[\s:(]", r"^enhance[\s:(]",
+                         r"^refactor[\s:(]", r"^cleanup[\s:(]", r"^clean[\s:(]",
+                         r"^update[\s:(]", r"^optimize[\s:(]"],
         "docs": [r"^doc[\s:(]", r"^docs[\s:(]"],
         "tests": [r"^test[\s:(]", r"^tests[\s:(]"],
-        "chore": [
-            r"^chore[\s:(]",
-            r"^ci[\s:(]",
-            r"^build[\s:(]",
-            r"^deps[\s:(]",
-            r"^bump[\s:(]",
-        ],
+        "chore": [r"^chore[\s:(]", r"^ci[\s:(]", r"^build[\s:(]",
+                  r"^deps[\s:(]", r"^bump[\s:(]"],
     }
 
     for category, regexes in patterns.items():
@@ -1801,13 +1763,10 @@ def categorize_commit(subject: str) -> str:
                 return category
 
     # Heuristic fallbacks
-
     if any(w in subject_lower for w in ["add ", "new ", "implement", "support "]):
         return "features"
-
     if any(w in subject_lower for w in ["fix ", "fixed ", "resolve", "patch "]):
         return "fixes"
-
     if any(w in subject_lower for w in ["refactor", "cleanup", "improve", "update "]):
         return "improvements"
 
@@ -1816,87 +1775,49 @@ def categorize_commit(subject: str) -> str:
 
 def clean_subject(subject: str) -> str:
     """Clean up a commit subject for display."""
-
     # Remove conventional commit prefix
-
-    cleaned = re.sub(
-        r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*",
-        "",
-        subject,
-        flags=re.IGNORECASE,
-    )
-
+    cleaned = re.sub(r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*", "", subject, flags=re.IGNORECASE)
     # Remove trailing issue refs that are redundant with PR links
-
     cleaned = cleaned.strip()
-
     # Capitalize first letter
-
     if cleaned:
         cleaned = cleaned[0].upper() + cleaned[1:]
-
     return cleaned
 
 
 def parse_coauthors(body: str) -> list:
     """Extract Co-authored-by trailers from a commit message body.
 
-
-
     Returns a list of {'name': ..., 'email': ...} dicts.
-
     Filters out AI assistants and bots (Claude, Copilot, Cursor, etc.).
-
     """
-
     if not body:
         return []
-
     # AI/bot emails to ignore in co-author trailers
-
-    _ignored_emails = {
-        "noreply@anthropic.com",
-        "noreply@github.com",
-        "cursoragent@cursor.com",
-        "clawk@nousresearch.com",
-    }
-
-    _ignored_names = re.compile(
-        r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)",
-        re.IGNORECASE,
-    )
-
+    _ignored_emails = {"noreply@anthropic.com", "noreply@github.com",
+                       "cursoragent@cursor.com", "clawk@nousresearch.com"}
+    _ignored_names = re.compile(r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)", re.IGNORECASE)
     pattern = re.compile(r"Co-authored-by:\s*(.+?)\s*<([^>]+)>", re.IGNORECASE)
-
     results = []
-
     for m in pattern.finditer(body):
         name, email = m.group(1).strip(), m.group(2).strip()
-
         if email in _ignored_emails or _ignored_names.match(name):
             continue
-
         results.append({"name": name, "email": email})
-
     return results
 
 
 def get_commits(since_tag=None):
     """Get commits since a tag (or all commits if None)."""
-
     if since_tag:
         range_spec = f"{since_tag}..HEAD"
-
     else:
         range_spec = "HEAD"
 
     # Format: hash<US>author_name<US>author_email<US>subject\0body
-
     # Using %x1f (unit separator) to avoid conflict with | in author names
-
     log = git(
-        "log",
-        range_spec,
+        "log", range_spec,
         "--format=%H%x1f%an%x1f%ae%x1f%s%x00%b%x00",
         "--no-merges",
     )
@@ -1905,40 +1826,25 @@ def get_commits(since_tag=None):
         return []
 
     commits = []
-
     # Split on double-null to get each commit entry, since body ends with \0
-
     # and format ends with \0, each record ends with \0\0 between entries
-
     for entry in log.split("\0\0"):
         entry = entry.strip()
-
         if not entry:
             continue
-
         # Split on first null to separate "hash<US>name<US>email<US>subject" from "body"
-
         if "\0" in entry:
             header, body = entry.split("\0", 1)
-
             body = body.strip()
-
         else:
             header = entry
-
             body = ""
-
         parts = header.split("\x1f", 3)
-
         if len(parts) != 4:
             continue
-
         sha, name, email, subject = parts
-
         coauthor_info = parse_coauthors(body)
-
         coauthors = [resolve_author(ca["name"], ca["email"]) for ca in coauthor_info]
-
         commits.append({
             "sha": sha,
             "short_sha": sha[:8],
@@ -1955,74 +1861,45 @@ def get_commits(since_tag=None):
 
 def get_pr_number(subject: str) -> str | None:
     """Extract PR number from commit subject if present."""
-
     match = re.search(r"#(\d+)", subject)
-
     if match:
         return match.group(1)
-
     return None
 
 
-def generate_changelog(
-    commits,
-    tag_name,
-    semver,
-    repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
-    prev_tag=None,
-    first_release=False,
-):
+def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
+                       prev_tag=None, first_release=False):
     """Generate markdown changelog from categorized commits."""
-
     lines = []
 
     # Header
-
     now = datetime.now()
-
     date_str = now.strftime("%B %d, %Y")
-
     lines.append(f"# Clawksis v{semver} ({tag_name})")
-
     lines.append("")
-
     lines.append(f"**Release Date:** {date_str}")
-
     lines.append("")
 
     if first_release:
-        lines.append(
-            "> 🎉 **First official release!** This marks the beginning of regular weekly releases"
-        )
-
-        lines.append(
-            "> for Clawksis. See below for everything included in this initial release."
-        )
-
+        lines.append("> 🎉 **First official release!** This marks the beginning of regular weekly releases")
+        lines.append("> for Clawksis. See below for everything included in this initial release.")
         lines.append("")
 
     # Group commits by category
-
     categories = defaultdict(list)
-
     all_authors = set()
-
     teknium_aliases = {"@teknium1"}
 
     for commit in commits:
         categories[commit["category"]].append(commit)
-
         author = commit["github_author"]
-
         if author not in teknium_aliases:
             all_authors.add(author)
-
         for coauthor in commit.get("coauthors", []):
             if coauthor not in teknium_aliases:
                 all_authors.add(coauthor)
 
     # Category display order and emoji
-
     category_order = [
         ("breaking", "⚠️ Breaking Changes"),
         ("features", "✨ Features"),
@@ -2036,32 +1913,23 @@ def generate_changelog(
 
     for cat_key, cat_title in category_order:
         cat_commits = categories.get(cat_key, [])
-
         if not cat_commits:
             continue
 
         lines.append(f"## {cat_title}")
-
         lines.append("")
 
         for commit in cat_commits:
             subject = clean_subject(commit["subject"])
-
             pr_num = get_pr_number(commit["subject"])
-
             author = commit["github_author"]
 
             # Build the line
-
             parts = [f"- {subject}"]
-
             if pr_num:
                 parts.append(f"([#{pr_num}]({repo_url}/pull/{pr_num}))")
-
             else:
-                parts.append(
-                    f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))"
-                )
+                parts.append(f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))")
 
             if author not in teknium_aliases:
                 parts.append(f"— {author}")
@@ -2071,18 +1939,13 @@ def generate_changelog(
         lines.append("")
 
     # Contributors section
-
     if all_authors:
         # Sort contributors by commit count
-
         author_counts = defaultdict(int)
-
         for commit in commits:
             author = commit["github_author"]
-
             if author not in teknium_aliases:
                 author_counts[author] += 1
-
             for coauthor in commit.get("coauthors", []):
                 if coauthor not in teknium_aliases:
                     author_counts[coauthor] += 1
@@ -2090,308 +1953,193 @@ def generate_changelog(
         sorted_authors = sorted(author_counts.items(), key=lambda x: -x[1])
 
         lines.append("## 👥 Contributors")
-
         lines.append("")
-
         lines.append("Thank you to everyone who contributed to this release!")
-
         lines.append("")
-
         for author, count in sorted_authors:
             commit_word = "commit" if count == 1 else "commits"
-
             lines.append(f"- {author} ({count} {commit_word})")
-
         lines.append("")
 
     # Full changelog link
-
     if prev_tag:
-        lines.append(
-            f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})"
-        )
-
+        lines.append(f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})")
     else:
         lines.append(f"**Full Changelog**: [{tag_name}]({repo_url}/commits/{tag_name})")
-
     lines.append("")
 
     return "\n".join(lines)
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="Clawksis Release Tool")
-
-    parser.add_argument(
-        "--bump",
-        choices=["major", "minor", "patch"],
-        help="Which semver component to bump",
-    )
-
-    parser.add_argument(
-        "--publish",
-        action="store_true",
-        help="Actually create the tag and GitHub release (otherwise dry run)",
-    )
-
-    parser.add_argument(
-        "--date", type=str, help="Override CalVer date (format: YYYY.M.D)"
-    )
-
-    parser.add_argument(
-        "--first-release",
-        action="store_true",
-        help="Mark as first release (no previous tag expected)",
-    )
-
-    parser.add_argument(
-        "--output", type=str, help="Write changelog to file instead of stdout"
-    )
-
+    parser.add_argument("--bump", choices=["major", "minor", "patch"],
+                        help="Which semver component to bump")
+    parser.add_argument("--publish", action="store_true",
+                        help="Actually create the tag and GitHub release (otherwise dry run)")
+    parser.add_argument("--date", type=str,
+                        help="Override CalVer date (format: YYYY.M.D)")
+    parser.add_argument("--first-release", action="store_true",
+                        help="Mark as first release (no previous tag expected)")
+    parser.add_argument("--output", type=str,
+                        help="Write changelog to file instead of stdout")
     args = parser.parse_args()
 
     # Determine CalVer date
-
     if args.date:
         calver_date = args.date
-
     else:
         now = datetime.now()
-
         calver_date = f"{now.year}.{now.month}.{now.day}"
 
     base_tag = f"v{calver_date}"
-
     tag_name, calver_date = next_available_tag(base_tag)
-
     if tag_name != base_tag:
         print(f"Note: Tag {base_tag} already exists, using {tag_name}")
 
     # Determine semver
-
     current_version = get_current_version()
-
     if args.bump:
         new_version = bump_version(current_version, args.bump)
-
     else:
         new_version = current_version
 
     # Get previous tag
-
     prev_tag = get_last_tag()
-
     if not prev_tag and not args.first_release:
         print("No previous tags found. Use --first-release for the initial release.")
-
         print(f"Would create tag: {tag_name}")
-
         print(f"Would set version: {new_version}")
-
         return
 
     # Get commits
-
     commits = get_commits(since_tag=prev_tag)
-
     if not commits:
         print("No new commits since last tag.")
-
         if not args.first_release:
             return
 
-    print(f"{'=' * 60}")
-
+    print(f"{'='*60}")
     print(f"  Clawksis Release Preview")
-
-    print(f"{'=' * 60}")
-
+    print(f"{'='*60}")
     print(f"  CalVer tag:      {tag_name}")
-
     print(f"  SemVer:          v{current_version} → v{new_version}")
-
     print(f"  Previous tag:    {prev_tag or '(none — first release)'}")
-
     print(f"  Commits:         {len(commits)}")
-
     print(f"  Unique authors:  {len({c['github_author'] for c in commits})}")
-
     print(f"  Mode:            {'PUBLISH' if args.publish else 'DRY RUN'}")
-
-    print(f"{'=' * 60}")
-
+    print(f"{'='*60}")
     print()
 
     # Generate changelog
-
     changelog = generate_changelog(
-        commits,
-        tag_name,
-        new_version,
+        commits, tag_name, new_version,
         prev_tag=prev_tag,
         first_release=args.first_release,
     )
 
     if args.output:
         Path(args.output).write_text(changelog, encoding="utf-8")
-
         print(f"Changelog written to {args.output}")
-
     else:
         print(changelog)
 
     if args.publish:
-        print(f"\n{'=' * 60}")
-
+        print(f"\n{'='*60}")
         print("  Publishing release...")
-
-        print(f"{'=' * 60}")
+        print(f"{'='*60}")
 
         # Update version files
-
         if args.bump:
             update_version_files(new_version, calver_date)
-
             print(f"  ✓ Updated version files to v{new_version} ({calver_date})")
 
             # Commit version bump
-
             add_files = [str(VERSION_FILE), str(PYPROJECT_FILE)]
-
             if ACP_REGISTRY_MANIFEST.exists():
                 add_files.append(str(ACP_REGISTRY_MANIFEST))
-
             add_result = git_result("add", *add_files)
-
             if add_result.returncode != 0:
                 print(f"  ✗ Failed to stage version files: {add_result.stderr.strip()}")
-
                 return
 
             commit_result = git_result(
                 "commit", "-m", f"chore: bump version to v{new_version} ({calver_date})"
             )
-
             if commit_result.returncode != 0:
-                print(
-                    f"  ✗ Failed to commit version bump: {commit_result.stderr.strip()}"
-                )
-
+                print(f"  ✗ Failed to commit version bump: {commit_result.stderr.strip()}")
                 return
-
             print(f"  ✓ Committed version bump")
 
         # Create annotated tag
-
         tag_result = git_result(
-            "tag",
-            "-a",
-            tag_name,
-            "-m",
-            f"Clawksis v{new_version} ({calver_date})\n\nWeekly release",
+            "tag", "-a", tag_name, "-m",
+            f"Clawksis v{new_version} ({calver_date})\n\nWeekly release"
         )
-
         if tag_result.returncode != 0:
             print(f"  ✗ Failed to create tag {tag_name}: {tag_result.stderr.strip()}")
-
             return
-
         print(f"  ✓ Created tag {tag_name}")
 
         # Push
-
         push_result = git_result("push", "origin", "HEAD", "--tags")
-
         if push_result.returncode == 0:
             print(f"  ✓ Pushed to origin")
-
         else:
             print(f"  ✗ Failed to push to origin: {push_result.stderr.strip()}")
-
             print("    Continue manually after fixing access:")
-
             print("    git push origin HEAD --tags")
 
         # Build semver-named Python artifacts so downstream packagers
-
         # (e.g. Homebrew) can target them without relying on CalVer tag names.
-
         artifacts = build_release_artifacts(new_version)
-
         if artifacts:
             print("  ✓ Built release artifacts:")
-
             for artifact in artifacts:
                 print(f"    - {artifact.relative_to(REPO_ROOT)}")
 
         # Create GitHub release
-
         changelog_file = REPO_ROOT / ".release_notes.md"
-
         changelog_file.write_text(changelog, encoding="utf-8")
 
         gh_cmd = [
-            "gh",
-            "release",
-            "create",
-            tag_name,
-            "--title",
-            f"Clawksis v{new_version} ({calver_date})",
-            "--notes-file",
-            str(changelog_file),
+            "gh", "release", "create", tag_name,
+            "--title", f"Clawksis v{new_version} ({calver_date})",
+            "--notes-file", str(changelog_file),
         ]
-
         gh_cmd.extend(str(path) for path in artifacts)
 
         gh_bin = shutil.which("gh")
-
         if gh_bin:
             result = subprocess.run(
                 gh_cmd,
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
                 cwd=str(REPO_ROOT),
             )
-
         else:
             result = None
 
         if result and result.returncode == 0:
             changelog_file.unlink(missing_ok=True)
-
             print(f"  ✓ GitHub release created: {result.stdout.strip()}")
-
             print(f"\n  🎉 Release v{new_version} ({tag_name}) published!")
-
         else:
             if result is None:
                 print("  ✗ GitHub release skipped: `gh` CLI not found.")
-
             else:
                 print(f"  ✗ GitHub release failed: {result.stderr.strip()}")
-
             print(f"    Release notes kept at: {changelog_file}")
-
             print(f"    Tag was created locally. Create the release manually:")
-
             print(
                 f"    gh release create {tag_name} --title 'Clawksis v{new_version} ({calver_date})' "
                 f"--notes-file .release_notes.md {' '.join(str(path) for path in artifacts)}"
             )
-
-            print(
-                f"\n  ✓ Release artifacts prepared for manual publish: v{new_version} ({tag_name})"
-            )
-
+            print(f"\n  ✓ Release artifacts prepared for manual publish: v{new_version} ({tag_name})")
     else:
-        print(f"\n{'=' * 60}")
-
+        print(f"\n{'='*60}")
         print(f"  Dry run complete. To publish, add --publish")
-
         print(f"  Example: python scripts/release.py --bump minor --publish")
-
-        print(f"{'=' * 60}")
+        print(f"{'='*60}")
 
 
 if __name__ == "__main__":

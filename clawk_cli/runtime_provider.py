@@ -30,10 +30,8 @@ from clawk_cli.auth import (
     DEFAULT_QWEN_BASE_URL,
     DEFAULT_XAI_OAUTH_BASE_URL,
     PROVIDER_REGISTRY,
-    _agent_key_is_usable,
     format_auth_error,
     resolve_provider,
-    resolve_nous_runtime_credentials,
     resolve_codex_runtime_credentials,
     resolve_xai_oauth_runtime_credentials,
     resolve_qwen_runtime_credentials,
@@ -48,6 +46,12 @@ from clawk_cli.config import get_compatible_custom_providers, load_config
 from clawk_constants import OPENROUTER_BASE_URL
 
 from utils import base_url_host_matches, base_url_hostname
+
+
+# Local Ollama daemon's OpenAI-compatible endpoint. Mirrors
+# clawk_cli.cookbook.OLLAMA_OPENAI_URL; duplicated here to avoid importing the
+# (heavier, optional) cookbook module into the hot runtime-resolution path.
+DEFAULT_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434/v1"
 
 
 def _normalize_custom_provider_name(value: str) -> str:
@@ -545,9 +549,6 @@ def _resolve_runtime_from_pool_entry(
 
     elif provider == "xai":
         api_mode = "codex_responses"
-
-    elif provider == "nous":
-        api_mode = "chat_completions"
 
     elif provider == "copilot":
         api_mode = _copilot_runtime_api_mode(
@@ -1709,52 +1710,6 @@ def _resolve_explicit_runtime(
             "requested_provider": requested_provider,
         }
 
-    if provider == "nous":
-        state = auth_mod.get_provider_auth_state("nous") or {}
-
-        base_url = explicit_base_url or str(
-            state.get("inference_base_url") or auth_mod.DEFAULT_NOUS_INFERENCE_URL
-        ).strip().rstrip("/")
-
-        # Only use the agent_key compatibility field for inference when it
-
-        # contains a NAS invoke JWT; raw OAuth access_token fallback is handled
-
-        # by resolve_nous_runtime_credentials().
-
-        api_key = explicit_api_key or (
-            str(state.get("agent_key") or "").strip()
-            if _agent_key_is_usable(
-                state,
-                max(60, int(os.getenv("CLAWK_NOUS_MIN_KEY_TTL_SECONDS", "1800"))),
-            )
-            else ""
-        )
-
-        expires_at = state.get("agent_key_expires_at") or state.get("expires_at")
-
-        if not api_key:
-            creds = resolve_nous_runtime_credentials(
-                timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-            )
-
-            api_key = creds.get("api_key", "")
-
-            expires_at = creds.get("expires_at")
-
-            if not explicit_base_url:
-                base_url = creds.get("base_url", "").rstrip("/") or base_url
-
-        return {
-            "provider": "nous",
-            "api_mode": "chat_completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "source": "explicit",
-            "expires_at": expires_at,
-            "requested_provider": requested_provider,
-        }
-
     # Azure Foundry: user-configured endpoint with selectable API mode
 
     if provider == "azure-foundry":
@@ -1828,6 +1783,67 @@ def _resolve_explicit_runtime(
         }
 
     return None
+
+
+def _resolve_ollama_runtime(
+    *,
+    requested_provider: str,
+    explicit_api_key: Optional[str] = None,
+    explicit_base_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Resolve the local Ollama provider to its OpenAI-compatible /v1 endpoint.
+
+    Ollama needs no auth, but the OpenAI SDK requires a non-empty api_key, so a
+    dummy ("ollama") is supplied when no real key is configured (matching
+    cookbook.use_model). Base URL precedence: explicit override > config
+    ``model.base_url`` (only when the configured provider is ollama, to avoid a
+    stale URL from another provider leaking in) > the localhost default.
+    """
+
+    model_cfg = _get_model_config()
+
+    cfg_provider = str(model_cfg.get("provider") or "").strip().lower()
+
+    cfg_base_url = ""
+
+    if cfg_provider == "ollama":
+        cfg_base_url = str(model_cfg.get("base_url") or "").strip().rstrip("/")
+
+    base_url = (
+        (explicit_base_url or "").strip().rstrip("/")
+        or cfg_base_url
+        or DEFAULT_OLLAMA_LOCAL_BASE_URL
+    )
+
+    # Ollama ignores the key; honor a real one if the user set it, else a
+    # non-empty placeholder so the OpenAI SDK doesn't reject the client.
+    cfg_api_key = str(model_cfg.get("api_key") or "").strip() if cfg_provider == "ollama" else ""
+
+    api_key = (
+        (explicit_api_key or "").strip()
+        or cfg_api_key
+        or os.getenv("OLLAMA_API_KEY", "").strip()
+        or "ollama"
+    )
+
+    # Ollama's OpenAI-compatible endpoint speaks chat_completions; honor an
+    # explicit config api_mode only when the configured provider is ollama.
+    api_mode = "chat_completions"
+
+    if cfg_provider == "ollama":
+        configured_mode = _parse_api_mode(model_cfg.get("api_mode"))
+
+        if configured_mode:
+            api_mode = configured_mode
+
+    return {
+        "provider": "ollama",
+        "api_mode": api_mode,
+        "base_url": base_url,
+        "api_key": api_key,
+        "source": "explicit" if (explicit_api_key or explicit_base_url) else "config",
+        "requested_provider": requested_provider,
+    }
 
 
 def resolve_runtime_provider(
@@ -1906,6 +1922,19 @@ def resolve_runtime_provider(
 
         return azure_runtime
 
+    # Local Ollama daemon (OpenAI-compatible /v1). Resolve here — BEFORE the
+    # alias table collapses "ollama" → "custom" — so a bare `provider: ollama`
+    # (from the model picker / Cookbook) gets the local /v1 base_url + a dummy
+    # api_key instead of silently falling through to OpenRouter. Honors an
+    # explicit base_url override and a config `model.base_url` (when the
+    # configured provider is ollama) so LAN/remote Ollama endpoints still work.
+    if requested_provider == "ollama":
+        return _resolve_ollama_runtime(
+            requested_provider=requested_provider,
+            explicit_api_key=explicit_api_key,
+            explicit_base_url=explicit_base_url,
+        )
+
     custom_runtime = _resolve_named_custom_runtime(
         requested_provider=requested_provider,
         explicit_api_key=explicit_api_key,
@@ -1978,34 +2007,6 @@ def resolve_runtime_provider(
                 entry, "access_token", ""
             )
 
-        # For Nous, the pool entry's runtime_api_key is the agent_key
-
-        # compatibility field. It must be an invoke JWT. The pool doesn't
-
-        # refresh it during selection (that would trigger network calls in
-
-        # non-runtime contexts like `clawk auth list`).  If the key is
-
-        # expired, clear pool_api_key so we fall through to
-
-        # resolve_nous_runtime_credentials() which handles refresh.
-
-        if provider == "nous" and entry is not None and pool_api_key:
-            min_ttl = max(60, int(os.getenv("CLAWK_NOUS_MIN_KEY_TTL_SECONDS", "1800")))
-
-            nous_state = {
-                "agent_key": getattr(entry, "agent_key", None),
-                "agent_key_expires_at": getattr(entry, "agent_key_expires_at", None),
-                "scope": getattr(entry, "scope", None),
-            }
-
-            if not _agent_key_is_usable(nous_state, min_ttl):
-                logger.debug(
-                    "Nous pool entry agent_key expired/missing, falling through to runtime resolution"
-                )
-
-                pool_api_key = ""
-
         if entry is not None and pool_api_key:
             return _resolve_runtime_from_pool_entry(
                 provider=provider,
@@ -2014,35 +2015,6 @@ def resolve_runtime_provider(
                 model_cfg=model_cfg,
                 pool=pool,
                 target_model=target_model,
-            )
-
-    if provider == "nous":
-        try:
-            creds = resolve_nous_runtime_credentials(
-                timeout_seconds=float(os.getenv("CLAWK_NOUS_TIMEOUT_SECONDS", "15")),
-            )
-
-            return {
-                "provider": "nous",
-                "api_mode": "chat_completions",
-                "base_url": creds.get("base_url", "").rstrip("/"),
-                "api_key": creds.get("api_key", ""),
-                "source": creds.get("source", "portal"),
-                "expires_at": creds.get("expires_at"),
-                "requested_provider": requested_provider,
-            }
-
-        except AuthError:
-            if requested_provider != "auto":
-                raise
-
-            # Auto-detected Nous but credentials are stale/revoked —
-
-            # fall through to env-var providers (e.g. OpenRouter).
-
-            logger.info(
-                "Auto-detected Nous provider but credentials failed; "
-                "falling through to next provider."
             )
 
     if provider == "openai-codex":

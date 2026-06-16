@@ -171,8 +171,6 @@ def test_show_status_reports_nous_inference_key_without_portal_login(
 
     from clawk_cli import status as status_mod
 
-    from clawk_cli.nous_account import NousPortalAccountInfo
-
     import clawk_cli.auth as auth_mod
 
     import clawk_cli.gateway as gateway_mod
@@ -218,23 +216,6 @@ def test_show_status_reports_nous_inference_key_without_portal_login(
         raising=False,
     )
 
-    monkeypatch.setattr(
-        status_mod,
-        "get_nous_portal_account_info",
-        lambda: NousPortalAccountInfo(
-            logged_in=False,
-            source="inference_key",
-            fresh=False,
-            inference_credential_present=True,
-            inference_base_url="https://inference.example.com/v1",
-        ),
-        raising=False,
-    )
-
-    monkeypatch.setattr(
-        status_mod, "managed_nous_tools_enabled", lambda: False, raising=False
-    )
-
     monkeypatch.setattr(auth_mod, "get_codex_auth_status", lambda: {}, raising=False)
 
     monkeypatch.setattr(auth_mod, "get_qwen_auth_status", lambda: {}, raising=False)
@@ -254,8 +235,6 @@ def test_show_status_reports_nous_inference_key_without_portal_login(
     assert "Nous Portal   ✗ not logged in (Nous inference key configured)" in output
 
     assert "Inference:  https://inference.example.com/v1" in output
-
-    assert "Nous inference credentials are configured" in output
 
 
 # ---------------------------------------------------------------------------

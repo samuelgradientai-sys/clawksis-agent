@@ -79,7 +79,6 @@ def _resolve_requests_verify() -> bool | str:
 
 _PROVIDER_PREFIXES: frozenset[str] = frozenset({
     "openrouter",
-    "nous",
     "openai-codex",
     "copilot",
     "copilot-acp",
@@ -525,7 +524,6 @@ _URL_TO_PROVIDER: Dict[str, str] = {
     "portal.qwen.ai": "qwen-oauth",
     "openrouter.ai": "openrouter",
     "generativelanguage.googleapis.com": "gemini",
-    "inference-api.nousresearch.com": "nous",
     "api.deepseek.com": "deepseek",
     "api.githubcopilot.com": "copilot",
     "models.github.ai": "copilot",
@@ -2111,120 +2109,6 @@ def _resolve_codex_oauth_context_length(
     return None
 
 
-def _resolve_nous_context_length(
-    model: str,
-    base_url: str = "",
-    api_key: str = "",
-) -> Tuple[Optional[int], str]:
-    """Resolve Nous Portal model context length.
-
-
-
-    Tries the live Nous inference endpoint first (authoritative), then falls
-
-    back to OpenRouter metadata with suffix/version matching.
-
-
-
-    Nous model IDs are bare after prefix-stripping (e.g. 'qwen3.6-plus',
-
-    'claude-opus-4-6') while OpenRouter uses prefixed IDs (e.g.
-
-    'qwen/qwen3.6-plus', 'anthropic/claude-opus-4.6').  Version
-
-    normalization (dot↔dash) is applied to handle name drifts.
-
-
-
-    Returns ``(context_length, source)`` where ``source`` is one of:
-
-      - ``"portal"``    — live /v1/models response (authoritative)
-
-      - ``"openrouter"`` — OpenRouter cache fallback (non-authoritative;
-
-        callers must NOT persist this to the on-disk cache or a single
-
-        portal blip will freeze the wrong value in forever)
-
-      - ``""``           — could not resolve
-
-    """
-
-    # Portal first — the Nous /models endpoint is authoritative for what our
-
-    # infrastructure enforces and may differ from OR (e.g. OR reports 1M for
-
-    # qwen3.6-plus; the portal correctly says 262144).  Fall back to the OR
-
-    # catalog only if the portal doesn't list the model.
-
-    if base_url:
-        portal_ctx = _resolve_endpoint_context_length(model, base_url, api_key=api_key)
-
-        if portal_ctx is not None:
-            return portal_ctx, "portal"
-
-    metadata = fetch_model_metadata()
-
-    def _safe_ctx(or_id: str, entry: dict) -> Optional[int]:
-
-        ctx = entry.get("context_length")
-
-        if ctx is None:
-            return None
-
-        if ctx <= 32768 and _model_name_suggests_kimi(or_id):
-            logger.info(
-                "Rejecting OpenRouter metadata context=%s for %r "
-                "(Kimi-family underreport, Nous path); falling through to hardcoded defaults",
-                ctx,
-                or_id,
-            )
-
-            return None
-
-        return ctx
-
-    if model in metadata:
-        ctx = _safe_ctx(model, metadata[model])
-
-        if ctx is not None:
-            return ctx, "openrouter"
-
-    normalized = _normalize_model_version(model).lower()
-
-    for or_id, entry in metadata.items():
-        bare = or_id.split("/", 1)[1] if "/" in or_id else or_id
-
-        if (
-            bare.lower() == model.lower()
-            or _normalize_model_version(bare).lower() == normalized
-        ):
-            ctx = _safe_ctx(or_id, entry)
-
-            if ctx is not None:
-                return ctx, "openrouter"
-
-    model_lower = model.lower()
-
-    for or_id, entry in metadata.items():
-        bare = or_id.split("/", 1)[1] if "/" in or_id else or_id
-
-        for candidate, query in [
-            (bare.lower(), model_lower),
-            (_normalize_model_version(bare).lower(), normalized),
-        ]:
-            if candidate.startswith(query) and (
-                len(candidate) == len(query) or candidate[len(query)] in "-:."
-            ):
-                ctx = _safe_ctx(or_id, entry)
-
-                if ctx is not None:
-                    return ctx, "openrouter"
-
-    return None, ""
-
-
 def get_model_context_length(
     model: str,
     base_url: str = "",
@@ -2241,11 +2125,7 @@ def get_model_context_length(
 
     0. Explicit config override (model.context_length or custom_providers per-model)
 
-    1. Persistent cache (previously discovered via probing).  Nous URLs
-
-       bypass the cache here so step 5b can always reconcile against
-
-       the authoritative portal /v1/models response.
+    1. Persistent cache (previously discovered via probing).
 
     1b. AWS Bedrock static table (must precede custom-endpoint probe)
 
@@ -2258,12 +2138,6 @@ def get_model_context_length(
     5. Provider-aware lookups (before generic OpenRouter cache):
 
        a. Copilot live /models API
-
-       b. Nous: live /v1/models probe first (authoritative), then OR
-
-          cache fallback with suffix/version normalisation.  Only
-
-          portal-derived values are persisted to disk.
 
        c. Codex OAuth /models probe
 
@@ -2415,31 +2289,6 @@ def get_model_context_length(
                 )
 
                 _invalidate_cached_context_length(model, base_url)
-
-            # Nous Portal: the portal /v1/models endpoint is authoritative.
-
-            # Bypass the persistent cache so step 5b can always reconcile
-
-            # against it — this corrects pre-fix entries seeded from the
-
-            # OR catalog (the same OR underreport class that the Kimi/Qwen
-
-            # DEFAULT_CONTEXT_LENGTHS overrides exist to mitigate) without
-
-            # touching the on-disk file when the portal is unreachable.
-
-            # The in-memory 300s endpoint metadata cache makes the per-call
-
-            # cost amortise to ~0 within a process.
-
-            elif _infer_provider_from_url(base_url) == "nous":
-                logger.debug(
-                    "Bypassing persistent cache for %s@%s (Nous portal authoritative)",
-                    model,
-                    base_url,
-                )
-
-                # Fall through; step 5b reconciles and overwrites if portal responds.
 
             else:
                 return cached
@@ -2596,29 +2445,6 @@ def get_model_context_length(
 
         except Exception:
             pass  # Fall through to models.dev
-
-    if effective_provider == "nous":
-        ctx, source = _resolve_nous_context_length(
-            model, base_url=base_url or "", api_key=api_key or ""
-        )
-
-        if ctx:
-            # Persist ONLY portal-derived values.  Caching an OR-fallback
-
-            # value here would freeze in a wrong number on the first portal
-
-            # blip / auth glitch and step-1 would short-circuit it forever.
-
-            # OR's catalog is community-maintained and is precisely why the
-
-            # Kimi/Qwen DEFAULT_CONTEXT_LENGTHS overrides exist — we don't
-
-            # want it leaking into the persistent cache for Nous URLs.
-
-            if base_url and source == "portal":
-                save_context_length(model, base_url, ctx)
-
-            return ctx
 
     if effective_provider == "openai-codex":
         # Codex OAuth enforces lower context limits than the direct OpenAI

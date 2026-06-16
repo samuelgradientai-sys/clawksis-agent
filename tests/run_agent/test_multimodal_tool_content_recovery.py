@@ -42,7 +42,6 @@ class _FakeApiError(Exception):
 def _make_agent(provider: str = "xiaomi", model: str = "mimo-v2.5"):
     """Build a bare AIAgent for method-level testing, no provider setup."""
     from run_agent import AIAgent
-
     agent = object.__new__(AIAgent)
     agent.provider = provider
     agent.model = model
@@ -79,30 +78,19 @@ class TestStripImagePartsHelper:
         the original error if this turns out to also be rejected."""
         agent = _make_agent()
         msgs = [
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {"type": "text", "text": "hello"},
-                ],
-            },
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "text", "text": "hello"},
+            ]},
         ]
         assert agent._try_strip_image_parts_from_tool_messages(msgs) is False
 
     def test_tool_message_list_with_image_downgrades(self):
         agent = _make_agent()
         msgs = [
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {"type": "text", "text": "AX summary: 5 buttons visible"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,iVBOR..."},
-                    },
-                ],
-            },
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "text", "text": "AX summary: 5 buttons visible"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBOR..."}},
+            ]},
         ]
         assert agent._try_strip_image_parts_from_tool_messages(msgs) is True
         # Image stripped; text preserved as a string.
@@ -116,16 +104,9 @@ class TestStripImagePartsHelper:
         the assistant message has something to reference."""
         agent = _make_agent()
         msgs = [
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,iVBOR..."},
-                    },
-                ],
-            },
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBOR..."}},
+            ]},
         ]
         assert agent._try_strip_image_parts_from_tool_messages(msgs) is True
         assert isinstance(msgs[0]["content"], str)
@@ -134,17 +115,10 @@ class TestStripImagePartsHelper:
     def test_records_provider_model_in_session_cache(self):
         agent = _make_agent(provider="xiaomi", model="mimo-v2.5")
         msgs = [
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {"type": "text", "text": "summary"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,X"},
-                    },
-                ],
-            },
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "text", "text": "summary"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,X"}},
+            ]},
         ]
         agent._try_strip_image_parts_from_tool_messages(msgs)
         assert ("xiaomi", "mimo-v2.5") in agent._no_list_tool_content_models
@@ -154,27 +128,14 @@ class TestStripImagePartsHelper:
         scope — they're handled by the existing image-routing path."""
         agent = _make_agent()
         msgs = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "describe"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,X"},
-                    },
-                ],
-            },
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {"type": "text", "text": "summary"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,Y"},
-                    },
-                ],
-            },
+            {"role": "user", "content": [
+                {"type": "text", "text": "describe"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,X"}},
+            ]},
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "text", "text": "summary"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,Y"}},
+            ]},
         ]
         agent._try_strip_image_parts_from_tool_messages(msgs)
         # User message untouched.
@@ -189,17 +150,10 @@ class TestStripImagePartsHelper:
         unset (e.g. lazy-initialised mid-handshake)."""
         agent = _make_agent(provider="", model="")
         msgs = [
-            {
-                "role": "tool",
-                "tool_call_id": "x",
-                "content": [
-                    {"type": "text", "text": "summary"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,X"},
-                    },
-                ],
-            },
+            {"role": "tool", "tool_call_id": "x", "content": [
+                {"type": "text", "text": "summary"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,X"}},
+            ]},
         ]
         agent._try_strip_image_parts_from_tool_messages(msgs)
         assert agent._no_list_tool_content_models == set()
@@ -219,31 +173,28 @@ class TestToolResultContentShortCircuit:
             "_multimodal": True,
             "content": [
                 {"type": "text", "text": "capture mode=som 800x600 app=Safari"},
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{png_b64}"},
-                },
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/png;base64,{png_b64}"}},
             ],
             "text_summary": "capture mode=som 800x600 app=Safari",
-            "meta": {
-                "mode": "som",
-                "width": 800,
-                "height": 600,
-                "elements": 5,
-                "png_bytes": 1024,
-            },
+            "meta": {"mode": "som", "width": 800, "height": 600, "elements": 5,
+                     "png_bytes": 1024},
         }
 
-    def test_returns_list_when_cache_empty_and_vision_supported(self, monkeypatch):
+    def test_returns_text_summary_for_xiaomi_proactively(self, monkeypatch):
+        """Xiaomi MiMo rejects list-type tool content, so even with an
+        empty cache, _tool_result_content_for_active_model should
+        proactively downgrade to a text summary."""
         agent = _make_agent(provider="xiaomi", model="mimo-v2.5")
         agent._no_list_tool_content_models = set()  # explicit empty
         monkeypatch.setattr(agent, "_model_supports_vision", lambda: True)
         out = agent._tool_result_content_for_active_model(
             "computer_use", self._multimodal_result()
         )
-        # Native multimodal path: returns the content parts list.
-        assert isinstance(out, list)
-        assert any(p.get("type") == "image_url" for p in out)
+        # Proactive downgrade: text summary instead of list with images.
+        assert isinstance(out, str)
+        assert "data:image" not in out
+        assert "image_url" not in out
 
     def test_returns_text_summary_when_model_in_cache(self, monkeypatch):
         agent = _make_agent(provider="xiaomi", model="mimo-v2.5")
@@ -257,29 +208,31 @@ class TestToolResultContentShortCircuit:
         assert "data:image" not in out
         assert "image_url" not in out
 
-    def test_cache_miss_on_different_model(self, monkeypatch):
-        """Cache is per (provider, model). A cached entry for mimo-v2.5
-        must NOT affect a session running on a different model.
-        """
+    def test_xiaomi_any_model_gets_text_summary(self, monkeypatch):
+        """All Xiaomi models reject list-type tool content, so even a
+        different model on the same provider gets a text summary."""
         agent = _make_agent(provider="xiaomi", model="mimo-v2.5-pro")
         agent._no_list_tool_content_models = {("xiaomi", "mimo-v2.5")}
         monkeypatch.setattr(agent, "_model_supports_vision", lambda: True)
         out = agent._tool_result_content_for_active_model(
             "computer_use", self._multimodal_result()
         )
-        assert isinstance(out, list)
+        assert isinstance(out, str)
+        assert "data:image" not in out
 
     def test_missing_cache_attribute_falls_through(self, monkeypatch):
-        """Tests that build agents via ``object.__new__`` without calling
-        ``__init__`` must not crash — the cache attribute may be absent.
-        """
-        agent = _make_agent()
+        """Agents built via ``object.__new__`` without calling ``__init__``
+        must not crash — the cache attribute may be absent. Xiaomi still
+        gets a text summary because the provider profile says so."""
+        agent = _make_agent(provider="xiaomi", model="mimo-v2.5")
         # Deliberately do not assign _no_list_tool_content_models.
         monkeypatch.setattr(agent, "_model_supports_vision", lambda: True)
         out = agent._tool_result_content_for_active_model(
             "computer_use", self._multimodal_result()
         )
-        assert isinstance(out, list)
+        # Xiaomi proactively downgrades regardless of cache state.
+        assert isinstance(out, str)
+        assert "data:image" not in out
 
 
 # ─── Classifier ──────────────────────────────────────────────────────────────

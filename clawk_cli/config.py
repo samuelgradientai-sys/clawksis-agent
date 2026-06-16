@@ -754,7 +754,7 @@ def recommended_update_command_for_method(method: str) -> str:
         return "brew upgrade clawksis-agent"
 
     if method == "docker":
-        return "docker pull nousresearch/clawksis-agent:latest"
+        return "git pull && docker compose build && docker compose up -d --force-recreate"
 
     if method == "pip":
         if is_uv_tool_install():
@@ -818,39 +818,29 @@ _DOCKER_UPDATE_MESSAGE = """\
 
 
 
-Clawksis runs as a published image (nousresearch/clawksis-agent), not a
+Clawksis runs from a locally-built image (``clawksis-agent``), not a git
 
-git checkout — the container has no working tree to pull into.  Update by
+checkout — the container has no working tree to pull into, and there is no
 
-pulling a fresh image and restarting your container instead:
+published image to fetch.  Update from the host checkout that built it:
 
 
 
-  docker pull nousresearch/clawksis-agent:latest
+  git pull                       # in your clawksis-agent checkout
 
-  # then restart whatever started the container, e.g.:
+  docker compose build
 
   docker compose up -d --force-recreate clawksis-agent
-
-  # or, for ad-hoc runs, exit the current container and `docker run` again
 
 
 
 Verify the new version after restart:
 
-  docker run --rm nousresearch/clawksis-agent:latest --version
+  docker compose run --rm clawksis-agent --version
 
 
 
 Notes:
-
-  • If you pinned a specific tag (e.g. ``:v0.14.0``) the ``:latest`` tag
-
-    won't move your container — pull the newer tag you actually want, or
-
-    switch to ``:latest`` / ``:main`` for rolling updates.  See available
-
-    tags at https://hub.docker.com/r/nousresearch/clawksis-agent/tags
 
   • Your config and session history live under ``$CLAWK_HOME`` (``/opt/data``
 
@@ -1981,7 +1971,7 @@ DEFAULT_CONFIG = {
     },
     # Web dashboard settings
     "dashboard": {
-        "theme": "default",  # Dashboard visual theme: "default", "midnight", "ember", "mono", "cyberpunk", "rose"
+        "theme": "midnight",  # Dashboard visual theme: "default", "midnight", "ember", "mono", "cyberpunk", "rose"
         # Hide the token/cost analytics surfaces (Analytics page, token bars and
         # cost figures on the Models page) by default.  The numbers shown there
         # are a local debug estimate: they only count successful main-agent
