@@ -937,6 +937,12 @@ export const api = {
 
     fetchJSON<CronJob[]>(`/api/cron/jobs?profile=${encodeURIComponent(profile)}`),
 
+  getCronOccurrences: (start: string, end: string, profile = "all") =>
+
+    fetchJSON<{ start: string; end: string; jobs: CronOccurrenceJob[] }>(
+      `/api/cron/occurrences?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&profile=${encodeURIComponent(profile)}`,
+    ),
+
   createCronJob: (
     job: {
       prompt?: string;
@@ -952,6 +958,11 @@ export const api = {
       enabled_toolsets?: string[];
       workdir?: string;
       no_agent?: boolean;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
     },
     profile = "default",
   ) =>
@@ -974,7 +985,17 @@ export const api = {
 
     id: string,
 
-    updates: { prompt?: string; schedule?: string; name?: string; deliver?: string },
+    updates: {
+      prompt?: string;
+      schedule?: string;
+      name?: string;
+      deliver?: string;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
+    },
 
     profile = "default",
 
@@ -3070,6 +3091,24 @@ export interface ModelsAnalyticsResponse {
 
 
 
+export interface CronOccurrenceJob {
+
+  id: string;
+
+  name: string;
+
+  profile?: string | null;
+
+  schedule_display?: string | null;
+
+  /** Map of "YYYY-MM-DD" → number of firings that day (in server timezone). */
+
+  days: Record<string, number>;
+
+}
+
+
+
 export interface CronJob {
 
   id: string;
@@ -3105,6 +3144,16 @@ export interface CronJob {
   last_status?: string | null;
 
   last_error?: string | null;
+
+  silent_notice?: boolean;
+
+  use_soul?: boolean;
+
+  use_user_md?: boolean;
+
+  use_memory?: boolean;
+
+  fallback_models?: { provider: string; model: string }[] | null;
 
 }
 

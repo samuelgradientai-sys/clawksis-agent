@@ -588,15 +588,13 @@ This applies only to cron deliveries. `TELEGRAM_HOME_CHANNEL_THREAD_ID` (used el
 
 
 
-By default, delivered cron output is wrapped with a header and footer so the recipient knows it came from a scheduled task:
+By default, delivered cron output is prefixed with a small ⏰ tag so the recipient knows it came from a scheduled task; the agent's output follows directly:
 
 
 
 ```
 
-Cronjob Response: Morning feeds
-
--------------
+⏰ Morning feeds
 
 
 

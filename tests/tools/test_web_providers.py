@@ -217,9 +217,10 @@ class TestDefaultConfig:
         assert "backend" in web
         assert "search_backend" in web
         assert "extract_backend" in web
-        # All empty string by default (no override)
+        # backend/extract default to empty (auto-detect); search defaults to
+        # the free DuckDuckGo backend so a fresh agent can search out of the box.
         assert web["backend"] == ""
-        assert web["search_backend"] == ""
+        assert web["search_backend"] == "ddgs"
         assert web["extract_backend"] == ""
 
 

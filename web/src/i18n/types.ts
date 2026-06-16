@@ -580,6 +580,26 @@ export interface Translations {
 
     deliverTo: string;
 
+    silentNotice?: string;
+
+    useSoul?: string;
+
+    useUserMd?: string;
+
+    useMemory?: string;
+
+    contextToggles?: string;
+
+    fallbackModels?: string;
+
+    fallbackModelsHint?: string;
+
+    viewLabel?: string;
+
+    listView?: string;
+
+    calendarView?: string;
+
     scheduledJobs: string;
 
     noJobs: string;
@@ -1635,6 +1655,54 @@ export interface Translations {
     guideStep2?: string;
 
     guideStep3?: string;
+
+    fieldIdeaLabel?: string;
+
+    fieldIdeaHelp?: string;
+
+    fieldTitleLabel?: string;
+
+    fieldTitleHelp?: string;
+
+    fieldSpecifierLabel?: string;
+
+    fieldSpecifierHelp?: string;
+
+    fieldAssigneeLabel?: string;
+
+    fieldAssigneeHelp?: string;
+
+    assigneeAuto?: string;
+
+    fieldPriorityLabel?: string;
+
+    fieldPriorityHelp?: string;
+
+    fieldSkillsLabel?: string;
+
+    fieldSkillsHelp?: string;
+
+    goalMode?: string;
+
+    goalModeHelp?: string;
+
+    goalMaxTurns?: string;
+
+    fieldWorkspaceLabel?: string;
+
+    fieldWorkspaceHelp?: string;
+
+    workspaceScratch?: string;
+
+    workspaceWorktree?: string;
+
+    workspaceDir?: string;
+
+    fieldParentLabel?: string;
+
+    fieldParentHelp?: string;
+
+    create?: string;
 
   };
 

@@ -522,11 +522,12 @@ class TestDeliverResultWrapping:
 
         send_mock.assert_called_once()
         sent_content = send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
-        assert "Cronjob Response: daily-report" in sent_content
-        assert "(job_id: test-job)" in sent_content
-        assert "-------------" in sent_content
+        assert "⏰ daily-report" in sent_content
         assert "Here is today's summary." in sent_content
-        assert "To stop or manage this job" in sent_content
+        # Natural header drops the robotic job_id / divider / management footer.
+        assert "(job_id:" not in sent_content
+        assert "-------------" not in sent_content
+        assert "To stop or manage this job" not in sent_content
 
     def test_delivery_uses_job_id_when_no_name(self):
         """When a job has no name, the wrapper should fall back to job id."""
@@ -547,7 +548,7 @@ class TestDeliverResultWrapping:
             _deliver_result(job, "Output.")
 
         sent_content = send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
-        assert "Cronjob Response: abc-123" in sent_content
+        assert "⏰ abc-123" in sent_content
 
     def test_delivery_skips_wrapping_when_config_disabled(self):
         """When cron.wrap_response is false, deliver raw content without header/footer."""
@@ -1878,11 +1879,15 @@ class TestSilentDelivery:
     """Verify that [SILENT] responses suppress delivery while still saving output."""
 
     def _make_job(self):
+        # This class tests the pure-silence opt-out (silent_notice=False). The
+        # default (True) delivers a short heartbeat instead — see
+        # test_silent_notice_default_delivers_heartbeat.
         return {
             "id": "monitor-job",
             "name": "monitor",
             "deliver": "origin",
             "origin": {"platform": "telegram", "chat_id": "123"},
+            "silent_notice": False,
         }
 
     def test_silent_response_suppresses_delivery(self, caplog):
@@ -1928,6 +1933,28 @@ class TestSilentDelivery:
             from cron.scheduler import tick
             tick(verbose=False)
         deliver_mock.assert_not_called()
+
+    def test_silent_notice_default_delivers_heartbeat(self):
+        """With silent_notice on (default), a [SILENT] response delivers a short
+        'nothing new' heartbeat instead of suppressing delivery entirely."""
+        job = {
+            "id": "monitor-job",
+            "name": "monitor",
+            "deliver": "origin",
+            "origin": {"platform": "telegram", "chat_id": "123"},
+            # silent_notice omitted → defaults to True
+        }
+        with patch("cron.scheduler.get_due_jobs", return_value=[job]), \
+             patch("cron.scheduler.run_job", return_value=(True, "# output", "[SILENT]", None)), \
+             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
+             patch("cron.scheduler._deliver_result") as deliver_mock, \
+             patch("cron.scheduler.mark_job_run"):
+            from cron.scheduler import tick
+            tick(verbose=False)
+        deliver_mock.assert_called_once()
+        # The delivered content is the heartbeat, not the [SILENT] sentinel.
+        delivered = deliver_mock.call_args[0][1]
+        assert SILENT_MARKER not in delivered.upper()
 
     def test_failed_job_always_delivers(self):
         """Failed jobs deliver regardless of [SILENT] in output."""

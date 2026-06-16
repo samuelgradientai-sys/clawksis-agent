@@ -89,6 +89,27 @@ class DDGSWebSearchProvider(WebSearchProvider):
     def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
         """Execute a DuckDuckGo search and return normalized results."""
 
+        # ddgs is the default search backend but ships as an opt-in package.
+        # Lazy-install it on first use (no-op once present) so a fresh agent
+        # — including a non-interactive cron — can search the web out of the
+        # box without a manual `clawk tools` pass. Gated by
+        # security.allow_lazy_installs (default true).
+        try:
+            from tools.lazy_deps import FeatureUnavailable, ensure
+
+            ensure("search.ddgs", prompt=False)
+
+        except FeatureUnavailable as exc:
+            return {
+                "success": False,
+                "error": f"ddgs package is not installed — run `pip install ddgs` ({exc.reason})",
+            }
+
+        except ImportError:
+            # tools.lazy_deps unavailable (stripped install) — fall through to
+            # the direct import below, which surfaces its own error.
+            pass
+
         try:
             from ddgs import DDGS  # type: ignore
 

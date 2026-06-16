@@ -16,6 +16,8 @@ import json
 
 import logging
 
+import math
+
 import shutil
 
 import tempfile
@@ -629,6 +631,78 @@ def compute_next_run(
     return None
 
 
+def compute_occurrences(
+    schedule: Dict[str, Any],
+    start: datetime,
+    end: datetime,
+    *,
+    anchor: Optional[str] = None,
+    cap: int = 4000,
+) -> List[datetime]:
+    """Enumerate firing times of ``schedule`` within [start, end] (tz-aware).
+
+    Day-level calendar projection — reuses the same kinds as
+    ``compute_next_run`` (interval / cron / once). ``anchor`` (ISO string,
+    typically the job's ``next_run_at``) phases interval schedules so e.g.
+    "every 3 days" lands on the same days the scheduler will actually fire.
+    Capped at ``cap`` firings to bound cost for sub-minute intervals.
+    """
+    kind = schedule.get("kind")
+    out: List[datetime] = []
+
+    if kind == "once":
+        raw = schedule.get("run_at")
+        if not raw:
+            return out
+        try:
+            dt = _ensure_aware(datetime.fromisoformat(raw))
+        except (ValueError, TypeError):
+            return out
+        if start <= dt <= end:
+            out.append(dt)
+        return out
+
+    if kind == "interval":
+        minutes = int(schedule.get("minutes", 0) or 0)
+        if minutes <= 0:
+            return out
+        step = timedelta(minutes=minutes)
+        base = start
+        if anchor:
+            try:
+                base = _ensure_aware(datetime.fromisoformat(anchor))
+            except (ValueError, TypeError):
+                base = start
+        # First occurrence >= start, preserving the anchor's phase.
+        k = math.ceil((start - base) / step)
+        t = base + k * step
+        while t <= end and len(out) < cap:
+            if t >= start:
+                out.append(t)
+            t += step
+        return out
+
+    if kind == "cron":
+        if not HAS_CRONITER:
+            return out
+        try:
+            it = croniter(schedule["expr"], start - timedelta(seconds=1))
+        except (ValueError, KeyError):
+            return out
+        while len(out) < cap:
+            try:
+                t = it.get_next(datetime)
+            except Exception:
+                break
+            if t > end:
+                break
+            if t >= start:
+                out.append(_ensure_aware(t))
+        return out
+
+    return out
+
+
 # =============================================================================
 
 # Job CRUD Operations
@@ -831,6 +905,45 @@ def _normalize_profile(profile: Optional[str]) -> Optional[str]:
     return normalized
 
 
+def _normalize_fallback_models(value) -> Optional[List[Dict[str, str]]]:
+    """Normalize a per-job model fallback chain into a list of
+    ``{"provider": str, "model": str}`` dicts (the shape AIAgent expects).
+
+    Accepts a list of dicts (already-formed), a list of ``"provider:model"``
+    strings, or a single comma/newline-separated string of those. Entries
+    without BOTH a provider and a model are skipped — the agent needs both to
+    route a fallback call. Returns the cleaned list, or ``None`` when empty.
+    """
+    if not value:
+        return None
+
+    if isinstance(value, str):
+        items: List[Any] = [
+            p.strip() for p in value.replace("\n", ",").split(",") if p.strip()
+        ]
+    elif isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        return None
+
+    out: List[Dict[str, str]] = []
+    for item in items:
+        provider = model = ""
+        if isinstance(item, dict):
+            provider = str(item.get("provider") or "").strip()
+            model = str(item.get("model") or "").strip()
+        elif isinstance(item, str):
+            text = item.strip()
+            if ":" not in text:
+                # bare model name has no provider to route with — skip safely
+                continue
+            provider, model = (p.strip() for p in text.split(":", 1))
+        if provider and model:
+            out.append({"provider": provider, "model": model})
+
+    return out or None
+
+
 def create_job(
     prompt: Optional[str],
     schedule: str,
@@ -850,6 +963,11 @@ def create_job(
     profile: Optional[str] = None,
     no_agent: bool = False,
     stop_after_alert: bool = False,
+    silent_notice: bool = True,
+    use_soul: bool = True,
+    use_user_md: bool = True,
+    use_memory: bool = False,
+    fallback_models: Optional[Union[str, List[Any]]] = None,
 ) -> Dict[str, Any]:
     """
 
@@ -1016,6 +1134,8 @@ def create_job(
 
     normalized_profile = _normalize_profile(profile)
 
+    normalized_fallback_models = _normalize_fallback_models(fallback_models)
+
     normalized_no_agent = bool(no_agent)
 
     # no_agent jobs are meaningless without a script — the script IS the job.
@@ -1084,6 +1204,12 @@ def create_job(
         "enabled_toolsets": normalized_toolsets,
         "workdir": normalized_workdir,
         "profile": normalized_profile,
+        # Per-job behaviour toggles (defaults preserve prior behaviour).
+        "silent_notice": bool(silent_notice),
+        "use_soul": bool(use_soul),
+        "use_user_md": bool(use_user_md),
+        "use_memory": bool(use_memory),
+        "fallback_models": normalized_fallback_models,
     }
 
     jobs = load_jobs()
@@ -1305,6 +1431,13 @@ def update_job(job_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]
 
             else:
                 updates["profile"] = _normalize_profile(_profile)
+
+        # Normalize the per-job fallback chain on update the same way create
+        # does, so the dashboard/tool can pass "provider:model" strings.
+        if "fallback_models" in updates:
+            updates["fallback_models"] = _normalize_fallback_models(
+                updates["fallback_models"]
+            )
 
         updated = _apply_skill_fields({**job, **updates})
 
