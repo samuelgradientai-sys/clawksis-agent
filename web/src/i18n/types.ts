@@ -1682,6 +1682,12 @@ export interface Translations {
 
     fieldSkillsHelp?: string;
 
+    skillAdd?: string;
+
+    skillNone?: string;
+
+    skillRemove?: string;
+
     goalMode?: string;
 
     goalModeHelp?: string;

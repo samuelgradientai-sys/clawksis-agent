@@ -5393,6 +5393,26 @@
       return function () { alive = false; };
     }, []);
 
+    // Roster of installed skills for the skills picker (the global /api/skills
+    // catalog, not the kanban plugin API). Empty list just hides the dropdown
+    // options; the chips below still reflect whatever is selected.
+    const [skillRoster, setSkillRoster] = useState([]);
+
+    useEffect(function () {
+      let alive = true;
+      SDK.fetchJSON("/api/skills")
+        .then(function (data) {
+          if (!alive) return;
+          const names = (Array.isArray(data) ? data : [])
+            .map(function (s) { return s && s.name; })
+            .filter(Boolean)
+            .sort();
+          setSkillRoster(names);
+        })
+        .catch(function () { /* keep empty; nothing to pick from */ });
+      return function () { alive = false; };
+    }, []);
+
 
 
     const submit = function () {
@@ -5559,19 +5579,63 @@
         tx(t, "fieldSkillsHelp", "Extra skills to force-load into the agent, comma-separated. e.g. translation, github-code-review.")
       ),
 
-      h(Input, {
-
-        value: skills,
-
-        onChange: function (e) { setSkills(e.target.value); },
-
-        placeholder: tx(t, "skillsPlaceholder",
-
-          "skills (optional, comma-separated): translation, github-code-review"),
-
-        className: "h-7 text-xs",
-
-      }),
+      (function () {
+        // Skills picker: chips for what's chosen + a dropdown to add more.
+        // Source of truth stays the comma-separated `skills` string the
+        // submit handler already consumes.
+        const selectedSkills = skills
+          .split(",")
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean);
+        const addSkill = function (name) {
+          const n = (name || "").trim();
+          if (!n || selectedSkills.indexOf(n) !== -1) return;
+          setSkills(selectedSkills.concat([n]).join(", "));
+        };
+        const removeSkill = function (name) {
+          setSkills(
+            selectedSkills.filter(function (x) { return x !== name; }).join(", ")
+          );
+        };
+        const available = skillRoster.filter(function (n) {
+          return selectedSkills.indexOf(n) === -1;
+        });
+        return h("div", { className: "flex flex-col gap-1" },
+          selectedSkills.length
+            ? h("div", { className: "flex flex-wrap gap-1" },
+                selectedSkills.map(function (name) {
+                  return h("span", {
+                    key: name,
+                    className: "inline-flex items-center gap-1 rounded-sm bg-primary/20 px-1.5 py-0.5 text-[10px] text-foreground",
+                  },
+                    name,
+                    h("button", {
+                      type: "button",
+                      title: tx(t, "skillRemove", "remove"),
+                      onClick: function () { removeSkill(name); },
+                      className: "leading-none opacity-70 hover:opacity-100",
+                    }, "×")
+                  );
+                })
+              )
+            : null,
+          h(Select, Object.assign({
+            value: "",
+            className: "h-7 text-xs w-full",
+          }, {
+            onValueChange: addSkill,
+            onChange: function (e) { addSkill(e && e.target ? e.target.value : e); },
+          }),
+            h(SelectOption, { value: "" },
+              available.length
+                ? tx(t, "skillAdd", "+ add a skill…")
+                : tx(t, "skillNone", "(no skills available)")),
+            available.map(function (name) {
+              return h(SelectOption, { key: name, value: name }, name);
+            })
+          )
+        );
+      })(),
 
       h("div", { className: "flex gap-2 items-center" },
 
