@@ -1554,6 +1554,54 @@ export const es: Translations = {
 
     guideStep3: "La tarjeta avanza sola: Listas → En curso → Hecho. Vos solo mirás, y ayudás si alguna queda «Trabada».",
 
+    fieldIdeaLabel: "Tu idea",
+
+    fieldIdeaHelp: "Escribí tu idea en pocas palabras — la IA la convierte en una tarea con objetivo, pasos y criterios de listo. Enter para crear, Shift+Enter para una línea nueva.",
+
+    fieldTitleLabel: "Título de la tarea",
+
+    fieldTitleHelp: "Un título corto para la tarea. Enter para crear, Shift+Enter para una línea nueva.",
+
+    fieldSpecifierLabel: "¿Qué agente la especifica?",
+
+    fieldSpecifierHelp: "El agente (perfil de Clawksis) que redacta la spec de esta idea. Dejalo en automático y el sistema elige uno.",
+
+    fieldAssigneeLabel: "¿Qué agente la hace?",
+
+    fieldAssigneeHelp: "El agente (perfil de Clawksis) que ejecuta la tarea. En automático, el sistema elige uno disponible cuando la tarea esté lista.",
+
+    assigneeAuto: "— automático —",
+
+    fieldPriorityLabel: "Prioridad",
+
+    fieldPriorityHelp: "Las tareas con más prioridad se toman primero. 0 = normal.",
+
+    fieldSkillsLabel: "Habilidades (opcional)",
+
+    fieldSkillsHelp: "Skills extra que querés que el agente cargue, separadas por coma. Ej: translation, github-code-review.",
+
+    goalMode: "Modo objetivo",
+
+    goalModeHelp: "El agente insiste en la misma sesión hasta que un juez la da por terminada (o se agota el presupuesto de turnos y la deja para revisión). Ideal para tareas abiertas que un solo intento no termina.",
+
+    goalMaxTurns: "máximo de turnos (por defecto 20)",
+
+    fieldWorkspaceLabel: "¿Dónde trabaja?",
+
+    fieldWorkspaceHelp: "aislado: una carpeta temporal (lo normal). worktree: una copia git del proyecto del agente. carpeta: una ruta exacta.",
+
+    workspaceScratch: "aislado",
+
+    workspaceWorktree: "worktree (git)",
+
+    workspaceDir: "carpeta exacta",
+
+    fieldParentLabel: "Tarea padre (opcional)",
+
+    fieldParentHelp: "Si elegís una, esta tarjeta queda bloqueada hasta que la tarea padre se marque como terminada.",
+
+    create: "Crear",
+
   },
 
 };

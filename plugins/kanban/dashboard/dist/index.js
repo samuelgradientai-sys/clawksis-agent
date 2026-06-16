@@ -138,6 +138,38 @@
 
 
 
+  // Small "(i)" help affordance — hover or keyboard-focus reveals the
+  // explanation, so the create form stays compact while every field is
+  // self-explanatory. Returns null when there's nothing to explain.
+  function HelpDot(text) {
+    if (!text) return null;
+    return h("span", {
+      className: "clawk-kanban-help",
+      title: text,
+      tabIndex: 0,
+      role: "img",
+      "aria-label": text,
+      style: {
+        cursor: "help",
+        opacity: 0.55,
+        marginLeft: "0.3rem",
+        fontSize: "0.72rem",
+        userSelect: "none",
+      },
+    }, "ⓘ");
+  }
+
+
+
+  // A small muted field caption with an optional (i) help dot beside it.
+  function FieldLabel(text, help) {
+    return h("div", {
+      className: "flex items-center text-[11px] font-medium text-muted-foreground mt-1 mb-0.5",
+    }, text, HelpDot(help));
+  }
+
+
+
   // ``fetchJSON`` throws ``Error("<status>: <raw body>")`` on non-2xx, and
 
   // FastAPI bodies look like ``{"detail":"<message>"}``.  Pull the
@@ -5341,6 +5373,28 @@
 
 
 
+    // Roster of profiles for the agent picker. Union of profiles on disk and
+    // anyone already used on the board, so a freshly-created profile shows up
+    // even before it has tasks. Blank = automatic (the dispatcher picks). If
+    // the endpoint is unavailable we keep an empty list; automatic still works.
+    const [roster, setRoster] = useState([]);
+
+    useEffect(function () {
+      let alive = true;
+      SDK.fetchJSON(`${API}/assignees`)
+        .then(function (data) {
+          if (!alive) return;
+          const names = ((data && data.assignees) || [])
+            .map(function (a) { return a && a.name; })
+            .filter(Boolean);
+          setRoster(names);
+        })
+        .catch(function () { /* keep empty roster; automatic pick still works */ });
+      return function () { alive = false; };
+    }, []);
+
+
+
     const submit = function () {
 
       const trimmed = title.trim();
@@ -5431,6 +5485,15 @@
 
     return h("div", { className: "clawk-kanban-inline-create" },
 
+      FieldLabel(
+        props.columnName === "triage"
+          ? tx(t, "fieldIdeaLabel", "Your idea")
+          : tx(t, "fieldTitleLabel", "Task title"),
+        props.columnName === "triage"
+          ? tx(t, "fieldIdeaHelp", "Write your idea in a few words — the AI turns it into a task with a goal, steps and acceptance criteria. Press Enter to create, Shift+Enter for a new line.")
+          : tx(t, "fieldTitleHelp", "A short title for the task. Press Enter to create, Shift+Enter for a new line.")
+      ),
+
       h("textarea", {
 
         value: title,
@@ -5459,54 +5522,41 @@
 
       }),
 
-      h("div", { className: "flex gap-2" },
+      FieldLabel(
+        props.columnName === "triage"
+          ? tx(t, "fieldSpecifierLabel", "Which agent specs it?")
+          : tx(t, "fieldAssigneeLabel", "Which agent does it?"),
+        props.columnName === "triage"
+          ? tx(t, "fieldSpecifierHelp", "The Clawksis profile that writes the spec for this idea. Leave it on automatic and the system picks one.")
+          : tx(t, "fieldAssigneeHelp", "The Clawksis profile that runs this task. On automatic, the system picks an available one when the task is Ready.")
+      ),
 
-        h(Input, {
+      h(Select, Object.assign({
+        value: assignee,
+        className: "h-7 text-xs w-full",
+      }, selectChangeHandler(setAssignee)),
+        h(SelectOption, { value: "" }, tx(t, "assigneeAuto", "— automatic —")),
+        roster.map(function (name) {
+          return h(SelectOption, { key: name, value: name }, name);
+        })
+      ),
 
-          value: assignee,
+      FieldLabel(
+        tx(t, "fieldPriorityLabel", "Priority"),
+        tx(t, "fieldPriorityHelp", "Higher-priority tasks are claimed first. 0 = normal.")
+      ),
 
-          onChange: function (e) { setAssignee(e.target.value); },
+      h(Input, {
+        type: "number",
+        value: priority,
+        onChange: function (e) { setPriority(e.target.value); },
+        placeholder: "0",
+        className: "h-7 text-xs w-20",
+      }),
 
-          placeholder: props.columnName === "triage"
-
-            ? tx(t, "specifier", "specifier")
-
-            : tx(t, "assigneePlaceholder", "assignee"),
-
-          className: "h-7 text-xs flex-1",
-
-          title: props.columnName === "triage"
-
-            ? "Clawksis profile that will spec this task (default: the dispatcher's configured specifier). Leave blank to let the dispatcher pick."
-
-            : "Clawksis profile to assign. Leave blank and the dispatcher will pick from available profiles when the task is Ready.",
-
-          style: { textTransform: "none" },
-
-          autoCapitalize: "none",
-
-          autoCorrect: "off",
-
-          spellCheck: false,
-
-        }),
-
-        h(Input, {
-
-          type: "number",
-
-          value: priority,
-
-          onChange: function (e) { setPriority(e.target.value); },
-
-          placeholder: "pri",
-
-          className: "h-7 text-xs w-16",
-
-          title: "Priority. Higher-priority tasks are claimed first by the dispatcher. 0 = default.",
-
-        }),
-
+      FieldLabel(
+        tx(t, "fieldSkillsLabel", "Skills (optional)"),
+        tx(t, "fieldSkillsHelp", "Extra skills to force-load into the agent, comma-separated. e.g. translation, github-code-review.")
       ),
 
       h(Input, {
@@ -5519,8 +5569,6 @@
 
           "skills (optional, comma-separated): translation, github-code-review"),
 
-        title: "Force-load these skills into the worker (in addition to the built-in kanban-worker).",
-
         className: "h-7 text-xs",
 
       }),
@@ -5530,8 +5578,6 @@
         h("label", {
 
           className: "flex items-center gap-1.5 text-xs cursor-pointer select-none",
-
-          title: "Goal mode: the worker keeps going in the same session until a judge agrees the card is done (or the turn budget runs out, which blocks it for review). Best for open-ended cards one shot rarely finishes.",
 
         },
 
@@ -5547,9 +5593,11 @@
 
           }),
 
-          tx(t, "goalMode", "goal mode"),
+          tx(t, "goalMode", "Goal mode"),
 
         ),
+
+        HelpDot(tx(t, "goalModeHelp", "The agent keeps going in the same session until a judge agrees the card is done (or the turn budget runs out, which blocks it for review). Best for open-ended cards one shot rarely finishes.")),
 
         goalMode ? h(Input, {
 
@@ -5571,23 +5619,26 @@
 
       ),
 
+      FieldLabel(
+        tx(t, "fieldWorkspaceLabel", "Where it works"),
+        tx(t, "fieldWorkspaceHelp", "isolated: a temp folder (the usual). worktree: a git copy of the agent's project. folder: an exact path.")
+      ),
+
       h("div", { className: "flex gap-2" },
 
         h(Select, Object.assign({
 
           value: workspaceKind,
 
-          title: "scratch: isolated temp dir (default). worktree: git worktree on the assignee profile. dir: exact path (required below).",
-
           className: "h-7 text-xs w-28",
 
         }, selectChangeHandler(setWorkspaceKind)),
 
-          h(SelectOption, { value: "scratch" }, "scratch"),
+          h(SelectOption, { value: "scratch" }, tx(t, "workspaceScratch", "isolated")),
 
-          h(SelectOption, { value: "worktree" }, "worktree"),
+          h(SelectOption, { value: "worktree" }, tx(t, "workspaceWorktree", "worktree (git)")),
 
-          h(SelectOption, { value: "dir" }, "dir"),
+          h(SelectOption, { value: "dir" }, tx(t, "workspaceDir", "exact folder")),
 
         ),
 
@@ -5605,13 +5656,16 @@
 
       ),
 
+      FieldLabel(
+        tx(t, "fieldParentLabel", "Parent task (optional)"),
+        tx(t, "fieldParentHelp", "If you pick one, this card stays blocked until the parent task is marked done.")
+      ),
+
       h(Select, Object.assign({
 
         value: parent,
 
-        className: "h-7 text-xs",
-
-        title: "Optional parent task. A child stays blocked in its current column until the parent is marked done.",
+        className: "h-7 text-xs w-full",
 
       }, selectChangeHandler(setParent)),
 
@@ -5635,7 +5689,7 @@
 
           size: "sm",
 
-        }, "Create"),
+        }, tx(t, "create", "Create")),
 
         h(Button, {
 
