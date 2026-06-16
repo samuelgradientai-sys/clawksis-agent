@@ -553,6 +553,12 @@ export const es: Translations = {
 
     fallbackModelsHint: "Si el modelo principal falla (límite, sobrecarga o error), reintenta con estos. Formato provider:model, separados por coma.",
 
+    viewLabel: "Vista",
+
+    listView: "Lista",
+
+    calendarView: "Calendario",
+
     scheduledJobs: "Tareas programadas",
 
     noJobs: "No hay tareas cron configuradas. Crea una arriba.",

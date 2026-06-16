@@ -8,6 +8,7 @@ import { H2 } from "@nous-research/ui/ui/components/typography/h2";
 import { api } from "@/lib/api";
 import type { CronJob, ProfileInfo } from "@/lib/api";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { CronCalendar } from "@/components/CronCalendar";
 import {
   DEFAULT_SCHEDULE_STATE,
   ScheduleBuilder,
@@ -119,6 +120,7 @@ export default function CronPage() {
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
   const [selectedProfile, setSelectedProfile] = useState("all");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [loading, setLoading] = useState(true);
   const { toast, showToast } = useToast();
   const { t, locale } = useI18n();
@@ -133,6 +135,9 @@ export default function CronPage() {
     fallbackModelsHint:
       t.cron.fallbackModelsHint ??
       "If the primary model fails, retry with these. Format provider:model, comma-separated.",
+    viewLabel: t.cron.viewLabel ?? "View",
+    listView: t.cron.listView ?? "List",
+    calendarView: t.cron.calendarView ?? "Calendar",
   };
   const { setEnd } = usePageHeader();
 
@@ -913,24 +918,59 @@ export default function CronPage() {
             {t.cron.scheduledJobs} ({jobs.length})
           </H2>
 
-          <div className="grid gap-1 min-w-[220px]">
-            <Label htmlFor="cron-profile-filter">Profile</Label>
-            <Select
-              id="cron-profile-filter"
-              value={selectedProfile}
-              onValueChange={(v) => setSelectedProfile(v)}
-            >
-              <SelectOption value="all">All profiles</SelectOption>
-              {profiles.map((profile) => (
-                <SelectOption key={profile.name} value={profile.name}>
-                  {profileLabel(profile.name)}
-                </SelectOption>
-              ))}
-            </Select>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+              <Label>{cronExtra.viewLabel}</Label>
+              <div className="inline-flex border border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={cn(
+                    "h-9 px-3 text-xs uppercase tracking-wide transition-colors",
+                    viewMode === "list"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cronExtra.listView}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("calendar")}
+                  className={cn(
+                    "h-9 border-l border-border px-3 text-xs uppercase tracking-wide transition-colors",
+                    viewMode === "calendar"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cronExtra.calendarView}
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-1 min-w-[220px]">
+              <Label htmlFor="cron-profile-filter">Profile</Label>
+              <Select
+                id="cron-profile-filter"
+                value={selectedProfile}
+                onValueChange={(v) => setSelectedProfile(v)}
+              >
+                <SelectOption value="all">All profiles</SelectOption>
+                {profiles.map((profile) => (
+                  <SelectOption key={profile.name} value={profile.name}>
+                    {profileLabel(profile.name)}
+                  </SelectOption>
+                ))}
+              </Select>
+            </div>
           </div>
         </div>
 
-        {jobs.length === 0 && (
+        {viewMode === "calendar" && (
+          <CronCalendar profile={selectedProfile} />
+        )}
+
+        {viewMode === "list" && jobs.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
               {t.cron.noJobs}
@@ -938,7 +978,7 @@ export default function CronPage() {
           </Card>
         )}
 
-        {jobs.map((job) => {
+        {viewMode === "list" && jobs.map((job) => {
           const state = getJobState(job);
           const promptText = getJobPrompt(job);
           const title = getJobTitle(job);

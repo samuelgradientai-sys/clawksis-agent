@@ -7249,6 +7249,66 @@ async def update_cron_job(
     return job
 
 
+@app.get("/api/cron/occurrences")
+async def cron_occurrences(start: str, end: str, profile: str = "all"):
+    """Per-job firing days within [start, end] (YYYY-MM-DD) for the calendar
+    view. Enumerates each enabled job's schedule with the canonical scheduler
+    logic (croniter / interval phase / one-shot) and buckets by local date."""
+    from datetime import datetime as _dt
+    from cron.jobs import compute_occurrences, _ensure_aware
+
+    try:
+        win_start = _ensure_aware(_dt.fromisoformat(f"{start}T00:00:00"))
+        win_end = _ensure_aware(_dt.fromisoformat(f"{end}T23:59:59"))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid start/end (use YYYY-MM-DD): {exc}"
+        )
+
+    requested = (profile or "all").strip()
+    jobs: List[Dict[str, Any]] = []
+    if requested.lower() != "all":
+        jobs = _call_cron_for_profile(requested, "list_jobs", True)
+    else:
+        for item in _cron_profile_dicts():
+            name = str(item.get("name") or "")
+            if not name:
+                continue
+            try:
+                jobs.extend(_call_cron_for_profile(name, "list_jobs", True))
+            except Exception:
+                _log.exception("Failed to list cron jobs for profile %s", name)
+
+    result: List[Dict[str, Any]] = []
+    for job in jobs:
+        if not job.get("enabled", True) or job.get("state") == "paused":
+            continue
+        schedule = job.get("schedule") or {}
+        if not isinstance(schedule, dict):
+            continue
+        anchor = job.get("next_run_at") or job.get("created_at")
+        try:
+            occ = compute_occurrences(schedule, win_start, win_end, anchor=anchor)
+        except Exception:
+            _log.exception("occurrences failed for job %s", job.get("id"))
+            occ = []
+        days: Dict[str, int] = {}
+        for dt in occ:
+            key = dt.strftime("%Y-%m-%d")
+            days[key] = days.get(key, 0) + 1
+        if days:
+            result.append({
+                "id": job.get("id"),
+                "name": job.get("name") or job.get("id"),
+                "profile": job.get("profile"),
+                "schedule_display": job.get("schedule_display")
+                or schedule.get("display"),
+                "days": days,
+            })
+
+    return {"start": start, "end": end, "jobs": result}
+
+
 @app.post("/api/cron/jobs/{job_id}/pause")
 async def pause_cron_job(job_id: str, profile: Optional[str] = None):
 

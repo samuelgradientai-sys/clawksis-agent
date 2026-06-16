@@ -559,6 +559,12 @@ export const en: Translations = {
 
     fallbackModelsHint: "If the primary model fails (rate-limit, overload, error), retry with these. Format provider:model, comma-separated.",
 
+    viewLabel: "View",
+
+    listView: "List",
+
+    calendarView: "Calendar",
+
     scheduledJobs: "Scheduled Jobs",
 
     noJobs: "No cron jobs configured. Create one above.",

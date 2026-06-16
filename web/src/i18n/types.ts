@@ -594,6 +594,12 @@ export interface Translations {
 
     fallbackModelsHint?: string;
 
+    viewLabel?: string;
+
+    listView?: string;
+
+    calendarView?: string;
+
     scheduledJobs: string;
 
     noJobs: string;

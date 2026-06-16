@@ -16,6 +16,8 @@ import json
 
 import logging
 
+import math
+
 import shutil
 
 import tempfile
@@ -627,6 +629,78 @@ def compute_next_run(
         return next_run.isoformat()
 
     return None
+
+
+def compute_occurrences(
+    schedule: Dict[str, Any],
+    start: datetime,
+    end: datetime,
+    *,
+    anchor: Optional[str] = None,
+    cap: int = 4000,
+) -> List[datetime]:
+    """Enumerate firing times of ``schedule`` within [start, end] (tz-aware).
+
+    Day-level calendar projection — reuses the same kinds as
+    ``compute_next_run`` (interval / cron / once). ``anchor`` (ISO string,
+    typically the job's ``next_run_at``) phases interval schedules so e.g.
+    "every 3 days" lands on the same days the scheduler will actually fire.
+    Capped at ``cap`` firings to bound cost for sub-minute intervals.
+    """
+    kind = schedule.get("kind")
+    out: List[datetime] = []
+
+    if kind == "once":
+        raw = schedule.get("run_at")
+        if not raw:
+            return out
+        try:
+            dt = _ensure_aware(datetime.fromisoformat(raw))
+        except (ValueError, TypeError):
+            return out
+        if start <= dt <= end:
+            out.append(dt)
+        return out
+
+    if kind == "interval":
+        minutes = int(schedule.get("minutes", 0) or 0)
+        if minutes <= 0:
+            return out
+        step = timedelta(minutes=minutes)
+        base = start
+        if anchor:
+            try:
+                base = _ensure_aware(datetime.fromisoformat(anchor))
+            except (ValueError, TypeError):
+                base = start
+        # First occurrence >= start, preserving the anchor's phase.
+        k = math.ceil((start - base) / step)
+        t = base + k * step
+        while t <= end and len(out) < cap:
+            if t >= start:
+                out.append(t)
+            t += step
+        return out
+
+    if kind == "cron":
+        if not HAS_CRONITER:
+            return out
+        try:
+            it = croniter(schedule["expr"], start - timedelta(seconds=1))
+        except (ValueError, KeyError):
+            return out
+        while len(out) < cap:
+            try:
+                t = it.get_next(datetime)
+            except Exception:
+                break
+            if t > end:
+                break
+            if t >= start:
+                out.append(_ensure_aware(t))
+        return out
+
+    return out
 
 
 # =============================================================================

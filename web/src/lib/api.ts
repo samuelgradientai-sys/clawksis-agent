@@ -937,6 +937,12 @@ export const api = {
 
     fetchJSON<CronJob[]>(`/api/cron/jobs?profile=${encodeURIComponent(profile)}`),
 
+  getCronOccurrences: (start: string, end: string, profile = "all") =>
+
+    fetchJSON<{ start: string; end: string; jobs: CronOccurrenceJob[] }>(
+      `/api/cron/occurrences?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&profile=${encodeURIComponent(profile)}`,
+    ),
+
   createCronJob: (
     job: {
       prompt?: string;
@@ -3080,6 +3086,24 @@ export interface ModelsAnalyticsResponse {
   };
 
   period_days: number;
+
+}
+
+
+
+export interface CronOccurrenceJob {
+
+  id: string;
+
+  name: string;
+
+  profile?: string | null;
+
+  schedule_display?: string | null;
+
+  /** Map of "YYYY-MM-DD" → number of firings that day (in server timezone). */
+
+  days: Record<string, number>;
 
 }
 
