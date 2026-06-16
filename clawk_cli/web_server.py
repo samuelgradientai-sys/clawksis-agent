@@ -7337,12 +7337,58 @@ class MCPServerCreate(BaseModel):
     auth: Optional[str] = None
 
 
+def _coerce_mapping(value: Any) -> Dict[str, Any]:
+    """Best-effort coerce a config value into a dict.
+
+    Older/hand-edited config.yaml entries sometimes store ``env`` as a
+    JSON-encoded string instead of a native mapping. Tolerate that here so a
+    single malformed server entry can't 500 the whole list endpoint. (#mcpfix)
+    """
+
+    if isinstance(value, dict):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+
+            if isinstance(parsed, dict):
+                return parsed
+
+        except Exception:
+            pass
+
+    return {}
+
+
+def _coerce_sequence(value: Any) -> List[Any]:
+    """Best-effort coerce a config value into a list (see ``_coerce_mapping``)."""
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+
+            if isinstance(parsed, list):
+                return parsed
+
+        except Exception:
+            pass
+
+        # A bare string is a single arg, not a char sequence.
+        return [value] if value else []
+
+    return list(value or [])
+
+
 def _redact_mcp_env(env: Dict[str, Any]) -> Dict[str, str]:
     """Mask secret-shaped MCP env values for read responses."""
 
     out: Dict[str, str] = {}
 
-    for k, v in (env or {}).items():
+    for k, v in _coerce_mapping(env).items():
         try:
             out[str(k)] = redact_key(str(v)) if v else ""
 
@@ -7363,8 +7409,8 @@ def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         "transport": transport,
         "url": cfg.get("url"),
         "command": cfg.get("command"),
-        "args": list(cfg.get("args") or []),
-        "env": _redact_mcp_env(cfg.get("env") or {}),
+        "args": _coerce_sequence(cfg.get("args")),
+        "env": _redact_mcp_env(cfg.get("env")),
         "auth": cfg.get("auth"),
         "enabled": cfg.get("enabled", True) is not False,
         # Tool selection: list of enabled tool names, or None = all.
