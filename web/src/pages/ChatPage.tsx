@@ -322,7 +322,12 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
   const { theme } = useTheme();
 
-  const terminalBg = theme.terminalBackground ?? "#000000";
+  // Bug #23 (Fase 1) - mejora visual: cuando el tema no define terminalBackground
+  // explícito, usamos el background de la paleta del tema (en vez de #000000 negro
+  // puro). Esto integra el chat con el resto del dashboard. Si un tema quiere el
+  // estilo terminal puro, basta con definir terminalBackground: "#000000" en su preset.
+  const terminalBg = theme.terminalBackground
+    ?? (theme.palette?.background?.hex ?? "#000000");
 
   const terminalTheme = useMemo(
 
@@ -1748,7 +1753,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
             "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
 
-            "p-2 sm:p-3",
+            "p-3 sm:p-4",
+
+            // Bug #23 (Fase 1): border sutil consistente con cards del dashboard
+            "border border-border",
 
           )}
 
@@ -1756,7 +1764,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
             backgroundColor: terminalBg,
 
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
 
           }}
 
