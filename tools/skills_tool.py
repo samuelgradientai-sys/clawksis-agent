@@ -657,11 +657,24 @@ def _find_all_skills(*, skip_disabled: bool = False) -> List[Dict[str, Any]]:
 
                 category = _get_category_from_path(skill_md)
 
+                # Optional minimalist emoji from frontmatter metadata
+                # (metadata.clawksis.emoji or metadata.openclaw.emoji), surfaced
+                # to the dashboard skills list. Empty when the skill defines none.
+                emoji = ""
+                _meta = frontmatter.get("metadata")
+                if isinstance(_meta, dict):
+                    for _ns in ("clawksis", "openclaw"):
+                        _nsv = _meta.get(_ns)
+                        if isinstance(_nsv, dict) and _nsv.get("emoji"):
+                            emoji = str(_nsv["emoji"]).strip()
+                            break
+
                 seen_names.add(name)
                 skills.append({
                     "name": name,
                     "description": description,
                     "category": category,
+                    "emoji": emoji,
                 })
 
             except (UnicodeDecodeError, PermissionError) as e:

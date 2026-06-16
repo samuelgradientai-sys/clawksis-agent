@@ -3169,6 +3169,8 @@ export interface SkillInfo {
 
   enabled: boolean;
 
+  emoji?: string;
+
 }
 
 
