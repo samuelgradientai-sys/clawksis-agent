@@ -1143,15 +1143,12 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
     if wrap_response:
         task_name = job.get("name", job["id"])
 
-        job_id = job.get("id", "")
-
-        delivery_content = (
-            f"Cronjob Response: {task_name}\n"
-            f"(job_id: {job_id})\n"
-            f"-------------\n\n"
-            f"{content}\n\n"
-            f'To stop or manage this job, send me a new message (e.g. "stop reminder {task_name}").'
-        )
+        # Minimal, natural header: a small "⏰ <name>" tag so a cron message is
+        # recognizable in a chat without reading like an automated system. No
+        # job_id, divider, or management footer — those felt robotic, and the
+        # user manages jobs from the dashboard / by replying. Set
+        # cron.wrap_response: false to deliver the raw content with no tag.
+        delivery_content = f"⏰ {task_name}\n\n{content}"
 
     else:
         delivery_content = content
