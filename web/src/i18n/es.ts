@@ -1600,6 +1600,12 @@ export const es: Translations = {
 
     fieldSkillsHelp: "Skills extra que querés que el agente cargue, separadas por coma. Ej: translation, github-code-review.",
 
+    skillAdd: "+ agregar habilidad…",
+
+    skillNone: "(sin habilidades disponibles)",
+
+    skillRemove: "quitar",
+
     goalMode: "Modo objetivo",
 
     goalModeHelp: "El agente insiste en la misma sesión hasta que un juez la da por terminada (o se agota el presupuesto de turnos y la deja para revisión). Ideal para tareas abiertas que un solo intento no termina.",

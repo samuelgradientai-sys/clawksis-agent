@@ -170,6 +170,13 @@ SESSION_SEARCH_GUIDANCE = (
 )
 
 SKILLS_GUIDANCE = (
+    "When the user names a tool, service, or platform (LinkedIn, Notion, "
+    "Airtable, GitHub, etc.) or asks for a capability, FIRST check whether a "
+    "matching skill or MCP server already exists before saying you cannot: scan "
+    "your available skills and MCP tools, open the relevant one with skill_view, "
+    "then use it to do the task. Only conclude a capability is missing after you "
+    "have actually looked — and then offer to install one from the hub. Never "
+    "assume a skill or MCP is not there without checking.\n"
     "After completing a complex task (5+ tool calls), fixing a tricky error, "
     "or discovering a non-trivial workflow, save the approach as a "
     "skill with skill_manage so you can reuse it next time.\n"

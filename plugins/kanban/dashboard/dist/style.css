@@ -628,6 +628,16 @@
 
   border-radius: var(--radius-sm, 0.25rem);
 
+  /* The form grew tall (labels + agent/skills pickers). Cap it and let it
+
+     scroll internally so Crear/Cancelar are always reachable inside the
+
+     height-limited column instead of being clipped below it. */
+
+  max-height: calc(100vh - 240px);
+
+  overflow-y: auto;
+
 }
 
 
