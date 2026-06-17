@@ -34,6 +34,23 @@ Two rendering enhancements (in `webview-ui/src/office/engine/renderer.ts` +
   (`renderDelegationLines`), so a delegate_task hand-off is visible as a
   connection between the two agents.
 
+Telegram-style activity (the `agentToolStart`/`subagentToolStart` protocol gains
+an optional `label` field; emoji choice + Spanish copy live in `pixelBridge.ts`):
+
+- **Emoji activity labels** — the activity label shows the bridge's emoji-prefixed
+  text (`Character.currentToolLabel`, e.g. "📖 config.py", "🔎 …", "💻 …"). The raw
+  tool name stays on `currentTool` so the read/type animation lookup is unaffected.
+- **💭 Thinking bubble** — a floating emoji bubble (`bubbleType: 'thinking'`,
+  drawn as a glyph in `renderBubbles`) while the agent reasons before its first
+  tool. The bridge synthesizes it on `message.start`.
+- **Clawksis tool animations** — `isReadingTool` (in `engine/characters.ts`) now
+  recognizes snake_case Clawksis tools (`read_file`, `web_search`, …) so they pick
+  the reading pose instead of always typing.
+- **Fuel gauge for every agent** — `ToolOverlay.tsx` draws the context gauge for
+  any agent with token usage, not only team agents.
+- **Sound on by default** — `browserMock.ts` enables the turn-end / permission
+  chime (still gated behind the first canvas click for AudioContext unlock).
+
 Plus session identity (in `office/types.ts`, `officeState.addAgent`,
 `hooks/useExtensionMessages.ts`, `office/components/ToolOverlay.tsx`):
 
