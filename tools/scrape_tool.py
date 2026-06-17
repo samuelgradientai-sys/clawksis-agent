@@ -53,29 +53,32 @@ _FORMAT_EXT = {"markdown": ".md", "text": ".txt", "html": ".html"}
 # Content shorter than this (after strip) is treated as "empty/blocked".
 _MIN_USEFUL_CHARS = 200
 _MAX_RESULT_CHARS = 30000
+# A genuine block/challenge page is short and template-y. Above this size we
+# assume real content even if it happens to mention "captcha"/"forbidden" in the
+# body (e.g. a captcha-demo or a security article) — those ambiguous markers
+# only count on a short page; the strong phrases below fire at any size.
+_BLOCK_PAGE_MAX_CHARS = 1500
 
-# Markers that mean "blocked by IP reputation / rate-limit / captcha" — Scrapling
-# can't fix these without a proxy, so we stop escalating and say so.
-_IP_BLOCK_MARKERS = (
+# Unambiguous "blocked by IP reputation / rate-limit" — Scrapling can't fix these
+# without a proxy. Fire regardless of page size.
+_IP_BLOCK_STRONG = (
     "too many requests",
     "unusual traffic",
-    "rate limit",
-    "429",
-    "captcha",
-    "are you a robot",
+    "rate limit exceeded",
+    "you have been blocked",
     "verify you are human",
-    "select all squares",
-    "access denied",
-    "forbidden",
+    "select all squares containing",
 )
-# Markers that mean "anti-bot / JS wall" — escalating to a stealthier mode helps.
-_ANTIBOT_MARKERS = (
+# Ambiguous block words — only count as a block on a SHORT page.
+_IP_BLOCK_WEAK = ("captcha", "are you a robot", "access denied", "forbidden", "429", "403")
+# Unambiguous anti-bot / JS interstitials — escalating to a stealthier mode helps.
+_ANTIBOT_STRONG = (
     "just a moment",  # Cloudflare interstitial
-    "enable javascript",
-    "checking your browser",
+    "checking your browser before",
     "cf-browser-verification",
-    "ddos protection",
+    "ddos protection by",
 )
+_ANTIBOT_WEAK = ("enable javascript", "please enable js")
 
 
 def _scrapling_cmd() -> Optional[List[str]]:
@@ -120,13 +123,23 @@ def _resolve_proxy(arg_proxy: Optional[str]) -> Optional[str]:
 def _classify(content: str) -> str:
     """'ok' | 'antibot' | 'ip_block' | 'empty' for the given page content."""
     stripped = content.strip()
-    if len(stripped) < _MIN_USEFUL_CHARS:
-        return "empty"
-    low = stripped.lower()
-    if any(m in low for m in _IP_BLOCK_MARKERS):
+    head = stripped[:2000].lower()
+    # Strong phrases are real block/challenge pages at ANY size — check before
+    # the empty gate so even a bare "Too many requests" page is flagged.
+    if any(m in head for m in _IP_BLOCK_STRONG):
         return "ip_block"
-    if any(m in low for m in _ANTIBOT_MARKERS):
+    if any(m in head for m in _ANTIBOT_STRONG):
         return "antibot"
+    n = len(stripped)
+    if n < _MIN_USEFUL_CHARS:
+        return "empty"
+    # Ambiguous words only count as a block on a short, template-y page — a long
+    # page that merely mentions "captcha"/"forbidden" is real content.
+    if n <= _BLOCK_PAGE_MAX_CHARS:
+        if any(m in head for m in _IP_BLOCK_WEAK):
+            return "ip_block"
+        if any(m in head for m in _ANTIBOT_WEAK):
+            return "antibot"
     return "ok"
 
 
