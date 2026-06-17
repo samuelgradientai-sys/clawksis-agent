@@ -407,3 +407,36 @@ This skill encapsulates almost all the published documentation in Markdown, so d
 - Add delays (`download_delay`) for large crawls.
 - Don't bypass paywalls or authentication without permission.
 - Never scrape personal/sensitive data.
+
+## Clawksis integration notes (read this first)
+
+**There is also a `scrape` TOOL.** For the common case — "fetch this anti-bot
+page and give me the content" — just call the `scrape` tool (`scrape(url=...,
+mode="auto"|"get"|"fetch"|"stealthy")`). It wraps the `scrapling extract` CLI in
+one call, always uses `--ai-targeted`, auto-escalates get→fetch→stealthy, reads
+a proxy from `SCRAPLING_PROXY`/config, and detects IP-blocks. Use **this skill**
+only for what the tool can't do: spiders, persistent sessions, custom parsing.
+
+**When Scrapling helps vs when it WON'T:**
+- ✅ Helps: Cloudflare/Turnstile, TLS/browser fingerprinting, JavaScript-rendered
+  pages, consent walls. This is its core strength.
+- ❌ Does NOT help: HTTP **429 / "too many requests" / "unusual traffic" /
+  captchas / a datacenter IP on a blocklist**. That is *IP reputation*, not
+  fingerprint — a stealthier browser changes nothing. The only fixes are an
+  **official API** or a **residential proxy**. Set `SCRAPLING_PROXY` (or
+  `web.scrapling_proxy` in config.yaml, or pass `--proxy` / `proxy=`), then retry.
+  If there's no proxy, say so instead of retrying the same blocked URL.
+
+**Never scrape search engines** (Google/DuckDuckGo/Bing) to *find* things — they
+captcha datacenter IPs and you'll waste turns. Use the `web_search` tool. Reach
+for Scrapling to *read a specific page* you already have the URL for.
+
+**Gotchas the API has (don't relearn them the hard way):**
+- **`--impersonate Chrome` can fail** with "Impersonating Chrome is not
+  supported" when the installed `curl_cffi` lacks the generic alias. Use a
+  *versioned* target (`--impersonate chrome124`) or just rely on the default
+  `--stealthy-headers` (on by default), which is usually enough.
+- **Response is a Selector, not raw text.** `.body` is the raw HTML **bytes**
+  (since v0.4). For text use selectors (`page.css('...::text').getall()`) or
+  `page.get_all_text()` — `page.text` is the matched element's text and is often
+  empty on the root. To dump raw HTML: `page.body.decode()`.

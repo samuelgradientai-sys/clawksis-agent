@@ -34,6 +34,7 @@ from agent.prompt_builder import (
     MEMORY_GUIDANCE,
     OPENAI_MODEL_EXECUTION_GUIDANCE,
     PLATFORM_HINTS,
+    SCRAPING_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
     SKILLS_GUIDANCE,
     STEER_CHANNEL_NOTE,
@@ -119,6 +120,11 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         tool_guidance.append(SESSION_SEARCH_GUIDANCE)
     if "skill_manage" in agent.valid_tool_names:
         tool_guidance.append(SKILLS_GUIDANCE)
+    # Fetching ladder (web_search → web_fetch → scrape) + the IP-block/proxy
+    # reality, so the agent reaches for Scrapling on anti-bot and stops
+    # brute-forcing captcha/429 walls. Gated on the scrape tool being loaded.
+    if "scrape" in agent.valid_tool_names:
+        tool_guidance.append(SCRAPING_GUIDANCE)
     # Kanban worker/orchestrator lifecycle — only present when the
     # dispatcher spawned this process (kanban_show check_fn gates on
     # CLAWK_KANBAN_TASK env var). Normal chat sessions never see
