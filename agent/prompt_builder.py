@@ -185,6 +185,24 @@ SKILLS_GUIDANCE = (
     "Skills that aren't maintained become liabilities."
 )
 
+SCRAPING_GUIDANCE = (
+    "Web fetching — pick the right tool, don't brute-force:\n"
+    "1. To FIND information or answer a question from the web, use web_search. "
+    "NEVER scrape Google/DuckDuckGo/Bing directly — they captcha datacenter IPs, "
+    "so you'll just burn turns on a wall you can't get past.\n"
+    "2. To READ a known page, use web_fetch / web_extract.\n"
+    "3. If that returns empty, a JS-required/consent page, or HTTP 403, or the "
+    "site is behind Cloudflare/anti-bot, escalate to the `scrape` tool "
+    "(Scrapling anti-bot bypass, one call — handles Cloudflare/Turnstile, "
+    "stealth, and JS rendering). For spiders, sessions, or custom parsing, open "
+    "the scrapling-official skill instead.\n"
+    "4. If you hit HTTP 429 / 'too many requests' / a captcha, that is IP "
+    "reputation, NOT browser fingerprint — a stealthier browser will NOT help. "
+    "Use an official API, or a residential proxy (set the SCRAPLING_PROXY env "
+    "var or pass proxy= to scrape), or tell the user it needs a proxy. Do not "
+    "retry the same blocked URL over and over."
+)
+
 KANBAN_GUIDANCE = (
     "# Kanban task execution protocol\n"
     "You have been assigned ONE task from "

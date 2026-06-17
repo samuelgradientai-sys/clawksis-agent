@@ -1,0 +1,336 @@
+"""``scrape`` — one-call anti-bot web fetch backed by the Scrapling CLI.
+
+The ``scrapling-official`` skill is powerful but makes the agent hand-write
+Python each time, which is where it tripped (`.text` vs `.body`, `--impersonate
+Chrome` curl_cffi version quirks, parsing). This tool wraps the documented
+``scrapling extract`` CLI so the common case — "fetch this anti-bot page and
+give me the content" — is a single call that can't get the API wrong.
+
+When to reach for it (also encoded in the schema so the model self-selects):
+  * web_fetch / web_extract returned empty, a JS-required/consent page, or 403
+  * the site is behind Cloudflare / Turnstile / fingerprint anti-bot
+  * a page needs JavaScript to render
+
+When it will NOT help (and the tool says so in its result, instead of letting
+the agent brute-force it):
+  * 429 / "too many requests" / "unusual traffic" / captcha → that is IP
+    reputation, not fingerprint. Scrapling cannot bypass it without a proxy.
+    Set ``SCRAPLING_PROXY`` (a residential proxy) or pass ``proxy=``.
+  * search engines (Google/DuckDuckGo/Bing) → use the ``web_search`` tool.
+
+The full skill stays for advanced work (spiders, sessions, custom parsing).
+
+Binary discovery: ``SCRAPLING_BIN`` env → ``scrapling`` on PATH →
+``python -m scrapling``. Proxy: ``proxy`` arg → ``SCRAPLING_PROXY`` env →
+``web.scrapling_proxy`` in config.yaml.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from tools.registry import registry, tool_result
+
+logger = logging.getLogger(__name__)
+
+_MODE_TO_SUBCMD = {
+    "get": "get",
+    "fetch": "fetch",
+    "stealthy": "stealthy-fetch",
+}
+# auto escalates cheap → expensive, the same ladder the skill recommends.
+_AUTO_LADDER = ["get", "fetch", "stealthy"]
+_FORMAT_EXT = {"markdown": ".md", "text": ".txt", "html": ".html"}
+
+# Content shorter than this (after strip) is treated as "empty/blocked".
+_MIN_USEFUL_CHARS = 200
+_MAX_RESULT_CHARS = 30000
+
+# Markers that mean "blocked by IP reputation / rate-limit / captcha" — Scrapling
+# can't fix these without a proxy, so we stop escalating and say so.
+_IP_BLOCK_MARKERS = (
+    "too many requests",
+    "unusual traffic",
+    "rate limit",
+    "429",
+    "captcha",
+    "are you a robot",
+    "verify you are human",
+    "select all squares",
+    "access denied",
+    "forbidden",
+)
+# Markers that mean "anti-bot / JS wall" — escalating to a stealthier mode helps.
+_ANTIBOT_MARKERS = (
+    "just a moment",  # Cloudflare interstitial
+    "enable javascript",
+    "checking your browser",
+    "cf-browser-verification",
+    "ddos protection",
+)
+
+
+def _scrapling_cmd() -> Optional[List[str]]:
+    """Return the base command to invoke the scrapling CLI, or None if absent."""
+    override = os.environ.get("SCRAPLING_BIN")
+    if override and (shutil.which(override) or Path(override).exists()):
+        return [override]
+    found = shutil.which("scrapling")
+    if found:
+        return [found]
+    # Fall back to the module entrypoint if the package is importable.
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("scrapling") is not None:
+            return [sys.executable, "-m", "scrapling"]
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_proxy(arg_proxy: Optional[str]) -> Optional[str]:
+    if arg_proxy:
+        return arg_proxy
+    env_proxy = os.environ.get("SCRAPLING_PROXY")
+    if env_proxy:
+        return env_proxy
+    try:
+        from clawk_cli.config import load_config
+
+        cfg = load_config() or {}
+        web_cfg = cfg.get("web") if isinstance(cfg, dict) else None
+        if isinstance(web_cfg, dict):
+            p = web_cfg.get("scrapling_proxy")
+            if isinstance(p, str) and p.strip():
+                return p.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _classify(content: str) -> str:
+    """'ok' | 'antibot' | 'ip_block' | 'empty' for the given page content."""
+    stripped = content.strip()
+    if len(stripped) < _MIN_USEFUL_CHARS:
+        return "empty"
+    low = stripped.lower()
+    if any(m in low for m in _IP_BLOCK_MARKERS):
+        return "ip_block"
+    if any(m in low for m in _ANTIBOT_MARKERS):
+        return "antibot"
+    return "ok"
+
+
+def _run_one(
+    base: List[str],
+    subcmd: str,
+    url: str,
+    ext: str,
+    css_selector: Optional[str],
+    wait_selector: Optional[str],
+    proxy: Optional[str],
+    timeout_s: int,
+) -> Tuple[bool, str, str]:
+    """Run one `scrapling extract <subcmd>`; return (ran_ok, content, stderr)."""
+    fd, out_path = tempfile.mkstemp(suffix=ext, prefix="scrape_")
+    os.close(fd)
+    try:
+        # --ai-targeted is mandatory per the skill: sanitizes hidden elements
+        # (prompt-injection guard) + enables ad-blocking on browser modes.
+        cmd = [*base, "extract", subcmd, url, out_path, "--ai-targeted"]
+        if css_selector:
+            cmd += ["--css-selector", css_selector]
+        if proxy:
+            cmd += ["--proxy", proxy]
+        if wait_selector and subcmd != "get":
+            cmd += ["--wait-selector", wait_selector]
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_s
+            )
+        except subprocess.TimeoutExpired:
+            return False, "", f"timed out after {timeout_s}s"
+        content = ""
+        try:
+            content = Path(out_path).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            content = ""
+        ran_ok = proc.returncode == 0 and bool(content.strip())
+        return ran_ok, content, (proc.stderr or "").strip()
+    finally:
+        try:
+            os.unlink(out_path)
+        except Exception:
+            pass
+
+
+async def _handle_scrape(args, **kw):
+    url = (args.get("url") or "").strip()
+    if not url:
+        return tool_result(ok=False, error="`url` is required.")
+    if not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url
+
+    mode = (args.get("mode") or "auto").strip().lower()
+    if mode not in ("auto", "get", "fetch", "stealthy"):
+        mode = "auto"
+    fmt = (args.get("format") or "markdown").strip().lower()
+    ext = _FORMAT_EXT.get(fmt, ".md")
+    css_selector = (args.get("css_selector") or "").strip() or None
+    wait_selector = (args.get("wait_selector") or "").strip() or None
+    proxy = _resolve_proxy((args.get("proxy") or "").strip() or None)
+
+    base = _scrapling_cmd()
+    if base is None:
+        return tool_result(
+            ok=False,
+            error=(
+                "Scrapling is not installed. Install it once with: "
+                'pip install "scrapling[all]>=0.4.9" && scrapling install '
+                "(or open the scrapling-official skill). If it's installed in a "
+                "venv not on PATH, set SCRAPLING_BIN to its full path."
+            ),
+        )
+
+    ladder = _AUTO_LADDER if mode == "auto" else [mode]
+
+    attempts: List[str] = []
+    best_content = ""
+    best_status = "empty"
+    last_stderr = ""
+    for m in ladder:
+        subcmd = _MODE_TO_SUBCMD[m]
+        # Browser modes get a longer budget than the fast HTTP `get`.
+        timeout_s = 45 if subcmd == "get" else 90
+        ran_ok, content, stderr = await asyncio.to_thread(
+            _run_one, base, subcmd, url, ext, css_selector, wait_selector, proxy, timeout_s
+        )
+        last_stderr = stderr or last_stderr
+        status = _classify(content) if content else "empty"
+        attempts.append(f"{m}:{status if content else 'failed'}")
+        if content and len(content.strip()) > len(best_content.strip()):
+            best_content, best_status = content, status
+        if ran_ok and status == "ok":
+            break
+        # IP-block / captcha won't improve with a stealthier browser — stop the
+        # ladder and report the real cause instead of burning more attempts.
+        if status == "ip_block":
+            break
+
+    content = best_content.strip()
+    truncated = False
+    if len(content) > _MAX_RESULT_CHARS:
+        content = content[:_MAX_RESULT_CHARS]
+        truncated = True
+
+    if best_status == "ip_block":
+        return tool_result(
+            ok=False,
+            url=url,
+            attempts=attempts,
+            reason="ip_block",
+            error=(
+                "Blocked by IP reputation / rate-limit / captcha — NOT a "
+                "fingerprint problem, so Scrapling can't bypass it from this "
+                "server's IP. Options: (1) for a search query use the web_search "
+                "tool, not direct scraping; (2) set a residential proxy via the "
+                "SCRAPLING_PROXY env var (or web.scrapling_proxy in config) and "
+                "retry; (3) use an official API if the site has one."
+            ),
+            content=content or None,
+        )
+
+    if not content:
+        return tool_result(
+            ok=False,
+            url=url,
+            attempts=attempts,
+            error=(
+                "No content returned"
+                + (f" (scrapling: {last_stderr})" if last_stderr else "")
+                + ". The page may need a different mode, a proxy, or login."
+            ),
+        )
+
+    return tool_result(
+        ok=True,
+        url=url,
+        mode_used=attempts[-1] if attempts else mode,
+        attempts=attempts,
+        status=best_status,
+        format=fmt,
+        truncated=truncated,
+        content=content,
+    )
+
+
+SCRAPE_SCHEMA = {
+    "name": "scrape",
+    "description": (
+        "Fetch a web page with anti-bot bypass (Cloudflare/Turnstile, stealth, "
+        "JavaScript rendering) via Scrapling and return its content in ONE call. "
+        "Reach for this when web_fetch/web_extract returned empty, a "
+        "JS-required/consent page, or HTTP 403, or when the site is behind "
+        "Cloudflare/anti-bot. Do NOT use it to get past HTTP 429 / 'too many "
+        "requests' / captchas — that is IP reputation, which needs a proxy "
+        "(set SCRAPLING_PROXY), not a stealthier browser. Do NOT scrape search "
+        "engines (Google/DuckDuckGo/Bing) — use the web_search tool instead. "
+        "For spiders, sessions, or custom parsing, use the scrapling-official skill."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "The page URL to fetch."},
+            "mode": {
+                "type": "string",
+                "enum": ["auto", "get", "fetch", "stealthy"],
+                "description": (
+                    "auto (default): try fast HTTP, escalate to headless browser, "
+                    "then full stealth as needed. get: fast HTTP only (no JS). "
+                    "fetch: headless browser + JS. stealthy: max anti-bot bypass."
+                ),
+            },
+            "format": {
+                "type": "string",
+                "enum": ["markdown", "text", "html"],
+                "description": "Output format (default markdown).",
+            },
+            "css_selector": {
+                "type": "string",
+                "description": "Optional CSS selector — return only matching content.",
+            },
+            "wait_selector": {
+                "type": "string",
+                "description": "Browser modes only: wait for this CSS selector before extracting.",
+            },
+            "proxy": {
+                "type": "string",
+                "description": (
+                    "Optional proxy URL (http://user:pass@host:port). Overrides "
+                    "the SCRAPLING_PROXY env var / config for this call."
+                ),
+            },
+        },
+        "required": ["url"],
+    },
+}
+
+
+registry.register(
+    name="scrape",
+    toolset="web",
+    schema=SCRAPE_SCHEMA,
+    handler=_handle_scrape,
+    is_async=True,
+    emoji="🕷️",
+    max_result_size_chars=_MAX_RESULT_CHARS + 2000,
+)

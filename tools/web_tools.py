@@ -1773,8 +1773,26 @@ async def web_extract_tool(
 
         trimmed_response = {"results": trimmed_results}
 
+        # When extraction came back empty / blocked, point the agent at the
+        # anti-bot fallback instead of giving up or brute-forcing the same URL.
+        def _looks_failed(r):
+            return not (r.get("content") or "").strip() or bool(r.get("error"))
+
+        if trimmed_results and all(_looks_failed(r) for r in trimmed_results):
+            trimmed_response["hint"] = (
+                "No usable content (possible anti-bot / JS-required / 403). "
+                "Next step: use the `scrape` tool (Scrapling anti-bot bypass) for "
+                "Cloudflare/JS sites; use web_search for search queries. If you see "
+                "429 / 'too many requests' / a captcha, that's an IP block — it "
+                "needs a residential proxy (SCRAPLING_PROXY), not retries."
+            )
+
         if trimmed_response.get("results") == []:
-            result_json = tool_error("Content was inaccessible or not found")
+            result_json = tool_error(
+                "Content was inaccessible or not found. Try the `scrape` tool "
+                "(Scrapling anti-bot bypass) for anti-bot/JS sites, or web_search "
+                "for search queries."
+            )
 
             cleaned_result = clean_base64_images(result_json)
 
