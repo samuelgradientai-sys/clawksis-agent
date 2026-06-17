@@ -153,6 +153,10 @@ def _run_one(
             cmd += ["--proxy", proxy]
         if wait_selector and subcmd != "get":
             cmd += ["--wait-selector", wait_selector]
+        # stealthy-fetch can auto-solve Cloudflare interstitials, but the flag
+        # defaults off — turn it on since this tool exists to beat anti-bot.
+        if subcmd == "stealthy-fetch":
+            cmd += ["--solve-cloudflare"]
         try:
             proc = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout_s
