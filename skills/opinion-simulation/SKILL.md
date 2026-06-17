@@ -22,17 +22,40 @@ en Markdown. Es un *focus group sintético* para anticipar reacción / sentimien
 / dinámica social ante un tema, mensaje, producto, post o documento — ideal
 **antes de publicar** algo.
 
-## Paso 0 — requisito (verificá primero)
+## Paso 0 — disponibilidad y oferta proactiva
 
 La herramienta `mirofish` SOLO está disponible si hay un **server MiroFish
 corriendo** (Docker, REST en `:5001`) y habilitado en `clawk tools` → MiroFish.
 
-- Si la tool `mirofish` no está en tu toolset, o responde *"No MiroFish server
-  responding at …"*, **avisá al usuario** que primero hay que levantar el server
-  MiroFish y configurar `MIROFISH_BASE_URL` (el server además necesita sus
-  propias `LLM_API_KEY` / `ZEP_API_KEY`, del lado de MiroFish, no de Clawksis).
-- No intentes "simular a mano" sin el server: este skill es justamente el
-  envoltorio del tool `mirofish`.
+- **Si la tool `mirofish` ESTÁ disponible** → seguí directo al Flujo y corré la
+  simulación.
+- **Si NO está disponible** (no aparece la tool, o responde *"No MiroFish server
+  responding at …"*) → **NO te limites a decir "no puedo".** Ofrecé la capacidad
+  con entusiasmo y explicá cómo activarla. Algo así:
+
+  > "Puedo correr una **simulación de opinión multi-agente** (MiroFish): genera
+  > cientos de personas-agente a partir de tu material y pronostica cómo
+  > reaccionaría el público a esto, con un reporte. Para activarla necesito un
+  > par de cosas (una sola vez):"
+
+  Y listá, con los enlaces:
+
+  1. **Levantar el server MiroFish** (Docker) y apuntar `MIROFISH_BASE_URL` a él
+     (habilitarlo en `clawk tools` → MiroFish). Ofrecé guiar el `docker compose`.
+  2. **Dos llaves** (van en el `.env` del server MiroFish, no en Clawksis):
+     - **`ZEP_API_KEY`** — gratis en **https://app.getzep.com/** (Zep Cloud; el
+       free tier mensual alcanza para uso simple). Es el grafo de memoria.
+     - **`LLM_API_KEY`** (+ `LLM_BASE_URL` + `LLM_MODEL_NAME`) — cualquier
+       proveedor **compatible con OpenAI**: OpenAI (platform.openai.com),
+       DeepSeek (platform.deepseek.com), Alibaba DashScope/Qwen, u OpenRouter.
+       **Podés reusar una API key de LLM que ya tengas.** (El default de MiroFish
+       es DashScope/`qwen-plus`; sirve cualquiera cambiando `LLM_BASE_URL` y
+       `LLM_MODEL_NAME`.)
+
+  Cerrá ofreciéndote a guiar el setup paso a paso.
+
+- No intentes "simular a mano" sin el server: este skill es el envoltorio del
+  tool `mirofish`.
 
 ## Flujo
 
