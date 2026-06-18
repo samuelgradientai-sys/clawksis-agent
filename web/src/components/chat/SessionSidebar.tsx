@@ -9,7 +9,7 @@
  */
 
 import { Plus, Loader2, MessageSquare } from "lucide-react";
-import type { SessionSummary } from "./hooks/useSessions";
+import { deriveTitle, type SessionSummary } from "./hooks/useSessions";
 
 interface SessionSidebarProps {
   sessions: SessionSummary[];
@@ -68,7 +68,7 @@ function SessionItem({
   isActive: boolean;
   onClick: () => void;
 }) {
-  const title = session.title?.trim() || session.preview?.trim() || "Sin título";
+  const title = deriveTitle(session);
   const dateLabel = formatRelativeDate(session.started_at);
 
   return (
