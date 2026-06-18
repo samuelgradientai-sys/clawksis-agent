@@ -177,11 +177,17 @@ const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
 
 const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
 
-// memo so a re-render of the App shell (e.g. the 10s sidebar status poll) does
-// NOT re-render the persistent chat host. Its only prop, `isActive`, is a
-// primitive, so the shallow compare is correct. The xterm/PTY lives in refs and
-// effects keyed on [channel], so this never tears down the terminal session.
-const ChatPage = memo(lazy(() => import("@/pages/ChatPage")));
+
+
+// Wrapper que decide entre modo terminal (xterm) y modo moderno (burbujas).
+// Lee preferencia de localStorage vía useChatMode. Fase 2.6.4 del plan visual.
+// Default: terminal (no romper UX existente).
+const ChatRouter = memo(
+  lazy(() => import("@/components/chat/ChatRouter")),
+);
+
+// NOTE: ChatPage ya no se importa aquí — el ChatRouter wrapper se encarga
+// de cargarlo lazy cuando el modo es "terminal". Ver components/chat/ChatRouter.tsx
 
 // The decorative WebGL/motion backdrop isn't needed for first paint — defer it
 // (and the `motion` vendor chunk it pulls) so the shell renders immediately and
@@ -1606,7 +1612,7 @@ export default function App() {
 
                       <Suspense fallback={<PageLoading />}>
 
-                        <ChatPage isActive={isChatRoute} />
+                        <ChatRouter isActive={isChatRoute} />
 
                       </Suspense>
 
