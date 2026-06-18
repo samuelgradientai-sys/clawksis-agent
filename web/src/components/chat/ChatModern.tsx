@@ -1,9 +1,10 @@
 /**
- * ChatModern — Modo "moderno" del chat con sidebar de sesiones (Fase 2.7).
+ * ChatModern — Modo "moderno" del chat con sidebar de sesiones (Fase 2.7)
+ * + file picker funcional en el composer (Fase 2.8 B1).
  *
  * Layout: sidebar 240px + body flex-1.
- * Sidebar incluye lista de sesiones y botón "Nueva conversación".
- * Click en sesión → switchSession del gateway.
+ * Composer: textarea + chips de archivos adjuntos arriba + botones (Paperclip
+ * funcional, Mic placeholder).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -21,6 +22,8 @@ import {
   AlertCircle,
   WifiOff,
   Square,
+  X,
+  FileText,
 } from "lucide-react";
 import { Markdown } from "../Markdown";
 import {
@@ -30,6 +33,7 @@ import {
   type ToolCall,
 } from "./hooks/useChatGateway";
 import { useSessions } from "./hooks/useSessions";
+import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { SessionSidebar } from "./SessionSidebar";
 
 interface ChatHeaderProps {
@@ -247,6 +251,33 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: Attachment;
+  onRemove: () => void;
+}) {
+  const sizeKb = (attachment.size / 1024).toFixed(1);
+  return (
+    <div className="flex items-center gap-1.5 rounded border border-border bg-muted/30 px-2 py-1 text-xs">
+      <FileText className="size-3 shrink-0 text-[#6C4FD6]" />
+      <span className="max-w-[180px] truncate font-mono text-foreground" title={attachment.name}>
+        {attachment.name}
+      </span>
+      <span className="text-muted-foreground">· {sizeKb}KB</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={"Quitar " + attachment.name}
+        className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
 interface ComposerProps {
   busy: boolean;
   disabled: boolean;
@@ -257,7 +288,18 @@ interface ComposerProps {
 function Composer({ busy, disabled, onSend, onInterrupt }: ComposerProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const canSend = value.trim().length > 0 && !busy && !disabled;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    attachments,
+    addFiles,
+    removeAttachment,
+    clear: clearAttachments,
+    error: attachError,
+    buildPromptWithAttachments,
+  } = useAttachments();
+
+  const canSend =
+    (value.trim().length > 0 || attachments.length > 0) && !busy && !disabled;
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -268,8 +310,10 @@ function Composer({ busy, disabled, onSend, onInterrupt }: ComposerProps) {
 
   const handleSubmit = () => {
     if (!canSend) return;
-    onSend(value);
+    const finalPrompt = buildPromptWithAttachments(value);
+    onSend(finalPrompt);
     setValue("");
+    clearAttachments();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -279,8 +323,53 @@ function Composer({ busy, disabled, onSend, onInterrupt }: ComposerProps) {
     }
   };
 
+  const handlePaperclipClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await addFiles(files);
+    }
+    // Reset input para que se pueda seleccionar el mismo archivo otra vez
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   return (
     <div className="border-t border-border px-4 py-3">
+      {/* Chips de archivos adjuntos */}
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {attachments.map((att) => (
+            <AttachmentChip
+              key={att.id}
+              attachment={att}
+              onRemove={() => removeAttachment(att.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Error de adjuntar */}
+      {attachError && (
+        <div className="mb-2 flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+          <AlertCircle className="size-3 shrink-0" />
+          <span>{attachError}</span>
+        </div>
+      )}
+
+      {/* Input file oculto */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".txt,.md,.markdown,.json,.yaml,.yml,.toml,.xml,.py,.ts,.tsx,.js,.jsx,.mjs,.cjs,.rs,.go,.java,.kt,.rb,.php,.swift,.c,.cpp,.h,.hpp,.cs,.sh,.bash,.zsh,.fish,.html,.css,.scss,.sass,.csv,.tsv,.sql,.env,.ini,.conf,.cfg,.log,.vue,.svelte,.graphql,.gql,text/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
+      {/* Composer principal */}
       <div className="flex items-end gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 focus-within:border-[#6C4FD6]/60 transition-colors">
         <textarea
           ref={textareaRef}
@@ -299,17 +388,18 @@ function Composer({ busy, disabled, onSend, onInterrupt }: ComposerProps) {
         <div className="flex items-center gap-1">
           <button
             type="button"
+            onClick={handlePaperclipClick}
+            disabled={disabled}
             aria-label="Adjuntar archivo"
-            title="Adjuntar archivo — disponible en Nivel 2"
-            disabled
-            className="rounded p-1.5 text-muted-foreground opacity-40 cursor-not-allowed"
+            title="Adjuntar archivo de texto (.txt, .md, .py, .ts, etc — máx 100KB)"
+            className="rounded p-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <Paperclip className="size-4" />
           </button>
           <button
             type="button"
             aria-label="Grabar voz"
-            title="Grabar voz — disponible en Nivel 2"
+            title="Grabación de voz — próximamente (Nivel 2)"
             disabled
             className="rounded p-1.5 text-muted-foreground opacity-40 cursor-not-allowed"
           >
