@@ -26144,7 +26144,7 @@ class GatewayRunner:
 
             from agent.display import get_tool_emoji
 
-            emoji = get_tool_emoji(tool_name, default="⚙️")
+            emoji = get_tool_emoji(tool_name, default="⚙️", args=args)
 
             # Verbose mode: show detailed arguments, respects tool_preview_length
 

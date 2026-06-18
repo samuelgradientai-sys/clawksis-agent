@@ -1885,7 +1885,7 @@ class APIServerAdapter(BasePlatformAdapter):
                 label = build_tool_preview(function_name, function_args) or function_name
                 _stream_q.put(("__tool_progress__", {
                     "tool": function_name,
-                    "emoji": get_tool_emoji(function_name),
+                    "emoji": get_tool_emoji(function_name, args=function_args),
                     "label": label,
                     "toolCallId": tool_call_id,
                     "status": "running",
