@@ -2225,7 +2225,7 @@ class BasePlatformAdapter(ABC):
 
         from agent.display import get_tool_emoji
 
-        emoji = get_tool_emoji(event.tool_name, default="⚙️")
+        emoji = get_tool_emoji(event.tool_name, default="⚙️", args=event.args)
 
         if mode == "verbose":
             if event.args:

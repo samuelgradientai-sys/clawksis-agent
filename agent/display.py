@@ -12,6 +12,8 @@ import logging
 
 import os
 
+import re
+
 import sys
 
 import threading
@@ -220,12 +222,15 @@ def get_skin_tool_prefix() -> str:
     return "┊"
 
 
-def get_tool_emoji(tool_name: str, default: str = "⚡") -> str:
+def get_tool_emoji(tool_name: str, default: str = "⚡", args=None) -> str:
     """Get the display emoji for a tool.
 
 
 
     Resolution order:
+
+    0. If *args* are given and this is a terminal/code tool running a bundled
+       skill, that skill's emoji (metadata.clawksis.emoji) — e.g. scrapling → 🕷️
 
     1. Active skin's ``tool_emojis`` overrides (if a skin is loaded)
 
@@ -234,6 +239,29 @@ def get_tool_emoji(tool_name: str, default: str = "⚡") -> str:
     3. *default* fallback
 
     """
+
+    # 0. Skill-aware: surface the emoji of the skill a shell command is using,
+    #    so running a skill reads like the skill (🕷️ scrapling), not "terminal".
+
+    if args and tool_name in _SKILL_CMD_TOOLS:
+
+        _cmd = ""
+
+        for _k in ("command", "code", "script", "cmd"):
+
+            _v = args.get(_k) if isinstance(args, dict) else None
+
+            if isinstance(_v, str) and _v:
+
+                _cmd = _v
+
+                break
+
+        _se = skill_emoji_for_command(_cmd)
+
+        if _se:
+
+            return _se
 
     # 1. Skin override
 
@@ -261,6 +289,83 @@ def get_tool_emoji(tool_name: str, default: str = "⚡") -> str:
     # 3. Hardcoded fallback
 
     return default
+
+
+# Tools whose primary argument is a shell command / code we can scan for a skill.
+_SKILL_CMD_TOOLS = {"terminal", "bash", "shell", "run_shell", "process", "execute_code"}
+
+# Library/CLI-style skills whose commands carry no skills/<cat>/<name> path (the
+# agent imports the library or runs its binary). substring (lowercased) → emoji.
+_SKILL_LIB_SIGNALS = {"scrapling": "🕷️"}
+
+_SKILL_PATH_RE = re.compile(r"skills[/\\]([A-Za-z0-9_.-]+)[/\\]([A-Za-z0-9_.-]+)")
+_skill_dir_emoji_cache: dict = {}
+
+
+def _emoji_from_skill_md(skill_dir: Path) -> str:
+    """Read metadata.clawksis.emoji / metadata.openclaw.emoji from a SKILL.md."""
+    try:
+        md = skill_dir / "SKILL.md"
+        if not md.is_file():
+            return ""
+        from agent.skill_utils import parse_frontmatter
+
+        fm, _ = parse_frontmatter(md.read_text(encoding="utf-8", errors="replace")[:4000])
+        meta = fm.get("metadata") if isinstance(fm, dict) else None
+        if isinstance(meta, dict):
+            for ns in ("clawksis", "openclaw"):
+                nsv = meta.get(ns)
+                if isinstance(nsv, dict) and nsv.get("emoji"):
+                    return str(nsv["emoji"]).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _emoji_for_skill_dir(category: str, name: str) -> str:
+    """Emoji for a skills/<category>/<name> dir across skill roots (cached)."""
+    key = (category, name)
+    if key in _skill_dir_emoji_cache:
+        return _skill_dir_emoji_cache[key]
+    emoji = ""
+    roots = []
+    try:
+        from clawk_constants import get_clawk_home
+
+        roots.append(get_clawk_home() / "skills")
+    except Exception:
+        pass
+    try:
+        from agent.skill_utils import get_external_skills_dirs
+
+        roots.extend(get_external_skills_dirs())
+    except Exception:
+        pass
+    for root in roots:
+        try:
+            emoji = _emoji_from_skill_md(Path(root) / category / name)
+        except Exception:
+            emoji = ""
+        if emoji:
+            break
+    _skill_dir_emoji_cache[key] = emoji
+    return emoji
+
+
+def skill_emoji_for_command(command: str) -> str:
+    """Emoji of the bundled skill a shell command uses, or '' if none detected."""
+    if not command:
+        return ""
+    m = _SKILL_PATH_RE.search(command)
+    if m:
+        emoji = _emoji_for_skill_dir(m.group(1), m.group(2))
+        if emoji:
+            return emoji
+    low = command.lower()
+    for sig, emoji in _SKILL_LIB_SIGNALS.items():
+        if sig in low:
+            return emoji
+    return ""
 
 
 # =========================================================================

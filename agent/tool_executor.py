@@ -1397,7 +1397,7 @@ def execute_tool_calls_sequential(
             spinner = None
             if agent._should_emit_quiet_tool_messages():
                 face = random.choice(KawaiiSpinner.get_waiting_faces())
-                emoji = _get_tool_emoji(function_name)
+                emoji = _get_tool_emoji(function_name, args=function_args)
                 preview = (
                     _build_tool_preview(function_name, function_args) or function_name
                 )
@@ -1452,7 +1452,7 @@ def execute_tool_calls_sequential(
                 and agent._should_start_quiet_spinner()
             ):
                 face = random.choice(KawaiiSpinner.get_waiting_faces())
-                emoji = _get_tool_emoji(function_name)
+                emoji = _get_tool_emoji(function_name, args=function_args)
                 preview = (
                     _build_tool_preview(function_name, function_args) or function_name
                 )
@@ -1505,7 +1505,7 @@ def execute_tool_calls_sequential(
                 and agent._should_start_quiet_spinner()
             ):
                 face = random.choice(KawaiiSpinner.get_waiting_faces())
-                emoji = _get_tool_emoji(function_name)
+                emoji = _get_tool_emoji(function_name, args=function_args)
                 preview = (
                     _build_tool_preview(function_name, function_args) or function_name
                 )
