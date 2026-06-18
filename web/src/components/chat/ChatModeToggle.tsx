@@ -20,7 +20,7 @@ export function ChatModeToggle({
     <div
       role="group"
       aria-label="Modo de chat"
-      className="inline-flex h-7 items-center rounded-md border border-border bg-muted/20 p-0.5"
+      className="inline-flex h-6 items-center rounded-md border border-border bg-muted/20 p-0.5"
     >
       <button
         type="button"
@@ -28,7 +28,7 @@ export function ChatModeToggle({
         onClick={() => onChange("terminal")}
         title="Modo terminal — interfaz CLI clásica"
         className={
-          "flex h-6 items-center gap-1.5 rounded px-2 text-xs transition-colors " +
+          "flex h-5 items-center gap-1 rounded px-1.5 text-xs transition-colors " +
           (mode === "terminal"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground")
@@ -43,7 +43,7 @@ export function ChatModeToggle({
         onClick={() => onChange("modern")}
         title="Modo moderno — burbujas tipo chat"
         className={
-          "flex h-6 items-center gap-1.5 rounded px-2 text-xs transition-colors " +
+          "flex h-5 items-center gap-1 rounded px-1.5 text-xs transition-colors " +
           (mode === "modern"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground")
