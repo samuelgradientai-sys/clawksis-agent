@@ -1,26 +1,9 @@
 /**
- * ChatModern — Modo "moderno" del chat (Fase 2.6.3 — integración real).
+ * ChatModern — Modo "moderno" del chat con sidebar de sesiones (Fase 2.7).
  *
- * Inspiración visual: Linear / Vercel
- *
- * Esta versión está conectada al gateway real via useChatGateway hook.
- * Renderiza conversaciones reales, no más datos hardcoded.
- *
- * Estado de Nivel 1 (Fase 2.6.3):
- * ✓ Conexión WebSocket JSON-RPC a /api/ws
- * ✓ Carga de historia de sesión más reciente
- * ✓ Envío de mensajes con prompt.submit
- * ✓ Streaming token-by-token de respuestas
- * ✓ Tool calls visibles con estado live (running → done)
- * ✓ Markdown renderizado
- * ✓ Estados de conexión visibles
- *
- * Limitaciones intencionales (queda para Nivel 2+):
- * - Sin slash commands
- * - Sin adjuntar archivos (botones visibles pero deshabilitados)
- * - Sin aprobaciones interactivas de tools
- * - Sin switch entre sesiones desde aquí
- * - Botones Regenerate/Edit son placeholders
+ * Layout: sidebar 240px + body flex-1.
+ * Sidebar incluye lista de sesiones y botón "Nueva conversación".
+ * Click en sesión → switchSession del gateway.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -32,7 +15,6 @@ import {
   RotateCw,
   Pencil,
   ChevronRight,
-  Plus,
   Zap,
   CheckCircle2,
   Loader2,
@@ -47,6 +29,8 @@ import {
   type ConnectionStatus,
   type ToolCall,
 } from "./hooks/useChatGateway";
+import { useSessions } from "./hooks/useSessions";
+import { SessionSidebar } from "./SessionSidebar";
 
 interface ChatHeaderProps {
   status: ConnectionStatus;
@@ -98,18 +82,6 @@ function ChatHeader({
         <span className="font-mono text-foreground/80">{shortSession}</span>
         <span>·</span>
         <span>{tokensLabel}</span>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded border border-border bg-transparent px-2.5 py-1 text-xs text-foreground hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          disabled
-          title="Nueva sesión — disponible en Nivel 2"
-        >
-          <Plus className="size-3" />
-          New
-        </button>
       </div>
     </div>
   );
@@ -417,9 +389,7 @@ function EmptyState() {
           Empezá una conversación
         </h2>
         <p className="text-sm text-muted-foreground">
-          Escribí un mensaje abajo para empezar a chatear con Clawksis. Esta es
-          la vista "moderna" del chat — para terminal puro, volvé a la pestaña
-          Chat.
+          Escribí un mensaje abajo para empezar a chatear con Clawksis.
         </p>
       </div>
     </div>
@@ -435,7 +405,17 @@ export default function ChatModern() {
     sendMessage,
     interrupt,
     errorMessage,
+    sendRpc,
+    readyForRpc,
+    switchSession,
   } = useChatGateway();
+
+  const {
+    sessions,
+    loading: sessionsLoading,
+    error: sessionsError,
+    createSession,
+  } = useSessions(sendRpc, readyForRpc);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -447,37 +427,60 @@ export default function ChatModern() {
   const isConnecting = status === "connecting" || status === "idle";
   const composerDisabled = status !== "connected" || !session.sessionId;
 
+  const handleSelectSession = (targetId: string) => {
+    if (targetId === session.sessionId) return;
+    void switchSession(targetId);
+  };
+
+  const handleNewChat = async () => {
+    const newId = await createSession();
+    if (newId) {
+      await switchSession(newId);
+    }
+  };
+
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-background">
-      <ChatHeader
-        status={status}
-        model={session.model}
-        modelProvider={session.modelProvider}
-        sessionId={session.sessionId}
-        tokensUsed={session.tokensUsed}
-        tokensMax={session.tokensMax}
+    <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={session.sessionId}
+        loading={sessionsLoading}
+        error={sessionsError}
+        onSelectSession={handleSelectSession}
+        onNewChat={handleNewChat}
       />
 
-      <ConnectionBanner status={status} errorMessage={errorMessage} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatHeader
+          status={status}
+          model={session.model}
+          modelProvider={session.modelProvider}
+          sessionId={session.sessionId}
+          tokensUsed={session.tokensUsed}
+          tokensMax={session.tokensMax}
+        />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        {messages.length === 0 && !isConnecting ? (
-          <EmptyState />
-        ) : (
-          <div className="mx-auto flex w-full max-w-none flex-col">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
-          </div>
-        )}
+        <ConnectionBanner status={status} errorMessage={errorMessage} />
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          {messages.length === 0 && !isConnecting ? (
+            <EmptyState />
+          ) : (
+            <div className="mx-auto flex w-full max-w-none flex-col">
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <Composer
+          busy={busy}
+          disabled={composerDisabled}
+          onSend={sendMessage}
+          onInterrupt={interrupt}
+        />
       </div>
-
-      <Composer
-        busy={busy}
-        disabled={composerDisabled}
-        onSend={sendMessage}
-        onInterrupt={interrupt}
-      />
     </div>
   );
 }

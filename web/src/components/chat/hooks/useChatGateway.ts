@@ -1,9 +1,7 @@
 /**
  * useChatGateway — Hook para conexión JSON-RPC con el gateway de Clawksis.
  *
- * Fase 2.6.3-fix: corregido el manejo de session init.
- * Si session.most_recent retorna un ID que ya no existe en disco,
- * caemos a session.create automáticamente.
+ * Fase 2.7 — versión completa con switchSession para sidebar de sesiones.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -79,6 +77,12 @@ interface UseChatGatewayResult {
   sendMessage: (text: string) => void;
   interrupt: () => void;
   errorMessage: string | null;
+  /** Para hooks satélite que necesitan reusar la conexión (ej: useSessions) */
+  sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+  /** true cuando es seguro usar sendRpc (WebSocket conectado) */
+  readyForRpc: boolean;
+  /** Cambiar a otra sesión: limpia mensajes, carga history, actualiza sessionId */
+  switchSession: (targetId: string) => Promise<void>;
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -240,16 +244,13 @@ export function useChatGateway(): UseChatGatewayResult {
   useEffect(() => {
     let cancelled = false;
 
-    // Helper: intenta resume, si falla crea sesión nueva
     async function resolveSession(): Promise<string | null> {
-      // 1. Intentar la sesión más reciente (puede que no exista)
       try {
         const recent = (await sendRpc("session.most_recent")) as {
           session_id?: string;
         } | null;
         const sid = recent?.session_id;
         if (sid) {
-          // Intentar resumir esa sesión
           try {
             const resumeResult = (await sendRpc("session.resume", { session_id: sid })) as { session_id?: string; resumed?: string };
             const liveSid = resumeResult?.session_id ?? sid;
@@ -260,14 +261,12 @@ export function useChatGateway(): UseChatGatewayResult {
               "[useChatGateway] resume failed, creating new session",
               resumeErr,
             );
-            // Cae a crear sesión nueva abajo
           }
         }
       } catch (err) {
         console.warn("[useChatGateway] session.most_recent failed", err);
       }
 
-      // 2. Crear sesión nueva
       try {
         const created = (await sendRpc("session.create", {
           source: "dashboard",
@@ -275,7 +274,6 @@ export function useChatGateway(): UseChatGatewayResult {
         const newSid = created?.session_id;
         if (newSid) {
           console.log("[useChatGateway] created new session", newSid);
-          // Activar la sesión recién creada
           try {
             const resumeResult = (await sendRpc("session.resume", { session_id: newSid })) as { session_id?: string };
             const liveSid = resumeResult?.session_id ?? newSid;
@@ -328,7 +326,6 @@ export function useChatGateway(): UseChatGatewayResult {
               return;
             }
 
-            // Cargar history (tolerante a errores)
             try {
               const history = (await sendRpc("session.history", {
                 session_id: sid,
@@ -340,7 +337,7 @@ export function useChatGateway(): UseChatGatewayResult {
                 .map((m, i) => ({
                   id: "hist-" + i,
                   role: m.role as "user" | "assistant",
-                  content: (m.content as string) ?? "",
+                  content: (m.text as string) ?? (m.content as string) ?? "",
                   toolCalls: [],
                   streaming: false,
                   timestamp:
@@ -352,7 +349,6 @@ export function useChatGateway(): UseChatGatewayResult {
                 "[useChatGateway] session.history failed (empty session)",
                 histErr,
               );
-              // No es fatal — sesión nueva no tiene history
               setMessages([]);
             }
 
@@ -464,6 +460,57 @@ export function useChatGateway(): UseChatGatewayResult {
     );
   }, [session.sessionId, sendRpc]);
 
+  const switchSeqRef = useRef(0);
+  const switchSession = useCallback(
+    async (targetId: string): Promise<void> => {
+      if (!targetId) return;
+      const mySeq = ++switchSeqRef.current;
+      setMessages([]);
+      setBusy(false);
+      try {
+        const resumeResult = (await sendRpc("session.resume", {
+          session_id: targetId,
+        })) as {
+          session_id?: string;
+          messages?: Array<Record<string, unknown>>;
+        };
+        if (mySeq !== switchSeqRef.current) return;
+        const liveSid = resumeResult?.session_id ?? targetId;
+        // session.resume ya retorna messages en la respuesta
+        // — NO necesitamos llamar session.history aparte
+        const historyMessages = resumeResult?.messages ?? [];
+        const initialMessages: ChatMessage[] = historyMessages
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m, i) => ({
+            id: "hist-" + Date.now() + "-" + i,
+            role: m.role as "user" | "assistant",
+            content: (m.text as string) ?? (m.content as string) ?? "",
+            toolCalls: [],
+            streaming: false,
+            timestamp:
+              (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
+          }));
+        setMessages(initialMessages);
+        if (mySeq !== switchSeqRef.current) return;
+        setSession((prev) => ({ ...prev, sessionId: liveSid }));
+        console.log(
+          "[useChatGateway] switched to session",
+          targetId,
+          "→ live sid",
+          liveSid,
+        );
+      } catch (err) {
+        console.error("[useChatGateway] switchSession failed", err);
+        if (mySeq === switchSeqRef.current) {
+          setErrorMessage(
+            err instanceof Error ? err.message : "Failed to switch session",
+          );
+        }
+      }
+    },
+    [sendRpc],
+  );
+
   return {
     status,
     session,
@@ -472,5 +519,8 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage,
     interrupt,
     errorMessage,
+    sendRpc,
+    readyForRpc: status === "connected",
+    switchSession,
   };
 }
