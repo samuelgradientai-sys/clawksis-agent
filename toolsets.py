@@ -57,6 +57,7 @@ _CLAWK_CORE_TOOLS = [
     # Web
     "web_search",
     "web_extract",
+    "scrape",
     # Terminal + process management
     "terminal",
     "process",
@@ -148,8 +149,8 @@ _CLAWK_WEBHOOK_SAFE_TOOLS = [
 TOOLSETS = {
     # Basic toolsets - individual tool categories
     "web": {
-        "description": "Web research and content extraction tools",
-        "tools": ["web_search", "web_extract"],
+        "description": "Web research and content extraction tools (incl. anti-bot scrape)",
+        "tools": ["web_search", "web_extract", "scrape"],
         "includes": [],  # No other toolsets included
     },
     "search": {

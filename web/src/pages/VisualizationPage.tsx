@@ -20,6 +20,7 @@ import { fetchJSON } from "@/lib/api";
 import { useActiveEventChannel } from "@/lib/eventChannelStore";
 
 import { ActivityFeedView } from "../visualization/ActivityFeedView";
+import { AgentInspectorPanel } from "../visualization/AgentInspectorPanel";
 import type { AgentMessage } from "../visualization/CommsGraphView";
 import { CommsGraphView } from "../visualization/CommsGraphView";
 import { useAgentEventsFeed } from "../visualization/agentEventsFeed";
@@ -152,12 +153,16 @@ export default function VisualizationPage() {
                     <span className="opacity-70">· {officeProvider.credit}</span>
                   )}
                 </div>
-                <div className="min-h-0 flex-1">
-                  <PixelOfficeView
-                    key={officeProvider.id}
-                    provider={officeProvider}
-                    feed={feed}
-                  />
+                <div className="flex min-h-0 flex-1 gap-2">
+                  <div className="min-h-0 flex-1">
+                    <PixelOfficeView
+                      key={officeProvider.id}
+                      provider={officeProvider}
+                      feed={feed}
+                    />
+                  </div>
+                  {/* Right dock: click an agent to inspect what it ran. */}
+                  <AgentInspectorPanel feed={feed} className="w-72 shrink-0" />
                 </div>
               </div>
             )}
