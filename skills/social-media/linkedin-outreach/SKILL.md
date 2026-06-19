@@ -32,6 +32,12 @@ scale" automation. Treat every action as if a human reviewer will see it.
 
 **Hard rules this skill always follows:**
 
+- **Never log in from a server.** Do NOT run `uvx mcp-server-linkedin@latest
+  --login` on a VPS / cloud / datacenter IP, and NEVER enter a verification code
+  the operator forwards from such a login. A fresh password login from a
+  datacenter IP + new device triggers a LinkedIn challenge and the account gets
+  banned for automation — the code does **not** save it. Authenticate only by
+  transplanting a session created on the operator's own machine (see Setup).
 - **Personalize every message.** No identical mass-blasts. Reference something
   real from the person's profile/company. If you can't personalize it, don't
   send it.
@@ -73,14 +79,46 @@ clawk mcp test linkedin        # verify the connection
 clawk mcp list                 # confirm it's registered
 ```
 
-This installs **stickerdaniel/linkedin-mcp-server** — open-source, self-hosted,
-launched locally via `uvx` (stdio). Auth is a **browser session on the
-operator's own machine** — no cookie or password is ever pasted into chat.
-Sign in once:
+This installs **stickerdaniel/linkedin-mcp-server** (PyPI package
+`mcp-server-linkedin`) — open-source, self-hosted, launched locally via `uvx`
+(stdio). Requires `uv` on PATH.
 
-```bash
-uvx mcp-server-linkedin@latest --login
-```
+### Authentication — read carefully (this is how the last account got banned)
+
+Auth is a **saved browser-session profile** under `~/.linkedin-mcp/`, created by
+an interactive `--login`. There is **no cookie / email / password to paste, and
+none that clawk can inject** (v4.x has no `LINKEDIN_COOKIE` / `--cookie` flag) —
+`--login` does a real password sign-in inside a browser.
+
+**HARD RULE: never run `--login` on a VPS / cloud / datacenter IP.** A fresh
+password login from a datacenter IP + new device + headless browser is exactly
+what makes LinkedIn throw a verification challenge and then **ban the account for
+automation** — and entering the forwarded verification code does **not** rescue
+it (the code only proves you can read your inbox; the flagged IP/device is what
+gets banned). This is how a prior account was lost.
+
+**Correct flow — authenticate on a trusted machine, then transplant the session:**
+
+1. On the operator's **own laptop** (normal residential IP), with `uv` installed:
+   ```bash
+   UV_HTTP_TIMEOUT=300 uvx mcp-server-linkedin@latest --login   # sign in; clear captcha / confirm in the LinkedIn mobile app
+   uvx mcp-server-linkedin@latest --status                       # should report a valid session
+   ```
+2. Copy the **whole `~/.linkedin-mcp/` directory** (the full cookie set — not
+   just `li_at`; dropping the rest yields empty/partial responses) to the server,
+   and point the server at it via `USER_DATA_DIR` / `--user-data-dir`. For Docker:
+   `-v ~/.linkedin-mcp:/home/pwuser/.linkedin-mcp`.
+3. Route the server's browser through a **residential proxy in the operator's
+   region** (no proxy flag — do it at the OS/network/container layer). This is
+   what neutralizes the datacenter-IP signal the verification code can't.
+
+> Be honest with the operator about limits: a cross-machine profile transplant
+> can still hit a re-login loop on fingerprint mismatch, and a residential proxy
+> *reduces* but does not guarantee removal of ban risk. The lowest-risk options
+> for unattended cloud use are running Clawksis + the MCP **on the operator's own
+> machine**, or a **managed auth API (e.g. Unipile)** — not a raw VPS. Only
+> **one** LinkedIn session may be active at a time: using the session on the
+> server while also browsing logged-in on the laptop can invalidate it.
 
 The two action tools — `connect_with_person` and `send_message` — are **off by
 default** (read/discovery tools are on). Enable them only when ready to send:
@@ -94,8 +132,8 @@ Then start a new Clawksis session so the tools load. Available tools:
 `get_inbox` / `get_conversation` / `search_conversations`, `search_jobs`,
 `get_job_details`, and (opt-in) `connect_with_person` / `send_message`.
 
-Other open-source servers if this one doesn't fit:
-[pauling-ai/linkedin-mcp-server](https://github.com/pauling-ai/linkedin-mcp-server).
+Another community option if this one doesn't fit (verify it's current before
+using): [pauling-ai/linkedin-mcp-server](https://github.com/pauling-ai/linkedin-mcp-server).
 
 > Heavier standalone alternatives (separate apps, not MCP) if the operator
 > wants a full campaign engine instead of agent-driven outreach:
@@ -148,7 +186,11 @@ someone who declined.
 
 ## When to stop and ask the operator
 
-- Any CAPTCHA / "unusual activity" / checkpoint, or auth/cookie expiry.
+- Any CAPTCHA / "unusual activity" / checkpoint, or auth/session expiry: **stop,
+  do not retry, do not re-run `--login` on the server, and never enter a
+  verification code** — report to the operator and point them to the laptop-login
+  + session-transplant flow in Setup. (Verify session validity with
+  `uvx mcp-server-linkedin@latest --status` before relying on any tool call.)
 - A message or connection request fails to send.
 - The daily cap is reached.
 - The ICP or message templates are ambiguous — confirm before sending.
