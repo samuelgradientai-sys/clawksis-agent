@@ -756,6 +756,18 @@ export default function SessionsPage() {
   const [pruneOpen, setPruneOpen] = useState(false);
   const [pruneDays, setPruneDays] = useState("90");
   const [pruning, setPruning] = useState(false);
+  // Filtered cleanup ("Limpieza"): delete by channel / model / age / size with
+  // a dry-run preview before committing.
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupSource, setCleanupSource] = useState("");
+  const [cleanupModel, setCleanupModel] = useState("");
+  const [cleanupDays, setCleanupDays] = useState("");
+  const [cleanupMaxMsgs, setCleanupMaxMsgs] = useState("");
+  const [cleanupPreview, setCleanupPreview] = useState<{
+    matched: number;
+    messages: number;
+  } | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const { toast, showToast } = useToast();
   const { t } = useI18n();
   const { setAfterTitle, setEnd } = usePageHeader();
@@ -791,15 +803,29 @@ export default function SessionsPage() {
 
   useEffect(() => {
     setEnd(
-      <Button
-        outlined
-        size="sm"
-        className="gap-1.5"
-        onClick={() => setPruneOpen(true)}
-      >
-        <Archive className="h-3.5 w-3.5" />
-        Prune old sessions
-      </Button>,
+      <div className="flex items-center gap-2">
+        <Button
+          outlined
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            setCleanupPreview(null);
+            setCleanupOpen(true);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Limpiar
+        </Button>
+        <Button
+          outlined
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setPruneOpen(true)}
+        >
+          <Archive className="h-3.5 w-3.5" />
+          Prune old sessions
+        </Button>
+      </div>,
     );
     return () => {
       setEnd(null);
@@ -1150,6 +1176,69 @@ export default function SessionsPage() {
     }
   }, [pruneDays, showToast, loadSessions, loadStats]);
 
+  const buildCleanupFilter = useCallback(
+    (dryRun: boolean) => {
+      const f: {
+        source?: string;
+        model?: string;
+        older_than_days?: number;
+        max_messages?: number;
+        dry_run: boolean;
+      } = { dry_run: dryRun };
+      if (cleanupSource) f.source = cleanupSource;
+      if (cleanupModel.trim()) f.model = cleanupModel.trim();
+      const d = parseInt(cleanupDays, 10);
+      if (cleanupDays.trim() !== "" && Number.isFinite(d) && d >= 0) f.older_than_days = d;
+      const mm = parseInt(cleanupMaxMsgs, 10);
+      if (cleanupMaxMsgs.trim() !== "" && Number.isFinite(mm) && mm >= 0) f.max_messages = mm;
+      return f;
+    },
+    [cleanupSource, cleanupModel, cleanupDays, cleanupMaxMsgs],
+  );
+
+  const handleCleanupPreview = useCallback(async () => {
+    const f = buildCleanupFilter(true);
+    if (!f.source && !f.model && f.older_than_days === undefined && f.max_messages === undefined) {
+      showToast("Elegí al menos un filtro", "error");
+      return;
+    }
+    setCleanupBusy(true);
+    try {
+      const r = await api.cleanupSessions(f);
+      setCleanupPreview({ matched: r.matched ?? 0, messages: r.messages ?? 0 });
+    } catch {
+      showToast("No se pudo previsualizar la limpieza", "error");
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [buildCleanupFilter, showToast]);
+
+  const handleCleanupDelete = useCallback(async () => {
+    setCleanupBusy(true);
+    try {
+      const r = await api.cleanupSessions(buildCleanupFilter(false));
+      showToast(`Se eliminaron ${r.deleted ?? 0} sesiones`, "success");
+      setCleanupOpen(false);
+      setCleanupPreview(null);
+      clearSelection();
+      loadSessions(0);
+      setPage(0);
+      loadStats();
+      refreshEmptyCount();
+    } catch {
+      showToast("No se pudo limpiar las sesiones", "error");
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [
+    buildCleanupFilter,
+    showToast,
+    clearSelection,
+    loadSessions,
+    loadStats,
+    refreshEmptyCount,
+  ]);
+
   const pendingSession = sessionDelete.pendingId
     ? sessions.find((s) => s.id === sessionDelete.pendingId)
     : null;
@@ -1310,6 +1399,127 @@ export default function SessionsPage() {
             >
               {pruning && <Spinner className="text-sm" />}
               Prune
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cleanupOpen}
+        onOpenChange={(open) => {
+          if (cleanupBusy) return;
+          setCleanupOpen(open);
+          if (!open) setCleanupPreview(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Limpiar sesiones · liberar espacio</DialogTitle>
+            <DialogDescription>
+              Elegí uno o más filtros (se combinan), previsualizá cuántas se
+              borrarían y confirmá. El borrado es permanente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Canal</label>
+              <select
+                value={cleanupSource}
+                onChange={(e) => {
+                  setCleanupSource(e.target.value);
+                  setCleanupPreview(null);
+                }}
+                disabled={cleanupBusy}
+                className="rounded-md border border-border bg-card/60 px-2 py-1.5 text-sm text-foreground"
+              >
+                <option value="">Cualquiera</option>
+                <option value="cron">Solo cron</option>
+                <option value="cli">Solo CLI</option>
+                <option value="telegram">Solo Telegram</option>
+                <option value="whatsapp">Solo WhatsApp</option>
+                <option value="discord">Solo Discord</option>
+                <option value="slack">Solo Slack</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Modelo contiene (ej: un modelo que no funciona)
+              </label>
+              <Input
+                value={cleanupModel}
+                onChange={(e) => {
+                  setCleanupModel(e.target.value);
+                  setCleanupPreview(null);
+                }}
+                placeholder="(cualquiera)"
+                disabled={cleanupBusy}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Más viejas que (días)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={cleanupDays}
+                  onChange={(e) => {
+                    setCleanupDays(e.target.value);
+                    setCleanupPreview(null);
+                  }}
+                  placeholder="—"
+                  disabled={cleanupBusy}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Máx. mensajes (vacías/cortas)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={cleanupMaxMsgs}
+                  onChange={(e) => {
+                    setCleanupMaxMsgs(e.target.value);
+                    setCleanupPreview(null);
+                  }}
+                  placeholder="—"
+                  disabled={cleanupBusy}
+                />
+              </div>
+            </div>
+            {cleanupPreview && (
+              <div className="rounded-md border border-border bg-background-base/40 px-3 py-2 text-xs">
+                {cleanupPreview.matched === 0
+                  ? "Ninguna sesión coincide con esos filtros."
+                  : `Coinciden ${cleanupPreview.matched} sesiones (${cleanupPreview.messages} mensajes). Se eliminarán permanentemente.`}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button outlined onClick={() => setCleanupOpen(false)} disabled={cleanupBusy}>
+              {t.common.cancel}
+            </Button>
+            <Button
+              outlined
+              onClick={() => void handleCleanupPreview()}
+              disabled={cleanupBusy}
+              className="gap-1.5"
+            >
+              {cleanupBusy && !cleanupPreview && <Spinner className="text-sm" />}
+              Previsualizar
+            </Button>
+            <Button
+              destructive
+              onClick={() => void handleCleanupDelete()}
+              disabled={cleanupBusy || !cleanupPreview || cleanupPreview.matched === 0}
+              className="gap-1.5"
+            >
+              {cleanupBusy && !!cleanupPreview && <Spinner className="text-sm" />}
+              {cleanupPreview && cleanupPreview.matched > 0
+                ? `Eliminar (${cleanupPreview.matched})`
+                : "Eliminar"}
             </Button>
           </DialogFooter>
         </DialogContent>

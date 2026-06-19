@@ -759,6 +759,22 @@ export const api = {
 
     }),
 
+  cleanupSessions: (filter: {
+    source?: string;
+    model?: string;
+    older_than_days?: number;
+    max_messages?: number;
+    dry_run: boolean;
+  }) =>
+    fetchJSON<{ ok: boolean; matched?: number; messages?: number; deleted?: number }>(
+      "/api/sessions/cleanup",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(filter),
+      },
+    ),
+
   renameSession: (id: string, title: string) =>
 
     fetchJSON<{ ok: boolean; title: string }>(
