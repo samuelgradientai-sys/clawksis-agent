@@ -12,7 +12,7 @@
  * `describe()` so the labels match the global feed exactly.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { describe, TONE_CLASS } from "./ActivityFeedView";
 import type { GatewayEvent, GatewayFeed } from "./gatewayFeed";
@@ -124,15 +124,9 @@ export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProp
   // Re-fold on every feed change; cheap (the ring buffer is ≤500 events) and
   // keeps the "active" dot honest without a separate timer.
   const agents = useMemo(() => buildAgents(feed.events, Date.now()), [feed.events]);
+  // Nothing is selected until the user clicks an agent — the detail dock stays
+  // closed until then (no auto-select), per the "click an agent to inspect" UX.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-
-  // Auto-select the first agent the moment one appears, so the panel is never
-  // an empty shell once there's something to show.
-  useEffect(() => {
-    if (selectedKey === null && agents.length > 0) {
-      setSelectedKey(agents[0].key);
-    }
-  }, [agents, selectedKey]);
 
   const selected = agents.find((a) => a.key === selectedKey) ?? null;
 
@@ -192,7 +186,12 @@ export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProp
         })}
       </ul>
 
-      {/* Selected-agent detail */}
+      {/* Selected-agent detail — only after the user clicks an agent. */}
+      {!selected && (
+        <div className="flex min-h-0 flex-1 items-center justify-center border-t border-border p-4 text-center text-xs text-muted-foreground">
+          Hacé clic en un agente para ver su modelo, herramientas y actividad.
+        </div>
+      )}
       {selected && (
         <div className="flex min-h-0 flex-1 flex-col border-t border-border">
           <div className="shrink-0 px-3 pt-2">
