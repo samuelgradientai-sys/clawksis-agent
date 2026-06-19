@@ -189,6 +189,20 @@ def _has_env(name: str) -> bool:
 
     val = os.getenv(name)
 
+    if not (val and val.strip()):
+        # Also honor the Clawksis config-aware env (~/.clawksis/.env), matching
+        # how providers resolve their own keys (e.g. SearXNG's is_available reads
+        # SEARXNG_URL via get_env_value). Without this, a key set only in .env
+        # made the tool *available* but backend selection silently fell back.
+
+        try:
+            from clawk_cli.config import get_env_value
+
+            val = get_env_value(name)
+
+        except Exception:
+            val = None
+
     return bool(val and val.strip())
 
 
