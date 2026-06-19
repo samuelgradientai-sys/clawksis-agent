@@ -6588,6 +6588,84 @@ async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
         db.close()
 
 
+class SessionCleanup(BaseModel):
+    source: Optional[str] = None
+    model: Optional[str] = None
+    older_than_days: Optional[int] = None
+    max_messages: Optional[int] = None
+    dry_run: bool = True
+
+
+@app.post("/api/sessions/cleanup")
+async def cleanup_sessions_endpoint(body: SessionCleanup):
+    """Filtered bulk session cleanup to free space.
+
+    Deletes sessions matching ANY combination of: ``source`` (cron / cli /
+    telegram…), ``model`` (substring — e.g. a model that no longer works),
+    ``older_than_days``, and ``max_messages`` (empty / near-empty junk).
+    ``dry_run`` (default True) returns the match count + total messages so the
+    dashboard can preview before committing. Matches the same logical-session
+    listing the sessions page shows, then reuses ``delete_sessions``.
+    """
+    has_filter = (
+        bool((body.source or "").strip())
+        or bool((body.model or "").strip())
+        or body.older_than_days is not None
+        or body.max_messages is not None
+    )
+    if not has_filter:
+        raise HTTPException(status_code=400, detail="at least one filter is required")
+
+    import time as _time
+
+    from clawk_state import SessionDB
+
+    db = SessionDB()
+    try:
+        src = (body.source or "").strip().lower()
+        rows = db.list_sessions_rich(
+            source=src or None,
+            limit=1_000_000,
+            offset=0,
+            include_archived=True,
+        )
+        now = _time.time()
+        model_q = (body.model or "").strip().lower()
+        matched_ids: List[str] = []
+        matched_msgs = 0
+        for s in rows:
+            if model_q and model_q not in str(s.get("model") or "").lower():
+                continue
+            mc = int(s.get("message_count") or 0)
+            if body.max_messages is not None and mc > body.max_messages:
+                continue
+            if body.older_than_days is not None:
+                last = s.get("last_active") or s.get("ended_at") or s.get("started_at") or 0
+                try:
+                    last = float(last)
+                except (TypeError, ValueError):
+                    last = 0.0
+                if not last or (now - last) < body.older_than_days * 86400:
+                    continue
+            sid = s.get("id")
+            if sid:
+                matched_ids.append(sid)
+                matched_msgs += mc
+
+        if body.dry_run:
+            return {"ok": True, "matched": len(matched_ids), "messages": matched_msgs}
+
+        if len(matched_ids) > 2000:
+            raise HTTPException(
+                status_code=400,
+                detail="too many matches (>2000) — narrow the filter or delete in batches",
+            )
+        deleted = db.delete_sessions(matched_ids)
+        return {"ok": True, "deleted": deleted}
+    finally:
+        db.close()
+
+
 @app.get("/api/sessions/empty/count")
 async def count_empty_sessions_endpoint():
     """Return the number of empty, ended, non-archived sessions.
