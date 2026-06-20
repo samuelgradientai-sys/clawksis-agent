@@ -702,6 +702,7 @@ export default function ChatModern() {
     sendMessage,
     interrupt,
     errorMessage,
+    clearError,
     sendRpc,
     readyForRpc,
     switchSession,
@@ -773,6 +774,23 @@ export default function ChatModern() {
         />
 
         <ConnectionBanner status={status} errorMessage={errorMessage} />
+
+        {/* Error a mitad de turno (conectado): el agente falló — mostralo en
+            vez de quedar colgado en "Pensando...". Descartable. */}
+        {status === "connected" && errorMessage && (
+          <div className="flex items-center gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            <AlertCircle className="size-3 shrink-0" />
+            <span className="min-w-0 flex-1 break-words">{errorMessage}</span>
+            <button
+              type="button"
+              onClick={clearError}
+              aria-label="Descartar error"
+              className="shrink-0 rounded p-0.5 transition-colors hover:bg-destructive/20"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        )}
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 && !isConnecting ? (

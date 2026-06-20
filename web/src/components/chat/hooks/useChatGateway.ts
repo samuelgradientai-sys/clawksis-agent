@@ -79,6 +79,8 @@ interface UseChatGatewayResult {
   sendMessage: (text: string) => void;
   interrupt: () => void;
   errorMessage: string | null;
+  /** Descartar el error visible (lo dispara el banner de error). */
+  clearError: () => void;
   /** Para hooks satélite que necesitan reusar la conexión (ej: useSessions) */
   sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
@@ -295,6 +297,18 @@ export function useChatGateway(): UseChatGatewayResult {
       case "error": {
         const msg = (payload.message as string) ?? "Unknown error";
         setErrorMessage(msg);
+        // Desatascar la UI: el agente falló a mitad de turno, así que liberamos
+        // el "busy" y finalizamos el mensaje en streaming para que no quede
+        // colgado en "Pensando..." para siempre.
+        setBusy(false);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role === "assistant" && last.streaming) {
+            return [...prev.slice(0, -1), { ...last, streaming: false }];
+          }
+          return prev;
+        });
         break;
       }
 
@@ -488,6 +502,8 @@ export function useChatGateway(): UseChatGatewayResult {
         setErrorMessage("No hay sesión activa todavía");
         return;
       }
+      // Nuevo turno: limpiar cualquier error previo.
+      setErrorMessage(null);
       const userMsgId = "usr-" + Date.now();
       setMessages((prev) => [
         ...prev,
@@ -615,6 +631,8 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage(lastUserText);
   }, [busy, session.sessionId, messages, sendRpc, sendMessage]);
 
+  const clearError = useCallback(() => setErrorMessage(null), []);
+
   return {
     status,
     session,
@@ -623,6 +641,7 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage,
     interrupt,
     errorMessage,
+    clearError,
     sendRpc,
     readyForRpc: status === "connected",
     switchSession,
