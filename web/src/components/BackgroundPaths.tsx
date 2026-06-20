@@ -1,26 +1,21 @@
-// Animated flowing SVG paths used as the dashboard backdrop — CSS-only.
+// Static flowing SVG paths used as the dashboard backdrop.
 //
-// Previously animated with the `motion` package, which pulled a ~122KB lib
-// (vendor-motion) into the dashboard BOOT path just for a decorative layer.
-// This version uses a single CSS @keyframes (stroke-dashoffset flow + opacity
-// shimmer); `pathLength={1}` normalizes every path so one keyframe fits all
-// lengths, and per-path `animationDuration` keeps the field out of lockstep.
-// Honors prefers-reduced-motion. Stroke colour = Clawksis purple #6C4FD6.
+// History: was framer-motion (pulled 122KB vendor-motion), then a CSS version
+// that animated `stroke-dashoffset` on 72 full-screen paths EVERY frame. That
+// property is not GPU-compositable, so it forced a continuous full-screen
+// repaint of this `fixed inset-0` layer behind the whole dashboard — visible as
+// flicker + stutter.
+//
+// This version draws the paths STATICALLY (zero per-frame paint) and adds only a
+// slow opacity "breath" on the WRAPPER element. Opacity on a single element is
+// GPU-composited (the compositor adjusts layer alpha; it does not repaint the
+// SVG contents), so the cost is ~nil. Honors prefers-reduced-motion.
+// Stroke colour = Clawksis purple #6C4FD6.
 
-const FLOW_CSS = `
-@keyframes clawk-bg-flow {
-  0%   { stroke-dashoffset: 0;  opacity: 0.2; }
-  50%  { stroke-dashoffset: -1; opacity: 0.5; }
-  100% { stroke-dashoffset: -2; opacity: 0.2; }
-}
-.clawk-bg-path {
-  stroke-dasharray: 0.3 0.7;
-  animation: clawk-bg-flow linear infinite;
-  will-change: stroke-dashoffset, opacity;
-}
-@media (prefers-reduced-motion: reduce) {
-  .clawk-bg-path { animation: none; opacity: 0.32; }
-}
+const BREATHE_CSS = `
+@keyframes clawk-bg-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
+.clawk-bg-wrap { animation: clawk-bg-breathe 16s ease-in-out infinite; will-change: opacity; }
+@media (prefers-reduced-motion: reduce) { .clawk-bg-wrap { animation: none; opacity: 0.6; } }
 `;
 
 function FloatingPaths({ position }: { position: number }) {
@@ -45,16 +40,11 @@ function FloatingPaths({ position }: { position: number }) {
     >
       {paths.map((path) => (
         <path
-          className="clawk-bg-path"
           d={path.d}
           key={path.id}
-          pathLength={1}
           stroke="currentColor"
           strokeOpacity={0.08 + path.id * 0.025}
           strokeWidth={path.width}
-          // Deterministic per-path variance (10–14s) so the field shimmers
-          // without every line moving in lockstep.
-          style={{ animationDuration: `${10 + (path.id % 5)}s` }}
         />
       ))}
     </svg>
@@ -65,10 +55,10 @@ export function BackgroundPaths() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-[2] overflow-hidden"
+      className="clawk-bg-wrap pointer-events-none fixed inset-0 z-[2] overflow-hidden"
       style={{ color: "#6C4FD6" }}
     >
-      <style>{FLOW_CSS}</style>
+      <style>{BREATHE_CSS}</style>
       <FloatingPaths position={1} />
       <FloatingPaths position={-1} />
     </div>
