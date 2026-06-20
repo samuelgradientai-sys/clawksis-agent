@@ -30,6 +30,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Cadena de razonamiento de modelos "thinking" (reasoning.delta). */
+  reasoning?: string;
   toolCalls: ToolCall[];
   streaming: boolean;
   timestamp: number;
@@ -148,18 +150,53 @@ export function useChatGateway(): UseChatGatewayResult {
         break;
 
       case "message.start": {
-        const assistantMsgId = "asst-" + Date.now();
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantMsgId,
-            role: "assistant",
-            content: "",
-            toolCalls: [],
-            streaming: true,
-            timestamp: Date.now(),
-          },
-        ]);
+        setMessages((prev) => {
+          // Si reasoning.delta ya creó el bubble del assistant, reusarlo
+          // (los modelos thinking razonan ANTES de empezar a responder).
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.streaming) return prev;
+          return [
+            ...prev,
+            {
+              id: "asst-" + Date.now(),
+              role: "assistant",
+              content: "",
+              reasoning: "",
+              toolCalls: [],
+              streaming: true,
+              timestamp: Date.now(),
+            },
+          ];
+        });
+        setBusy(true);
+        break;
+      }
+
+      case "reasoning.delta":
+      case "thinking.delta": {
+        const text = (payload.text as string) ?? "";
+        if (!text) break;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, reasoning: (last.reasoning ?? "") + text },
+            ];
+          }
+          return [
+            ...prev,
+            {
+              id: "asst-" + Date.now(),
+              role: "assistant",
+              content: "",
+              reasoning: text,
+              toolCalls: [],
+              streaming: true,
+              timestamp: Date.now(),
+            },
+          ];
+        });
         setBusy(true);
         break;
       }
@@ -176,15 +213,38 @@ export function useChatGateway(): UseChatGatewayResult {
         break;
       }
 
-      case "message.complete":
+      case "message.complete": {
         setMessages((prev) => {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           if (last.role !== "assistant" || !last.streaming) return prev;
-          return [...prev.slice(0, -1), { ...last, streaming: false }];
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              streaming: false,
+              reasoning: (payload.reasoning as string) || last.reasoning,
+            },
+          ];
         });
         setBusy(false);
+        // Acumular tokens del usage para el contador del header. El backend no
+        // emite session.info por turno, así que sin esto quedaban en 0.
+        const u =
+          payload.usage && typeof payload.usage === "object"
+            ? (payload.usage as Record<string, unknown>)
+            : {};
+        const inTok = Number(u.input ?? u.prompt ?? u.input_tokens ?? 0) || 0;
+        const outTok =
+          Number(u.output ?? u.completion ?? u.output_tokens ?? 0) || 0;
+        if (inTok || outTok) {
+          setSession((prev) => ({
+            ...prev,
+            tokensUsed: prev.tokensUsed + inTok + outTok,
+          }));
+        }
         break;
+      }
 
       case "tool.start": {
         const toolId = (payload.tool_id as string) ?? "tool-" + Date.now();

@@ -104,14 +104,18 @@ export function useVoiceInput(): UseVoiceInputResult {
       rec.interimResults = true;
       finalRef.current = "";
       rec.onresult = (e) => {
-        let interim = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const res = e.results[i];
-          const txt = res[0]?.transcript ?? "";
-          if (res.isFinal) finalRef.current += txt;
-          else interim += txt;
+        try {
+          let interim = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const res = e.results[i];
+            const txt = res[0]?.transcript ?? "";
+            if (res.isFinal) finalRef.current += txt;
+            else interim += txt;
+          }
+          onText((finalRef.current + interim).trim());
+        } catch (err) {
+          console.error("[useVoiceInput] onresult", err);
         }
-        onText((finalRef.current + interim).trim());
       };
       rec.onerror = (ev) => {
         if (ev?.error === "no-speech" || ev?.error === "aborted") return;
