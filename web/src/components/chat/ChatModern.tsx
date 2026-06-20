@@ -7,7 +7,7 @@
  * funcional, Mic placeholder).
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Paperclip,
   Mic,
@@ -41,6 +41,8 @@ import { useVoiceInput } from "./hooks/useVoiceInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
+import type { GatewayClient } from "@/lib/gatewayClient";
 
 interface ChatHeaderProps {
   status: ConnectionStatus;
@@ -439,6 +441,15 @@ function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voice = useVoiceInput();
+  // Slash-command autocomplete (mismo backend que el terminal: complete.slash).
+  const slashRef = useRef<SlashPopoverHandle>(null);
+  const slashGw = useMemo(
+    () =>
+      ({
+        request: (m: string, p?: Record<string, unknown>) => sendRpc(m, p),
+      }) as unknown as GatewayClient,
+    [sendRpc],
+  );
   const {
     attachments,
     addFiles,
@@ -483,6 +494,8 @@ function Composer({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // El popover de comandos consume Arrow/Tab/Escape cuando está visible.
+    if (slashRef.current?.handleKey(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -550,7 +563,9 @@ function Composer({
       />
 
       {/* Composer principal — layout tipo Claude: textarea arriba, controles abajo */}
-      <div className="rounded-2xl border border-border bg-muted/20 px-3 py-2.5 focus-within:border-[#6C4FD6]/60 transition-colors">
+      <div className="relative rounded-2xl border border-border bg-muted/20 px-3 py-2.5 focus-within:border-[#6C4FD6]/60 transition-colors">
+        {/* Autocomplete de slash commands (/) — flota sobre el composer. */}
+        <SlashPopover ref={slashRef} input={value} gw={slashGw} onApply={setValue} />
         <textarea
           ref={textareaRef}
           value={value}
@@ -761,13 +776,14 @@ export default function ChatModern() {
 
   const handleDeleteSession = async (id: string) => {
     if (!window.confirm("¿Borrar esta conversación? No se puede deshacer.")) return;
-    const wasActive = id === session.sessionId;
-    const fallback = sessions.find((s) => s.id !== id);
-    await deleteSession(id);
-    if (wasActive) {
+    // Si es la conversación activa, el gateway rechaza borrarla mientras está
+    // viva. Soltamos la sesión (cambiando a otra / nueva) ANTES de borrarla.
+    if (id === session.sessionId) {
+      const fallback = sessions.find((s) => s.id !== id);
       if (fallback) await switchSession(fallback.id);
       else await handleNewChat();
     }
+    await deleteSession(id);
   };
 
   // Título de la conversación que se está viendo (para el header).

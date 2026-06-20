@@ -177,16 +177,23 @@ export function useSessions(
   const deleteSession = useCallback(
     async (id: string): Promise<void> => {
       if (!ready || !id) return;
-      // Optimista: sacarla de la lista ya; refrescamos después por las dudas.
-      setSessions((prev) => prev.filter((s) => s.id !== id));
       try {
         await sendRpc("session.delete", { session_id: id });
       } catch (err) {
+        // NO la sacamos ni refrescamos: el refresh borraría el error y parecería
+        // que "no borra" sin explicar por qué (p.ej. sesión activa). Mostramos
+        // el motivo real.
         console.error("[useSessions] session.delete failed", err);
-        setError(err instanceof Error ? err.message : "Failed to delete session");
-      } finally {
-        await refresh();
+        setError(
+          err instanceof Error
+            ? err.message.replace(/^\d+:\s*/, "")
+            : "No se pudo borrar la sesión",
+        );
+        return;
       }
+      // Éxito: sacarla ya y re-sincronizar con el backend.
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      void refresh();
     },
     [sendRpc, ready, refresh],
   );

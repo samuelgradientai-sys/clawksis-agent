@@ -516,6 +516,43 @@ export function useChatGateway(): UseChatGatewayResult {
           timestamp: Date.now(),
         },
       ]);
+
+      // Slash command (/model, /help, /status, …): ejecutarlo vía slash.exec —
+      // como el terminal — en lugar de mandarlo al modelo. El output se muestra
+      // como respuesta; los comandos con efectos (model/new/stop) emiten eventos
+      // que el chat ya procesa.
+      if (text.trim().startsWith("/")) {
+        sendRpc("slash.exec", {
+          session_id: session.sessionId,
+          command: text.trim(),
+        })
+          .then((res) => {
+            const output = (res as { output?: string })?.output ?? "";
+            if (output) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: "slash-" + Date.now(),
+                  role: "assistant",
+                  content: output,
+                  toolCalls: [],
+                  streaming: false,
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
+          })
+          .catch((err) => {
+            console.error("[useChatGateway] slash.exec failed", err);
+            setErrorMessage(
+              err instanceof Error
+                ? err.message.replace(/^\d+:\s*/, "")
+                : "El comando falló",
+            );
+          });
+        return;
+      }
+
       sendRpc("prompt.submit", {
         session_id: session.sessionId,
         text,
