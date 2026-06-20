@@ -11,9 +11,36 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Clawksis - Dashboard</title>
+    <style>
+      /* Boot shell — painted instantly so there's no white flash before the
+         JS bundle parses and React mounts. Replaced when React renders #root. */
+      #boot-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b0a18;
+      }
+      #boot-shell .spin {
+        width: 34px;
+        height: 34px;
+        border: 3px solid rgba(108, 79, 214, 0.22);
+        border-top-color: #6c4fd6;
+        border-radius: 50%;
+        animation: boot-spin 0.8s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-shell"><div class="spin"></div></div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
