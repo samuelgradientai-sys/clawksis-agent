@@ -845,6 +845,19 @@ export const api = {
 
   getModelOptions: () => fetchJSON<ModelOptionsResponse>("/api/model/options"),
 
+  /** Transcribe audio (base64 data: URL) via the backend Whisper endpoint. Batch. */
+  transcribeAudio: (dataUrl: string, mimeType?: string) =>
+
+    fetchJSON<{ ok: boolean; transcript: string; provider?: string }>("/api/audio/transcribe", {
+
+      method: "POST",
+
+      headers: { "Content-Type": "application/json" },
+
+      body: JSON.stringify({ data_url: dataUrl, mime_type: mimeType }),
+
+    }),
+
   getAuxiliaryModels: () => fetchJSON<AuxiliaryModelsResponse>("/api/model/auxiliary"),
 
   setModelAssignment: (body: ModelAssignmentRequest) =>

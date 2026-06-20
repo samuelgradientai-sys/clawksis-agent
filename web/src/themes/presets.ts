@@ -106,7 +106,11 @@ export const defaultTheme: DashboardTheme = {
 
   layout: DEFAULT_LAYOUT,
 
-  terminalBackground: "#000000",
+  // Bug #23 (Fase 1): integramos el fondo del chat con la paleta del dashboard.
+  // Antes era "#000000" (negro puro) — se sentía como un terminal aparte. Ahora
+  // un poco más oscuro que background para mantener jerarquía visual pero con
+  // la misma familia de color.
+  terminalBackground: "#021414",
 
 };
 
