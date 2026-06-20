@@ -551,6 +551,7 @@ export function useChatGateway(): UseChatGatewayResult {
         })) as {
           session_id?: string;
           messages?: Array<Record<string, unknown>>;
+          info?: Record<string, unknown>;
         };
         if (mySeq !== switchSeqRef.current) return;
         const liveSid = resumeResult?.session_id ?? targetId;
@@ -570,7 +571,18 @@ export function useChatGateway(): UseChatGatewayResult {
           }));
         setMessages(initialMessages);
         if (mySeq !== switchSeqRef.current) return;
-        setSession((prev) => ({ ...prev, sessionId: liveSid }));
+        // Tokens por conversación: resetear al cambiar para no arrastrar el
+        // total del chat anterior. El modelo lo tomamos del info de la sesión
+        // resumida (si el gateway lo manda).
+        const info = resumeResult?.info ?? {};
+        setSession((prev) => ({
+          ...prev,
+          sessionId: liveSid,
+          model: (info.model as string) || prev.model,
+          modelProvider: (info.model_provider as string) ?? prev.modelProvider,
+          tokensUsed: 0,
+          tokensMax: 0,
+        }));
         console.log(
           "[useChatGateway] switched to session",
           targetId,

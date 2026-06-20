@@ -4117,6 +4117,7 @@ def _(rid, params: dict) -> dict:
                         "started_at": s.get("started_at") or 0,
                         "message_count": s.get("message_count") or 0,
                         "source": s.get("source") or "",
+                        "model": s.get("model") or "",
                     }
                     for s in rows
                 ]
