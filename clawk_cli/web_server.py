@@ -275,6 +275,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compress text responses (JS/CSS/JSON). StaticFiles serves the built dashboard
+# assets raw, so without this the eager first-load text payload (index + vendor
+# + css ≈ 750KB) goes over the wire uncompressed. GZip cuts it ~70% (→ ~220KB).
+from fastapi.middleware.gzip import GZipMiddleware
+
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 
 # ---------------------------------------------------------------------------
 
