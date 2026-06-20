@@ -275,13 +275,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Compress text responses (JS/CSS/JSON). StaticFiles serves the built dashboard
-# assets raw, so without this the eager first-load text payload (index + vendor
-# + css ≈ 750KB) goes over the wire uncompressed. GZip cuts it ~70% (→ ~220KB).
-from fastapi.middleware.gzip import GZipMiddleware
+# Gzip JS/CSS/JSON on the wire. The dashboard ships ~1MB of hashed JS/CSS per
+# cold load; gzip cuts that ~3-4x (e.g. the 405KB index chunk → ~131KB),
+# which dominates first-load time over the Cloudflare tunnel.
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+
+@app.middleware("http")
+async def _immutable_asset_cache(request: "Request", call_next):
+    """Mark Vite's content-hashed assets immutable so the browser stops doing a
+    conditional GET + 304 for every chunk on each reload. The filename changes
+    when the content changes, and index.html (served elsewhere) is never cached,
+    so it always re-resolves the current hashes."""
+    response = await call_next(request)
+    if response.status_code == 200 and request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 # ---------------------------------------------------------------------------
 
@@ -6750,7 +6761,7 @@ async def delete_empty_sessions_endpoint():
 
 
 @app.get("/api/sessions/stats")
-async def get_session_stats():
+def get_session_stats():
     """Session-store statistics for the Sessions page (mirrors `clawk sessions stats`).
 
 

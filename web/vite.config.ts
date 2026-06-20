@@ -152,16 +152,6 @@ export default defineConfig({
 
       "react-dom",
 
-      "@react-three/fiber",
-
-      "@observablehq/plot",
-
-      "three",
-
-      "leva",
-
-      "gsap",
-
     ],
 
   },
@@ -205,6 +195,15 @@ export default defineConfig({
 
             return "vendor-motion";
 
+          }
+
+          // The design system + icon set are large and change rarely; keeping
+          // them in their own chunk stops every app-shell edit from busting
+          // ~405KB of cache on each `clawk update`.
+          if (
+            /[\\/]node_modules[\\/](@nous-research[\\/]ui|lucide-react)[\\/]/.test(id)
+          ) {
+            return "vendor-ui";
           }
 
         },
