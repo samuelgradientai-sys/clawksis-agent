@@ -118,15 +118,31 @@ function buildAgents(events: GatewayEvent[], now: number): AgentInfo[] {
 interface AgentInspectorPanelProps {
   feed: GatewayFeed;
   className?: string;
+  /** Controlled selection — e.g. driven by clicking an agent in the office.
+   *  When `onSelectKey` is provided the panel is controlled; otherwise it
+   *  keeps its own selection state. */
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
 }
 
-export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProps) {
+export function AgentInspectorPanel({
+  feed,
+  className,
+  selectedKey: externalKey,
+  onSelectKey,
+}: AgentInspectorPanelProps) {
   // Re-fold on every feed change; cheap (the ring buffer is ≤500 events) and
   // keeps the "active" dot honest without a separate timer.
   const agents = useMemo(() => buildAgents(feed.events, Date.now()), [feed.events]);
-  // Nothing is selected until the user clicks an agent — the detail dock stays
-  // closed until then (no auto-select), per the "click an agent to inspect" UX.
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Nothing is selected until the user clicks an agent — in the list here OR a
+  // sprite in the office (which the host pipes in via the controlled prop).
+  const [internalKey, setInternalKey] = useState<string | null>(null);
+  const controlled = onSelectKey !== undefined;
+  const selectedKey = controlled ? externalKey ?? null : internalKey;
+  const selectAgent = (key: string) => {
+    if (controlled) onSelectKey?.(key);
+    else setInternalKey(key);
+  };
 
   const selected = agents.find((a) => a.key === selectedKey) ?? null;
 
@@ -161,7 +177,7 @@ export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProp
             <li key={a.key}>
               <button
                 type="button"
-                onClick={() => setSelectedKey(a.key)}
+                onClick={() => selectAgent(a.key)}
                 className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                   isSel
                     ? "bg-[var(--color-primary)]/15 text-foreground"
