@@ -83,6 +83,8 @@ interface UseChatGatewayResult {
   readyForRpc: boolean;
   /** Cambiar a otra sesión: limpia mensajes, carga history, actualiza sessionId */
   switchSession: (targetId: string) => Promise<void>;
+  /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
+  regenerateLast: () => Promise<void>;
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -511,6 +513,48 @@ export function useChatGateway(): UseChatGatewayResult {
     [sendRpc],
   );
 
+  const regenerateLast = useCallback(async (): Promise<void> => {
+    if (busy) return;
+    const sid = session.sessionId;
+    if (!sid) return;
+
+    // El último mensaje user es el prompt que produjo la última respuesta.
+    let lastUserText: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserText = messages[i].content;
+        break;
+      }
+    }
+    if (lastUserText == null) return;
+
+    // Sacar localmente el último turno (desde el último user, inclusive). El
+    // backend hace lo mismo con session.undo; re-enviamos el prompt para
+    // generar una respuesta fresca sin duplicar el turno.
+    setMessages((prev) => {
+      let cut = prev.length;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === "user") {
+          cut = i;
+          break;
+        }
+      }
+      return prev.slice(0, cut);
+    });
+
+    try {
+      await sendRpc("session.undo", { session_id: sid });
+    } catch (err) {
+      console.error("[useChatGateway] session.undo failed", err);
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to regenerate",
+      );
+      return;
+    }
+
+    sendMessage(lastUserText);
+  }, [busy, session.sessionId, messages, sendRpc, sendMessage]);
+
   return {
     status,
     session,
@@ -522,5 +566,6 @@ export function useChatGateway(): UseChatGatewayResult {
     sendRpc,
     readyForRpc: status === "connected",
     switchSession,
+    regenerateLast,
   };
 }
