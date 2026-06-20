@@ -1430,6 +1430,65 @@ export default function SessionsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
+            {/* Atajos: rellenan los filtros de abajo con un click. */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Atajos
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: "Vacías / cortas",
+                    apply: () => {
+                      setCleanupSource("");
+                      setCleanupModel("");
+                      setCleanupDays("");
+                      setCleanupMaxMsgs("1");
+                    },
+                  },
+                  {
+                    label: "+ de 30 días",
+                    apply: () => {
+                      setCleanupSource("");
+                      setCleanupModel("");
+                      setCleanupMaxMsgs("");
+                      setCleanupDays("30");
+                    },
+                  },
+                  {
+                    label: "Cron viejas",
+                    apply: () => {
+                      setCleanupModel("");
+                      setCleanupMaxMsgs("");
+                      setCleanupSource("cron");
+                      setCleanupDays("7");
+                    },
+                  },
+                  {
+                    label: "Limpiar filtros",
+                    apply: () => {
+                      setCleanupSource("");
+                      setCleanupModel("");
+                      setCleanupDays("");
+                      setCleanupMaxMsgs("");
+                    },
+                  },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    disabled={cleanupBusy}
+                    onClick={() => {
+                      p.apply();
+                      setCleanupPreview(null);
+                    }}
+                    className="rounded-md border border-border bg-card/60 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">Canal</label>
               <select

@@ -34,7 +34,7 @@ import {
   type ConnectionStatus,
   type ToolCall,
 } from "./hooks/useChatGateway";
-import { useSessions, type RpcSender } from "./hooks/useSessions";
+import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
 import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
@@ -49,6 +49,8 @@ interface ChatHeaderProps {
   sessionId: string | null;
   tokensUsed: number;
   tokensMax: number;
+  /** Título de la conversación que se está viendo. */
+  title?: string | null;
 }
 
 function ChatHeader({
@@ -58,6 +60,7 @@ function ChatHeader({
   sessionId,
   tokensUsed,
   tokensMax,
+  title,
 }: ChatHeaderProps) {
   const statusColor =
     status === "connected"
@@ -74,16 +77,19 @@ function ChatHeader({
 
   return (
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex min-w-0 items-center gap-2">
         <span className={"size-2 rounded-full shrink-0 " + statusColor} />
-        <span className="text-sm font-semibold text-foreground truncate">
-          {model || (status === "connecting" ? "Connecting..." : "—")}
+        <span className="truncate text-sm font-semibold text-foreground">
+          {title || (status === "connecting" ? "Conectando..." : "Nueva conversación")}
         </span>
-        {modelProvider && (
-          <>
-            <span className="text-xs text-muted-foreground">·</span>
-            <span className="text-xs text-muted-foreground">{modelProvider}</span>
-          </>
+        {model && (
+          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
+            <span>·</span>
+            <span className="max-w-[180px] truncate">
+              {model}
+              {modelProvider ? " · " + modelProvider : ""}
+            </span>
+          </span>
         )}
       </div>
 
@@ -714,6 +720,7 @@ export default function ChatModern() {
     loading: sessionsLoading,
     error: sessionsError,
     createSession,
+    deleteSession,
   } = useSessions(sendRpc, readyForRpc);
 
   const {
@@ -752,6 +759,21 @@ export default function ChatModern() {
     }
   };
 
+  const handleDeleteSession = async (id: string) => {
+    if (!window.confirm("¿Borrar esta conversación? No se puede deshacer.")) return;
+    const wasActive = id === session.sessionId;
+    const fallback = sessions.find((s) => s.id !== id);
+    await deleteSession(id);
+    if (wasActive) {
+      if (fallback) await switchSession(fallback.id);
+      else await handleNewChat();
+    }
+  };
+
+  // Título de la conversación que se está viendo (para el header).
+  const activeSession = sessions.find((s) => s.id === session.sessionId);
+  const activeTitle = activeSession ? deriveTitle(activeSession) : null;
+
   return (
     <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
       <SessionSidebar
@@ -761,6 +783,7 @@ export default function ChatModern() {
         error={sessionsError}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -771,6 +794,7 @@ export default function ChatModern() {
           sessionId={session.sessionId}
           tokensUsed={session.tokensUsed}
           tokensMax={session.tokensMax}
+          title={activeTitle}
         />
 
         <ConnectionBanner status={status} errorMessage={errorMessage} />
