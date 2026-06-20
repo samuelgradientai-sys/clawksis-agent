@@ -7,7 +7,7 @@
  * funcional, Mic placeholder).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Paperclip,
   Mic,
@@ -16,6 +16,7 @@ import {
   RotateCw,
   Pencil,
   Quote,
+  Brain,
   ChevronRight,
   Zap,
   CheckCircle2,
@@ -39,6 +40,7 @@ import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface ChatHeaderProps {
   status: ConnectionStatus;
@@ -237,17 +239,52 @@ function MessageActions({
   );
 }
 
-function MessageBubble({
+// Panel colapsable con el "pensamiento" de modelos thinking (reasoning.delta).
+function ReasoningPanel({
+  text,
+  streaming,
+}: {
+  text: string;
+  streaming?: boolean;
+}) {
+  // Abierto mientras piensa (para ver el razonamiento en vivo); colapsable a mano.
+  // Los turnos cargados del historial llegan con streaming=false → colapsados.
+  const [open, setOpen] = useState(!!streaming);
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/15">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronRight
+          className={"size-3 transition-transform " + (open ? "rotate-90" : "")}
+        />
+        <Brain className="size-3 text-[#6C4FD6]" />
+        <span>{streaming ? "Pensando…" : "Razonamiento"}</span>
+      </button>
+      {open && (
+        <div className="max-h-64 overflow-auto whitespace-pre-wrap border-t border-border/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// memo: durante el streaming, message.delta crea un nuevo objeto SOLO para el
+// último mensaje (los anteriores conservan su referencia), así que con props
+// estables (onRegenerate/onQuote/canRegenerate) solo re-renderiza el mensaje
+// que está llegando — no toda la conversación.
+const MessageBubble = memo(function MessageBubble({
   message,
-  isLast,
-  busy,
   onRegenerate,
+  canRegenerate,
   onQuote,
 }: {
   message: ChatMessage;
-  isLast?: boolean;
-  busy?: boolean;
   onRegenerate?: () => void;
+  canRegenerate?: boolean;
   onQuote?: (message: ChatMessage) => void;
 }) {
   const isUser = message.role === "user";
@@ -256,8 +293,8 @@ function MessageBubble({
     <MessageActions
       content={message.content}
       role={message.role}
-      onRegenerate={!isUser && isLast ? onRegenerate : undefined}
-      canRegenerate={!!isLast && !busy}
+      onRegenerate={onRegenerate}
+      canRegenerate={canRegenerate}
       onQuote={onQuote ? () => onQuote(message) : undefined}
     />
   ) : null;
@@ -293,11 +330,18 @@ function MessageBubble({
           </div>
         )}
 
+        {message.reasoning && (
+          <ReasoningPanel
+            text={message.reasoning}
+            streaming={message.streaming}
+          />
+        )}
+
         {actions}
       </div>
     </div>
   );
-}
+});
 
 function AttachmentChip({
   attachment,
@@ -424,6 +468,7 @@ function Composer({
 
   const handleSubmit = () => {
     if (!canSend) return;
+    if (voice.listening) voice.stop();
     const finalPrompt = buildPromptWithAttachments(buildPromptWithQuotes(value));
     onSend(finalPrompt);
     setValue("");
@@ -678,6 +723,12 @@ export default function ChatModern() {
     buildPromptWithQuotes,
   } = useCitations();
 
+  // Estable para que memo(MessageBubble) no re-renderice toda la lista.
+  const handleQuote = useCallback(
+    (m: ChatMessage) => addCitation({ role: m.role, content: m.content }),
+    [addCitation],
+  );
+
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
@@ -728,20 +779,20 @@ export default function ChatModern() {
             <EmptyState />
           ) : (
             <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-2">
-              {messages.map((msg, idx) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isLast={
-                    idx === messages.length - 1 && msg.role === "assistant"
-                  }
-                  busy={busy}
-                  onRegenerate={regenerateLast}
-                  onQuote={(m) =>
-                    addCitation({ role: m.role, content: m.content })
-                  }
-                />
-              ))}
+              {messages.map((msg, idx) => {
+                const isLast =
+                  idx === messages.length - 1 && msg.role === "assistant";
+                return (
+                  <ErrorBoundary key={msg.id} resetKey={msg.content}>
+                    <MessageBubble
+                      message={msg}
+                      onRegenerate={isLast ? regenerateLast : undefined}
+                      canRegenerate={isLast && !busy}
+                      onQuote={handleQuote}
+                    />
+                  </ErrorBoundary>
+                );
+              })}
             </div>
           )}
         </div>
