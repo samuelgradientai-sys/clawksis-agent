@@ -54,6 +54,9 @@ export default function VisualizationPage() {
   const feed = useMergedFeed(wsFeed, pollFeed);
   const [active, setActive] = useState<VisualId>("office");
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  // Agent selected for the inspector dock — shared so clicking a sprite in the
+  // office and clicking a row in the dock drive the same selection.
+  const [inspectKey, setInspectKey] = useState<string | null>(null);
   const [officeProviderId, setOfficeProviderId] = useState<string>(loadOfficeProviderId);
   const officeProvider = getOfficeProvider(officeProviderId);
 
@@ -159,10 +162,16 @@ export default function VisualizationPage() {
                       key={officeProvider.id}
                       provider={officeProvider}
                       feed={feed}
+                      onSelectAgent={setInspectKey}
                     />
                   </div>
-                  {/* Right dock: click an agent to inspect what it ran. */}
-                  <AgentInspectorPanel feed={feed} className="w-72 shrink-0" />
+                  {/* Right dock: click an agent (here or a sprite) to inspect. */}
+                  <AgentInspectorPanel
+                    feed={feed}
+                    selectedKey={inspectKey}
+                    onSelectKey={setInspectKey}
+                    className="w-72 shrink-0"
+                  />
                 </div>
               </div>
             )}
