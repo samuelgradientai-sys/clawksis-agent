@@ -862,6 +862,8 @@ export default function SessionsPage() {
 
   useEffect(() => {
     const loadOverview = () => {
+      // No poll en background: la pestaña oculta no necesita refrescar.
+      if (document.hidden) return;
       api
         .getStatus()
         .then(setStatus)
@@ -873,7 +875,14 @@ export default function SessionsPage() {
     };
     loadOverview();
     const id = setInterval(loadOverview, 5000);
-    return () => clearInterval(id);
+    const onVisible = () => {
+      if (!document.hidden) loadOverview();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
