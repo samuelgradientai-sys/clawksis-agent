@@ -240,6 +240,16 @@ class AnthropicTransport(ProviderTransport):
 
         as invalid falsely retries a completed response.
 
+        It is also legitimate when ``stop_reason == "refusal"`` (Claude 4.5+
+
+        declines with an empty content list). Validating it lets the response
+
+        flow through to normalize_response — which maps ``refusal`` to a
+
+        ``content_filter`` finish reason — and the loop's refusal handler,
+
+        instead of being rejected and retried as a deterministic refusal.
+
         """
 
         if response is None:
@@ -251,7 +261,7 @@ class AnthropicTransport(ProviderTransport):
             return False
 
         if not content_blocks:
-            return getattr(response, "stop_reason", None) == "end_turn"
+            return getattr(response, "stop_reason", None) in ("end_turn", "refusal")
 
         return True
 
