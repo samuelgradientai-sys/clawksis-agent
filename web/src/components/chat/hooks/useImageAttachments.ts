@@ -8,7 +8,7 @@
  * Quitar una usa `image.detach`. Requiere un modelo con visión.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 import type { RpcSender } from "./useSessions";
@@ -54,6 +54,29 @@ export function useImageAttachments(
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Al cambiar de sesión: limpiar los chips (no son de la nueva conversación) y
+  // hacer best-effort detach contra la sesión VIEJA (removeImage/clear cierran
+  // sobre el sessionId nuevo, así que sin esto el detach iría a la sesión
+  // equivocada y la imagen quedaría huérfana en la sesión anterior).
+  const prevSidRef = useRef<string | null>(sessionId);
+  useEffect(() => {
+    if (prevSidRef.current === sessionId) return;
+    const oldSid = prevSidRef.current;
+    prevSidRef.current = sessionId;
+    setImages((prev) => {
+      if (oldSid) {
+        for (const img of prev) {
+          void sendRpc("image.detach", {
+            session_id: oldSid,
+            path: img.serverPath,
+          }).catch(() => {});
+        }
+      }
+      return [];
+    });
+    setError(null);
+  }, [sessionId, sendRpc]);
 
   const addImage = useCallback(
     async (file: File): Promise<void> => {

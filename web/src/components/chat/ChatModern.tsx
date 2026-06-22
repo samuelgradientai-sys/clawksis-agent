@@ -258,6 +258,8 @@ function ReasoningPanel({
 }) {
   // Abierto mientras piensa (para ver el razonamiento en vivo); colapsable a mano.
   // Los turnos cargados del historial llegan con streaming=false → colapsados.
+  // (Init desde `streaming`: cubre el caso normal — el panel aparece cuando llega
+  // el primer reasoning.delta, con streaming=true.)
   const [open, setOpen] = useState(!!streaming);
   return (
     <div className="rounded-lg border border-border/60 bg-muted/15">
@@ -522,7 +524,13 @@ function Composer({
   const handleSubmit = () => {
     if (!canSend) return;
     if (voice.listening) voice.stop();
-    const finalPrompt = buildPromptWithAttachments(buildPromptWithQuotes(value));
+    let finalPrompt = buildPromptWithAttachments(buildPromptWithQuotes(value));
+    // Solo imágenes (sin texto): el prompt quedaría vacío y el backend
+    // descartaría el turno, dejando la imagen huérfana. Mandamos un prompt mínimo.
+    if (!finalPrompt.trim() && images.length > 0) {
+      finalPrompt = "¿Qué ves en esta imagen?";
+    }
+    if (!finalPrompt.trim()) return;
     onSend(finalPrompt);
     setValue("");
     clearAttachments();
@@ -564,6 +572,9 @@ function Composer({
         }}
         onDragLeave={(e) => {
           e.preventDefault();
+          // Ignorar el dragleave que cruza hacia un hijo (textarea/botones):
+          // si no, el overlay parpadea al mover el mouse por dentro.
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
           setDragging(false);
         }}
         onDrop={handleDrop}
@@ -871,6 +882,16 @@ export default function ChatModern() {
   const activeSession = sessions.find((s) => s.id === session.sessionId);
   const activeTitle = activeSession ? deriveTitle(activeSession) : null;
 
+  // Si el último turno fue un slash command, no ofrecer "Regenerar" (re-correría
+  // el comando y session.undo borraría el turno real previo).
+  const lastUserIsSlash = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user")
+        return messages[i].content.trim().startsWith("/");
+    }
+    return false;
+  })();
+
   return (
     <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
       <SessionSidebar
@@ -925,7 +946,9 @@ export default function ChatModern() {
                   <ErrorBoundary key={msg.id} resetKey={msg.content}>
                     <MessageBubble
                       message={msg}
-                      onRegenerate={isLast ? regenerateLast : undefined}
+                      onRegenerate={
+                        isLast && !lastUserIsSlash ? regenerateLast : undefined
+                      }
                       canRegenerate={isLast && !busy}
                       onQuote={handleQuote}
                     />
