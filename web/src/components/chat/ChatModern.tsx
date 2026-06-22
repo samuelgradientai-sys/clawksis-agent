@@ -414,6 +414,7 @@ function CitationChip({
 interface ComposerProps {
   busy: boolean;
   disabled: boolean;
+  resuming: boolean;
   onSend: (text: string) => void;
   onInterrupt: () => void;
   sendRpc: RpcSender;
@@ -429,6 +430,7 @@ interface ComposerProps {
 function Composer({
   busy,
   disabled,
+  resuming,
   onSend,
   onInterrupt,
   sendRpc,
@@ -664,9 +666,11 @@ function Composer({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={
-            disabled
-              ? "Esperando conexión..."
-              : "Mensaje a Clawksis... (Shift+Enter para nueva línea)"
+            resuming
+              ? "Preparando conversación…"
+              : disabled
+                ? "Esperando conexión..."
+                : "Mensaje a Clawksis... (Shift+Enter para nueva línea)"
           }
           rows={1}
           disabled={disabled}
@@ -819,6 +823,7 @@ export default function ChatModern() {
     sendRpc,
     readyForRpc,
     switchSession,
+    resuming,
     regenerateLast,
   } = useChatGateway();
 
@@ -852,7 +857,8 @@ export default function ChatModern() {
   }, [messages]);
 
   const isConnecting = status === "connecting" || status === "idle";
-  const composerDisabled = status !== "connected" || !session.sessionId;
+  const composerDisabled =
+    status !== "connected" || !session.sessionId || resuming;
 
   const handleSelectSession = (targetId: string) => {
     if (targetId === session.sessionId) return;
@@ -935,7 +941,12 @@ export default function ChatModern() {
         )}
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {messages.length === 0 && !isConnecting ? (
+          {resuming && messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Cargando conversación…
+            </div>
+          ) : messages.length === 0 && !isConnecting ? (
             <EmptyState />
           ) : (
             <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-2">
@@ -962,6 +973,7 @@ export default function ChatModern() {
         <Composer
           busy={busy}
           disabled={composerDisabled}
+          resuming={resuming}
           onSend={sendMessage}
           onInterrupt={interrupt}
           sendRpc={sendRpc}
