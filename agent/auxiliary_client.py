@@ -3516,6 +3516,26 @@ def _is_connection_error(exc: Exception) -> bool:
     return False
 
 
+def _is_server_error(exc: Exception) -> bool:
+    """Detect transient 5xx server errors (502/503/504 etc.).
+
+
+
+    Unlike _is_connection_error (the endpoint is unreachable), the provider IS
+
+    reachable here but returned a 5xx — typically an upstream blip that is
+
+    safe to retry once against the same target.  A 4xx (e.g. 400 bad request)
+
+    is NOT transient and must NOT match.
+
+    """
+
+    status = getattr(exc, "status_code", None)
+
+    return isinstance(status, int) and 500 <= status <= 599
+
+
 def _is_auth_error(exc: Exception) -> bool:
     """Detect auth failures that should trigger provider-specific refresh."""
 
@@ -7879,6 +7899,44 @@ def call_llm(
 
                     else:
                         raise
+
+        # ── Same-target transient transport retry (PR #16587) ─────────
+
+        # A plain connection blip (premature stream close, peer reset) or a
+
+        # 5xx server error is transient: the same provider is very likely to
+
+        # succeed on an immediate second attempt.  Retry ONCE against the same
+
+        # client/kwargs before escalating to the provider-fallback chain.  A
+
+        # second transient failure (or a non-transient retry error) is NOT
+
+        # swallowed — connection/5xx fall through to the fallback chain below,
+
+        # anything else propagates as before.
+
+        if _is_connection_error(first_err) or _is_server_error(first_err):
+            logger.info(
+                "Auxiliary %s: transient transport error on %s (%s), "
+                "retrying once on same provider",
+                task or "call",
+                resolved_provider,
+                type(first_err).__name__,
+            )
+
+            try:
+                return _validate_llm_response(
+                    client.chat.completions.create(**kwargs), task
+                )
+
+            except Exception as retry_err:
+                # Still transient → fall through to the fallback chain so the
+                # request can be rerouted.  Otherwise propagate immediately.
+                if not (_is_connection_error(retry_err) or _is_server_error(retry_err)):
+                    raise
+
+                first_err = retry_err
 
         # ── Payment / credit exhaustion fallback ──────────────────────
 
