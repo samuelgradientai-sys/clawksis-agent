@@ -950,18 +950,19 @@ class _CodexCompletionsAdapter:
         input_msgs: List[Dict[str, Any]] = []
 
         for msg in messages:
-            role = msg.get("role", "user")
+            if msg.get("role") == "system":
+                content = msg.get("content") or ""
 
-            content = msg.get("content") or ""
-
-            if role == "system":
                 instructions = content if isinstance(content, str) else str(content)
 
-            else:
-                input_msgs.append({
-                    "role": role,
-                    "content": _convert_content_for_responses(content),
-                })
+        # Convert the conversation through the canonical Responses converter so
+        # tool turns become function_call / function_call_output items instead of
+        # leaking a raw role="tool" (or an unconverted assistant tool_calls)
+        # message, which the Responses API rejects with HTTP 400. Mirrors
+        # agent/transports/codex.py rather than re-deriving the mapping here.
+        from agent.codex_responses_adapter import _chat_messages_to_responses_input
+
+        input_msgs = _chat_messages_to_responses_input(messages)
 
         resp_kwargs: Dict[str, Any] = {
             "model": model,
