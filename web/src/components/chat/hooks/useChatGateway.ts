@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
 
 export type ConnectionStatus =
   | "idle"
@@ -85,8 +85,10 @@ interface UseChatGatewayResult {
   sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
   readyForRpc: boolean;
-  /** Cambiar a otra sesión: limpia mensajes, carga history, actualiza sessionId */
+  /** Cambiar a otra sesión: muestra el historial al instante y resume en 2do plano. */
   switchSession: (targetId: string) => Promise<void>;
+  /** true mientras se resume una sesión (el agente se está construyendo). */
+  resuming: boolean;
   /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
   regenerateLast: () => Promise<void>;
 }
@@ -103,6 +105,7 @@ export function useChatGateway(): UseChatGatewayResult {
   });
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const nextIdRef = useRef(1);
@@ -589,6 +592,41 @@ export function useChatGateway(): UseChatGatewayResult {
       const mySeq = ++switchSeqRef.current;
       setMessages([]);
       setBusy(false);
+      setResuming(true);
+      setErrorMessage(null);
+      // Mostrar ya el header/asociación de la sesión; el composer queda
+      // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
+      setSession((prev) => ({
+        ...prev,
+        sessionId: targetId,
+        model: null,
+        modelProvider: null,
+        tokensUsed: 0,
+        tokensMax: 0,
+      }));
+
+      // 1) Historial al INSTANTE: lee del DB por HTTP (no construye el agente),
+      //    así la conversación aparece sin esperar el build lento del resume.
+      try {
+        const fast = await api.getSessionMessages(targetId);
+        if (mySeq !== switchSeqRef.current) return;
+        const fastMsgs: ChatMessage[] = (fast?.messages ?? [])
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m, i) => ({
+            id: "hist-" + targetId + "-" + i,
+            role: m.role as "user" | "assistant",
+            content: m.content ?? "",
+            toolCalls: [],
+            streaming: false,
+            timestamp: Date.now() - 1000 * (1000 - i),
+          }));
+        if (fastMsgs.length) setMessages(fastMsgs);
+      } catch {
+        // best-effort: el resume de abajo igual trae los mensajes.
+      }
+
+      // 2) Resume: construye el agente (lento) y deja la sesión VIVA para poder
+      //    enviar. El historial ya se mostró en el paso 1.
       try {
         const resumeResult = (await sendRpc("session.resume", {
           session_id: targetId,
@@ -599,42 +637,32 @@ export function useChatGateway(): UseChatGatewayResult {
         };
         if (mySeq !== switchSeqRef.current) return;
         const liveSid = resumeResult?.session_id ?? targetId;
-        // session.resume ya retorna messages en la respuesta
-        // — NO necesitamos llamar session.history aparte
         const historyMessages = resumeResult?.messages ?? [];
-        const initialMessages: ChatMessage[] = historyMessages
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m, i) => ({
-            id: "hist-" + Date.now() + "-" + i,
-            role: m.role as "user" | "assistant",
-            content: (m.text as string) ?? (m.content as string) ?? "",
-            toolCalls: [],
-            streaming: false,
-            timestamp:
-              (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
-          }));
-        setMessages(initialMessages);
+        if (historyMessages.length) {
+          const initialMessages: ChatMessage[] = historyMessages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m, i) => ({
+              id: "hist-" + Date.now() + "-" + i,
+              role: m.role as "user" | "assistant",
+              content: (m.text as string) ?? (m.content as string) ?? "",
+              toolCalls: [],
+              streaming: false,
+              timestamp:
+                (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
+            }));
+          setMessages(initialMessages);
+        }
         if (mySeq !== switchSeqRef.current) return;
-        // Tokens por conversación: resetear al cambiar para no arrastrar el
-        // total del chat anterior. El modelo lo tomamos del info de la sesión
-        // resumida (si el gateway lo manda).
+        // Tokens por conversación + modelo de la sesión resumida.
         const info = resumeResult?.info ?? {};
         setSession((prev) => ({
           ...prev,
           sessionId: liveSid,
-          // Reset por-sesión (consistente con los tokens): si el resume no trae
-          // info.model, no dejar pegado el modelo del chat anterior.
           model: (info.model as string) ?? null,
           modelProvider: (info.model_provider as string) ?? null,
           tokensUsed: 0,
           tokensMax: 0,
         }));
-        console.log(
-          "[useChatGateway] switched to session",
-          targetId,
-          "→ live sid",
-          liveSid,
-        );
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
         if (mySeq === switchSeqRef.current) {
@@ -642,6 +670,8 @@ export function useChatGateway(): UseChatGatewayResult {
             err instanceof Error ? err.message : "Failed to switch session",
           );
         }
+      } finally {
+        if (mySeq === switchSeqRef.current) setResuming(false);
       }
     },
     [sendRpc],
@@ -707,6 +737,7 @@ export function useChatGateway(): UseChatGatewayResult {
     sendRpc,
     readyForRpc: status === "connected",
     switchSession,
+    resuming,
     regenerateLast,
   };
 }
