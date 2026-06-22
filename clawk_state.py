@@ -2201,6 +2201,26 @@ class SessionDB:
 
         return cleaned
 
+    def update_session_meta(
+        self, session_id: str, model_config: str, model: Optional[str] = None
+    ) -> None:
+        """Update a session's ``model_config`` JSON and (optionally) its model.
+
+        Routes through :meth:`_execute_write` — the shared locked/retried write
+        path — instead of touching ``_conn``/``_lock`` directly. ``model=None``
+        preserves the stored model (SQL ``COALESCE``). No-op if the session id
+        doesn't exist (the UPDATE simply matches no rows).
+        """
+
+        def _do(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE sessions SET model_config = ?, model = COALESCE(?, model) "
+                "WHERE id = ?",
+                (model_config, model, session_id),
+            )
+
+        self._execute_write(_do)
+
     def set_session_title(self, session_id: str, title: str) -> bool:
         """Set or update a session's title.
 
