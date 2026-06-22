@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "Nem vagy bejelentkezve a Nous Portal-ba — futtasd a `/model` parancsot a bejelentkezéshez, majd a `/credits` parancsot."
+
   approval_expired: "⚠️ A jóváhagyás lejárt (az ügynök már nem vár). Kérd meg az ügynököt, hogy próbálja újra."
 
   draining:         "⏳ {count} aktív ügynök befejezésére várunk az újraindítás előtt..."

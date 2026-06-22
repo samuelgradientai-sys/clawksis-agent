@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "Nous Portal'a giriş yapmadınız — giriş yapmak için `/model` komutunu çalıştırın, ardından `/credits`."
+
   approval_expired: "⚠️ Onay süresi doldu (ajan artık beklemiyor). Ajanın tekrar denemesini isteyin."
 
   draining:         "⏳ Yeniden başlatmadan önce {count} aktif ajan bekleniyor..."

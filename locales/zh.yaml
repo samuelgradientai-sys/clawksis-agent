@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "尚未登录 Nous Portal — 运行 `/model` 以登录，然后运行 `/credits`。"
+
   approval_expired: "⚠️ 批准已过期（代理不再等待）。请让代理重试。"
 
   draining:         "⏳ 正在等待 {count} 个活跃代理结束后重启..."

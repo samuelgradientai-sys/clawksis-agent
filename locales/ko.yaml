@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "Nous Portal에 로그인되어 있지 않습니다 — `/model`을 실행하여 로그인한 다음 `/credits`를 실행하세요."
+
   approval_expired: "⚠️ 승인이 만료되었습니다 (에이전트가 더 이상 대기하지 않습니다). 에이전트에게 다시 시도하도록 요청하세요."
 
   draining:         "⏳ 재시작 전에 활성 에이전트 {count}명을 정리하는 중..."
