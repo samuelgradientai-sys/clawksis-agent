@@ -681,9 +681,10 @@ class TestResolveModelOverride:
         import clawk_cli.runtime_provider as rp_mod
 
         monkeypatch.setattr(rp_mod, "has_named_custom_provider", lambda name: True)
-        provider, model = _resolve_model_override(
-            {"provider": "custom", "model": "gpt-5.4"}
-        )
+        provider, model = _resolve_model_override({
+            "provider": "custom",
+            "model": "gpt-5.4",
+        })
         assert provider == "custom"
         assert model == "gpt-5.4"
 
@@ -695,9 +696,10 @@ class TestResolveModelOverride:
         monkeypatch.setattr(
             cfg_mod, "load_config", lambda: {"model": {"provider": "openai-codex"}}
         )
-        provider, model = _resolve_model_override(
-            {"provider": "custom", "model": "gpt-5.4"}
-        )
+        provider, model = _resolve_model_override({
+            "provider": "custom",
+            "model": "gpt-5.4",
+        })
         # No matching custom entry → fall back to pinning the main provider.
         assert provider == "openai-codex"
         assert model == "gpt-5.4"
@@ -708,8 +710,9 @@ class TestResolveModelOverride:
         # Even if the resolver claims no entry, the canonical "custom:<name>"
         # form is never stripped or pinned.
         monkeypatch.setattr(rp_mod, "has_named_custom_provider", lambda name: False)
-        provider, model = _resolve_model_override(
-            {"provider": "custom:cliproxy", "model": "gpt-5.4"}
-        )
+        provider, model = _resolve_model_override({
+            "provider": "custom:cliproxy",
+            "model": "gpt-5.4",
+        })
         assert provider == "custom:cliproxy"
         assert model == "gpt-5.4"

@@ -243,7 +243,7 @@ def _supports_vision_override(
         for p in filter(None, (provider, config_provider)):
             candidate_names.add(p)
             if p.startswith("custom:"):
-                candidate_names.add(p[len("custom:"):])
+                candidate_names.add(p[len("custom:") :])
             else:
                 candidate_names.add(f"custom:{p}")
         for entry_raw in custom_providers:

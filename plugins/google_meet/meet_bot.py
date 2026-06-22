@@ -82,6 +82,7 @@ def _meeting_id_from_url(url: str) -> str:
 # Status + transcript file writers
 # ---------------------------------------------------------------------------
 
+
 class _BotState:
     """Single-process mutable state, flushed to ``status.json`` on each change."""
 
@@ -320,7 +321,9 @@ def _start_realtime_speaker(
     def _stop_fn():
         return stop_flag.get("stop", False)
 
-    rt["speaker_stop"] = lambda: stop_flag.__setitem__("stop", stop_flag.get("stop", False))
+    rt["speaker_stop"] = lambda: stop_flag.__setitem__(
+        "stop", stop_flag.get("stop", False)
+    )
 
     speaker = RealtimeSpeaker(
         session=session,
@@ -364,7 +367,9 @@ def _start_realtime_speaker(
             )
             rt["pcm_pump"] = proc
         except FileNotFoundError:
-            state.set(error="paplay not found — install pulseaudio-utils for realtime on Linux")
+            state.set(
+                error="paplay not found — install pulseaudio-utils for realtime on Linux"
+            )
     elif platform_tag == "darwin":
         # macOS: use ffmpeg to tail-read speaker.pcm and write it to the
         # BlackHole output device. The user must have BlackHole selected
@@ -390,12 +395,23 @@ def _start_realtime_speaker(
                 proc = _sp.Popen(
                     [
                         "ffmpeg",
-                        "-nostdin", "-hide_banner", "-loglevel", "error",
+                        "-nostdin",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-re",
-                        "-f", "s16le", "-ar", "24000", "-ac", "1",
-                        "-i", str(pcm_path),
-                        "-f", "audiotoolbox",
-                        "-audio_device_index", _mac_audio_device_index(device_name),
+                        "-f",
+                        "s16le",
+                        "-ar",
+                        "24000",
+                        "-ac",
+                        "1",
+                        "-i",
+                        str(pcm_path),
+                        "-f",
+                        "audiotoolbox",
+                        "-audio_device_index",
+                        _mac_audio_device_index(device_name),
                         "-",
                     ],
                     stdin=_sp.DEVNULL,
@@ -404,11 +420,15 @@ def _start_realtime_speaker(
                 )
                 rt["pcm_pump"] = proc
             except FileNotFoundError:
-                state.set(error="ffmpeg not found — install via `brew install ffmpeg` for realtime on macOS")
+                state.set(
+                    error="ffmpeg not found — install via `brew install ffmpeg` for realtime on macOS"
+                )
             except Exception as e:
                 state.set(error=f"macOS pcm pump failed to start: {e}")
         else:
-            state.set(error="ffmpeg not found — install via `brew install ffmpeg` for realtime on macOS")
+            state.set(
+                error="ffmpeg not found — install via `brew install ffmpeg` for realtime on macOS"
+            )
 
 
 def _mac_audio_device_index(device_name: str) -> str:
@@ -456,7 +476,9 @@ def run_bot() -> int:  # noqa: C901 — orchestration, explicit branches
     realtime_model = os.environ.get("CLAWK_MEET_REALTIME_MODEL", "gpt-realtime")
     realtime_voice = os.environ.get("CLAWK_MEET_REALTIME_VOICE", "alloy")
     realtime_instructions = os.environ.get("CLAWK_MEET_REALTIME_INSTRUCTIONS", "")
-    realtime_api_key = os.environ.get("CLAWK_MEET_REALTIME_KEY") or os.environ.get("OPENAI_API_KEY", "")
+    realtime_api_key = os.environ.get("CLAWK_MEET_REALTIME_KEY") or os.environ.get(
+        "OPENAI_API_KEY", ""
+    )
 
     if not url or not _is_safe_meet_url(url):
         sys.stderr.write(
@@ -489,25 +511,32 @@ def run_bot() -> int:  # noqa: C901 — orchestration, explicit branches
     # fall back to transcribe mode with a status flag.
     rt = {
         "enabled": mode == "realtime",
-        "bridge": None,            # AudioBridge | None
-        "bridge_info": None,       # dict | None
-        "session": None,           # RealtimeSession | None
-        "speaker_thread": None,    # threading.Thread | None
-        "speaker_stop": None,      # callable | None
+        "bridge": None,  # AudioBridge | None
+        "bridge_info": None,  # dict | None
+        "session": None,  # RealtimeSession | None
+        "speaker_thread": None,  # threading.Thread | None
+        "speaker_stop": None,  # callable | None
     }
     if rt["enabled"]:
         if not realtime_api_key:
-            state.set(error="realtime mode requested but no API key in CLAWK_MEET_REALTIME_KEY/OPENAI_API_KEY — falling back to transcribe")
+            state.set(
+                error="realtime mode requested but no API key in CLAWK_MEET_REALTIME_KEY/OPENAI_API_KEY — falling back to transcribe"
+            )
             rt["enabled"] = False
         else:
             try:
                 from plugins.google_meet.audio_bridge import AudioBridge
+
                 bridge = AudioBridge()
                 rt["bridge_info"] = bridge.setup()
                 rt["bridge"] = bridge
-                state.set(realtime=True, realtime_device=rt["bridge_info"].get("device_name"))
+                state.set(
+                    realtime=True, realtime_device=rt["bridge_info"].get("device_name")
+                )
             except Exception as e:
-                state.set(error=f"audio bridge setup failed: {e} — falling back to transcribe")
+                state.set(
+                    error=f"audio bridge setup failed: {e} — falling back to transcribe"
+                )
                 rt["enabled"] = False
 
     try:
@@ -652,7 +681,9 @@ def run_bot() -> int:  # noqa: C901 — orchestration, explicit branches
                         break
 
                 try:
-                    queued = page.evaluate("window.__clawkMeetDrain && window.__clawkMeetDrain()")
+                    queued = page.evaluate(
+                        "window.__clawkMeetDrain && window.__clawkMeetDrain()"
+                    )
                     if isinstance(queued, list):
                         for entry in queued:
                             if not isinstance(entry, dict):
@@ -683,7 +714,9 @@ def run_bot() -> int:  # noqa: C901 — orchestration, explicit branches
                 if rt["session"] is not None:
                     state.set(
                         audio_bytes_out=getattr(rt["session"], "audio_bytes_out", 0),
-                        last_audio_out_at=getattr(rt["session"], "last_audio_out_at", None),
+                        last_audio_out_at=getattr(
+                            rt["session"], "last_audio_out_at", None
+                        ),
                     )
 
                 time.sleep(1.0)

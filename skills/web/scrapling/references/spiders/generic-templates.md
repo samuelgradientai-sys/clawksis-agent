@@ -13,6 +13,7 @@ You can use `LinkExtractor` directly inside any plain `Spider.parse()`. The temp
 ```python
 from scrapling.spiders import CrawlSpider, CrawlRule, LinkExtractor
 
+
 class BlogCrawler(CrawlSpider):
     name = "blog"
     start_urls = ["https://example.com"]
@@ -20,7 +21,9 @@ class BlogCrawler(CrawlSpider):
     def rules(self):
         return [
             CrawlRule(LinkExtractor(allow=r"/posts/"), callback=self.parse_post),
-            CrawlRule(LinkExtractor(allow=r"/page/\d+/")),  # follow pagination, no callback
+            CrawlRule(
+                LinkExtractor(allow=r"/page/\d+/")
+            ),  # follow pagination, no callback
         ]
 
     async def parse_post(self, response):
@@ -28,6 +31,7 @@ class BlogCrawler(CrawlSpider):
             "title": response.css("h1::text").get(),
             "url": response.url,
         }
+
 
 result = BlogCrawler().start()
 ```
@@ -58,12 +62,15 @@ def add_priority(self, request, response):
     request.priority = 10
     return request
 
+
 def rules(self):
-    return [CrawlRule(
-        LinkExtractor(allow=r"/posts/"),
-        callback=self.parse_post,
-        process_request=self.add_priority,
-    )]
+    return [
+        CrawlRule(
+            LinkExtractor(allow=r"/posts/"),
+            callback=self.parse_post,
+            process_request=self.add_priority,
+        )
+    ]
 ```
 
 ## SitemapSpider
@@ -72,6 +79,7 @@ def rules(self):
 
 ```python
 from scrapling.spiders import SitemapSpider, CrawlRule, LinkExtractor
+
 
 class MySitemap(SitemapSpider):
     name = "sm"
@@ -89,6 +97,7 @@ class MySitemap(SitemapSpider):
     async def parse_product(self, response):
         yield {"sku": response.css(".sku::text").get()}
 
+
 result = MySitemap().start()
 ```
 
@@ -104,7 +113,9 @@ When `SitemapSpider` encounters a `<sitemapindex>` (a sitemap of sitemaps), it d
 class MySitemap(SitemapSpider):
     name = "sm"
     sitemap_urls = ["https://example.com/sitemap.xml"]
-    sitemap_follow = LinkExtractor(allow=r"/posts-sitemap-\d+\.xml")  # only post sitemaps
+    sitemap_follow = LinkExtractor(
+        allow=r"/posts-sitemap-\d+\.xml"
+    )  # only post sitemaps
 ```
 
 ### Robots.txt support
@@ -114,7 +125,9 @@ Put a `robots.txt` URL directly in `sitemap_urls` and `SitemapSpider` will detec
 ```python
 class MySitemap(SitemapSpider):
     name = "sm"
-    sitemap_urls = ["https://example.com/robots.txt"]  # Sitemap: directives discovered automatically
+    sitemap_urls = [
+        "https://example.com/robots.txt"
+    ]  # Sitemap: directives discovered automatically
 ```
 
 ### Alternate-language URLs
@@ -127,6 +140,7 @@ You don't have to use the templates. `LinkExtractor` works inside any plain `Spi
 
 ```python
 from scrapling.spiders import Spider, LinkExtractor
+
 
 class CustomSpider(Spider):
     name = "custom"

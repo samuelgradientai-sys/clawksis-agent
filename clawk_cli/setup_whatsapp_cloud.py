@@ -520,8 +520,10 @@ def run_whatsapp_cloud_setup() -> int:
     effective_waba = waba_id or current_waba_id
     if effective_waba:
         print("    • Display name + profile picture:")
-        print("        https://business.facebook.com/wa/manage/phone-numbers/"
-              f"?waba_id={effective_waba}")
+        print(
+            "        https://business.facebook.com/wa/manage/phone-numbers/"
+            f"?waba_id={effective_waba}"
+        )
     else:
         print("    • Display name + profile picture:")
         print("        https://business.facebook.com/wa/manage/phone-numbers/")

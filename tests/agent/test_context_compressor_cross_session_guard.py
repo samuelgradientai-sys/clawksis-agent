@@ -79,6 +79,7 @@ def _conversation_without_handoff(n_exchanges=12):
 def _conversation_with_handoff(n_exchanges=12):
     """Build message list WITH a compaction handoff in protected head."""
     from agent.context_compressor import SUMMARY_PREFIX
+
     msgs = [{"role": "system", "content": "You are a helpful assistant."}]
     msgs.append({"role": "user", "content": SUMMARY_PREFIX + "\nPrevious summary."})
     for i in range(n_exchanges):
@@ -95,8 +96,9 @@ def test_stale_previous_summary_cleared_when_no_handoff():
 
     messages = _conversation_without_handoff()
 
-    with patch.object(c, "_generate_summary",
-                      return_value="[CONTEXT COMPACTION] Fresh summary."):
+    with patch.object(
+        c, "_generate_summary", return_value="[CONTEXT COMPACTION] Fresh summary."
+    ):
         result = c.compress(messages)
 
     assert c._previous_summary is None, (
@@ -104,9 +106,7 @@ def test_stale_previous_summary_cleared_when_no_handoff():
         f"summary exists in current messages. Got: {c._previous_summary!r}"
     )
     assert result != messages
-    assert any(
-        "[CONTEXT COMPACTION]" in (m.get("content", "") or "") for m in result
-    )
+    assert any("[CONTEXT COMPACTION]" in (m.get("content", "") or "") for m in result)
 
 
 def test_previous_summary_preserved_when_handoff_found():
@@ -117,8 +117,9 @@ def test_previous_summary_preserved_when_handoff_found():
 
     messages = _conversation_with_handoff()
 
-    with patch.object(c, "_generate_summary",
-                      return_value="[CONTEXT COMPACTION] Updated summary."):
+    with patch.object(
+        c, "_generate_summary", return_value="[CONTEXT COMPACTION] Updated summary."
+    ):
         c.compress(messages)
 
     # When a handoff IS found, the staleness guard must NOT fire.
@@ -137,8 +138,9 @@ def test_no_false_positive_when_previous_summary_already_none():
 
     messages = _conversation_without_handoff()
 
-    with patch.object(c, "_generate_summary",
-                      return_value="[CONTEXT COMPACTION] Fresh summary."):
+    with patch.object(
+        c, "_generate_summary", return_value="[CONTEXT COMPACTION] Fresh summary."
+    ):
         c.compress(messages)
 
     # Should still be None — guard is no-op

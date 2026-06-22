@@ -11,7 +11,7 @@ from pathlib import Path
 # frontmatter. Multiline so the pattern can be applied to a full SKILL.md text.
 # Three alternation groups — exactly one captures per successful match.
 _VERSION_RE = re.compile(
-    r'''^version:\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s*$''',
+    r"""^version:\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s*$""",
     re.MULTILINE,
 )
 

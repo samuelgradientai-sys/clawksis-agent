@@ -74,6 +74,7 @@ def test_lazy_singleton_concurrent_first_call_builds_once():
             build_count["n"] += 1
         # Simulate an expensive build so threads genuinely overlap.
         import time
+
         time.sleep(0.01)
         return object()
 
@@ -139,6 +140,7 @@ def test_slot_concurrent_first_call_builds_once():
         with build_lock:
             build_count["n"] += 1
         import time
+
         time.sleep(0.01)
         return object()
 

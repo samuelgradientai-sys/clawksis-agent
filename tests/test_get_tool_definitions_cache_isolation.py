@@ -14,6 +14,7 @@ These tests pin:
 - the first uncached call also returns a fresh list (the fix)
 - every call returns a list that is not the cached one, even after mutation
 """
+
 from __future__ import annotations
 
 import pytest
@@ -30,7 +31,6 @@ def _clear_cache():
 
 
 class TestQuietModeCacheIsolation:
-
     def test_first_uncached_call_returns_fresh_list(self):
         """The first quiet_mode call must not alias the cached object \u2014
         otherwise a caller mutating the returned list mutates the cache."""
@@ -95,14 +95,16 @@ class TestQuietModeCacheIsolation:
         # Fill cache to the cap with distinct keys by varying enabled_toolsets.
         for i in range(cap):
             model_tools.get_tool_definitions(
-                enabled_toolsets=[f"fake_toolset_{i}"], quiet_mode=True,
+                enabled_toolsets=[f"fake_toolset_{i}"],
+                quiet_mode=True,
             )
         assert len(model_tools._tool_defs_cache) == cap
 
         # Adding one more must evict the oldest, not clear everything and
         # not grow past the cap.
         model_tools.get_tool_definitions(
-            enabled_toolsets=["fake_toolset_overflow"], quiet_mode=True,
+            enabled_toolsets=["fake_toolset_overflow"],
+            quiet_mode=True,
         )
         assert len(model_tools._tool_defs_cache) == cap, (
             "Eviction should keep the cache at the cap, not clear it or grow"

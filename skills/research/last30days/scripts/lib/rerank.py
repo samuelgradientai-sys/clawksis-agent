@@ -89,11 +89,23 @@ def rerank_candidates(
     primary_entity = _primary_entity(topic)
     if provider and model and shortlisted:
         try:
-            response = provider.generate_json(model, _build_prompt(topic, plan, shortlisted, primary_entity))
+            response = provider.generate_json(
+                model, _build_prompt(topic, plan, shortlisted, primary_entity)
+            )
             _apply_llm_scores(shortlisted, response)
-        except (ValueError, KeyError, json.JSONDecodeError, OSError, http.HTTPError) as exc:
+        except (
+            ValueError,
+            KeyError,
+            json.JSONDecodeError,
+            OSError,
+            http.HTTPError,
+        ) as exc:
             import sys
-            print(f"[Rerank] LLM reranking failed, using local fallback: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+            print(
+                f"[Rerank] LLM reranking failed, using local fallback: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
             _apply_fallback_scores(shortlisted, primary_entity=primary_entity)
     else:
         _apply_fallback_scores(shortlisted, primary_entity=primary_entity)
@@ -130,28 +142,30 @@ def _fenced_untrusted_content(candidate_block: str) -> str:
     )
 
 
-def _build_prompt(topic: str, plan: schema.QueryPlan, candidates: list[schema.Candidate], primary_entity: str = "") -> str:
+def _build_prompt(
+    topic: str,
+    plan: schema.QueryPlan,
+    candidates: list[schema.Candidate],
+    primary_entity: str = "",
+) -> str:
     ranking_queries = "\n".join(
-        f"- {subquery.label}: {subquery.ranking_query}"
-        for subquery in plan.subqueries
+        f"- {subquery.label}: {subquery.ranking_query}" for subquery in plan.subqueries
     )
     candidate_block = "\n".join(
-        "\n".join(
-            [
-                f"- candidate_id: {candidate.candidate_id}",
-                f"  sources: {schema.candidate_source_label(candidate)}",
-                f"  title: {candidate.title[:220]}",
-                f"  snippet: {candidate.snippet[:420]}",
-                f"  date: {schema.candidate_best_published_at(candidate) or 'unknown'}",
-                f"  matched_subqueries: {', '.join(candidate.subquery_labels)}",
-            ]
-        )
+        "\n".join([
+            f"- candidate_id: {candidate.candidate_id}",
+            f"  sources: {schema.candidate_source_label(candidate)}",
+            f"  title: {candidate.title[:220]}",
+            f"  snippet: {candidate.snippet[:420]}",
+            f"  date: {schema.candidate_best_published_at(candidate) or 'unknown'}",
+            f"  matched_subqueries: {', '.join(candidate.subquery_labels)}",
+        ])
         for candidate in candidates
     )
     grounding_hint = ""
     if primary_entity:
         grounding_hint = (
-            f"\nPrimary entity grounding: the user's primary entity is \"{primary_entity}\". "
+            f'\nPrimary entity grounding: the user\'s primary entity is "{primary_entity}". '
             "A candidate that does NOT mention this entity (or a clear synonym/abbreviation) "
             "in its title or snippet should score no higher than 30, regardless of other "
             "signals. Do not let a candidate match the topic vicinity without matching the "
@@ -200,13 +214,17 @@ def _apply_llm_scores(candidates: list[schema.Candidate], payload: dict) -> None
             str(row.get("reason") or "").strip() or None,
         )
     for candidate in candidates:
-        rerank_score, reason = scores.get(candidate.candidate_id, _fallback_tuple(candidate))
+        rerank_score, reason = scores.get(
+            candidate.candidate_id, _fallback_tuple(candidate)
+        )
         candidate.rerank_score = rerank_score
         candidate.explanation = reason
         candidate.final_score = _final_score(candidate)
 
 
-def _apply_fallback_scores(candidates: list[schema.Candidate], *, primary_entity: str = "") -> None:
+def _apply_fallback_scores(
+    candidates: list[schema.Candidate], *, primary_entity: str = ""
+) -> None:
     for candidate in candidates:
         rerank_score, reason = _fallback_tuple(candidate, primary_entity=primary_entity)
         candidate.rerank_score = rerank_score
@@ -271,7 +289,9 @@ def _entity_grounded(haystack: str, primary_entity: str) -> bool:
     return tokens[0] in haystack
 
 
-def _fallback_tuple(candidate: schema.Candidate, *, primary_entity: str = "") -> tuple[float, str]:
+def _fallback_tuple(
+    candidate: schema.Candidate, *, primary_entity: str = ""
+) -> tuple[float, str]:
     score = (
         (candidate.local_relevance * 100.0 * 0.7)
         + (candidate.freshness * 0.2)
@@ -343,8 +363,6 @@ def _final_score(candidate: schema.Candidate) -> float:
     return base
 
 
-
-
 def score_fun(
     *,
     topic: str,
@@ -359,9 +377,19 @@ def score_fun(
         try:
             response = provider.generate_json(model, _build_fun_prompt(topic, pool))
             _apply_fun_scores(pool, response)
-        except (ValueError, KeyError, json.JSONDecodeError, OSError, http.HTTPError) as exc:
+        except (
+            ValueError,
+            KeyError,
+            json.JSONDecodeError,
+            OSError,
+            http.HTTPError,
+        ) as exc:
             import sys
-            print(f"[FunJudge] LLM scoring failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+            print(
+                f"[FunJudge] LLM scoring failed: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
             _apply_fun_fallback(pool)
     else:
         _apply_fun_fallback(pool)
@@ -383,7 +411,7 @@ def _build_fun_prompt(topic: str, candidates: list[schema.Candidate]) -> str:
         "You are the fun judge. A press conference is 0. A one-liner that makes you laugh is 95.\n\n"
         f"Topic: {topic}\n\n"
         "Return JSON only:\n"
-        '{\n  \"scores\": [{\"candidate_id\": \"id\", \"fun\": 0-100, \"reason\": \"short reason\"}]\n}\n\n'
+        '{\n  "scores": [{"candidate_id": "id", "fun": 0-100, "reason": "short reason"}]\n}\n\n'
         "Scoring: 90-100=genuinely hilarious, 70-89=witty/clever, "
         "40-69=has personality, 20-39=straight news, 0-19=dry/official.\n"
         "Prefer SHORT PUNCHY content. A 15-word tweet > a 500-word analysis.\n\n"
@@ -395,7 +423,9 @@ def _extract_comment_text(candidate: schema.Candidate) -> str:
     parts = []
     for item in candidate.source_items:
         for comment in item.metadata.get("top_comments", [])[:3]:
-            body = comment.get("body", "") if isinstance(comment, dict) else str(comment)
+            body = (
+                comment.get("body", "") if isinstance(comment, dict) else str(comment)
+            )
             if body:
                 parts.append(body[:150])
         for insight in item.metadata.get("comment_insights", [])[:2]:
@@ -429,12 +459,31 @@ def _apply_fun_fallback(candidates: list[schema.Candidate]) -> None:
 
 
 def _apply_single_fun_fallback(candidate: schema.Candidate) -> None:
-    text = candidate.title + " " + (candidate.snippet or "") + " " + _extract_comment_text(candidate)
+    text = (
+        candidate.title
+        + " "
+        + (candidate.snippet or "")
+        + " "
+        + _extract_comment_text(candidate)
+    )
     text_len = len(text.strip())
     eng = candidate.engagement if candidate.engagement is not None else 0.0
     shortness = max(0, (200 - text_len) / 200) * 30
     eng_bonus = min(eng * 2.0, 40)
-    markers = ["lol", "lmao", "dead", "hilarious", "funny", "bruh", "ratio", "nah", "bro", "ain't no way", "i'm crying", "rent free"]
+    markers = [
+        "lol",
+        "lmao",
+        "dead",
+        "hilarious",
+        "funny",
+        "bruh",
+        "ratio",
+        "nah",
+        "bro",
+        "ain't no way",
+        "i'm crying",
+        "rent free",
+    ]
     marker_bonus = 10 if any(m in text.lower() for m in markers) else 0
     candidate.fun_score = max(0.0, min(100.0, shortness + eng_bonus + marker_bonus))
     candidate.fun_explanation = "heuristic-fallback"

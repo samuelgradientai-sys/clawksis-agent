@@ -7,6 +7,7 @@ A spider is a class that defines how to crawl and extract data from websites. He
 ```python
 from scrapling.spiders import Spider, Response
 
+
 class QuotesSpider(Spider):
     name = "quotes"
     start_urls = ["https://quotes.toscrape.com"]
@@ -62,6 +63,7 @@ Most crawls need to follow links across multiple pages. Use `response.follow()` 
 ```python
 from scrapling.spiders import Spider, Response
 
+
 class QuotesSpider(Spider):
     name = "quotes"
     start_urls = ["https://quotes.toscrape.com"]
@@ -88,6 +90,7 @@ You can point follow-up requests at different callback methods for different pag
 async def parse(self, response: Response):
     for link in response.css("a.product-link::attr(href)").getall():
         yield response.follow(link, callback=self.parse_product)
+
 
 async def parse_product(self, response: Response):
     yield {

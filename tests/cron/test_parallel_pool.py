@@ -84,7 +84,11 @@ class TestRunningJobGuard:
         dispatched = []
         monkeypatch.setattr(sched, "get_due_jobs", lambda: [job])
         monkeypatch.setattr(sched, "advance_next_run", lambda *_a, **_kw: None)
-        monkeypatch.setattr(sched, "run_job", lambda j: dispatched.append(j["id"]) or (True, "out", "resp", None))
+        monkeypatch.setattr(
+            sched,
+            "run_job",
+            lambda j: dispatched.append(j["id"]) or (True, "out", "resp", None),
+        )
         monkeypatch.setattr(sched, "save_job_output", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)
@@ -109,9 +113,15 @@ class TestSyncMode:
         sched._running_job_ids.clear()
 
         jobs = [
-            {"id": f"job-{i}", "name": f"Job {i}", "prompt": "test",
-             "schedule": "every 5m", "enabled": True,
-             "next_run_at": "2020-01-01T00:00:00", "deliver": "local"}
+            {
+                "id": f"job-{i}",
+                "name": f"Job {i}",
+                "prompt": "test",
+                "schedule": "every 5m",
+                "enabled": True,
+                "next_run_at": "2020-01-01T00:00:00",
+                "deliver": "local",
+            }
             for i in range(3)
         ]
 
@@ -223,7 +233,9 @@ class TestSequentialPool:
         time.sleep(0.1)
         sched._shutdown_parallel_pool()
 
-    def test_sequential_running_guard_prevents_double_dispatch(self, tmp_path, monkeypatch):
+    def test_sequential_running_guard_prevents_double_dispatch(
+        self, tmp_path, monkeypatch
+    ):
         """A workdir job already in _running_job_ids is skipped on next tick."""
         import cron.scheduler as sched
 
@@ -249,7 +261,11 @@ class TestSequentialPool:
         dispatched = []
         monkeypatch.setattr(sched, "get_due_jobs", lambda: [job])
         monkeypatch.setattr(sched, "advance_next_run", lambda *_a, **_kw: None)
-        monkeypatch.setattr(sched, "run_job", lambda j: dispatched.append(j["id"]) or (True, "out", "resp", None))
+        monkeypatch.setattr(
+            sched,
+            "run_job",
+            lambda j: dispatched.append(j["id"]) or (True, "out", "resp", None),
+        )
         monkeypatch.setattr(sched, "save_job_output", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)

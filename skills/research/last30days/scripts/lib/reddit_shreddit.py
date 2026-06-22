@@ -95,7 +95,7 @@ def _body_for(html_text: str, thing_id: str) -> str:
     idx = html_text.find(anchor)
     if idx == -1:
         return ""
-    window = html_text[idx + len(anchor): idx + len(anchor) + 8000]
+    window = html_text[idx + len(anchor) : idx + len(anchor) + 8000]
     nxt = _NEXT_RTJSON.search(window)
     if nxt:
         window = window[: nxt.start()]
@@ -162,7 +162,9 @@ def fetch_comments(
         return {"top_comments": [], "comment_insights": [], "num_comments": None}
     sub, post_id = ref
 
-    html_text = http.get_text(_svc_url(sub, post_id), timeout=timeout, accept="text/html")
+    html_text = http.get_text(
+        _svc_url(sub, post_id), timeout=timeout, accept="text/html"
+    )
     if not html_text:
         return {"top_comments": [], "comment_insights": [], "num_comments": None}
 

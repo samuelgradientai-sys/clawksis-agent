@@ -283,12 +283,17 @@ class TestUsageAccountSection:
         )
         # The credits block routes through the shared nous_credits_lines() helper;
         # stub it so this account-section test stays hermetic (no portal/auth lookup).
-        monkeypatch.setattr("agent.account_usage.nous_credits_lines", lambda markdown=False: [])
+        monkeypatch.setattr(
+            "agent.account_usage.nous_credits_lines", lambda markdown=False: []
+        )
 
         event = MagicMock()
         result = await runner._handle_usage_command(event)
 
         account_call = next(c for c in calls if c["args"] == ("openai-codex",))
-        assert account_call["kwargs"]["base_url"] == "https://chatgpt.com/backend-api/codex"
+        assert (
+            account_call["kwargs"]["base_url"]
+            == "https://chatgpt.com/backend-api/codex"
+        )
         assert "📊 **Session Info**" in result
         assert "📈 **Account limits**" in result

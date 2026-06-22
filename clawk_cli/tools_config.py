@@ -1937,15 +1937,13 @@ def _run_post_setup(post_setup_key: str):
         # MiroFish is a Docker service, not a CLI binary — we can't `pip`/`npm`
         # it. Print the stand-up steps; the tool's check_fn activates it once
         # the server answers /health.
-        base = (
-            get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001"
-        ).rstrip("/")
+        base = (get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001").rstrip(
+            "/"
+        )
 
         _print_info("    MiroFish runs as a server (Docker), not a CLI binary. Setup:")
 
-        _print_info(
-            "      git clone https://github.com/666ghj/MiroFish && cd MiroFish"
-        )
+        _print_info("      git clone https://github.com/666ghj/MiroFish && cd MiroFish")
 
         _print_info("      cp .env.example .env   # set LLM_API_KEY and ZEP_API_KEY")
 

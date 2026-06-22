@@ -130,8 +130,7 @@ def _model_is_local_endpoint(provider: str, base_url: str) -> bool:
     host = (base_url or "").strip().lower()
 
     return any(
-        marker in host
-        for marker in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
+        marker in host for marker in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
     )
 
 

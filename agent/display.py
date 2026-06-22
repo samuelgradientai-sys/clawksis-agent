@@ -244,15 +244,12 @@ def get_tool_emoji(tool_name: str, default: str = "⚡", args=None) -> str:
     #    so running a skill reads like the skill (🕷️ scrapling), not "terminal".
 
     if args and tool_name in _SKILL_CMD_TOOLS:
-
         _cmd = ""
 
         for _k in ("command", "code", "script", "cmd"):
-
             _v = args.get(_k) if isinstance(args, dict) else None
 
             if isinstance(_v, str) and _v:
-
                 _cmd = _v
 
                 break
@@ -260,7 +257,6 @@ def get_tool_emoji(tool_name: str, default: str = "⚡", args=None) -> str:
         _se = skill_emoji_for_command(_cmd)
 
         if _se:
-
             return _se
 
     # 1. Skin override
@@ -310,7 +306,9 @@ def _emoji_from_skill_md(skill_dir: Path) -> str:
             return ""
         from agent.skill_utils import parse_frontmatter
 
-        fm, _ = parse_frontmatter(md.read_text(encoding="utf-8", errors="replace")[:4000])
+        fm, _ = parse_frontmatter(
+            md.read_text(encoding="utf-8", errors="replace")[:4000]
+        )
         meta = fm.get("metadata") if isinstance(fm, dict) else None
         if isinstance(meta, dict):
             for ns in ("clawksis", "openclaw"):

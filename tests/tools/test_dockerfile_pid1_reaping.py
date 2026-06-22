@@ -160,7 +160,8 @@ def test_dockerfile_installs_tui_dependencies(dockerfile_text):
 
 def test_dockerfile_preinstalls_gateway_messaging_dependencies(dockerfile_text):
     sync_steps = [
-        step for step in _run_steps(dockerfile_text)
+        step
+        for step in _run_steps(dockerfile_text)
         if "uv sync" in step and "--no-install-project" in step
     ]
 
@@ -174,7 +175,8 @@ def test_dockerfile_preinstalls_gateway_messaging_dependencies(dockerfile_text):
 
 def test_dockerfile_preinstalls_matrix_dependencies(dockerfile_text):
     sync_steps = [
-        step for step in _run_steps(dockerfile_text)
+        step
+        for step in _run_steps(dockerfile_text)
         if "uv sync" in step and "--no-install-project" in step
     ]
 
@@ -199,7 +201,8 @@ def test_dockerfile_installs_matrix_native_build_dependencies(dockerfile_text):
 
 def test_dockerfile_preinstalls_hindsight_memory_dependency(dockerfile_text):
     sync_steps = [
-        step for step in _run_steps(dockerfile_text)
+        step
+        for step in _run_steps(dockerfile_text)
         if "uv sync" in step and "--no-install-project" in step
     ]
 

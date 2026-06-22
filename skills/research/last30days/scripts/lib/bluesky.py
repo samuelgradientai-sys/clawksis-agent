@@ -51,7 +51,7 @@ def _resolve_search_url(config: Optional[Dict[str, Any]] = None) -> str:
     # Strip embedded scheme so users who paste full URLs do not break the f-string.
     for prefix in ("https://", "http://"):
         if host.lower().startswith(prefix):
-            host = host[len(prefix):]
+            host = host[len(prefix) :]
             break
     if not host or "/" in host or " " in host:
         # Embedded path or whitespace remains — don't trust it. Default + log.
@@ -110,7 +110,9 @@ def _create_session(handle: str, app_password: str) -> Optional[str]:
         Access JWT string, or None on failure. Sets _session_error on failure.
     """
     global _cached_token, _token_created_at, _session_error
-    if _cached_token and (time.monotonic() - _token_created_at < _TOKEN_MAX_AGE_SECONDS):
+    if _cached_token and (
+        time.monotonic() - _token_created_at < _TOKEN_MAX_AGE_SECONDS
+    ):
         return _cached_token
     if _cached_token:
         _log("Session token expired, re-authenticating")
@@ -159,11 +161,26 @@ def _reset_session_cache() -> None:
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Bluesky search."""
     from .query import extract_core_subject
+
     _BSKY_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features', 'recommendations', 'advice',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
     })
     return extract_core_subject(topic, noise=_BSKY_NOISE)
 
@@ -230,6 +247,7 @@ def search_bluesky(
     _log(f"Searching for '{core_topic}' (depth={depth}, limit={count})")
 
     from urllib.parse import urlencode
+
     params = {
         "q": core_topic,
         "limit": str(min(count, 100)),
@@ -240,11 +258,14 @@ def search_bluesky(
     def _auth_and_search() -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         token = _create_session(handle, app_password)
         if not token:
-            error_msg = _session_error or "Bluesky session creation failed (unknown error)"
+            error_msg = (
+                _session_error or "Bluesky session creation failed (unknown error)"
+            )
             return None, error_msg
         try:
             response = http.request(
-                "GET", url,
+                "GET",
+                url,
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=30,
             )
@@ -255,7 +276,10 @@ def search_bluesky(
                 _reset_session_cache()
                 return None, "refresh"
             if e.status_code == 403 and e.body and "cloudflare" in e.body.lower():
-                return None, "Bluesky search blocked by Cloudflare (403). This is a network-level block - try a different network or VPN."
+                return (
+                    None,
+                    "Bluesky search blocked by Cloudflare (403). This is a network-level block - try a different network or VPN.",
+                )
             return None, f"Bluesky search failed: {e}"
         except Exception as e:
             _log(f"Search failed: {e}")
@@ -296,7 +320,9 @@ def parse_bluesky_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         # URI format: at://did:plc:xxx/app.bsky.feed.post/rkey
         uri = post.get("uri") or ""
         rkey = uri.rsplit("/", 1)[-1] if uri else ""
-        url = f"https://bsky.app/profile/{handle}/post/{rkey}" if handle and rkey else ""
+        url = (
+            f"https://bsky.app/profile/{handle}/post/{rkey}" if handle and rkey else ""
+        )
 
         likes = post.get("likeCount") or 0
         reposts = post.get("repostCount") or 0
@@ -323,7 +349,9 @@ def parse_bluesky_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "quotes": quotes,
             },
             "relevance": round(relevance, 2),
-            "why_relevant": f"Bluesky: @{handle}: {text[:60]}" if text else f"Bluesky: {handle}",
+            "why_relevant": f"Bluesky: @{handle}: {text[:60]}"
+            if text
+            else f"Bluesky: {handle}",
         })
 
     return items

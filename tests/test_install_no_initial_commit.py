@@ -56,7 +56,7 @@ def _extract_no_commit_guard() -> str:
 def _run_guard(install_dir: Path) -> None:
     block = _extract_no_commit_guard()
     script = (
-        "log_warn() { echo \"WARN: $*\"; }\n"
+        'log_warn() { echo "WARN: $*"; }\n'
         f"INSTALL_DIR={shlex.quote(str(install_dir))}\n"
         f"{block}\n"
     )

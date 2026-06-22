@@ -2126,9 +2126,10 @@ class TestBedrockIamStreamingFallback:
             "agent.bedrock_adapter._get_bedrock_runtime_client",
             return_value=client,
         ):
-            response = agent._interruptible_streaming_api_call(
-                {"modelId": agent.model, "messages": []}
-            )
+            response = agent._interruptible_streaming_api_call({
+                "modelId": agent.model,
+                "messages": [],
+            })
 
         client.converse.assert_called_once()
         assert response.choices[0].message.content == "hi"
@@ -2153,9 +2154,10 @@ class TestBedrockIamStreamingFallback:
             return_value=client,
         ):
             with pytest.raises(ClientError):
-                agent._interruptible_streaming_api_call(
-                    {"modelId": agent.model, "messages": []}
-                )
+                agent._interruptible_streaming_api_call({
+                    "modelId": agent.model,
+                    "messages": [],
+                })
 
         client.converse.assert_not_called()
         assert getattr(agent, "_disable_streaming", False) is False

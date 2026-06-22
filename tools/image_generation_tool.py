@@ -52,6 +52,7 @@ def _load_fal_client() -> Any:
     if fal_client is not None:
         return fal_client
     from tools.fal_common import import_fal_client
+
     fal_client = import_fal_client()
     return fal_client
 
@@ -112,8 +113,12 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "enable_safety_checker": False,
         },
         "supports": {
-            "prompt", "image_size", "num_inference_steps", "seed",
-            "output_format", "enable_safety_checker",
+            "prompt",
+            "image_size",
+            "num_inference_steps",
+            "seed",
+            "output_format",
+            "enable_safety_checker",
         },
         "upscale": False,
     },
@@ -138,11 +143,18 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "sync_mode": True,
         },
         "supports": {
-            "prompt", "image_size", "num_inference_steps", "guidance_scale",
-            "num_images", "output_format", "enable_safety_checker",
-            "safety_tolerance", "sync_mode", "seed",
+            "prompt",
+            "image_size",
+            "num_inference_steps",
+            "guidance_scale",
+            "num_images",
+            "output_format",
+            "enable_safety_checker",
+            "safety_tolerance",
+            "sync_mode",
+            "seed",
         },
-        "upscale": True,   # Backward-compat: current default behavior.
+        "upscale": True,  # Backward-compat: current default behavior.
     },
     "fal-ai/z-image/turbo": {
         "display": "Z-Image Turbo",
@@ -163,8 +175,13 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "enable_prompt_expansion": False,  # avoid the extra per-request charge
         },
         "supports": {
-            "prompt", "image_size", "num_inference_steps", "num_images",
-            "seed", "output_format", "enable_safety_checker",
+            "prompt",
+            "image_size",
+            "num_inference_steps",
+            "num_images",
+            "seed",
+            "output_format",
+            "enable_safety_checker",
             "enable_prompt_expansion",
         },
         "upscale": False,
@@ -189,9 +206,16 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "resolution": "1K",
         },
         "supports": {
-            "prompt", "aspect_ratio", "num_images", "output_format",
-            "safety_tolerance", "seed", "sync_mode", "resolution",
-            "enable_web_search", "limit_generations",
+            "prompt",
+            "aspect_ratio",
+            "num_images",
+            "output_format",
+            "safety_tolerance",
+            "seed",
+            "sync_mode",
+            "resolution",
+            "enable_web_search",
+            "limit_generations",
         },
         "upscale": False,
     },
@@ -214,8 +238,13 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "output_format": "png",
         },
         "supports": {
-            "prompt", "image_size", "quality", "num_images", "output_format",
-            "background", "sync_mode",
+            "prompt",
+            "image_size",
+            "quality",
+            "num_images",
+            "output_format",
+            "background",
+            "sync_mode",
         },
         "upscale": False,
     },
@@ -231,9 +260,9 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
         # three aspect ratios.
         "size_style": "image_size_preset",
         "sizes": {
-            "landscape": "landscape_4_3",   # 1024x768
-            "square": "square_hd",            # 1024x1024
-            "portrait": "portrait_4_3",       # 768x1024
+            "landscape": "landscape_4_3",  # 1024x768
+            "square": "square_hd",  # 1024x1024
+            "portrait": "portrait_4_3",  # 768x1024
         },
         "defaults": {
             # Same quality pinning as gpt-image-1.5: medium keeps Nous
@@ -244,7 +273,11 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "output_format": "png",
         },
         "supports": {
-            "prompt", "image_size", "quality", "num_images", "output_format",
+            "prompt",
+            "image_size",
+            "quality",
+            "num_images",
+            "output_format",
             "sync_mode",
             # openai_api_key (BYOK) intentionally omitted — all users go
             # through the shared FAL billing path.
@@ -268,8 +301,12 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "style": "AUTO",
         },
         "supports": {
-            "prompt", "image_size", "rendering_speed", "expand_prompt",
-            "style", "seed",
+            "prompt",
+            "image_size",
+            "rendering_speed",
+            "expand_prompt",
+            "style",
+            "seed",
         },
         "upscale": False,
     },
@@ -289,8 +326,11 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "enable_safety_checker": False,
         },
         "supports": {
-            "prompt", "image_size", "enable_safety_checker",
-            "colors", "background_color",
+            "prompt",
+            "image_size",
+            "enable_safety_checker",
+            "colors",
+            "background_color",
         },
         "upscale": False,
     },
@@ -313,8 +353,15 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "acceleration": "regular",
         },
         "supports": {
-            "prompt", "image_size", "num_inference_steps", "guidance_scale",
-            "num_images", "output_format", "acceleration", "seed", "sync_mode",
+            "prompt",
+            "image_size",
+            "num_inference_steps",
+            "guidance_scale",
+            "num_images",
+            "output_format",
+            "acceleration",
+            "seed",
+            "sync_mode",
         },
         "upscale": False,
     },
@@ -341,7 +388,10 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "creativity": "medium",
         },
         "supports": {
-            "prompt", "aspect_ratio", "creativity", "seed",
+            "prompt",
+            "aspect_ratio",
+            "creativity",
+            "seed",
             "image_style_references",
         },
         "upscale": False,
@@ -361,7 +411,10 @@ FAL_MODELS: Dict[str, Dict[str, Any]] = {
             "creativity": "medium",
         },
         "supports": {
-            "prompt", "aspect_ratio", "creativity", "seed",
+            "prompt",
+            "aspect_ratio",
+            "creativity",
+            "seed",
             "image_style_references",
         },
         "upscale": False,
@@ -415,7 +468,10 @@ def _get_managed_fal_client(managed_gateway):
         managed_gateway.nous_user_token,
     )
     with _managed_fal_client_lock:
-        if _managed_fal_client is not None and _managed_fal_client_config == client_config:
+        if (
+            _managed_fal_client is not None
+            and _managed_fal_client_config == client_config
+        ):
             return _managed_fal_client
 
         # Resolve fal_client on the legacy module — preserves the test
@@ -455,12 +511,9 @@ def _submit_fal_request(model: str, arguments: Dict[str, Any]):
         if status is not None and 400 <= status < 500:
             gateway_message = ""
             if status in {401, 402, 403}:
-                gateway_message = (
-                    "\n\n"
-                    + nous_tool_gateway_unavailable_message(
-                        "managed FAL image generation",
-                        force_fresh=True,
-                    )
+                gateway_message = "\n\n" + nous_tool_gateway_unavailable_message(
+                    "managed FAL image generation",
+                    force_fresh=True,
                 )
             raise ValueError(
                 f"Nous Subscription gateway rejected model '{model}' "
@@ -485,6 +538,7 @@ def _resolve_fal_model() -> tuple:
     model_id = ""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config()
         img_cfg = cfg.get("image_gen") if isinstance(cfg, dict) else None
         if isinstance(img_cfg, dict):
@@ -504,7 +558,8 @@ def _resolve_fal_model() -> tuple:
     if model_id not in FAL_MODELS:
         logger.warning(
             "Unknown FAL model '%s' in config; falling back to %s",
-            model_id, DEFAULT_MODEL,
+            model_id,
+            DEFAULT_MODEL,
         )
         return DEFAULT_MODEL, FAL_MODELS[DEFAULT_MODEL]
 
@@ -647,7 +702,11 @@ def _agent_cache_base_for_env(env: Any) -> str | None:
             return f"{str(remote_home).rstrip('/')}/.clawk"
 
         env_name = env.__class__.__name__
-        if env_name in {"DockerEnvironment", "SingularityEnvironment", "ModalEnvironment"}:
+        if env_name in {
+            "DockerEnvironment",
+            "SingularityEnvironment",
+            "ModalEnvironment",
+        }:
             return "/root/.clawk"
 
     # If no environment has been created yet, only backends with deterministic
@@ -772,7 +831,8 @@ def image_generate_tool(
         if aspect_lc not in VALID_ASPECT_RATIOS:
             logger.warning(
                 "Invalid aspect_ratio '%s', defaulting to '%s'",
-                aspect_ratio, DEFAULT_ASPECT_RATIO,
+                aspect_ratio,
+                DEFAULT_ASPECT_RATIO,
             )
             aspect_lc = DEFAULT_ASPECT_RATIO
 
@@ -787,12 +847,18 @@ def image_generate_tool(
             overrides["output_format"] = output_format
 
         arguments = _build_fal_payload(
-            model_id, prompt, aspect_lc, seed=seed, overrides=overrides,
+            model_id,
+            prompt,
+            aspect_lc,
+            seed=seed,
+            overrides=overrides,
         )
 
         logger.info(
             "Generating image with %s (%s) — prompt: %s",
-            meta.get("display", model_id), model_id, prompt[:80],
+            meta.get("display", model_id),
+            model_id,
+            prompt[:80],
         )
 
         handler = _submit_fal_request(model_id, arguments=arguments)
@@ -835,7 +901,10 @@ def image_generate_tool(
         upscaled_count = sum(1 for img in formatted_images if img.get("upscaled"))
         logger.info(
             "Generated %s image(s) in %.1fs (%s upscaled) via %s",
-            len(formatted_images), generation_time, upscaled_count, model_id,
+            len(formatted_images),
+            generation_time,
+            upscaled_count,
+            model_id,
         )
 
         response_data = {
@@ -975,6 +1044,7 @@ if __name__ == "__main__":
 
     try:
         import fal_client  # noqa: F401
+
         print("✅ fal_client library available")
     except ImportError:
         print("❌ fal_client library not found — pip install fal-client")
@@ -1034,6 +1104,7 @@ def _read_configured_image_model():
     """Return the value of ``image_gen.model`` from config.yaml, or None."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None
         if isinstance(section, dict):
@@ -1058,6 +1129,7 @@ def _read_configured_image_provider():
     """
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None
         if isinstance(section, dict):
@@ -1130,7 +1202,8 @@ def _dispatch_to_plugin_provider(prompt: str, aspect_ratio: str):
     except Exception as exc:
         logger.warning(
             "Image gen provider '%s' raised: %s",
-            getattr(provider, "name", "?"), exc,
+            getattr(provider, "name", "?"),
+            exc,
         )
         return json.dumps({
             "success": False,
@@ -1175,6 +1248,6 @@ registry.register(
     handler=_handle_image_generate,
     check_fn=check_image_generation_requirements,
     requires_env=[],
-    is_async=False,   # sync fal_client API to avoid "Event loop is closed" in gateway
+    is_async=False,  # sync fal_client API to avoid "Event loop is closed" in gateway
     emoji="🎨",
 )

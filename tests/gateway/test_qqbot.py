@@ -3286,6 +3286,7 @@ class TestReadEventsClosedWsGuard:
 
     def _make_adapter(self, **extra):
         from gateway.platforms.qqbot import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b", **extra))
 
     def test_read_events_raises_when_ws_closed_on_entry(self):

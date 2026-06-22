@@ -93,6 +93,7 @@ def _disk_cache_path(home_path: Optional[Path] = None) -> Path:
     """
     if home_path is None:
         from clawk_constants import get_clawk_home
+
         home_path = get_clawk_home()
     return home_path / "cache" / _DISK_CACHE_BASENAME
 

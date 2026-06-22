@@ -40,7 +40,9 @@ from . import http, log, subproc
 from .relevance import token_overlap_relevance as _compute_relevance
 
 
-def extract_transcript_highlights(transcript: str, topic: str, limit: int = 5) -> list[str]:
+def extract_transcript_highlights(
+    transcript: str, topic: str, limit: int = 5
+) -> list[str]:
     """Extract quotable highlights from a YouTube transcript.
 
     Filters filler (subscribe, welcome back, etc.), scores sentences by
@@ -50,13 +52,13 @@ def extract_transcript_highlights(transcript: str, topic: str, limit: int = 5) -
     if not transcript:
         return []
 
-    sentences = re.split(r'(?<=[.!?])\s+', transcript)
+    sentences = re.split(r"(?<=[.!?])\s+", transcript)
 
     # Fallback for punctuation-free transcripts (common with auto-captions):
     # chunk into ~20-word segments so they pass the 8-50 word filter.
     if len(sentences) <= 1 and len(transcript.split()) > 50:
         words = transcript.split()
-        sentences = [' '.join(words[i:i+20]) for i in range(0, len(words), 20)]
+        sentences = [" ".join(words[i : i + 20]) for i in range(0, len(words), 20)]
 
     filler = [
         r"^(hey |hi |what's up|welcome back|in today's video|don't forget to)",
@@ -77,11 +79,11 @@ def extract_transcript_highlights(transcript: str, topic: str, limit: int = 5) -
             continue
 
         score = 0
-        if re.search(r'\d', sent):
+        if re.search(r"\d", sent):
             score += 2
-        if re.search(r'[A-Z][a-z]+', sent):
+        if re.search(r"[A-Z][a-z]+", sent):
             score += 1
-        if '?' in sent:
+        if "?" in sent:
             score += 1
         sent_lower = sent.lower()
         if any(w in sent_lower for w in topic_words):
@@ -175,22 +177,63 @@ def _extract_core_subject(topic: str) -> str:
     are intentionally KEPT — they're YouTube content types that improve search.
     """
     from .query import extract_core_subject
+
     # YouTube-specific noise set: smaller than default, keeps content-type words
     _YT_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome', 'killer',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features',
-        'recommendations', 'advice',
-        'prompt', 'prompts', 'prompting',
-        'methods', 'strategies', 'approaches',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
+        "prompt",
+        "prompts",
+        "prompting",
+        "methods",
+        "strategies",
+        "approaches",
         # Temporal/meta words — planner generates these but they don't
         # appear in YouTube titles, so strip them for better search.
-        'last', 'days', 'recent', 'recently', 'month', 'week',
-        'january', 'february', 'march', 'april', 'may', 'june',
-        'july', 'august', 'september', 'october', 'november', 'december',
-        '2025', '2026', '2027',
-        'music', 'public', 'appearances', 'developments', 'discussions', 'coverage',
+        "last",
+        "days",
+        "recent",
+        "recently",
+        "month",
+        "week",
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+        "2025",
+        "2026",
+        "2027",
+        "music",
+        "public",
+        "appearances",
+        "developments",
+        "discussions",
+        "coverage",
     })
     return extract_core_subject(topic, noise=_YT_NOISE)
 
@@ -200,7 +243,10 @@ def _infer_query_intent(topic: str) -> str:
     text = topic.lower().strip()
     if re.search(r"\b(vs|versus|compare|difference between)\b", text):
         return "comparison"
-    if re.search(r"\b(how to|tutorial|guide|setup|step by step|deploy|install|configure|troubleshoot|error|fix|debug)\b", text):
+    if re.search(
+        r"\b(how to|tutorial|guide|setup|step by step|deploy|install|configure|troubleshoot|error|fix|debug)\b",
+        text,
+    ):
         return "how_to"
     if re.search(r"\b(thoughts on|worth it|should i|opinion|review)\b", text):
         return "opinion"
@@ -224,7 +270,7 @@ def expand_youtube_queries(topic: str, depth: str) -> List[str]:
     queries = [core]
 
     # Include cleaned original topic as variant if different from core
-    original_clean = topic.strip().rstrip('?!.')
+    original_clean = topic.strip().rstrip("?!.")
     if core.lower() != original_clean.lower() and len(original_clean.split()) <= 8:
         queries.append(original_clean)
 
@@ -318,9 +364,15 @@ def search_youtube(
             continue
 
         video_id = video.get("id", "")
-        view_count = video.get("view_count") if video.get("view_count") is not None else 0
-        like_count = video.get("like_count") if video.get("like_count") is not None else 0
-        comment_count = video.get("comment_count") if video.get("comment_count") is not None else 0
+        view_count = (
+            video.get("view_count") if video.get("view_count") is not None else 0
+        )
+        like_count = (
+            video.get("like_count") if video.get("like_count") is not None else 0
+        )
+        comment_count = (
+            video.get("comment_count") if video.get("comment_count") is not None else 0
+        )
         upload_date = video.get("upload_date", "")  # YYYYMMDD
 
         # Convert YYYYMMDD to YYYY-MM-DD
@@ -341,7 +393,9 @@ def search_youtube(
                 "comments": comment_count,
             },
             "duration": video.get("duration"),
-            "relevance": _compute_relevance(core_topic, f"{video.get('title', '')} {description}"),
+            "relevance": _compute_relevance(
+                core_topic, f"{video.get('title', '')} {description}"
+            ),
             "why_relevant": f"YouTube: {video.get('title', core_topic)[:60]}",
             "description": description,
         })
@@ -352,7 +406,9 @@ def search_youtube(
         items = recent
         _log(f"Found {len(items)} videos within date range")
     else:
-        _log(f"Found {len(items)} videos ({len(recent)} within date range, keeping all)")
+        _log(
+            f"Found {len(items)} videos ({len(recent)} within date range, keeping all)"
+        )
 
     # Sort by views descending
     items.sort(key=lambda x: x["engagement"]["views"], reverse=True)
@@ -363,15 +419,17 @@ def search_youtube(
 def _clean_vtt(vtt_text: str) -> str:
     """Convert VTT subtitle format to clean plaintext."""
     # Strip VTT header
-    text = re.sub(r'^WEBVTT.*?\n\n', '', vtt_text, flags=re.DOTALL)
+    text = re.sub(r"^WEBVTT.*?\n\n", "", vtt_text, flags=re.DOTALL)
     # Strip timestamps
-    text = re.sub(r'\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}.*\n', '', text)
+    text = re.sub(
+        r"\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}.*\n", "", text
+    )
     # Strip position/alignment tags
-    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r"<[^>]+>", "", text)
     # Strip cue numbers
-    text = re.sub(r'^\d+\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^\d+\s*$", "", text, flags=re.MULTILINE)
     # Deduplicate overlapping lines
-    lines = text.strip().split('\n')
+    lines = text.strip().split("\n")
     seen = set()
     unique = []
     for line in lines:
@@ -379,7 +437,7 @@ def _clean_vtt(vtt_text: str) -> str:
         if stripped and stripped not in seen:
             seen.add(stripped)
             unique.append(stripped)
-    return re.sub(r'\s+', ' ', ' '.join(unique)).strip()
+    return re.sub(r"\s+", " ", " ".join(unique)).strip()
 
 
 _YT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -416,20 +474,25 @@ def _fetch_transcript_direct(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             html = resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+    ) as exc:
         _log(f"Direct transcript: failed to fetch watch page for {video_id}: {exc}")
         return None
 
     # Step 2: Extract captions URL from ytInitialPlayerResponse
     # YouTube embeds this as a JS variable in the page HTML
     match = re.search(
-        r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;(?:\s*var\s|\s*<\/script>)',
+        r"ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;(?:\s*var\s|\s*<\/script>)",
         html,
     )
     if not match:
         # Fallback: try the JSON embedded in the script tag
         match = re.search(
-            r'var\s+ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;',
+            r"var\s+ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;",
             html,
         )
     if not match:
@@ -439,7 +502,9 @@ def _fetch_transcript_direct(
     try:
         player_response = json.loads(match.group(1))
     except json.JSONDecodeError:
-        _log(f"Direct transcript: failed to parse ytInitialPlayerResponse for {video_id}")
+        _log(
+            f"Direct transcript: failed to parse ytInitialPlayerResponse for {video_id}"
+        )
         return None
 
     # Navigate to caption tracks
@@ -480,7 +545,12 @@ def _fetch_transcript_direct(
     try:
         with urllib.request.urlopen(vtt_req, timeout=timeout) as resp:
             vtt_text = resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+    ) as exc:
         _log(f"Direct transcript: failed to fetch VTT for {video_id}: {exc}")
         return None
 
@@ -505,11 +575,14 @@ def _fetch_transcript_ytdlp(video_id: str, temp_dir: str) -> Optional[str]:
         "--ignore-config",
         "--no-cookies-from-browser",
         "--write-auto-subs",
-        "--sub-lang", "en",
-        "--sub-format", "vtt",
+        "--sub-lang",
+        "en",
+        "--sub-format",
+        "vtt",
         "--skip-download",
         "--no-warnings",
-        "-o", f"{temp_dir}/%(id)s",
+        "-o",
+        f"{temp_dir}/%(id)s",
         f"https://www.youtube.com/watch?v={video_id}",
     ]
 
@@ -567,7 +640,9 @@ def fetch_transcript(
     if use_ytdlp:
         raw_vtt = _fetch_transcript_ytdlp(video_id, temp_dir)
         if not raw_vtt:
-            _log(f"yt-dlp transcript failed for {video_id}, trying direct HTTP fallback")
+            _log(
+                f"yt-dlp transcript failed for {video_id}, trying direct HTTP fallback"
+            )
             raw_vtt = _fetch_transcript_direct(video_id, status=status)
     else:
         if ssh_host:
@@ -585,7 +660,7 @@ def fetch_transcript(
     # Truncate to max words
     words = transcript.split()
     if len(words) > TRANSCRIPT_MAX_WORDS:
-        transcript = ' '.join(words[:TRANSCRIPT_MAX_WORDS]) + '...'
+        transcript = " ".join(words[:TRANSCRIPT_MAX_WORDS]) + "..."
 
     return transcript if transcript else None
 
@@ -628,7 +703,9 @@ def fetch_transcripts_parallel(
                     _log(f"Transcript fetch error for {vid}: {exc}")
                     results[vid] = None
                 except Exception as exc:
-                    _log(f"Unexpected transcript error for {vid}: {type(exc).__name__}: {exc}")
+                    _log(
+                        f"Unexpected transcript error for {vid}: {type(exc).__name__}: {exc}"
+                    )
                     results[vid] = None
 
     if out_captions_disabled is not None:
@@ -690,9 +767,12 @@ def search_and_transcribe(
     if transcript_limit > 0:
         attempt_count = min(len(items), transcript_limit * 3)
         candidate_ids = [item["video_id"] for item in items[:attempt_count]]
-        _log(f"Fetching transcripts for up to {attempt_count} videos (target: {transcript_limit}): {candidate_ids}")
+        _log(
+            f"Fetching transcripts for up to {attempt_count} videos (target: {transcript_limit}): {candidate_ids}"
+        )
         transcripts = fetch_transcripts_parallel(
-            candidate_ids, out_captions_disabled=captions_disabled_ids,
+            candidate_ids,
+            out_captions_disabled=captions_disabled_ids,
         )
     else:
         _log(f"Transcript limit is 0 for depth={depth}, skipping transcript fetch")
@@ -707,7 +787,8 @@ def search_and_transcribe(
         transcript = transcripts.get(vid)
         item["transcript_snippet"] = transcript or ""
         item["transcript_highlights"] = extract_transcript_highlights(
-            transcript or "", core_topic,
+            transcript or "",
+            core_topic,
         )
         item["captions_disabled"] = vid in captions_disabled_ids
 
@@ -895,18 +976,20 @@ def search_youtube_sc(
     # Parse into normalized items
     items = []
     for i, raw in enumerate(raw_items[:count]):
-        video_id = (
-            raw.get("id") or raw.get("video_id") or raw.get("videoId") or ""
-        )
+        video_id = raw.get("id") or raw.get("video_id") or raw.get("videoId") or ""
         title = raw.get("title", "")
-        channel = raw.get("channel") or raw.get("channel_name") or raw.get("uploader", "")
+        channel = (
+            raw.get("channel") or raw.get("channel_name") or raw.get("uploader", "")
+        )
         description = str(raw.get("description", ""))[:500]
         view_count = raw.get("view_count") or raw.get("views", 0)
         like_count = raw.get("like_count") or raw.get("likes", 0)
         comment_count = raw.get("comment_count") or raw.get("comments", 0)
 
         # Date: try multiple field names
-        date_str = raw.get("upload_date") or raw.get("date") or raw.get("published_at", "")
+        date_str = (
+            raw.get("upload_date") or raw.get("date") or raw.get("published_at", "")
+        )
         if date_str and len(date_str) == 8 and date_str.isdigit():
             date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
         elif date_str and "T" in date_str:
@@ -929,7 +1012,9 @@ def search_youtube_sc(
             },
             "duration": raw.get("duration"),
             "relevance": _compute_relevance(core_topic, f"{title} {description}"),
-            "why_relevant": f"YouTube: {title[:60]}" if title else f"YouTube: {core_topic}",
+            "why_relevant": f"YouTube: {title[:60]}"
+            if title
+            else f"YouTube: {core_topic}",
             "description": description,
         })
 
@@ -939,7 +1024,9 @@ def search_youtube_sc(
         items = recent
         _log(f"Found {len(items)} videos within date range")
     else:
-        _log(f"Found {len(items)} videos ({len(recent)} within date range, keeping all)")
+        _log(
+            f"Found {len(items)} videos ({len(recent)} within date range, keeping all)"
+        )
 
     # Sort by views
     items.sort(key=lambda x: x["engagement"]["views"], reverse=True)
@@ -948,7 +1035,9 @@ def search_youtube_sc(
     transcript_limit = TRANSCRIPT_LIMITS.get(depth, TRANSCRIPT_LIMITS["default"])
     if transcript_limit > 0 and items:
         attempt_count = min(len(items), transcript_limit * 3)
-        _log(f"Fetching SC transcripts for up to {attempt_count} videos (target: {transcript_limit})")
+        _log(
+            f"Fetching SC transcripts for up to {attempt_count} videos (target: {transcript_limit})"
+        )
         for item in items[:attempt_count]:
             vid = item["video_id"]
             if not vid:
@@ -956,7 +1045,8 @@ def search_youtube_sc(
             transcript = _sc_fetch_transcript(vid, token)
             item["transcript_snippet"] = transcript or ""
             item["transcript_highlights"] = extract_transcript_highlights(
-                transcript or "", core_topic,
+                transcript or "",
+                core_topic,
             )
     else:
         for item in items:

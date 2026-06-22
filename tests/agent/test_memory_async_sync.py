@@ -15,6 +15,7 @@ The fix dispatches provider work to a single-worker background executor.
 for session boundaries and deterministic tests. ``shutdown_all`` drains the
 executor with a bounded timeout so a wedged provider can't hang teardown.
 """
+
 import time
 
 import pytest
@@ -53,7 +54,9 @@ class _SlowProvider(MemoryProvider):
         time.sleep(self._delay)
         self.prefetch_done = True
 
-    def sync_turn(self, user_content, assistant_content, *, session_id: str = "", messages=None) -> None:
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id: str = "", messages=None
+    ) -> None:
         time.sleep(self._delay)
         self.sync_done = True
 
@@ -127,7 +130,9 @@ def test_writes_are_serialized_in_order():
     class _OrderProvider(_SlowProvider):
         _name = "order"
 
-        def sync_turn(self, user_content, assistant_content, *, session_id="", messages=None):
+        def sync_turn(
+            self, user_content, assistant_content, *, session_id="", messages=None
+        ):
             order.append(user_content)
 
     mgr = MemoryManager()

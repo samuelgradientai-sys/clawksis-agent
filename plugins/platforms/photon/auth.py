@@ -34,6 +34,7 @@ Credential storage mirrors every other Clawksis channel:
 Reference: https://github.com/photon-hq/cli and
 https://photon.codes/docs/api-reference/device-login/request-device-+-user-code
 """
+
 from __future__ import annotations
 
 import json
@@ -56,6 +57,7 @@ logger = logging.getLogger(__name__)
 
 class PhotonDashboardAuthError(RuntimeError):
     """Raised when Photon rejects a device-flow token for the dashboard API."""
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -85,10 +87,12 @@ E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
 # ---------------------------------------------------------------------------
 # auth.json helpers — share the file with the rest of clawksis-agent.
 
+
 def _auth_json_path() -> Path:
     """Resolve ``~/.clawksis/auth.json`` honouring the active Clawksis profile."""
     try:
         from clawk_constants import get_clawk_home
+
         return Path(get_clawk_home()) / "auth.json"
     except Exception:
         return Path(os.path.expanduser("~/.clawksis")) / "auth.json"
@@ -254,6 +258,7 @@ def _persist_runtime_env(spectrum_project_id: str, project_secret: str) -> None:
 # ---------------------------------------------------------------------------
 # Device login flow (RFC 8628)
 
+
 @dataclass
 class DeviceCode:
     device_code: str
@@ -267,6 +272,7 @@ class DeviceCode:
 @dataclass(frozen=True)
 class _DeviceTokenCandidate:
     """A token-like value extracted from the device-token response."""
+
     source: str
     token: str
 
@@ -313,7 +319,9 @@ def _raise_for_status(resp: Any, action: str) -> None:
 
 
 def request_device_code(
-    *, client_id: str = DEFAULT_CLIENT_ID, scope: Optional[str] = DEFAULT_SCOPE,
+    *,
+    client_id: str = DEFAULT_CLIENT_ID,
+    scope: Optional[str] = DEFAULT_SCOPE,
 ) -> DeviceCode:
     """POST ``/api/auth/device/code`` and return the device + user codes."""
     if httpx is None:
@@ -358,7 +366,9 @@ def poll_for_token(
         raise RuntimeError("httpx is required for Photon device login")
     url = f"{_dashboard_host()}/api/auth/device/token"
     deadline = time.time() + (timeout or code.expires_in or DEFAULT_POLL_TIMEOUT)
-    sleep = interval if interval is not None else (code.interval or DEFAULT_POLL_INTERVAL)
+    sleep = (
+        interval if interval is not None else (code.interval or DEFAULT_POLL_INTERVAL)
+    )
     while time.time() < deadline:
         time.sleep(sleep)
         try:
@@ -382,7 +392,8 @@ def poll_for_token(
             except (TypeError, ValueError, json.JSONDecodeError):
                 body = {}
             candidates = _device_response_token_candidates(
-                body, headers=getattr(resp, "headers", {}),
+                body,
+                headers=getattr(resp, "headers", {}),
             )
             if not candidates:
                 raise RuntimeError(
@@ -418,7 +429,8 @@ def poll_for_token(
             raise RuntimeError(f"Photon device token error: {err or resp.text}")
         logger.warning(
             "photon: device-token unexpected status %s: %s",
-            resp.status_code, resp.text[:200],
+            resp.status_code,
+            resp.text[:200],
         )
     raise TimeoutError("Photon device login timed out")
 
@@ -532,8 +544,7 @@ def _validated_dashboard_token(candidates: list) -> str:
     """Return the first candidate token that passes dashboard validation."""
     if not candidates:
         raise RuntimeError(
-            "Photon returned 200 but no token candidate in the device-token "
-            "response."
+            "Photon returned 200 but no token candidate in the device-token response."
         )
     dashboard_error: Optional[PhotonDashboardAuthError] = None
     last_error: Optional[BaseException] = None
@@ -583,6 +594,7 @@ def login_device_flow(
     if open_browser:
         try:
             import webbrowser
+
             target = code.verification_uri_complete or code.verification_uri
             webbrowser.open(target, new=2)
         except Exception:
@@ -610,6 +622,7 @@ def get_session(token: str) -> Dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 # Dashboard API: projects
+
 
 def _unwrap_list(data: Any) -> List[Dict[str, Any]]:
     if isinstance(data, list):
@@ -729,6 +742,7 @@ def regenerate_project_secret(token: str, project_id: str) -> str:
 # ---------------------------------------------------------------------------
 # Spectrum API: users
 
+
 def _normalize_phone(phone: str) -> str:
     """Reduce a phone string to ``+`` and digits for dedup comparison."""
     return re.sub(r"[^\d+]", "", phone or "")
@@ -745,7 +759,9 @@ def list_users(project_id: str, project_secret: str) -> List[Dict[str, Any]]:
 
 
 def find_user_by_phone(
-    project_id: str, project_secret: str, phone_number: str,
+    project_id: str,
+    project_secret: str,
+    phone_number: str,
 ) -> Optional[Dict[str, Any]]:
     """Return an existing Spectrum user with the given phone number, or None."""
     target = _normalize_phone(phone_number)
@@ -850,9 +866,8 @@ def load_user_numbers() -> Tuple[Optional[str], Optional[str]]:
         entry = user_entries[0] or {}
         if isinstance(entry, dict):
             phone = entry.get("phone_number") or entry.get("phoneNumber")
-            assigned = (
-                entry.get("assigned_phone_number")
-                or entry.get("assignedPhoneNumber")
+            assigned = entry.get("assigned_phone_number") or entry.get(
+                "assignedPhoneNumber"
             )
             if phone or assigned:
                 return (
@@ -863,7 +878,8 @@ def load_user_numbers() -> Tuple[Optional[str], Optional[str]]:
 
 
 def refresh_user_numbers(
-    project_id: str, project_secret: str,
+    project_id: str,
+    project_secret: str,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Refresh cached user numbers from Photon without provisioning anything."""
     phone, cached_assigned = load_user_numbers()
@@ -943,6 +959,7 @@ def _get_config_env_value(key: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Dashboard API: iMessage lines (the assigned number inventory)
 
+
 def list_lines(token: str, project_id: str) -> List[Dict[str, Any]]:
     """GET ``/api/projects/{id}/lines`` → ``[{id, platform, phoneNumber, status}]``."""
     if httpx is None:
@@ -954,14 +971,20 @@ def list_lines(token: str, project_id: str) -> List[Dict[str, Any]]:
 
 
 def add_line(
-    token: str, project_id: str, *, platform: str = "imessage",
+    token: str,
+    project_id: str,
+    *,
+    platform: str = "imessage",
 ) -> Dict[str, Any]:
     """POST ``/api/projects/{id}/lines`` to provision a new line."""
     if httpx is None:
         raise RuntimeError("httpx is required for Photon")
     url = f"{_dashboard_host()}/api/projects/{project_id}/lines"
     resp = httpx.post(
-        url, json={"platform": platform}, headers=_bearer(token), timeout=30.0,
+        url,
+        json={"platform": platform},
+        headers=_bearer(token),
+        timeout=30.0,
     )
     resp.raise_for_status()
     data = resp.json() or {}
@@ -971,7 +994,10 @@ def add_line(
 
 
 def get_imessage_line(
-    token: str, project_id: str, *, create_if_missing: bool = True,
+    token: str,
+    project_id: str,
+    *,
+    create_if_missing: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """Return the project's iMessage line (the number to text the agent).
 
@@ -993,6 +1019,7 @@ def get_imessage_line(
 # ---------------------------------------------------------------------------
 # Credential status (display-only — never emits raw secret material)
 
+
 def print_credential_summary(emit: Any = print) -> None:
     """Pretty-print the credential status table via the *emit* callback.
 
@@ -1003,8 +1030,7 @@ def print_credential_summary(emit: Any = print) -> None:
     """
     labels: Dict[str, str] = {}
     labels["device_token"] = (
-        "✓ stored" if load_photon_token()
-        else "✗ missing (run `clawk photon setup`)"
+        "✓ stored" if load_photon_token() else "✗ missing (run `clawk photon setup`)"
     )
     sid, sec = load_project_credentials()
     labels["spectrum_project_id"] = sid if sid else "✗ missing"
@@ -1033,9 +1059,11 @@ def print_credential_summary(emit: Any = print) -> None:
 
 def credential_summary() -> Dict[str, str]:
     """Return a fully pre-formatted credential status dict (no raw secrets)."""
+
     def _present_token() -> str:
         return (
-            "✓ stored" if load_photon_token()
+            "✓ stored"
+            if load_photon_token()
             else "✗ missing (run `clawk photon setup`)"
         )
 

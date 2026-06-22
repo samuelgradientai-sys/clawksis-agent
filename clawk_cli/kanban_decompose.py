@@ -162,16 +162,13 @@ def _extract_json_blob(raw: str) -> Optional[dict]:
 
 def _profile_author() -> str:
     """Mirror of ``clawk_cli.kanban._profile_author``."""
-    return (
-        os.environ.get("CLAWK_PROFILE")
-        or os.environ.get("USER")
-        or "decomposer"
-    )
+    return os.environ.get("CLAWK_PROFILE") or os.environ.get("USER") or "decomposer"
 
 
 def _load_config() -> dict:
     try:
         from clawk_cli.config import load_config
+
         return load_config() or {}
     except Exception:
         return {}
@@ -337,7 +334,9 @@ def decompose_task(
         )
     except Exception as exc:
         logger.info(
-            "decompose: API call failed for %s (%s)", task_id, exc,
+            "decompose: API call failed for %s (%s)",
+            task_id,
+            exc,
         )
         return DecomposeOutcome(task_id, False, f"LLM error: {type(exc).__name__}")
 
@@ -357,7 +356,11 @@ def decompose_task(
         # Fall back to single-task spec promotion (same effect as specify).
         new_title = parsed.get("title")
         new_body = parsed.get("body")
-        title_val = new_title.strip() if isinstance(new_title, str) and new_title.strip() else None
+        title_val = (
+            new_title.strip()
+            if isinstance(new_title, str) and new_title.strip()
+            else None
+        )
         body_val = new_body if isinstance(new_body, str) and new_body.strip() else None
         assignee_val = None
         if not task.assignee:
@@ -368,7 +371,9 @@ def decompose_task(
             )
         if title_val is None and body_val is None:
             return DecomposeOutcome(
-                task_id, False, "decomposer returned fanout=false with no title/body",
+                task_id,
+                False,
+                "decomposer returned fanout=false with no title/body",
             )
         with kb.connect_closing() as conn:
             ok = kb.specify_triage_task(
@@ -381,17 +386,24 @@ def decompose_task(
             )
         if not ok:
             return DecomposeOutcome(
-                task_id, False, "task moved out of triage before promotion",
+                task_id,
+                False,
+                "task moved out of triage before promotion",
             )
         return DecomposeOutcome(
-            task_id, True, "single task (no fanout)",
-            fanout=False, new_title=title_val,
+            task_id,
+            True,
+            "single task (no fanout)",
+            fanout=False,
+            new_title=title_val,
         )
 
     raw_tasks = parsed.get("tasks") or []
     if not isinstance(raw_tasks, list) or not raw_tasks:
         return DecomposeOutcome(
-            task_id, False, "decomposer returned fanout=true with empty tasks list",
+            task_id,
+            False,
+            "decomposer returned fanout=true with empty tasks list",
         )
 
     # Rewrite invalid assignees to the default fallback. Never leave a
@@ -400,12 +412,16 @@ def decompose_task(
     for idx, entry in enumerate(raw_tasks):
         if not isinstance(entry, dict):
             return DecomposeOutcome(
-                task_id, False, f"tasks[{idx}] is not an object",
+                task_id,
+                False,
+                f"tasks[{idx}] is not an object",
             )
         title = entry.get("title")
         if not isinstance(title, str) or not title.strip():
             return DecomposeOutcome(
-                task_id, False, f"tasks[{idx}].title is missing or empty",
+                task_id,
+                False,
+                f"tasks[{idx}].title is missing or empty",
             )
         body = entry.get("body")
         if not isinstance(body, str):
@@ -424,13 +440,20 @@ def decompose_task(
             logger.info(
                 "decompose: task %s child %d picked unknown assignee %r — "
                 "routing to default_assignee %r",
-                task_id, idx, assignee, default_assignee,
+                task_id,
+                idx,
+                assignee,
+                default_assignee,
             )
         parents = entry.get("parents") or []
         if not isinstance(parents, list):
             parents = []
         # Clean parent indices: drop non-int and out-of-range.
-        clean_parents = [p for p in parents if isinstance(p, int) and 0 <= p < len(raw_tasks) and p != idx]
+        clean_parents = [
+            p
+            for p in parents
+            if isinstance(p, int) and 0 <= p < len(raw_tasks) and p != idx
+        ]
         children.append({
             "title": title.strip()[:200],
             "body": body.strip(),
@@ -456,12 +479,17 @@ def decompose_task(
 
     if child_ids is None:
         return DecomposeOutcome(
-            task_id, False, "task moved out of triage before decomposition",
+            task_id,
+            False,
+            "task moved out of triage before decomposition",
         )
 
     return DecomposeOutcome(
-        task_id, True, f"decomposed into {len(child_ids)} children",
-        fanout=True, child_ids=child_ids,
+        task_id,
+        True,
+        f"decomposed into {len(child_ids)} children",
+        fanout=True,
+        child_ids=child_ids,
     )
 
 

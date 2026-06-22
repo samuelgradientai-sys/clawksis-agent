@@ -14,20 +14,21 @@ from . import dates, http
 # Brave Search API
 # ---------------------------------------------------------------------------
 
+
 def brave_search(
-    query: str, date_range: tuple[str, str], api_key: str, count: int = 5,
+    query: str,
+    date_range: tuple[str, str],
+    api_key: str,
+    count: int = 5,
 ) -> tuple[list[dict], dict]:
-    url = (
-        "https://api.search.brave.com/res/v1/web/search?"
-        + urllib.parse.urlencode(
-            {
-                "q": query,
-                "count": count,
-                "freshness": f"{date_range[0]}to{date_range[1]}",
-            }
-        )
+    url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode({
+        "q": query,
+        "count": count,
+        "freshness": f"{date_range[0]}to{date_range[1]}",
+    })
+    data = http.request(
+        "GET", url, headers={"X-Subscription-Token": api_key}, timeout=15
     )
-    data = http.request("GET", url, headers={"X-Subscription-Token": api_key}, timeout=15)
     items = []
     for i, r in enumerate((data.get("web", {}).get("results", []))[:count]):
         raw_date = r.get("page_age") or ""
@@ -44,7 +45,11 @@ def brave_search(
             "relevance": 0.8,
             "why_relevant": "Brave web search",
         })
-    artifact = {"label": "brave", "webSearchQueries": [query], "resultCount": len(items)}
+    artifact = {
+        "label": "brave",
+        "webSearchQueries": [query],
+        "resultCount": len(items),
+    }
     return items, artifact
 
 
@@ -52,11 +57,16 @@ def brave_search(
 # Exa AI Search
 # ---------------------------------------------------------------------------
 
+
 def exa_search(
-    query: str, date_range: tuple[str, str], api_key: str, count: int = 5,
+    query: str,
+    date_range: tuple[str, str],
+    api_key: str,
+    count: int = 5,
 ) -> tuple[list[dict], dict]:
     data = http.request(
-        "POST", "https://api.exa.ai/search",
+        "POST",
+        "https://api.exa.ai/search",
         headers={"x-api-key": api_key},
         json_data={
             "query": query,
@@ -76,7 +86,13 @@ def exa_search(
         if not url:
             continue
         raw_date = r.get("publishedDate") or ""
-        pub_date = _normalize_date(raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]) if raw_date else None
+        pub_date = (
+            _normalize_date(
+                raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]
+            )
+            if raw_date
+            else None
+        )
         if not _in_date_range(pub_date, date_range):
             continue
         items.append({
@@ -97,11 +113,16 @@ def exa_search(
 # Serper (Google Search wrapper)
 # ---------------------------------------------------------------------------
 
+
 def serper_search(
-    query: str, date_range: tuple[str, str], api_key: str, count: int = 5,
+    query: str,
+    date_range: tuple[str, str],
+    api_key: str,
+    count: int = 5,
 ) -> tuple[list[dict], dict]:
     data = http.request(
-        "POST", "https://google.serper.dev/search",
+        "POST",
+        "https://google.serper.dev/search",
         headers={"X-API-KEY": api_key},
         json_data={
             "q": query,
@@ -126,7 +147,11 @@ def serper_search(
             "relevance": 0.8,
             "why_relevant": "Serper web search",
         })
-    artifact = {"label": "serper", "webSearchQueries": [query], "resultCount": len(items)}
+    artifact = {
+        "label": "serper",
+        "webSearchQueries": [query],
+        "resultCount": len(items),
+    }
     return items, artifact
 
 
@@ -134,12 +159,20 @@ def serper_search(
 # Parallel AI Search
 # ---------------------------------------------------------------------------
 
+
 def parallel_search(
-    query: str, date_range: tuple[str, str], api_key: str, count: int = 5,
+    query: str,
+    date_range: tuple[str, str],
+    api_key: str,
+    count: int = 5,
 ) -> tuple[list[dict], dict]:
     data = http.request(
-        "POST", "https://api.parallel.ai/v1/search",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        "POST",
+        "https://api.parallel.ai/v1/search",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
         json_data={
             "search_queries": [query],
             "advanced_settings": {"max_results": count},
@@ -167,7 +200,11 @@ def parallel_search(
             "relevance": 0.8,
             "why_relevant": "Parallel AI web search",
         })
-    artifact = {"label": "parallel", "webSearchQueries": [query], "resultCount": len(items)}
+    artifact = {
+        "label": "parallel",
+        "webSearchQueries": [query],
+        "resultCount": len(items),
+    }
     return items, artifact
 
 
@@ -185,11 +222,10 @@ def _parse_serper_date(raw: str) -> str | None:
     return None
 
 
-
-
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
+
 
 def web_search(
     query: str,
@@ -229,7 +265,9 @@ def web_search(
     elif backend == "parallel":
         key = config.get("PARALLEL_API_KEY")
         if not key:
-            raise RuntimeError("PARALLEL_API_KEY is required when web_backend='parallel'")
+            raise RuntimeError(
+                "PARALLEL_API_KEY is required when web_backend='parallel'"
+            )
         items, artifact = parallel_search(query, date_range, key)
     elif backend != "none":
         raise ValueError(f"Unsupported web backend: {backend!r}")
@@ -298,6 +336,7 @@ def _enrich_reddit_items(items: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalize_date(value: object) -> str | None:
     if value is None:

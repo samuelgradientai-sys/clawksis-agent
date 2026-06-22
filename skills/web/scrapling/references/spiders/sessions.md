@@ -24,6 +24,7 @@ Override `configure_sessions()` on your spider to set up sessions. The `manager`
 from scrapling.spiders import Spider, Response
 from scrapling.fetchers import FetcherSession
 
+
 class MySpider(Spider):
     name = "my_spider"
     start_urls = ["https://example.com"]
@@ -60,6 +61,7 @@ Here's a practical example: use a fast HTTP session for listing pages and a stea
 from scrapling.spiders import Spider, Response
 from scrapling.fetchers import FetcherSession, AsyncStealthySession
 
+
 class ProductSpider(Spider):
     name = "products"
     start_urls = ["https://shop.example.com/products"]
@@ -69,10 +71,13 @@ class ProductSpider(Spider):
         manager.add("http", FetcherSession())
 
         # Stealth browser for protected product pages
-        manager.add("stealth", AsyncStealthySession(
-            headless=True,
-            network_idle=True,
-        ))
+        manager.add(
+            "stealth",
+            AsyncStealthySession(
+                headless=True,
+                network_idle=True,
+            ),
+        )
 
     async def parse(self, response: Response):
         for link in response.css("a.product::attr(href)").getall():
@@ -97,6 +102,7 @@ Sessions can also be different instances of the same class with different config
 ```python
 from scrapling.spiders import Spider, Response
 from scrapling.fetchers import FetcherSession
+
 
 class ProductSpider(Spider):
     name = "products"
@@ -179,18 +185,21 @@ async def parse(self, response: Response):
 from scrapling.spiders import Spider, Response
 from scrapling.fetchers import FetcherSession
 
+
 class ProductSpider(Spider):
     name = "products"
     start_urls = ["https://shop.example.com/products"]
 
     def configure_sessions(self, manager):
-        manager.add("http", FetcherSession(impersonate='chrome'))
+        manager.add("http", FetcherSession(impersonate="chrome"))
 
     async def parse(self, response: Response):
         # I don't want the follow request to impersonate a desktop Chrome like the previous request, but a mobile one
         # so I override it like this
         for link in response.css("a.product::attr(href)").getall():
-            yield response.follow(link, impersonate="chrome131_android", callback=self.parse_product)
+            yield response.follow(
+                link, impersonate="chrome131_android", callback=self.parse_product
+            )
 
         next_page = response.css("a.next::attr(href)").get()
         if next_page:

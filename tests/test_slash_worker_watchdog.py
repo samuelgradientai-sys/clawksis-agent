@@ -17,5 +17,6 @@ def test_is_orphaned_true_when_parent_create_time_mismatch():
 def test_is_orphaned_false_when_parent_alive_and_matches():
     me = psutil.Process()
     assert (
-        slash_worker._is_orphaned(me.pid, me.create_time(), getppid=lambda: me.pid) is False
+        slash_worker._is_orphaned(me.pid, me.create_time(), getppid=lambda: me.pid)
+        is False
     )

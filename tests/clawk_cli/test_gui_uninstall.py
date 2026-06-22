@@ -181,7 +181,10 @@ def test_userdata_dir_per_platform(monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
 
     monkeypatch.setattr(gu.sys, "platform", "darwin")
-    assert gu.desktop_userdata_dir() == home / "Library" / "Application Support" / "Clawksis"
+    assert (
+        gu.desktop_userdata_dir()
+        == home / "Library" / "Application Support" / "Clawksis"
+    )
 
     monkeypatch.setattr(gu.sys, "platform", "linux")
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
@@ -193,7 +196,10 @@ def test_userdata_dir_windows(monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setattr(gu.sys, "platform", "win32")
     monkeypatch.setenv("APPDATA", r"C:\Users\tester\AppData\Roaming")
-    assert gu.desktop_userdata_dir() == Path(r"C:\Users\tester\AppData\Roaming") / "Clawksis"
+    assert (
+        gu.desktop_userdata_dir()
+        == Path(r"C:\Users\tester\AppData\Roaming") / "Clawksis"
+    )
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlink semantics")
@@ -247,9 +253,12 @@ def test_run_uninstall_yes_keep_data_is_non_interactive(tmp_path, monkeypatch):
     monkeypatch.setattr(uninstall, "remove_node_symlinks", lambda h: [])
     monkeypatch.setattr(uninstall, "_discover_named_profiles", lambda: [])
     # Make input() blow up so a regression that reaches a prompt fails loudly.
-    monkeypatch.setattr("builtins.input", lambda *a, **k: pytest.fail("prompted in --yes mode"))
+    monkeypatch.setattr(
+        "builtins.input", lambda *a, **k: pytest.fail("prompted in --yes mode")
+    )
 
     from clawk_cli import gui_uninstall as gu_mod
+
     monkeypatch.setattr(gu_mod, "packaged_gui_app_paths", lambda: [])
     monkeypatch.setattr(gu_mod, "desktop_userdata_dir", lambda: tmp_path / "none")
 
@@ -280,9 +289,12 @@ def test_run_uninstall_yes_full_wipes_home(tmp_path, monkeypatch):
     monkeypatch.setattr(uninstall, "remove_wrapper_script", lambda: [])
     monkeypatch.setattr(uninstall, "remove_node_symlinks", lambda h: [])
     monkeypatch.setattr(uninstall, "_discover_named_profiles", lambda: [])
-    monkeypatch.setattr("builtins.input", lambda *a, **k: pytest.fail("prompted in --yes mode"))
+    monkeypatch.setattr(
+        "builtins.input", lambda *a, **k: pytest.fail("prompted in --yes mode")
+    )
 
     from clawk_cli import gui_uninstall as gu_mod
+
     monkeypatch.setattr(gu_mod, "packaged_gui_app_paths", lambda: [])
     monkeypatch.setattr(gu_mod, "desktop_userdata_dir", lambda: tmp_path / "none")
 
@@ -310,10 +322,13 @@ def test_uninstall_module_main_gui_mode(tmp_path, monkeypatch):
 
     monkeypatch.setattr(uninstall, "get_clawk_home", lambda: clawk_home)
     from clawk_cli import gui_uninstall as gu_mod
+
     monkeypatch.setattr(gu_mod, "packaged_gui_app_paths", lambda: [])
     monkeypatch.setattr(gu_mod, "desktop_userdata_dir", lambda: tmp_path / "none")
     monkeypatch.setattr(gu_mod, "get_clawk_home", lambda: clawk_home)
-    monkeypatch.setattr("builtins.input", lambda *a, **k: pytest.fail("prompted in module main"))
+    monkeypatch.setattr(
+        "builtins.input", lambda *a, **k: pytest.fail("prompted in module main")
+    )
 
     rc = uninstall.main(["--mode", "gui"])
     assert rc == 0
@@ -345,4 +360,3 @@ def test_uninstall_args_namespace_mode_mapping():
 
     full = uninstall._UninstallArgs(mode="full")
     assert full.gui is False and full.full is True and full.yes is True
-

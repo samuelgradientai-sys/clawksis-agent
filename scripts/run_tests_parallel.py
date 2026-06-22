@@ -72,7 +72,7 @@ _SKIP_PARTS = {"integration", "e2e", "docker"}
 
 # Per-file wall-clock cap. Override
 # via --file-timeout or CLAWK_TEST_FILE_TIMEOUT.
-_DEFAULT_FILE_TIMEOUT_SECONDS = 140.0 # set by observing the slowest file at commit time was ~100s in CI and adding some leeway
+_DEFAULT_FILE_TIMEOUT_SECONDS = 140.0  # set by observing the slowest file at commit time was ~100s in CI and adding some leeway
 
 # Duration cache: maps relative file paths to last-observed subprocess
 # wall-clock seconds. Used by ``--slice`` to distribute files across
@@ -109,8 +109,11 @@ def _count_tests(
                 ignore_args.extend(["--ignore", str(d)])
 
     cmd = [
-        sys.executable, "-m", "pytest",
-        "--co", "-q",
+        sys.executable,
+        "-m",
+        "pytest",
+        "--co",
+        "-q",
         *ignore_args,
         *[str(f) for f in files],
         *pytest_passthrough,
@@ -170,9 +173,7 @@ def _discover_files(roots: List[Path]) -> List[Path]:
         # skip for that subtree. Compute the set of skip-parts the user
         # opted into, and only filter files whose path crosses a
         # skip-part *outside* that opt-in.
-        root_skip_overrides = {
-            part for part in root.parts if part in _SKIP_PARTS
-        }
+        root_skip_overrides = {part for part in root.parts if part in _SKIP_PARTS}
         effective_skips = _SKIP_PARTS - root_skip_overrides
         for path in root.rglob("test_*.py"):
             if any(part in effective_skips for part in path.parts):
@@ -217,7 +218,6 @@ def _kill_tree(proc: "subprocess.Popen", pgid: int | None = None) -> None:
 
     if sys.platform == "win32":
         try:
-            
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                 stdout=subprocess.DEVNULL,
@@ -232,6 +232,7 @@ def _kill_tree(proc: "subprocess.Popen", pgid: int | None = None) -> None:
         if pgid is not None:
             try:
                 import signal as _signal
+
                 os.killpg(pgid, _signal.SIGKILL)  # windows-footgun: ok
             except (ProcessLookupError, PermissionError, OSError):
                 pass
@@ -275,7 +276,7 @@ def _run_one_file(
     bound a pathologically slow or hung file as a whole.
     """
     cmd = [sys.executable, "-m", "pytest", str(file), *pytest_args]
-    
+
     subproc_start = time.monotonic()
     # launch the pytest process
     proc = subprocess.Popen(
@@ -285,7 +286,7 @@ def _run_one_file(
         stderr=subprocess.STDOUT,
         text=True,
         # skipping writing bytecode because we're running a bunch of parallel python processes on the same code
-        env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'},
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         # POSIX: place the child at the head of its own process group so
         # _kill_tree can SIGKILL the group atomically.
         # Windows: this maps to CREATE_NEW_PROCESS_GROUP in CPython 3.12+;
@@ -314,10 +315,7 @@ def _run_one_file(
         except subprocess.TimeoutExpired:
             output = "(file timeout exceeded; output unavailable)"
         rc = 124  # de facto convention for "killed by timeout".
-        output = (
-            f"({file_timeout:.0f}s exceeded; "
-            f"process tree SIGKILL'd)\n{output}"
-        )
+        output = f"({file_timeout:.0f}s exceeded; process tree SIGKILL'd)\n{output}"
     except BaseException:
         # KeyboardInterrupt / runner crash — make sure no zombie
         # grandchildren outlive us.
@@ -328,7 +326,7 @@ def _run_one_file(
         # case it left grandchildren behind; already-dead is a no-op.
         _kill_tree(proc, pgid=pgid)
 
-        output +=  "\n"
+        output += "\n"
 
     if rc == 5:
         # No tests collected — every test in the file was filtered out.
@@ -360,7 +358,9 @@ def _parse_pytest_summary(output: str) -> dict[str, int]:
         if not line:
             continue
         # Match "N passed", "N failed", "N skipped", "N errors", "N xfailed", "N xpassed"
-        for m in re.finditer(r"(\d+)\s+(passed|failed|skipped|errors|xfailed|xpassed)", line):
+        for m in re.finditer(
+            r"(\d+)\s+(passed|failed|skipped|errors|xfailed|xpassed)", line
+        ):
             result[m.group(2)] = int(m.group(1))
         # Also match "N error" (singular — pytest uses this sometimes).
         for m in re.finditer(r"(\d+)\s+error\b", line):
@@ -483,12 +483,18 @@ def _print_inline_failure(
     tail = "\n".join(lines[-30:])
 
     print(flush=True)
-    print(f"  ╔╍ Failed: {rel} ╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍", flush=True)
+    print(
+        f"  ╔╍ Failed: {rel} ╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍",
+        flush=True,
+    )
     for line in tail.splitlines():
         print(f"  ║ {line}", flush=True)
     print(f"  ║", flush=True)
     print(f"  ║  Repro: {repro}", flush=True)
-    print(f"  ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍", flush=True)
+    print(
+        f"  ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍",
+        flush=True,
+    )
     print(flush=True)
 
 
@@ -624,7 +630,7 @@ def main() -> int:
         help=(
             "Per-file wall-clock cap in seconds. On timeout, the pytest "
             "subprocess and its full process tree are SIGKILL'd. "
-            f"Default: {_DEFAULT_FILE_TIMEOUT_SECONDS}s ({round(_DEFAULT_FILE_TIMEOUT_SECONDS/60)} min), env: CLAWK_TEST_FILE_TIMEOUT."
+            f"Default: {_DEFAULT_FILE_TIMEOUT_SECONDS}s ({round(_DEFAULT_FILE_TIMEOUT_SECONDS / 60)} min), env: CLAWK_TEST_FILE_TIMEOUT."
         ),
     )
     parser.add_argument(
@@ -671,7 +677,10 @@ def main() -> int:
             slice_index = int(idx_s)
             slice_count = int(count_s)
         except (ValueError, AttributeError):
-            print(f"error: --slice must be I/N (e.g. 1/4), got: {slice_raw!r}", file=sys.stderr)
+            print(
+                f"error: --slice must be I/N (e.g. 1/4), got: {slice_raw!r}",
+                file=sys.stderr,
+            )
             sys.exit(2)
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -693,7 +702,9 @@ def main() -> int:
 
     files = _discover_files(roots)
     if not files:
-        print(f"No test files discovered under {[str(r) for r in roots]}", file=sys.stderr)
+        print(
+            f"No test files discovered under {[str(r) for r in roots]}", file=sys.stderr
+        )
         return 1
 
     # Count individual tests per file via a single pytest --co pass.
@@ -719,7 +730,9 @@ def main() -> int:
     # Capture and print on completion (out-of-order is fine — keeps the
     # terminal clean rather than interleaving N parallel pytest outputs).
     failures: List[Tuple[Path, str, Dict[str, int]]] = []
-    file_times: List[Tuple[Path, float]] = []  # (file, subprocess_wall) for distribution
+    file_times: List[
+        Tuple[Path, float]
+    ] = []  # (file, subprocess_wall) for distribution
     started = time.monotonic()
     files_done = 0
     tests_done = 0
@@ -729,8 +742,18 @@ def main() -> int:
     tests_failed = 0
     lock = threading.Lock()
 
-    def _on_done(file: Path, started_at: float, fut: "Future[Tuple[Path, int, str, dict[str, int], float]]") -> None:
-        nonlocal files_done, tests_done, pass_count, fail_count, tests_passed, tests_failed
+    def _on_done(
+        file: Path,
+        started_at: float,
+        fut: "Future[Tuple[Path, int, str, dict[str, int], float]]",
+    ) -> None:
+        nonlocal \
+            files_done, \
+            tests_done, \
+            pass_count, \
+            fail_count, \
+            tests_passed, \
+            tests_failed
         n_tests = test_counts.get(file, 0)
         try:
             fpath, rc, output, summary, subproc_wall = fut.result()
@@ -741,9 +764,14 @@ def main() -> int:
                 fail_count += 1
                 failures.append((file, f"runner crashed: {exc!r}", {}))
                 _print_progress(
-                    tests_done, total_tests, file, 1,
+                    tests_done,
+                    total_tests,
+                    file,
+                    1,
                     time.monotonic() - started_at,
-                    repo_root, tests_passed, tests_failed,
+                    repo_root,
+                    tests_passed,
+                    tests_failed,
                     test_counts,
                     subproc_wall=0.0,
                 )
@@ -761,9 +789,14 @@ def main() -> int:
                 fail_count += 1
                 failures.append((fpath, output, summary))
             _print_progress(
-                tests_done, total_tests, fpath, rc,
+                tests_done,
+                total_tests,
+                fpath,
+                rc,
                 time.monotonic() - started_at,
-                repo_root, tests_passed, tests_failed,
+                repo_root,
+                tests_passed,
+                tests_failed,
                 test_counts,
                 file_summary=summary,
                 subproc_wall=subproc_wall,
@@ -789,7 +822,9 @@ def main() -> int:
     elapsed = time.monotonic() - started
     print()
     pct = (tests_done / total_tests * 100) if total_tests else 0
-    print(f"=== Summary: {len(files)} files, {tests_passed} tests passed, {tests_failed} failed ({pct:.0f}% complete) in {elapsed:.1f}s ({args.jobs} workers) ===")
+    print(
+        f"=== Summary: {len(files)} files, {tests_passed} tests passed, {tests_failed} failed ({pct:.0f}% complete) in {elapsed:.1f}s ({args.jobs} workers) ==="
+    )
 
     # Save durations for future --slice runs. Each slice writes its own
     # partial test_durations.json; a CI merge step joins them later.
@@ -816,9 +851,15 @@ def main() -> int:
         print()
         print(f"=== Per-file subprocess time distribution ===")
         print(f"  Files:   {len(times)}")
-        print(f"  Total subprocess CPU-wall: {total_subproc:.1f}s  (runner wall: {elapsed:.1f}s, parallelism: {args.jobs}x)")
-        print(f"  P50: {p50:.2f}s  P90: {p90:.2f}s  P95: {p95:.2f}s  P99: {p99:.2f}s  Max: {max_t:.2f}s")
-        print(f"  <1s: {fast} files ({fast/len(times)*100:.0f}%)  <2s: {fast_2s} files ({fast_2s/len(times)*100:.0f}%)")
+        print(
+            f"  Total subprocess CPU-wall: {total_subproc:.1f}s  (runner wall: {elapsed:.1f}s, parallelism: {args.jobs}x)"
+        )
+        print(
+            f"  P50: {p50:.2f}s  P90: {p90:.2f}s  P95: {p95:.2f}s  P99: {p99:.2f}s  Max: {max_t:.2f}s"
+        )
+        print(
+            f"  <1s: {fast} files ({fast / len(times) * 100:.0f}%)  <2s: {fast_2s} files ({fast_2s / len(times) * 100:.0f}%)"
+        )
         # Top 10 slowest files — likely the ones dragging the run.
         slowest = sorted(file_times, key=lambda x: x[1], reverse=True)[:10]
         print(f"  Top 10 slowest:")
@@ -835,22 +876,38 @@ def main() -> int:
         print()
         # Split: files with actual test failures vs non-zero exit for other reasons
         test_fail_files = [(f, s) for f, _o, s in failures if s.get("failed", 0) > 0]
-        all_passed_but_nonzero = [(f, s) for f, _o, s in failures
-                                  if s.get("failed", 0) == 0 and s.get("passed", 0) > 0]
-        no_tests_ran = [(f, s) for f, _o, s in failures
-                        if s.get("failed", 0) == 0 and s.get("passed", 0) == 0]
+        all_passed_but_nonzero = [
+            (f, s)
+            for f, _o, s in failures
+            if s.get("failed", 0) == 0 and s.get("passed", 0) > 0
+        ]
+        no_tests_ran = [
+            (f, s)
+            for f, _o, s in failures
+            if s.get("failed", 0) == 0 and s.get("passed", 0) == 0
+        ]
         if test_fail_files:
             total_tf = sum(s.get("failed", 0) for _, s in test_fail_files)
-            print(f"=== {len(test_fail_files)} file{'s' if len(test_fail_files) != 1 else ''} with test failures ({total_tf} test{'s' if total_tf != 1 else ''} failed) ===")
+            print(
+                f"=== {len(test_fail_files)} file{'s' if len(test_fail_files) != 1 else ''} with test failures ({total_tf} test{'s' if total_tf != 1 else ''} failed) ==="
+            )
             for file, s in test_fail_files:
                 nf = s.get("failed", 0)
-                print(f"  {_format_file(file, repo_root)}  ({nf} test{'s' if nf != 1 else ''} failed)")
+                print(
+                    f"  {_format_file(file, repo_root)}  ({nf} test{'s' if nf != 1 else ''} failed)"
+                )
         if all_passed_but_nonzero:
-            print(f"=== {len(all_passed_but_nonzero)} file{'s' if len(all_passed_but_nonzero) != 1 else ''} where all tests passed but pytest exited non-zero (warnings-as-errors, hook failures, etc.) ===")
+            print(
+                f"=== {len(all_passed_but_nonzero)} file{'s' if len(all_passed_but_nonzero) != 1 else ''} where all tests passed but pytest exited non-zero (warnings-as-errors, hook failures, etc.) ==="
+            )
             for file, s in all_passed_but_nonzero:
-                print(f"  {_format_file(file, repo_root)}  ({s.get('passed', 0)} passed)")
+                print(
+                    f"  {_format_file(file, repo_root)}  ({s.get('passed', 0)} passed)"
+                )
         if no_tests_ran:
-            print(f"=== {len(no_tests_ran)} file{'s' if len(no_tests_ran) != 1 else ''} where no tests ran (collection/import error, timeout before collection, etc.) ===")
+            print(
+                f"=== {len(no_tests_ran)} file{'s' if len(no_tests_ran) != 1 else ''} where no tests ran (collection/import error, timeout before collection, etc.) ==="
+            )
             for file, s in no_tests_ran:
                 print(f"  {_format_file(file, repo_root)}")
         return 1

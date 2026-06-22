@@ -95,8 +95,12 @@ def _occupy_session(runner: GatewayRunner, chat_id: str = "busy"):
 def _silence_global_gateway_hooks(monkeypatch):
     monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *args, **kwargs: [])
     monkeypatch.setattr("tools.slash_confirm.get_pending", lambda *args, **kwargs: None)
-    monkeypatch.setattr("tools.slash_confirm.clear_if_stale", lambda *args, **kwargs: None)
-    monkeypatch.setattr("tools.approval.has_blocking_approval", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        "tools.slash_confirm.clear_if_stale", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        "tools.approval.has_blocking_approval", lambda *args, **kwargs: False
+    )
 
 
 def test_new_session_gets_clean_error_at_active_session_limit(monkeypatch):
@@ -130,7 +134,9 @@ def test_existing_active_session_uses_busy_handling_at_limit(monkeypatch):
     runner._running_agents_ts[session_key] = 0
 
     async def fail_if_agent_runs(self_inner, ev, src, qk, generation):
-        raise AssertionError("_handle_message_with_agent should not run for busy follow-up")
+        raise AssertionError(
+            "_handle_message_with_agent should not run for busy follow-up"
+        )
 
     with patch.object(GatewayRunner, "_handle_message_with_agent", fail_if_agent_runs):
         result = asyncio.run(runner._handle_message(event))

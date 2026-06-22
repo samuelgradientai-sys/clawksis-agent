@@ -55,10 +55,12 @@ class TestMarkSeen:
 
     def test_preserves_other_config(self, tmp_path):
         cfg_path = tmp_path / "config.yaml"
-        cfg_path.write_text(yaml.safe_dump({
-            "model": {"default": "claude-sonnet-4.6"},
-            "display": {"skin": "default"},
-        }))
+        cfg_path.write_text(
+            yaml.safe_dump({
+                "model": {"default": "claude-sonnet-4.6"},
+                "display": {"skin": "default"},
+            })
+        )
 
         assert mark_seen(cfg_path, BUSY_INPUT_FLAG) is True
         loaded = yaml.safe_load(cfg_path.read_text())
@@ -69,9 +71,11 @@ class TestMarkSeen:
 
     def test_preserves_other_seen_flags(self, tmp_path):
         cfg_path = tmp_path / "config.yaml"
-        cfg_path.write_text(yaml.safe_dump({
-            "onboarding": {"seen": {TOOL_PROGRESS_FLAG: True}},
-        }))
+        cfg_path.write_text(
+            yaml.safe_dump({
+                "onboarding": {"seen": {TOOL_PROGRESS_FLAG: True}},
+            })
+        )
 
         assert mark_seen(cfg_path, BUSY_INPUT_FLAG) is True
         loaded = yaml.safe_load(cfg_path.read_text())

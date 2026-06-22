@@ -30,6 +30,7 @@ def _log(msg: str):
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject for X search queries."""
     from .query import extract_core_subject
+
     return extract_core_subject(topic, max_words=5, strip_suffixes=True)
 
 
@@ -53,6 +54,7 @@ def expand_xquik_queries(topic: str, depth: str) -> List[str]:
     # Add compound term variant for deep searches
     if len(queries) < 3:
         from .query import extract_compound_terms
+
         compounds = extract_compound_terms(topic)
         if compounds:
             or_parts = " OR ".join(f'"{t}"' for t in compounds[:3])
@@ -224,4 +226,5 @@ def _safe_int(value: Any) -> int | None:
 def _url_encode(text: str) -> str:
     """URL-encode a string using stdlib."""
     from urllib.parse import quote
+
     return quote(text, safe="")

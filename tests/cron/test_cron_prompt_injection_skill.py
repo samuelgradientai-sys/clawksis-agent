@@ -567,10 +567,13 @@ class TestScriptOutputNotStrictScanned:
         assert "\u200b" not in prompt
         assert "item oneitem two" in prompt
 
-    def test_command_shapes_in_context_from_output_not_blocked(self, cron_env, monkeypatch):
+    def test_command_shapes_in_context_from_output_not_blocked(
+        self, cron_env, monkeypatch
+    ):
         """context_from injects a prior job's output — also runtime data."""
         clawk_home, scheduler = cron_env
         import cron.jobs as cron_jobs
+
         output_root = clawk_home / "cron" / "output"
         monkeypatch.setattr(cron_jobs, "OUTPUT_DIR", output_root)
         upstream_dir = output_root / "abcdef123456"

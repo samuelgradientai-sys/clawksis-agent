@@ -24,6 +24,7 @@ def _log(msg: str):
 def _log_error(msg: str):
     log.source_log("xAI ERROR", msg, tty_only=False)
 
+
 # xAI uses responses endpoint with Agent Tools API
 XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
 
@@ -105,9 +106,7 @@ def search_x(
     # Use Agent Tools API with x_search tool (native date filtering)
     payload = {
         "model": model,
-        "tools": [
-            {"type": "x_search", "from_date": from_date, "to_date": to_date}
-        ],
+        "tools": [{"type": "x_search", "from_date": from_date, "to_date": to_date}],
         "input": [
             {
                 "role": "user",
@@ -139,7 +138,9 @@ def parse_x_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Check for API errors first
     if "error" in response and response["error"]:
         error = response["error"]
-        err_msg = error.get("message", str(error)) if isinstance(error, dict) else str(error)
+        err_msg = (
+            error.get("message", str(error)) if isinstance(error, dict) else str(error)
+        )
         _log_error(f"xAI API error: {err_msg}")
         if http.DEBUG:
             _log_error(f"Full error response: {json.dumps(response, indent=2)[:1000]}")
@@ -209,17 +210,29 @@ def parse_x_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         eng_raw = item.get("engagement")
         if isinstance(eng_raw, dict):
             engagement = {
-                "likes": int(eng_raw["likes"]) if eng_raw.get("likes") is not None else None,
-                "reposts": int(eng_raw["reposts"]) if eng_raw.get("reposts") is not None else None,
-                "replies": int(eng_raw["replies"]) if eng_raw.get("replies") is not None else None,
-                "quotes": int(eng_raw["quotes"]) if eng_raw.get("quotes") is not None else None,
+                "likes": int(eng_raw["likes"])
+                if eng_raw.get("likes") is not None
+                else None,
+                "reposts": int(eng_raw["reposts"])
+                if eng_raw.get("reposts") is not None
+                else None,
+                "replies": int(eng_raw["replies"])
+                if eng_raw.get("replies") is not None
+                else None,
+                "quotes": int(eng_raw["quotes"])
+                if eng_raw.get("quotes") is not None
+                else None,
             }
 
         clean_item = {
-            "id": f"X{i+1}",
-            "text": _safe_text(item.get("text", "")).strip()[:500],  # Truncate long text
+            "id": f"X{i + 1}",
+            "text": _safe_text(item.get("text", "")).strip()[
+                :500
+            ],  # Truncate long text
             "url": url,
-            "author_handle": _safe_text(item.get("author_handle", "")).strip().lstrip("@"),
+            "author_handle": _safe_text(item.get("author_handle", ""))
+            .strip()
+            .lstrip("@"),
             "date": item.get("date"),
             "engagement": engagement,
             "why_relevant": _safe_text(item.get("why_relevant", "")).strip(),
@@ -228,7 +241,7 @@ def parse_x_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         # Validate date format
         if clean_item["date"]:
-            if not re.match(r'^\d{4}-\d{2}-\d{2}$', str(clean_item["date"])):
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(clean_item["date"])):
                 clean_item["date"] = None
 
         clean_items.append(clean_item)

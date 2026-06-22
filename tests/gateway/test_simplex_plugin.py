@@ -34,9 +34,11 @@ _CORR_PREFIX = _simplex._CORR_PREFIX
 # 1. Platform enum (plugin-discovered, not bundled)
 # ---------------------------------------------------------------------------
 
+
 def test_platform_enum_resolves_via_plugin_scan():
     """The plugin filesystem scan should expose Platform("simplex")."""
     from gateway.config import Platform
+
     p = Platform("simplex")
     assert p.value == "simplex"
     # Identity stability — repeated lookups return the same pseudo-member
@@ -46,6 +48,7 @@ def test_platform_enum_resolves_via_plugin_scan():
 # ---------------------------------------------------------------------------
 # 2. check_requirements / validate_config / is_connected
 # ---------------------------------------------------------------------------
+
 
 def test_check_requirements_needs_url(monkeypatch):
     monkeypatch.delenv("SIMPLEX_WS_URL", raising=False)
@@ -66,6 +69,7 @@ def test_check_requirements_true_when_configured(monkeypatch):
 
 def test_validate_config_uses_env_or_extra():
     from gateway.config import PlatformConfig
+
     # Empty extra + no env → invalid
     cfg = PlatformConfig(enabled=True)
     assert validate_config(cfg) is False
@@ -76,6 +80,7 @@ def test_validate_config_uses_env_or_extra():
 
 def test_is_connected_mirrors_validate(monkeypatch):
     from gateway.config import PlatformConfig
+
     monkeypatch.delenv("SIMPLEX_WS_URL", raising=False)
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://x"})
     assert is_connected(cfg) is True
@@ -85,6 +90,7 @@ def test_is_connected_mirrors_validate(monkeypatch):
 # ---------------------------------------------------------------------------
 # 3. _env_enablement seeds PlatformConfig.extra
 # ---------------------------------------------------------------------------
+
 
 def test_env_enablement_none_when_unset(monkeypatch):
     monkeypatch.delenv("SIMPLEX_WS_URL", raising=False)
@@ -118,8 +124,10 @@ def test_env_enablement_home_channel_defaults_name_to_id(monkeypatch):
 # 4. Adapter init
 # ---------------------------------------------------------------------------
 
+
 def test_adapter_init_custom_url():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     assert adapter.ws_url == "ws://localhost:5225"
@@ -129,6 +137,7 @@ def test_adapter_init_custom_url():
 
 def test_adapter_init_default_url():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True)
     adapter = SimplexAdapter(cfg)
     assert adapter.ws_url == "ws://127.0.0.1:5225"
@@ -137,6 +146,7 @@ def test_adapter_init_default_url():
 def test_adapter_platform_identity():
     """Adapter should expose Platform("simplex") identity."""
     from gateway.config import Platform, PlatformConfig
+
     cfg = PlatformConfig(enabled=True)
     adapter = SimplexAdapter(cfg)
     assert adapter.platform is Platform("simplex")
@@ -145,6 +155,7 @@ def test_adapter_platform_identity():
 # ---------------------------------------------------------------------------
 # 5. Helper functions (magic-byte detection)
 # ---------------------------------------------------------------------------
+
 
 def test_guess_extension_png():
     assert _guess_extension(b"\x89PNG\r\n\x1a\n") == ".png"
@@ -178,8 +189,10 @@ def test_is_audio_ext():
 # 6. Correlation IDs
 # ---------------------------------------------------------------------------
 
+
 def test_corr_id_starts_with_prefix_and_tracks_pending():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     corr_id = adapter._make_corr_id()
@@ -189,6 +202,7 @@ def test_corr_id_starts_with_prefix_and_tracks_pending():
 
 def test_corr_id_pending_set_self_trims():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     adapter._max_pending_corr = 4
@@ -203,6 +217,7 @@ def test_corr_id_pending_set_self_trims():
 # 7. Outbound send (mocked WS)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_send_dm():
     """DMs use the bare ``@<id> text`` chat-command form.
@@ -213,6 +228,7 @@ async def test_send_dm():
     Clawksis deployment has been using in production for months.
     """
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
 
@@ -238,6 +254,7 @@ async def test_send_group():
     ID and survives newlines/quoting through ``json.dumps``.
     """
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
 
@@ -247,9 +264,7 @@ async def test_send_group():
     result = await adapter.send("group:grp-99", "Hello, group!")
     payload = json.loads(mock_ws.send.call_args[0][0])
     assert payload["cmd"].startswith("/_send #grp-99 json ")
-    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0][
-        "msgContent"
-    ]
+    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0]["msgContent"]
     assert msg_content == {"type": "text", "text": "Hello, group!"}
     assert result.success is True
 
@@ -257,6 +272,7 @@ async def test_send_group():
 @pytest.mark.asyncio
 async def test_send_when_ws_not_connected_does_not_crash():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     # No _ws assigned — _send_ws should drop quietly
@@ -268,9 +284,11 @@ async def test_send_when_ws_not_connected_does_not_crash():
 # 8. Inbound: filter own-echo by corrId prefix
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_handle_event_filters_own_corr_id():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     # Pretend we sent a command with this corrId
@@ -287,6 +305,7 @@ async def test_handle_event_filters_own_corr_id():
 # 9. Standalone (out-of-process) send for cron
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_standalone_send_missing_websockets(monkeypatch):
     """When websockets is unimportable, return a clean error dict.
@@ -296,6 +315,7 @@ async def test_standalone_send_missing_websockets(monkeypatch):
     pulling it out of ``sys.modules`` and pointing the finder at None.
     """
     import sys
+
     saved_websockets = sys.modules.pop("websockets", None)
     saved_meta = list(sys.meta_path)
 
@@ -345,6 +365,7 @@ async def test_standalone_send_defaults_to_local_daemon(monkeypatch):
         return DummyWs()
 
     import websockets
+
     monkeypatch.setattr(websockets, "connect", fake_connect)
 
     result = await _standalone_send(pconfig, "contact-42", "hi")
@@ -355,6 +376,7 @@ async def test_standalone_send_defaults_to_local_daemon(monkeypatch):
 @pytest.mark.asyncio
 async def test_health_monitor_does_not_reconnect_quiet_healthy_ws(monkeypatch):
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     adapter._running = True
@@ -375,6 +397,7 @@ async def test_health_monitor_does_not_reconnect_quiet_healthy_ws(monkeypatch):
 # ---------------------------------------------------------------------------
 # 10. register() — plugin-side metadata
 # ---------------------------------------------------------------------------
+
 
 def test_register_calls_register_platform():
     ctx = MagicMock()
@@ -401,6 +424,7 @@ def test_register_calls_register_platform():
 # ---------------------------------------------------------------------------
 # Inbound attachment message type classification
 # ---------------------------------------------------------------------------
+
 
 def _make_file_chat_item(file_path: str, file_name: str) -> dict:
     """Minimal direct-chat rcvMsgContent item carrying a completed file."""
@@ -440,7 +464,9 @@ async def test_document_file_sets_document_type():
         dispatched.append(event)
 
     adapter.handle_message = _capture
-    await adapter._handle_chat_item(_make_file_chat_item("/tmp/report.pdf", "report.pdf"))
+    await adapter._handle_chat_item(
+        _make_file_chat_item("/tmp/report.pdf", "report.pdf")
+    )
 
     assert dispatched, "_handle_chat_item did not dispatch any event"
     assert dispatched[0].message_type == MessageType.DOCUMENT

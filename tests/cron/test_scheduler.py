@@ -7,7 +7,15 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 
-from cron.scheduler import _resolve_origin, _resolve_delivery_target, _deliver_result, _send_media_via_adapter, run_job, SILENT_MARKER, _build_job_prompt
+from cron.scheduler import (
+    _resolve_origin,
+    _resolve_delivery_target,
+    _deliver_result,
+    _send_media_via_adapter,
+    run_job,
+    SILENT_MARKER,
+    _build_job_prompt,
+)
 from tools.env_passthrough import clear_env_passthrough
 from tools.credential_files import clear_credential_files
 
@@ -163,7 +171,9 @@ class TestResolveDeliveryTarget:
             "thread_id": "42",
         }
 
-    def test_telegram_cron_thread_id_sets_thread_when_home_thread_unset(self, monkeypatch):
+    def test_telegram_cron_thread_id_sets_thread_when_home_thread_unset(
+        self, monkeypatch
+    ):
         """TELEGRAM_CRON_THREAD_ID supplies a thread when no home thread is configured."""
         monkeypatch.setenv("TELEGRAM_HOME_CHANNEL", "-1001234567890")
         monkeypatch.delenv("TELEGRAM_HOME_CHANNEL_THREAD_ID", raising=False)
@@ -175,7 +185,9 @@ class TestResolveDeliveryTarget:
             "thread_id": "42",
         }
 
-    def test_telegram_cron_thread_id_does_not_leak_to_other_platforms(self, monkeypatch):
+    def test_telegram_cron_thread_id_does_not_leak_to_other_platforms(
+        self, monkeypatch
+    ):
         """TELEGRAM_CRON_THREAD_ID is Telegram-only; other platforms keep their own thread resolution."""
         monkeypatch.setenv("DISCORD_HOME_CHANNEL", "parent-42")
         monkeypatch.setenv("DISCORD_HOME_CHANNEL_THREAD_ID", "topic-7")
@@ -437,18 +449,33 @@ class TestRoutingIntents:
         assert "telegram" in platforms
         assert "discord" in platforms
         # Every target is unique on (platform, chat_id, thread_id).
-        keys = [(t["platform"].lower(), str(t["chat_id"]), t.get("thread_id")) for t in targets]
+        keys = [
+            (t["platform"].lower(), str(t["chat_id"]), t.get("thread_id"))
+            for t in targets
+        ]
         assert len(keys) == len(set(keys))
 
     def test_all_with_no_connected_channels_returns_empty(self, monkeypatch):
         """deliver='all' with nothing connected returns [] — delivery is recorded as failed upstream."""
         from cron.scheduler import _resolve_delivery_targets
 
-        for var in ("TELEGRAM_HOME_CHANNEL", "DISCORD_HOME_CHANNEL", "SLACK_HOME_CHANNEL",
-                    "SIGNAL_HOME_CHANNEL", "MATRIX_HOME_ROOM", "MATTERMOST_HOME_CHANNEL",
-                    "SMS_HOME_CHANNEL", "EMAIL_HOME_ADDRESS", "DINGTALK_HOME_CHANNEL",
-                    "FEISHU_HOME_CHANNEL", "WECOM_HOME_CHANNEL", "WEIXIN_HOME_CHANNEL",
-                    "BLUEBUBBLES_HOME_CHANNEL", "QQBOT_HOME_CHANNEL", "QQ_HOME_CHANNEL"):
+        for var in (
+            "TELEGRAM_HOME_CHANNEL",
+            "DISCORD_HOME_CHANNEL",
+            "SLACK_HOME_CHANNEL",
+            "SIGNAL_HOME_CHANNEL",
+            "MATRIX_HOME_ROOM",
+            "MATTERMOST_HOME_CHANNEL",
+            "SMS_HOME_CHANNEL",
+            "EMAIL_HOME_ADDRESS",
+            "DINGTALK_HOME_CHANNEL",
+            "FEISHU_HOME_CHANNEL",
+            "WECOM_HOME_CHANNEL",
+            "WEIXIN_HOME_CHANNEL",
+            "BLUEBUBBLES_HOME_CHANNEL",
+            "QQBOT_HOME_CHANNEL",
+            "QQ_HOME_CHANNEL",
+        ):
             monkeypatch.delenv(var, raising=False)
 
         assert _resolve_delivery_targets({"deliver": "all", "origin": None}) == []
@@ -484,7 +511,9 @@ class TestRoutingIntents:
         for token in ("ALL", "All", "all"):
             targets = _resolve_delivery_targets({"deliver": token, "origin": None})
             platforms = sorted(t["platform"].lower() for t in targets)
-            assert platforms == ["discord", "telegram"], f"token={token!r} -> {platforms}"
+            assert platforms == ["discord", "telegram"], (
+                f"token={token!r} -> {platforms}"
+            )
 
 
 class TestDeliverResultWrapping:
@@ -510,8 +539,13 @@ class TestDeliverResultWrapping:
         mock_cfg = MagicMock()
         mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock:
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+        ):
             job = {
                 "id": "test-job",
                 "name": "daily-report",
@@ -521,7 +555,9 @@ class TestDeliverResultWrapping:
             _deliver_result(job, "Here is today's summary.")
 
         send_mock.assert_called_once()
-        sent_content = send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        sent_content = (
+            send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        )
         assert "⏰ daily-report" in sent_content
         assert "Here is today's summary." in sent_content
         # Natural header drops the robotic job_id / divider / management footer.
@@ -538,8 +574,13 @@ class TestDeliverResultWrapping:
         mock_cfg = MagicMock()
         mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock:
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+        ):
             job = {
                 "id": "abc-123",
                 "deliver": "origin",
@@ -547,7 +588,9 @@ class TestDeliverResultWrapping:
             }
             _deliver_result(job, "Output.")
 
-        sent_content = send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        sent_content = (
+            send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        )
         assert "⏰ abc-123" in sent_content
 
     def test_delivery_skips_wrapping_when_config_disabled(self):
@@ -559,9 +602,17 @@ class TestDeliverResultWrapping:
         mock_cfg = MagicMock()
         mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+        ):
             job = {
                 "id": "test-job",
                 "name": "daily-report",
@@ -571,7 +622,9 @@ class TestDeliverResultWrapping:
             _deliver_result(job, "Clean output only.")
 
         send_mock.assert_called_once()
-        sent_content = send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        sent_content = (
+            send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+        )
         assert sent_content == "Clean output only."
         assert "Cronjob Response" not in sent_content
         assert "The agent cannot see" not in sent_content
@@ -579,6 +632,7 @@ class TestDeliverResultWrapping:
     def test_delivery_extracts_media_tags_before_send(self, tmp_path, monkeypatch):
         """Cron delivery should pass MEDIA attachments separately to the send helper."""
         from gateway.config import Platform
+
         media_path = self._safe_media_path(tmp_path, monkeypatch, "test-voice.ogg")
 
         pconfig = MagicMock()
@@ -586,9 +640,17 @@ class TestDeliverResultWrapping:
         mock_cfg = MagicMock()
         mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+        ):
             job = {
                 "id": "voice-job",
                 "deliver": "origin",
@@ -610,6 +672,7 @@ class TestDeliverResultWrapping:
         as literal 'MEDIA:/path' text."""
         from gateway.config import Platform
         from concurrent.futures import Future
+
         media_path = self._safe_media_path(tmp_path, monkeypatch, "cron-voice.mp3")
 
         adapter = AsyncMock()
@@ -637,9 +700,14 @@ class TestDeliverResultWrapping:
             "origin": {"platform": "discord", "chat_id": "9876"},
         }
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+        ):
             _deliver_result(
                 job,
                 f"Here is TTS\nMEDIA:{media_path}",
@@ -662,6 +730,7 @@ class TestDeliverResultWrapping:
         """Image MEDIA files should be routed to send_image_file, not send_voice."""
         from gateway.config import Platform
         from concurrent.futures import Future
+
         media_path = self._safe_media_path(tmp_path, monkeypatch, "chart.png")
 
         adapter = AsyncMock()
@@ -688,9 +757,14 @@ class TestDeliverResultWrapping:
             "origin": {"platform": "discord", "chat_id": "1234"},
         }
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+        ):
             _deliver_result(
                 job,
                 f"Chart attached\nMEDIA:{media_path}",
@@ -706,6 +780,7 @@ class TestDeliverResultWrapping:
         """When content is ONLY a MEDIA tag with no text, media should still be sent."""
         from gateway.config import Platform
         from concurrent.futures import Future
+
         media_path = self._safe_media_path(tmp_path, monkeypatch, "voice.ogg")
 
         adapter = AsyncMock()
@@ -731,9 +806,14 @@ class TestDeliverResultWrapping:
             "origin": {"platform": "telegram", "chat_id": "999"},
         }
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+        ):
             _deliver_result(
                 job,
                 f"[[audio_as_voice]]\nMEDIA:{media_path}",
@@ -775,9 +855,14 @@ class TestDeliverResultWrapping:
             "origin": {"platform": "telegram", "chat_id": "555"},
         }
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+        ):
             _deliver_result(
                 job,
                 "Report\nMEDIA:/tmp/chart.png",
@@ -798,9 +883,14 @@ class TestDeliverResultWrapping:
         mock_cfg = MagicMock()
         mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})), \
-             patch("gateway.mirror.mirror_to_session") as mirror_mock:
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("gateway.mirror.mirror_to_session") as mirror_mock,
+        ):
             job = {
                 "id": "test-job",
                 "deliver": "origin",
@@ -830,8 +920,13 @@ class TestDeliverResultWrapping:
             },
         }
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock:
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+        ):
             _deliver_result(job, "hello")
 
         send_mock.assert_called_once()
@@ -877,20 +972,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "test-key",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "test-key",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -924,20 +1021,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "test-key",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "test-key",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -961,20 +1060,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.side_effect = RuntimeError("boom")
             mock_agent_cls.return_value = mock_agent
@@ -998,21 +1099,23 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls, \
-             patch("agent.auxiliary_client.cleanup_stale_async_clients") as cleanup_mock:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+            patch("agent.auxiliary_client.cleanup_stale_async_clients") as cleanup_mock,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1049,8 +1152,14 @@ class TestRunJobSessionPersistence:
             "enabled_toolsets": ["web", "terminal", "file"],
         }
         fake_db, patches = self._make_run_job_patches(tmp_path)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1070,10 +1179,7 @@ class TestRunJobSessionPersistence:
         precedence over enabled_toolsets, so this stops the bypass.
         """
         (tmp_path / "config.yaml").write_text(
-            "agent:\n"
-            "  disabled_toolsets:\n"
-            "    - terminal\n"
-            "    - file\n",
+            "agent:\n  disabled_toolsets:\n    - terminal\n    - file\n",
             encoding="utf-8",
         )
         job = {
@@ -1083,8 +1189,14 @@ class TestRunJobSessionPersistence:
             "enabled_toolsets": ["web", "terminal", "file"],
         }
         fake_db, patches = self._make_run_job_patches(tmp_path)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1092,10 +1204,16 @@ class TestRunJobSessionPersistence:
 
         kwargs = mock_agent_cls.call_args.kwargs
         assert set(kwargs["disabled_toolsets"]) >= {
-            "cronjob", "messaging", "clarify", "terminal", "file",
+            "cronjob",
+            "messaging",
+            "clarify",
+            "terminal",
+            "file",
         }
 
-    def test_run_job_enabled_toolsets_resolves_from_platform_config_when_not_set(self, tmp_path):
+    def test_run_job_enabled_toolsets_resolves_from_platform_config_when_not_set(
+        self, tmp_path
+    ):
         """When a job has no explicit enabled_toolsets, the scheduler now
         resolves them from ``clawk tools`` platform config for ``cron``
         (PR #14xxx — blanket fix for Norbert's surprise ``moa`` run).
@@ -1110,8 +1228,14 @@ class TestRunJobSessionPersistence:
             "prompt": "hello",
         }
         fake_db, patches = self._make_run_job_patches(tmp_path)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1138,12 +1262,18 @@ class TestRunJobSessionPersistence:
         fake_db, patches = self._make_run_job_patches(tmp_path)
         # Even if the user has ``clawk tools`` configured to enable web+file
         # for cron, the per-job override wins.
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patch("run_agent.AIAgent") as mock_agent_cls, \
-             patch(
-                 "clawk_cli.tools_config._get_platform_tools",
-                 return_value={"web", "file"},
-             ):
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patch("run_agent.AIAgent") as mock_agent_cls,
+            patch(
+                "clawk_cli.tools_config._get_platform_tools",
+                return_value={"web", "file"},
+            ),
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1165,20 +1295,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             # Agent did work via tools but returned no text
             mock_agent.run_conversation.return_value = {"final_response": ""}
@@ -1241,20 +1373,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = agent_result
             mock_agent_cls.return_value = mock_agent
@@ -1280,20 +1414,22 @@ class TestRunJobSessionPersistence:
         }
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {
                 "final_response": "all good",
@@ -1327,13 +1463,15 @@ class TestRunJobSessionPersistence:
 
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler.get_due_jobs", return_value=[job]), \
-             patch("cron.scheduler.advance_next_run"), \
-             patch("cron.scheduler.mark_job_run") as mock_mark, \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("cron.scheduler.run_job", return_value=(True, "output", "", None)):
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler.get_due_jobs", return_value=[job]),
+            patch("cron.scheduler.advance_next_run"),
+            patch("cron.scheduler.mark_job_run") as mock_mark,
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("cron.scheduler.run_job", return_value=(True, "output", "", None)),
+        ):
             tick(verbose=False)
 
         # Should be called with success=False because final_response is empty
@@ -1343,7 +1481,9 @@ class TestRunJobSessionPersistence:
         assert call_args[0][1] is False  # success should be False
         assert "empty" in call_args[0][2].lower()  # error should mention empty
 
-    def test_run_job_sets_auto_delivery_env_from_dotenv_home_channel(self, tmp_path, monkeypatch):
+    def test_run_job_sets_auto_delivery_env_from_dotenv_home_channel(
+        self, tmp_path, monkeypatch
+    ):
         job = {
             "id": "test-job",
             "name": "test",
@@ -1365,23 +1505,32 @@ class TestRunJobSessionPersistence:
 
             def run_conversation(self, *args, **kwargs):
                 from gateway.session_context import get_session_env
-                seen["platform"] = get_session_env("CLAWK_CRON_AUTO_DELIVER_PLATFORM") or None
-                seen["chat_id"] = get_session_env("CLAWK_CRON_AUTO_DELIVER_CHAT_ID") or None
-                seen["thread_id"] = get_session_env("CLAWK_CRON_AUTO_DELIVER_THREAD_ID") or None
+
+                seen["platform"] = (
+                    get_session_env("CLAWK_CRON_AUTO_DELIVER_PLATFORM") or None
+                )
+                seen["chat_id"] = (
+                    get_session_env("CLAWK_CRON_AUTO_DELIVER_CHAT_ID") or None
+                )
+                seen["thread_id"] = (
+                    get_session_env("CLAWK_CRON_AUTO_DELIVER_THREAD_ID") or None
+                )
                 return {"final_response": "ok"}
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent", FakeAgent):
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent", FakeAgent),
+        ):
             success, output, final_response, error = run_job(job)
 
         assert success is True
@@ -1398,7 +1547,9 @@ class TestRunJobSessionPersistence:
         assert os.getenv("CLAWK_CRON_AUTO_DELIVER_THREAD_ID") is None
         fake_db.close.assert_called_once()
 
-    def test_run_job_clears_stale_auto_delivery_thread_id_between_jobs(self, tmp_path, monkeypatch):
+    def test_run_job_clears_stale_auto_delivery_thread_id_between_jobs(
+        self, tmp_path, monkeypatch
+    ):
         jobs = [
             {
                 "id": "threaded-job",
@@ -1427,27 +1578,30 @@ class TestRunJobSessionPersistence:
             def run_conversation(self, *args, **kwargs):
                 from gateway.session_context import get_session_env
 
-                seen.append(
-                    {
-                        "platform": get_session_env("CLAWK_CRON_AUTO_DELIVER_PLATFORM") or None,
-                        "chat_id": get_session_env("CLAWK_CRON_AUTO_DELIVER_CHAT_ID") or None,
-                        "thread_id": get_session_env("CLAWK_CRON_AUTO_DELIVER_THREAD_ID") or None,
-                    }
-                )
+                seen.append({
+                    "platform": get_session_env("CLAWK_CRON_AUTO_DELIVER_PLATFORM")
+                    or None,
+                    "chat_id": get_session_env("CLAWK_CRON_AUTO_DELIVER_CHAT_ID")
+                    or None,
+                    "thread_id": get_session_env("CLAWK_CRON_AUTO_DELIVER_THREAD_ID")
+                    or None,
+                })
                 return {"final_response": "ok"}
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent", FakeAgent):
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent", FakeAgent),
+        ):
             for job in jobs:
                 success, output, final_response, error = run_job(job)
                 assert success is True
@@ -1492,15 +1646,22 @@ class TestRunJobConfigLogging:
         # resolution and MCP discovery, both of which can spawn subprocesses
         # / hit the network and have caused this test to time out on CI
         # (>30s wall clock) under load. See PR #33661 follow-up.
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value={"provider": "openrouter", "api_key": "x",
-                                 "base_url": "https://example.invalid",
-                                 "api_mode": "chat_completions"}), \
-             patch("tools.mcp_tool.discover_mcp_tools", return_value=[]), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "provider": "openrouter",
+                    "api_key": "x",
+                    "base_url": "https://example.invalid",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("tools.mcp_tool.discover_mcp_tools", return_value=[]),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1508,8 +1669,9 @@ class TestRunJobConfigLogging:
             with caplog.at_level(logging.WARNING, logger="cron.scheduler"):
                 run_job(job)
 
-        assert any("failed to load config.yaml" in r.message for r in caplog.records), \
+        assert any("failed to load config.yaml" in r.message for r in caplog.records), (
             f"Expected 'failed to load config.yaml' warning in logs, got: {[r.message for r in caplog.records]}"
+        )
 
     def test_bad_prefill_messages_is_logged(self, caplog, tmp_path):
         """When the prefill messages file contains invalid JSON, a warning should be logged."""
@@ -1526,15 +1688,22 @@ class TestRunJobConfigLogging:
             "prompt": "hello",
         }
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value={"provider": "openrouter", "api_key": "x",
-                                 "base_url": "https://example.invalid",
-                                 "api_mode": "chat_completions"}), \
-             patch("tools.mcp_tool.discover_mcp_tools", return_value=[]), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "provider": "openrouter",
+                    "api_key": "x",
+                    "base_url": "https://example.invalid",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("tools.mcp_tool.discover_mcp_tools", return_value=[]),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1542,8 +1711,11 @@ class TestRunJobConfigLogging:
             with caplog.at_level(logging.WARNING, logger="cron.scheduler"):
                 run_job(job)
 
-        assert any("failed to parse prefill messages" in r.message for r in caplog.records), \
+        assert any(
+            "failed to parse prefill messages" in r.message for r in caplog.records
+        ), (
             f"Expected 'failed to parse prefill messages' warning in logs, got: {[r.message for r in caplog.records]}"
+        )
 
 
 class TestRunJobConfigEnvVarExpansion:
@@ -1564,13 +1736,17 @@ class TestRunJobConfigEnvVarExpansion:
         job = {"id": "env-job", "name": "env test", "prompt": "hi"}
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value=self._RUNTIME), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=self._RUNTIME,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1589,22 +1765,25 @@ class TestRunJobConfigEnvVarExpansion:
         prefill = [{"role": "system", "content": "legacy cron prefill"}]
         (tmp_path / "prefill.json").write_text(json.dumps(prefill), encoding="utf-8")
         (tmp_path / "config.yaml").write_text(
-            "agent:\n"
-            "  prefill_messages_file: prefill.json\n",
+            "agent:\n  prefill_messages_file: prefill.json\n",
             encoding="utf-8",
         )
 
         job = {"id": "prefill-job", "name": "prefill test", "prompt": "hi"}
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value=self._RUNTIME), \
-             patch("tools.mcp_tool.discover_mcp_tools", return_value=[]), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=self._RUNTIME,
+            ),
+            patch("tools.mcp_tool.discover_mcp_tools", return_value=[]),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1614,7 +1793,9 @@ class TestRunJobConfigEnvVarExpansion:
         assert error is None
         assert mock_agent_cls.call_args.kwargs["prefill_messages"] == prefill
 
-    def test_fallback_model_env_ref_in_config_yaml_is_expanded(self, tmp_path, monkeypatch):
+    def test_fallback_model_env_ref_in_config_yaml_is_expanded(
+        self, tmp_path, monkeypatch
+    ):
         """${VAR} in config.yaml fallback_providers model: is expanded."""
         (tmp_path / "config.yaml").write_text(
             "fallback_providers:\n"
@@ -1626,13 +1807,17 @@ class TestRunJobConfigEnvVarExpansion:
         job = {"id": "fb-job", "name": "fallback test", "prompt": "hi"}
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value=self._RUNTIME), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=self._RUNTIME,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1655,13 +1840,17 @@ class TestRunJobConfigEnvVarExpansion:
         job = {"id": "unset-job", "name": "unset var test", "prompt": "hi"}
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value=self._RUNTIME), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=self._RUNTIME,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1697,21 +1886,23 @@ class TestRunJobSkillBacked:
             assert "NOTION_API_KEY" in get_all_passthrough()
             return {"final_response": "ok"}
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("tools.skills_tool.skill_view", side_effect=_skill_view), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("tools.skills_tool.skill_view", side_effect=_skill_view),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.side_effect = _run_conversation
             mock_agent_cls.return_value = mock_agent
@@ -1725,7 +1916,9 @@ class TestRunJobSkillBacked:
         assert error is None
         assert final_response == "ok"
 
-    def test_run_job_preserves_credential_file_passthrough_into_worker_thread(self, tmp_path):
+    def test_run_job_preserves_credential_file_passthrough_into_worker_thread(
+        self, tmp_path
+    ):
         """copy_context() also propagates credential_files ContextVar."""
         job = {
             "id": "cred-env-job",
@@ -1746,7 +1939,10 @@ class TestRunJobSkillBacked:
             from tools.credential_files import register_credential_file
 
             register_credential_file("credentials/google_token.json")
-            return json.dumps({"success": True, "content": "# google-workspace\nUse Google."})
+            return json.dumps({
+                "success": True,
+                "content": "# google-workspace\nUse Google.",
+            })
 
         def _run_conversation(prompt):
             from tools.credential_files import _get_registered
@@ -1756,22 +1952,24 @@ class TestRunJobSkillBacked:
             assert any("google_token.json" in v for v in registered.values())
             return {"final_response": "ok"}
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("tools.credential_files._resolve_clawk_home", return_value=tmp_path), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("tools.skills_tool.skill_view", side_effect=_skill_view), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("tools.credential_files._resolve_clawk_home", return_value=tmp_path),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("tools.skills_tool.skill_view", side_effect=_skill_view),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.side_effect = _run_conversation
             mock_agent_cls.return_value = mock_agent
@@ -1795,21 +1993,29 @@ class TestRunJobSkillBacked:
 
         fake_db = MagicMock()
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("tools.skills_tool.skill_view", return_value=json.dumps({"success": True, "content": "# Blogwatcher\nFollow this skill."})), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch(
+                "tools.skills_tool.skill_view",
+                return_value=json.dumps({
+                    "success": True,
+                    "content": "# Blogwatcher\nFollow this skill.",
+                }),
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1839,23 +2045,30 @@ class TestRunJobSkillBacked:
         fake_db = MagicMock()
 
         def _skill_view(name):
-            return json.dumps({"success": True, "content": f"# {name}\nInstructions for {name}."})
+            return json.dumps({
+                "success": True,
+                "content": f"# {name}\nInstructions for {name}.",
+            })
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("dotenv.load_dotenv"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "***",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("tools.skills_tool.skill_view", side_effect=_skill_view) as skill_view_mock, \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("dotenv.load_dotenv"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "***",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch(
+                "tools.skills_tool.skill_view", side_effect=_skill_view
+            ) as skill_view_mock,
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -1866,7 +2079,10 @@ class TestRunJobSkillBacked:
         assert error is None
         assert final_response == "ok"
         assert skill_view_mock.call_count == 2
-        assert [call.args[0] for call in skill_view_mock.call_args_list] == ["blogwatcher", "maps"]
+        assert [call.args[0] for call in skill_view_mock.call_args_list] == [
+            "blogwatcher",
+            "maps",
+        ]
 
         prompt_arg = mock_agent.run_conversation.call_args.args[0]
         assert prompt_arg.index("blogwatcher") < prompt_arg.index("maps")
@@ -1891,46 +2107,70 @@ class TestSilentDelivery:
         }
 
     def test_silent_response_suppresses_delivery(self, caplog):
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "[SILENT]", None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", "[SILENT]", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             with caplog.at_level(logging.INFO, logger="cron.scheduler"):
                 tick(verbose=False)
         deliver_mock.assert_not_called()
         assert any(SILENT_MARKER in r.message for r in caplog.records)
 
     def test_silent_with_note_suppresses_delivery(self):
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "[SILENT] No changes detected", None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", "[SILENT] No changes detected", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
         deliver_mock.assert_not_called()
 
     def test_silent_trailing_suppresses_delivery(self):
         """Agent appended [SILENT] after explanation text — must still suppress."""
         response = "2 deals filtered out (like<10, reply<15).\n\n[SILENT]"
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", response, None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", response, None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
         deliver_mock.assert_not_called()
 
     def test_silent_is_case_insensitive(self):
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "[silent] nothing new", None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", "[silent] nothing new", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
         deliver_mock.assert_not_called()
 
@@ -1944,12 +2184,18 @@ class TestSilentDelivery:
             "origin": {"platform": "telegram", "chat_id": "123"},
             # silent_notice omitted → defaults to True
         }
-        with patch("cron.scheduler.get_due_jobs", return_value=[job]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "[SILENT]", None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[job]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", "[SILENT]", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
         deliver_mock.assert_called_once()
         # The delivered content is the heartbeat, not the [SILENT] sentinel.
@@ -1958,35 +2204,53 @@ class TestSilentDelivery:
 
     def test_failed_job_always_delivers(self):
         """Failed jobs deliver regardless of [SILENT] in output."""
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(False, "# output", "", "some error")), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(False, "# output", "", "some error"),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
         deliver_mock.assert_called_once()
 
     def test_output_saved_even_when_delivery_suppressed(self):
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# full output", "[SILENT]", None)), \
-             patch("cron.scheduler.save_job_output") as save_mock, \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# full output", "[SILENT]", None),
+            ),
+            patch("cron.scheduler.save_job_output") as save_mock,
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             save_mock.return_value = "/tmp/out.md"
             from cron.scheduler import tick
+
             tick(verbose=False)
         save_mock.assert_called_once_with("monitor-job", "# full output")
         deliver_mock.assert_not_called()
 
     def test_whitespace_only_response_is_marked_failed_not_delivered(self):
         """Whitespace-only final responses should behave like empty responses."""
-        with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "   \n\t  ", None)), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result") as deliver_mock, \
-             patch("cron.scheduler.mark_job_run") as mark_mock:
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "# output", "   \n\t  ", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result") as deliver_mock,
+            patch("cron.scheduler.mark_job_run") as mark_mock,
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
 
         deliver_mock.assert_not_called()
@@ -2038,58 +2302,69 @@ class TestParseWakeGate:
 
     def test_empty_output_wakes(self):
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate("") is True
         assert _parse_wake_gate(None) is True
 
     def test_whitespace_only_wakes(self):
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate("   \n\n  \t\n") is True
 
     def test_non_json_last_line_wakes(self):
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate("hello world") is True
         assert _parse_wake_gate("line 1\nline 2\nplain text") is True
 
     def test_json_non_dict_wakes(self):
         """Bare arrays, numbers, strings must not be interpreted as a gate."""
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate("[1, 2, 3]") is True
         assert _parse_wake_gate("42") is True
         assert _parse_wake_gate('"wakeAgent"') is True
 
     def test_wake_gate_false_skips(self):
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate('{"wakeAgent": false}') is False
 
     def test_wake_gate_true_wakes(self):
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate('{"wakeAgent": true}') is True
 
     def test_wake_gate_missing_wakes(self):
         """A JSON dict without a wakeAgent key defaults to waking."""
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate('{"data": {"foo": "bar"}}') is True
 
     def test_non_boolean_false_still_wakes(self):
         """Only strict ``False`` skips — truthy/falsy shortcuts are too risky."""
         from cron.scheduler import _parse_wake_gate
+
         assert _parse_wake_gate('{"wakeAgent": 0}') is True
         assert _parse_wake_gate('{"wakeAgent": null}') is True
         assert _parse_wake_gate('{"wakeAgent": ""}') is True
 
     def test_only_last_non_empty_line_parsed(self):
         from cron.scheduler import _parse_wake_gate
+
         multi = 'some log output\nmore output\n{"wakeAgent": false}'
         assert _parse_wake_gate(multi) is False
 
     def test_trailing_blank_lines_ignored(self):
         from cron.scheduler import _parse_wake_gate
+
         multi = '{"wakeAgent": false}\n\n\n'
         assert _parse_wake_gate(multi) is False
 
     def test_non_last_json_line_does_not_gate(self):
         """A JSON gate on an earlier line with plain text after it does NOT trigger."""
         from cron.scheduler import _parse_wake_gate
+
         multi = '{"wakeAgent": false}\nactually this is the real output'
         assert _parse_wake_gate(multi) is True
 
@@ -2138,9 +2413,14 @@ class TestRunJobWakeGate:
         from cron.scheduler import SILENT_MARKER
         import cron.scheduler as scheduler
 
-        with patch.object(scheduler, "_run_job_script",
-                          return_value=(True, '{"wakeAgent": false}')), \
-             patch("run_agent.AIAgent") as agent_cls:
+        with (
+            patch.object(
+                scheduler,
+                "_run_job_script",
+                return_value=(True, '{"wakeAgent": false}'),
+            ),
+            patch("run_agent.AIAgent") as agent_cls,
+        ):
             success, doc, final, err = scheduler.run_job(self._make_job())
 
         assert success is True
@@ -2156,19 +2436,26 @@ class TestRunJobWakeGate:
 
         script_output = '{"wakeAgent": true, "data": {"new": 3}}'
         agent = MagicMock()
-        agent.run_conversation = MagicMock(return_value={
-            "final_response": "ok", "messages": []
-        })
-        with patch.object(scheduler, "_run_job_script",
-                          return_value=(True, script_output)), \
-             patch("run_agent.AIAgent", return_value=agent) as agent_cls:
+        agent.run_conversation = MagicMock(
+            return_value={"final_response": "ok", "messages": []}
+        )
+        with (
+            patch.object(
+                scheduler, "_run_job_script", return_value=(True, script_output)
+            ),
+            patch("run_agent.AIAgent", return_value=agent) as agent_cls,
+        ):
             success, doc, final, err = scheduler.run_job(self._make_job())
 
         agent_cls.assert_called_once()
         # The script output should be visible in the prompt passed to
         # run_conversation.
         call_kwargs = agent.run_conversation.call_args
-        prompt_arg = call_kwargs.args[0] if call_kwargs.args else call_kwargs.kwargs.get("user_message", "")
+        prompt_arg = (
+            call_kwargs.args[0]
+            if call_kwargs.args
+            else call_kwargs.kwargs.get("user_message", "")
+        )
         assert script_output in prompt_arg
         assert success is True
         assert err is None
@@ -2180,17 +2467,20 @@ class TestRunJobWakeGate:
         import cron.scheduler as scheduler
 
         call_count = 0
+
         def _script_stub(path):
             nonlocal call_count
             call_count += 1
             return (True, "regular output")
 
         agent = MagicMock()
-        agent.run_conversation = MagicMock(return_value={
-            "final_response": "ok", "messages": []
-        })
-        with patch.object(scheduler, "_run_job_script", side_effect=_script_stub), \
-             patch("run_agent.AIAgent", return_value=agent):
+        agent.run_conversation = MagicMock(
+            return_value={"final_response": "ok", "messages": []}
+        )
+        with (
+            patch.object(scheduler, "_run_job_script", side_effect=_script_stub),
+            patch("run_agent.AIAgent", return_value=agent),
+        ):
             scheduler.run_job(self._make_job())
 
         assert call_count == 1, f"script ran {call_count}x, expected exactly 1"
@@ -2203,12 +2493,17 @@ class TestRunJobWakeGate:
         # Malicious or broken script whose stderr happens to contain the
         # gate JSON — we must NOT honor it because ran_ok is False.
         agent = MagicMock()
-        agent.run_conversation = MagicMock(return_value={
-            "final_response": "ok", "messages": []
-        })
-        with patch.object(scheduler, "_run_job_script",
-                          return_value=(False, '{"wakeAgent": false}')), \
-             patch("run_agent.AIAgent", return_value=agent) as agent_cls:
+        agent.run_conversation = MagicMock(
+            return_value={"final_response": "ok", "messages": []}
+        )
+        with (
+            patch.object(
+                scheduler,
+                "_run_job_script",
+                return_value=(False, '{"wakeAgent": false}'),
+            ),
+            patch("run_agent.AIAgent", return_value=agent) as agent_cls,
+        ):
             success, doc, final, err = scheduler.run_job(self._make_job())
 
         agent_cls.assert_called_once()  # Agent DID wake despite the gate-like text
@@ -2218,13 +2513,15 @@ class TestRunJobWakeGate:
         import cron.scheduler as scheduler
 
         agent = MagicMock()
-        agent.run_conversation = MagicMock(return_value={
-            "final_response": "ok", "messages": []
-        })
+        agent.run_conversation = MagicMock(
+            return_value={"final_response": "ok", "messages": []}
+        )
         job = self._make_job(script=None)
         job.pop("script", None)
-        with patch.object(scheduler, "_run_job_script") as script_fn, \
-             patch("run_agent.AIAgent", return_value=agent) as agent_cls:
+        with (
+            patch.object(scheduler, "_run_job_script") as script_fn,
+            patch("run_agent.AIAgent", return_value=agent) as agent_cls,
+        ):
             scheduler.run_job(job)
 
         script_fn.assert_not_called()
@@ -2239,23 +2536,39 @@ class TestBuildJobPromptMissingSkill:
 
     def test_missing_skill_does_not_raise(self):
         """Job should run even when a referenced skill is not installed."""
-        with patch("tools.skills_tool.skill_view", side_effect=self._missing_skill_view):
-            result = _build_job_prompt({"skills": ["ghost-skill"], "prompt": "do something"})
+        with patch(
+            "tools.skills_tool.skill_view", side_effect=self._missing_skill_view
+        ):
+            result = _build_job_prompt({
+                "skills": ["ghost-skill"],
+                "prompt": "do something",
+            })
         # prompt is preserved even though skill was skipped
         assert "do something" in result
 
     def test_missing_skill_injects_user_notice_into_prompt(self):
         """A system notice about the missing skill is injected into the prompt."""
-        with patch("tools.skills_tool.skill_view", side_effect=self._missing_skill_view):
-            result = _build_job_prompt({"skills": ["ghost-skill"], "prompt": "do something"})
+        with patch(
+            "tools.skills_tool.skill_view", side_effect=self._missing_skill_view
+        ):
+            result = _build_job_prompt({
+                "skills": ["ghost-skill"],
+                "prompt": "do something",
+            })
         assert "ghost-skill" in result
         assert "not found" in result.lower() or "skipped" in result.lower()
 
     def test_missing_skill_logs_warning(self, caplog):
         """A warning is logged when a skill cannot be found."""
         with caplog.at_level(logging.WARNING, logger="cron.scheduler"):
-            with patch("tools.skills_tool.skill_view", side_effect=self._missing_skill_view):
-                _build_job_prompt({"name": "My Job", "skills": ["ghost-skill"], "prompt": "do something"})
+            with patch(
+                "tools.skills_tool.skill_view", side_effect=self._missing_skill_view
+            ):
+                _build_job_prompt({
+                    "name": "My Job",
+                    "skills": ["ghost-skill"],
+                    "prompt": "do something",
+                })
         assert any("ghost-skill" in record.message for record in caplog.records)
 
     def test_valid_skill_loaded_alongside_missing(self):
@@ -2267,7 +2580,10 @@ class TestBuildJobPromptMissingSkill:
             return json.dumps({"success": False, "error": f"Skill '{name}' not found."})
 
         with patch("tools.skills_tool.skill_view", side_effect=_mixed_skill_view):
-            result = _build_job_prompt({"skills": ["ghost-skill", "real-skill"], "prompt": "go"})
+            result = _build_job_prompt({
+                "skills": ["ghost-skill", "real-skill"],
+                "prompt": "go",
+            })
         assert "Real skill content." in result
         assert "go" in result
 
@@ -2281,8 +2597,10 @@ class TestBuildJobPromptBumpUse:
         def _skill_view(name: str) -> str:
             return json.dumps({"success": True, "content": f"Content for {name}."})
 
-        with patch("tools.skills_tool.skill_view", side_effect=_skill_view), \
-             patch("tools.skill_usage.bump_use") as mock_bump:
+        with (
+            patch("tools.skills_tool.skill_view", side_effect=_skill_view),
+            patch("tools.skill_usage.bump_use") as mock_bump,
+        ):
             _build_job_prompt({"skills": ["alpha", "beta"], "prompt": "go"})
 
         assert mock_bump.call_count == 2
@@ -2296,8 +2614,10 @@ class TestBuildJobPromptBumpUse:
         def _missing_view(name: str) -> str:
             return json.dumps({"success": False, "error": "not found"})
 
-        with patch("tools.skills_tool.skill_view", side_effect=_missing_view), \
-             patch("tools.skill_usage.bump_use") as mock_bump:
+        with (
+            patch("tools.skills_tool.skill_view", side_effect=_missing_view),
+            patch("tools.skill_usage.bump_use") as mock_bump,
+        ):
             _build_job_prompt({"skills": ["ghost"], "prompt": "go"})
 
         assert mock_bump.call_count == 0
@@ -2308,9 +2628,11 @@ class TestBuildJobPromptBumpUse:
         def _skill_view(name: str) -> str:
             return json.dumps({"success": True, "content": "Works."})
 
-        with patch("tools.skills_tool.skill_view", side_effect=_skill_view), \
-             patch("tools.skill_usage.bump_use", side_effect=RuntimeError("boom")), \
-             caplog.at_level(logging.DEBUG, logger="cron.scheduler"):
+        with (
+            patch("tools.skills_tool.skill_view", side_effect=_skill_view),
+            patch("tools.skill_usage.bump_use", side_effect=RuntimeError("boom")),
+            caplog.at_level(logging.DEBUG, logger="cron.scheduler"),
+        ):
             result = _build_job_prompt({"skills": ["good-skill"], "prompt": "go"})
 
         # Prompt should still contain the skill content and original instruction
@@ -2346,7 +2668,9 @@ class TestSendMediaViaAdapter:
             return completed
 
         with patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
-            _send_media_via_adapter(adapter, chat_id, media_files, metadata, MagicMock(), job)
+            _send_media_via_adapter(
+                adapter, chat_id, media_files, metadata, MagicMock(), job
+            )
 
     def test_video_dispatched_to_send_video(self, tmp_path, monkeypatch):
         adapter = MagicMock()
@@ -2387,7 +2711,9 @@ class TestParallelTick:
         lock_dir = tmp_path / "cron"
         lock_dir.mkdir()
         lock_file = lock_dir / ".tick.lock"
-        with patch("cron.scheduler._get_lock_paths", return_value=(lock_dir, lock_file)):
+        with patch(
+            "cron.scheduler._get_lock_paths", return_value=(lock_dir, lock_file)
+        ):
             yield
 
     def test_parallel_jobs_run_concurrently(self):
@@ -2409,13 +2735,16 @@ class TestParallelTick:
             {"id": "job-b", "name": "b", "deliver": "local"},
         ]
 
-        with patch("cron.scheduler.get_due_jobs", return_value=jobs), \
-             patch("cron.scheduler.advance_next_run"), \
-             patch("cron.scheduler.run_job", side_effect=mock_run_job), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result", return_value=None), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=jobs),
+            patch("cron.scheduler.advance_next_run"),
+            patch("cron.scheduler.run_job", side_effect=mock_run_job),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result", return_value=None),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             result = tick(verbose=False)
 
         assert result == 2
@@ -2429,17 +2758,20 @@ class TestParallelTick:
     def test_parallel_jobs_isolated_contextvars(self):
         """Each job's ContextVars must be isolated — no cross-contamination."""
         from gateway.session_context import get_session_env
+
         seen = {}
 
         def mock_run_job(job):
             origin = job.get("origin", {})
             # run_job sets ContextVars — verify each job sees its own
             from gateway.session_context import set_session_vars, clear_session_vars
+
             tokens = set_session_vars(
                 platform=origin.get("platform", ""),
                 chat_id=str(origin.get("chat_id", "")),
             )
             import time
+
             time.sleep(0.05)  # give other thread time to set its vars
             platform = get_session_env("CLAWK_SESSION_PLATFORM")
             chat_id = get_session_env("CLAWK_SESSION_CHAT_ID")
@@ -2448,19 +2780,30 @@ class TestParallelTick:
             return (True, "output", "response", None)
 
         jobs = [
-            {"id": "tg-job", "name": "tg", "deliver": "local",
-             "origin": {"platform": "telegram", "chat_id": "111"}},
-            {"id": "dc-job", "name": "dc", "deliver": "local",
-             "origin": {"platform": "discord", "chat_id": "222"}},
+            {
+                "id": "tg-job",
+                "name": "tg",
+                "deliver": "local",
+                "origin": {"platform": "telegram", "chat_id": "111"},
+            },
+            {
+                "id": "dc-job",
+                "name": "dc",
+                "deliver": "local",
+                "origin": {"platform": "discord", "chat_id": "222"},
+            },
         ]
 
-        with patch("cron.scheduler.get_due_jobs", return_value=jobs), \
-             patch("cron.scheduler.advance_next_run"), \
-             patch("cron.scheduler.run_job", side_effect=mock_run_job), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result", return_value=None), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=jobs),
+            patch("cron.scheduler.advance_next_run"),
+            patch("cron.scheduler.run_job", side_effect=mock_run_job),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result", return_value=None),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             tick(verbose=False)
 
         assert seen["tg-job"] == {"platform": "telegram", "chat_id": "111"}
@@ -2473,6 +2816,7 @@ class TestParallelTick:
 
         def mock_run_job(job):
             import time
+
             call_times.append(("start", job["id"], time.monotonic()))
             time.sleep(0.05)
             call_times.append(("end", job["id"], time.monotonic()))
@@ -2483,19 +2827,26 @@ class TestParallelTick:
             {"id": "s2", "name": "s2", "deliver": "local"},
         ]
 
-        with patch("cron.scheduler.get_due_jobs", return_value=jobs), \
-             patch("cron.scheduler.advance_next_run"), \
-             patch("cron.scheduler.run_job", side_effect=mock_run_job), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._deliver_result", return_value=None), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.get_due_jobs", return_value=jobs),
+            patch("cron.scheduler.advance_next_run"),
+            patch("cron.scheduler.run_job", side_effect=mock_run_job),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._deliver_result", return_value=None),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             from cron.scheduler import tick
+
             result = tick(verbose=False)
 
         assert result == 2
         # With max_workers=1, second job starts after first ends
-        end_s1 = [t for action, jid, t in call_times if action == "end" and jid == "s1"][0]
-        start_s2 = [t for action, jid, t in call_times if action == "start" and jid == "s2"][0]
+        end_s1 = [
+            t for action, jid, t in call_times if action == "end" and jid == "s1"
+        ][0]
+        start_s2 = [
+            t for action, jid, t in call_times if action == "start" and jid == "s2"
+        ][0]
         assert start_s2 >= end_s1, "Jobs ran concurrently despite max_parallel=1"
 
 
@@ -2550,10 +2901,15 @@ class TestDeliverResultTimeoutCancelsFuture:
 
         standalone_send = AsyncMock(return_value={"success": True})
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro), \
-             patch("tools.send_message_tool._send_to_platform", new=standalone_send):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+            patch("tools.send_message_tool._send_to_platform", new=standalone_send),
+        ):
             result = _deliver_result(
                 job,
                 "Hello world",
@@ -2606,9 +2962,14 @@ class TestDeliverResultTimeoutCancelsFuture:
             coro.close()
             return completed_future
 
-        with patch("gateway.config.load_gateway_config", return_value=mock_cfg), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-             patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+            patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+        ):
             result = _deliver_result(
                 job,
                 "Hello world",
@@ -2633,7 +2994,9 @@ class TestSendMediaTimeoutCancelsFuture:
     in-flight coroutine must be cancelled before the next file is tried.
     """
 
-    def test_media_send_timeout_cancels_future_and_continues(self, tmp_path, monkeypatch):
+    def test_media_send_timeout_cancels_future_and_continues(
+        self, tmp_path, monkeypatch
+    ):
         """End-to-end: _send_media_via_adapter with a future whose .result()
         raises TimeoutError. Assert cancel() fires and the loop proceeds
         to the next file rather than hanging or crashing."""
@@ -2675,8 +3038,8 @@ class TestSendMediaTimeoutCancelsFuture:
             (root,),
         )
         media_files = [
-            (str(slow), False),   # times out
-            (str(fast), False),   # succeeds
+            (str(slow), False),  # times out
+            (str(fast), False),  # succeeds
         ]
 
         loop = MagicMock()
@@ -2687,7 +3050,9 @@ class TestSendMediaTimeoutCancelsFuture:
             _send_media_via_adapter(adapter, "chat-1", media_files, None, loop, job)
 
         # 1. The timed-out future was cancelled (the bug fix)
-        assert timeout_cancel_calls == [True], "future.cancel() must fire on TimeoutError"
+        assert timeout_cancel_calls == [True], (
+            "future.cancel() must fire on TimeoutError"
+        )
         # 2. Second file still got dispatched — one timeout doesn't abort the batch
         adapter.send_video.assert_called_once()
         assert adapter.send_video.call_args[1]["video_path"] == str(fast.resolve())
@@ -2716,7 +3081,9 @@ class TestCronDeliveryTargets:
             gateway_config, "load_gateway_config", lambda: _GatewayConfig()
         )
 
-    def test_lists_configured_platforms_flagging_missing_home_channel(self, monkeypatch):
+    def test_lists_configured_platforms_flagging_missing_home_channel(
+        self, monkeypatch
+    ):
         from cron.scheduler import cron_delivery_targets
 
         self._patch_connected(monkeypatch, ["matrix", "telegram"])

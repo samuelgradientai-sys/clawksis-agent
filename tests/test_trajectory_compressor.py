@@ -816,14 +816,14 @@ class TestGenerateSummary:
 
 def _gpt_with_tool_call(label, tokens):
     """A 'gpt' turn carrying a <tool_call> marker, padded to ~`tokens` tokens."""
-    body = f"<tool_call>\n{{\"name\": \"{label}\"}}\n</tool_call>"
+    body = f'<tool_call>\n{{"name": "{label}"}}\n</tool_call>'
     pad = max(0, tokens * 4 - len(body))
     return {"from": "gpt", "value": body + "x" * pad}
 
 
 def _tool_response(label, tokens):
     """A 'tool' turn carrying a <tool_response> marker, padded to ~`tokens` tokens."""
-    body = f"<tool_response>\n{{\"name\": \"{label}\"}}\n</tool_response>"
+    body = f'<tool_response>\n{{"name": "{label}"}}\n</tool_response>'
     pad = max(0, tokens * 4 - len(body))
     return {"from": "tool", "value": body + "x" * pad}
 

@@ -6,41 +6,117 @@ from typing import FrozenSet, List, Optional, Set
 
 # Common multi-word prefixes stripped from all queries (identical across modules)
 PREFIXES = [
-    'what are the best', 'what is the best', 'what are the latest',
-    'what are people saying about', 'what do people think about',
-    'how do i use', 'how to use', 'how to',
-    'what are', 'what is', 'tips for', 'best practices for',
+    "what are the best",
+    "what is the best",
+    "what are the latest",
+    "what are people saying about",
+    "what do people think about",
+    "how do i use",
+    "how to use",
+    "how to",
+    "what are",
+    "what is",
+    "tips for",
+    "best practices for",
 ]
 
 # Multi-word suffixes (used by bird_x)
 SUFFIXES = [
-    'best practices', 'use cases', 'prompt techniques',
-    'prompting techniques', 'prompting tips',
+    "best practices",
+    "use cases",
+    "prompt techniques",
+    "prompting techniques",
+    "prompting tips",
 ]
 
 # Base noise words shared across most modules
 NOISE_WORDS = frozenset({
     # Articles/prepositions/conjunctions
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'and', 'or',
-    'of', 'in', 'on', 'for', 'with', 'about', 'to',
+    "a",
+    "an",
+    "the",
+    "is",
+    "are",
+    "was",
+    "were",
+    "and",
+    "or",
+    "of",
+    "in",
+    "on",
+    "for",
+    "with",
+    "about",
+    "to",
     # Question words
-    'how', 'what', 'which', 'who', 'why', 'when', 'where',
-    'does', 'should', 'could', 'would',
+    "how",
+    "what",
+    "which",
+    "who",
+    "why",
+    "when",
+    "where",
+    "does",
+    "should",
+    "could",
+    "would",
     # Research/meta descriptors
-    'best', 'top', 'good', 'great', 'awesome', 'killer',
-    'latest', 'new', 'news', 'update', 'updates',
-    'trendiest', 'trending', 'hottest', 'hot', 'popular', 'viral',
-    'practices', 'features', 'guide', 'tutorial',
-    'recommendations', 'advice', 'review', 'reviews',
-    'usecases', 'examples', 'comparison', 'versus', 'vs',
-    'plugin', 'plugins', 'skill', 'skills', 'tool', 'tools',
+    "best",
+    "top",
+    "good",
+    "great",
+    "awesome",
+    "killer",
+    "latest",
+    "new",
+    "news",
+    "update",
+    "updates",
+    "trendiest",
+    "trending",
+    "hottest",
+    "hot",
+    "popular",
+    "viral",
+    "practices",
+    "features",
+    "guide",
+    "tutorial",
+    "recommendations",
+    "advice",
+    "review",
+    "reviews",
+    "usecases",
+    "examples",
+    "comparison",
+    "versus",
+    "vs",
+    "plugin",
+    "plugins",
+    "skill",
+    "skills",
+    "tool",
+    "tools",
     # Prompting meta words
-    'prompt', 'prompts', 'prompting', 'techniques', 'tips',
-    'tricks', 'methods', 'strategies', 'approaches',
+    "prompt",
+    "prompts",
+    "prompting",
+    "techniques",
+    "tips",
+    "tricks",
+    "methods",
+    "strategies",
+    "approaches",
     # Action words
-    'using', 'uses', 'use',
+    "using",
+    "uses",
+    "use",
     # Misc filler
-    'people', 'saying', 'think', 'said', 'lately',
+    "people",
+    "saying",
+    "think",
+    "said",
+    "lately",
 })
 
 
@@ -71,15 +147,15 @@ def extract_core_subject(
 
     # Phase 1: Strip multi-word prefixes (longest first, stop after first match)
     for p in PREFIXES:
-        if text.startswith(p + ' '):
-            text = text[len(p):].strip()
+        if text.startswith(p + " "):
+            text = text[len(p) :].strip()
             break
 
     # Phase 2: Strip multi-word suffixes (opt-in)
     if strip_suffixes:
         for s in SUFFIXES:
-            if text.endswith(' ' + s):
-                text = text[:-len(s)].strip()
+            if text.endswith(" " + s):
+                text = text[: -len(s)].strip()
                 break
 
     # Phase 3: Filter individual noise words
@@ -91,8 +167,8 @@ def extract_core_subject(
     if max_words is not None and filtered:
         filtered = filtered[:max_words]
 
-    result = ' '.join(filtered) if filtered else text
-    return result.rstrip('?!.') if not max_words else (result or topic.lower().strip())
+    result = " ".join(filtered) if filtered else text
+    return result.rstrip("?!.") if not max_words else (result or topic.lower().strip())
 
 
 def extract_compound_terms(topic: str) -> List[str]:
@@ -107,11 +183,11 @@ def extract_compound_terms(topic: str) -> List[str]:
     terms: List[str] = []
 
     # Hyphenated terms
-    for match in re.finditer(r'\b\w+-\w+(?:-\w+)*\b', topic):
+    for match in re.finditer(r"\b\w+-\w+(?:-\w+)*\b", topic):
         terms.append(match.group())
 
     # Title-cased sequences (2+ capitalized words in a row)
-    for match in re.finditer(r'(?:[A-Z][a-z]+\s+){1,}[A-Z][a-z]+', topic):
+    for match in re.finditer(r"(?:[A-Z][a-z]+\s+){1,}[A-Z][a-z]+", topic):
         terms.append(match.group())
 
     return terms

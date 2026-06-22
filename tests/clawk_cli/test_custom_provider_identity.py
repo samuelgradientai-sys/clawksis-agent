@@ -34,8 +34,7 @@ def test_matches_providers_dict_by_key(monkeypatch):
         lambda: {"providers": {"local": {"api": "http://127.0.0.1:8000/v1"}}},
     )
     assert (
-        rp.find_custom_provider_identity("http://127.0.0.1:8000/v1")
-        == "custom:local"
+        rp.find_custom_provider_identity("http://127.0.0.1:8000/v1") == "custom:local"
     )
 
 
@@ -50,8 +49,7 @@ def test_match_ignores_trailing_slash_and_case(monkeypatch):
         },
     )
     assert (
-        rp.find_custom_provider_identity("http://localhost:8000/v1")
-        == "custom:local"
+        rp.find_custom_provider_identity("http://localhost:8000/v1") == "custom:local"
     )
 
 

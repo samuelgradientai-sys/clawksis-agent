@@ -31,12 +31,10 @@ def local_relevance(
     item: schema.SourceItem,
     ranking_query: "str | relevance.PreparedQuery",
 ) -> float:
-    text = "\n".join(
-        part
-        for part in [item.title, item.body, item.snippet]
-        if part
+    text = "\n".join(part for part in [item.title, item.body, item.snippet] if part)
+    hashtags = (
+        item.metadata.get("hashtags") if isinstance(item.metadata, dict) else None
     )
-    hashtags = item.metadata.get("hashtags") if isinstance(item.metadata, dict) else None
     score = relevance.token_overlap_relevance(ranking_query, text, hashtags=hashtags)
 
     # High-engagement YouTube floor: official videos with millions of views
@@ -90,18 +88,27 @@ def _top_comment_score(item: schema.SourceItem) -> float:
 # a dedicated 10% top-comment-score slot (see _reddit_engagement,
 # _youtube_engagement, _tiktok_engagement).
 ENGAGEMENT_WEIGHTS: dict[str, list[tuple[str, float]]] = {
-    "x":            [("likes", 0.55), ("reposts", 0.25), ("replies", 0.15), ("quotes", 0.05)],
-    "instagram":    [("views", 0.50), ("likes", 0.30), ("comments", 0.20)],
-    "hackernews":   [("points", 0.55), ("comments", 0.45)],
-    "bluesky":      [("likes", 0.40), ("reposts", 0.30), ("replies", 0.20), ("quotes", 0.10)],
-    "truthsocial":  [("likes", 0.45), ("reposts", 0.30), ("replies", 0.25)],
-    "polymarket":   [("volume", 0.60), ("liquidity", 0.40)],
-    "digg":         [("postCount", 0.40), ("uniqueAuthors", 0.30), ("rank_score", 0.30)],
+    "x": [("likes", 0.55), ("reposts", 0.25), ("replies", 0.15), ("quotes", 0.05)],
+    "instagram": [("views", 0.50), ("likes", 0.30), ("comments", 0.20)],
+    "hackernews": [("points", 0.55), ("comments", 0.45)],
+    "bluesky": [
+        ("likes", 0.40),
+        ("reposts", 0.30),
+        ("replies", 0.20),
+        ("quotes", 0.10),
+    ],
+    "truthsocial": [("likes", 0.45), ("reposts", 0.30), ("replies", 0.25)],
+    "polymarket": [("volume", 0.60), ("liquidity", 0.40)],
+    "digg": [("postCount", 0.40), ("uniqueAuthors", 0.30), ("rank_score", 0.30)],
 }
 
 
-def _weighted_engagement(item: schema.SourceItem, weights: list[tuple[str, float]]) -> float | None:
-    values = [(log1p_safe(item.engagement.get(field)), weight) for field, weight in weights]
+def _weighted_engagement(
+    item: schema.SourceItem, weights: list[tuple[str, float]]
+) -> float | None:
+    values = [
+        (log1p_safe(item.engagement.get(field)), weight) for field, weight in weights
+    ]
     if not any(v for v, _ in values):
         return None
     return sum(v * w for v, w in values)
@@ -114,7 +121,12 @@ def _reddit_engagement(item: schema.SourceItem) -> float | None:
     top_comment = _top_comment_score(item)
     if not any([score, comments, ratio, top_comment]):
         return None
-    return (0.50 * score) + (0.35 * comments) + (0.05 * (ratio * 10.0)) + (0.10 * top_comment)
+    return (
+        (0.50 * score)
+        + (0.35 * comments)
+        + (0.05 * (ratio * 10.0))
+        + (0.10 * top_comment)
+    )
 
 
 def _youtube_engagement(item: schema.SourceItem) -> float | None:
@@ -171,9 +183,7 @@ def normalize(values: list[float | None]) -> list[int | None]:
     if math.isclose(low, high):
         return [50 if value is not None else None for value in values]
     return [
-        None
-        if value is None
-        else int(((value - low) / (high - low)) * 100)
+        None if value is None else int(((value - low) / (high - low)) * 100)
         for value in values
     ]
 
@@ -184,7 +194,11 @@ def annotate_stream(
     freshness_mode: str,
 ) -> list[schema.SourceItem]:
     """Attach local scoring metadata and return items sorted by local_rank_score."""
-    prepared_query = ranking_query if isinstance(ranking_query, relevance.PreparedQuery) else relevance.PreparedQuery(ranking_query)
+    prepared_query = (
+        ranking_query
+        if isinstance(ranking_query, relevance.PreparedQuery)
+        else relevance.PreparedQuery(ranking_query)
+    )
     engagement_scores = normalize([engagement_raw(item) for item in items])
     for item, eng_score in zip(items, engagement_scores, strict=True):
         item.local_relevance = local_relevance(item, prepared_query)
@@ -241,7 +255,9 @@ def prune_low_relevance(
         rel = item.local_relevance if item.local_relevance is not None else 0.0
         if rel < minimum:
             return False
-        if item.source in _SOCIAL_SOURCES and (item.engagement_score is None or item.engagement_score == 0):
+        if item.source in _SOCIAL_SOURCES and (
+            item.engagement_score is None or item.engagement_score == 0
+        ):
             if rel < minimum * 1.5:
                 return False
         sole_source = sources_present == {item.source}

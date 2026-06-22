@@ -19,8 +19,7 @@ def _windows(words: list[str], size: int, overlap: int) -> list[str]:
         return [" ".join(words)]
     step = max(1, size - overlap)
     return [
-        " ".join(words[start:start + size])
-        for start in range(0, len(words), step)
+        " ".join(words[start : start + size]) for start in range(0, len(words), step)
     ]
 
 
@@ -43,9 +42,15 @@ def extract_best_snippet(
     if not candidates:
         return _truncate_words(body, max_words)
 
-    prepared_query = ranking_query if isinstance(ranking_query, relevance.PreparedQuery) else relevance.PreparedQuery(ranking_query)
+    prepared_query = (
+        ranking_query
+        if isinstance(ranking_query, relevance.PreparedQuery)
+        else relevance.PreparedQuery(ranking_query)
+    )
     best = max(
         candidates,
-        key=lambda candidate: relevance.token_overlap_relevance(prepared_query, candidate),
+        key=lambda candidate: relevance.token_overlap_relevance(
+            prepared_query, candidate
+        ),
     )
     return _truncate_words(best, max_words)

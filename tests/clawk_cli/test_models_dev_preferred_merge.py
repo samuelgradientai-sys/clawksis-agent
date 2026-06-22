@@ -37,6 +37,7 @@ class TestMergeHelper:
 
     def test_merge_mdev_raises_returns_curated(self):
         """Offline / broken models.dev must not break the catalog path."""
+
         def boom(_provider):
             raise RuntimeError("network down")
 
@@ -109,9 +110,15 @@ class TestProviderModelIdsPreferred:
         with (
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
-                return_value={"api_key": "sk-test", "base_url": "https://api.moonshot.ai/v1"},
+                return_value={
+                    "api_key": "sk-test",
+                    "base_url": "https://api.moonshot.ai/v1",
+                },
             ),
-            patch("providers.base.ProviderProfile.fetch_models", return_value=["kimi-k2.6"]),
+            patch(
+                "providers.base.ProviderProfile.fetch_models",
+                return_value=["kimi-k2.6"],
+            ),
         ):
             out = provider_model_ids("kimi-coding")
         assert out[:2] == ["kimi-k2.7-code", "kimi-k2.6"]
@@ -127,7 +134,9 @@ class TestProviderModelIdsPreferred:
             return None
 
         with (
-            patch("clawk_cli.main._prompt_api_key", return_value=("sk-kimi-test", False)),
+            patch(
+                "clawk_cli.main._prompt_api_key", return_value=("sk-kimi-test", False)
+            ),
             patch("clawk_cli.auth._prompt_model_selection", side_effect=fake_select),
             patch("clawk_cli.config.get_env_value", return_value=""),
             patch("clawk_cli.config.save_env_value"),

@@ -259,9 +259,7 @@ class WhatsAppBehaviorMixin:
         for bot_id in bot_ids:
             bare_id = bot_id.split("@", 1)[0]
             if bare_id:
-                cleaned = re.sub(
-                    rf"@{re.escape(bare_id)}\b[,:\-]*\s*", "", cleaned
-                )
+                cleaned = re.sub(rf"@{re.escape(bare_id)}\b[,:\-]*\s*", "", cleaned)
         return cleaned.strip() or text
 
     def _should_process_message(self, data: Dict[str, Any]) -> bool:
@@ -351,9 +349,7 @@ class WhatsAppBehaviorMixin:
                 inner = inner[1:-1].strip()
             return f"*{inner}*"
 
-        result = re.sub(
-            r"^#{1,6}\s+(.+)$", _header_to_bold, result, flags=re.MULTILINE
-        )
+        result = re.sub(r"^#{1,6}\s+(.+)$", _header_to_bold, result, flags=re.MULTILINE)
 
         # --- 5. Convert markdown links: [text](url) → text (url) ---
         result = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", result)

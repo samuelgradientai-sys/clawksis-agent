@@ -255,18 +255,23 @@ def test_items_sanitized_in_array_schema():
 
 def test_ref_with_default_sibling_stripped():
     """Strict backends reject ``default`` alongside ``$ref``."""
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "payload": {"$ref": "#/$defs/Payload", "default": None},
-        },
-        "$defs": {
-            "Payload": {
+    tools = [
+        _tool(
+            "t",
+            {
                 "type": "object",
-                "properties": {"q": {"type": "string"}},
+                "properties": {
+                    "payload": {"$ref": "#/$defs/Payload", "default": None},
+                },
+                "$defs": {
+                    "Payload": {
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                    },
+                },
             },
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert payload == {"$ref": "#/$defs/Payload"}
@@ -274,24 +279,29 @@ def test_ref_with_default_sibling_stripped():
 
 def test_nullable_union_collapse_does_not_leave_default_on_ref():
     """Nullable anyOf collapse must not attach ``default`` to a ``$ref`` branch."""
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "input": {
-                "anyOf": [
-                    {"$ref": "#/$defs/Payload"},
-                    {"type": "null"},
-                ],
-                "default": None,
-            },
-        },
-        "$defs": {
-            "Payload": {
+    tools = [
+        _tool(
+            "t",
+            {
                 "type": "object",
-                "properties": {"q": {"type": "string"}},
+                "properties": {
+                    "input": {
+                        "anyOf": [
+                            {"$ref": "#/$defs/Payload"},
+                            {"type": "null"},
+                        ],
+                        "default": None,
+                    },
+                },
+                "$defs": {
+                    "Payload": {
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                    },
+                },
             },
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["input"]
     assert prop["$ref"] == "#/$defs/Payload"
@@ -301,18 +311,23 @@ def test_nullable_union_collapse_does_not_leave_default_on_ref():
 
 def test_ref_description_preserved():
     """Annotation siblings that strict backends allow should survive."""
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "payload": {
-                "$ref": "#/$defs/Payload",
-                "description": "The payload",
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "payload": {
+                        "$ref": "#/$defs/Payload",
+                        "description": "The payload",
+                    },
+                },
+                "$defs": {
+                    "Payload": {"type": "object", "properties": {}},
+                },
             },
-        },
-        "$defs": {
-            "Payload": {"type": "object", "properties": {}},
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert payload["description"] == "The payload"

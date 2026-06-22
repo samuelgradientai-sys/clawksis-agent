@@ -294,6 +294,7 @@ async def _immutable_asset_cache(request: "Request", call_next):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
+
 # ---------------------------------------------------------------------------
 
 # Endpoints that do NOT require the session token.  Everything else under
@@ -6658,7 +6659,12 @@ async def cleanup_sessions_endpoint(body: SessionCleanup):
             if body.max_messages is not None and mc > body.max_messages:
                 continue
             if body.older_than_days is not None:
-                last = s.get("last_active") or s.get("ended_at") or s.get("started_at") or 0
+                last = (
+                    s.get("last_active")
+                    or s.get("ended_at")
+                    or s.get("started_at")
+                    or 0
+                )
                 try:
                     last = float(last)
                 except (TypeError, ValueError):
@@ -12160,7 +12166,10 @@ def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
 async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
     now = time.time()
 
-    if now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL or not _VIZ_SESSION_META["data"]:
+    if (
+        now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL
+        or not _VIZ_SESSION_META["data"]
+    ):
         data = await asyncio.to_thread(_build_viz_session_meta)
 
         if data:

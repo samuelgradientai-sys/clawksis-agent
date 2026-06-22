@@ -43,6 +43,7 @@ from clawk_cli.subcommands.whatsapp import build_whatsapp_parser
 def _h(name):
     def handler(args):  # pragma: no cover - identity only
         return name
+
     handler.__name__ = f"cmd_{name}"
     return handler
 
@@ -76,7 +77,11 @@ SINGLE_HANDLER_CASES = [
 ]
 
 
-@pytest.mark.parametrize("name,builder,kw,argv", SINGLE_HANDLER_CASES, ids=[c[0] for c in SINGLE_HANDLER_CASES])
+@pytest.mark.parametrize(
+    "name,builder,kw,argv",
+    SINGLE_HANDLER_CASES,
+    ids=[c[0] for c in SINGLE_HANDLER_CASES],
+)
 def test_single_handler_builders(name, builder, kw, argv):
     parser = argparse.ArgumentParser(prog="clawk")
     sub = parser.add_subparsers(dest="command")

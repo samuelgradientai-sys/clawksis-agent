@@ -41,14 +41,27 @@ def _ensure_discord_mock():
         discord_mod.DMChannel = type("DMChannel", (), {})
         discord_mod.Thread = type("Thread", (), {})
         discord_mod.ForumChannel = type("ForumChannel", (), {})
-        discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-        discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, danger=3, green=1, blurple=2, red=3, grey=4, secondary=5)
-        discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4)
+        discord_mod.ui = SimpleNamespace(
+            View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+        )
+        discord_mod.ButtonStyle = SimpleNamespace(
+            success=1,
+            primary=2,
+            danger=3,
+            green=1,
+            blurple=2,
+            red=3,
+            grey=4,
+            secondary=5,
+        )
+        discord_mod.Color = SimpleNamespace(
+            orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4
+        )
         discord_mod.Interaction = object
         discord_mod.Embed = MagicMock
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         )
         discord_mod.opus = SimpleNamespace(is_loaded=lambda: True)
@@ -148,19 +161,34 @@ class SlowSyncBot(FakeBot):
         ("769524422783664158,abhey-gupta", True),
     ],
 )
-async def test_connect_only_requests_members_intent_when_needed(monkeypatch, allowed_users, expected_members_intent):
+async def test_connect_only_requests_members_intent_when_needed(
+    monkeypatch, allowed_users, expected_members_intent
+):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
     monkeypatch.setenv("DISCORD_ALLOWED_USERS", allowed_users)
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
-    intents = SimpleNamespace(message_content=False, dm_messages=False, guild_messages=False, members=False, voice_states=False)
+    intents = SimpleNamespace(
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
+    )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     created = {}
 
-    def fake_bot_factory(*, command_prefix, intents, proxy=None, allowed_mentions=None, **_):
+    def fake_bot_factory(
+        *, command_prefix, intents, proxy=None, allowed_mentions=None, **_
+    ):
         created["bot"] = FakeBot(intents=intents, allowed_mentions=allowed_mentions)
         return created["bot"]
 
@@ -183,7 +211,9 @@ async def test_connect_only_requests_members_intent_when_needed(monkeypatch, all
 
 
 @pytest.mark.asyncio
-async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monkeypatch):
+async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(
+    monkeypatch,
+):
     """Regression for #18187: calling connect() twice without disconnect() in
     between (e.g. during an in-process reconnect attempt) must close the old
     commands.Bot before creating a new one. Without this guard, two websockets
@@ -192,17 +222,26 @@ async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monk
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     class TrackedBot(FakeBot):
         """FakeBot that records close() calls and reports open/closed state."""
+
         _closed = False
 
         def is_closed(self):
@@ -213,7 +252,9 @@ async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monk
 
     created: list[TrackedBot] = []
 
-    def fake_bot_factory(*, command_prefix, intents, proxy=None, allowed_mentions=None, **_):
+    def fake_bot_factory(
+        *, command_prefix, intents, proxy=None, allowed_mentions=None, **_
+    ):
         bot = TrackedBot(intents=intents, allowed_mentions=allowed_mentions)
         created.append(bot)
         return bot
@@ -249,11 +290,23 @@ async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monk
 async def test_connect_releases_token_lock_on_timeout(monkeypatch):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
     released = []
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: released.append((scope, identity)))
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock",
+        lambda scope, identity: released.append((scope, identity)),
+    )
 
-    intents = SimpleNamespace(message_content=False, dm_messages=False, guild_messages=False, members=False, voice_states=False)
+    intents = SimpleNamespace(
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
+    )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     monkeypatch.setattr(
@@ -291,17 +344,26 @@ async def test_connect_timeout_cancels_bot_task(monkeypatch):
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     class NeverReadyBot(FakeBot):
         """Bot whose start() never fires on_ready — simulates a slow gateway handshake."""
+
         async def start(self, token):
             await asyncio.Event().wait()  # hang forever
 
@@ -340,8 +402,13 @@ async def test_disconnect_cancels_running_bot_task(monkeypatch):
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
     # Simulate a zombie bot_task that never finishes (as if discord.py is mid-handshake)
     async def _forever():
@@ -359,7 +426,9 @@ async def test_disconnect_cancels_running_bot_task(monkeypatch):
 
     # The task must have been cancelled (done + cancelled) and cleared from the adapter.
     assert adapter._bot_task is None, "disconnect() must clear _bot_task"
-    assert zombie_task.done(), "disconnect() must have awaited the bot task to completion"
+    assert zombie_task.done(), (
+        "disconnect() must have awaited the bot task to completion"
+    )
     assert zombie_task.cancelled(), "disconnect() must cancel the zombie bot task"
 
 
@@ -368,15 +437,28 @@ async def test_connect_does_not_wait_for_slash_sync(monkeypatch):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
     monkeypatch.setenv("DISCORD_COMMAND_SYNC_POLICY", "bulk")
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
-    intents = SimpleNamespace(message_content=False, dm_messages=False, guild_messages=False, members=False, voice_states=False)
+    intents = SimpleNamespace(
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
+    )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     created = {}
 
-    def fake_bot_factory(*, command_prefix, intents, proxy=None, allowed_mentions=None, **_):
+    def fake_bot_factory(
+        *, command_prefix, intents, proxy=None, allowed_mentions=None, **_
+    ):
         bot = SlowSyncBot(intents=intents, proxy=proxy)
         created["bot"] = bot
         return bot
@@ -400,14 +482,27 @@ async def test_connect_does_not_wait_for_slash_sync(monkeypatch):
 @pytest.mark.asyncio
 async def test_connect_respects_slash_commands_opt_out(monkeypatch):
     adapter = DiscordAdapter(
-        PlatformConfig(enabled=True, token="test-token", extra={"slash_commands": False})
+        PlatformConfig(
+            enabled=True, token="test-token", extra={"slash_commands": False}
+        )
     )
 
     monkeypatch.setenv("DISCORD_COMMAND_SYNC_POLICY", "off")
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
 
-    intents = SimpleNamespace(message_content=False, dm_messages=False, guild_messages=False, members=False, voice_states=False)
+    intents = SimpleNamespace(
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
+    )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
     monkeypatch.setattr(
         discord_platform.commands,
@@ -512,7 +607,9 @@ async def test_safe_sync_slash_commands_only_mutates_diffs():
             _DesiredCommand(desired_updated),
             _DesiredCommand(desired_created),
         ],
-        fetch_commands=AsyncMock(return_value=[existing_same, existing_updated, existing_deleted]),
+        fetch_commands=AsyncMock(
+            return_value=[existing_same, existing_updated, existing_deleted]
+        ),
     )
     fake_http = SimpleNamespace(
         upsert_global_command=AsyncMock(),
@@ -631,7 +728,9 @@ async def test_post_connect_initialization_skips_sync_when_policy_off(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_post_connect_initialization_skips_same_fingerprint_after_success(tmp_path, monkeypatch):
+async def test_post_connect_initialization_skips_same_fingerprint_after_success(
+    tmp_path, monkeypatch
+):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
     monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
 
@@ -668,7 +767,9 @@ async def test_post_connect_initialization_skips_same_fingerprint_after_success(
 
 
 @pytest.mark.asyncio
-async def test_post_connect_initialization_respects_discord_retry_after(tmp_path, monkeypatch):
+async def test_post_connect_initialization_respects_discord_retry_after(
+    tmp_path, monkeypatch
+):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
     monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
 
@@ -686,6 +787,7 @@ async def test_post_connect_initialization_respects_discord_retry_after(tmp_path
         application_id=999,
         user=SimpleNamespace(id=999),
     )
+
     class _DiscordRateLimit(RuntimeError):
         retry_after = 123.0
 
@@ -708,14 +810,21 @@ async def test_post_connect_initialization_respects_discord_retry_after(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_post_connect_initialization_reraises_non_rate_limit_exceptions(tmp_path, monkeypatch):
+async def test_post_connect_initialization_reraises_non_rate_limit_exceptions(
+    tmp_path, monkeypatch
+):
     """Arbitrary failures during sync must surface, not be swallowed as rate-limits."""
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
     monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
 
     class _DesiredCommand:
         def to_dict(self, tree):
-            return {"name": "status", "description": "Show Clawksis status", "type": 1, "options": []}
+            return {
+                "name": "status",
+                "description": "Show Clawksis status",
+                "type": 1,
+                "options": [],
+            }
 
     adapter._client = SimpleNamespace(
         tree=SimpleNamespace(get_commands=lambda: [_DesiredCommand()]),
@@ -785,7 +894,10 @@ async def test_safe_sync_slash_commands_paces_mutation_writes(monkeypatch):
         "options": [],
     }
     fake_tree = SimpleNamespace(
-        get_commands=lambda: [_DesiredCommand(desired_one), _DesiredCommand(desired_two)],
+        get_commands=lambda: [
+            _DesiredCommand(desired_one),
+            _DesiredCommand(desired_two),
+        ],
         fetch_commands=AsyncMock(return_value=[]),
     )
     fake_http = SimpleNamespace(
@@ -826,7 +938,16 @@ async def test_safe_sync_reads_permission_attrs_from_existing_command():
     class _ExistingCommand:
         """Mirrors discord.py's AppCommand — to_dict() omits nsfw/dm/perms."""
 
-        def __init__(self, command_id, name, description, *, nsfw, guild_only, default_permissions):
+        def __init__(
+            self,
+            command_id,
+            name,
+            description,
+            *,
+            nsfw,
+            guild_only,
+            default_permissions,
+        ):
             self.id = command_id
             self.name = name
             self.description = description

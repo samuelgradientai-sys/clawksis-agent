@@ -15,8 +15,13 @@ from gateway.platforms.base import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(text="/update", platform=Platform.TELEGRAM,
-                user_id="12345", chat_id="67890", thread_id=None):
+def _make_event(
+    text="/update",
+    platform=Platform.TELEGRAM,
+    user_id="12345",
+    chat_id="67890",
+    thread_id=None,
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -31,6 +36,7 @@ def _make_event(text="/update", platform=Platform.TELEGRAM,
 def _make_runner():
     """Create a bare GatewayRunner without calling __init__."""
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -70,8 +76,10 @@ class TestHandleUpdateCommand:
         # Point _clawk_home to tmp_path and project_root to a dir without .git
         fake_root = tmp_path / "project"
         fake_root.mkdir()
-        with patch("gateway.run._clawk_home", tmp_path), \
-             patch("gateway.run.Path") as MockPath:
+        with (
+            patch("gateway.run._clawk_home", tmp_path),
+            patch("gateway.run.Path") as MockPath,
+        ):
             # Path(__file__).parent.parent.resolve() -> fake_root
             MockPath.return_value = MagicMock()
             MockPath.__truediv__ = Path.__truediv__
@@ -119,10 +127,12 @@ class TestHandleUpdateCommand:
         (fake_root / "gateway" / "run.py").touch()
         fake_file = str(fake_root / "gateway" / "run.py")
 
-        with patch("gateway.run._clawk_home", tmp_path), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", return_value=None), \
-             patch("importlib.util.find_spec", return_value=None):
+        with (
+            patch("gateway.run._clawk_home", tmp_path),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", return_value=None),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
             result = await runner._handle_update_command(event)
 
         assert "Could not locate" in result
@@ -146,11 +156,13 @@ class TestHandleUpdateCommand:
         mock_popen = MagicMock()
         fake_spec = MagicMock()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", return_value=None), \
-             patch("importlib.util.find_spec", return_value=fake_spec), \
-             patch("subprocess.Popen", mock_popen):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", return_value=None),
+            patch("importlib.util.find_spec", return_value=fake_spec),
+            patch("subprocess.Popen", mock_popen),
+        ):
             result = await runner._handle_update_command(event)
 
         assert "Starting Clawksis update" in result
@@ -176,8 +188,10 @@ class TestHandleUpdateCommand:
         from gateway.run import _resolve_clawk_bin
 
         fake_spec = MagicMock()
-        with patch("shutil.which", return_value=None), \
-             patch("importlib.util.find_spec", return_value=fake_spec):
+        with (
+            patch("shutil.which", return_value=None),
+            patch("importlib.util.find_spec", return_value=fake_spec),
+        ):
             result = _resolve_clawk_bin()
 
         assert result == [sys.executable, "-m", "clawk_cli.main"]
@@ -187,8 +201,10 @@ class TestHandleUpdateCommand:
         """_resolve_clawk_bin returns None when both strategies fail."""
         from gateway.run import _resolve_clawk_bin
 
-        with patch("shutil.which", return_value=None), \
-             patch("importlib.util.find_spec", return_value=None):
+        with (
+            patch("shutil.which", return_value=None),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
             result = _resolve_clawk_bin()
 
         assert result is None
@@ -209,10 +225,17 @@ class TestHandleUpdateCommand:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=lambda x: "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"), \
-             patch("subprocess.Popen"):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch(
+                "shutil.which",
+                side_effect=lambda x: (
+                    "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"
+                ),
+            ),
+            patch("subprocess.Popen"),
+        ):
             result = await runner._handle_update_command(event)
 
         pending_path = clawk_home / ".update_pending.json"
@@ -245,10 +268,17 @@ class TestHandleUpdateCommand:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=lambda x: "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"), \
-             patch("subprocess.Popen"):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch(
+                "shutil.which",
+                side_effect=lambda x: (
+                    "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"
+                ),
+            ),
+            patch("subprocess.Popen"),
+        ):
             await runner._handle_update_command(event)
 
         data = json.loads((clawk_home / ".update_pending.json").read_text())
@@ -271,10 +301,12 @@ class TestHandleUpdateCommand:
         clawk_home.mkdir()
 
         mock_popen = MagicMock()
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), \
-             patch("subprocess.Popen", mock_popen):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"),
+            patch("subprocess.Popen", mock_popen),
+        ):
             result = await runner._handle_update_command(event)
 
         # Verify setsid was used
@@ -308,10 +340,12 @@ class TestHandleUpdateCommand:
                 return None
             return None
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=which_no_setsid), \
-             patch("subprocess.Popen", mock_popen):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", side_effect=which_no_setsid),
+            patch("subprocess.Popen", mock_popen),
+        ):
             result = await runner._handle_update_command(event)
 
         # Verify plain bash -c fallback (no nohup, no setsid)
@@ -339,10 +373,12 @@ class TestHandleUpdateCommand:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), \
-             patch("subprocess.Popen", side_effect=OSError("spawn failed")):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"),
+            patch("subprocess.Popen", side_effect=OSError("spawn failed")),
+        ):
             result = await runner._handle_update_command(event)
 
         assert "Failed to start update" in result
@@ -365,10 +401,12 @@ class TestHandleUpdateCommand:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), \
-             patch("subprocess.Popen"):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"),
+            patch("subprocess.Popen"),
+        ):
             result = await runner._handle_update_command(event)
 
         assert "stream progress" in result
@@ -437,8 +475,10 @@ class TestUpdateCommandPlatformGate:
 
         # Make sure the plugin registry is populated so the fallback fires.
         from clawk_cli.plugins import PluginManager
+
         PluginManager().discover_and_load(force=True)
         from gateway.platform_registry import platform_registry
+
         discord_entry = platform_registry.get("discord")
         assert discord_entry is not None
         assert discord_entry.allow_update_command is True
@@ -466,8 +506,10 @@ class TestUpdateCommandPlatformGate:
         assert Platform.MATTERMOST not in GatewayRunner._UPDATE_ALLOWED_PLATFORMS
 
         from clawk_cli.plugins import PluginManager
+
         PluginManager().discover_and_load(force=True)
         from gateway.platform_registry import platform_registry
+
         mm_entry = platform_registry.get("mattermost")
         assert mm_entry is not None
         assert mm_entry.allow_update_command is True
@@ -492,8 +534,10 @@ class TestUpdateCommandPlatformGate:
         assert Platform.HOMEASSISTANT not in GatewayRunner._UPDATE_ALLOWED_PLATFORMS
 
         from clawk_cli.plugins import PluginManager
+
         PluginManager().discover_and_load(force=True)
         from gateway.platform_registry import platform_registry
+
         ha_entry = platform_registry.get("homeassistant")
         assert ha_entry is not None
         assert ha_entry.allow_update_command is True
@@ -553,9 +597,13 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         pending_path = clawk_home / ".update_pending.json"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "67890", "user_id": "12345",
-        }))
+        pending_path.write_text(
+            json.dumps({
+                "platform": "telegram",
+                "chat_id": "67890",
+                "user_id": "12345",
+            })
+        )
         (clawk_home / ".update_output.txt").write_text("still running")
 
         mock_adapter = AsyncMock()
@@ -576,9 +624,13 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         claimed_path = clawk_home / ".update_pending.claimed.json"
-        claimed_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "67890", "user_id": "12345",
-        }))
+        claimed_path.write_text(
+            json.dumps({
+                "platform": "telegram",
+                "chat_id": "67890",
+                "user_id": "12345",
+            })
+        )
         (clawk_home / ".update_output.txt").write_text("done")
         (clawk_home / ".update_exit_code").write_text("0")
 
@@ -623,7 +675,10 @@ class TestSendUpdateNotification:
         mock_adapter.send.assert_called_once()
         call_args = mock_adapter.send.call_args
         assert call_args[0][0] == "67890"  # chat_id
-        assert "Update complete" in call_args[0][1] or "update finished" in call_args[0][1].lower()
+        assert (
+            "Update complete" in call_args[0][1]
+            or "update finished" in call_args[0][1].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_sends_notification_with_thread_metadata(self, tmp_path):
@@ -759,9 +814,13 @@ class TestSendUpdateNotification:
         pending_path = clawk_home / ".update_pending.json"
         output_path = clawk_home / ".update_output.txt"
         exit_code_path = clawk_home / ".update_exit_code"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "111", "user_id": "222",
-        }))
+        pending_path.write_text(
+            json.dumps({
+                "platform": "telegram",
+                "chat_id": "111",
+                "user_id": "222",
+            })
+        )
         output_path.write_text("✓ Done")
         exit_code_path.write_text("0")
 
@@ -785,9 +844,13 @@ class TestSendUpdateNotification:
         pending_path = clawk_home / ".update_pending.json"
         output_path = clawk_home / ".update_output.txt"
         exit_code_path = clawk_home / ".update_exit_code"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "111", "user_id": "222",
-        }))
+        pending_path.write_text(
+            json.dumps({
+                "platform": "telegram",
+                "chat_id": "111",
+                "user_id": "222",
+            })
+        )
         output_path.write_text("✓ Done")
         exit_code_path.write_text("0")
 
@@ -927,5 +990,6 @@ class TestUpdateInHelp:
         # checking the help output includes it.
         from gateway.run import GatewayRunner
         import inspect
+
         source = inspect.getsource(GatewayRunner._handle_message)
         assert '"update"' in source

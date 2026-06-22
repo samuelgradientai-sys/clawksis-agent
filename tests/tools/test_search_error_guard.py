@@ -67,9 +67,15 @@ if shutil.which("rg"):
 
 def _search(ops, method, pattern, path, **kw):
     fn = getattr(ops, method)
-    return fn(pattern, str(path), kw.get("file_glob"), kw.get("limit", 50),
-              kw.get("offset", 0), kw.get("output_mode", "content"),
-              kw.get("context", 0))
+    return fn(
+        pattern,
+        str(path),
+        kw.get("file_glob"),
+        kw.get("limit", 50),
+        kw.get("offset", 0),
+        kw.get("output_mode", "content"),
+        kw.get("context", 0),
+    )
 
 
 @pytest.mark.parametrize("method", _METHODS)
@@ -110,16 +116,27 @@ class TestSearchErrorGuard:
 
     def test_files_only_excludes_diagnostics(self, method, partial_error_tree):
         # files_only mode must not list a diagnostic line as a fake file path.
-        res = _search(_ops(partial_error_tree), method, "needle",
-                      partial_error_tree, output_mode="files_only")
+        res = _search(
+            _ops(partial_error_tree),
+            method,
+            "needle",
+            partial_error_tree,
+            output_mode="files_only",
+        )
         assert res.error is None
         assert res.files, "expected matching files"
-        assert all("Permission denied" not in f and "locked.txt" not in f
-                   for f in res.files), f"diagnostic leaked into files: {res.files}"
+        assert all(
+            "Permission denied" not in f and "locked.txt" not in f for f in res.files
+        ), f"diagnostic leaked into files: {res.files}"
 
     def test_count_mode_with_partial_error(self, method, partial_error_tree):
-        res = _search(_ops(partial_error_tree), method, "needle",
-                      partial_error_tree, output_mode="count")
+        res = _search(
+            _ops(partial_error_tree),
+            method,
+            "needle",
+            partial_error_tree,
+            output_mode="count",
+        )
         assert res.error is None
         assert res.total_count >= 4
 
@@ -134,8 +151,10 @@ class TestSplitToolDiagnostics:
         assert "regex parse error" in diagnostics
 
     def test_partial_error_separates_matches(self):
-        out = ("rg: sub/locked.txt: Permission denied (os error 13)\n"
-               "a.txt:1:needle here\nb.txt:2:needle there\n")
+        out = (
+            "rg: sub/locked.txt: Permission denied (os error 13)\n"
+            "a.txt:1:needle here\nb.txt:2:needle there\n"
+        )
         diagnostics, payload = _split_tool_diagnostics(out)
         assert "Permission denied" in diagnostics
         assert "a.txt:1:needle here" in payload

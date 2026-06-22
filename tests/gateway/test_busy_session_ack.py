@@ -3,6 +3,7 @@
 Verifies that users get an immediate status response instead of total silence
 when the agent is working on a task. See PR fix for the @Lonely__MH report.
 """
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,6 +37,7 @@ from gateway.platforms.base import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_event(text="hello", chat_id="123", platform_val="telegram"):
     """Build a minimal MessageEvent."""
@@ -94,6 +96,7 @@ def _make_adapter(platform_val="telegram"):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestBusySessionAck:
     """User sends a message while agent is running — should get acknowledgment."""
@@ -575,9 +578,12 @@ class TestBusySessionOnboardingHint:
 
         agent = MagicMock()
         agent.get_activity_summary.return_value = {
-            "api_call_count": 3, "max_iterations": 60,
-            "current_tool": None, "last_activity_ts": time.time(),
-            "last_activity_desc": "api", "seconds_since_activity": 0.1,
+            "api_call_count": 3,
+            "max_iterations": 60,
+            "current_tool": None,
+            "last_activity_ts": time.time(),
+            "last_activity_desc": "api",
+            "seconds_since_activity": 0.1,
         }
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = time.time() - 5
@@ -596,6 +602,7 @@ class TestBusySessionOnboardingHint:
 
         # The flag is now persisted to tmp_path/config.yaml
         import yaml
+
         cfg = yaml.safe_load((tmp_path / "config.yaml").read_text())
         assert cfg["onboarding"]["seen"]["busy_input_prompt"] is True
 
@@ -607,11 +614,14 @@ class TestBusySessionOnboardingHint:
 
         monkeypatch.setattr(_gr, "_clawk_home", tmp_path)
         # Pre-populate the config so is_seen() returns True from the start.
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "onboarding": {"seen": {"busy_input_prompt": True}},
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "onboarding": {"seen": {"busy_input_prompt": True}},
+            })
+        )
         monkeypatch.setattr(
-            _gr, "_load_gateway_config",
+            _gr,
+            "_load_gateway_config",
             lambda: yaml.safe_load((tmp_path / "config.yaml").read_text()),
         )
 
@@ -624,9 +634,12 @@ class TestBusySessionOnboardingHint:
 
         agent = MagicMock()
         agent.get_activity_summary.return_value = {
-            "api_call_count": 3, "max_iterations": 60,
-            "current_tool": None, "last_activity_ts": time.time(),
-            "last_activity_desc": "api", "seconds_since_activity": 0.1,
+            "api_call_count": 3,
+            "max_iterations": 60,
+            "current_tool": None,
+            "last_activity_ts": time.time(),
+            "last_activity_desc": "api",
+            "seconds_since_activity": 0.1,
         }
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = time.time() - 5

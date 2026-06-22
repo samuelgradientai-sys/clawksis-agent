@@ -6,6 +6,7 @@ replacement spawn then died on EADDRINUSE. These tests cover the startup
 reaper (`_reap_stale_sidecar`) and the stdin-pipe lifetime binding, without
 spawning Node or binding ports.
 """
+
 from __future__ import annotations
 
 import subprocess

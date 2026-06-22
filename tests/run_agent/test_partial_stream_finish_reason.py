@@ -210,6 +210,7 @@ class TestPartialStreamStubFinishReason:
 
 # ── Clean stream-end mid-tool-call (no exception, no finish_reason) ─────────
 
+
 class TestCleanStreamEndMidToolCall:
     """The upstream closes the SSE stream cleanly after delivering a tool
     name + the opening '{' of its arguments — NO exception, NO finish_reason,
@@ -226,24 +227,31 @@ class TestCleanStreamEndMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_no_finish_reason_partial_tool_args_routes_to_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         def _clean_ending_stream():
             # Reasoning + tool name + the lone opening brace, then the
             # generator simply RETURNS (StopIteration) — no raise, no
             # finish_reason chunk, no [DONE].
             yield _make_stream_chunk(content="\n")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_x", name="execute_code"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments="{"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_x", name="execute_code"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments="{"),
+                ]
+            )
             # falls off the end — clean close, no terminator
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _clean_ending_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _clean_ending_stream()
         )
         mock_create.return_value = mock_client
 
@@ -267,25 +275,32 @@ class TestCleanStreamEndMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_real_length_truncation_still_uses_uuid_id(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """Control: when the provider DOES send finish_reason='length' with
         partial tool args, it is a genuine output cap — keep the existing
         non-stub behaviour (boost max_tokens and retry)."""
 
         def _capped_stream():
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_y", name="execute_code"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments="{"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_y", name="execute_code"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments="{"),
+                ]
+            )
             # Provider explicitly reports the output cap.
             yield _make_stream_chunk(finish_reason="length")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _capped_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _capped_stream()
         )
         mock_create.return_value = mock_client
 

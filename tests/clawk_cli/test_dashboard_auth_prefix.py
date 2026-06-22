@@ -616,9 +616,7 @@ class TestPublicUrlOverride:
 
         assert result == ""  # scheme-less value is still rejected
         warnings = [
-            r.getMessage()
-            for r in caplog.records
-            if r.levelno == logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any(
             "CLAWK_DASHBOARD_PUBLIC_URL" in m
@@ -648,17 +646,13 @@ class TestPublicUrlOverride:
         scheme_warnings = [
             r
             for r in caplog.records
-            if r.levelno == logging.WARNING
-            and "clawk.domain.com" in r.getMessage()
+            if r.levelno == logging.WARNING and "clawk.domain.com" in r.getMessage()
         ]
         assert len(scheme_warnings) == 1, (
-            f"expected exactly one warning across 5 calls, "
-            f"got {len(scheme_warnings)}"
+            f"expected exactly one warning across 5 calls, got {len(scheme_warnings)}"
         )
 
-    def test_valid_public_url_emits_no_warning(
-        self, patch_config, monkeypatch, caplog
-    ):
+    def test_valid_public_url_emits_no_warning(self, patch_config, monkeypatch, caplog):
         """A correctly-formed value must not produce a spurious warning."""
         import logging
 
@@ -666,17 +660,13 @@ class TestPublicUrlOverride:
 
         prefix_mod._warned_malformed_public_urls.clear()
         patch_config(None)
-        monkeypatch.setenv(
-            "CLAWK_DASHBOARD_PUBLIC_URL", "https://clawk.domain.com"
-        )
+        monkeypatch.setenv("CLAWK_DASHBOARD_PUBLIC_URL", "https://clawk.domain.com")
 
         with caplog.at_level(logging.WARNING, logger=prefix_mod.__name__):
             result = prefix_mod.resolve_public_url()
 
         assert result == "https://clawk.domain.com"
-        assert not [
-            r for r in caplog.records if r.levelno == logging.WARNING
-        ]
+        assert not [r for r in caplog.records if r.levelno == logging.WARNING]
 
 
 # ---------------------------------------------------------------------------

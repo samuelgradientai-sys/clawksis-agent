@@ -38,7 +38,9 @@ class _CompressionThenFailureAgent:
         self.session_prompt_tokens = 4321
         self.session_completion_tokens = 0
 
-    def run_conversation(self, user_message, conversation_history=None, task_id=None, **_kwargs):
+    def run_conversation(
+        self, user_message, conversation_history=None, task_id=None, **_kwargs
+    ):
         self.session_id = "session-after-compression"
         return {
             "failed": True,
@@ -84,7 +86,9 @@ class _Adapter:
 def _runner(session_store):
     runner = object.__new__(gateway_run.GatewayRunner)
     runner.adapters = {Platform.TELEGRAM: _Adapter()}
-    runner.config = SimpleNamespace(streaming=None, group_sessions_per_user=True, thread_sessions_per_user=False)
+    runner.config = SimpleNamespace(
+        streaming=None, group_sessions_per_user=True, thread_sessions_per_user=False
+    )
     runner.hooks = SimpleNamespace(loaded_hooks=False, emit=AsyncMock())
     runner.session_store = session_store
     runner._session_db = MagicMock()
@@ -106,10 +110,18 @@ def _runner(session_store):
     runner._get_proxy_url = lambda: None
     runner._resolve_session_agent_runtime = lambda **_kwargs: (
         "gpt-5.4",
-        {"provider": "openai-codex", "api_mode": "codex_responses", "base_url": "https://chatgpt.com/backend-api/codex", "api_key": "token"},
+        {
+            "provider": "openai-codex",
+            "api_mode": "codex_responses",
+            "base_url": "https://chatgpt.com/backend-api/codex",
+            "api_key": "token",
+        },
     )
     runner._resolve_session_reasoning_config = lambda **_kwargs: None
-    runner._resolve_turn_agent_config = lambda message, model, runtime: {"model": model, "runtime": runtime}
+    runner._resolve_turn_agent_config = lambda message, model, runtime: {
+        "model": model,
+        "runtime": runtime,
+    }
     runner._load_service_tier = lambda: None
     runner._agent_config_signature = lambda *_args, **_kwargs: ("sig",)
     runner._extract_cache_busting_config = lambda _config: ()
@@ -126,15 +138,21 @@ def test_failed_turn_still_syncs_compression_session_split(monkeypatch):
     monkeypatch.setenv("CLAWK_TOOL_PROGRESS_MODE", "off")
     monkeypatch.setenv("CLAWK_AGENT_TIMEOUT", "0")
     monkeypatch.setattr(gateway_run, "_load_gateway_config", lambda: {})
-    monkeypatch.setattr("gateway.stream_consumer.GatewayStreamConsumer", _StreamConsumer)
+    monkeypatch.setattr(
+        "gateway.stream_consumer.GatewayStreamConsumer", _StreamConsumer
+    )
 
     import clawk_cli.tools_config as tools_config
 
-    monkeypatch.setattr(tools_config, "_get_platform_tools", lambda *_args, **_kwargs: {"core"})
+    monkeypatch.setattr(
+        tools_config, "_get_platform_tools", lambda *_args, **_kwargs: {"core"}
+    )
 
     session_store = _SessionStore()
     runner = _runner(session_store)
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="user-1")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="user-1"
+    )
 
     result = asyncio.run(
         asyncio.wait_for(

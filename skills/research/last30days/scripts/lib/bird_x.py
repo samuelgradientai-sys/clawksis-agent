@@ -31,6 +31,7 @@ def _first_of(*values):
             return v
     return None
 
+
 # Path to the vendored bird-search wrapper
 _BIRD_SEARCH_MJS = Path(__file__).parent / "vendor" / "bird-search" / "bird-search.mjs"
 
@@ -48,14 +49,14 @@ _credentials: Dict[str, str] = {}
 def set_credentials(auth_token: Optional[str], ct0: Optional[str]):
     """Inject AUTH_TOKEN/CT0 from .env config so Node subprocesses can use them."""
     if auth_token:
-        _credentials['AUTH_TOKEN'] = auth_token
+        _credentials["AUTH_TOKEN"] = auth_token
     if ct0:
-        _credentials['CT0'] = ct0
+        _credentials["CT0"] = ct0
 
 
 def _has_injected_credentials() -> bool:
     """Return True when both X session cookies were injected from config."""
-    return bool(_credentials.get('AUTH_TOKEN') and _credentials.get('CT0'))
+    return bool(_credentials.get("AUTH_TOKEN") and _credentials.get("CT0"))
 
 
 def _has_process_credentials() -> bool:
@@ -85,6 +86,7 @@ def _extract_core_subject(topic: str) -> str:
     core product/concept name (max 5 words).
     """
     from .query import extract_core_subject
+
     return extract_core_subject(topic, max_words=5, strip_suffixes=True)
 
 
@@ -131,7 +133,10 @@ def install_bird() -> Tuple[bool, str]:
         Tuple of (success, message).
     """
     if is_bird_installed():
-        return True, "Bird search is bundled with /last30days v3.0.0 - no installation needed."
+        return (
+            True,
+            "Bird search is bundled with /last30days v3.0.0 - no installation needed.",
+        )
     if not shutil.which("node"):
         return False, "Node.js 22+ is required for X search. Install Node.js first."
     return False, f"Vendored bird-search.mjs not found at {_BIRD_SEARCH_MJS}"
@@ -164,9 +169,11 @@ def _invoke_bird_subprocess(query: str, count: int, timeout: int):
     based on the result.stdout content.
     """
     cmd = [
-        "node", str(_BIRD_SEARCH_MJS),
+        "node",
+        str(_BIRD_SEARCH_MJS),
         query,
-        "--count", str(count),
+        "--count",
+        str(count),
         "--json",
     ]
 
@@ -176,6 +183,7 @@ def _invoke_bird_subprocess(query: str, count: int, timeout: int):
         pid_holder.append(pid)
         try:
             from last30days import register_child_pid
+
             register_child_pid(pid)
         except ImportError:
             pass
@@ -195,6 +203,7 @@ def _invoke_bird_subprocess(query: str, count: int, timeout: int):
         if pid_holder:
             try:
                 from last30days import unregister_child_pid
+
                 unregister_child_pid(pid_holder[0])
             except Exception:
                 pass
@@ -309,10 +318,11 @@ def search_x(
     core_words = core_topic.split()
     if not items and len(core_words) >= 2:
         from .query import extract_compound_terms
+
         compounds = extract_compound_terms(topic)
         if compounds:
             # Build OR-group query: ("multi-agent" OR "agent simulation") since:DATE
-            or_parts = ' OR '.join(f'"{t}"' for t in compounds[:3])
+            or_parts = " OR ".join(f'"{t}"' for t in compounds[:3])
             _log(f"0 results for '{core_topic}', retrying with OR groups: {or_parts}")
             query = f"({or_parts}) since:{from_date}"
             response = _run_bird_search(query, count, timeout)
@@ -320,7 +330,7 @@ def search_x(
 
     # Retry with fewer keywords if still 0 results and query has 3+ words
     if not items and len(core_words) > 2:
-        shorter = ' '.join(core_words[:2])
+        shorter = " ".join(core_words[:2])
         _log(f"0 results for '{core_topic}', retrying with '{shorter}'")
         query = f"{shorter} since:{from_date}"
         response = _run_bird_search(query, count, timeout)
@@ -329,14 +339,29 @@ def search_x(
     # Last-chance retry: use strongest remaining token (often the product name)
     if not items and core_words:
         low_signal = {
-            'trendiest', 'trending', 'hottest', 'hot', 'popular', 'viral',
-            'best', 'top', 'latest', 'new', 'plugin', 'plugins',
-            'skill', 'skills', 'tool', 'tools',
+            "trendiest",
+            "trending",
+            "hottest",
+            "hot",
+            "popular",
+            "viral",
+            "best",
+            "top",
+            "latest",
+            "new",
+            "plugin",
+            "plugins",
+            "skill",
+            "skills",
+            "tool",
+            "tools",
         }
         candidates = [w for w in core_words if w not in low_signal]
         if candidates:
             strongest = max(candidates, key=len)
-            _log(f"0 results for '{core_topic}', retrying with strongest token '{strongest}'")
+            _log(
+                f"0 results for '{core_topic}', retrying with strongest token '{strongest}'"
+            )
             query = f"{strongest} since:{from_date}"
             response = _run_bird_search(query, count, timeout)
 
@@ -373,9 +398,11 @@ def search_handles(
             query = f"from:{handle} since:{from_date}"
 
         cmd = [
-            "node", str(_BIRD_SEARCH_MJS),
+            "node",
+            str(_BIRD_SEARCH_MJS),
             query,
-            "--count", str(count_per),
+            "--count",
+            str(count_per),
             "--json",
         ]
 
@@ -414,7 +441,9 @@ def search_handles(
     return all_items
 
 
-def parse_bird_response(response: Dict[str, Any], query: str = "") -> List[Dict[str, Any]]:
+def parse_bird_response(
+    response: Dict[str, Any], query: str = ""
+) -> List[Dict[str, Any]]:
     """Parse Bird response to match xai_x output format.
 
     Args:
@@ -432,7 +461,11 @@ def parse_bird_response(response: Dict[str, Any], query: str = "") -> List[Dict[
         return items
 
     # Bird returns a list of tweets directly or under a key
-    raw_items = response if isinstance(response, list) else response.get("items", response.get("tweets", []))
+    raw_items = (
+        response
+        if isinstance(response, list)
+        else response.get("items", response.get("tweets", []))
+    )
 
     if not isinstance(raw_items, list):
         return items
@@ -471,11 +504,19 @@ def parse_bird_response(response: Dict[str, Any], query: str = "") -> List[Dict[
 
         # Extract user info (Bird uses author.username, older format uses user.screen_name)
         author = tweet.get("author", {}) or tweet.get("user", {})
-        author_handle = author.get("username") or author.get("screen_name", "") or tweet.get("author_handle", "")
+        author_handle = (
+            author.get("username")
+            or author.get("screen_name", "")
+            or tweet.get("author_handle", "")
+        )
 
         # Build engagement dict (Bird uses camelCase: likeCount, retweetCount, etc.)
         engagement = {
-            "likes": _first_of(tweet.get("likeCount"), tweet.get("like_count"), tweet.get("favorite_count")),
+            "likes": _first_of(
+                tweet.get("likeCount"),
+                tweet.get("like_count"),
+                tweet.get("favorite_count"),
+            ),
             "reposts": _first_of(tweet.get("retweetCount"), tweet.get("retweet_count")),
             "replies": _first_of(tweet.get("replyCount"), tweet.get("reply_count")),
             "quotes": _first_of(tweet.get("quoteCount"), tweet.get("quote_count")),
@@ -490,14 +531,18 @@ def parse_bird_response(response: Dict[str, Any], query: str = "") -> List[Dict[
 
         # Build normalized item
         item = {
-            "id": f"X{i+1}",
+            "id": f"X{i + 1}",
             "text": str(tweet.get("text", tweet.get("full_text", ""))).strip()[:500],
             "url": url,
             "author_handle": author_handle.lstrip("@"),
             "date": date,
-            "engagement": engagement if any(v is not None for v in engagement.values()) else None,
+            "engagement": engagement
+            if any(v is not None for v in engagement.values())
+            else None,
             "why_relevant": "",  # Bird doesn't provide relevance explanations
-            "relevance": _compute_relevance(query, str(tweet.get("text", ""))) if query else 0.7,
+            "relevance": _compute_relevance(query, str(tweet.get("text", "")))
+            if query
+            else 0.7,
         }
 
         items.append(item)

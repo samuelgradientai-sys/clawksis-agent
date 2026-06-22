@@ -1863,7 +1863,9 @@ def test_normalize_codex_response_marks_commentary_only_message_as_incomplete(
     assert "inspect the repository" in (assistant_message.content or "")
 
 
-def test_normalize_codex_response_final_answer_overrides_top_level_incomplete(monkeypatch):
+def test_normalize_codex_response_final_answer_overrides_top_level_incomplete(
+    monkeypatch,
+):
     from agent.codex_responses_adapter import _normalize_codex_response
 
     assistant_message, finish_reason = _normalize_codex_response(
@@ -1876,7 +1878,9 @@ def test_normalize_codex_response_final_answer_overrides_top_level_incomplete(mo
     assert "Ramsay" in (assistant_message.content or "")
 
 
-def test_normalize_codex_response_top_level_incomplete_without_final_answer_stays_incomplete(monkeypatch):
+def test_normalize_codex_response_top_level_incomplete_without_final_answer_stays_incomplete(
+    monkeypatch,
+):
     from agent.codex_responses_adapter import _normalize_codex_response
 
     response = SimpleNamespace(
@@ -1922,7 +1926,9 @@ def test_normalize_codex_response_final_answer_does_not_override_streaming_statu
     assert finish_reason == "incomplete"
 
 
-def test_normalize_codex_response_final_answer_does_not_override_per_item_in_progress(monkeypatch):
+def test_normalize_codex_response_final_answer_does_not_override_per_item_in_progress(
+    monkeypatch,
+):
     from agent.codex_responses_adapter import _normalize_codex_response
 
     response = SimpleNamespace(

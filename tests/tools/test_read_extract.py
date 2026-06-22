@@ -28,6 +28,7 @@ from tools.file_tools import read_file_tool
 # Fixture builders — construct minimal valid OOXML / notebook files.
 # ---------------------------------------------------------------------------
 
+
 def _write_notebook(path, cells, nbformat=4):
     nb = {"cells": cells, "metadata": {}, "nbformat": nbformat, "nbformat_minor": 5}
     with open(path, "w", encoding="utf-8") as fh:
@@ -59,6 +60,7 @@ _NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 # is_extractable_document
 # ---------------------------------------------------------------------------
 
+
 class TestIsExtractable(unittest.TestCase):
     def test_recognized_extensions(self):
         self.assertTrue(is_extractable_document("a.ipynb"))
@@ -75,22 +77,30 @@ class TestIsExtractable(unittest.TestCase):
 # Notebooks (.ipynb) — #10733
 # ---------------------------------------------------------------------------
 
+
 class TestNotebookExtraction(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="rex_nb_")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_markdown_and_code_in_order(self):
         p = os.path.join(self.tmp, "nb.ipynb")
-        _write_notebook(p, [
-            {"cell_type": "markdown", "source": ["# Title\n", "para"]},
-            {"cell_type": "code", "source": "x = 1\nprint(x)",
-             "outputs": [{"output_type": "stream", "text": ["1\n"]}],
-             "execution_count": 1},
-        ])
+        _write_notebook(
+            p,
+            [
+                {"cell_type": "markdown", "source": ["# Title\n", "para"]},
+                {
+                    "cell_type": "code",
+                    "source": "x = 1\nprint(x)",
+                    "outputs": [{"output_type": "stream", "text": ["1\n"]}],
+                    "execution_count": 1,
+                },
+            ],
+        )
         text = extract_document_text(p)
         self.assertIn("# Title", text)
         self.assertIn("print(x)", text)
@@ -107,9 +117,20 @@ class TestNotebookExtraction(unittest.TestCase):
 
     def test_legacy_worksheets_form(self):
         p = os.path.join(self.tmp, "nb3.ipynb")
-        nb = {"worksheets": [{"cells": [
-            {"cell_type": "code", "input": "ignored", "source": "legacy cell"}]}],
-            "nbformat": 3}
+        nb = {
+            "worksheets": [
+                {
+                    "cells": [
+                        {
+                            "cell_type": "code",
+                            "input": "ignored",
+                            "source": "legacy cell",
+                        }
+                    ]
+                }
+            ],
+            "nbformat": 3,
+        }
         with open(p, "w") as fh:
             json.dump(nb, fh)
         self.assertIn("legacy cell", extract_document_text(p))
@@ -132,31 +153,43 @@ class TestNotebookExtraction(unittest.TestCase):
 # Word documents (.docx) — #10737
 # ---------------------------------------------------------------------------
 
+
 class TestDocxExtraction(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="rex_docx_")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _doc(self, body):
-        return (f'<?xml version="1.0"?><w:document xmlns:w="{_NS_W}">'
-                f'<w:body>{body}</w:body></w:document>')
+        return (
+            f'<?xml version="1.0"?><w:document xmlns:w="{_NS_W}">'
+            f"<w:body>{body}</w:body></w:document>"
+        )
 
     def test_paragraphs_and_runs(self):
         p = os.path.join(self.tmp, "d.docx")
-        _write_docx(p, self._doc(
-            '<w:p><w:r><w:t>Hello </w:t></w:r><w:r><w:t>World</w:t></w:r></w:p>'
-            '<w:p><w:r><w:t>Second</w:t></w:r></w:p>'))
+        _write_docx(
+            p,
+            self._doc(
+                "<w:p><w:r><w:t>Hello </w:t></w:r><w:r><w:t>World</w:t></w:r></w:p>"
+                "<w:p><w:r><w:t>Second</w:t></w:r></w:p>"
+            ),
+        )
         text = extract_document_text(p)
         self.assertIn("Hello World", text)
         self.assertIn("Second", text)
 
     def test_tabs_and_breaks(self):
         p = os.path.join(self.tmp, "d2.docx")
-        _write_docx(p, self._doc(
-            '<w:p><w:r><w:t>A</w:t><w:tab/><w:t>B</w:t><w:br/><w:t>C</w:t></w:r></w:p>'))
+        _write_docx(
+            p,
+            self._doc(
+                "<w:p><w:r><w:t>A</w:t><w:tab/><w:t>B</w:t><w:br/><w:t>C</w:t></w:r></w:p>"
+            ),
+        )
         text = extract_document_text(p)
         self.assertIn("A\tB", text)
         self.assertIn("C", text)
@@ -180,48 +213,70 @@ class TestDocxExtraction(unittest.TestCase):
 # Excel workbooks (.xlsx) — #10740
 # ---------------------------------------------------------------------------
 
+
 class TestXlsxExtraction(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="rex_xlsx_")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _build(self, path, *, include_hidden=True):
         r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-        hidden_sheet = (f'<sheet name="Hidden" sheetId="2" state="hidden" '
-                        f'xmlns:r="{r}" r:id="rId2"/>') if include_hidden else ""
+        hidden_sheet = (
+            (
+                f'<sheet name="Hidden" sheetId="2" state="hidden" '
+                f'xmlns:r="{r}" r:id="rId2"/>'
+            )
+            if include_hidden
+            else ""
+        )
         workbook = (
             f'<workbook xmlns="{_NS_S}" xmlns:r="{r}"><sheets>'
             f'<sheet name="Data" sheetId="1" r:id="rId1"/>{hidden_sheet}'
-            f'</sheets></workbook>')
+            f"</sheets></workbook>"
+        )
         rels = (
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             '<Relationship Id="rId1" Target="worksheets/sheet1.xml" Type="x"/>'
             '<Relationship Id="rId2" Target="worksheets/sheet2.xml" Type="x"/>'
-            '</Relationships>')
-        shared = (f'<sst xmlns="{_NS_S}"><si><t>Name</t></si><si><t>Score</t></si>'
-                  f'<si><t>Alice</t></si></sst>')
+            "</Relationships>"
+        )
+        shared = (
+            f'<sst xmlns="{_NS_S}"><si><t>Name</t></si><si><t>Score</t></si>'
+            f"<si><t>Alice</t></si></sst>"
+        )
         sheet1 = (
             f'<worksheet xmlns="{_NS_S}"><sheetData>'
             '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
             '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>95</v></c></row>'
-            '</sheetData></worksheet>')
-        sheet2 = (f'<worksheet xmlns="{_NS_S}"><sheetData>'
-                  '<row r="1"><c r="A1" t="str"><v>SECRETDATA</v></c></row>'
-                  '</sheetData></worksheet>')
-        _write_xlsx(path, workbook=workbook, rels=rels, shared=shared,
-                    sheets={"xl/worksheets/sheet1.xml": sheet1,
-                            "xl/worksheets/sheet2.xml": sheet2})
+            "</sheetData></worksheet>"
+        )
+        sheet2 = (
+            f'<worksheet xmlns="{_NS_S}"><sheetData>'
+            '<row r="1"><c r="A1" t="str"><v>SECRETDATA</v></c></row>'
+            "</sheetData></worksheet>"
+        )
+        _write_xlsx(
+            path,
+            workbook=workbook,
+            rels=rels,
+            shared=shared,
+            sheets={
+                "xl/worksheets/sheet1.xml": sheet1,
+                "xl/worksheets/sheet2.xml": sheet2,
+            },
+        )
 
     def test_visible_sheet_content(self):
         p = os.path.join(self.tmp, "wb.xlsx")
         self._build(p)
         text = extract_document_text(p)
-        self.assertIn("Data", text)        # sheet label
+        self.assertIn("Data", text)  # sheet label
         self.assertIn("Name\tScore", text)  # shared-string header row
-        self.assertIn("Alice\t95", text)    # string + numeric cells
+        self.assertIn("Alice\t95", text)  # string + numeric cells
 
     def test_hidden_sheet_omitted(self):
         p = os.path.join(self.tmp, "wb2.xlsx")
@@ -242,20 +297,25 @@ class TestXlsxExtraction(unittest.TestCase):
 # read_file_tool integration
 # ---------------------------------------------------------------------------
 
+
 class TestReadFileToolIntegration(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="rex_int_")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_notebook_read_is_line_numbered(self):
         p = os.path.join(self.tmp, "nb.ipynb")
-        _write_notebook(p, [
-            {"cell_type": "markdown", "source": "# H"},
-            {"cell_type": "code", "source": "print(1)"},
-        ])
+        _write_notebook(
+            p,
+            [
+                {"cell_type": "markdown", "source": "# H"},
+                {"cell_type": "code", "source": "print(1)"},
+            ],
+        )
         res = json.loads(read_file_tool(p))
         self.assertTrue(res.get("extracted_document"))
         self.assertIn("1|", res["content"])  # line-number gutter
@@ -263,9 +323,12 @@ class TestReadFileToolIntegration(unittest.TestCase):
 
     def test_pagination(self):
         p = os.path.join(self.tmp, "nb.ipynb")
-        _write_notebook(p, [
-            {"cell_type": "code", "source": "a\nb\nc\nd\ne\nf"},
-        ])
+        _write_notebook(
+            p,
+            [
+                {"cell_type": "code", "source": "a\nb\nc\nd\ne\nf"},
+            ],
+        )
         res = json.loads(read_file_tool(p, offset=1, limit=2))
         self.assertTrue(res.get("truncated"))
         self.assertIn("offset=3", res.get("hint", ""))
@@ -283,9 +346,14 @@ class TestReadFileToolIntegration(unittest.TestCase):
 
     def test_docx_read_extracts(self):
         p = os.path.join(self.tmp, "d.docx")
-        _write_docx(p, (f'<?xml version="1.0"?><w:document xmlns:w="{_NS_W}">'
-                        '<w:body><w:p><w:r><w:t>Report body</w:t></w:r></w:p>'
-                        '</w:body></w:document>'))
+        _write_docx(
+            p,
+            (
+                f'<?xml version="1.0"?><w:document xmlns:w="{_NS_W}">'
+                "<w:body><w:p><w:r><w:t>Report body</w:t></w:r></w:p>"
+                "</w:body></w:document>"
+            ),
+        )
         res = json.loads(read_file_tool(p))
         self.assertTrue(res.get("extracted_document"))
         self.assertIn("Report body", res["content"])

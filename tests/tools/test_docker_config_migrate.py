@@ -13,15 +13,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "docker_config_migrate.py"
 
 
-def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.CompletedProcess[str]:
+def _run_migration(
+    clawk_home: Path, **env_overrides: str
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    env.update(
-        {
-            "CLAWK_HOME": str(clawk_home),
-            "CLAWK_SKIP_CHMOD": "1",
-            "PYTHONPATH": str(REPO_ROOT),
-        }
-    )
+    env.update({
+        "CLAWK_HOME": str(clawk_home),
+        "CLAWK_SKIP_CHMOD": "1",
+        "PYTHONPATH": str(REPO_ROOT),
+    })
     env.update(env_overrides)
     return subprocess.run(
         [sys.executable, str(SCRIPT)],
@@ -32,7 +32,9 @@ def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.Complet
     )
 
 
-def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Path) -> None:
+def test_docker_config_migrate_backs_up_and_migrates_legacy_config(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
     model_map = {
@@ -40,23 +42,21 @@ def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Pat
         "local-large": {"context_length": 32768},
     }
     config_path.write_text(
-        yaml.safe_dump(
-            {
-                "_config_version": 11,
-                "custom_providers": [
-                    {
-                        "name": "Local API",
-                        "base_url": "http://localhost:8080/v1",
-                        "api_key": "test-key",
-                        "api_mode": "chat_completions",
-                        "model": "local-small",
-                        "models": model_map,
-                        "context_length": 32768,
-                        "discover_models": False,
-                    }
-                ],
-            }
-        ),
+        yaml.safe_dump({
+            "_config_version": 11,
+            "custom_providers": [
+                {
+                    "name": "Local API",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "test-key",
+                    "api_mode": "chat_completions",
+                    "model": "local-small",
+                    "models": model_map,
+                    "context_length": 32768,
+                    "discover_models": False,
+                }
+            ],
+        }),
         encoding="utf-8",
     )
     env_path.write_text("OPENROUTER_API_KEY=test\n", encoding="utf-8")
@@ -79,20 +79,20 @@ def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Pat
     assert list(tmp_path.glob(".env.bak-*"))
 
 
-def test_docker_config_migrate_backs_up_and_migrates_unversioned_config(tmp_path: Path) -> None:
+def test_docker_config_migrate_backs_up_and_migrates_unversioned_config(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        yaml.safe_dump(
-            {
-                "custom_providers": [
-                    {
-                        "name": "Local API",
-                        "base_url": "http://localhost:8080/v1",
-                        "api_key": "test-key",
-                    }
-                ],
-            }
-        ),
+        yaml.safe_dump({
+            "custom_providers": [
+                {
+                    "name": "Local API",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "test-key",
+                }
+            ],
+        }),
         encoding="utf-8",
     )
 

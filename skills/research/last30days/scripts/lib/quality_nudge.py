@@ -35,6 +35,7 @@ def _is_youtube_active(config: dict, research_results: dict) -> bool:
     """Check if YouTube source is active (yt-dlp installed)."""
     try:
         from . import youtube_yt
+
         has_ytdlp = youtube_yt.is_ytdlp_installed()
     except Exception:
         has_ytdlp = False
@@ -66,7 +67,9 @@ def _is_youtube_degraded(research_results: dict, threshold: float) -> bool:
     """
     videos = int(research_results.get("youtube_videos_count") or 0)
     transcripts = int(research_results.get("youtube_transcripts_count") or 0)
-    captions_disabled = int(research_results.get("youtube_captions_disabled_count") or 0)
+    captions_disabled = int(
+        research_results.get("youtube_captions_disabled_count") or 0
+    )
     if videos <= 0:
         return False
     eligible = videos - captions_disabled
@@ -162,7 +165,10 @@ def compute_quality_score(config: dict, research_results: dict) -> dict:
         # level. But search-success + transcript-failure is the canonical
         # stale-binary failure mode that the footer used to hide. Flag as
         # degraded so the user gets an actionable nudge to update the binary.
-        threshold = float(config.get("DEGRADED_TRANSCRIPT_THRESHOLD") or DEFAULT_DEGRADED_TRANSCRIPT_THRESHOLD)
+        threshold = float(
+            config.get("DEGRADED_TRANSCRIPT_THRESHOLD")
+            or DEFAULT_DEGRADED_TRANSCRIPT_THRESHOLD
+        )
         if _is_youtube_degraded(research_results, threshold):
             core_degraded.append("youtube")
     else:
@@ -170,6 +176,7 @@ def compute_quality_score(config: dict, research_results: dict) -> dict:
         # Check if configured but errored (yt-dlp installed but failed this run)
         try:
             from . import youtube_yt
+
             has_ytdlp = youtube_yt.is_ytdlp_installed()
         except Exception:
             has_ytdlp = False
@@ -185,15 +192,19 @@ def compute_quality_score(config: dict, research_results: dict) -> dict:
 
     has_sc = bool(config.get("SCRAPECREATORS_API_KEY"))
     active_sources = research_results.get("active_sources") or []
-    nudge_text = _build_nudge_text(
-        core_missing,
-        core_errored,
-        core_degraded,
-        research_results,
-        has_sc=has_sc,
-        active_sources=active_sources,
-        bonus_errored=bonus_errored,
-    ) if (core_missing or core_degraded or bonus_errored) else None
+    nudge_text = (
+        _build_nudge_text(
+            core_missing,
+            core_errored,
+            core_degraded,
+            research_results,
+            has_sc=has_sc,
+            active_sources=active_sources,
+            bonus_errored=bonus_errored,
+        )
+        if (core_missing or core_degraded or bonus_errored)
+        else None
+    )
 
     return {
         "score_pct": score_pct,
@@ -276,7 +287,9 @@ def _build_nudge_text(
     if "youtube" in core_degraded:
         videos = int(research_results.get("youtube_videos_count") or 0)
         transcripts = int(research_results.get("youtube_transcripts_count") or 0)
-        captions_disabled = int(research_results.get("youtube_captions_disabled_count") or 0)
+        captions_disabled = int(
+            research_results.get("youtube_captions_disabled_count") or 0
+        )
         captions_note = ""
         if captions_disabled > 0:
             captions_note = (

@@ -38,10 +38,14 @@ def _clear_provider_env(monkeypatch):
 
 
 def _stub_tts(monkeypatch):
-    monkeypatch.setattr("clawk_cli.setup.prompt_choice", lambda q, c, d=0: (
-        _maybe_keep_current_tts(q, c) if _maybe_keep_current_tts(q, c) is not None
-        else d
-    ))
+    monkeypatch.setattr(
+        "clawk_cli.setup.prompt_choice",
+        lambda q, c, d=0: (
+            _maybe_keep_current_tts(q, c)
+            if _maybe_keep_current_tts(q, c) is not None
+            else d
+        ),
+    )
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *a, **kw: False)
 
 
@@ -63,7 +67,9 @@ def _write_model_config(provider, base_url="", model_name="test-model"):
     save_config(cfg)
 
 
-def _write_aux_config(task="compression", provider="gemini", model_name="gemini-2.5-flash"):
+def _write_aux_config(
+    task="compression", provider="gemini", model_name="gemini-2.5-flash"
+):
     """Simulate the aux picker writing a task override to disk."""
     cfg = load_config()
     aux = cfg.setdefault("auxiliary", {})
@@ -73,7 +79,9 @@ def _write_aux_config(task="compression", provider="gemini", model_name="gemini-
     save_config(cfg)
 
 
-def test_setup_model_provider_preserves_auxiliary_choices_written_by_picker(tmp_path, monkeypatch):
+def test_setup_model_provider_preserves_auxiliary_choices_written_by_picker(
+    tmp_path, monkeypatch
+):
     """Aux choices made inside clawk setup must survive the wizard's final save."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
@@ -95,7 +103,9 @@ def test_setup_model_provider_preserves_auxiliary_choices_written_by_picker(tmp_
     assert compression["model"] == "gemini-2.5-flash"
 
 
-def test_setup_keep_current_custom_from_config_does_not_fall_through(tmp_path, monkeypatch):
+def test_setup_keep_current_custom_from_config_does_not_fall_through(
+    tmp_path, monkeypatch
+):
     """Keep-current custom should not fall through to the generic model menu."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
@@ -166,14 +176,18 @@ def test_setup_copilot_acp_skips_same_provider_pool_step(tmp_path, monkeypatch):
 
     def fake_prompt_yes_no(question, default=True):
         if question == "Add another credential for same-provider fallback?":
-            raise AssertionError("same-provider pool prompt should not appear for copilot-acp")
+            raise AssertionError(
+                "same-provider pool prompt should not appear for copilot-acp"
+            )
         return False
 
     monkeypatch.setattr("clawk_cli.setup.prompt_choice", fake_prompt_choice)
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", fake_prompt_yes_no)
     monkeypatch.setattr("clawk_cli.setup.prompt", lambda *args, **kwargs: "")
     monkeypatch.setattr("clawk_cli.auth.get_active_provider", lambda: None)
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr(
+        "agent.auxiliary_client.get_available_vision_backends", lambda: []
+    )
 
     setup_model_provider(config)
 
@@ -189,7 +203,9 @@ def test_setup_copilot_uses_gh_auth_and_saves_provider(tmp_path, monkeypatch):
     config = load_config()
 
     def fake_select():
-        _write_model_config("copilot", "https://models.github.ai/inference/v1", "gpt-4o")
+        _write_model_config(
+            "copilot", "https://models.github.ai/inference/v1", "gpt-4o"
+        )
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
 
@@ -275,12 +291,16 @@ def test_setup_switch_preserves_non_model_config(tmp_path, monkeypatch):
     assert reloaded["model"]["provider"] == "openrouter"
 
 
-def test_setup_summary_marks_anthropic_auth_as_vision_available(tmp_path, monkeypatch, capsys):
+def test_setup_summary_marks_anthropic_auth_as_vision_available(
+    tmp_path, monkeypatch, capsys
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-key")
     monkeypatch.setattr("shutil.which", lambda _name: None)
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: ["anthropic"])
+    monkeypatch.setattr(
+        "agent.auxiliary_client.get_available_vision_backends", lambda: ["anthropic"]
+    )
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out
@@ -289,7 +309,9 @@ def test_setup_summary_marks_anthropic_auth_as_vision_available(tmp_path, monkey
     assert "missing run 'clawk setup' to configure" not in output
 
 
-def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(tmp_path, monkeypatch, capsys):
+def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(
+    tmp_path, monkeypatch, capsys
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
     monkeypatch.setattr(
@@ -299,16 +321,62 @@ def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(tmp_path, m
             nous_auth_present=False,
             provider_is_nous=False,
             features={
-                "web": NousFeatureState("web", "Web tools", True, False, False, False, False, True, ""),
-                "image_gen": NousFeatureState("image_gen", "Image generation", True, False, False, False, False, True, ""),
-                "video_gen": NousFeatureState("video_gen", "Video generation", False, False, False, False, False, False, ""),
-                "tts": NousFeatureState("tts", "OpenAI TTS", True, False, False, False, False, True, ""),
-                "browser": NousFeatureState("browser", "Browser automation", True, True, True, False, True, True, "Camofox"),
-                "modal": NousFeatureState("modal", "Modal execution", False, False, False, False, False, True, "local"),
+                "web": NousFeatureState(
+                    "web", "Web tools", True, False, False, False, False, True, ""
+                ),
+                "image_gen": NousFeatureState(
+                    "image_gen",
+                    "Image generation",
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    "",
+                ),
+                "video_gen": NousFeatureState(
+                    "video_gen",
+                    "Video generation",
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    "",
+                ),
+                "tts": NousFeatureState(
+                    "tts", "OpenAI TTS", True, False, False, False, False, True, ""
+                ),
+                "browser": NousFeatureState(
+                    "browser",
+                    "Browser automation",
+                    True,
+                    True,
+                    True,
+                    False,
+                    True,
+                    True,
+                    "Camofox",
+                ),
+                "modal": NousFeatureState(
+                    "modal",
+                    "Modal execution",
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    "local",
+                ),
             },
         ),
     )
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr(
+        "agent.auxiliary_client.get_available_vision_backends", lambda: []
+    )
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out
@@ -316,7 +384,9 @@ def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(tmp_path, m
     assert "Browser Automation (Camofox)" in output
 
 
-def test_setup_summary_does_not_mark_incomplete_browserbase_as_available(tmp_path, monkeypatch, capsys):
+def test_setup_summary_does_not_mark_incomplete_browserbase_as_available(
+    tmp_path, monkeypatch, capsys
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
     monkeypatch.setenv("BROWSERBASE_API_KEY", "bb-key")
@@ -327,16 +397,62 @@ def test_setup_summary_does_not_mark_incomplete_browserbase_as_available(tmp_pat
             nous_auth_present=False,
             provider_is_nous=False,
             features={
-                "web": NousFeatureState("web", "Web tools", True, False, False, False, False, True, ""),
-                "image_gen": NousFeatureState("image_gen", "Image generation", True, False, False, False, False, True, ""),
-                "video_gen": NousFeatureState("video_gen", "Video generation", False, False, False, False, False, False, ""),
-                "tts": NousFeatureState("tts", "OpenAI TTS", True, False, False, False, False, True, ""),
-                "browser": NousFeatureState("browser", "Browser automation", True, False, False, False, False, True, "Browserbase"),
-                "modal": NousFeatureState("modal", "Modal execution", False, False, False, False, False, True, "local"),
+                "web": NousFeatureState(
+                    "web", "Web tools", True, False, False, False, False, True, ""
+                ),
+                "image_gen": NousFeatureState(
+                    "image_gen",
+                    "Image generation",
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    "",
+                ),
+                "video_gen": NousFeatureState(
+                    "video_gen",
+                    "Video generation",
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    "",
+                ),
+                "tts": NousFeatureState(
+                    "tts", "OpenAI TTS", True, False, False, False, False, True, ""
+                ),
+                "browser": NousFeatureState(
+                    "browser",
+                    "Browser automation",
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    "Browserbase",
+                ),
+                "modal": NousFeatureState(
+                    "modal",
+                    "Modal execution",
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    "local",
+                ),
             },
         ),
     )
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr(
+        "agent.auxiliary_client.get_available_vision_backends", lambda: []
+    )
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out

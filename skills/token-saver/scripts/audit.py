@@ -13,6 +13,7 @@ disabled list (with a timestamped backup of config.yaml).
   audit.py --apply a,b,c    add skills a,b,c to skills.disabled (backs up config)
   audit.py --skills-dir DIR --config FILE   explicit overrides (testing)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -133,7 +134,9 @@ def apply_disable(config_path: Path, names: list[str]) -> list[str]:
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        config_path.with_name(config_path.name + f".bak-{ts}").write_text(raw, encoding="utf-8")
+        config_path.with_name(config_path.name + f".bak-{ts}").write_text(
+            raw, encoding="utf-8"
+        )
     skills_cfg = cfg.setdefault("skills", {})
     if not isinstance(skills_cfg, dict):
         raise SystemExit("config 'skills' is not a mapping; refusing to edit.")
@@ -170,8 +173,14 @@ def main() -> int:
     ap.add_argument("--config", default="")
     args = ap.parse_args()
 
-    skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
-    config_path = Path(args.config).expanduser() if args.config else skills_dir.parent / "config.yaml"
+    skills_dir = (
+        Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
+    )
+    config_path = (
+        Path(args.config).expanduser()
+        if args.config
+        else skills_dir.parent / "config.yaml"
+    )
 
     if args.apply:
         try:
@@ -182,9 +191,13 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"apply failed: {exc}")
             return 1
-        print(f"Desactivadas (agregadas a skills.disabled): {', '.join(added) or '(ninguna nueva)'}")
+        print(
+            f"Desactivadas (agregadas a skills.disabled): {', '.join(added) or '(ninguna nueva)'}"
+        )
         print(f"Config: {config_path}  · backup guardado al lado.")
-        print("Reiniciá el gateway/agente para que tome efecto. Reactivar = sacarlas de esa lista.")
+        print(
+            "Reiniciá el gateway/agente para que tome efecto. Reactivar = sacarlas de esa lista."
+        )
         return 0
 
     usage = load_usage(skills_dir)
@@ -222,29 +235,42 @@ def main() -> int:
     save_tokens = sum(r["tokens"] for r in candidates)
 
     if args.json:
-        print(json.dumps({
-            "skills_dir": str(skills_dir),
-            "total_skills": len(rows),
-            "total_tokens_est": total_tokens,
-            "savings_est": save_tokens,
-            "candidates": candidates,
-            "skills": rows,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "skills_dir": str(skills_dir),
+                    "total_skills": len(rows),
+                    "total_tokens_est": total_tokens,
+                    "savings_est": save_tokens,
+                    "candidates": candidates,
+                    "skills": rows,
+                },
+                indent=2,
+            )
+        )
         return 0
 
     print("🪙 token-saver — auditoría de skills")
     print(f"Carpeta: {skills_dir}")
-    print(f"Skills instaladas: {len(rows)}  ·  costo estimado en contexto: ~{total_tokens:,} tokens")
+    print(
+        f"Skills instaladas: {len(rows)}  ·  costo estimado en contexto: ~{total_tokens:,} tokens"
+    )
     already = [r for r in rows if r["status"] == "disabled"]
     if already:
-        print(f"Ya desactivadas: {len(already)} ({', '.join(r['name'] for r in already)})")
+        print(
+            f"Ya desactivadas: {len(already)} ({', '.join(r['name'] for r in already)})"
+        )
     print()
 
     if not candidates:
-        print(f"✅ Ninguna skill lleva ≥ {args.days} días sin usarse. Nada que recortar.")
+        print(
+            f"✅ Ninguna skill lleva ≥ {args.days} días sin usarse. Nada que recortar."
+        )
         return 0
 
-    print(f"Candidatas a desactivar (sin uso ≥ {args.days} días o nunca usadas) — ahorro ~{save_tokens:,} tokens:")
+    print(
+        f"Candidatas a desactivar (sin uso ≥ {args.days} días o nunca usadas) — ahorro ~{save_tokens:,} tokens:"
+    )
     print()
     print(f"  {'skill':<26} {'~tokens':>8}  {'último uso':<12} estado")
     for r in candidates:
@@ -259,7 +285,9 @@ def main() -> int:
     print("…o a mano en ~/.clawksis/config.yaml:")
     print("  skills:")
     print("    disabled: [" + ", ".join(r["name"] for r in candidates) + "]")
-    print("Luego reiniciá el gateway/agente. Las marcadas (¿nueva?) podrían ser recién instaladas — confirmá antes.")
+    print(
+        "Luego reiniciá el gateway/agente. Las marcadas (¿nueva?) podrían ser recién instaladas — confirmá antes."
+    )
     return 0
 
 

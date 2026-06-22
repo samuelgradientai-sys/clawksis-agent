@@ -41,30 +41,30 @@ Let's see some shared examples of using CSS and XPath Selectors.
 
 Select all elements with the class `product`.
 ```python
-products = page.css('.product')
+products = page.css(".product")
 products = page.xpath('//*[@class="product"]')
 ```
 **Note:** The XPath version won't be accurate if there's another class; it's always better to rely on CSS for selecting by class.
 
 Select the first element with the class `product`.
 ```python
-product = page.css('.product')[0]
+product = page.css(".product")[0]
 product = page.xpath('//*[@class="product"]')[0]
 ```
 Get the text of the first element with the `h1` tag name
 ```python
-title = page.css('h1::text').get()
-title = page.xpath('//h1//text()').get()
+title = page.css("h1::text").get()
+title = page.xpath("//h1//text()").get()
 ```
 Which is the same as doing
 ```python
-title = page.css('h1')[0].text
-title = page.xpath('//h1')[0].text
+title = page.css("h1")[0].text
+title = page.xpath("//h1")[0].text
 ```
 Get the `href` attribute of the first element with the `a` tag name
 ```python
-link = page.css('a::attr(href)').get()
-link = page.xpath('//a/@href').get()
+link = page.css("a::attr(href)").get()
+link = page.xpath("//a/@href").get()
 ```
 Select the text of the first element with the `h1` tag name, which contains `Phone`, and under an element with class `product`.
 ```python
@@ -73,8 +73,10 @@ title = page.xpath('//*[@class="product"]//h1[contains(text(),"Phone")]/text()')
 ```
 You can nest and chain selectors as you want, given that they return results
 ```python
-page.css('.product')[0].css('h1:contains("Phone")::text').get()
-page.xpath('//*[@class="product"]')[0].xpath('//h1[contains(text(),"Phone")]/text()').get()
+page.css(".product")[0].css('h1:contains("Phone")::text').get()
+page.xpath('//*[@class="product"]')[0].xpath(
+    '//h1[contains(text(),"Phone")]/text()'
+).get()
 page.xpath('//*[@class="product"]')[0].css('h1:contains("Phone")::text').get()
 ```
 Another example
@@ -84,9 +86,11 @@ All links that have 'image' in their 'href' attribute
 links = page.css('a[href*="image"]')
 links = page.xpath('//a[contains(@href, "image")]')
 for index, link in enumerate(links):
-    link_value = link.attrib['href']  # Cleaner than link.css('::attr(href)').get()
+    link_value = link.attrib["href"]  # Cleaner than link.css('::attr(href)').get()
     link_text = link.text
-    print(f'Link number {index} points to this url {link_value} with text content as "{link_text}"')
+    print(
+        f'Link number {index} points to this url {link_value} with text content as "{link_text}"'
+    )
 ```
 
 ## Text-content selection
@@ -128,7 +132,8 @@ Arguments for `find_similar()`:
 Examples of finding elements with raw text, regex, and `find_similar`.
 ```python
 from scrapling.fetchers import Fetcher
-page = Fetcher.get('https://books.toscrape.com/index.html')
+
+page = Fetcher.get("https://books.toscrape.com/index.html")
 ```
 Find the first element whose text fully matches this text
 ```python
@@ -242,8 +247,8 @@ E-commerce Product Extraction
 ```python
 def extract_product_grid(page):
     # Find the first product card
-    first_product = page.find_by_text('Add to Cart').find_ancestor(
-        lambda e: e.has_class('product-card')
+    first_product = page.find_by_text("Add to Cart").find_ancestor(
+        lambda e: e.has_class("product-card")
     )
 
     # Find similar product cards
@@ -251,10 +256,10 @@ def extract_product_grid(page):
 
     return [
         {
-            'name': p.css('h3::text').get(),
-            'price': p.css('.price::text').re_first(r'\d+\.\d{2}'),
-            'stock': 'In stock' in p.text,
-            'rating': p.css('.rating')[0].attrib.get('data-rating')
+            "name": p.css("h3::text").get(),
+            "price": p.css(".price::text").re_first(r"\d+\.\d{2}"),
+            "stock": "In stock" in p.text,
+            "rating": p.css(".rating")[0].attrib.get("data-rating"),
         }
         for p in products
     ]
@@ -263,16 +268,16 @@ Table Row Extraction
 ```python
 def extract_table_data(page):
     # Find the first data row
-    first_row = page.css('table tbody tr')[0]
+    first_row = page.css("table tbody tr")[0]
 
     # Find similar rows
     rows = first_row.find_similar()
 
     return [
         {
-            'column1': row.css('td:nth-child(1)::text').get(),
-            'column2': row.css('td:nth-child(2)::text').get(),
-            'column3': row.css('td:nth-child(3)::text').get()
+            "column1": row.css("td:nth-child(1)::text").get(),
+            "column2": row.css("td:nth-child(2)::text").get(),
+            "column3": row.css("td:nth-child(3)::text").get(),
         }
         for row in rows
     ]
@@ -281,8 +286,8 @@ Form Field Extraction
 ```python
 def extract_form_fields(page):
     # Find first form field container
-    first_field = page.css('input')[0].find_ancestor(
-        lambda e: e.has_class('form-field')
+    first_field = page.css("input")[0].find_ancestor(
+        lambda e: e.has_class("form-field")
     )
 
     # Find similar field containers
@@ -290,9 +295,9 @@ def extract_form_fields(page):
 
     return [
         {
-            'label': f.css('label::text').get(),
-            'type': f.css('input')[0].attrib.get('type'),
-            'required': 'required' in f.css('input')[0].attrib
+            "label": f.css("label::text").get(),
+            "type": f.css("input")[0].attrib.get("type"),
+            "required": "required" in f.css("input")[0].attrib,
         }
         for f in fields
     ]
@@ -301,19 +306,17 @@ Extracting reviews from a website
 ```python
 def extract_reviews(page):
     # Find first review
-    first_review = page.find_by_text('Great product!')
-    review_container = first_review.find_ancestor(
-        lambda e: e.has_class('review')
-    )
-    
+    first_review = page.find_by_text("Great product!")
+    review_container = first_review.find_ancestor(lambda e: e.has_class("review"))
+
     # Find similar reviews
     all_reviews = review_container.find_similar()
-    
+
     return [
         {
-            'text': r.css('.review-text::text').get(),
-            'rating': r.attrib.get('data-rating'),
-            'author': r.css('.reviewer::text').get()
+            "text": r.css(".review-text::text").get(),
+            "rating": r.attrib.get("data-rating"),
+            "author": r.css(".reviewer::text").get(),
         }
         for r in all_reviews
     ]
@@ -347,7 +350,8 @@ It filters all elements in the current page/element in the following order:
 ### Examples
 ```python
 from scrapling.fetchers import Fetcher
-page = Fetcher.get('https://quotes.toscrape.com/')
+
+page = Fetcher.get("https://quotes.toscrape.com/")
 ```
 Find all elements with the tag name `div`.
 ```python

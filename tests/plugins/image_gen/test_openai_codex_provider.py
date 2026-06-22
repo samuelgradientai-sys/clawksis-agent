@@ -29,6 +29,7 @@ _PNG_HEX = (
 
 def _b64_png() -> str:
     import base64
+
     return base64.b64encode(bytes.fromhex(_PNG_HEX)).decode()
 
 
@@ -79,7 +80,9 @@ class TestAvailability:
 
     def test_available_with_codex_token(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         assert codex_plugin.OpenAICodexImageGenProvider().is_available() is True
 
     def test_openai_api_key_alone_is_not_enough(self, monkeypatch):
@@ -101,14 +104,20 @@ class TestGenerate:
         assert result["error_type"] == "auth_required"
 
     def test_returns_invalid_argument_for_empty_prompt(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         result = provider.generate("   ")
         assert result["success"] is False
         assert result["error_type"] == "invalid_argument"
 
     def test_generate_uses_codex_stream_path(self, provider, monkeypatch, tmp_path):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
-        monkeypatch.setattr(codex_plugin, "_collect_image_b64", lambda *a, **kw: _b64_png())
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
+        monkeypatch.setattr(
+            codex_plugin, "_collect_image_b64", lambda *a, **kw: _b64_png()
+        )
 
         result = provider.generate("a cat", aspect_ratio="landscape")
 
@@ -125,16 +134,20 @@ class TestGenerate:
         assert saved.name.startswith("openai_codex_")
 
     def test_codex_stream_request_shape(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
 
         captured = {}
 
         def _collect(token, *, prompt, size, quality):
-            captured.update(codex_plugin._build_responses_payload(
-                prompt=prompt,
-                size=size,
-                quality=quality,
-            ))
+            captured.update(
+                codex_plugin._build_responses_payload(
+                    prompt=prompt,
+                    size=size,
+                    quality=quality,
+                )
+            )
             return _b64_png()
 
         monkeypatch.setattr(codex_plugin, "_collect_image_b64", _collect)
@@ -178,28 +191,34 @@ class TestGenerate:
                 ])
 
         events = list(codex_plugin._iter_sse_json(_Response()))
-        assert events == [{
-            "type": "response.output_item.done",
-            "item": {"type": "image_generation_call", "result": "abc"},
-        }]
+        assert events == [
+            {
+                "type": "response.output_item.done",
+                "item": {"type": "image_generation_call", "result": "abc"},
+            }
+        ]
 
     def test_final_response_sweep_recovers_image(self):
         """Completed response output is found by recursive payload scanning."""
         payload = {
             "type": "response.completed",
             "response": {
-                "output": [{
-                    "type": "image_generation_call",
-                    "status": "completed",
-                    "id": "ig_final",
-                    "result": _b64_png(),
-                }],
+                "output": [
+                    {
+                        "type": "image_generation_call",
+                        "status": "completed",
+                        "id": "ig_final",
+                        "result": _b64_png(),
+                    }
+                ],
             },
         }
         assert codex_plugin._extract_image_b64(payload) == _b64_png()
 
     def test_empty_response_returns_error(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         monkeypatch.setattr(codex_plugin, "_collect_image_b64", lambda *a, **kw: None)
 
         result = provider.generate("a cat")
@@ -207,7 +226,9 @@ class TestGenerate:
         assert result["error_type"] == "empty_response"
 
     def test_stream_exception_returns_api_error(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
 
         def _boom(*args, **kwargs):
             raise RuntimeError("cloudflare 403")

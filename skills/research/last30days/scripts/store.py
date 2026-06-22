@@ -215,16 +215,12 @@ def init_db(db_path: Optional[Path] = None) -> Path:
 
 def _run_migrations(conn: sqlite3.Connection):
     """Apply pending schema migrations."""
-    current = conn.execute(
-        "SELECT MAX(version) FROM schema_version"
-    ).fetchone()[0] or 0
+    current = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
 
     for version in sorted(MIGRATIONS.keys()):
         if version > current:
             conn.executescript(MIGRATIONS[version])
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?)", (version,)
-            )
+            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
 
 
 # --- Topics ---
@@ -250,9 +246,7 @@ def add_topic(
             (name, queries_json, schedule),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT * FROM topics WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM topics WHERE name = ?", (name,)).fetchone()
         return dict(row)
     finally:
         conn.close()
@@ -263,9 +257,7 @@ def remove_topic(name: str) -> bool:
     init_db()
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT id FROM topics WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM topics WHERE name = ?", (name,)).fetchone()
         if not row:
             return False
         topic_id = row["id"]
@@ -303,9 +295,7 @@ def get_topic(name: str) -> Optional[Dict[str, Any]]:
     init_db()
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT * FROM topics WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM topics WHERE name = ?", (name,)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -333,8 +323,14 @@ def record_run(
                 duration_seconds, prompt_tokens, completion_tokens, token_cost)
                VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)""",
             (
-                topic_id, source_mode, status, error_message,
-                duration_seconds, prompt_tokens, completion_tokens, token_cost,
+                topic_id,
+                source_mode,
+                status,
+                error_message,
+                duration_seconds,
+                prompt_tokens,
+                completion_tokens,
+                token_cost,
             ),
         )
         conn.commit()
@@ -349,9 +345,7 @@ def update_run(run_id: int, **kwargs):
     try:
         invalid_columns = sorted(set(kwargs) - _UPDATABLE_RUN_COLUMNS)
         if invalid_columns:
-            raise ValueError(
-                f"Invalid run update fields: {', '.join(invalid_columns)}"
-            )
+            raise ValueError(f"Invalid run update fields: {', '.join(invalid_columns)}")
         sets = ", ".join(f"{k} = ?" for k in kwargs)
         values = list(kwargs.values()) + [run_id]
         conn.execute(f"UPDATE research_runs SET {sets} WHERE id = ?", values)
@@ -616,17 +610,14 @@ def _sightings_by_url(sightings: List[Dict[str, Any]]) -> Dict[str, Dict[str, An
 
 
 def _delta_source_counts(
-    findings: Dict[str, List[Dict[str, Any]]]
+    findings: Dict[str, List[Dict[str, Any]]],
 ) -> Dict[str, Dict[str, int]]:
     sources = sorted({
         finding.get("source") or "unknown"
         for group in findings.values()
         for finding in group
     })
-    counts = {
-        source: {"new": 0, "continued": 0, "dropped": 0}
-        for source in sources
-    }
+    counts = {source: {"new": 0, "continued": 0, "dropped": 0} for source in sources}
     for group_name, group in findings.items():
         for finding in group:
             source = finding.get("source") or "unknown"
@@ -772,7 +763,9 @@ def get_stats() -> Dict[str, Any]:
     """Get overall database stats."""
     conn = _connect()
     try:
-        topic_count = conn.execute("SELECT COUNT(*) FROM topics WHERE enabled = 1").fetchone()[0]
+        topic_count = conn.execute(
+            "SELECT COUNT(*) FROM topics WHERE enabled = 1"
+        ).fetchone()[0]
         finding_count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
 
         week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -842,7 +835,8 @@ def finding_from_candidate(candidate: schema.Candidate) -> Dict[str, Any]:
     """Convert a ranked candidate into a persisted finding."""
     primary_item = schema.candidate_primary_item(candidate)
     corroborating_sources = [
-        source for source in schema.candidate_sources(candidate)
+        source
+        for source in schema.candidate_sources(candidate)
         if source and source != candidate.source
     ]
     summary = candidate.explanation or candidate.snippet or ""
@@ -863,7 +857,9 @@ def finding_from_candidate(candidate: schema.Candidate) -> Dict[str, Any]:
         "content": body,
         "summary": summary,
         "engagement_score": candidate.engagement or 0,
-        "relevance_score": candidate.final_score or candidate.rerank_score or candidate.local_relevance,
+        "relevance_score": candidate.final_score
+        or candidate.rerank_score
+        or candidate.local_relevance,
     }
 
 
@@ -931,13 +927,23 @@ def _cli_query(args):
         since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     findings = get_new_findings(topic["id"], since)
-    print(json.dumps({"topic": topic["name"], "findings": findings, "count": len(findings)}, default=str))
+    print(
+        json.dumps(
+            {"topic": topic["name"], "findings": findings, "count": len(findings)},
+            default=str,
+        )
+    )
 
 
 def _cli_search(args):
     """Handle CLI search command."""
     results = search_findings(args.query, limit=args.limit)
-    print(json.dumps({"query": args.query, "results": results, "count": len(results)}, default=str))
+    print(
+        json.dumps(
+            {"query": args.query, "results": results, "count": len(results)},
+            default=str,
+        )
+    )
 
 
 def _cli_trending(args):
@@ -953,7 +959,9 @@ def _cli_stats(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Query the last30days research database")
+    parser = argparse.ArgumentParser(
+        description="Query the last30days research database"
+    )
     sub = parser.add_subparsers(dest="command")
 
     # query

@@ -53,7 +53,9 @@ class TestEnsureTypingTicket:
         )
 
         mock_response = {"typing_ticket": "fresh-ticket-xyz"}
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             ticket = await weixin_adapter._ensure_typing_ticket("user-123")
 
@@ -70,7 +72,9 @@ class TestEnsureTypingTicket:
     async def test_refreshes_when_no_cached_ticket(self, weixin_adapter):
         """When there is no cached ticket at all, fetch a new one."""
         mock_response = {"typing_ticket": "new-ticket"}
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             ticket = await weixin_adapter._ensure_typing_ticket("user-456")
 
@@ -82,7 +86,9 @@ class TestEnsureTypingTicket:
         weixin_adapter._token_store.get.return_value = "stored-ctx-token"
 
         mock_response = {"typing_ticket": "ticket-with-ctx"}
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             ticket = await weixin_adapter._ensure_typing_ticket("user-789")
 
@@ -105,16 +111,22 @@ class TestEnsureTypingTicket:
     @pytest.mark.asyncio
     async def test_returns_none_when_getconfig_fails(self, weixin_adapter):
         """Return None when getConfig raises an exception."""
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.side_effect = Exception("network error")
             ticket = await weixin_adapter._ensure_typing_ticket("user-123")
 
         assert ticket is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_getconfig_returns_empty_ticket(self, weixin_adapter):
+    async def test_returns_none_when_getconfig_returns_empty_ticket(
+        self, weixin_adapter
+    ):
         """Return None when getConfig returns no typing_ticket."""
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = {"typing_ticket": ""}
             ticket = await weixin_adapter._ensure_typing_ticket("user-123")
 
@@ -130,8 +142,14 @@ class TestEnsureTypingTicket:
         )
 
         mock_response = {"typing_ticket": "refreshed-ticket"}
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get, \
-             patch("gateway.platforms.weixin._send_typing", new_callable=AsyncMock) as mock_send:
+        with (
+            patch(
+                "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "gateway.platforms.weixin._send_typing", new_callable=AsyncMock
+            ) as mock_send,
+        ):
             mock_get.return_value = mock_response
             await weixin_adapter.stop_typing("user-123")
 
@@ -151,8 +169,14 @@ class TestEnsureTypingTicket:
         )
 
         mock_response = {"typing_ticket": "refreshed-ticket"}
-        with patch("gateway.platforms.weixin._get_config", new_callable=AsyncMock) as mock_get, \
-             patch("gateway.platforms.weixin._send_typing", new_callable=AsyncMock) as mock_send:
+        with (
+            patch(
+                "gateway.platforms.weixin._get_config", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "gateway.platforms.weixin._send_typing", new_callable=AsyncMock
+            ) as mock_send,
+        ):
             mock_get.return_value = mock_response
             await weixin_adapter.send_typing("user-123")
 
@@ -167,23 +191,27 @@ class TestTypingTicketCache:
 
     def test_returns_ticket_when_fresh(self):
         from gateway.platforms.weixin import TypingTicketCache
+
         cache = TypingTicketCache(ttl_seconds=600.0)
         cache.set("user-1", "ticket-1")
         assert cache.get("user-1") == "ticket-1"
 
     def test_returns_none_when_expired(self):
         from gateway.platforms.weixin import TypingTicketCache
+
         cache = TypingTicketCache(ttl_seconds=600.0)
         cache._cache["user-1"] = ("ticket-1", time.time() - 601)
         assert cache.get("user-1") is None
 
     def test_returns_none_when_missing(self):
         from gateway.platforms.weixin import TypingTicketCache
+
         cache = TypingTicketCache(ttl_seconds=600.0)
         assert cache.get("nonexistent") is None
 
     def test_expired_entry_is_removed_from_cache(self):
         from gateway.platforms.weixin import TypingTicketCache
+
         cache = TypingTicketCache(ttl_seconds=600.0)
         cache._cache["user-1"] = ("ticket-1", time.time() - 601)
         cache.get("user-1")

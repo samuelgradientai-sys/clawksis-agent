@@ -59,8 +59,8 @@ def build_profile_parser(subparsers, *, cmd_profile: Callable) -> None:
         "--description",
         default=None,
         help="One- or two-sentence description of what this profile is good at. "
-             "Used by the kanban decomposer to route tasks based on role instead "
-             "of profile name alone. Skip and add later via `clawk profile describe`.",
+        "Used by the kanban decomposer to route tasks based on role instead "
+        "of profile name alone. Skip and add later via `clawk profile describe`.",
     )
 
     profile_delete = profile_subparsers.add_parser("delete", help="Delete a profile")
@@ -88,13 +88,13 @@ def build_profile_parser(subparsers, *, cmd_profile: Callable) -> None:
         "--auto",
         action="store_true",
         help="Auto-generate description via the auxiliary LLM "
-             "(uses auxiliary.profile_describer)",
+        "(uses auxiliary.profile_describer)",
     )
     profile_describe.add_argument(
         "--overwrite",
         action="store_true",
         help="With --auto, replace user-authored descriptions too (default: only "
-             "fill in missing or previously-auto descriptions)",
+        "fill in missing or previously-auto descriptions)",
     )
     profile_describe.add_argument(
         "--all",
@@ -158,19 +158,25 @@ def build_profile_parser(subparsers, *, cmd_profile: Callable) -> None:
         help="Distribution source (git URL or local directory)",
     )
     profile_install.add_argument(
-        "--name", dest="install_name", metavar="NAME",
+        "--name",
+        dest="install_name",
+        metavar="NAME",
         help="Override profile name (default: read from manifest)",
     )
     profile_install.add_argument(
-        "--alias", action="store_true",
+        "--alias",
+        action="store_true",
         help="Create a shell wrapper alias for the installed profile",
     )
     profile_install.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Overwrite an existing profile of the same name (user data preserved)",
     )
     profile_install.add_argument(
-        "-y", "--yes", action="store_true",
+        "-y",
+        "--yes",
+        action="store_true",
         help="Skip manifest preview confirmation",
     )
 
@@ -186,11 +192,14 @@ def build_profile_parser(subparsers, *, cmd_profile: Callable) -> None:
     )
     profile_update.add_argument("profile_name", help="Profile to update")
     profile_update.add_argument(
-        "--force-config", action="store_true",
+        "--force-config",
+        action="store_true",
         help="Also overwrite config.yaml (normally preserved to keep user overrides)",
     )
     profile_update.add_argument(
-        "-y", "--yes", action="store_true",
+        "-y",
+        "--yes",
+        action="store_true",
         help="Skip confirmation",
     )
 

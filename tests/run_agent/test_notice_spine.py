@@ -7,6 +7,7 @@ Covers:
   C. TUI _agent_cbs notice binding — mirrors the status_callback tests already
      in tests/test_tui_gateway_server.py.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -103,11 +104,13 @@ class TestSignatureThreading:
 
     def test_init_agent_exposes_notice_callback(self):
         from agent.agent_init import init_agent
+
         sig = inspect.signature(init_agent)
         assert "notice_callback" in sig.parameters
 
     def test_init_agent_exposes_notice_clear_callback(self):
         from agent.agent_init import init_agent
+
         sig = inspect.signature(init_agent)
         assert "notice_clear_callback" in sig.parameters
 
@@ -152,7 +155,9 @@ class TestAgentCbsNoticeBinding:
         from tui_gateway import server
 
         captured = []
-        with patch("tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)):
+        with patch(
+            "tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)
+        ):
             cbs = server._agent_cbs("sid123")
             cbs["notice_callback"](
                 AgentNotice(
@@ -186,7 +191,9 @@ class TestAgentCbsNoticeBinding:
         from tui_gateway import server
 
         captured = []
-        with patch("tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)):
+        with patch(
+            "tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)
+        ):
             cbs = server._agent_cbs("sid123")
             cbs["notice_callback"](AgentNotice(text="any"))
 
@@ -196,7 +203,9 @@ class TestAgentCbsNoticeBinding:
         from tui_gateway import server
 
         captured = []
-        with patch("tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)):
+        with patch(
+            "tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)
+        ):
             cbs = server._agent_cbs("sid123")
             cbs["notice_clear_callback"]("some.key")
 

@@ -53,6 +53,7 @@ def compressor():
     """ContextCompressor with mocked deps and a tight tail budget so
     the helpers' anchor behaviour is observable."""
     from agent.context_compressor import ContextCompressor
+
     with patch(
         "agent.context_compressor.get_model_context_length",
         return_value=100_000,
@@ -83,9 +84,7 @@ class TestFindLastAssistantMessageIdx:
         idx = compressor._find_last_assistant_message_idx(messages, head_end=1)
         assert idx == 2
 
-    def test_skips_tool_call_only_stub_when_text_reply_exists_earlier(
-        self, compressor
-    ):
+    def test_skips_tool_call_only_stub_when_text_reply_exists_earlier(self, compressor):
         """An assistant message that only carries ``tool_calls`` (no
         text content) is not the user-visible reply — the WebUI
         renders those as small "calling tool X" indicators. The helper
@@ -95,9 +94,11 @@ class TestFindLastAssistantMessageIdx:
             {"role": "user", "content": "q1"},
             {"role": "assistant", "content": "VISIBLE REPLY"},
             {"role": "user", "content": "q2"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"function": {"name": "t",
-                                          "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"function": {"name": "t", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "result", "tool_call_id": "c1"},
         ]
         idx = compressor._find_last_assistant_message_idx(messages, head_end=0)
@@ -127,23 +128,22 @@ class TestFindLastAssistantMessageIdx:
         counts as content-bearing."""
         messages = [
             {"role": "user", "content": "q"},
-            {"role": "assistant",
-             "content": [{"type": "text", "text": "hello"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "hello"}]},
         ]
         idx = compressor._find_last_assistant_message_idx(messages, head_end=0)
         assert idx == 1
 
-    def test_fallback_to_any_assistant_when_no_content_bearing(
-        self, compressor
-    ):
+    def test_fallback_to_any_assistant_when_no_content_bearing(self, compressor):
         """When there's no text-bearing assistant in the compressible
         region (fresh multi-step tool sequence), fall back to the
         most recent assistant of any kind so the anchor still works."""
         messages = [
             {"role": "user", "content": "q"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"function": {"name": "t",
-                                          "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"function": {"name": "t", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "result", "tool_call_id": "c1"},
         ]
         idx = compressor._find_last_assistant_message_idx(messages, head_end=0)
@@ -227,10 +227,13 @@ class TestEnsureLastAssistantMessageInTail:
         guarantee as ``_ensure_last_user_message_in_tail``."""
         messages = [
             {"role": "user", "content": "q1"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "c1",
-                             "function": {"name": "t",
-                                          "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "content": "result", "tool_call_id": "c1"},
             {"role": "assistant", "content": "REPLY"},  # idx 3
             {"role": "user", "content": "q2"},
@@ -259,9 +262,7 @@ class TestEnsureLastAssistantMessageInTail:
 
 
 class TestFindTailCutByTokensAnchorsAssistant:
-    def test_reporter_repro_long_tool_run_after_visible_reply(
-        self, compressor
-    ):
+    def test_reporter_repro_long_tool_run_after_visible_reply(self, compressor):
         """The exact #29824 scenario: a tight token budget combined
         with a long tail of tool-call/result messages after the
         visible reply. Pre-fix, the token-budget walk hit its ceiling
@@ -271,26 +272,26 @@ class TestFindTailCutByTokensAnchorsAssistant:
         c.tail_token_budget = 10  # force min-tail behaviour
         messages = [
             {"role": "system", "content": "sys"},
-            {"role": "user", "content": "msg1"},                # head_end=2
+            {"role": "user", "content": "msg1"},  # head_end=2
             {"role": "user", "content": "q1"},
-            {"role": "assistant",
-             "content": "PREVIOUSLY VISIBLE REPLY"},           # idx 3
+            {"role": "assistant", "content": "PREVIOUSLY VISIBLE REPLY"},  # idx 3
             {"role": "user", "content": "q2"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "c1",
-                             "function": {"name": "t",
-                                          "arguments": "{}"}}]},
-            {"role": "tool", "content": "x" * 200,
-             "tool_call_id": "c1"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
+            {"role": "tool", "content": "x" * 200, "tool_call_id": "c1"},
         ]
         cut = c._find_tail_cut_by_tokens(messages, head_end=2)
         tail_contents = [
-            m.get("content") for m in messages[cut:]
+            m.get("content")
+            for m in messages[cut:]
             if isinstance(m.get("content"), str)
         ]
-        assert any(
-            "PREVIOUSLY VISIBLE REPLY" in (t or "") for t in tail_contents
-        ), (
+        assert any("PREVIOUSLY VISIBLE REPLY" in (t or "") for t in tail_contents), (
             "REGRESSION (#29824): the visible reply was rolled into "
             f"the compaction summary. Tail contents: {tail_contents!r}"
         )
@@ -309,7 +310,8 @@ class TestFindTailCutByTokensAnchorsAssistant:
         ]
         cut = c._find_tail_cut_by_tokens(messages, head_end=0)
         tail_contents = [
-            m.get("content") for m in messages[cut:]
+            m.get("content")
+            for m in messages[cut:]
             if isinstance(m.get("content"), str)
         ]
         assert any("VISIBLE REPLY" in (t or "") for t in tail_contents)
@@ -325,18 +327,21 @@ class TestFindTailCutByTokensAnchorsAssistant:
             {"role": "user", "content": "earlier"},
             {"role": "assistant", "content": "VISIBLE REPLY"},
             {"role": "user", "content": "read big file"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "c1",
-                             "function": {"name": "read",
-                                          "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "read", "arguments": "{}"}}
+                ],
+            },
             # ~500 chars ⇒ ~135 tokens, blows past soft ceiling of 150
-            {"role": "tool", "content": "y" * 500,
-             "tool_call_id": "c1"},
+            {"role": "tool", "content": "y" * 500, "tool_call_id": "c1"},
             {"role": "user", "content": "ok"},
         ]
         cut = c._find_tail_cut_by_tokens(messages, head_end=0)
         tail_contents = [
-            m.get("content") for m in messages[cut:]
+            m.get("content")
+            for m in messages[cut:]
             if isinstance(m.get("content"), str)
         ]
         assert any("VISIBLE REPLY" in (t or "") for t in tail_contents)
@@ -358,6 +363,7 @@ class TestCompactionRollupReproduction:
 
     def test_compress_keeps_visible_reply_text(self, compressor):
         from agent.context_compressor import SUMMARY_PREFIX
+
         c = compressor
         c.tail_token_budget = 10
         # ``_generate_summary`` normally wraps the LLM body in
@@ -365,8 +371,10 @@ class TestCompactionRollupReproduction:
         # the merge-into-tail branch can identify the boundary.
         _mocked = f"{SUMMARY_PREFIX}\nrolled-up middle summary"
         messages = (
-            [{"role": "system", "content": "sys"},
-             {"role": "user", "content": "initial"}]   # head (protect_first_n=2)
+            [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "initial"},
+            ]  # head (protect_first_n=2)
             # Middle: long enough to be compressible.
             + [
                 {"role": "user", "content": f"middle q{i}"}
@@ -376,19 +384,24 @@ class TestCompactionRollupReproduction:
             ]
             + [
                 {"role": "user", "content": "the visible question"},
-                {"role": "assistant",
-                 "content": "THE VISIBLE REPLY THE USER JUST READ"},
+                {
+                    "role": "assistant",
+                    "content": "THE VISIBLE REPLY THE USER JUST READ",
+                },
                 {"role": "user", "content": "follow up"},
-                {"role": "assistant", "content": None,
-                 "tool_calls": [{"id": "c1",
-                                 "function": {"name": "t",
-                                              "arguments": "{}"}}]},
-                {"role": "tool", "content": "z" * 500,
-                 "tool_call_id": "c1"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                    ],
+                },
+                {"role": "tool", "content": "z" * 500, "tool_call_id": "c1"},
             ]
         )
         with patch.object(
-            c, "_generate_summary",
+            c,
+            "_generate_summary",
             return_value=_mocked,
         ):
             result = c.compress(messages, current_tokens=90_000)
@@ -401,8 +414,7 @@ class TestCompactionRollupReproduction:
         # 2. The visible reply text must survive somewhere — either
         # as its own message OR concatenated into the merged tail.
         joined = "\n".join(
-            m.get("content") for m in result
-            if isinstance(m.get("content"), str)
+            m.get("content") for m in result if isinstance(m.get("content"), str)
         )
         assert "THE VISIBLE REPLY THE USER JUST READ" in joined, (
             "REGRESSION (#29824): the visible reply was absorbed into "
@@ -411,15 +423,14 @@ class TestCompactionRollupReproduction:
             f"{[(m.get('role'), str(m.get('content'))[:50]) for m in result]}"
         )
 
-    def test_standalone_summary_case_keeps_reply_as_own_message(
-        self, compressor
-    ):
+    def test_standalone_summary_case_keeps_reply_as_own_message(self, compressor):
         """When the head and tail roles allow a standalone summary
         message (no double-collision), the visible reply must remain
         as its OWN assistant message — not merged with anything.
         This is the common case; the merge-into-tail path is the
         edge case for double-collision."""
         from agent.context_compressor import SUMMARY_PREFIX
+
         c = compressor
         c.tail_token_budget = 10
         _mocked = f"{SUMMARY_PREFIX}\nrolled-up middle summary"
@@ -439,19 +450,23 @@ class TestCompactionRollupReproduction:
             ]
             + [
                 {"role": "user", "content": "the visible question"},
-                {"role": "assistant",
-                 "content": "THE VISIBLE REPLY THE USER JUST READ"},
+                {
+                    "role": "assistant",
+                    "content": "THE VISIBLE REPLY THE USER JUST READ",
+                },
                 {"role": "user", "content": "follow up"},
             ]
         )
         with patch.object(
-            c, "_generate_summary",
+            c,
+            "_generate_summary",
             return_value=_mocked,
         ):
             result = c.compress(messages, current_tokens=90_000)
         # Standalone summary present:
         summary_rows = [
-            m for m in result
+            m
+            for m in result
             if isinstance(m.get("content"), str)
             and m["content"].startswith(SUMMARY_PREFIX)
         ]
@@ -459,7 +474,8 @@ class TestCompactionRollupReproduction:
         # Visible reply as its OWN distinct assistant message
         # (NOT merged into the summary row):
         reply_rows = [
-            m for m in result
+            m
+            for m in result
             if m.get("role") == "assistant"
             and isinstance(m.get("content"), str)
             and "THE VISIBLE REPLY THE USER JUST READ" in m["content"]
@@ -481,9 +497,10 @@ class TestSourceGuardrail:
     @pytest.fixture
     def source(self) -> str:
         from pathlib import Path
-        return (Path(__file__).resolve().parents[2]
-                / "agent" / "context_compressor.py").read_text(
-                    encoding="utf-8")
+
+        return (
+            Path(__file__).resolve().parents[2] / "agent" / "context_compressor.py"
+        ).read_text(encoding="utf-8")
 
     def test_helper_defined(self, source):
         assert "def _find_last_assistant_message_idx(" in source
@@ -497,8 +514,12 @@ class TestSourceGuardrail:
     def test_anchor_called_after_user_anchor(self, source):
         """The two anchors must run in sequence; reversing or skipping
         one drops the corresponding side of the guarantee."""
-        user_call = "self._ensure_last_user_message_in_tail(messages, cut_idx, head_end)"
-        asst_call = "self._ensure_last_assistant_message_in_tail(messages, cut_idx, head_end)"
+        user_call = (
+            "self._ensure_last_user_message_in_tail(messages, cut_idx, head_end)"
+        )
+        asst_call = (
+            "self._ensure_last_assistant_message_in_tail(messages, cut_idx, head_end)"
+        )
         user_idx = source.find(user_call)
         asst_idx = source.find(asst_call)
         assert user_idx >= 0 and asst_idx >= 0

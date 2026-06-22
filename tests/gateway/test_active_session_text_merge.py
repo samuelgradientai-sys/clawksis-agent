@@ -19,7 +19,9 @@ import pytest
 # Minimal telegram stub so importing gateway.platforms.base does not pull
 # in the real python-telegram-bot dependency.
 _tg = sys.modules.get("telegram") or types.ModuleType("telegram")
-_tg.constants = sys.modules.get("telegram.constants") or types.ModuleType("telegram.constants")
+_tg.constants = sys.modules.get("telegram.constants") or types.ModuleType(
+    "telegram.constants"
+)
 _ct = MagicMock()
 _ct.PRIVATE = "private"
 _ct.GROUP = "group"
@@ -203,12 +205,17 @@ async def test_active_drain_force_flushes_debounce_before_release():
     current = _make_event("current")
     session_key = build_session_key(current.source)
 
-    task = asyncio.create_task(adapter._process_message_background(current, session_key))
+    task = asyncio.create_task(
+        adapter._process_message_background(current, session_key)
+    )
     adapter._session_tasks[session_key] = task
     await asyncio.wait_for(task, timeout=1.0)
 
     for _ in range(20):
-        if processed == ["current", "follow up"] and session_key not in adapter._active_sessions:
+        if (
+            processed == ["current", "follow up"]
+            and session_key not in adapter._active_sessions
+        ):
             break
         await asyncio.sleep(0.05)
 

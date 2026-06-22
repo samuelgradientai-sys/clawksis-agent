@@ -29,6 +29,7 @@ def extract_reddit_path(url: str) -> Optional[str]:
 
 class RedditRateLimitError(Exception):
     """Raised when Reddit returns HTTP 429 (rate limited)."""
+
     pass
 
 
@@ -64,7 +65,9 @@ def fetch_thread_data(
         return data
     except http.HTTPError as e:
         if e.status_code == 429:
-            raise RedditRateLimitError(f"Reddit rate limited (429) fetching {url}") from e
+            raise RedditRateLimitError(
+                f"Reddit rate limited (429) fetching {url}"
+            ) from e
         return None
 
 
@@ -161,17 +164,17 @@ def extract_comment_insights(comments: List[Dict], limit: int = 7) -> List[str]:
     """
     insights = []
 
-    for comment in comments[:limit * 2]:  # Look at more comments than we need
+    for comment in comments[: limit * 2]:  # Look at more comments than we need
         body = comment.get("body", "").strip()
         if not body or len(body) < 30:
             continue
 
         # Skip low-value patterns
         skip_patterns = [
-            r'^(this|same|agreed|exactly|yep|nope|yes|no|thanks|thank you)\.?$',
-            r'^lol|lmao|haha',
-            r'^\[deleted\]',
-            r'^\[removed\]',
+            r"^(this|same|agreed|exactly|yep|nope|yes|no|thanks|thank you)\.?$",
+            r"^lol|lmao|haha",
+            r"^\[deleted\]",
+            r"^\[removed\]",
         ]
         if any(re.match(p, body.lower()) for p in skip_patterns):
             continue
@@ -181,8 +184,8 @@ def extract_comment_insights(comments: List[Dict], limit: int = 7) -> List[str]:
         if len(body) > 150:
             # Try to find a sentence boundary
             for i, char in enumerate(insight):
-                if char in '.!?' and i > 50:
-                    insight = insight[:i+1]
+                if char in ".!?" and i > 50:
+                    insight = insight[: i + 1]
                     break
             else:
                 insight = insight.rstrip() + "..."
@@ -217,7 +220,9 @@ def enrich_reddit_item(
     url = item.get("url", "")
 
     # Fetch thread data (RedditRateLimitError propagates to caller)
-    thread_data = fetch_thread_data(url, mock_thread_data, timeout=timeout, retries=retries)
+    thread_data = fetch_thread_data(
+        url, mock_thread_data, timeout=timeout, retries=retries
+    )
     if not thread_data:
         return item
 
@@ -298,7 +303,9 @@ def enrich_reddit_item_sc(
 
         top_comments.append({
             "score": score,
-            "date": dates.timestamp_to_date(c.get("created_utc")) if c.get("created_utc") else None,
+            "date": dates.timestamp_to_date(c.get("created_utc"))
+            if c.get("created_utc")
+            else None,
             "author": author,
             "body": body[:300],
             "excerpt": body[:200],

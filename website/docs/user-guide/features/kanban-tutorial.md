@@ -75,11 +75,14 @@ kanban_heartbeat(note="schema drafted, writing migrations now")
 
 kanban_complete(
     summary="users(id, email, pw_hash), sessions(id, user_id, jti, expires_at); "
-            "refresh tokens stored as sessions with type='refresh'",
+    "refresh tokens stored as sessions with type='refresh'",
     metadata={
         "changed_files": ["migrations/001_users.sql", "migrations/002_sessions.sql"],
-        "decisions": ["bcrypt for hashing", "JWT for session tokens",
-                      "7-day refresh, 15-min access"],
+        "decisions": [
+            "bcrypt for hashing",
+            "JWT for session tokens",
+            "7-day refresh, 15-min access",
+        ],
     },
 )
 ```
@@ -159,23 +162,25 @@ The interesting one is the implementation task, because it was blocked and retri
 kanban_show()
 kanban_complete(
     summary="spec approved; POST /forgot-password sends email, "
-            "GET /reset/:token renders form, POST /reset applies new password",
-    metadata={"acceptance": [
-        "expired token returns 410",
-        "reused last-3 password returns 400 with message",
-        "successful reset invalidates all active sessions",
-    ]},
+    "GET /reset/:token renders form, POST /reset applies new password",
+    metadata={
+        "acceptance": [
+            "expired token returns 410",
+            "reused last-3 password returns 400 with message",
+            "successful reset invalidates all active sessions",
+        ]
+    },
 )
 # → $SPEC is done; $IMPL auto-promotes from todo to ready
 
 # --- Engineer worker spawns on $IMPL (first attempt) ---
 # worker tool calls
-kanban_show()   # reads $SPEC's summary + acceptance metadata in worker_context
+kanban_show()  # reads $SPEC's summary + acceptance metadata in worker_context
 # (engineer writes code, runs tests, opens PR)
 # Reviewer feedback arrives — engineer decides the concerns are valid and blocks
 kanban_block(
     reason="Review: password strength check missing, reset link isn't "
-           "single-use (can be replayed within 30min)",
+    "single-use (can be replayed within 30min)",
 )
 # → $IMPL transitions to blocked; run 1 closes with outcome='blocked'
 ```
@@ -198,7 +203,7 @@ kanban_show()
 # (engineer adds zxcvbn check, makes reset tokens single-use, re-runs tests)
 kanban_complete(
     summary="added zxcvbn strength check, reset tokens are now single-use "
-            "(stored + deleted on success)",
+    "(stored + deleted on success)",
     metadata={
         "changed_files": [
             "auth/reset.py",

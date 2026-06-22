@@ -14,10 +14,18 @@ PROSE_LABELS = [
     ("KEY PATTERNS from the research:", "Key patterns from the research"),
 ]
 
-INVITATION_PATTERN = re.compile(r"^---\nI'm now an expert.*?Just ask\.$", re.MULTILINE | re.DOTALL)
-EVIDENCE_BLOCK_PATTERN = re.compile(r"<!-- EVIDENCE FOR SYNTHESIS.*?<!-- END EVIDENCE FOR SYNTHESIS -->", re.DOTALL)
-PASS_THROUGH_FOOTER_PATTERN = re.compile(r"<!-- PASS-THROUGH FOOTER.*?-->\n(.*?)<!-- END PASS-THROUGH FOOTER -->", re.DOTALL)
-CANONICAL_BOUNDARY_PATTERN = re.compile(r"\n?---\n# END OF last30days CANONICAL OUTPUT.*$", re.DOTALL)
+INVITATION_PATTERN = re.compile(
+    r"^---\nI'm now an expert.*?Just ask\.$", re.MULTILINE | re.DOTALL
+)
+EVIDENCE_BLOCK_PATTERN = re.compile(
+    r"<!-- EVIDENCE FOR SYNTHESIS.*?<!-- END EVIDENCE FOR SYNTHESIS -->", re.DOTALL
+)
+PASS_THROUGH_FOOTER_PATTERN = re.compile(
+    r"<!-- PASS-THROUGH FOOTER.*?-->\n(.*?)<!-- END PASS-THROUGH FOOTER -->", re.DOTALL
+)
+CANONICAL_BOUNDARY_PATTERN = re.compile(
+    r"\n?---\n# END OF last30days CANONICAL OUTPUT.*$", re.DOTALL
+)
 # render_for_html emits metadata as <!-- META: ... --> so it survives the
 # markdown converter (which escapes raw HTML inside paragraphs). Promoted to
 # a styled <div class="meta"> after conversion.
@@ -372,7 +380,9 @@ def render_html_comparison(
 ) -> str:
     _ = fun_level
     md = render.render_for_html_comparison(
-        entity_reports, synthesis_md=synthesis_md, save_path=save_path,
+        entity_reports,
+        synthesis_md=synthesis_md,
+        save_path=save_path,
     )
     md = _strip_evidence_block(md)
     md = _strip_invitation(md)
@@ -444,7 +454,9 @@ def _markdown_to_html(md: str) -> str:
 
         if in_code:
             if stripped.startswith("```"):
-                out.append(f"<pre><code>{html.escape(chr(10).join(code_lines))}</code></pre>")
+                out.append(
+                    f"<pre><code>{html.escape(chr(10).join(code_lines))}</code></pre>"
+                )
                 code_lines = []
                 in_code = False
             else:
@@ -480,7 +492,11 @@ def _markdown_to_html(md: str) -> str:
             index += 1
             continue
 
-        if index + 1 < len(lines) and _is_table_row(stripped) and _is_table_separator(lines[index + 1].strip()):
+        if (
+            index + 1 < len(lines)
+            and _is_table_row(stripped)
+            and _is_table_separator(lines[index + 1].strip())
+        ):
             flush_paragraph()
             close_list()
             table_lines = [stripped]
@@ -507,7 +523,9 @@ def _markdown_to_html(md: str) -> str:
             while index < len(lines) and lines[index].strip().startswith(">"):
                 quote_lines.append(lines[index].strip().lstrip(">").strip())
                 index += 1
-            out.append(f"<blockquote>{_inline_markdown(' '.join(quote_lines))}</blockquote>")
+            out.append(
+                f"<blockquote>{_inline_markdown(' '.join(quote_lines))}</blockquote>"
+            )
             continue
 
         unordered = re.match(r"^[-*]\s+(.+)$", stripped)
@@ -528,7 +546,9 @@ def _markdown_to_html(md: str) -> str:
             flush_paragraph()
             close_list()
             badge_text = _inline_markdown(stripped.removeprefix("🌐").strip())
-            out.append(f'<div class="badge"><span class="accent">🌐</span> {badge_text}</div>')
+            out.append(
+                f'<div class="badge"><span class="accent">🌐</span> {badge_text}</div>'
+            )
             index += 1
             continue
 
@@ -576,6 +596,7 @@ def _promote_meta_marker(body: str) -> str:
       <p><!-- META: TEXT --></p>     (when not escaped)
     Both collapse to ``<div class="meta">TEXT</div>``.
     """
+
     def replace(match: re.Match[str]) -> str:
         text = match.group(1).strip()
         return f'<div class="meta">{text}</div>'
@@ -623,7 +644,9 @@ def _is_table_row(line: str) -> bool:
 
 def _is_table_separator(line: str) -> bool:
     cells = _split_table_cells(line)
-    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
+    return bool(cells) and all(
+        re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells
+    )
 
 
 def _split_table_cells(line: str) -> list[str]:

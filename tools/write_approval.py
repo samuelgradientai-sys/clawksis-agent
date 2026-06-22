@@ -71,6 +71,7 @@ CONFIG_KEY = "write_approval"
 # Config resolution
 # ---------------------------------------------------------------------------
 
+
 def write_approval_enabled(subsystem: str) -> bool:
     """Return whether the approval gate is enabled for ``subsystem``.
 
@@ -82,6 +83,7 @@ def write_approval_enabled(subsystem: str) -> bool:
         return False
     try:
         from clawk_cli.config import load_config, cfg_get
+
         cfg = load_config()
         raw = cfg_get(cfg, subsystem, CONFIG_KEY, default=False)
     except Exception:
@@ -107,12 +109,14 @@ def _normalize_enabled(value: Any) -> bool:
 # Pending store (file-backed)
 # ---------------------------------------------------------------------------
 
+
 def _pending_dir(subsystem: str) -> Path:
     return get_clawk_home() / "pending" / subsystem
 
 
-def stage_write(subsystem: str, payload: Dict[str, Any],
-                *, summary: str, origin: str) -> Dict[str, Any]:
+def stage_write(
+    subsystem: str, payload: Dict[str, Any], *, summary: str, origin: str
+) -> Dict[str, Any]:
     """Persist a pending write and return a short record describing it.
 
     Args:
@@ -144,10 +148,14 @@ def stage_write(subsystem: str, payload: Dict[str, Any],
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{pid}.json"
         tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         os.replace(tmp, path)
     except Exception as e:  # pragma: no cover - disk failure path
-        logger.error("Failed to stage pending %s write: %s", subsystem, e, exc_info=True)
+        logger.error(
+            "Failed to stage pending %s write: %s", subsystem, e, exc_info=True
+        )
     return record
 
 
@@ -204,6 +212,7 @@ def pending_count(subsystem: str) -> int:
 # Write origin
 # ---------------------------------------------------------------------------
 
+
 def current_origin() -> str:
     """Return the active write origin: ``foreground`` or ``background_review``.
 
@@ -214,6 +223,7 @@ def current_origin() -> str:
     """
     try:
         from tools.skill_provenance import get_current_write_origin
+
         return get_current_write_origin()
     except Exception:
         return "foreground"
@@ -226,6 +236,7 @@ def is_background() -> bool:
 # ---------------------------------------------------------------------------
 # Gate decision
 # ---------------------------------------------------------------------------
+
 
 class GateDecision:
     """Result of evaluating the write gate for a single write attempt.
@@ -250,8 +261,9 @@ class GateDecision:
         self.message = message
 
 
-def evaluate_gate(subsystem: str, *, inline_summary: str = "",
-                  inline_detail: str = "") -> GateDecision:
+def evaluate_gate(
+    subsystem: str, *, inline_summary: str = "", inline_detail: str = ""
+) -> GateDecision:
     """Decide what to do with a pending write for ``subsystem``.
 
     Args:
@@ -329,6 +341,7 @@ def _interactive_approval_available() -> bool:
     """
     try:
         from tools.terminal_tool import _get_approval_callback
+
         return _get_approval_callback() is not None
     except Exception:
         return False
@@ -385,9 +398,16 @@ def _prompt_inline_memory_approval(summary: str, detail: str) -> Optional[bool]:
 # Skill-specific helpers (gist + diff for the review affordances)
 # ---------------------------------------------------------------------------
 
-def skill_gist(action: str, name: str, *, content: str = "",
-               file_path: str = "", old_string: str = "",
-               new_string: str = "") -> str:
+
+def skill_gist(
+    action: str,
+    name: str,
+    *,
+    content: str = "",
+    file_path: str = "",
+    old_string: str = "",
+    new_string: str = "",
+) -> str:
     """Build a one-line human gist for a pending skill write.
 
     Heuristic, no model call — the gist surfaces enough to decide approve/reject
@@ -397,7 +417,11 @@ def skill_gist(action: str, name: str, *, content: str = "",
     """
     if action in {"create", "edit"} and content:
         desc = _frontmatter_description(content)
-        size = f"{len(content) // 1024 + 1} KB" if len(content) >= 1024 else f"{len(content)} chars"
+        size = (
+            f"{len(content) // 1024 + 1} KB"
+            if len(content) >= 1024
+            else f"{len(content)} chars"
+        )
         verb = "create" if action == "create" else "rewrite"
         if desc:
             return f"{verb} '{name}' — {desc} ({size})"
@@ -419,6 +443,7 @@ def skill_gist(action: str, name: str, *, content: str = "",
 def _frontmatter_description(content: str) -> str:
     """Extract the ``description:`` value from SKILL.md YAML frontmatter."""
     import re
+
     m = re.search(r"^description:\s*(.+)$", content, re.MULTILINE)
     if not m:
         return ""
@@ -435,12 +460,13 @@ def skill_pending_diff(record: Dict[str, Any]) -> str:
     on-disk skill.
     """
     import difflib
+
     payload = record.get("payload", {})
     action = payload.get("action", "")
     name = payload.get("name", "")
 
     if action == "create":
-        return (payload.get("content") or "")
+        return payload.get("content") or ""
 
     # Resolve current on-disk content for diffable actions.
     try:
@@ -473,7 +499,11 @@ def skill_pending_diff(record: Dict[str, Any]) -> str:
     elif action == "patch":
         old_s = payload.get("old_string") or ""
         new_s = payload.get("new_string") or ""
-        new = current.replace(old_s, new_s) if current else f"(patch {old_s!r} → {new_s!r})"
+        new = (
+            current.replace(old_s, new_s)
+            if current
+            else f"(patch {old_s!r} → {new_s!r})"
+        )
     elif action == "write_file":
         new = payload.get("file_content") or ""
     elif action == "remove_file":

@@ -3,6 +3,7 @@
 The toggle suppresses notice EMISSION only — credits state capture and /usage
 stay live. Uses the bare-AIAgent pattern (object.__new__) from test_notice_spine.py.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -64,7 +65,9 @@ class TestCreditsNoticesToggle:
         """load_config is consulted once per agent, not once per emission."""
         agent = _agent_with_state()
         agent.notice_callback = lambda n: None
-        with patch("clawk_cli.config.load_config", return_value=_cfg(True)) as mock_load:
+        with patch(
+            "clawk_cli.config.load_config", return_value=_cfg(True)
+        ) as mock_load:
             agent._emit_credits_notices()
             agent._emit_credits_notices()
         assert mock_load.call_count == 1

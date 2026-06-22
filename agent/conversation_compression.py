@@ -46,9 +46,7 @@ logger = logging.getLogger(__name__)
 # instead of the transcript appearing to silently reset. Keep the marker phrase
 # intact if you reword COMPACTION_STATUS.
 COMPACTION_STATUS_MARKER = "Compacting context"
-COMPACTION_STATUS = (
-    f"🗜️ {COMPACTION_STATUS_MARKER} — summarizing earlier conversation so I can continue..."
-)
+COMPACTION_STATUS = f"🗜️ {COMPACTION_STATUS_MARKER} — summarizing earlier conversation so I can continue..."
 
 
 def _compression_lock_holder(agent: Any) -> str:
@@ -63,6 +61,7 @@ def _compression_lock_holder(agent: Any) -> str:
     we want each acquire to be unique).
     """
     import threading
+
     return (
         f"pid={os.getpid()}"
         f":tid={threading.get_ident()}"
@@ -141,17 +140,27 @@ def check_compression_model_feasibility(agent: Any) -> None:
         # fallbacks, which don't require auth — pass empty string rather
         # than minting a bearer JWT just to look up a context length.
         _raw_aux_key = getattr(client, "api_key", "")
-        aux_api_key = "" if (callable(_raw_aux_key) and not isinstance(_raw_aux_key, str)) else str(_raw_aux_key or "")
+        aux_api_key = (
+            ""
+            if (callable(_raw_aux_key) and not isinstance(_raw_aux_key, str))
+            else str(_raw_aux_key or "")
+        )
 
         aux_context = get_model_context_length(
             aux_model,
             base_url=aux_base_url,
             api_key=aux_api_key,
-            config_context_length=getattr(agent, "_aux_compression_context_length_config", None),
+            config_context_length=getattr(
+                agent, "_aux_compression_context_length_config", None
+            ),
             # Each model must be resolved with its own provider so that
             # provider-specific paths (e.g. Bedrock static table, OpenRouter API)
             # are invoked for the correct client, not inherited from the main model.
-            provider=(_aux_cfg_provider if _aux_cfg_provider and _aux_cfg_provider != "auto" else getattr(agent, "provider", "")),
+            provider=(
+                _aux_cfg_provider
+                if _aux_cfg_provider and _aux_cfg_provider != "auto"
+                else getattr(agent, "provider", "")
+            ),
             custom_providers=agent._custom_providers,
         )
 
@@ -192,9 +201,7 @@ def check_compression_model_feasibility(agent: Any) -> None:
             # sensible number rather than the original too-high value.
             main_ctx = agent.context_compressor.context_length
             if main_ctx:
-                agent.context_compressor.threshold_percent = (
-                    new_threshold / main_ctx
-                )
+                agent.context_compressor.threshold_percent = new_threshold / main_ctx
             safe_pct = int((aux_context / main_ctx) * 100) if main_ctx else 50
             # Build human-readable "model (provider)" labels for both
             # the main model and the compression model so users can
@@ -211,15 +218,14 @@ def check_compression_model_feasibility(agent: Any) -> None:
             if not _aux_provider_label:
                 try:
                     from urllib.parse import urlparse
+
                     _aux_provider_label = (
                         urlparse(aux_base_url).hostname or aux_base_url
                     )
                 except Exception:
                     _aux_provider_label = aux_base_url or "auto"
             _main_label = (
-                f"{_main_model} ({_main_provider})"
-                if _main_provider
-                else _main_model
+                f"{_main_model} ({_main_provider})" if _main_provider else _main_model
             )
             _aux_label = f"{aux_model} ({_aux_provider_label})"
             msg = (
@@ -255,9 +261,7 @@ def check_compression_model_feasibility(agent: Any) -> None:
         # so the session refuses to start.
         raise
     except Exception as exc:
-        logger.debug(
-            "Compression feasibility check failed (non-fatal): %s", exc
-        )
+        logger.debug("Compression feasibility check failed (non-fatal): %s", exc)
 
 
 def replay_compression_warning(agent: Any) -> None:
@@ -330,8 +334,10 @@ def compress_context(
     _pre_msg_count = len(messages)
     logger.info(
         "context compression started: session=%s messages=%d tokens=~%s model=%s focus=%r",
-        agent.session_id or "none", _pre_msg_count,
-        f"{approx_tokens:,}" if approx_tokens else "unknown", agent.model,
+        agent.session_id or "none",
+        _pre_msg_count,
+        f"{approx_tokens:,}" if approx_tokens else "unknown",
+        agent.model,
         focus_topic,
     )
     agent._emit_status(COMPACTION_STATUS)
@@ -395,7 +401,9 @@ def compress_context(
                     "(%s: %s) — proceeding without lock. This usually means a "
                     "stale in-memory module after an update; restart the "
                     "process (or `clawk update`) to resync.",
-                    _lock_sid, type(_lock_err).__name__, _lock_err,
+                    _lock_sid,
+                    type(_lock_err).__name__,
+                    _lock_err,
                 )
             _lock_acquired = True  # treat as acquired-but-unlocked; proceed
         if not _lock_acquired:
@@ -406,7 +414,8 @@ def compress_context(
             logger.warning(
                 "compression skipped: another path is compressing session=%s "
                 "(holder=%s) — returning messages unchanged to avoid session fork",
-                _lock_sid, existing,
+                _lock_sid,
+                existing,
             )
             _lock_holder = None  # don't release a lock we don't own
             # Surface to the user once — quiet for downstream auto-compress loops
@@ -441,11 +450,15 @@ def compress_context(
             pass
 
     try:
-        compressed = agent.context_compressor.compress(messages, current_tokens=approx_tokens, focus_topic=focus_topic, force=force)
+        compressed = agent.context_compressor.compress(
+            messages, current_tokens=approx_tokens, focus_topic=focus_topic, force=force
+        )
     except TypeError:
         # Plugin context engine with strict signature that doesn't accept
         # focus_topic / force — fall back to calling without them.
-        compressed = agent.context_compressor.compress(messages, current_tokens=approx_tokens)
+        compressed = agent.context_compressor.compress(
+            messages, current_tokens=approx_tokens
+        )
     except BaseException:
         # ANY exception during compress() must release the lock so the
         # session isn't permanently blocked from future compression.
@@ -458,7 +471,10 @@ def compress_context(
     # session has logically ended), and let auto-compress callers detect
     # the no-op via len(returned) == len(input).
     if getattr(agent.context_compressor, "_last_compress_aborted", False):
-        _err = getattr(agent.context_compressor, "_last_summary_error", None) or "unknown error"
+        _err = (
+            getattr(agent.context_compressor, "_last_summary_error", None)
+            or "unknown error"
+        )
         if getattr(agent, "_last_compression_summary_warning", None) != _err:
             agent._last_compression_summary_warning = _err
             agent._emit_warning(
@@ -485,8 +501,12 @@ def compress_context(
         # and get recovered by retrying on main?  Surface that so users
         # know their auxiliary.compression.model setting is broken even
         # though compression succeeded.
-        _aux_fail_model = getattr(agent.context_compressor, "_last_aux_model_failure_model", None)
-        _aux_fail_err = getattr(agent.context_compressor, "_last_aux_model_failure_error", None)
+        _aux_fail_model = getattr(
+            agent.context_compressor, "_last_aux_model_failure_model", None
+        )
+        _aux_fail_err = getattr(
+            agent.context_compressor, "_last_aux_model_failure_error", None
+        )
         if _aux_fail_model:
             # Dedup on (model, error) so we don't spam on every compaction
             _aux_key = (_aux_fail_model, _aux_fail_err)
@@ -514,7 +534,9 @@ def compress_context(
             agent.commit_memory_session(messages)
             agent._session_db.end_session(agent.session_id, "compression")
             old_session_id = agent.session_id
-            agent.session_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            agent.session_id = (
+                f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            )
             # Ordering contract: the agent thread updates the contextvar here;
             # the gateway propagates to SessionEntry after run_in_executor returns.
             try:
@@ -558,7 +580,10 @@ def compress_context(
             # Reset flush cursor — new session starts with no messages written
             agent._last_flushed_db_idx = 0
         except Exception as e:
-            logger.warning("Session DB compression split failed — new session will NOT be indexed: %s", e)
+            logger.warning(
+                "Session DB compression split failed — new session will NOT be indexed: %s",
+                e,
+            )
 
     # Notify the context engine that the session_id rotated because of
     # compression (not a fresh /new). Plugin engines (e.g. clawk-lcm) use
@@ -621,13 +646,16 @@ def compress_context(
     # file it needs the full content, not a "file unchanged" stub.
     try:
         from tools.file_tools import reset_file_dedup
+
         reset_file_dedup(task_id)
     except Exception:
         pass
 
     logger.info(
         "context compression done: session=%s messages=%d->%d rough_tokens=~%s awaiting_real_usage=true",
-        agent.session_id or "none", _pre_msg_count, len(compressed),
+        agent.session_id or "none",
+        _pre_msg_count,
+        len(compressed),
         f"{_compressed_est:,}",
     )
     # Release the lock on the OLD session_id only AFTER rotation completed
@@ -701,12 +729,14 @@ def try_shrink_image_parts_in_messages(
             # bytes yet too large in pixels.
             try:
                 import base64 as _b64_dim
+
                 header_d, _, data_d = url.partition(",")
                 if not data_d:
                     return None
                 raw_d = _b64_dim.b64decode(data_d)
                 from PIL import Image as _PILImage
                 import io as _io_dim
+
                 with _PILImage.open(_io_dim.BytesIO(raw_d)) as _img:
                     if max(_img.size) <= max_dimension:
                         return None  # both bytes and pixels are fine
@@ -720,17 +750,24 @@ def try_shrink_image_parts_in_messages(
             header, _, data = url.partition(",")
             mime = "image/jpeg"
             if header.startswith("data:"):
-                mime_part = header[len("data:"):].split(";", 1)[0].strip()
+                mime_part = header[len("data:") :].split(";", 1)[0].strip()
                 if mime_part.startswith("image/"):
                     mime = mime_part
             import base64 as _b64
+
             raw = _b64.b64decode(data)
             suffix = {
-                "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp",
-                "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/bmp": ".bmp",
+                "image/png": ".png",
+                "image/gif": ".gif",
+                "image/webp": ".webp",
+                "image/jpeg": ".jpg",
+                "image/jpg": ".jpg",
+                "image/bmp": ".bmp",
             }.get(mime, ".jpg")
             tmp = tempfile.NamedTemporaryFile(
-                prefix="clawk_shrink_", suffix=suffix, delete=False,
+                prefix="clawk_shrink_",
+                suffix=suffix,
+                delete=False,
             )
             try:
                 tmp.write(raw)
@@ -775,22 +812,27 @@ def try_shrink_image_parts_in_messages(
                 if resized:
                     image_value["url"] = resized
                     changed_count += 1
-                elif isinstance(url, str) and url.startswith("data:") \
-                        and len(url) > target_bytes:
+                elif (
+                    isinstance(url, str)
+                    and url.startswith("data:")
+                    and len(url) > target_bytes
+                ):
                     unshrinkable_oversized += 1
             elif isinstance(image_value, str):
                 resized = _shrink_data_url(image_value)
                 if resized:
                     part["image_url"] = resized
                     changed_count += 1
-                elif image_value.startswith("data:") \
-                        and len(image_value) > target_bytes:
+                elif (
+                    image_value.startswith("data:") and len(image_value) > target_bytes
+                ):
                     unshrinkable_oversized += 1
 
     if changed_count:
         logger.info(
             "image-shrink recovery: re-encoded %d image part(s) to fit under %.0f MB",
-            changed_count, target_bytes / (1024 * 1024),
+            changed_count,
+            target_bytes / (1024 * 1024),
         )
     if unshrinkable_oversized:
         # At least one oversized image could not be shrunk under the target.
@@ -800,7 +842,8 @@ def try_shrink_image_parts_in_messages(
         logger.warning(
             "image-shrink recovery: %d oversized image part(s) could not be "
             "shrunk under %.0f MB — not retrying (would re-send rejected payload)",
-            unshrinkable_oversized, target_bytes / (1024 * 1024),
+            unshrinkable_oversized,
+            target_bytes / (1024 * 1024),
         )
         return False
     return changed_count > 0

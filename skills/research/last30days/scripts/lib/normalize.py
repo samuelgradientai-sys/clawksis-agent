@@ -40,12 +40,22 @@ def normalize_source_items(
         "reddit": _normalize_reddit,
         "x": _normalize_x,
         "youtube": _normalize_youtube,
-        "tiktok": lambda s, i, idx, fd, td: _normalize_shortform_video(s, i, idx, fd, td, "TK", "TikTok post"),
-        "instagram": lambda s, i, idx, fd, td: _normalize_shortform_video(s, i, idx, fd, td, "IG", "Instagram reel"),
+        "tiktok": lambda s, i, idx, fd, td: _normalize_shortform_video(
+            s, i, idx, fd, td, "TK", "TikTok post"
+        ),
+        "instagram": lambda s, i, idx, fd, td: _normalize_shortform_video(
+            s, i, idx, fd, td, "IG", "Instagram reel"
+        ),
         "hackernews": _normalize_hackernews,
-        "bluesky": lambda s, i, idx, fd, td: _normalize_microblog(s, i, idx, fd, td, "BS", "Bluesky post"),
-        "truthsocial": lambda s, i, idx, fd, td: _normalize_microblog(s, i, idx, fd, td, "TS", "Truth Social post"),
-        "threads": lambda s, i, idx, fd, td: _normalize_microblog(s, i, idx, fd, td, "TH", "Threads post"),
+        "bluesky": lambda s, i, idx, fd, td: _normalize_microblog(
+            s, i, idx, fd, td, "BS", "Bluesky post"
+        ),
+        "truthsocial": lambda s, i, idx, fd, td: _normalize_microblog(
+            s, i, idx, fd, td, "TS", "Truth Social post"
+        ),
+        "threads": lambda s, i, idx, fd, td: _normalize_microblog(
+            s, i, idx, fd, td, "TH", "Threads post"
+        ),
         "xquik": _normalize_x,
         "pinterest": _normalize_pinterest,
         "polymarket": _normalize_polymarket,
@@ -58,9 +68,14 @@ def normalize_source_items(
     normalizer = normalizers.get(source)
     if normalizer is None:
         raise ValueError(f"Unsupported source: {source}")
-    normalized = [normalizer(source, item, index, from_date, to_date) for index, item in enumerate(items)]
+    normalized = [
+        normalizer(source, item, index, from_date, to_date)
+        for index, item in enumerate(items)
+    ]
     require_date = source == "grounding"
-    filtered = filter_by_date_range(normalized, from_date, to_date, require_date=require_date)
+    filtered = filter_by_date_range(
+        normalized, from_date, to_date, require_date=require_date
+    )
     if filtered:
         return filtered
     if freshness_mode == "evergreen_ok" and source == "youtube":
@@ -131,7 +146,9 @@ def _domain_from_url(url: str) -> str | None:
     return domain or None
 
 
-def _date_confidence(item: dict[str, Any], from_date: str, to_date: str, default: str = "low") -> str:
+def _date_confidence(
+    item: dict[str, Any], from_date: str, to_date: str, default: str = "low"
+) -> str:
     if item.get("date_confidence"):
         return str(item["date_confidence"])
     date_value = item.get("date")
@@ -355,7 +372,11 @@ def _normalize_hackernews(
     top_comments = item.get("top_comments") or []
     comment_text = _join_comment_excerpts(top_comments, "text")
     title = str(item.get("title") or "").strip()
-    body = "\n".join(part for part in [title, str(item.get("text") or "").strip(), comment_text] if part)
+    body = "\n".join(
+        part
+        for part in [title, str(item.get("text") or "").strip(), comment_text]
+        if part
+    )
     return _source_item(
         item_id=str(item.get("id") or f"HN{index + 1}"),
         source=source,
@@ -469,7 +490,11 @@ def _normalize_polymarket(
         item_id=str(item.get("id") or f"PM{index + 1}"),
         source=source,
         title=title or question or f"Polymarket event {index + 1}",
-        body="\n".join(part for part in [title, question, str(item.get("price_movement") or "")] if part),
+        body="\n".join(
+            part
+            for part in [title, question, str(item.get("price_movement") or "")]
+            if part
+        ),
         url=str(item.get("url") or ""),
         author=None,
         container="Polymarket",
@@ -486,7 +511,6 @@ def _normalize_polymarket(
             "outcomes_remaining": item.get("outcomes_remaining"),
         },
     )
-
 
 
 def _normalize_github(
@@ -523,6 +547,7 @@ def _normalize_github(
             "is_pr": metadata.get("is_pr", False),
         },
     )
+
 
 def _normalize_grounding(
     source: str,

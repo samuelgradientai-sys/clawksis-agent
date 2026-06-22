@@ -105,42 +105,39 @@ _PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     # turn start and final answer. Otherwise it looks like "typing..." for
     # 30 minutes with nothing happening. Opt in to verbose iteration detail
     # via display.platforms.telegram.busy_ack_detail / tool_progress.
-    "telegram":    {
+    "telegram": {
         **_TIER_HIGH,
         "tool_progress": "off",
         "busy_ack_detail": False,
     },
-    "discord":     _TIER_HIGH,
-
+    "discord": _TIER_HIGH,
     # Tier 2 — edit support, often customer/workspace channels
     # Slack: tool_progress off by default — Bolt posts cannot be edited like CLI;
     # "new"/"all" spam permanent lines in channels (clawksis-agent#14663).
-    "slack":           {**_TIER_MEDIUM, "tool_progress": "off"},
-    "mattermost":      _TIER_MEDIUM,
-    "matrix":          _TIER_MEDIUM,
-    "feishu":          _TIER_MEDIUM,
-
+    "slack": {**_TIER_MEDIUM, "tool_progress": "off"},
+    "mattermost": _TIER_MEDIUM,
+    "matrix": _TIER_MEDIUM,
+    "feishu": _TIER_MEDIUM,
     # Tier 3 — no edit support, progress messages are permanent
-    "signal":          _TIER_LOW,
-    "whatsapp":        _TIER_MEDIUM,  # Baileys bridge supports /edit
+    "signal": _TIER_LOW,
+    "whatsapp": _TIER_MEDIUM,  # Baileys bridge supports /edit
     # WhatsApp Cloud API: Meta added message editing in 2023 but the
     # Clawksis Cloud adapter doesn't implement edit_message yet, so we
     # stay on TIER_LOW (tool_progress off) to avoid spamming each
     # status update as a separate message. Promote to TIER_MEDIUM once
     # Cloud's edit_message lands.
-    "whatsapp_cloud":  _TIER_LOW,
-    "bluebubbles":     _TIER_LOW,
-    "weixin":          _TIER_LOW,
-    "wecom":           _TIER_LOW,
-    "wecom_callback":  _TIER_LOW,
-    "dingtalk":        _TIER_LOW,
-
+    "whatsapp_cloud": _TIER_LOW,
+    "bluebubbles": _TIER_LOW,
+    "weixin": _TIER_LOW,
+    "wecom": _TIER_LOW,
+    "wecom_callback": _TIER_LOW,
+    "dingtalk": _TIER_LOW,
     # Tier 4 — batch or non-interactive delivery
-    "email":           _TIER_MINIMAL,
-    "sms":             _TIER_MINIMAL,
-    "webhook":         _TIER_MINIMAL,
-    "homeassistant":   _TIER_MINIMAL,
-    "api_server":      {**_TIER_HIGH, "tool_preview_length": 0},
+    "email": _TIER_MINIMAL,
+    "sms": _TIER_MINIMAL,
+    "webhook": _TIER_MINIMAL,
+    "homeassistant": _TIER_MINIMAL,
+    "api_server": {**_TIER_HIGH, "tool_preview_length": 0},
 }
 
 # Canonical set of per-platform overrideable keys (for validation).
@@ -215,6 +212,7 @@ def resolve_display_setting(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalise(setting: str, value: Any) -> Any:
     """Normalise YAML quirks (bare ``off`` → False in YAML 1.1)."""

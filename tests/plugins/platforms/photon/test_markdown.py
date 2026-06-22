@@ -4,6 +4,7 @@ Markdown is on by default (the sidecar sends it via spectrum-ts'
 ``markdown()`` builder and iMessage renders it); ``PHOTON_MARKDOWN=false``
 reverts to the stripped-plain-text path.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple

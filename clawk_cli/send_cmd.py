@@ -235,6 +235,7 @@ def _load_clawk_env() -> None:
 
     try:
         from clawk_cli.config import get_clawk_home
+
         home = get_clawk_home()
     except Exception:
         return
@@ -255,6 +256,7 @@ def _load_clawk_env() -> None:
     # gateway.config.load_gateway_config() sees them. Scalars only; don't
     # override values already in the env.
     import os
+
     config_path = home / "config.yaml"
     if not config_path.exists():
         return
@@ -272,6 +274,7 @@ def _load_clawk_env() -> None:
 
     try:
         from clawk_cli.config import _expand_env_vars
+
         raw = _expand_env_vars(raw)
     except Exception:
         pass
@@ -300,7 +303,9 @@ def cmd_send(args: argparse.Namespace) -> None:
         # When `--list telegram` is used, argparse stores "telegram" in the
         # `message` positional (since list_targets takes no argument).
         platform_filter = getattr(args, "message", None)
-        exit_code = _list_targets(platform_filter, json_mode=getattr(args, "json", False))
+        exit_code = _list_targets(
+            platform_filter, json_mode=getattr(args, "json", False)
+        )
         sys.exit(exit_code)
 
     target = _resolve_target(getattr(args, "to", None))
@@ -308,7 +313,7 @@ def cmd_send(args: argparse.Namespace) -> None:
         print(
             "clawk send: --to PLATFORM[:channel[:thread]] is required\n"
             "Examples:\n"
-            "  clawk send --to telegram \"hello\"\n"
+            '  clawk send --to telegram "hello"\n'
             "  clawk send --to discord:#ops --file report.md\n"
             "  clawk send --list      # list available targets",
             file=sys.stderr,
@@ -376,11 +381,11 @@ def register_send_subparser(subparsers) -> argparse.ArgumentParser:
         ),
         epilog=(
             "Examples:\n"
-            "  clawk send --to telegram \"deploy finished\"\n"
-            "  echo \"RAM 92%\" | clawk send --to telegram:-1001234567890\n"
+            '  clawk send --to telegram "deploy finished"\n'
+            '  echo "RAM 92%" | clawk send --to telegram:-1001234567890\n'
             "  clawk send --to discord:#ops --file /tmp/report.md\n"
-            "  clawk send --to slack:#eng --subject \"[CI]\" --file build.log\n"
-            "  clawk send --to telegram \"MEDIA:/tmp/chart.png\"   # send a media attachment\n"
+            '  clawk send --to slack:#eng --subject "[CI]" --file build.log\n'
+            '  clawk send --to telegram "MEDIA:/tmp/chart.png"   # send a media attachment\n'
             "  clawk send --list                  # all platforms\n"
             "  clawk send --list telegram         # filter by platform\n"
             "\n"

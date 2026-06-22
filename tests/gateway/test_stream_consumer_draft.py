@@ -381,10 +381,12 @@ def _make_fresh_final_adapter():
     # Accepts the metadata kwarg the consumer passes; ignores it (like Telegram).
     adapter.prefers_fresh_final_streaming = lambda content, metadata=None: True
 
-    adapter.send = AsyncMock(side_effect=[
-        SendResult(success=True, message_id="preview1"),
-        SendResult(success=True, message_id="final1"),
-    ])
+    adapter.send = AsyncMock(
+        side_effect=[
+            SendResult(success=True, message_id="preview1"),
+            SendResult(success=True, message_id="final1"),
+        ]
+    )
     adapter.edit_message = AsyncMock(return_value=SendResult(success=True))
     adapter.delete_message = AsyncMock(return_value=True)
     return adapter
@@ -399,8 +401,11 @@ class TestAdapterPrefersFreshFinal:
     async def test_edit_stream_finalizes_with_fresh_send_and_deletes_preview(self):
         adapter = _make_fresh_final_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
             fresh_final_after_seconds=0.0,  # only the adapter hook drives fresh-final
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
@@ -450,8 +455,12 @@ def _make_rich_capable_adapter(*, overflow_limit=32768, send_results=None):
     adapter.supports_draft_streaming = lambda chat_type=None, metadata=None: False
     adapter.prefers_fresh_final_streaming = lambda content, metadata=None: True
     adapter.streaming_overflow_limit = lambda: overflow_limit
-    adapter.send = AsyncMock(side_effect=send_results) if send_results else AsyncMock(
-        return_value=SendResult(success=True, message_id="m1"),
+    adapter.send = (
+        AsyncMock(side_effect=send_results)
+        if send_results
+        else AsyncMock(
+            return_value=SendResult(success=True, message_id="m1"),
+        )
     )
     adapter.edit_message = AsyncMock(return_value=SendResult(success=True))
     adapter.delete_message = AsyncMock(return_value=True)
@@ -487,13 +496,18 @@ class TestRichAwareOverflow:
         from gateway.platforms.base import SendResult
 
         long_text = "x" * 5000  # > 4096 legacy limit, < 32768 rich limit
-        adapter = _make_rich_capable_adapter(send_results=[
-            SendResult(success=True, message_id="preview1"),
-            SendResult(success=True, message_id="final1"),
-        ])
+        adapter = _make_rich_capable_adapter(
+            send_results=[
+                SendResult(success=True, message_id="preview1"),
+                SendResult(success=True, message_id="final1"),
+            ]
+        )
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=5, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=5,
+            cursor="",
             fresh_final_after_seconds=0.0,
         )
         consumer = GatewayStreamConsumer(adapter, "12345", cfg)
@@ -517,9 +531,11 @@ class TestRichAwareOverflow:
     async def test_fresh_final_deletes_all_preview_fragments(self):
         from gateway.platforms.base import SendResult
 
-        adapter = _make_rich_capable_adapter(send_results=[
-            SendResult(success=True, message_id="final1"),
-        ])
+        adapter = _make_rich_capable_adapter(
+            send_results=[
+                SendResult(success=True, message_id="final1"),
+            ]
+        )
         consumer = GatewayStreamConsumer(adapter, "12345", StreamConsumerConfig())
         # Simulate a reply that was split across the edit limit while streaming:
         # three preview fragments, the last of which is the current message.

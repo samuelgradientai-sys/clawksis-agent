@@ -578,13 +578,11 @@ class TestSkillViewSecureSetupOnLoad:
         calls = []
 
         def fake_secret_callback(var_name, prompt, metadata=None):
-            calls.append(
-                {
-                    "var_name": var_name,
-                    "prompt": prompt,
-                    "metadata": metadata,
-                }
-            )
+            calls.append({
+                "var_name": var_name,
+                "prompt": prompt,
+                "metadata": metadata,
+            })
             os.environ[var_name] = "stored-in-test"
             return {
                 "success": True,
@@ -665,6 +663,7 @@ class TestSkillViewSecureSetupOnLoad:
         assert result["success"] is True
         assert result["setup_skipped"] is True
         assert result["content"].startswith("---")
+
 
 # ---------------------------------------------------------------------------
 # skill_matches_platform

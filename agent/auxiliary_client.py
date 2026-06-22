@@ -5947,16 +5947,12 @@ def get_async_text_auxiliary_client(
 
 # Aggregators auto-probed as vision fallbacks.  ``nous`` is deliberately
 # NOT here — Clawksis is BYOK and never probes Nous Portal automatically.
-_VISION_AUTO_PROVIDER_ORDER = (
-    "openrouter",
-)
+_VISION_AUTO_PROVIDER_ORDER = ("openrouter",)
 
 
 # Providers with a dedicated strict vision backend, valid for EXPLICIT
 # selection only (user-configured main provider or per-task override).
-_VISION_STRICT_PROVIDERS = (
-    "openrouter",
-)
+_VISION_STRICT_PROVIDERS = ("openrouter",)
 
 
 def _main_model_supports_vision(provider: str, model: Optional[str]) -> bool:
@@ -7757,10 +7753,7 @@ def call_llm(
 
         # ── Auth refresh retry ───────────────────────────────────────
 
-        if (
-            _is_auth_error(first_err)
-            and resolved_provider not in {"auto", "", None}
-        ):
+        if _is_auth_error(first_err) and resolved_provider not in {"auto", "", None}:
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
                     "Auxiliary %s: refreshed %s credentials after auth error, retrying",
@@ -8349,10 +8342,7 @@ async def async_call_llm(
 
         # ── Auth refresh retry (mirrors sync call_llm) ───────────────
 
-        if (
-            _is_auth_error(first_err)
-            and resolved_provider not in {"auto", "", None}
-        ):
+        if _is_auth_error(first_err) and resolved_provider not in {"auto", "", None}:
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
                     "Auxiliary %s (async): refreshed %s credentials after auth error, retrying",

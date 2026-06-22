@@ -64,7 +64,12 @@ class TestScheduleResolution:
     def test_weekday_preset_to_dow(self):
         spec = fill_blueprint(
             get_blueprint("custom-reminder"),
-            {"what": "stretch", "time": "14:00", "recurrence": "weekdays", "deliver": "origin"},
+            {
+                "what": "stretch",
+                "time": "14:00",
+                "recurrence": "weekdays",
+                "deliver": "origin",
+            },
         )
         assert spec["schedule"] == "0 14 * * 1-5"
 
@@ -86,7 +91,9 @@ class TestValidation:
         # deliver is a non-strict enum: its options are suggestions, the real
         # set of valid platforms depends on the user's configured gateways and
         # is validated downstream by the cron scheduler.
-        spec = fill_blueprint(get_blueprint("morning-brief"), {"time": "08:00", "deliver": "slack"})
+        spec = fill_blueprint(
+            get_blueprint("morning-brief"), {"time": "08:00", "deliver": "slack"}
+        )
         assert spec["deliver"] == "slack"
 
     def test_unknown_slot_name_rejected(self):
@@ -103,11 +110,10 @@ class TestValidation:
         spec = fill_blueprint(get_blueprint("hydration-move"), {"interval_hours": "2"})
         it = croniter(spec["schedule"], datetime(2026, 6, 10, 8, 0))
         first_three = [it.get_next(datetime) for _ in range(3)]
-        gaps = {
-            (b - a).total_seconds()
-            for a, b in zip(first_three, first_three[1:])
-        }
-        assert gaps == {7200.0}, f"expected 2h gaps, got {spec['schedule']} -> {first_three}"
+        gaps = {(b - a).total_seconds() for a, b in zip(first_three, first_three[1:])}
+        assert gaps == {7200.0}, (
+            f"expected 2h gaps, got {spec['schedule']} -> {first_three}"
+        )
 
     def test_text_slot_renders_into_prompt(self):
         spec = fill_blueprint(
@@ -118,7 +124,9 @@ class TestValidation:
 
     def test_origin_threads_through(self):
         spec = fill_blueprint(
-            get_blueprint("morning-brief"), {"time": "08:00"}, origin={"platform": "telegram", "chat_id": "9"}
+            get_blueprint("morning-brief"),
+            {"time": "08:00"},
+            origin={"platform": "telegram", "chat_id": "9"},
         )
         assert spec["origin"] == {"platform": "telegram", "chat_id": "9"}
 
@@ -160,8 +168,10 @@ def isolated_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.jobs as jobs
+
     importlib.reload(jobs)
     return jobs
 
@@ -207,7 +217,9 @@ class TestCommandHandler:
         assert res.agent_seed is None
         jobs = isolated_home.load_jobs()
         assert len(jobs) == 1
-        assert (jobs[0].get("schedule_display") or jobs[0].get("schedule")) == "30 7 * * *"
+        assert (
+            jobs[0].get("schedule_display") or jobs[0].get("schedule")
+        ) == "30 7 * * *"
         assert jobs[0].get("deliver") == "telegram"
 
     def test_unknown_blueprint(self, isolated_home):
@@ -232,7 +244,9 @@ class TestDocsGenerator:
 
         script = (
             Path(__file__).resolve().parents[2]
-            / "website" / "scripts" / "extract-automation-blueprints.py"
+            / "website"
+            / "scripts"
+            / "extract-automation-blueprints.py"
         )
         spec = importlib.util.spec_from_file_location("extract_cron_blueprints", script)
         assert spec is not None and spec.loader is not None

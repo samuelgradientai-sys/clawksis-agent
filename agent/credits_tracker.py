@@ -79,7 +79,6 @@ def _safe_int(value: Any) -> Any:
         return _SENTINEL
 
 
-
 def _validate_usd(value: Optional[str]) -> bool:
     """Return True iff value is a non-None string matching ^-?\\d+\\.\\d{2}$."""
     if value is None:
@@ -97,9 +96,13 @@ class CreditsState:
     version: int = 0
     remaining_micros: int = 0
     remaining_usd: str = ""
-    subscription_micros: int = 0  # SIGNED — may be negative (debt). ONLY field allowed negative.
+    subscription_micros: int = (
+        0  # SIGNED — may be negative (debt). ONLY field allowed negative.
+    )
     subscription_usd: str = ""
-    subscription_limit_micros: Optional[int] = None  # PAIRED + OPTIONAL (only when subscription_cap)
+    subscription_limit_micros: Optional[int] = (
+        None  # PAIRED + OPTIONAL (only when subscription_cap)
+    )
     subscription_limit_usd: Optional[str] = None
     rollover_micros: int = 0
     purchased_micros: int = 0
@@ -155,8 +158,10 @@ class CreditsState:
 # paired *_TTL_MS companion for each notice kind — the field exists on AgentNotice
 # but is not yet plumbed through the policy loop.
 
-CREDITS_NOTICE_KIND = "sticky"      # v1: credits notices are sticky
-CREDITS_RESTORED_TTL_MS = 8000     # the only TTL notice in v1 (depletion-recovery confirmation)
+CREDITS_NOTICE_KIND = "sticky"  # v1: credits notices are sticky
+CREDITS_RESTORED_TTL_MS = (
+    8000  # the only TTL notice in v1 (depletion-recovery confirmation)
+)
 
 # Usage-gauge bands (ascending). Each is (threshold_fraction, level, label_pct).
 # The notice shows the HIGHEST band the current used_fraction has reached — a single
@@ -187,10 +192,10 @@ class AgentNotice:
     """
 
     text: str
-    level: str = "info"            # info | warn | error | success
-    kind: str = "sticky"           # sticky | ttl
-    ttl_ms: Optional[int] = None   # honored only when kind == "ttl"
-    key: Optional[str] = None      # dedupe / fired-once-latch / clear key
+    level: str = "info"  # info | warn | error | success
+    kind: str = "sticky"  # sticky | ttl
+    ttl_ms: Optional[int] = None  # honored only when kind == "ttl"
+    key: Optional[str] = None  # dedupe / fired-once-latch / clear key
     id: Optional[str] = None
 
 
@@ -548,7 +553,9 @@ def parse_credits_headers(
             tool_pool_gated_off = False
 
         # ── disabled_reason: header omitted when null ────────────────────────
-        disabled_reason = lowered.get("x-nous-credits-disabled-reason")  # None if absent
+        disabled_reason = lowered.get(
+            "x-nous-credits-disabled-reason"
+        )  # None if absent
 
         return CreditsState(
             version=version_val,
@@ -575,7 +582,9 @@ def parse_credits_headers(
         # Fail-open → miss, but leave a breadcrumb so a parser/import regression
         # (feature silently dead) is distinguishable from a legitimate no-headers
         # response in agent.log, without needing a dev flag.
-        logger.debug("credits ▸ parse_credits_headers raised (fail-open miss)", exc_info=True)
+        logger.debug(
+            "credits ▸ parse_credits_headers raised (fail-open miss)", exc_info=True
+        )
         return None
 
 
@@ -594,49 +603,80 @@ def parse_credits_headers(
 # CLAWK_DEV_CREDITS scaffolding.
 _DEV_FIXTURES: dict[str, dict] = {
     "healthy": dict(  # used_fraction ~0.1, paid → no notice (recovery target)
-        remaining_micros=30_340_000, remaining_usd="30.34",
-        subscription_micros=18_000_000, subscription_usd="18.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        purchased_micros=12_340_000, purchased_usd="12.34",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=30_340_000,
+        remaining_usd="30.34",
+        subscription_micros=18_000_000,
+        subscription_usd="18.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        purchased_micros=12_340_000,
+        purchased_usd="12.34",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     ),
     "sub_50pct": dict(  # used_fraction == 0.5 → credits.usage band 50 (info)
-        remaining_micros=10_000_000, remaining_usd="10.00",
-        subscription_micros=10_000_000, subscription_usd="10.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=10_000_000,
+        remaining_usd="10.00",
+        subscription_micros=10_000_000,
+        subscription_usd="10.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     ),
     "sub_75pct": dict(  # used_fraction == 0.75 → credits.usage band 75 (warn)
-        remaining_micros=5_000_000, remaining_usd="5.00",
-        subscription_micros=5_000_000, subscription_usd="5.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=5_000_000,
+        remaining_usd="5.00",
+        subscription_micros=5_000_000,
+        subscription_usd="5.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     ),
     "sub_90pct": dict(  # used_fraction == 0.9 → credits.usage band 90 (warn)
-        remaining_micros=2_000_000, remaining_usd="2.00",
-        subscription_micros=2_000_000, subscription_usd="2.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=2_000_000,
+        remaining_usd="2.00",
+        subscription_micros=2_000_000,
+        subscription_usd="2.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     ),
     "grant_exhausted": dict(  # used_fraction == 1.0 + purchased>0 → credits.grant_spent
-        remaining_micros=12_340_000, remaining_usd="12.34",
-        subscription_micros=0, subscription_usd="0.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        purchased_micros=12_340_000, purchased_usd="12.34",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=12_340_000,
+        remaining_usd="12.34",
+        subscription_micros=0,
+        subscription_usd="0.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        purchased_micros=12_340_000,
+        purchased_usd="12.34",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     ),
     "depleted": dict(  # paid_access False → credits.depleted (sticky)
-        remaining_micros=0, remaining_usd="0.00",
-        subscription_micros=0, subscription_usd="0.00",
-        purchased_micros=0, purchased_usd="0.00",
-        paid_access=False, disabled_reason="out_of_credits",
+        remaining_micros=0,
+        remaining_usd="0.00",
+        subscription_micros=0,
+        subscription_usd="0.00",
+        purchased_micros=0,
+        purchased_usd="0.00",
+        paid_access=False,
+        disabled_reason="out_of_credits",
     ),
     "debt": dict(  # subscription in debt (negative, the only signed field) → depleted
-        remaining_micros=0, remaining_usd="0.00",
-        subscription_micros=-5_000_000, subscription_usd="-5.00",
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        purchased_micros=0, purchased_usd="0.00",
-        denominator_kind="subscription_cap", paid_access=False,
+        remaining_micros=0,
+        remaining_usd="0.00",
+        subscription_micros=-5_000_000,
+        subscription_usd="-5.00",
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        purchased_micros=0,
+        purchased_usd="0.00",
+        denominator_kind="subscription_cap",
+        paid_access=False,
         disabled_reason="out_of_credits",
     ),
 }
@@ -660,7 +700,9 @@ def dev_fixture_credits_state() -> Optional[CreditsState]:
     if not raw:
         return None
     name = raw
-    if os.path.sep in raw or "/" in raw:  # looks like a path → read the name from the file
+    if (
+        os.path.sep in raw or "/" in raw
+    ):  # looks like a path → read the name from the file
         try:
             with open(raw, "r", encoding="utf-8") as fh:
                 name = fh.read().strip()
@@ -689,7 +731,11 @@ def _credits_state_from_account(info) -> Optional[CreditsState]:
         _sub = getattr(info, "subscription", None)
 
         def _to_micros(dollars):
-            return int(round(dollars * 1_000_000)) if isinstance(dollars, (int, float)) else 0
+            return (
+                int(round(dollars * 1_000_000))
+                if isinstance(dollars, (int, float))
+                else 0
+            )
 
         def _to_usd(dollars):
             # DISPLAY formatting of an account float (not a server *_usd string);
@@ -702,11 +748,17 @@ def _credits_state_from_account(info) -> Optional[CreditsState]:
         return CreditsState(
             remaining_micros=_to_micros(getattr(_acc, "total_usable_credits", None)),
             remaining_usd=_to_usd(getattr(_acc, "total_usable_credits", None)),
-            subscription_micros=_to_micros(getattr(_acc, "subscription_credits_remaining", None)),
-            subscription_usd=_to_usd(getattr(_acc, "subscription_credits_remaining", None)),
+            subscription_micros=_to_micros(
+                getattr(_acc, "subscription_credits_remaining", None)
+            ),
+            subscription_usd=_to_usd(
+                getattr(_acc, "subscription_credits_remaining", None)
+            ),
             subscription_limit_micros=_to_micros(_monthly) if _has_cap else None,
             subscription_limit_usd=_to_usd(_monthly) if _has_cap else None,
-            purchased_micros=_to_micros(getattr(_acc, "purchased_credits_remaining", None)),
+            purchased_micros=_to_micros(
+                getattr(_acc, "purchased_credits_remaining", None)
+            ),
             purchased_usd=_to_usd(getattr(_acc, "purchased_credits_remaining", None)),
             rollover_micros=_to_micros(getattr(_sub, "rollover_credits", None)),
             denominator_kind="subscription_cap" if _has_cap else "none",
@@ -775,6 +827,7 @@ def seed_credits_at_session_start(agent) -> bool:
         def _bg_seed() -> None:
             try:
                 from clawk_cli.nous_account import get_nous_portal_account_info
+
                 info = get_nous_portal_account_info(force_fresh=True)
                 if getattr(agent, "_credits_state", None) is not None:
                     return  # a live inference header beat us — don't clobber it
@@ -782,7 +835,9 @@ def seed_credits_at_session_start(agent) -> bool:
                 if state is not None:
                     _hydrate_seed_state(agent, state)
             except Exception:
-                logger.debug("credits ▸ session-start seed (background) failed", exc_info=True)
+                logger.debug(
+                    "credits ▸ session-start seed (background) failed", exc_info=True
+                )
 
         threading.Thread(target=_bg_seed, name="credits-seed", daemon=True).start()
         return True

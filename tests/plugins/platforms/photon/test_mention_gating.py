@@ -8,6 +8,7 @@ never gated.
 These call ``_dispatch_inbound`` directly (no aiohttp / ports) and assert
 on what reaches ``handle_message``.
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -19,7 +20,9 @@ from gateway.platforms.base import MessageEvent
 from plugins.platforms.photon.adapter import PhotonAdapter
 
 
-def _make_adapter(monkeypatch: pytest.MonkeyPatch, extra: dict | None = None) -> PhotonAdapter:
+def _make_adapter(
+    monkeypatch: pytest.MonkeyPatch, extra: dict | None = None
+) -> PhotonAdapter:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "test-project-id")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "test-project-secret")
     monkeypatch.delenv("PHOTON_REQUIRE_MENTION", raising=False)
@@ -48,7 +51,9 @@ def _dm_payload(text: str) -> dict:
     }
 
 
-def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> List[MessageEvent]:
+def _capture(
+    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
+) -> List[MessageEvent]:
     captured: List[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
@@ -66,7 +71,9 @@ def test_require_mention_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_group_message_dropped_without_mention(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_group_message_dropped_without_mention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
     captured = _capture(adapter, monkeypatch)
 
@@ -75,7 +82,9 @@ async def test_group_message_dropped_without_mention(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_group_message_passes_and_strips_wake_word(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_group_message_passes_and_strips_wake_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
     captured = _capture(adapter, monkeypatch)
 
@@ -96,7 +105,9 @@ async def test_dm_never_gated(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_require_mention_off_passes_group_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_require_mention_off_passes_group_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter = _make_adapter(monkeypatch)  # require_mention defaults off
     captured = _capture(adapter, monkeypatch)
 
@@ -108,7 +119,10 @@ async def test_require_mention_off_passes_group_messages(monkeypatch: pytest.Mon
 def test_custom_mention_patterns_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(
         monkeypatch,
-        extra={"require_mention": True, "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"]},
+        extra={
+            "require_mention": True,
+            "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"],
+        },
     )
     assert adapter.require_mention is True
     assert len(adapter._mention_patterns) == 1

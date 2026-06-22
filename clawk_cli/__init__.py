@@ -73,8 +73,12 @@ def _ensure_utf8():
             # for streams that don't expose reconfigure() (e.g. some wrapped
             # or replaced streams). closefd=False keeps the original fd open.
             new_stream = open(
-                stream.fileno(), "w", encoding="utf-8",
-                errors="replace", buffering=1, closefd=False,
+                stream.fileno(),
+                "w",
+                encoding="utf-8",
+                errors="replace",
+                buffering=1,
+                closefd=False,
             )
             setattr(sys, stream_name, new_stream)
             repaired = True

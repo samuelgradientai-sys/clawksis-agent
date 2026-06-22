@@ -37,7 +37,10 @@ def test_archiving_compression_tip_archives_projected_root(db):
     assert db.get_session("root")["archived"] == 1
     assert db.get_session("tip")["archived"] == 1
     assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == []
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)] == ["tip"]
+    assert [
+        s["id"]
+        for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)
+    ] == ["tip"]
 
 
 def test_unarchiving_compression_tip_unarchives_projected_root(db):
@@ -48,4 +51,6 @@ def test_unarchiving_compression_tip_unarchives_projected_root(db):
 
     assert db.get_session("root")["archived"] == 0
     assert db.get_session("tip")["archived"] == 0
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == ["tip"]
+    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == [
+        "tip"
+    ]

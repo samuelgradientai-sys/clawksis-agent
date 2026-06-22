@@ -37,7 +37,9 @@ def profile_host_key(profile: str | None) -> str:
     """Return the safe Honcho host key for a Clawksis profile."""
     if not profile or profile in {"default", "custom"}:
         return HOST
-    sanitized = "".join(c if c.isalnum() or c in "_-" else "_" for c in profile).strip("_")
+    sanitized = "".join(c if c.isalnum() or c in "_-" else "_" for c in profile).strip(
+        "_"
+    )
     return f"{HOST}_{sanitized or 'profile'}"
 
 
@@ -47,7 +49,7 @@ def _host_block(raw: dict, host: str) -> dict:
     block = hosts.get(host, {})
     if block or not host.startswith(f"{HOST}_"):
         return block
-    legacy = f"{HOST}.{host[len(HOST) + 1:]}"
+    legacy = f"{HOST}.{host[len(HOST) + 1 :]}"
     return hosts.get(legacy, {})
 
 
@@ -65,6 +67,7 @@ def resolve_active_host() -> str:
 
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         profile = get_active_profile_name()
         return profile_host_key(profile)
     except Exception:
@@ -196,8 +199,7 @@ def _parse_dialectic_depth_levels(host_val, root_val, depth: int) -> list[str] |
     for val in (host_val, root_val):
         if val is not None and isinstance(val, list):
             levels = [
-                lvl if lvl in _VALID_REASONING_LEVELS else "low"
-                for lvl in val[:depth]
+                lvl if lvl in _VALID_REASONING_LEVELS else "low" for lvl in val[:depth]
             ]
             # Pad with "low" if array is shorter than depth
             while len(levels) < depth:
@@ -234,7 +236,11 @@ def _resolve_optional_float(*values: Any) -> float | None:
 
 
 _VALID_OBSERVATION_MODES = {"unified", "directional"}
-_OBSERVATION_MODE_ALIASES = {"shared": "unified", "separate": "directional", "cross": "directional"}
+_OBSERVATION_MODE_ALIASES = {
+    "shared": "unified",
+    "separate": "directional",
+    "cross": "directional",
+}
 
 
 def _normalize_observation_mode(val: str) -> str:
@@ -247,12 +253,16 @@ def _normalize_observation_mode(val: str) -> str:
 # Explicit per-peer config always wins over presets.
 _OBSERVATION_PRESETS = {
     "directional": {
-        "user_observe_me": True, "user_observe_others": True,
-        "ai_observe_me": True, "ai_observe_others": True,
+        "user_observe_me": True,
+        "user_observe_others": True,
+        "ai_observe_me": True,
+        "ai_observe_others": True,
     },
     "unified": {
-        "user_observe_me": True, "user_observe_others": False,
-        "ai_observe_me": False, "ai_observe_others": True,
+        "user_observe_me": True,
+        "user_observe_others": False,
+        "ai_observe_me": False,
+        "ai_observe_others": True,
     },
 }
 
@@ -279,13 +289,12 @@ def _resolve_observation(
 
     return {
         "user_observe_me": user_block.get("observeMe", preset["user_observe_me"]),
-        "user_observe_others": user_block.get("observeOthers", preset["user_observe_others"]),
+        "user_observe_others": user_block.get(
+            "observeOthers", preset["user_observe_others"]
+        ),
         "ai_observe_me": ai_block.get("observeMe", preset["ai_observe_me"]),
         "ai_observe_others": ai_block.get("observeOthers", preset["ai_observe_others"]),
     }
-
-
-
 
 
 @dataclass
@@ -430,25 +439,16 @@ class HonchoClientConfig:
         _explicitly_configured = bool(host_block) or raw.get("enabled") is True
 
         # Explicit host block fields win, then flat/global, then defaults
-        workspace = (
-            host_block.get("workspace")
-            or raw.get("workspace")
-            or resolved_host
-        )
-        ai_peer = (
-            host_block.get("aiPeer")
-            or raw.get("aiPeer")
-            or resolved_host
-        )
+        workspace = host_block.get("workspace") or raw.get("workspace") or resolved_host
+        ai_peer = host_block.get("aiPeer") or raw.get("aiPeer") or resolved_host
         api_key = (
             host_block.get("apiKey")
             or raw.get("apiKey")
             or os.environ.get("HONCHO_API_KEY")
         )
 
-        environment = (
-            host_block.get("environment")
-            or raw.get("environment", "production")
+        environment = host_block.get("environment") or raw.get(
+            "environment", "production"
         )
 
         base_url = (
@@ -477,9 +477,7 @@ class HonchoClientConfig:
 
         # write_frequency: accept int or string
         raw_wf = (
-            host_block.get("writeFrequency")
-            or raw.get("writeFrequency")
-            or "async"
+            host_block.get("writeFrequency") or raw.get("writeFrequency") or "async"
         )
         try:
             write_frequency: str | int = int(raw_wf)
@@ -488,16 +486,18 @@ class HonchoClientConfig:
 
         # saveMessages: host wins (None-aware since False is valid)
         host_save = host_block.get("saveMessages")
-        save_messages = host_save if host_save is not None else raw.get("saveMessages", True)
+        save_messages = (
+            host_save if host_save is not None else raw.get("saveMessages", True)
+        )
 
         # sessionStrategy / sessionPeerPrefix: host first, root fallback
-        session_strategy = (
-            host_block.get("sessionStrategy")
-            or raw.get("sessionStrategy", "per-directory")
+        session_strategy = host_block.get("sessionStrategy") or raw.get(
+            "sessionStrategy", "per-directory"
         )
         host_prefix = host_block.get("sessionPeerPrefix")
         session_peer_prefix = (
-            host_prefix if host_prefix is not None
+            host_prefix
+            if host_prefix is not None
             else raw.get("sessionPeerPrefix", False)
         )
 
@@ -562,7 +562,9 @@ class HonchoClientConfig:
             dialectic_depth_levels=_parse_dialectic_depth_levels(
                 host_block.get("dialecticDepthLevels"),
                 raw.get("dialecticDepthLevels"),
-                depth=_parse_dialectic_depth(host_block.get("dialecticDepth"), raw.get("dialecticDepth")),
+                depth=_parse_dialectic_depth(
+                    host_block.get("dialecticDepth"), raw.get("dialecticDepth")
+                ),
             ),
             reasoning_heuristic=_resolve_bool(
                 host_block.get("reasoningHeuristic"),
@@ -585,9 +587,7 @@ class HonchoClientConfig:
                 default=10000,
             ),
             recall_mode=_normalize_recall_mode(
-                host_block.get("recallMode")
-                or raw.get("recallMode")
-                or "hybrid"
+                host_block.get("recallMode") or raw.get("recallMode") or "hybrid"
             ),
             init_on_session_start=_resolve_bool(
                 host_block.get("initOnSessionStart"),
@@ -627,7 +627,10 @@ class HonchoClientConfig:
         try:
             root = subprocess.run(
                 ["git", "rev-parse", "--show-toplevel"],
-                capture_output=True, text=True, cwd=cwd, timeout=5,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=5,
                 stdin=subprocess.DEVNULL,
             )
             if root.returncode == 0:
@@ -699,7 +702,7 @@ class HonchoClientConfig:
 
         # /title mid-session remap
         if session_title:
-            sanitized = re.sub(r'[^a-zA-Z0-9_-]+', '-', session_title).strip('-')
+            sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", session_title).strip("-")
             if sanitized:
                 if self.session_peer_prefix and self.peer_name:
                     return f"{self.peer_name}-{sanitized}"
@@ -711,7 +714,7 @@ class HonchoClientConfig:
         # based resolution because gateway platforms need per-chat isolation that
         # cwd-based strategies cannot provide.
         if gateway_session_key:
-            sanitized = re.sub(r'[^a-zA-Z0-9_-]+', '-', gateway_session_key).strip('-')
+            sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", gateway_session_key).strip("-")
             if sanitized:
                 return self._enforce_session_id_limit(sanitized, gateway_session_key)
 
@@ -779,6 +782,7 @@ def get_honcho_client(config: HonchoClientConfig | None = None) -> Honcho:
         # the "go run clawk honcho setup" hint they used to.
         try:
             from tools.lazy_deps import FeatureUnavailable, ensure as _lazy_ensure
+
             _lazy_ensure("memory.honcho", prompt=False)
         except ImportError:
             # lazy_deps module missing — fall through to the raw import below.
@@ -805,11 +809,14 @@ def get_honcho_client(config: HonchoClientConfig | None = None) -> Honcho:
         if not resolved_base_url or resolved_timeout is None:
             try:
                 from clawk_cli.config import load_config
+
                 clawk_cfg = load_config()
                 honcho_cfg = clawk_cfg.get("honcho", {})
                 if isinstance(honcho_cfg, dict):
                     if not resolved_base_url:
-                        resolved_base_url = honcho_cfg.get("base_url", "").strip() or None
+                        resolved_base_url = (
+                            honcho_cfg.get("base_url", "").strip() or None
+                        )
                     if resolved_timeout is None:
                         resolved_timeout = _resolve_optional_float(
                             honcho_cfg.get("timeout"),
@@ -824,9 +831,17 @@ def get_honcho_client(config: HonchoClientConfig | None = None) -> Honcho:
             resolved_timeout = _DEFAULT_HTTP_TIMEOUT
 
         if resolved_base_url:
-            logger.info("Initializing Honcho client (base_url: %s, workspace: %s)", resolved_base_url, config.workspace_id)
+            logger.info(
+                "Initializing Honcho client (base_url: %s, workspace: %s)",
+                resolved_base_url,
+                config.workspace_id,
+            )
         else:
-            logger.info("Initializing Honcho client (host: %s, workspace: %s)", config.host, config.workspace_id)
+            logger.info(
+                "Initializing Honcho client (host: %s, workspace: %s)",
+                config.host,
+                config.workspace_id,
+            )
 
         # Local Honcho instances don't require an API key, but the SDK
         # expects a non-empty string.  Use a placeholder for local URLs.
@@ -860,6 +875,7 @@ def get_honcho_client(config: HonchoClientConfig | None = None) -> Honcho:
         # SDK then appends its own versioned paths correctly.
         if resolved_base_url:
             import re as _re
+
             resolved_base_url = _re.sub(r"/v\d+/*$", "", resolved_base_url).rstrip("/")
 
         kwargs: dict = {

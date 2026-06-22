@@ -40,7 +40,12 @@ def test_latest_message_wins_on_conflict():
     assert HISTORICAL_PENDING_ASKS_HEADING.lower() in lower
     assert HISTORICAL_REMAINING_WORK_HEADING.lower() in lower
     # Must have an explicit conflict-resolution rule.
-    assert "wins" in lower or "supersede" in lower or "discard" in lower or "priority" in lower
+    assert (
+        "wins" in lower
+        or "supersede" in lower
+        or "discard" in lower
+        or "priority" in lower
+    )
 
 
 def test_handoff_sections_are_framed_as_historical():
@@ -102,7 +107,8 @@ def test_replaced_prefixes_are_frozen_for_renormalization():
     )
 
     carveout_era = [
-        p for p in _HISTORICAL_SUMMARY_PREFIXES
+        p
+        for p in _HISTORICAL_SUMMARY_PREFIXES
         if "you may use the summary as background" in p
     ]
     assert carveout_era, "carveout-era prefix missing from frozen tuple"

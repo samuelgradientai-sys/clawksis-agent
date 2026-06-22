@@ -40,7 +40,9 @@ def _isolated_cwd(tmp_path, monkeypatch):
     return workspace, decoy
 
 
-def test_relative_terminal_cwd_anchors_to_absolute_not_process_cwd(_isolated_cwd, monkeypatch):
+def test_relative_terminal_cwd_anchors_to_absolute_not_process_cwd(
+    _isolated_cwd, monkeypatch
+):
     """TERMINAL_CWD='.' must NOT silently mean 'the agent process cwd'.
 
     A relative base is meaningless as a resolution anchor. The resolver must
@@ -71,7 +73,9 @@ def test_live_tracking_cwd_wins_over_relative_terminal_cwd(_isolated_cwd, monkey
     """
     workspace, decoy = _isolated_cwd
     monkeypatch.setenv("TERMINAL_CWD", ".")
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
 
     resolved = ft._resolve_path_for_task("target.py", task_id="default")
 
@@ -119,10 +123,14 @@ def test_warning_fires_when_relative_path_escapes_workspace(_isolated_cwd, monke
     # Live cwd = workspace, but the relative path resolves to decoy (process cwd)
     # because TERMINAL_CWD is the poison '.'.  Simulate by pointing live tracking
     # at workspace while the resolved path is under decoy.
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
     resolved_in_decoy = decoy / "target.py"
 
-    warn = ft._path_resolution_warning("target.py", resolved_in_decoy, task_id="default")
+    warn = ft._path_resolution_warning(
+        "target.py", resolved_in_decoy, task_id="default"
+    )
 
     assert warn is not None
     assert "OUTSIDE the active workspace" in warn
@@ -132,19 +140,27 @@ def test_warning_fires_when_relative_path_escapes_workspace(_isolated_cwd, monke
 
 def test_no_warning_when_relative_path_inside_workspace(_isolated_cwd, monkeypatch):
     workspace, decoy = _isolated_cwd
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
     resolved_in_workspace = workspace / "target.py"
 
-    warn = ft._path_resolution_warning("target.py", resolved_in_workspace, task_id="default")
+    warn = ft._path_resolution_warning(
+        "target.py", resolved_in_workspace, task_id="default"
+    )
 
     assert warn is None
 
 
 def test_no_warning_for_absolute_input(_isolated_cwd, monkeypatch):
     workspace, decoy = _isolated_cwd
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
 
-    warn = ft._path_resolution_warning(str(decoy / "target.py"), decoy / "target.py", task_id="default")
+    warn = ft._path_resolution_warning(
+        str(decoy / "target.py"), decoy / "target.py", task_id="default"
+    )
 
     assert warn is None
 
@@ -154,7 +170,9 @@ def test_no_warning_when_no_live_cwd(_isolated_cwd, monkeypatch):
     monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": None)
     monkeypatch.delenv("TERMINAL_CWD", raising=False)
 
-    warn = ft._path_resolution_warning("target.py", decoy / "target.py", task_id="default")
+    warn = ft._path_resolution_warning(
+        "target.py", decoy / "target.py", task_id="default"
+    )
 
     assert warn is None
 
@@ -169,7 +187,9 @@ def test_no_warning_when_no_live_cwd(_isolated_cwd, monkeypatch):
 
 
 @pytest.mark.parametrize("sentinel", ["", ".", "./", "auto", "cwd", "CWD", "Auto"])
-def test_sentinel_terminal_cwd_is_treated_as_unset(_isolated_cwd, monkeypatch, sentinel):
+def test_sentinel_terminal_cwd_is_treated_as_unset(
+    _isolated_cwd, monkeypatch, sentinel
+):
     """Sentinel TERMINAL_CWD values are NOT used as a directory anchor.
 
     They fall through to the (absolute) process cwd, exactly as if unset —
@@ -218,7 +238,9 @@ def test_absolute_terminal_cwd_anchors_with_empty_registry(_isolated_cwd, monkey
     assert not str(resolved).startswith(str(decoy))
 
 
-def test_warning_fires_from_terminal_cwd_when_registry_empty(_isolated_cwd, monkeypatch):
+def test_warning_fires_from_terminal_cwd_when_registry_empty(
+    _isolated_cwd, monkeypatch
+):
     """Divergence warning must fire even before any terminal command runs.
 
     PR #35399's warning required a live terminal cwd; a fresh worktree session
@@ -247,7 +269,9 @@ def test_live_cwd_still_wins_over_absolute_terminal_cwd(_isolated_cwd, monkeypat
     other = decoy.parent / "other"
     other.mkdir()
     # Live cwd = workspace; TERMINAL_CWD points elsewhere — live must win.
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
     monkeypatch.setenv("TERMINAL_CWD", str(other))
 
     resolved = ft._resolve_path_for_task("target.py", task_id="default")
@@ -261,9 +285,12 @@ def test_live_cwd_still_wins_over_absolute_terminal_cwd(_isolated_cwd, monkeypat
 def test_write_file_reports_resolved_absolute_path(_isolated_cwd, monkeypatch):
     """write_file_tool must put the absolute on-disk path in files_modified."""
     workspace, decoy = _isolated_cwd
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
 
     import json
+
     out = json.loads(ft.write_file_tool("newfile.txt", "hello\n", task_id="t1"))
 
     expected = str((workspace / "newfile.txt").resolve())
@@ -275,14 +302,21 @@ def test_write_file_reports_resolved_absolute_path(_isolated_cwd, monkeypatch):
 def test_patch_reports_resolved_absolute_path(_isolated_cwd, monkeypatch):
     """patch_tool (replace mode) must put the absolute on-disk path in files_modified."""
     workspace, decoy = _isolated_cwd
-    monkeypatch.setattr(ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace))
+    monkeypatch.setattr(
+        ft, "_get_live_tracking_cwd", lambda task_id="default": str(workspace)
+    )
 
     import json
-    out = json.loads(ft.patch_tool(
-        mode="replace", path="target.py",
-        old_string="WORKSPACE_ORIGINAL", new_string="WORKSPACE_PATCHED",
-        task_id="t1",
-    ))
+
+    out = json.loads(
+        ft.patch_tool(
+            mode="replace",
+            path="target.py",
+            old_string="WORKSPACE_ORIGINAL",
+            new_string="WORKSPACE_PATCHED",
+            task_id="t1",
+        )
+    )
 
     expected = str((workspace / "target.py").resolve())
     assert not out.get("error"), out
@@ -291,4 +325,3 @@ def test_patch_reports_resolved_absolute_path(_isolated_cwd, monkeypatch):
     assert "WORKSPACE_PATCHED" in (workspace / "target.py").read_text()
     # And the decoy copy is untouched.
     assert (decoy / "target.py").read_text() == "DECOY_ORIGINAL\n"
-

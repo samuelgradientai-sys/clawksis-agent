@@ -566,7 +566,9 @@ class TestWeixinChunkDelivery:
 
     @patch("gateway.platforms.weixin.asyncio.sleep", new_callable=AsyncMock)
     @patch("gateway.platforms.weixin._send_message", new_callable=AsyncMock)
-    def test_repeated_rate_limits_open_circuit_for_followup_sends(self, send_message_mock, sleep_mock):
+    def test_repeated_rate_limits_open_circuit_for_followup_sends(
+        self, send_message_mock, sleep_mock
+    ):
         adapter = self._connected_adapter()
         adapter._send_chunk_retries = 3
         adapter._send_chunk_retry_delay_seconds = 0
@@ -594,7 +596,9 @@ class TestWeixinChunkDelivery:
         assert sleep_mock.await_count == 1
 
     @patch("gateway.platforms.weixin._send_message", new_callable=AsyncMock)
-    def test_open_rate_limit_circuit_fails_fast_without_sendmessage(self, send_message_mock):
+    def test_open_rate_limit_circuit_fails_fast_without_sendmessage(
+        self, send_message_mock
+    ):
         adapter = self._connected_adapter()
         adapter._rate_limit_circuit_open_seconds = 60
         adapter._open_rate_limit_circuit()
@@ -606,7 +610,9 @@ class TestWeixinChunkDelivery:
         send_message_mock.assert_not_awaited()
 
     @patch("gateway.platforms.weixin._send_message", new_callable=AsyncMock)
-    def test_successful_send_after_cooldown_resets_rate_limit_state(self, send_message_mock):
+    def test_successful_send_after_cooldown_resets_rate_limit_state(
+        self, send_message_mock
+    ):
         adapter = self._connected_adapter()
         adapter._rate_limit_circuit_until = weixin.time.monotonic() - 1
         adapter._rate_limit_events = [weixin.time.monotonic()]
@@ -641,9 +647,14 @@ class TestWeixinChunkDelivery:
             }
 
         async def run_burst():
-            with patch("gateway.platforms.weixin._send_message", side_effect=rate_limited_send) as send_message_mock:
+            with patch(
+                "gateway.platforms.weixin._send_message", side_effect=rate_limited_send
+            ) as send_message_mock:
                 results = await asyncio.gather(
-                    *(adapter.send("wxid_test123", f"message {idx}") for idx in range(20))
+                    *(
+                        adapter.send("wxid_test123", f"message {idx}")
+                        for idx in range(20)
+                    )
                 )
                 return results, send_message_mock
 

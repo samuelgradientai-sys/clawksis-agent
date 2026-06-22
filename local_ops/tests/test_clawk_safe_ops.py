@@ -53,7 +53,10 @@ class TestClawkSafeOps(unittest.TestCase):
         self.assertNotIn("Permission denied", result.stdout + result.stderr)
 
     def test_system_health_json_is_valid(self):
-        result = self.run_cmd([str(REPO_ROOT / "local_ops" / "system-health"), "--json"])
+        result = self.run_cmd([
+            str(REPO_ROOT / "local_ops" / "system-health"),
+            "--json",
+        ])
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertIn(data.get("status"), ["ok", "warning", "degraded"])
@@ -62,20 +65,30 @@ class TestClawkSafeOps(unittest.TestCase):
         self.assertIn("system", data)
 
     def test_service_status_json_is_valid(self):
-        result = self.run_cmd([str(REPO_ROOT / "local_ops" / "service-status"), "--json"])
+        result = self.run_cmd([
+            str(REPO_ROOT / "local_ops" / "service-status"),
+            "--json",
+        ])
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data.get("status"), "ok")
         self.assertIn("services", data)
 
     def test_service_status_blocks_unallowlisted_service(self):
-        result = self.run_cmd([str(REPO_ROOT / "local_ops" / "service-status"), "nginx-no-autorizado", "--json"])
+        result = self.run_cmd([
+            str(REPO_ROOT / "local_ops" / "service-status"),
+            "nginx-no-autorizado",
+            "--json",
+        ])
         self.assertNotEqual(result.returncode, 0)
         data = json.loads(result.stdout)
         self.assertEqual(data.get("status"), "blocked")
 
     def test_client_report_json_is_valid_and_sanitized(self):
-        result = self.run_cmd([str(REPO_ROOT / "local_ops" / "client-report"), "--json"])
+        result = self.run_cmd([
+            str(REPO_ROOT / "local_ops" / "client-report"),
+            "--json",
+        ])
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertIn(data.get("overall_status"), ["ok", "warning", "degraded"])

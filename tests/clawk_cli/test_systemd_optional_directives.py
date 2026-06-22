@@ -23,6 +23,7 @@ import pytest
 class TestStripOptionalSystemdDirectives:
     def test_removes_restart_max_delay_sec(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = """[Service]
 Restart=always
 RestartSec=5
@@ -37,6 +38,7 @@ RestartSteps=5
 
     def test_preserves_other_directives(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = """[Service]
 Type=simple
 ExecStart=/usr/bin/python gateway run
@@ -53,10 +55,12 @@ KillSignal=SIGTERM
 
     def test_handles_empty_string(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         assert _strip_optional_systemd_directives("") == ""
 
     def test_handles_no_optional_directives(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = "[Service]\nRestart=always\n"
         result = _strip_optional_systemd_directives(text)
         assert "Restart=always" in result
@@ -64,6 +68,7 @@ KillSignal=SIGTERM
 
     def test_preserves_comments(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = """[Service]
 # RestartMaxDelaySec is set below
 RestartMaxDelaySec=300
@@ -76,6 +81,7 @@ RestartMaxDelaySec=300
 
     def test_handles_inline_values_with_equals(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = "RestartMaxDelaySec=300\n"
         result = _strip_optional_systemd_directives(text)
         assert result == ""
@@ -86,6 +92,7 @@ RestartMaxDelaySec=300
             _normalize_service_definition,
             _strip_optional_systemd_directives,
         )
+
         # What the installed unit looks like on older systemd (directives stripped)
         installed = """[Unit]
 Description=Clawksis Gateway
@@ -121,7 +128,9 @@ KillSignal=SIGTERM
 WantedBy=default.target
 """
         # Without normalization, they differ
-        assert _normalize_service_definition(installed) != _normalize_service_definition(expected)
+        assert _normalize_service_definition(
+            installed
+        ) != _normalize_service_definition(expected)
 
         # With optional-directive stripping, they match
         norm_installed = _normalize_service_definition(
@@ -163,7 +172,9 @@ WantedBy=default.target
         monkeypatch.setattr(
             gw,
             "generate_systemd_unit",
-            lambda system=False, run_as_user=None: installed + "\nRestartMaxDelaySec=300\nRestartSteps=5\n",
+            lambda system=False, run_as_user=None: (
+                installed + "\nRestartMaxDelaySec=300\nRestartSteps=5\n"
+            ),
         )
 
         assert gw.systemd_unit_is_current(system=False) is True
@@ -242,6 +253,7 @@ WantedBy=default.target
 
     def test_nonexistent_unit_is_not_current(self, tmp_path, monkeypatch):
         from clawk_cli import gateway as gw
+
         unit_file = tmp_path / "nonexistent.service"
         monkeypatch.setattr(gw, "get_systemd_unit_path", lambda system=False: unit_file)
         assert gw.systemd_unit_is_current(system=False) is False

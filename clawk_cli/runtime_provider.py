@@ -1817,7 +1817,9 @@ def _resolve_ollama_runtime(
 
     # Ollama ignores the key; honor a real one if the user set it, else a
     # non-empty placeholder so the OpenAI SDK doesn't reject the client.
-    cfg_api_key = str(model_cfg.get("api_key") or "").strip() if cfg_provider == "ollama" else ""
+    cfg_api_key = (
+        str(model_cfg.get("api_key") or "").strip() if cfg_provider == "ollama" else ""
+    )
 
     api_key = (
         (explicit_api_key or "").strip()

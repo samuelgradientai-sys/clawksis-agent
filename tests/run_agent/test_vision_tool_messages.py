@@ -24,6 +24,7 @@ import pytest
 def _make_agent(provider="openrouter", model="gpt-4o"):
     """Create a minimal AIAgent mock with provider/model attributes."""
     from run_agent import AIAgent
+
     agent = MagicMock(spec=AIAgent)
     agent.provider = provider
     agent.model = model
@@ -33,15 +34,20 @@ def _make_agent(provider="openrouter", model="gpt-4o"):
         if not isinstance(content, list):
             return False
         for part in content:
-            if isinstance(part, dict) and part.get("type") in {"image_url", "input_image"}:
+            if isinstance(part, dict) and part.get("type") in {
+                "image_url",
+                "input_image",
+            }:
                 return True
         return False
 
     agent._content_has_image_parts = _real_content_has_image_parts
     agent._model_supports_vision = lambda: AIAgent._model_supports_vision(agent)
-    agent._provider_supports_vision_tool_messages = lambda: AIAgent._provider_supports_vision_tool_messages(agent)
-    agent._tool_result_content_for_active_model = (
-        lambda name, result: AIAgent._tool_result_content_for_active_model(agent, name, result)
+    agent._provider_supports_vision_tool_messages = lambda: (
+        AIAgent._provider_supports_vision_tool_messages(agent)
+    )
+    agent._tool_result_content_for_active_model = lambda name, result: (
+        AIAgent._tool_result_content_for_active_model(agent, name, result)
     )
     return agent
 
@@ -100,7 +106,9 @@ class TestToolResultContentProactiveDowngrade:
         result = _multimodal_result(text="screenshot captured")
 
         with patch.object(agent, "_model_supports_vision", return_value=True):
-            content = agent._tool_result_content_for_active_model("browser_screenshot", result)
+            content = agent._tool_result_content_for_active_model(
+                "browser_screenshot", result
+            )
 
         assert isinstance(content, str)
         assert "screenshot captured" in content
@@ -120,7 +128,9 @@ class TestToolResultContentProactiveDowngrade:
         result = _multimodal_result()
 
         with patch.object(agent, "_model_supports_vision", return_value=True):
-            content = agent._tool_result_content_for_active_model("browser_screenshot", result)
+            content = agent._tool_result_content_for_active_model(
+                "browser_screenshot", result
+            )
 
         assert isinstance(content, list)
         assert any(p.get("type") == "image_url" for p in content if isinstance(p, dict))
@@ -131,7 +141,9 @@ class TestToolResultContentProactiveDowngrade:
         result = _multimodal_result(text="screenshot")
 
         with patch.object(agent, "_model_supports_vision", return_value=False):
-            content = agent._tool_result_content_for_active_model("browser_screenshot", result)
+            content = agent._tool_result_content_for_active_model(
+                "browser_screenshot", result
+            )
 
         assert isinstance(content, str)
         assert "screenshot" in content
@@ -142,7 +154,9 @@ class TestToolResultContentProactiveDowngrade:
         result = _multimodal_result(text="desktop screenshot")
 
         with patch.object(agent, "_model_supports_vision", return_value=True):
-            content = agent._tool_result_content_for_active_model("computer_use", result)
+            content = agent._tool_result_content_for_active_model(
+                "computer_use", result
+            )
 
         # Should be a text summary, not the error dict for non-vision models
         assert isinstance(content, str)
@@ -169,7 +183,9 @@ class TestToolResultContentProactiveDowngrade:
         result = _multimodal_result(text="cached downgrade")
 
         with patch.object(agent, "_model_supports_vision", return_value=True):
-            content = agent._tool_result_content_for_active_model("browser_screenshot", result)
+            content = agent._tool_result_content_for_active_model(
+                "browser_screenshot", result
+            )
 
         assert isinstance(content, str)
         assert "cached downgrade" in content
@@ -183,30 +199,37 @@ class TestToolResultContentProactiveDowngrade:
 class TestProviderProfileField:
     def test_default_is_true(self):
         from providers.base import ProviderProfile
+
         # ProviderProfile uses __init__ with defaults; check via a minimal instance
         # by reading the class-level default from a dataclass-like field
         import dataclasses
+
         if dataclasses.is_dataclass(ProviderProfile):
             fields = {f.name: f.default for f in dataclasses.fields(ProviderProfile)}
             assert fields.get("supports_vision_tool_messages", True) is True
         else:
             # Class-level attribute default
-            assert getattr(ProviderProfile, "supports_vision_tool_messages", True) is True
+            assert (
+                getattr(ProviderProfile, "supports_vision_tool_messages", True) is True
+            )
 
     def test_xiaomi_profile_has_false(self):
         from providers import get_provider_profile
+
         profile = get_provider_profile("xiaomi")
         assert profile is not None
         assert profile.supports_vision_tool_messages is False
 
     def test_xiaomi_alias_mimo_has_false(self):
         from providers import get_provider_profile
+
         profile = get_provider_profile("mimo")
         assert profile is not None
         assert profile.supports_vision_tool_messages is False
 
     def test_anthropic_profile_defaults_true(self):
         from providers import get_provider_profile
+
         profile = get_provider_profile("anthropic")
         if profile is not None:
             assert profile.supports_vision_tool_messages is True

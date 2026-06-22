@@ -92,7 +92,9 @@ def _format_reset(dt: Optional[datetime]) -> str:
     return f"{rel} ({local_dt.strftime('%Y-%m-%d %H:%M %Z')})"
 
 
-def render_account_usage_lines(snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False) -> list[str]:
+def render_account_usage_lines(
+    snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False
+) -> list[str]:
     if not snapshot:
         return []
     header = f"📈 {'**' if markdown else ''}{snapshot.title}{'**' if markdown else ''}"
@@ -276,7 +278,9 @@ def nous_credits_lines(*, markdown: bool = False, timeout: float = 10.0) -> list
     except Exception:
         # Fail-open (caller shows nothing), but leave a breadcrumb so a dead
         # /usage credits block is diagnosable in agent.log without a dev flag.
-        logger.debug("credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True)
+        logger.debug(
+            "credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True
+        )
         return []
 
 
@@ -382,11 +386,13 @@ def build_credits_view(*, markdown: bool = False, timeout: float = 10.0) -> Cred
         )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            account = pool.submit(get_nous_portal_account_info, force_fresh=True).result(
-                timeout=timeout
-            )
+            account = pool.submit(
+                get_nous_portal_account_info, force_fresh=True
+            ).result(timeout=timeout)
     except Exception:
-        logger.debug("credits ▸ /credits portal fetch failed (fail-open)", exc_info=True)
+        logger.debug(
+            "credits ▸ /credits portal fetch failed (fail-open)", exc_info=True
+        )
         return not_logged_in
 
     if account is None or not getattr(account, "logged_in", False):
@@ -449,7 +455,9 @@ def _fetch_codex_account_usage() -> Optional[AccountUsageSnapshot]:
     if account_id:
         headers["ChatGPT-Account-Id"] = account_id
     with httpx.Client(timeout=15.0) as client:
-        response = client.get(_resolve_codex_usage_url(creds.get("base_url", "")), headers=headers)
+        response = client.get(
+            _resolve_codex_usage_url(creds.get("base_url", "")), headers=headers
+        )
         response.raise_for_status()
     payload = response.json() or {}
     rate_limit = payload.get("rate_limit") or {}
@@ -503,7 +511,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
         "User-Agent": "claude-code/2.1.0",
     }
     with httpx.Client(timeout=15.0) as client:
-        response = client.get("https://api.anthropic.com/api/oauth/usage", headers=headers)
+        response = client.get(
+            "https://api.anthropic.com/api/oauth/usage", headers=headers
+        )
         response.raise_for_status()
     payload = response.json() or {}
     windows: list[AccountUsageWindow] = []
@@ -532,7 +542,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
         used_credits = extra.get("used_credits")
         monthly_limit = extra.get("monthly_limit")
         currency = extra.get("currency") or "USD"
-        if isinstance(used_credits, (int, float)) and isinstance(monthly_limit, (int, float)):
+        if isinstance(used_credits, (int, float)) and isinstance(
+            monthly_limit, (int, float)
+        ):
             details.append(
                 f"Extra usage: {used_credits:.2f} / {monthly_limit:.2f} {currency}"
             )
@@ -545,7 +557,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
     )
 
 
-def _fetch_openrouter_account_usage(base_url: Optional[str], api_key: Optional[str]) -> Optional[AccountUsageSnapshot]:
+def _fetch_openrouter_account_usage(
+    base_url: Optional[str], api_key: Optional[str]
+) -> Optional[AccountUsageSnapshot]:
     runtime = resolve_runtime_provider(
         requested="openrouter",
         explicit_base_url=base_url,

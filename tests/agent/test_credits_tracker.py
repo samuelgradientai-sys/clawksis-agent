@@ -49,102 +49,88 @@ def _base_headers(**overrides) -> dict:
 # ── 9 STATES ────────────────────────────────────────────────────────────────
 
 
-HEALTHY_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(30.34),
-        "x-nous-credits-remaining-usd": "30.34",
-        "x-nous-credits-subscription-micros": micros(18.00),
-        "x-nous-credits-subscription-usd": "18.00",
-        "x-nous-credits-subscription-limit-micros": micros(20.00),
-        "x-nous-credits-subscription-limit-usd": "20.00",
-        "x-nous-credits-rollover-micros": micros(0),
-        "x-nous-credits-purchased-micros": micros(12.34),
-        "x-nous-credits-purchased-usd": "12.34",
-        "x-nous-tool-pool-micros": micros(2.00),
-        "x-nous-tool-pool-gated-off": "true",
-        "x-nous-credits-denominator-kind": "subscription_cap",
-        "x-nous-credits-paid-access": "true",
-    }
-)
+HEALTHY_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(30.34),
+    "x-nous-credits-remaining-usd": "30.34",
+    "x-nous-credits-subscription-micros": micros(18.00),
+    "x-nous-credits-subscription-usd": "18.00",
+    "x-nous-credits-subscription-limit-micros": micros(20.00),
+    "x-nous-credits-subscription-limit-usd": "20.00",
+    "x-nous-credits-rollover-micros": micros(0),
+    "x-nous-credits-purchased-micros": micros(12.34),
+    "x-nous-credits-purchased-usd": "12.34",
+    "x-nous-tool-pool-micros": micros(2.00),
+    "x-nous-tool-pool-gated-off": "true",
+    "x-nous-credits-denominator-kind": "subscription_cap",
+    "x-nous-credits-paid-access": "true",
+})
 
-SUB_90PCT_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(2.00),
-        "x-nous-credits-remaining-usd": "2.00",
-        "x-nous-credits-subscription-micros": micros(2.00),
-        "x-nous-credits-subscription-usd": "2.00",
-        "x-nous-credits-subscription-limit-micros": micros(20.00),
-        "x-nous-credits-subscription-limit-usd": "20.00",
-        "x-nous-credits-purchased-micros": micros(0),
-        "x-nous-credits-purchased-usd": "0.00",
-        "x-nous-credits-denominator-kind": "subscription_cap",
-        "x-nous-credits-paid-access": "true",
-    }
-)
+SUB_90PCT_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(2.00),
+    "x-nous-credits-remaining-usd": "2.00",
+    "x-nous-credits-subscription-micros": micros(2.00),
+    "x-nous-credits-subscription-usd": "2.00",
+    "x-nous-credits-subscription-limit-micros": micros(20.00),
+    "x-nous-credits-subscription-limit-usd": "20.00",
+    "x-nous-credits-purchased-micros": micros(0),
+    "x-nous-credits-purchased-usd": "0.00",
+    "x-nous-credits-denominator-kind": "subscription_cap",
+    "x-nous-credits-paid-access": "true",
+})
 
-GRANT_EXHAUSTED_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(12.34),
-        "x-nous-credits-remaining-usd": "12.34",
-        "x-nous-credits-subscription-micros": micros(0),
-        "x-nous-credits-subscription-usd": "0.00",
-        "x-nous-credits-subscription-limit-micros": micros(20.00),
-        "x-nous-credits-subscription-limit-usd": "20.00",
-        "x-nous-credits-purchased-micros": micros(12.34),
-        "x-nous-credits-purchased-usd": "12.34",
-        "x-nous-credits-denominator-kind": "subscription_cap",
-        "x-nous-credits-paid-access": "true",
-    }
-)
+GRANT_EXHAUSTED_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(12.34),
+    "x-nous-credits-remaining-usd": "12.34",
+    "x-nous-credits-subscription-micros": micros(0),
+    "x-nous-credits-subscription-usd": "0.00",
+    "x-nous-credits-subscription-limit-micros": micros(20.00),
+    "x-nous-credits-subscription-limit-usd": "20.00",
+    "x-nous-credits-purchased-micros": micros(12.34),
+    "x-nous-credits-purchased-usd": "12.34",
+    "x-nous-credits-denominator-kind": "subscription_cap",
+    "x-nous-credits-paid-access": "true",
+})
 
-PURCHASED_ONLY_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(30.00),
-        "x-nous-credits-remaining-usd": "30.00",
-        "x-nous-credits-subscription-micros": micros(0),
-        "x-nous-credits-subscription-usd": "0.00",
-        "x-nous-credits-purchased-micros": micros(30.00),
-        "x-nous-credits-purchased-usd": "30.00",
-        "x-nous-credits-denominator-kind": "none",
-        "x-nous-credits-paid-access": "true",
-        # No limit pair — denominator_kind=none
-    }
-)
+PURCHASED_ONLY_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(30.00),
+    "x-nous-credits-remaining-usd": "30.00",
+    "x-nous-credits-subscription-micros": micros(0),
+    "x-nous-credits-subscription-usd": "0.00",
+    "x-nous-credits-purchased-micros": micros(30.00),
+    "x-nous-credits-purchased-usd": "30.00",
+    "x-nous-credits-denominator-kind": "none",
+    "x-nous-credits-paid-access": "true",
+    # No limit pair — denominator_kind=none
+})
 
-TOOL_POOL_FREE_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(0.05),
-        "x-nous-credits-remaining-usd": "0.05",
-        "x-nous-tool-pool-micros": micros(0.05),
-        "x-nous-tool-pool-gated-off": "false",
-        "x-nous-credits-paid-access": "true",
-    }
-)
+TOOL_POOL_FREE_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(0.05),
+    "x-nous-credits-remaining-usd": "0.05",
+    "x-nous-tool-pool-micros": micros(0.05),
+    "x-nous-tool-pool-gated-off": "false",
+    "x-nous-credits-paid-access": "true",
+})
 
-DEPLETED_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(0),
-        "x-nous-credits-remaining-usd": "0.00",
-        "x-nous-credits-subscription-micros": micros(0),
-        "x-nous-credits-subscription-usd": "0.00",
-        "x-nous-credits-purchased-micros": micros(0),
-        "x-nous-credits-purchased-usd": "0.00",
-        "x-nous-credits-paid-access": "false",
-        "x-nous-credits-disabled-reason": "out_of_credits",
-    }
-)
+DEPLETED_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(0),
+    "x-nous-credits-remaining-usd": "0.00",
+    "x-nous-credits-subscription-micros": micros(0),
+    "x-nous-credits-subscription-usd": "0.00",
+    "x-nous-credits-purchased-micros": micros(0),
+    "x-nous-credits-purchased-usd": "0.00",
+    "x-nous-credits-paid-access": "false",
+    "x-nous-credits-disabled-reason": "out_of_credits",
+})
 
-DEBT_HEADERS = _base_headers(
-    **{
-        "x-nous-credits-remaining-micros": micros(0),
-        "x-nous-credits-remaining-usd": "0.00",
-        "x-nous-credits-subscription-micros": str(-5_000_000),
-        "x-nous-credits-subscription-usd": "-5.00",
-        "x-nous-credits-purchased-micros": micros(0),
-        "x-nous-credits-purchased-usd": "0.00",
-        "x-nous-credits-paid-access": "false",
-    }
-)
+DEBT_HEADERS = _base_headers(**{
+    "x-nous-credits-remaining-micros": micros(0),
+    "x-nous-credits-remaining-usd": "0.00",
+    "x-nous-credits-subscription-micros": str(-5_000_000),
+    "x-nous-credits-subscription-usd": "-5.00",
+    "x-nous-credits-purchased-micros": micros(0),
+    "x-nous-credits-purchased-usd": "0.00",
+    "x-nous-credits-paid-access": "false",
+})
 
 
 # ── State 1: healthy ─────────────────────────────────────────────────────────
@@ -390,7 +376,9 @@ class TestVersionValidation:
         assert state is None
 
     def test_version_absent_returns_none(self):
-        headers = {k: v for k, v in _base_headers().items() if k != "x-nous-credits-version"}
+        headers = {
+            k: v for k, v in _base_headers().items() if k != "x-nous-credits-version"
+        }
         state = parse_credits_headers(headers)
         assert state is None
 
@@ -409,7 +397,11 @@ class TestVersionValidation:
                 parse_credits_headers(headers)
                 parse_credits_headers(headers)
 
-            warning_records = [r for r in caplog.records if "unsupported" in r.message.lower() or "version" in r.message.lower()]
+            warning_records = [
+                r
+                for r in caplog.records
+                if "unsupported" in r.message.lower() or "version" in r.message.lower()
+            ]
             assert len(warning_records) == 1, (
                 f"Expected exactly 1 version warning, got {len(warning_records)}: {[r.message for r in warning_records]}"
             )
@@ -522,12 +514,10 @@ class TestToolPoolOptional:
 class TestHalfPairLimit:
     def test_only_limit_micros_present_both_absent(self):
         """Only -micros present → both None, parse SUCCEEDS."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-limit-micros": micros(20.00),
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-limit-micros": micros(20.00),
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_limit_micros is None
@@ -535,12 +525,10 @@ class TestHalfPairLimit:
 
     def test_only_limit_usd_present_both_absent(self):
         """Only -usd present → both None, parse SUCCEEDS."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-limit-usd": "20.00",
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-limit-usd": "20.00",
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_limit_micros is None
@@ -548,27 +536,23 @@ class TestHalfPairLimit:
 
     def test_half_pair_used_fraction_is_none(self):
         """With no limit pair, used_fraction is None regardless of denominator_kind."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-limit-micros": micros(20.00),
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-limit-micros": micros(20.00),
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.used_fraction is None
 
     def test_full_pair_present_parsed_correctly(self):
         """Both present → both populated, used_fraction computable."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-micros": micros(10.00),
-                "x-nous-credits-subscription-usd": "10.00",
-                "x-nous-credits-subscription-limit-micros": micros(20.00),
-                "x-nous-credits-subscription-limit-usd": "20.00",
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-micros": micros(10.00),
+            "x-nous-credits-subscription-usd": "10.00",
+            "x-nous-credits-subscription-limit-micros": micros(20.00),
+            "x-nous-credits-subscription-limit-usd": "20.00",
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_limit_micros == round(20.00 * 1_000_000)
@@ -593,19 +577,19 @@ class TestNegativeValues:
         assert parse_credits_headers(headers) is None
 
     def test_negative_limit_micros_returns_none(self):
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-limit-micros": "-1000",
-                "x-nous-credits-subscription-limit-usd": "-0.00",
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-limit-micros": "-1000",
+            "x-nous-credits-subscription-limit-usd": "-0.00",
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         assert parse_credits_headers(headers) is None
 
     def test_negative_subscription_accepted(self):
         """subscription_micros is the ONLY field allowed to be negative."""
-        headers = _base_headers(**{"x-nous-credits-subscription-micros": "-5000000",
-                                   "x-nous-credits-subscription-usd": "-5.00"})
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-micros": "-5000000",
+            "x-nous-credits-subscription-usd": "-5.00",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_micros == -5_000_000
@@ -640,12 +624,10 @@ class TestUsdValidation:
 
     def test_usd_negative_valid(self):
         """Negative USD string should parse (e.g. subscription debt)."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-micros": "-5000000",
-                "x-nous-credits-subscription-usd": "-5.00",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-micros": "-5000000",
+            "x-nous-credits-subscription-usd": "-5.00",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_usd == "-5.00"
@@ -689,13 +671,11 @@ class TestAsOfMs:
 
 class TestDenominatorKind:
     def test_subscription_cap_valid(self):
-        headers = _base_headers(
-            **{
-                "x-nous-credits-denominator-kind": "subscription_cap",
-                "x-nous-credits-subscription-limit-micros": micros(20.00),
-                "x-nous-credits-subscription-limit-usd": "20.00",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-denominator-kind": "subscription_cap",
+            "x-nous-credits-subscription-limit-micros": micros(20.00),
+            "x-nous-credits-subscription-limit-usd": "20.00",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.denominator_kind == "subscription_cap"
@@ -717,13 +697,11 @@ class TestDenominatorKind:
 class TestZeroDivisionGuard:
     def test_subscription_limit_zero_used_fraction_is_none(self):
         """subscription_limit_micros='0' + subscription_cap → used_fraction is None (no ZeroDivisionError)."""
-        headers = _base_headers(
-            **{
-                "x-nous-credits-subscription-limit-micros": "0",
-                "x-nous-credits-subscription-limit-usd": "0.00",
-                "x-nous-credits-denominator-kind": "subscription_cap",
-            }
-        )
+        headers = _base_headers(**{
+            "x-nous-credits-subscription-limit-micros": "0",
+            "x-nous-credits-subscription-limit-usd": "0.00",
+            "x-nous-credits-denominator-kind": "subscription_cap",
+        })
         state = parse_credits_headers(headers)
         assert state is not None
         # limit == 0, so used_fraction must be None (guard prevents division)
@@ -831,17 +809,23 @@ class TestCreditsStateDefaults:
 class TestDepletedProperty:
     def test_depleted_equals_not_paid_access(self):
         """depleted must be exactly `not paid_access`, never `remaining==0`."""
-        state = CreditsState(paid_access=False, remaining_micros=0, captured_at=time.time())
+        state = CreditsState(
+            paid_access=False, remaining_micros=0, captured_at=time.time()
+        )
         assert state.depleted is True
 
     def test_not_depleted_when_paid_access_true(self):
-        state = CreditsState(paid_access=True, remaining_micros=0, captured_at=time.time())
+        state = CreditsState(
+            paid_access=True, remaining_micros=0, captured_at=time.time()
+        )
         # remaining==0 but paid_access is True → NOT depleted
         assert state.depleted is False
 
     def test_depleted_independent_of_remaining(self):
         """Even with remaining > 0, if paid_access is False, depleted is True."""
-        state = CreditsState(paid_access=False, remaining_micros=1_000_000, captured_at=time.time())
+        state = CreditsState(
+            paid_access=False, remaining_micros=1_000_000, captured_at=time.time()
+        )
         assert state.depleted is True
 
 
