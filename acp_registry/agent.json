@@ -9,7 +9,7 @@
   "license": "MIT",
   "distribution": {
     "uvx": {
-      "package": "clawksis-agent[acp]==0.15.1",
+      "package": "clawksis-agent[acp]==0.16.0",
       "args": ["clawk-acp"]
     }
   }
