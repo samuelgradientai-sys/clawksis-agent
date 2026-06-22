@@ -1687,7 +1687,10 @@ def _endpoint_speaks_anthropic_messages(base_url: str) -> bool:
     if not normalized:
         return False
 
-    if normalized.endswith("/anthropic"):
+    # ``/anthropic`` suffix (MiniMax, ``/v1/anthropic``) and the ``/anthropic/v1``
+    # base form (LiteLLM-style proxies) both speak Anthropic Messages. A deeper
+    # resource path like ``/anthropic/v1/models`` is NOT the base endpoint.
+    if normalized.endswith("/anthropic") or normalized.endswith("/anthropic/v1"):
         return True
 
     hostname = base_url_hostname(normalized)
