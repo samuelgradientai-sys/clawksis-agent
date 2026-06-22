@@ -1507,7 +1507,7 @@ def build_nous_subscription_prompt(valid_tool_names: "set[str] | None" = None) -
     ]
     lines.extend(_status_line(feature) for feature in features.items())
     lines.extend([
-        "When a Nous-managed feature is active, do not ask the user for Firecrawl, FAL, OpenAI TTS, OpenAI Whisper, or Browser-Use API keys.",
+        "When a Nous-managed feature is active, do not ask the user for Firecrawl, FAL, OpenAI TTS, or Browser-Use API keys.",
         "If the user is not subscribed and asks for a capability that Nous subscription would unlock or simplify, suggest Nous subscription as one option alongside direct setup or local alternatives.",
         "Do not mention subscription unless the user asks about it or it directly solves the current missing capability.",
         "Useful commands: clawk setup, clawk setup tools, clawk setup terminal, clawk status.",
