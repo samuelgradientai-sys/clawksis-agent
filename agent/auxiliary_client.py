@@ -4618,9 +4618,13 @@ def _resolve_auto(
 
             # so that a working key is reused instead of re-selecting from the pool
 
-            # (which might pick a different, potentially exhausted key).
+            # (which might pick a different, potentially exhausted key). Named
+            # API-key providers (xiaomi, etc.) also inherit the live session
+            # endpoint so aux work hits the same base_url as the main chat.
 
             explicit_api_key = runtime_api_key
+
+            explicit_base_url = runtime_base_url or None
 
         # Skip Step-1 if the main provider was recently 402'd. The unhealthy
 
