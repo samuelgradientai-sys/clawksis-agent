@@ -452,6 +452,44 @@ class ExecuteResult:
     exit_code: int = 0
 
 
+# Lines ripgrep/grep emit as their OWN diagnostics (vs. real result rows).
+# A result row always starts at column 0 with the file path; a diagnostic or
+# error-continuation line either carries a tool prefix, leads with whitespace
+# (the indented carets of a regex-parse error), or names a filesystem error.
+_TOOL_DIAG_PREFIXES = ("rg:", "grep:", "ripgrep:", "error:")
+_TOOL_DIAG_PHRASES = ("Permission denied", "os error", "No such file")
+
+
+def _split_tool_diagnostics(output: str) -> tuple[str, str]:
+    """Split mixed grep/rg output into ``(diagnostics, payload)``.
+
+    A partial-error run (exit 2 because one file was unreadable, or a backend
+    that merges stderr into stdout) interleaves diagnostic lines with real
+    matches. This separates them by shape so diagnostics never leak into the
+    payload (matches / file list / counts) the caller builds, and so a pure
+    error is detectable as "diagnostics but no payload". Content matches,
+    context lines (``path-line-content``), group separators (``--``),
+    files-only paths and per-file counts (``path:N``) are all payload. Blank
+    lines are dropped.
+    """
+
+    diagnostics: list[str] = []
+    payload: list[str] = []
+
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        is_diagnostic = (
+            stripped.startswith(_TOOL_DIAG_PREFIXES)
+            or line[:1].isspace()
+            or any(phrase in line for phrase in _TOOL_DIAG_PHRASES)
+        )
+        (diagnostics if is_diagnostic else payload).append(line)
+
+    return "\n".join(diagnostics), "\n".join(payload)
+
+
 def _parse_search_context_line(line: str) -> tuple[str, int, str] | None:
     """Parse grep/rg context output in ``path-line-content`` format.
 
@@ -3248,16 +3286,27 @@ class ShellFileOperations(FileOperations):
 
         result = self._exec(cmd, timeout=60)
 
-        # rg exit codes: 0=matches found, 1=no matches, 2=error
+        # rg exit codes: 0=matches found, 1=no matches, 2=error. The trailing
+        # `| head` can mask that exit code, so detect a hard error by content:
+        # diagnostics present but no real payload. Then strip the diagnostics
+        # out so they can't leak into the matches / files / counts parsed below.
+        diagnostics, payload = _split_tool_diagnostics(result.stdout)
 
-        if result.exit_code == 2 and not result.stdout.strip():
-            error_msg = (
-                result.stderr.strip()
-                if hasattr(result, "stderr") and result.stderr
-                else "Search error"
-            )
+        stderr = (
+            result.stderr.strip()
+            if hasattr(result, "stderr") and result.stderr
+            else ""
+        )
+
+        if not payload.strip() and (
+            diagnostics.strip() or stderr or result.exit_code == 2
+        ):
+            detail = diagnostics.strip() or stderr
+            error_msg = detail.splitlines()[0] if detail else "Search error"
 
             return SearchResult(error=f"Search failed: {error_msg}", total_count=0)
+
+        result.stdout = payload
 
         # Parse results based on output mode
 
@@ -3400,16 +3449,27 @@ class ShellFileOperations(FileOperations):
 
         result = self._exec(cmd, timeout=60)
 
-        # grep exit codes: 0=matches found, 1=no matches, 2=error
+        # grep exit codes: 0=matches found, 1=no matches, 2=error. The trailing
+        # `| head` can mask that exit code, so detect a hard error by content:
+        # diagnostics present but no real payload. Then strip the diagnostics
+        # out so they can't leak into the matches / files / counts parsed below.
+        diagnostics, payload = _split_tool_diagnostics(result.stdout)
 
-        if result.exit_code == 2 and not result.stdout.strip():
-            error_msg = (
-                result.stderr.strip()
-                if hasattr(result, "stderr") and result.stderr
-                else "Search error"
-            )
+        stderr = (
+            result.stderr.strip()
+            if hasattr(result, "stderr") and result.stderr
+            else ""
+        )
+
+        if not payload.strip() and (
+            diagnostics.strip() or stderr or result.exit_code == 2
+        ):
+            detail = diagnostics.strip() or stderr
+            error_msg = detail.splitlines()[0] if detail else "Search error"
 
             return SearchResult(error=f"Search failed: {error_msg}", total_count=0)
+
+        result.stdout = payload
 
         if output_mode == "files_only":
             all_files = [f for f in result.stdout.strip().split("\n") if f]
