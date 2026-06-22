@@ -56,7 +56,12 @@ jobs:
         working-directory: website
         run: npm run build
 
+      # enablement: true auto-creates the Pages site with the GitHub Actions
+      # build type via the API, so the deploy works without first flipping
+      # Settings → Pages → Source to "GitHub Actions" by hand.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
