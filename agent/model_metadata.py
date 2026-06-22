@@ -10,6 +10,8 @@ and run_agent.py for pre-flight context checks.
 
 import ipaddress
 
+import json
+
 import logging
 
 import os
@@ -30,7 +32,7 @@ import requests
 import yaml
 
 
-from utils import base_url_host_matches, base_url_hostname
+from utils import atomic_json_write, base_url_host_matches, base_url_hostname
 
 
 from clawk_constants import OPENROUTER_MODELS_URL
@@ -222,6 +224,71 @@ _endpoint_model_metadata_cache_time: Dict[str, float] = {}
 _ENDPOINT_MODEL_CACHE_TTL = 300
 
 
+def _get_model_metadata_cache_path() -> Path:
+    """Return path to the OpenRouter model metadata disk cache."""
+
+    from clawk_constants import get_clawk_home
+
+    return get_clawk_home() / "cache" / "openrouter_model_metadata.json"
+
+
+def _model_metadata_disk_cache_age_seconds() -> Optional[float]:
+    """Return disk-cache age in seconds, or None if freshness is unknown."""
+
+    try:
+        cache_path = _get_model_metadata_cache_path()
+
+        if not cache_path.exists():
+            return None
+
+        age = time.time() - cache_path.stat().st_mtime
+
+        if age < 0:
+            return None
+
+        return age
+
+    except Exception:
+        return None
+
+
+def _load_model_metadata_disk_cache() -> Dict[str, Dict[str, Any]]:
+    """Load processed OpenRouter metadata cache from disk."""
+
+    try:
+        cache_path = _get_model_metadata_cache_path()
+
+        with cache_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            return {}
+
+        return {
+            str(key): value for key, value in data.items() if isinstance(value, dict)
+        }
+
+    except Exception as e:
+        logger.debug("Failed to load OpenRouter model metadata disk cache: %s", e)
+
+        return {}
+
+
+def _save_model_metadata_disk_cache(data: Dict[str, Dict[str, Any]]) -> None:
+    """Save processed OpenRouter metadata cache to disk atomically."""
+
+    try:
+        atomic_json_write(
+            _get_model_metadata_cache_path(),
+            data,
+            indent=0,
+            separators=(",", ":"),
+        )
+
+    except Exception as e:
+        logger.debug("Failed to save OpenRouter model metadata disk cache: %s", e)
+
+
 # Descending tiers for context length probing when the model is unknown.
 
 # We start at 256K (covers GPT-5.x, many current large-context models) and
@@ -333,7 +400,13 @@ DEFAULT_CONTEXT_LENGTHS = {
     # https://platform.minimax.io/docs/api-reference/text-chat-openai
     "minimax-m3": 1000000,
     "minimax": 204800,
-    # GLM
+    # GLM — GLM-5.2 ships with a 1M context window (verified empirically:
+    # needle-in-a-haystack retrieval at 789K prompt tokens succeeded with
+    # zero errors on api.z.ai/api/coding/paas/v4).  Older GLM models
+    # (5, 5.1, 5-turbo) are ~202K.  Longest-key-first substring matching
+    # ensures "glm-5.2" resolves to 1M while older variants still hit the
+    # generic 202K fallback.
+    "glm-5.2": 1_048_576,
     "glm": 202752,
     # xAI Grok — xAI /v1/models does not return context_length metadata,
     # so these hardcoded fallbacks prevent Clawksis from probing-down to
@@ -920,6 +993,19 @@ def fetch_model_metadata(force_refresh: bool = False) -> Dict[str, Dict[str, Any
     ):
         return _model_metadata_cache
 
+    if not force_refresh:
+        disk_age = _model_metadata_disk_cache_age_seconds()
+
+        if disk_age is not None and disk_age < _MODEL_CACHE_TTL:
+            disk_cache = _load_model_metadata_disk_cache()
+
+            if disk_cache:
+                _model_metadata_cache = disk_cache
+
+                _model_metadata_cache_time = time.time() - disk_age
+
+                return _model_metadata_cache
+
     try:
         response = requests.get(
             OPENROUTER_MODELS_URL, timeout=10, verify=_resolve_requests_verify()
@@ -954,6 +1040,8 @@ def fetch_model_metadata(force_refresh: bool = False) -> Dict[str, Dict[str, Any
 
         _model_metadata_cache_time = time.time()
 
+        _save_model_metadata_disk_cache(cache)
+
         logger.debug("Fetched metadata for %s models from OpenRouter", len(cache))
 
         return cache
@@ -961,7 +1049,27 @@ def fetch_model_metadata(force_refresh: bool = False) -> Dict[str, Dict[str, Any
     except Exception as e:
         logger.warning(f"Failed to fetch model metadata from OpenRouter: {e}")
 
-        return _model_metadata_cache or {}
+        if _model_metadata_cache:
+            return _model_metadata_cache
+
+        disk_cache = _load_model_metadata_disk_cache()
+
+        if disk_cache:
+            _model_metadata_cache = disk_cache
+
+            disk_age = _model_metadata_disk_cache_age_seconds()
+
+            if disk_age is not None:
+                _model_metadata_cache_time = time.time() - min(
+                    disk_age, _MODEL_CACHE_TTL
+                )
+
+            else:
+                _model_metadata_cache_time = time.time() - _MODEL_CACHE_TTL + 1
+
+            return _model_metadata_cache
+
+        return {}
 
 
 def fetch_endpoint_model_metadata(
@@ -2391,6 +2499,32 @@ def get_model_context_length(
                 f"{DEFAULT_FALLBACK_CONTEXT:,}",
             )
 
+            # 3b. Before falling back to the hard 256K default, consult the
+            # hardcoded catalog as a last resort.  A proxied/custom Anthropic
+            # gateway (e.g. corporate proxy) fails the Ollama/local probes
+            # above, but the model name may still match an entry in
+            # DEFAULT_CONTEXT_LENGTHS (e.g. "claude-opus-4-8" → 1M).
+            # Without this, the early return here short-circuits the catalog
+            # lookup at step 8 and silently caps context at 256K.
+
+            model_lower = model.lower()
+
+            for default_model, length in sorted(
+                DEFAULT_CONTEXT_LENGTHS.items(),
+                key=lambda x: len(x[0]),
+                reverse=True,
+            ):
+                if default_model in model_lower:
+                    logger.info(
+                        "Using hardcoded context length %s for model %r "
+                        "(custom endpoint, catalog match on %r)",
+                        f"{length:,}",
+                        model,
+                        default_model,
+                    )
+
+                    return length
+
             return DEFAULT_FALLBACK_CONTEXT
 
     # 4. Anthropic /v1/models API (only for regular API keys, not OAuth)
@@ -2498,6 +2632,35 @@ def get_model_context_length(
             save_context_length(model, base_url, ctx)
 
             return ctx
+
+    # 5f. OpenRouter live /models metadata — authoritative for OpenRouter-routed
+    # models. OpenRouter's catalog carries per-model context_length (e.g.
+    # anthropic/claude-fable-5 -> 1M) and refreshes as new slugs ship, so it
+    # must win over both models.dev (step 5g) and the hardcoded family catch-all
+    # (step 8). Before this branch, an OpenRouter selection set
+    # effective_provider="openrouter", which (a) made the models.dev lookup miss
+    # brand-new slugs and (b) skipped the step-6 OR fallback (gated on `not
+    # effective_provider`), so a fresh slug like claude-fable-5 fell through to
+    # the generic "claude": 200K entry and under-reported a 1M window. Mirrors
+    # the dedicated Copilot/GMI branches above.
+
+    if effective_provider == "openrouter":
+        metadata = fetch_model_metadata()
+
+        entry = metadata.get(model)
+
+        if entry:
+            or_ctx = entry.get("context_length")
+
+            # Guard against the known OpenRouter Kimi-family 32k underreport
+            # (same class the hardcoded overrides exist to mitigate).
+
+            if (
+                isinstance(or_ctx, int)
+                and or_ctx > 0
+                and not (or_ctx == 32768 and _model_name_suggests_kimi(model))
+            ):
+                return or_ctx
 
     if effective_provider:
         from agent.models_dev import lookup_models_dev_context

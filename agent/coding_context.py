@@ -165,7 +165,7 @@ _EDIT_FORMAT_GUIDANCE: dict[str, tuple[tuple[str, ...], str]] = {
             "kimi",
             "glm",
             "grok",
-            "clawk",
+            "hermes",
             "llama",
             "mistral",
             "devstral",
