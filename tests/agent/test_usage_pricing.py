@@ -16,7 +16,9 @@ def test_normalize_usage_anthropic_keeps_cache_buckets_separate():
         cache_creation_input_tokens=400,
     )
 
-    normalized = normalize_usage(usage, provider="anthropic", api_mode="anthropic_messages")
+    normalized = normalize_usage(
+        usage, provider="anthropic", api_mode="anthropic_messages"
+    )
 
     assert normalized.input_tokens == 1000
     assert normalized.output_tokens == 500
@@ -57,7 +59,9 @@ def test_normalize_usage_openai_reads_top_level_anthropic_cache_fields():
         cache_creation_input_tokens=300,
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     # Expected: cache read from prompt_tokens_details.cached_tokens (preferred),
     # cache write from top-level cache_creation_input_tokens (fallback).
@@ -79,7 +83,9 @@ def test_normalize_usage_openai_reads_top_level_cache_read_when_details_missing(
         cache_creation_input_tokens=300,
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.cache_read_tokens == 500
     assert normalized.cache_write_tokens == 300
@@ -94,19 +100,25 @@ def test_normalize_usage_openai_prefers_prompt_tokens_details_over_top_level():
     usage = SimpleNamespace(
         prompt_tokens=1000,
         completion_tokens=200,
-        prompt_tokens_details=SimpleNamespace(cached_tokens=600, cache_write_tokens=150),
+        prompt_tokens_details=SimpleNamespace(
+            cached_tokens=600, cache_write_tokens=150
+        ),
         # Intentionally different values — proving we ignore these when details exist.
         cache_read_input_tokens=999,
         cache_creation_input_tokens=999,
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.cache_read_tokens == 600
     assert normalized.cache_write_tokens == 150
 
 
-def test_openrouter_models_api_pricing_is_converted_from_per_token_to_per_million(monkeypatch):
+def test_openrouter_models_api_pricing_is_converted_from_per_token_to_per_million(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.usage_pricing.fetch_model_metadata",
         lambda: {
@@ -145,7 +157,9 @@ def test_estimate_usage_cost_marks_subscription_routes_included():
     assert float(result.amount_usd) == 0.0
 
 
-def test_estimate_usage_cost_refuses_cache_pricing_without_official_cache_rate(monkeypatch):
+def test_estimate_usage_cost_refuses_cache_pricing_without_official_cache_rate(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.usage_pricing.fetch_model_metadata",
         lambda: {

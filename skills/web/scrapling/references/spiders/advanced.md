@@ -135,6 +135,7 @@ For long-running spiders or applications that need real-time access to scraped i
 ```python
 import anyio
 
+
 async def main():
     spider = MySpider()
     async for item in spider.stream():
@@ -142,6 +143,7 @@ async def main():
         # Access real-time stats
         print(f"Items so far: {spider.stats.items_scraped}")
         print(f"Requests made: {spider.stats.requests_count}")
+
 
 anyio.run(main)
 ```
@@ -159,6 +161,7 @@ You can use it with the checkpoint system too, so it's easy to build UI on top o
 ```python
 import anyio
 
+
 async def main():
     spider = MySpider(crawldir="crawl_data/my_spider")
     async for item in spider.stream():
@@ -166,6 +169,7 @@ async def main():
         # Access real-time stats
         print(f"Items so far: {spider.stats.items_scraped}")
         print(f"Requests made: {spider.stats.requests_count}")
+
 
 anyio.run(main)
 ```
@@ -236,6 +240,7 @@ async def start_requests(self):
         callback=self.after_login,
     )
 
+
 async def after_login(self, response: Response):
     # Now crawl the authenticated pages
     yield response.follow("/dashboard", callback=self.parse)
@@ -300,12 +305,12 @@ print(stats.log_levels_counter)
 # {'debug': 200, 'info': 50, 'warning': 3, 'error': 1, 'critical': 0}
 
 # Timing information
-print(stats.start_time)       # Unix timestamp when crawl started
-print(stats.end_time)         # Unix timestamp when crawl finished
-print(stats.download_delay)   # The download delay used (seconds)
+print(stats.start_time)  # Unix timestamp when crawl started
+print(stats.end_time)  # Unix timestamp when crawl finished
+print(stats.download_delay)  # The download delay used (seconds)
 
 # Concurrency settings used
-print(stats.concurrent_requests)             # Global concurrency limit
+print(stats.concurrent_requests)  # Global concurrency limit
 print(stats.concurrent_requests_per_domain)  # Per-domain concurrency limit
 
 # Custom stats (set by your spider code)
@@ -329,6 +334,7 @@ The spider has a built-in logger accessible via `self.logger`. It's pre-configur
 
 ```python
 import logging
+
 
 class MySpider(Spider):
     name = "my_spider"

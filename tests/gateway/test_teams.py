@@ -1151,9 +1151,13 @@ class TestTeamsAttachmentClassification:
     (same bug class as Signal/Email/SimpleX, PR #44695)."""
 
     def _make_adapter(self):
-        adapter = TeamsAdapter(_make_config(
-            client_id="bot-id", client_secret="secret", tenant_id="tenant",
-        ))
+        adapter = TeamsAdapter(
+            _make_config(
+                client_id="bot-id",
+                client_secret="secret",
+                tenant_id="tenant",
+            )
+        )
         adapter._app = MagicMock()
         adapter._app.id = "bot-id"
         adapter.handle_message = AsyncMock()

@@ -15,7 +15,7 @@ from typing import Any, Literal
 # Allow override via environment variable for testing
 # Set LAST30DAYS_CONFIG_DIR="" for clean/no-config mode
 # Set LAST30DAYS_CONFIG_DIR="/path/to/dir" for custom config location
-_config_override = os.environ.get('LAST30DAYS_CONFIG_DIR')
+_config_override = os.environ.get("LAST30DAYS_CONFIG_DIR")
 if _config_override == "":
     # Empty string = no config file (clean mode)
     CONFIG_DIR = None
@@ -27,7 +27,9 @@ else:
     CONFIG_DIR = Path.home() / ".config" / "last30days"
     CONFIG_FILE = CONFIG_DIR / ".env"
 
-CODEX_AUTH_FILE = Path(os.environ.get("CODEX_AUTH_FILE", str(Path.home() / ".codex" / "auth.json")))
+CODEX_AUTH_FILE = Path(
+    os.environ.get("CODEX_AUTH_FILE", str(Path.home() / ".codex" / "auth.json"))
+)
 
 # macOS Keychain integration: items stored with this service prefix are picked
 # up automatically on Darwin as the lowest-priority credential source.
@@ -38,11 +40,24 @@ KEYCHAIN_SERVICE_PREFIX = "last30days-"
 # The setup-keychain.sh helper mirrors this list and is held in sync via
 # tests/test_env_keychain.py::test_keychain_keys_match_setup_script.
 KEYCHAIN_KEYS = (
-    "OPENAI_API_KEY", "XAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY",
-    "GOOGLE_GENAI_API_KEY", "SCRAPECREATORS_API_KEY", "APIFY_API_TOKEN",
-    "AUTH_TOKEN", "CT0", "BSKY_HANDLE", "BSKY_APP_PASSWORD",
-    "TRUTHSOCIAL_TOKEN", "BRAVE_API_KEY", "EXA_API_KEY", "SERPER_API_KEY",
-    "OPENROUTER_API_KEY", "PARALLEL_API_KEY", "XQUIK_API_KEY",
+    "OPENAI_API_KEY",
+    "XAI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_GENAI_API_KEY",
+    "SCRAPECREATORS_API_KEY",
+    "APIFY_API_TOKEN",
+    "AUTH_TOKEN",
+    "CT0",
+    "BSKY_HANDLE",
+    "BSKY_APP_PASSWORD",
+    "TRUTHSOCIAL_TOKEN",
+    "BRAVE_API_KEY",
+    "EXA_API_KEY",
+    "SERPER_API_KEY",
+    "OPENROUTER_API_KEY",
+    "PARALLEL_API_KEY",
+    "XQUIK_API_KEY",
     "XIAOHONGSHU_API_BASE",
 )
 
@@ -95,13 +110,13 @@ def load_env_file(path: Path) -> dict[str, str]:
         return env
     _check_file_permissions(path)
 
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
-            if '=' in line:
-                key, _, value = line.partition('=')
+            if "=" in line:
+                key, _, value = line.partition("=")
                 key = key.strip()
                 value = value.strip()
                 # Remove quotes if present
@@ -121,16 +136,19 @@ def _load_keychain(keys: list[str]) -> dict[str, str]:
     and is meant to be additive over `.env` files and process environment.
     """
     import platform
+
     if platform.system() != "Darwin":
         return {}
 
     import shutil
+
     security = shutil.which("security")
     if not security:
         return {}
 
     import subprocess
     import pwd
+
     # USER can be unset under sudo, in Docker without --env USER, or in some CI
     # runners; fall back to the OS user record so lookups still match items
     # stored by setup-keychain.sh (which uses $USER).
@@ -139,11 +157,18 @@ def _load_keychain(keys: list[str]) -> dict[str, str]:
     for key in keys:
         try:
             result = subprocess.run(
-                [security, "find-generic-password",
-                 "-a", user,
-                 "-s", f"{KEYCHAIN_SERVICE_PREFIX}{key}",
-                 "-w"],
-                capture_output=True, text=True, timeout=5,
+                [
+                    security,
+                    "find-generic-password",
+                    "-a",
+                    user,
+                    "-s",
+                    f"{KEYCHAIN_SERVICE_PREFIX}{key}",
+                    "-w",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
         except (subprocess.TimeoutExpired, OSError):
             continue
@@ -162,7 +187,12 @@ def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
         pad = "=" * (-len(payload_b64) % 4)
         decoded = base64.urlsafe_b64decode(payload_b64 + pad)
         return json.loads(decoded.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, binascii.Error, IndexError) as exc:
+    except (
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        binascii.Error,
+        IndexError,
+    ) as exc:
         sys.stderr.write(f"[last30days] WARNING: malformed JWT token: {exc}\n")
         sys.stderr.flush()
         return None
@@ -228,7 +258,7 @@ def get_codex_access_token() -> tuple[str | None, str]:
 
 def get_openai_auth(file_env: dict[str, str]) -> OpenAIAuth:
     """Resolve OpenAI auth from API key or Codex login."""
-    api_key = os.environ.get('OPENAI_API_KEY') or file_env.get('OPENAI_API_KEY')
+    api_key = os.environ.get("OPENAI_API_KEY") or file_env.get("OPENAI_API_KEY")
     if api_key:
         return OpenAIAuth(
             token=api_key,
@@ -259,7 +289,7 @@ def _find_project_env() -> Path | None:
     """
     cwd = Path.cwd()
     for parent in [cwd, *cwd.parents]:
-        candidate = parent / '.claude' / 'last30days.env'
+        candidate = parent / ".claude" / "last30days.env"
         if candidate.exists():
             return candidate
         # Stop at filesystem root or home
@@ -296,47 +326,47 @@ def get_config() -> dict[str, Any]:
 
     # Build config: Codex/OpenAI auth + process.env > project .env > global .env
     config = {
-        'OPENAI_API_KEY': openai_auth.token,
-        'OPENAI_AUTH_SOURCE': openai_auth.source,
-        'OPENAI_AUTH_STATUS': openai_auth.status,
-        'OPENAI_CHATGPT_ACCOUNT_ID': openai_auth.account_id,
-        'CODEX_AUTH_FILE': openai_auth.codex_auth_file,
+        "OPENAI_API_KEY": openai_auth.token,
+        "OPENAI_AUTH_SOURCE": openai_auth.source,
+        "OPENAI_AUTH_STATUS": openai_auth.status,
+        "OPENAI_CHATGPT_ACCOUNT_ID": openai_auth.account_id,
+        "CODEX_AUTH_FILE": openai_auth.codex_auth_file,
     }
 
     keys = [
-        ('XAI_API_KEY', None),
-        ('GOOGLE_API_KEY', None),
-        ('GEMINI_API_KEY', None),
-        ('GOOGLE_GENAI_API_KEY', None),
-        ('XIAOHONGSHU_API_BASE', None),
-        ('LAST30DAYS_REASONING_PROVIDER', 'auto'),
-        ('LAST30DAYS_PLANNER_MODEL', None),
-        ('LAST30DAYS_RERANK_MODEL', None),
-        ('LAST30DAYS_X_MODEL', None),
-        ('LAST30DAYS_X_BACKEND', None),
-        ('LAST30DAYS_STORE', None),
-        ('OPENAI_MODEL_PIN', None),
-        ('XAI_MODEL_PIN', None),
-        ('SCRAPECREATORS_API_KEY', None),
-        ('APIFY_API_TOKEN', None),
-        ('AUTH_TOKEN', None),
-        ('CT0', None),
-        ('BSKY_HANDLE', None),
-        ('BSKY_APP_PASSWORD', None),
-        ('BSKY_SEARCH_HOST', None),
-        ('TRUTHSOCIAL_TOKEN', None),
-        ('BRAVE_API_KEY', None),
-        ('EXA_API_KEY', None),
-        ('SERPER_API_KEY', None),
-        ('OPENROUTER_API_KEY', None),
-        ('PARALLEL_API_KEY', None),
-        ('XQUIK_API_KEY', None),
-        ('FROM_BROWSER', None),
-        ('SETUP_COMPLETE', None),
-        ('INCLUDE_SOURCES', ''),
-        ('EXCLUDE_SOURCES', ''),
-        ('LAST30DAYS_YOUTUBE_SSH_HOST', None),
-        ('LAST30DAYS_TRANSCRIPT_TIMEOUT', None),
+        ("XAI_API_KEY", None),
+        ("GOOGLE_API_KEY", None),
+        ("GEMINI_API_KEY", None),
+        ("GOOGLE_GENAI_API_KEY", None),
+        ("XIAOHONGSHU_API_BASE", None),
+        ("LAST30DAYS_REASONING_PROVIDER", "auto"),
+        ("LAST30DAYS_PLANNER_MODEL", None),
+        ("LAST30DAYS_RERANK_MODEL", None),
+        ("LAST30DAYS_X_MODEL", None),
+        ("LAST30DAYS_X_BACKEND", None),
+        ("LAST30DAYS_STORE", None),
+        ("OPENAI_MODEL_PIN", None),
+        ("XAI_MODEL_PIN", None),
+        ("SCRAPECREATORS_API_KEY", None),
+        ("APIFY_API_TOKEN", None),
+        ("AUTH_TOKEN", None),
+        ("CT0", None),
+        ("BSKY_HANDLE", None),
+        ("BSKY_APP_PASSWORD", None),
+        ("BSKY_SEARCH_HOST", None),
+        ("TRUTHSOCIAL_TOKEN", None),
+        ("BRAVE_API_KEY", None),
+        ("EXA_API_KEY", None),
+        ("SERPER_API_KEY", None),
+        ("OPENROUTER_API_KEY", None),
+        ("PARALLEL_API_KEY", None),
+        ("XQUIK_API_KEY", None),
+        ("FROM_BROWSER", None),
+        ("SETUP_COMPLETE", None),
+        ("INCLUDE_SOURCES", ""),
+        ("EXCLUDE_SOURCES", ""),
+        ("LAST30DAYS_YOUTUBE_SSH_HOST", None),
+        ("LAST30DAYS_TRANSCRIPT_TIMEOUT", None),
     ]
 
     for key, default in keys:
@@ -347,30 +377,33 @@ def get_config() -> dict[str, Any]:
     # CREATORS). Accept that form too so users who follow the vendor's docs
     # don't silently end up with has_scrapecreators=False. Canonical name
     # wins when both are set.
-    if not config.get('SCRAPECREATORS_API_KEY'):
-        legacy = os.environ.get('SCRAPE_CREATORS_API_KEY') or merged_env.get('SCRAPE_CREATORS_API_KEY')
+    if not config.get("SCRAPECREATORS_API_KEY"):
+        legacy = os.environ.get("SCRAPE_CREATORS_API_KEY") or merged_env.get(
+            "SCRAPE_CREATORS_API_KEY"
+        )
         if legacy:
-            config['SCRAPECREATORS_API_KEY'] = legacy
+            config["SCRAPECREATORS_API_KEY"] = legacy
 
     # Multi-key rotation: comma-separated SCRAPECREATORS_API_KEY round-robins
     # via random.choice per run. Originally added in #268, accidentally dropped
     # in v3.0.6, restored here.
-    sc_key_raw = config.get('SCRAPECREATORS_API_KEY') or ''
-    if ',' in sc_key_raw:
+    sc_key_raw = config.get("SCRAPECREATORS_API_KEY") or ""
+    if "," in sc_key_raw:
         import random
-        sc_keys = [k.strip() for k in sc_key_raw.split(',') if k.strip()]
-        config['SCRAPECREATORS_API_KEY'] = random.choice(sc_keys) if sc_keys else ''
+
+        sc_keys = [k.strip() for k in sc_key_raw.split(",") if k.strip()]
+        config["SCRAPECREATORS_API_KEY"] = random.choice(sc_keys) if sc_keys else ""
 
     # Track which config source was used (highest-priority file source wins
     # the label; keychain is only reported when nothing else is configured).
     if project_env_path:
-        config['_CONFIG_SOURCE'] = f'project:{project_env_path}'
+        config["_CONFIG_SOURCE"] = f"project:{project_env_path}"
     elif CONFIG_FILE and CONFIG_FILE.exists():
-        config['_CONFIG_SOURCE'] = f'global:{CONFIG_FILE}'
+        config["_CONFIG_SOURCE"] = f"global:{CONFIG_FILE}"
     elif keychain_env:
-        config['_CONFIG_SOURCE'] = 'keychain'
+        config["_CONFIG_SOURCE"] = "keychain"
     else:
-        config['_CONFIG_SOURCE'] = 'env_only'
+        config["_CONFIG_SOURCE"] = "env_only"
 
     # Extract browser credentials if configured
     browser_creds = extract_browser_credentials(config)
@@ -432,7 +465,9 @@ def extract_browser_credentials(config: dict[str, Any]) -> dict[str, str]:
             continue
         for browser in browsers:
             try:
-                cookies = cookie_extract.extract_cookies(browser, spec["domain"], spec["cookies"])
+                cookies = cookie_extract.extract_cookies(
+                    browser, spec["domain"], spec["cookies"]
+                )
             except Exception:
                 continue
             if cookies:
@@ -452,6 +487,7 @@ def get_x_source_with_method(config: dict[str, Any]) -> tuple[str | None, str]:
         return "bird", method
     # Fall back to xurl CLI (official X API v2, OAuth2, free developer app)
     from . import xurl_x
+
     if xurl_x.is_available():
         return "xurl", "oauth2"
     return None, "none"
@@ -471,8 +507,8 @@ def get_reddit_source(config: dict[str, Any]) -> str | None:
 
     Returns: 'scrapecreators' or None
     """
-    if config.get('SCRAPECREATORS_API_KEY'):
-        return 'scrapecreators'
+    if config.get("SCRAPECREATORS_API_KEY"):
+        return "scrapecreators"
     return None
 
 
@@ -497,25 +533,26 @@ def get_x_source(config: dict[str, Any]) -> str | None:
     # Import here to avoid circular dependency
     from . import bird_x
 
-    preferred = (config.get('LAST30DAYS_X_BACKEND') or '').lower()
-    has_bird_creds = bool(config.get('AUTH_TOKEN') and config.get('CT0'))
+    preferred = (config.get("LAST30DAYS_X_BACKEND") or "").lower()
+    has_bird_creds = bool(config.get("AUTH_TOKEN") and config.get("CT0"))
     if has_bird_creds:
-        bird_x.set_credentials(config.get('AUTH_TOKEN'), config.get('CT0'))
+        bird_x.set_credentials(config.get("AUTH_TOKEN"), config.get("CT0"))
 
-    if preferred == 'xai':
-        return 'xai' if config.get('XAI_API_KEY') else None
-    if preferred == 'bird':
-        return 'bird' if has_bird_creds and bird_x.is_bird_installed() else None
+    if preferred == "xai":
+        return "xai" if config.get("XAI_API_KEY") else None
+    if preferred == "bird":
+        return "bird" if has_bird_creds and bird_x.is_bird_installed() else None
 
-    if config.get('XAI_API_KEY'):
-        return 'xai'
+    if config.get("XAI_API_KEY"):
+        return "xai"
     if has_bird_creds and bird_x.is_bird_installed():
-        return 'bird'
+        return "bird"
 
     # Fall back to xurl CLI (official X API v2, OAuth2, free developer app)
     from . import xurl_x
+
     if xurl_x.is_available():
-        return 'xurl'
+        return "xurl"
 
     return None
 
@@ -523,6 +560,7 @@ def get_x_source(config: dict[str, Any]) -> str | None:
 def is_ytdlp_available() -> bool:
     """Check if yt-dlp is installed for YouTube search."""
     from . import youtube_yt
+
     return youtube_yt.is_ytdlp_installed()
 
 
@@ -531,10 +569,10 @@ def is_youtube_comments_available(config: dict[str, Any]) -> bool:
 
     Requires SCRAPECREATORS_API_KEY AND youtube_comments in INCLUDE_SOURCES.
     """
-    if not config.get('SCRAPECREATORS_API_KEY'):
+    if not config.get("SCRAPECREATORS_API_KEY"):
         return False
     include = _parse_include_sources(config)
-    return 'youtube_comments' in include
+    return "youtube_comments" in include
 
 
 def is_tiktok_comments_available(config: dict[str, Any]) -> bool:
@@ -543,10 +581,10 @@ def is_tiktok_comments_available(config: dict[str, Any]) -> bool:
     Requires SCRAPECREATORS_API_KEY AND tiktok_comments in INCLUDE_SOURCES.
     Mirrors the youtube_comments opt-in pattern.
     """
-    if not config.get('SCRAPECREATORS_API_KEY'):
+    if not config.get("SCRAPECREATORS_API_KEY"):
         return False
     include = _parse_include_sources(config)
-    return 'tiktok_comments' in include
+    return "tiktok_comments" in include
 
 
 def is_youtube_sc_available(config: dict[str, Any]) -> bool:
@@ -554,7 +592,7 @@ def is_youtube_sc_available(config: dict[str, Any]) -> bool:
 
     Used when yt-dlp is not installed or fails.
     """
-    return bool(config.get('SCRAPECREATORS_API_KEY'))
+    return bool(config.get("SCRAPECREATORS_API_KEY"))
 
 
 def is_hackernews_available() -> bool:
@@ -570,7 +608,7 @@ def is_bluesky_available(config: dict[str, Any]) -> bool:
 
     Requires BSKY_HANDLE and BSKY_APP_PASSWORD (app password from bsky.app/settings).
     """
-    return bool(config.get('BSKY_HANDLE') and config.get('BSKY_APP_PASSWORD'))
+    return bool(config.get("BSKY_HANDLE") and config.get("BSKY_APP_PASSWORD"))
 
 
 def is_truthsocial_available(config: dict[str, Any]) -> bool:
@@ -578,7 +616,7 @@ def is_truthsocial_available(config: dict[str, Any]) -> bool:
 
     Requires TRUTHSOCIAL_TOKEN (bearer token from browser dev tools).
     """
-    return bool(config.get('TRUTHSOCIAL_TOKEN'))
+    return bool(config.get("TRUTHSOCIAL_TOKEN"))
 
 
 def is_polymarket_available() -> bool:
@@ -594,18 +632,18 @@ def is_tiktok_available(config: dict[str, Any]) -> bool:
 
     Returns True if SCRAPECREATORS_API_KEY or APIFY_API_TOKEN is set.
     """
-    return bool(config.get('SCRAPECREATORS_API_KEY') or config.get('APIFY_API_TOKEN'))
+    return bool(config.get("SCRAPECREATORS_API_KEY") or config.get("APIFY_API_TOKEN"))
 
 
 def get_tiktok_token(config: dict[str, Any]) -> str:
     """Get TikTok API token, preferring ScrapeCreators over legacy Apify."""
-    return config.get('SCRAPECREATORS_API_KEY') or config.get('APIFY_API_TOKEN') or ''
+    return config.get("SCRAPECREATORS_API_KEY") or config.get("APIFY_API_TOKEN") or ""
 
 
 def _parse_include_sources(config: dict[str, Any]) -> set[str]:
     """Parse INCLUDE_SOURCES config value into a set of lowercase source names."""
-    raw = config.get('INCLUDE_SOURCES') or ''
-    return {s.strip().lower() for s in raw.split(',') if s.strip()}
+    raw = config.get("INCLUDE_SOURCES") or ""
+    return {s.strip().lower() for s in raw.split(",") if s.strip()}
 
 
 def is_threads_available(config: dict[str, Any]) -> bool:
@@ -616,7 +654,7 @@ def is_threads_available(config: dict[str, Any]) -> bool:
     cost shape, so the same default-on rule applies. Suppress via
     EXCLUDE_SOURCES=threads.
     """
-    return bool(config.get('SCRAPECREATORS_API_KEY'))
+    return bool(config.get("SCRAPECREATORS_API_KEY"))
 
 
 def is_instagram_available(config: dict[str, Any]) -> bool:
@@ -625,12 +663,12 @@ def is_instagram_available(config: dict[str, Any]) -> bool:
     Returns True if SCRAPECREATORS_API_KEY is set.
     Instagram uses the same key as TikTok.
     """
-    return bool(config.get('SCRAPECREATORS_API_KEY'))
+    return bool(config.get("SCRAPECREATORS_API_KEY"))
 
 
 def get_instagram_token(config: dict[str, Any]) -> str:
     """Get Instagram API token (same ScrapeCreators key as TikTok)."""
-    return config.get('SCRAPECREATORS_API_KEY') or ''
+    return config.get("SCRAPECREATORS_API_KEY") or ""
 
 
 def get_xiaohongshu_api_base(config: dict[str, Any]) -> str:
@@ -638,7 +676,9 @@ def get_xiaohongshu_api_base(config: dict[str, Any]) -> str:
 
     Defaults to host.docker.internal so OpenClaw Docker can reach host service.
     """
-    return (config.get('XIAOHONGSHU_API_BASE') or "http://host.docker.internal:18060").rstrip("/")
+    return (
+        config.get("XIAOHONGSHU_API_BASE") or "http://host.docker.internal:18060"
+    ).rstrip("/")
 
 
 def is_xiaohongshu_available(config: dict[str, Any]) -> bool:
@@ -660,7 +700,8 @@ def is_xiaohongshu_available(config: dict[str, Any]) -> bool:
         login = http.get(f"{base}/api/v1/login/status", timeout=8, retries=2)
         is_logged_in = (
             login.get("data", {}).get("is_logged_in")
-            if isinstance(login, dict) else False
+            if isinstance(login, dict)
+            else False
         )
         return bool(is_logged_in)
     except (OSError, http.HTTPError):
@@ -687,22 +728,24 @@ def get_x_source_status(config: dict[str, Any]) -> dict[str, Any]:
     """
     from . import bird_x
 
-    if config.get('AUTH_TOKEN') and config.get('CT0'):
-        bird_x.set_credentials(config.get('AUTH_TOKEN'), config.get('CT0'))
+    if config.get("AUTH_TOKEN") and config.get("CT0"):
+        bird_x.set_credentials(config.get("AUTH_TOKEN"), config.get("CT0"))
     bird_status = bird_x.get_bird_status()
-    xai_available = bool(config.get('XAI_API_KEY'))
+    xai_available = bool(config.get("XAI_API_KEY"))
 
     # Determine active source
     if bird_status["authenticated"]:
-        source = 'bird'
+        source = "bird"
     elif xai_available:
-        source = 'xai'
+        source = "xai"
     else:
         # Fall back to xurl CLI
         from . import xurl_x as _xurl_check
-        source = 'xurl' if _xurl_check.is_available() else None
+
+        source = "xurl" if _xurl_check.is_available() else None
 
     from . import xurl_x as _xurl_x
+
     return {
         "source": source,
         "bird_installed": bird_status["installed"],
@@ -722,12 +765,12 @@ def is_pinterest_available(config: dict[str, Any]) -> bool:
     INCLUDE_SOURCES (or requested_sources at the pipeline level).  Pinterest
     is opt-in because not every topic benefits from visual pin results.
     """
-    return bool(config.get('SCRAPECREATORS_API_KEY'))
+    return bool(config.get("SCRAPECREATORS_API_KEY"))
 
 
 def get_pinterest_token(config: dict[str, Any]) -> str:
     """Get Pinterest API token (same ScrapeCreators key as TikTok/Instagram)."""
-    return config.get('SCRAPECREATORS_API_KEY') or ''
+    return config.get("SCRAPECREATORS_API_KEY") or ""
 
 
 # Xquik
@@ -736,9 +779,9 @@ def is_xquik_available(config: dict[str, Any]) -> bool:
 
     Requires XQUIK_API_KEY (API key from xquik.com).
     """
-    return bool(config.get('XQUIK_API_KEY'))
+    return bool(config.get("XQUIK_API_KEY"))
 
 
 def get_xquik_token(config: dict[str, Any]) -> str:
     """Get Xquik API key."""
-    return config.get('XQUIK_API_KEY') or ''
+    return config.get("XQUIK_API_KEY") or ""

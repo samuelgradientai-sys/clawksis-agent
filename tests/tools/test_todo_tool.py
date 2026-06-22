@@ -108,10 +108,12 @@ class TestTodoToolFunction:
 
     def test_write_mode(self):
         store = TodoStore()
-        result = json.loads(todo_tool(
-            todos=[{"id": "1", "content": "New", "status": "in_progress"}],
-            store=store,
-        ))
+        result = json.loads(
+            todo_tool(
+                todos=[{"id": "1", "content": "New", "status": "in_progress"}],
+                store=store,
+            )
+        )
         assert result["summary"]["in_progress"] == 1
 
     def test_no_store_returns_error(self):
@@ -132,6 +134,7 @@ class TestTodoStoreBounds:
 
     def test_oversized_content_is_truncated(self):
         from tools.todo_tool import MAX_TODO_CONTENT_CHARS
+
         store = TodoStore()
         store.write([{"id": "1", "content": "A" * 50001, "status": "pending"}])
         item = store.read()[0]
@@ -140,6 +143,7 @@ class TestTodoStoreBounds:
 
     def test_injection_block_is_bounded(self):
         from tools.todo_tool import MAX_TODO_CONTENT_CHARS
+
         store = TodoStore()
         store.write([{"id": "1", "content": "A" * 50001, "status": "pending"}])
         inj = store.format_for_injection()
@@ -150,6 +154,7 @@ class TestTodoStoreBounds:
         """The merge path updates content directly, bypassing _validate —
         verify it is capped too."""
         from tools.todo_tool import MAX_TODO_CONTENT_CHARS
+
         store = TodoStore()
         store.write([{"id": "1", "content": "short", "status": "pending"}])
         store.write([{"id": "1", "content": "B" * 50001}], merge=True)
@@ -157,6 +162,7 @@ class TestTodoStoreBounds:
 
     def test_item_count_is_bounded(self):
         from tools.todo_tool import MAX_TODO_ITEMS
+
         store = TodoStore()
         store.write([
             {"id": str(i), "content": f"task {i}", "status": "pending"}

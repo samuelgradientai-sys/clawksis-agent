@@ -86,7 +86,7 @@ def _fetch_json(url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
 
         except urllib.error.HTTPError as e:
             if e.code == 429:
-                delay = BASE_BACKOFF * (2 ** attempt)
+                delay = BASE_BACKOFF * (2**attempt)
                 retry_after = None
                 if hasattr(e, "headers"):
                     retry_after = e.headers.get("Retry-After")
@@ -95,7 +95,9 @@ def _fetch_json(url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
                         delay = float(retry_after)
                     except ValueError:
                         pass
-                _log(f"429 rate limited, retry {attempt + 1}/{MAX_RETRIES} after {delay:.1f}s")
+                _log(
+                    f"429 rate limited, retry {attempt + 1}/{MAX_RETRIES} after {delay:.1f}s"
+                )
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(delay)
                     continue
@@ -150,6 +152,7 @@ def _parse_posts(data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if created_utc:
             try:
                 from datetime import datetime, timezone
+
                 dt = datetime.fromtimestamp(float(created_utc), tz=timezone.utc)
                 date_str = dt.strftime("%Y-%m-%d")
             except (ValueError, TypeError, OSError):
@@ -163,7 +166,9 @@ def _parse_posts(data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "num_comments": num_comments,
             "subreddit": str(post.get("subreddit", "")).strip(),
             "created_utc": float(created_utc) if created_utc else None,
-            "author": author if author not in ("[deleted]", "[removed]") else "[deleted]",
+            "author": author
+            if author not in ("[deleted]", "[removed]")
+            else "[deleted]",
             "selftext": selftext[:500] if selftext else "",
             # Normalized fields matching ScrapeCreators output
             "date": date_str,
@@ -267,6 +272,7 @@ def search_reddit_public(
         Empty list on total failure (so SC backup can engage).
     """
     from . import reddit_keyless
+
     return reddit_keyless.search_and_enrich(
         topic, from_date, to_date, depth=depth, subreddits=subreddits
     )

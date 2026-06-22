@@ -509,7 +509,10 @@ def test_env_sourced_oauth_status_is_not_disconnectable(monkeypatch):
 
     assert providers["anthropic"]["status"]["source"] == "env_var"
     assert providers["anthropic"]["disconnectable"] is False
-    assert providers["anthropic"]["disconnect_hint"] == "Remove the API key from Settings → Keys instead."
+    assert (
+        providers["anthropic"]["disconnect_hint"]
+        == "Remove the API key from Settings → Keys instead."
+    )
 
     delete_resp = client.delete("/api/providers/oauth/anthropic", headers=HEADERS)
     assert delete_resp.status_code == 400, delete_resp.text

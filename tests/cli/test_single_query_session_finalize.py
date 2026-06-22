@@ -11,9 +11,13 @@ def reset_single_query_finalize_state(monkeypatch):
     monkeypatch.setattr(cli, "_cleanup_done", False)
 
 
-def test_finalize_single_query_runs_cleanup_without_reemitting_finalize_before_release(monkeypatch):
+def test_finalize_single_query_runs_cleanup_without_reemitting_finalize_before_release(
+    monkeypatch,
+):
     calls = []
-    fake_cli = SimpleNamespace(_release_active_session=lambda: calls.append(("release", {})))
+    fake_cli = SimpleNamespace(
+        _release_active_session=lambda: calls.append(("release", {}))
+    )
 
     def cleanup(**kwargs):
         calls.append(("cleanup", kwargs))

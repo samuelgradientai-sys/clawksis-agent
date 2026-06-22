@@ -48,7 +48,9 @@ class ReasoningClient:
         *,
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        text = self.generate_text(model, prompt, tools=tools, response_mime_type="application/json")
+        text = self.generate_text(
+            model, prompt, tools=tools, response_mime_type="application/json"
+        )
         return extract_json(text)
 
 
@@ -97,6 +99,7 @@ class GeminiClient(ReasoningClient):
         )
         return extract_gemini_text(payload)
 
+
 class OpenAIClient(ReasoningClient):
     name = "openai"
 
@@ -134,7 +137,9 @@ class OpenAIClient(ReasoningClient):
                 "originator": "pi",
                 "Content-Type": "application/json",
             }
-            raw = http.post_raw(CODEX_RESPONSES_URL, payload, headers=headers, timeout=90)
+            raw = http.post_raw(
+                CODEX_RESPONSES_URL, payload, headers=headers, timeout=90
+            )
             return extract_openai_text(_parse_codex_stream(raw))
 
         payload = {
@@ -226,9 +231,13 @@ _MODEL_DEFAULTS: dict[str, tuple[str, str]] = {
 }
 
 
-def _resolve_model_pins(config: dict[str, Any], depth: str, provider_name: str) -> tuple[str, str, str]:
+def _resolve_model_pins(
+    config: dict[str, Any], depth: str, provider_name: str
+) -> tuple[str, str, str]:
     """Resolve planner, rerank, and grounding model pins for a provider."""
-    default_planner, default_rerank = _MODEL_DEFAULTS.get(provider_name, (GEMINI_FLASH_LITE, GEMINI_FLASH_LITE))
+    default_planner, default_rerank = _MODEL_DEFAULTS.get(
+        provider_name, (GEMINI_FLASH_LITE, GEMINI_FLASH_LITE)
+    )
     if depth == "deep" and provider_name == "gemini":
         default_rerank = GEMINI_PRO
 
@@ -255,15 +264,20 @@ def mock_runtime(config: dict[str, Any], depth: str) -> schema.ProviderRuntime:
         reasoning_provider=provider_name,
         planner_model=planner_model,
         rerank_model=rerank_model,
-
         x_search_backend=_resolve_x_backend(config),
     )
 
 
-def resolve_runtime(config: dict[str, Any], depth: str) -> tuple[schema.ProviderRuntime, ReasoningClient | None]:
+def resolve_runtime(
+    config: dict[str, Any], depth: str
+) -> tuple[schema.ProviderRuntime, ReasoningClient | None]:
     """Resolve the reasoning provider and pinned models."""
     provider_name = (config.get("LAST30DAYS_REASONING_PROVIDER") or "auto").lower()
-    google_key = config.get("GOOGLE_API_KEY") or config.get("GEMINI_API_KEY") or config.get("GOOGLE_GENAI_API_KEY")
+    google_key = (
+        config.get("GOOGLE_API_KEY")
+        or config.get("GEMINI_API_KEY")
+        or config.get("GOOGLE_GENAI_API_KEY")
+    )
     openai_token = config.get("OPENAI_API_KEY")
     xai_key = config.get("XAI_API_KEY")
 
@@ -293,19 +307,19 @@ def resolve_runtime(config: dict[str, Any], depth: str) -> tuple[schema.Provider
             reasoning_provider="gemini",
             planner_model=planner_model,
             rerank_model=rerank_model,
-    
             x_search_backend=_resolve_x_backend(config),
         )
         return runtime, GeminiClient(google_key)
 
     if provider_name == "openai":
         if not openai_token or config.get("OPENAI_AUTH_STATUS") != env.AUTH_STATUS_OK:
-            raise RuntimeError("OpenAI selected but no valid OpenAI auth is configured.")
+            raise RuntimeError(
+                "OpenAI selected but no valid OpenAI auth is configured."
+            )
         runtime = schema.ProviderRuntime(
             reasoning_provider="openai",
             planner_model=planner_model,
             rerank_model=rerank_model,
-    
             x_search_backend=_resolve_x_backend(config),
         )
         return runtime, OpenAIClient(
@@ -321,7 +335,6 @@ def resolve_runtime(config: dict[str, Any], depth: str) -> tuple[schema.Provider
             reasoning_provider="xai",
             planner_model=planner_model,
             rerank_model=rerank_model,
-    
             x_search_backend=_resolve_x_backend(config),
         )
         return runtime, XAIClient(xai_key)
@@ -329,7 +342,9 @@ def resolve_runtime(config: dict[str, Any], depth: str) -> tuple[schema.Provider
     if provider_name == "openrouter":
         openrouter_key = config.get("OPENROUTER_API_KEY")
         if not openrouter_key:
-            raise RuntimeError("OpenRouter selected but OPENROUTER_API_KEY is not configured.")
+            raise RuntimeError(
+                "OpenRouter selected but OPENROUTER_API_KEY is not configured."
+            )
         runtime = schema.ProviderRuntime(
             reasoning_provider="openrouter",
             planner_model=planner_model,
@@ -351,9 +366,7 @@ def _resolve_x_backend(config: dict[str, Any]) -> str | None:
 def _require_gemini_31(model: str, *, role: str) -> None:
     if model.startswith("gemini-3.1-"):
         return
-    raise RuntimeError(
-        f"{role} must use a Gemini 3.1 model. Got: {model}"
-    )
+    raise RuntimeError(f"{role} must use a Gemini 3.1 model. Got: {model}")
 
 
 def extract_json(text: str) -> dict[str, Any]:
@@ -378,7 +391,10 @@ def extract_gemini_text(payload: dict[str, Any]) -> str:
             if text:
                 return text
     if payload:
-        print(f"[Providers] extract_gemini_text: no text in payload keys: {list(payload.keys())}", file=sys.stderr)
+        print(
+            f"[Providers] extract_gemini_text: no text in payload keys: {list(payload.keys())}",
+            file=sys.stderr,
+        )
     return ""
 
 
@@ -397,21 +413,26 @@ def extract_openai_text(payload: dict[str, Any]) -> str:
                 for part in content:
                     if isinstance(part, dict) and isinstance(part.get("text"), str):
                         return part["text"]
-                    if isinstance(part, dict) and part.get("type") == "output_text" and isinstance(part.get("text"), str):
+                    if (
+                        isinstance(part, dict)
+                        and part.get("type") == "output_text"
+                        and isinstance(part.get("text"), str)
+                    ):
                         return part["text"]
             message = item.get("message") or {}
             if isinstance(message, dict) and isinstance(message.get("content"), str):
                 return message["content"]
     if payload:
-        print(f"[Providers] extract_openai_text: no text in payload keys: {list(payload.keys())}", file=sys.stderr)
+        print(
+            f"[Providers] extract_openai_text: no text in payload keys: {list(payload.keys())}",
+            file=sys.stderr,
+        )
     return ""
 
 
 def _parse_sse_chunk(chunk: str) -> dict[str, Any] | None:
     data_lines = [
-        line[5:].strip()
-        for line in chunk.split("\n")
-        if line.startswith("data:")
+        line[5:].strip() for line in chunk.split("\n") if line.startswith("data:")
     ]
     if not data_lines:
         return None
@@ -421,7 +442,9 @@ def _parse_sse_chunk(chunk: str) -> dict[str, Any] | None:
     try:
         return json.loads(data)
     except json.JSONDecodeError:
-        print(f"[Providers] _parse_sse_chunk: invalid JSON: {data[:100]}", file=sys.stderr)
+        print(
+            f"[Providers] _parse_sse_chunk: invalid JSON: {data[:100]}", file=sys.stderr
+        )
         return None
 
 
@@ -441,7 +464,9 @@ def _parse_codex_stream(raw: str) -> dict[str, Any]:
             events.append(event)
 
     for event in reversed(events):
-        if event.get("type") == "response.completed" and isinstance(event.get("response"), dict):
+        if event.get("type") == "response.completed" and isinstance(
+            event.get("response"), dict
+        ):
             return event["response"]
         if isinstance(event.get("response"), dict):
             return event["response"]
@@ -464,5 +489,8 @@ def _parse_codex_stream(raw: str) -> dict[str, Any]:
             ]
         }
     if raw.strip():
-        print(f"[Providers] _parse_codex_stream: received {len(raw)} bytes but could not extract text", file=sys.stderr)
+        print(
+            f"[Providers] _parse_codex_stream: received {len(raw)} bytes but could not extract text",
+            file=sys.stderr,
+        )
     return {}

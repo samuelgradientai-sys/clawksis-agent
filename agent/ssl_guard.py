@@ -42,7 +42,9 @@ def _ssl_err(message: str) -> SSLConfigurationError:
     return SSLConfigurationError(f"{message}\n{_repair_hint()}")
 
 
-def _validate_bundle_path(label: str, value: str, *, require_substantial: bool = False) -> None:
+def _validate_bundle_path(
+    label: str, value: str, *, require_substantial: bool = False
+) -> None:
     path = Path(value).expanduser()
     if not path.exists():
         raise _ssl_err(f"{label} points to a missing CA bundle: {value}")

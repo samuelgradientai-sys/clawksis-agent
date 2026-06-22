@@ -67,4 +67,3 @@ def test_inline_noqa_marker_exempts_a_call():
         "x.py",
     )
     assert exempt == [], "inline marker should exempt the call"
-

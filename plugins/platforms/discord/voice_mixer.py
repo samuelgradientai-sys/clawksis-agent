@@ -46,7 +46,9 @@ import logging
 import threading
 from typing import TYPE_CHECKING, List, Optional
 
-if TYPE_CHECKING:  # numpy is an optional ("voice" extra) dep — never import at runtime top-level
+if (
+    TYPE_CHECKING
+):  # numpy is an optional ("voice" extra) dep — never import at runtime top-level
     import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -62,15 +64,17 @@ def _require_numpy():
     ImportError that would break the whole adapter import.
     """
     import numpy as np  # noqa: PLC0415 — intentional lazy import
+
     return np
+
 
 # Discord-native frame geometry (matches discord.opus.Encoder).
 SAMPLE_RATE = 48000
 CHANNELS = 2
-SAMPLE_WIDTH = 2                       # bytes per sample (s16)
+SAMPLE_WIDTH = 2  # bytes per sample (s16)
 FRAME_LENGTH_MS = 20
-SAMPLES_PER_FRAME = SAMPLE_RATE * FRAME_LENGTH_MS // 1000   # 960
-FRAME_SIZE = SAMPLES_PER_FRAME * CHANNELS * SAMPLE_WIDTH    # 3840 bytes
+SAMPLES_PER_FRAME = SAMPLE_RATE * FRAME_LENGTH_MS // 1000  # 960
+FRAME_SIZE = SAMPLES_PER_FRAME * CHANNELS * SAMPLE_WIDTH  # 3840 bytes
 SILENCE_FRAME = b"\x00" * FRAME_SIZE
 
 
@@ -82,8 +86,15 @@ class MixerChild:
     """
 
     __slots__ = (
-        "name", "_pcm", "_pos", "loop", "gain",
-        "is_speech", "fade_frames", "_fade_done", "_finished",
+        "name",
+        "_pcm",
+        "_pos",
+        "loop",
+        "gain",
+        "is_speech",
+        "fade_frames",
+        "_fade_done",
+        "_finished",
     )
 
     def __init__(
@@ -128,7 +139,7 @@ class MixerChild:
                 return None
 
         np = _require_numpy()
-        chunk = self._pcm[self._pos:self._pos + FRAME_SIZE]
+        chunk = self._pcm[self._pos : self._pos + FRAME_SIZE]
         self._pos += FRAME_SIZE
         if len(chunk) < FRAME_SIZE:
             chunk = chunk + b"\x00" * (FRAME_SIZE - len(chunk))
@@ -185,7 +196,9 @@ class VoiceMixer:
     # Ambient (idle / "thinking") bed
     # ------------------------------------------------------------------
 
-    def set_ambient(self, pcm: Optional[bytes], *, gain: Optional[float] = None) -> None:
+    def set_ambient(
+        self, pcm: Optional[bytes], *, gain: Optional[float] = None
+    ) -> None:
         """Install (or clear, with ``pcm=None``) the looping ambient bed."""
         with self._lock:
             if gain is not None:
@@ -194,8 +207,11 @@ class VoiceMixer:
                 self._ambient = None
                 return
             self._ambient = MixerChild(
-                "ambient", pcm, loop=True,
-                gain=self._effective_ambient_gain(), fade_in_ms=200,
+                "ambient",
+                pcm,
+                loop=True,
+                gain=self._effective_ambient_gain(),
+                fade_in_ms=200,
             )
 
     def _effective_ambient_gain(self) -> float:
@@ -205,16 +221,20 @@ class VoiceMixer:
     # Speech (TTS replies, verbal acks) layered over the ambient bed
     # ------------------------------------------------------------------
 
-    def play_speech(self, pcm: bytes, *, gain: Optional[float] = None,
-                    fade_in_ms: int = 40) -> None:
+    def play_speech(
+        self, pcm: bytes, *, gain: Optional[float] = None, fade_in_ms: int = 40
+    ) -> None:
         """Layer a one-shot speech clip over the ambient bed (ducks ambient)."""
         if not pcm:
             return
         with self._lock:
             child = MixerChild(
-                "speech", pcm, loop=False,
+                "speech",
+                pcm,
+                loop=False,
                 gain=self._speech_gain if gain is None else float(gain),
-                is_speech=True, fade_in_ms=fade_in_ms,
+                is_speech=True,
+                fade_in_ms=fade_in_ms,
             )
             self._speech.append(child)
             self._speech_active = True
@@ -274,8 +294,7 @@ class VoiceMixer:
                     self._duck_release_left -= 1
                     frac = 1.0 - (self._duck_release_left / self._duck_release_frames)
                     self._ambient.gain = (
-                        self._duck_gain
-                        + (self._ambient_gain - self._duck_gain) * frac
+                        self._duck_gain + (self._ambient_gain - self._duck_gain) * frac
                     )
                 elif not self._speech_active and self._duck_release_left == 0:
                     self._ambient.gain = self._ambient_gain
@@ -300,6 +319,7 @@ class VoiceMixer:
 # PCM helpers
 # ----------------------------------------------------------------------
 
+
 def decode_to_pcm(path: str, *, timeout: float = 30.0) -> Optional[bytes]:
     """Decode any audio file to 48 kHz / stereo / s16le PCM via ffmpeg.
 
@@ -311,11 +331,18 @@ def decode_to_pcm(path: str, *, timeout: float = 30.0) -> Optional[bytes]:
     try:
         proc = subprocess.run(
             [
-                "ffmpeg", "-y", "-loglevel", "error",
-                "-i", path,
-                "-f", "s16le",
-                "-ar", str(SAMPLE_RATE),
-                "-ac", str(CHANNELS),
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                path,
+                "-f",
+                "s16le",
+                "-ar",
+                str(SAMPLE_RATE),
+                "-ac",
+                str(CHANNELS),
                 "pipe:1",
             ],
             capture_output=True,
@@ -328,7 +355,9 @@ def decode_to_pcm(path: str, *, timeout: float = 30.0) -> Optional[bytes]:
     if proc.returncode != 0:
         logger.warning(
             "ffmpeg decode failed for %s (rc=%d): %s",
-            path, proc.returncode, (proc.stderr or b"").decode("utf-8", "replace")[:200],
+            path,
+            proc.returncode,
+            (proc.stderr or b"").decode("utf-8", "replace")[:200],
         )
         return None
     return proc.stdout or None
@@ -354,12 +383,9 @@ def synth_ambient_pcm(seconds: float = 4.0) -> bytes:
 
     f1 = _whole_cycle_freq(110.0)
     f2 = _whole_cycle_freq(110.5)
-    trem = _whole_cycle_freq(0.5)   # ~0.5 Hz tremolo
+    trem = _whole_cycle_freq(0.5)  # ~0.5 Hz tremolo
 
-    pad = (
-        0.55 * np.sin(2 * np.pi * f1 * t)
-        + 0.45 * np.sin(2 * np.pi * f2 * t)
-    )
+    pad = 0.55 * np.sin(2 * np.pi * f1 * t) + 0.45 * np.sin(2 * np.pi * f2 * t)
     tremolo = 0.6 + 0.4 * (0.5 * (1 + np.sin(2 * np.pi * trem * t)))
     signal = pad * tremolo
 

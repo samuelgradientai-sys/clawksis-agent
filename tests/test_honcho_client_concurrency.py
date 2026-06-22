@@ -33,6 +33,7 @@ def _install_fake_honcho_sdk(monkeypatch, build_count, build_lock):
             with build_lock:
                 build_count["n"] += 1
             import time
+
             time.sleep(0.01)  # widen the race window
             self.kwargs = kwargs
 

@@ -11,7 +11,13 @@ RRF_K = 60
 
 
 def _candidate_sort_key(c: schema.Candidate) -> tuple:
-    return (-c.rrf_score, -c.local_relevance, -c.freshness, schema.candidate_source_label(c), c.title)
+    return (
+        -c.rrf_score,
+        -c.local_relevance,
+        -c.freshness,
+        schema.candidate_source_label(c),
+        c.title,
+    )
 
 
 def _normalize_url(url: str) -> str:
@@ -20,7 +26,7 @@ def _normalize_url(url: str) -> str:
     netloc = parsed.netloc
     for prefix in ("www.", "old.", "m."):
         if netloc.startswith(prefix):
-            netloc = netloc[len(prefix):]
+            netloc = netloc[len(prefix) :]
     # Strip tracking params
     params = parse_qs(parsed.query)
     clean_params = {k: v for k, v in params.items() if not k.startswith("utm_")}
@@ -125,9 +131,21 @@ def weighted_rrf(
         for rank, item in enumerate(items, start=1):
             key = candidate_key(item)
             score = weight / (RRF_K + rank)
-            item_local_relevance = item.local_relevance if item.local_relevance is not None else float(item.metadata.get("local_relevance", item.relevance_hint))
-            item_freshness = item.freshness if item.freshness is not None else int(item.metadata.get("freshness", 0))
-            item_source_quality = item.source_quality if item.source_quality is not None else float(item.metadata.get("source_quality", 0.6))
+            item_local_relevance = (
+                item.local_relevance
+                if item.local_relevance is not None
+                else float(item.metadata.get("local_relevance", item.relevance_hint))
+            )
+            item_freshness = (
+                item.freshness
+                if item.freshness is not None
+                else int(item.metadata.get("freshness", 0))
+            )
+            item_source_quality = (
+                item.source_quality
+                if item.source_quality is not None
+                else float(item.metadata.get("source_quality", 0.6))
+            )
             if key not in candidates:
                 candidates[key] = schema.Candidate(
                     candidate_id=key,
@@ -140,7 +158,9 @@ def weighted_rrf(
                     native_ranks={f"{label}:{source}": rank},
                     local_relevance=item_local_relevance,
                     freshness=item_freshness,
-                    engagement=item.engagement_score if item.engagement_score is not None else item.metadata.get("engagement_score"),
+                    engagement=item.engagement_score
+                    if item.engagement_score is not None
+                    else item.metadata.get("engagement_score"),
                     source_quality=item_source_quality,
                     rrf_score=score,
                     sources=[item.source],
@@ -161,14 +181,26 @@ def weighted_rrf(
 
             candidate = candidates[key]
             candidate.rrf_score += score
-            previous_primary_score = (candidate.local_relevance * 100.0) + candidate.freshness + (candidate.source_quality * 10.0)
-            incoming_primary_score = (item_local_relevance * 100.0) + item_freshness + (item_source_quality * 10.0)
+            previous_primary_score = (
+                (candidate.local_relevance * 100.0)
+                + candidate.freshness
+                + (candidate.source_quality * 10.0)
+            )
+            incoming_primary_score = (
+                (item_local_relevance * 100.0)
+                + item_freshness
+                + (item_source_quality * 10.0)
+            )
             candidate.local_relevance = max(
                 candidate.local_relevance,
                 item_local_relevance,
             )
             candidate.freshness = max(candidate.freshness, item_freshness)
-            item_eng = item.engagement_score if item.engagement_score is not None else item.metadata.get("engagement_score")
+            item_eng = (
+                item.engagement_score
+                if item.engagement_score is not None
+                else item.metadata.get("engagement_score")
+            )
             if candidate.engagement is None:
                 candidate.engagement = item_eng
             elif item_eng is not None:
@@ -186,14 +218,12 @@ def weighted_rrf(
             if source_item_key not in seen_source_items[key]:
                 seen_source_items[key].add(source_item_key)
                 candidate.source_items.append(item)
-            candidate.metadata.setdefault("provenance", []).append(
-                {
-                    "source": source,
-                    "subquery_label": label,
-                    "native_rank": rank,
-                    "item_id": item.item_id,
-                }
-            )
+            candidate.metadata.setdefault("provenance", []).append({
+                "source": source,
+                "subquery_label": label,
+                "native_rank": rank,
+                "item_id": item.item_id,
+            })
             if incoming_primary_score > previous_primary_score:
                 candidate.item_id = item.item_id
                 candidate.source = item.source

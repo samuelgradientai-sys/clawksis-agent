@@ -86,6 +86,7 @@ _CORR_PREFIX = "clawk-"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_comma_list(value: str) -> List[str]:
     """Split a comma-separated string into a stripped list."""
     return [v.strip() for v in value.split(",") if v.strip()]
@@ -133,6 +134,7 @@ def _is_audio_ext(ext: str) -> bool:
 # ---------------------------------------------------------------------------
 # SimpleX Adapter
 # ---------------------------------------------------------------------------
+
 
 class SimplexAdapter(BasePlatformAdapter):
     """SimpleX Chat adapter using the simplex-chat daemon WebSocket API.
@@ -226,6 +228,7 @@ class SimplexAdapter(BasePlatformAdapter):
         # Quick connectivity check — try to open and immediately close
         try:
             import websockets as _wsclient
+
             async with _wsclient.connect(self.ws_url, open_timeout=10):
                 pass
         except Exception as e:
@@ -327,13 +330,15 @@ class SimplexAdapter(BasePlatformAdapter):
                 if self._running:
                     logger.warning(
                         "SimpleX WS: connection closed: %s (reconnecting in %.0fs)",
-                        e, backoff,
+                        e,
+                        backoff,
                     )
             except Exception as e:
                 if self._running:
                     logger.warning(
                         "SimpleX WS: unexpected error: %s (reconnecting in %.0fs)",
-                        e, backoff,
+                        e,
+                        backoff,
                     )
             finally:
                 self._ws = None
@@ -562,9 +567,7 @@ class SimplexAdapter(BasePlatformAdapter):
         if file_info and isinstance(file_info, dict):
             file_source = file_info.get("fileSource", {}) or {}
             file_path = (
-                file_source.get("filePath")
-                if isinstance(file_source, dict)
-                else None
+                file_source.get("filePath") if isinstance(file_source, dict) else None
             )
             file_name = file_info.get("fileName", "")
             file_id = file_info.get("fileId")
@@ -833,9 +836,9 @@ class SimplexAdapter(BasePlatformAdapter):
             if chat_id.startswith("group:"):
                 # Structured form: addresses by numeric ID, and json.dumps
                 # escapes newlines + special chars correctly.
-                composed = json.dumps(
-                    [{"msgContent": {"type": "text", "text": content}}]
-                )
+                composed = json.dumps([
+                    {"msgContent": {"type": "text", "text": content}}
+                ])
                 cmd_str = f"/_send #{chat_id[6:]} json {composed}"
             else:
                 cmd_str = f"@{chat_id} {content}"
@@ -888,8 +891,7 @@ class SimplexAdapter(BasePlatformAdapter):
             buf = io.BytesIO()
             thumb.save(buf, "JPEG", quality=70)
             thumb_uri = (
-                "data:image/jpg;base64,"
-                + base64.b64encode(buf.getvalue()).decode()
+                "data:image/jpg;base64," + base64.b64encode(buf.getvalue()).decode()
             )
         except ImportError:
             try:
@@ -955,18 +957,16 @@ class SimplexAdapter(BasePlatformAdapter):
 
         # /_send addresses by numeric ID; /f only accepts display names which
         # breaks for group IDs.
-        composed = json.dumps(
-            [
-                {
-                    "filePath": png_path,
-                    "msgContent": {
-                        "type": "image",
-                        "image": thumb_uri,
-                        "text": caption or "",
-                    },
-                }
-            ]
-        )
+        composed = json.dumps([
+            {
+                "filePath": png_path,
+                "msgContent": {
+                    "type": "image",
+                    "image": thumb_uri,
+                    "text": caption or "",
+                },
+            }
+        ])
 
         if chat_id.startswith("group:"):
             group_id = chat_id[6:]
@@ -1015,14 +1015,12 @@ class SimplexAdapter(BasePlatformAdapter):
         if not Path(file_path).exists():
             return SendResult(success=False, error="File not found")
 
-        composed = json.dumps(
-            [
-                {
-                    "filePath": file_path,
-                    "msgContent": {"type": "file", "text": caption or ""},
-                }
-            ]
-        )
+        composed = json.dumps([
+            {
+                "filePath": file_path,
+                "msgContent": {"type": "file", "text": caption or ""},
+            }
+        ])
 
         if chat_id.startswith("group:"):
             group_id = chat_id[6:]
@@ -1054,18 +1052,16 @@ class SimplexAdapter(BasePlatformAdapter):
         if not Path(audio_path).exists():
             return SendResult(success=False, error="Voice file not found")
 
-        composed = json.dumps(
-            [
-                {
-                    "msgContent": {
-                        "type": "voice",
-                        "text": caption or "",
-                        "duration": duration,
-                    },
-                    "fileSource": {"filePath": audio_path},
-                }
-            ]
-        )
+        composed = json.dumps([
+            {
+                "msgContent": {
+                    "type": "voice",
+                    "text": caption or "",
+                    "duration": duration,
+                },
+                "fileSource": {"filePath": audio_path},
+            }
+        ])
 
         if chat_id.startswith("group:"):
             group_id = chat_id[6:]
@@ -1091,6 +1087,7 @@ class SimplexAdapter(BasePlatformAdapter):
 # ---------------------------------------------------------------------------
 # Plugin entry-point hooks
 # ---------------------------------------------------------------------------
+
 
 def check_requirements() -> bool:
     """Plugin gate: require SIMPLEX_WS_URL AND the websockets package.
@@ -1184,18 +1181,14 @@ async def _standalone_send(
         return {"error": "websockets not installed. Run: pip install websockets"}
 
     extra = getattr(pconfig, "extra", {}) or {}
-    ws_url = os.getenv("SIMPLEX_WS_URL") or extra.get(
-        "ws_url", "ws://127.0.0.1:5225"
-    )
+    ws_url = os.getenv("SIMPLEX_WS_URL") or extra.get("ws_url", "ws://127.0.0.1:5225")
     if not ws_url:
         return {"error": "SimpleX standalone send: SIMPLEX_WS_URL is required"}
 
     try:
         if chat_id.startswith("group:"):
             group_id = chat_id[6:]
-            composed = json.dumps(
-                [{"msgContent": {"type": "text", "text": message}}]
-            )
+            composed = json.dumps([{"msgContent": {"type": "text", "text": message}}])
             cmd_str = f"/_send #{group_id} json {composed}"
         else:
             # Direct contacts are addressed by display name without brackets.
@@ -1206,9 +1199,7 @@ async def _standalone_send(
             "cmd": cmd_str,
         }
 
-        async with _wsclient.connect(
-            ws_url, open_timeout=10, close_timeout=5
-        ) as ws:
+        async with _wsclient.connect(ws_url, open_timeout=10, close_timeout=5) as ws:
             await ws.send(json.dumps(payload))
             # Give the daemon a moment to process the command before closing.
             await asyncio.sleep(0.5)
@@ -1248,6 +1239,7 @@ def interactive_setup() -> None:
         try:
             if secret:
                 from clawk_cli.secret_prompt import masked_secret_prompt
+
                 value = masked_secret_prompt(f"{prompt}{suffix}: ")
             else:
                 value = input(f"{prompt}{suffix}: ").strip()
@@ -1258,7 +1250,10 @@ def interactive_setup() -> None:
             save_env_value(var, value)
 
     _prompt("SIMPLEX_WS_URL", "Daemon WebSocket URL (default ws://127.0.0.1:5225)")
-    _prompt("SIMPLEX_ALLOWED_USERS", "Allowed contactIds or display names (comma-separated; blank=skip)")
+    _prompt(
+        "SIMPLEX_ALLOWED_USERS",
+        "Allowed contactIds or display names (comma-separated; blank=skip)",
+    )
     _prompt(
         "SIMPLEX_GROUP_ALLOWED",
         "Allowed group IDs (comma-separated, or '*' for any; blank=disable groups)",
@@ -1285,8 +1280,7 @@ def register(ctx) -> None:
         is_connected=is_connected,
         required_env=["SIMPLEX_WS_URL"],
         install_hint=(
-            "pip install websockets   # SimpleX adapter requires the "
-            "websockets package"
+            "pip install websockets   # SimpleX adapter requires the websockets package"
         ),
         setup_fn=interactive_setup,
         env_enablement_fn=_env_enablement,

@@ -103,7 +103,9 @@ def parse_cards(html_text: str, query: str = "") -> List[Dict[str, Any]]:
             "num_comments": num_comments,
             "subreddit": subreddit,
             "created_utc": _to_epoch(created),
-            "author": author if author not in ("[deleted]", "[removed]") else "[deleted]",
+            "author": author
+            if author not in ("[deleted]", "[removed]")
+            else "[deleted]",
             "selftext": "",
             "date": _to_date(created),
             "engagement": {
@@ -111,7 +113,9 @@ def parse_cards(html_text: str, query: str = "") -> List[Dict[str, Any]]:
                 "num_comments": num_comments,
                 "upvote_ratio": None,
             },
-            "relevance": round(token_overlap_relevance(query, title), 3) if query else 0.0,
+            "relevance": round(token_overlap_relevance(query, title), 3)
+            if query
+            else 0.0,
             "why_relevant": "Reddit listing",
             "metadata": {"post_id": _post_id(permalink)},
         })
@@ -128,8 +132,9 @@ def _listing_url(subreddit: str, sort: str) -> str:
 
 def _fetch_one(subreddit: str, sort: str, query: str) -> List[Dict[str, Any]]:
     try:
-        text = http.get_text(_listing_url(subreddit, sort), timeout=LISTING_TIMEOUT,
-                             accept="text/html")
+        text = http.get_text(
+            _listing_url(subreddit, sort), timeout=LISTING_TIMEOUT, accept="text/html"
+        )
         return parse_cards(text, query) if text else []
     except Exception as e:
         _log(f"listing fetch failed r/{subreddit} {sort}: {e}")
@@ -152,8 +157,10 @@ def fetch_listings(
     jobs = [(sub, sort) for sub in subreddits for sort in sorts]
     all_posts: List[Dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(jobs)) or 1) as executor:
-        futures = {executor.submit(_fetch_one, sub, sort, query): (sub, sort)
-                   for sub, sort in jobs}
+        futures = {
+            executor.submit(_fetch_one, sub, sort, query): (sub, sort)
+            for sub, sort in jobs
+        }
         for future in futures:
             try:
                 all_posts.extend(future.result(timeout=LISTING_TIMEOUT + 5))
@@ -169,7 +176,9 @@ def fetch_listings(
     return unique
 
 
-def score_index(subreddits: List[str], depth: str = "default") -> Dict[str, Dict[str, int]]:
+def score_index(
+    subreddits: List[str], depth: str = "default"
+) -> Dict[str, Dict[str, int]]:
     """Build a {post_id: {score, num_comments}} map from subreddit listings.
 
     Used to backfill real scores onto posts discovered via RSS, which carries

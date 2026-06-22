@@ -50,7 +50,7 @@ _CUA_DRIVER_ARGS = ["mcp"]  # stdio MCP transport
 # Regex to parse list_windows text output lines:
 #   "- AppName (pid 12345) "Title" [window_id: 67890]"
 _WINDOW_LINE_RE = re.compile(
-    r'^-\s+(.+?)\s+\(pid\s+(\d+)\)\s+.*\[window_id:\s+(\d+)\]',
+    r"^-\s+(.+?)\s+\(pid\s+(\d+)\)\s+.*\[window_id:\s+(\d+)\]",
     re.MULTILINE,
 )
 
@@ -65,7 +65,7 @@ _WINDOW_LINE_RE = re.compile(
 # Group 3: quoted label (classic format)
 # Group 4: id= label (new format)
 _ELEMENT_LINE_RE = re.compile(
-    r'^\s*(?:-\s+)?\[(\d+)\]\s+(\w+)(?:\s+"([^"]*)"|(?:\s+\(\d+\))?\s+id=([^\s\[\]]*))?' ,
+    r'^\s*(?:-\s+)?\[(\d+)\]\s+(\w+)(?:\s+"([^"]*)"|(?:\s+\(\d+\))?\s+id=([^\s\[\]]*))?',
     re.MULTILINE,
 )
 
@@ -73,6 +73,7 @@ _ELEMENT_LINE_RE = re.compile(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _is_macos() -> bool:
     return sys.platform == "darwin"
@@ -117,12 +118,14 @@ def _parse_elements_from_tree(markdown: str) -> List[UIElement]:
     for m in _ELEMENT_LINE_RE.finditer(markdown):
         # group(3) = quoted label (classic); group(4) = id= label (new)
         label = m.group(3) or m.group(4) or ""
-        elements.append(UIElement(
-            index=int(m.group(1)),
-            role=m.group(2),
-            label=label,
-            bounds=(0, 0, 0, 0),
-        ))
+        elements.append(
+            UIElement(
+                index=int(m.group(1)),
+                role=m.group(2),
+                label=label,
+                bounds=(0, 0, 0, 0),
+            )
+        )
     return elements
 
 
@@ -147,16 +150,27 @@ def _image_dimensions_from_bytes(raw: bytes) -> Tuple[int, int]:
                 continue
             if i + 2 > n:
                 break
-            segment_len = int.from_bytes(raw[i:i + 2], "big")
+            segment_len = int.from_bytes(raw[i : i + 2], "big")
             if segment_len < 2 or i + segment_len > n:
                 break
             if marker in {
-                0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
-                0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+                0xC0,
+                0xC1,
+                0xC2,
+                0xC3,
+                0xC5,
+                0xC6,
+                0xC7,
+                0xC9,
+                0xCA,
+                0xCB,
+                0xCD,
+                0xCE,
+                0xCF,
             }:
                 if segment_len >= 7:
-                    height = int.from_bytes(raw[i + 3:i + 5], "big")
-                    width = int.from_bytes(raw[i + 5:i + 7], "big")
+                    height = int.from_bytes(raw[i + 3 : i + 5], "big")
+                    width = int.from_bytes(raw[i + 5 : i + 7], "big")
                     if width > 0 and height > 0:
                         return width, height
                 break
@@ -179,10 +193,19 @@ def _parse_key_combo(keys: str) -> Tuple[Optional[str], List[str]]:
     Returns (key, modifiers) where key is the non-modifier key and modifiers
     is a list of modifier names (cmd, shift, option, ctrl).
     """
-    MODIFIER_NAMES = {"cmd", "command", "shift", "option", "alt", "ctrl", "control", "fn"}
+    MODIFIER_NAMES = {
+        "cmd",
+        "command",
+        "shift",
+        "option",
+        "alt",
+        "ctrl",
+        "control",
+        "fn",
+    }
     KEY_ALIASES = {"command": "cmd", "alt": "option", "control": "ctrl"}
 
-    parts = [p.strip().lower() for p in re.split(r'[+\-]', keys) if p.strip()]
+    parts = [p.strip().lower() for p in re.split(r"[+\-]", keys) if p.strip()]
     modifiers = []
     key = None
     for part in parts:
@@ -197,6 +220,7 @@ def _parse_key_combo(keys: str) -> Tuple[Optional[str], List[str]]:
 # ---------------------------------------------------------------------------
 # Asyncio bridge — one long-lived loop on a background thread
 # ---------------------------------------------------------------------------
+
 
 class _AsyncBridge:
     """Runs one asyncio loop on a daemon thread; marshals coroutines from the caller."""
@@ -223,13 +247,16 @@ class _AsyncBridge:
                 except Exception:
                     pass
 
-        self._thread = threading.Thread(target=_run, daemon=True, name="cua-driver-loop")
+        self._thread = threading.Thread(
+            target=_run, daemon=True, name="cua-driver-loop"
+        )
         self._thread.start()
         if not self._ready.wait(timeout=5.0):
             raise RuntimeError("cua-driver asyncio bridge failed to start")
 
     def run(self, coro, timeout: Optional[float] = 30.0) -> Any:
         from agent.async_utils import safe_schedule_threadsafe
+
         if not self._loop or not self._thread or not self._thread.is_alive():
             if asyncio.iscoroutine(coro):
                 coro.close()
@@ -251,6 +278,7 @@ class _AsyncBridge:
 # ---------------------------------------------------------------------------
 # MCP session (lazy, shared across tool calls)
 # ---------------------------------------------------------------------------
+
 
 class _CuaDriverSession:
     """Holds the mcp ClientSession. Spawned lazily; re-entered on drop."""
@@ -338,7 +366,9 @@ class _CuaDriverSession:
         self._bridge.run(self._aenter(), timeout=15.0)
         self._started = True
 
-    def call_tool(self, name: str, args: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    def call_tool(
+        self, name: str, args: Dict[str, Any], timeout: float = 30.0
+    ) -> Dict[str, Any]:
         self._require_started()
         try:
             return self._bridge.run(self._call_tool_async(name, args), timeout=timeout)
@@ -348,7 +378,9 @@ class _CuaDriverSession:
             # Daemon restart closes the cached stdio channel. Reconnect once and
             # retry exactly one more time — never loop, to avoid hammering a
             # genuinely dead daemon.
-            logger.warning("cua-driver MCP session closed during %s; reconnecting once", name)
+            logger.warning(
+                "cua-driver MCP session closed during %s; reconnecting once", name
+            )
             with self._lock:
                 self._restart_session_locked()
             return self._bridge.run(self._call_tool_async(name, args), timeout=timeout)
@@ -385,15 +417,23 @@ def _extract_tool_result(mcp_result: Any) -> Dict[str, Any]:
     if text_chunks:
         joined = "\n".join(t for t in text_chunks if t)
         try:
-            data = json.loads(joined) if joined.strip().startswith(("{", "[")) else joined
+            data = (
+                json.loads(joined) if joined.strip().startswith(("{", "[")) else joined
+            )
         except json.JSONDecodeError:
             data = joined
-    return {"data": data, "images": images, "structuredContent": structured, "isError": is_error}
+    return {
+        "data": data,
+        "images": images,
+        "structuredContent": structured,
+        "isError": is_error,
+    }
 
 
 # ---------------------------------------------------------------------------
 # The backend itself
 # ---------------------------------------------------------------------------
+
 
 class CuaDriverBackend(ComputerUseBackend):
     """Default computer-use backend. macOS-only via cua-driver MCP."""
@@ -404,7 +444,9 @@ class CuaDriverBackend(ComputerUseBackend):
         # Sticky context — updated by capture(), used by action tools.
         self._active_pid: Optional[int] = None
         self._active_window_id: Optional[int] = None
-        self._last_app: Optional[str] = None  # last app name targeted via capture/focus_app
+        self._last_app: Optional[str] = (
+            None  # last app name targeted via capture/focus_app
+        )
 
     # ── Lifecycle ──────────────────────────────────────────────────
     def start(self) -> None:
@@ -454,8 +496,16 @@ class CuaDriverBackend(ComputerUseBackend):
             windows = _parse_windows_from_text(raw_text)
 
         if not windows:
-            return CaptureResult(mode=mode, width=0, height=0, png_b64=None,
-                                 elements=[], app="", window_title="", png_bytes_len=0)
+            return CaptureResult(
+                mode=mode,
+                width=0,
+                height=0,
+                png_b64=None,
+                elements=[],
+                app="",
+                window_title="",
+                png_bytes_len=0,
+            )
 
         # Filter by app name (case-insensitive substring) if requested.
         # When the filter matches nothing, surface that explicitly instead of
@@ -468,8 +518,12 @@ class CuaDriverBackend(ComputerUseBackend):
             filtered = [w for w in windows if app_lower in w["app_name"].lower()]
             if not filtered:
                 return CaptureResult(
-                    mode=mode, width=0, height=0, png_b64=None,
-                    elements=[], app="",
+                    mode=mode,
+                    width=0,
+                    height=0,
+                    png_b64=None,
+                    elements=[],
+                    app="",
                     window_title=(
                         f"<no on-screen window matched app={app!r}; "
                         f"call list_apps to see available app names "
@@ -514,7 +568,7 @@ class CuaDriverBackend(ComputerUseBackend):
             summary, tree = _split_tree_text(text)
 
             # Parse element count from summary e.g. "✅ AppName — 42 elements, turn 3..."
-            m = re.search(r'(\d+)\s+elements?', summary)
+            m = re.search(r"(\d+)\s+elements?", summary)
             if tree and not gws_out["images"]:
                 # ax mode — no screenshot
                 elements = _parse_elements_from_tree(tree)
@@ -563,8 +617,11 @@ class CuaDriverBackend(ComputerUseBackend):
     ) -> ActionResult:
         pid = self._active_pid
         if pid is None:
-            return ActionResult(ok=False, action="click",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="click",
+                message="No active window — call capture() first.",
+            )
 
         # Choose tool based on button and click_count.
         if button == "right":
@@ -577,16 +634,20 @@ class CuaDriverBackend(ComputerUseBackend):
         args: Dict[str, Any] = {"pid": pid}
         if element is not None:
             if self._active_window_id is None:
-                return ActionResult(ok=False, action=tool,
-                                    message="No active window_id for element_index click.")
+                return ActionResult(
+                    ok=False,
+                    action=tool,
+                    message="No active window_id for element_index click.",
+                )
             args["element_index"] = element
             args["window_id"] = self._active_window_id
         elif x is not None and y is not None:
             args["x"] = x
             args["y"] = y
         else:
-            return ActionResult(ok=False, action=tool,
-                                message="click requires element= or x/y.")
+            return ActionResult(
+                ok=False, action=tool, message="click requires element= or x/y."
+            )
         if modifiers:
             args["modifier"] = modifiers
 
@@ -604,13 +665,19 @@ class CuaDriverBackend(ComputerUseBackend):
     ) -> ActionResult:
         pid = self._active_pid
         if pid is None:
-            return ActionResult(ok=False, action="drag",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="drag",
+                message="No active window — call capture() first.",
+            )
         args: Dict[str, Any] = {"pid": pid}
         if from_element is not None and to_element is not None:
             if self._active_window_id is None:
-                return ActionResult(ok=False, action="drag",
-                                    message="No active window_id for element-based drag.")
+                return ActionResult(
+                    ok=False,
+                    action="drag",
+                    message="No active window_id for element-based drag.",
+                )
             args["from_element"] = from_element
             args["to_element"] = to_element
             args["window_id"] = self._active_window_id
@@ -618,8 +685,11 @@ class CuaDriverBackend(ComputerUseBackend):
             args["from_x"], args["from_y"] = int(from_xy[0]), int(from_xy[1])
             args["to_x"], args["to_y"] = int(to_xy[0]), int(to_xy[1])
         else:
-            return ActionResult(ok=False, action="drag",
-                                message="drag requires from_element/to_element or from_coordinate/to_coordinate.")
+            return ActionResult(
+                ok=False,
+                action="drag",
+                message="drag requires from_element/to_element or from_coordinate/to_coordinate.",
+            )
         return self._action("drag", args)
 
     def scroll(
@@ -634,8 +704,11 @@ class CuaDriverBackend(ComputerUseBackend):
     ) -> ActionResult:
         pid = self._active_pid
         if pid is None:
-            return ActionResult(ok=False, action="scroll",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="scroll",
+                message="No active window — call capture() first.",
+            )
         args: Dict[str, Any] = {
             "pid": pid,
             "direction": direction,
@@ -653,20 +726,27 @@ class CuaDriverBackend(ComputerUseBackend):
     def type_text(self, text: str) -> ActionResult:
         pid = self._active_pid
         if pid is None:
-            return ActionResult(ok=False, action="type_text",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="type_text",
+                message="No active window — call capture() first.",
+            )
         return self._action("type_text", {"pid": pid, "text": text})
 
     def key(self, keys: str) -> ActionResult:
         pid = self._active_pid
         if pid is None:
-            return ActionResult(ok=False, action="key",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="key",
+                message="No active window — call capture() first.",
+            )
 
         key_name, modifiers = _parse_key_combo(keys)
         if not key_name:
-            return ActionResult(ok=False, action="key",
-                                message=f"Could not parse key from '{keys}'.")
+            return ActionResult(
+                ok=False, action="key", message=f"Could not parse key from '{keys}'."
+            )
 
         if modifiers:
             # hotkey requires at least one modifier + one key.
@@ -680,11 +760,17 @@ class CuaDriverBackend(ComputerUseBackend):
         pid = self._active_pid
         window_id = self._active_window_id
         if pid is None or window_id is None:
-            return ActionResult(ok=False, action="set_value",
-                                message="No active window — call capture() first.")
+            return ActionResult(
+                ok=False,
+                action="set_value",
+                message="No active window — call capture() first.",
+            )
         if element is None:
-            return ActionResult(ok=False, action="set_value",
-                                message="set_value requires element= (element index).")
+            return ActionResult(
+                ok=False,
+                action="set_value",
+                message="set_value requires element= (element index).",
+            )
         args: Dict[str, Any] = {
             "pid": pid,
             "window_id": window_id,
@@ -705,7 +791,7 @@ class CuaDriverBackend(ComputerUseBackend):
         if isinstance(data, str):
             apps = []
             for line in data.splitlines():
-                m = re.search(r'(.+?)\s+\(pid\s+(\d+)\)', line)
+                m = re.search(r"(.+?)\s+\(pid\s+(\d+)\)", line)
                 if m:
                     apps.append({"name": m.group(1).strip(), "pid": int(m.group(2))})
             return apps
@@ -752,14 +838,20 @@ class CuaDriverBackend(ComputerUseBackend):
         if target:
             self._active_pid = target["pid"]
             self._active_window_id = target["window_id"]
-            self._last_app = target["app_name"]  # preserve for capture_after= follow-ups
+            self._last_app = target[
+                "app_name"
+            ]  # preserve for capture_after= follow-ups
             return ActionResult(
-                ok=True, action="focus_app",
+                ok=True,
+                action="focus_app",
                 message=f"Targeted {target['app_name']} (pid {self._active_pid}, "
-                        f"window {self._active_window_id}) without raising window.",
+                f"window {self._active_window_id}) without raising window.",
             )
-        return ActionResult(ok=False, action="focus_app",
-                            message=f"No on-screen window found for app '{app}'.")
+        return ActionResult(
+            ok=False,
+            action="focus_app",
+            message=f"No on-screen window found for app '{app}'.",
+        )
 
     # ── Internal ───────────────────────────────────────────────────
     def _action(self, name: str, args: Dict[str, Any]) -> ActionResult:
@@ -775,5 +867,9 @@ class CuaDriverBackend(ComputerUseBackend):
             message = str(data.get("message", ""))
         elif isinstance(data, str):
             message = data
-        return ActionResult(ok=ok, action=name, message=message,
-                            meta=data if isinstance(data, dict) else {})
+        return ActionResult(
+            ok=ok,
+            action=name,
+            message=message,
+            meta=data if isinstance(data, dict) else {},
+        )

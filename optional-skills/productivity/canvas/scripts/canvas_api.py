@@ -126,14 +126,14 @@ def list_assignments(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Canvas LMS API CLI for Clawksis"
-    )
+    parser = argparse.ArgumentParser(description="Canvas LMS API CLI for Clawksis")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # --- list_courses ---
     p = sub.add_parser("list_courses", help="List enrolled courses")
-    p.add_argument("--per-page", type=int, default=50, help="Results per page (default 50)")
+    p.add_argument(
+        "--per-page", type=int, default=50, help="Results per page (default 50)"
+    )
     p.add_argument(
         "--enrollment-state",
         default="",
@@ -144,7 +144,9 @@ def main():
     # --- list_assignments ---
     p = sub.add_parser("list_assignments", help="List assignments for a course")
     p.add_argument("course_id", help="Canvas course ID")
-    p.add_argument("--per-page", type=int, default=50, help="Results per page (default 50)")
+    p.add_argument(
+        "--per-page", type=int, default=50, help="Results per page (default 50)"
+    )
     p.add_argument(
         "--order-by",
         default="",

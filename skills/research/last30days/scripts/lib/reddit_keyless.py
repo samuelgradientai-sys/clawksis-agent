@@ -38,13 +38,16 @@ def _tier0_json(topic: str, depth: str) -> List[Dict[str, Any]]:
     """One cheap global ``.json`` discovery attempt. Returns [] on the 403 wall."""
     try:
         from . import reddit_public
+
         return reddit_public.search(topic, depth=depth) or []
     except Exception as e:  # never let the demoted tier sink the run
         _log(f"Tier 0 (.json) unavailable: {e}")
         return []
 
 
-def _top_subreddits(posts: List[Dict[str, Any]], limit: int = MAX_DERIVED_SUBS) -> List[str]:
+def _top_subreddits(
+    posts: List[Dict[str, Any]], limit: int = MAX_DERIVED_SUBS
+) -> List[str]:
     """Most frequent subreddits across discovered posts (for score backfill)."""
     counts = Counter(p.get("subreddit", "") for p in posts if p.get("subreddit"))
     return [sub for sub, _ in counts.most_common(limit)]
@@ -57,7 +60,9 @@ def _apply_scores(post: Dict[str, Any], scored: Dict[str, int]) -> None:
     post["engagement"]["num_comments"] = scored["num_comments"]
 
 
-def _discover(topic: str, depth: str, subreddits: Optional[List[str]]) -> List[Dict[str, Any]]:
+def _discover(
+    topic: str, depth: str, subreddits: Optional[List[str]]
+) -> List[Dict[str, Any]]:
     # Tier 0: demoted one-shot .json (dead for normal users too, but free to try).
     posts = _tier0_json(topic, depth)
     if posts:
@@ -71,7 +76,9 @@ def _discover(topic: str, depth: str, subreddits: Optional[List[str]]) -> List[D
     if subreddits:
         # Targeted run: the caller chose these subreddits, so their listing cards
         # are on-topic — include them as scored discovery AND as a score source.
-        listing_posts = reddit_listing.fetch_listings(subreddits, depth=depth, query=topic)
+        listing_posts = reddit_listing.fetch_listings(
+            subreddits, depth=depth, query=topic
+        )
         score_source = listing_posts
     else:
         # Bare global run: subreddits derived from noisy RSS results are NOT
@@ -187,13 +194,17 @@ def _slot_priority(topic: str, posts: List[Dict[str, Any]]) -> List[Dict[str, An
 
         entity = rerank._primary_entity(topic).lower()
         if entity:
+
             def _matches(post: Dict[str, Any]) -> bool:
                 return rerank._entity_grounded(_post_text(post), entity)
+
         else:
             prepared = relevance.PreparedQuery(topic)
 
             def _matches(post: Dict[str, Any]) -> bool:
-                return relevance.token_overlap_relevance(prepared, _post_text(post)) > 0.24
+                return (
+                    relevance.token_overlap_relevance(prepared, _post_text(post)) > 0.24
+                )
 
         matches: List[Dict[str, Any]] = []
         misses: List[Dict[str, Any]] = []
@@ -231,8 +242,7 @@ def search_and_enrich(
 
     # Date filter: keep posts in range or with unknown dates (mirrors reddit_public).
     posts = [
-        p for p in posts
-        if p.get("date") is None or (from_date <= p["date"] <= to_date)
+        p for p in posts if p.get("date") is None or (from_date <= p["date"] <= to_date)
     ]
 
     # Rank by real upvote score (from listing cards / backfill), then query

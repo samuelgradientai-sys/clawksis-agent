@@ -100,7 +100,9 @@ def build_ranked_items(report: dict[str, Any], limit: int) -> list[dict[str, Any
             if not isinstance(item, dict):
                 continue
             all_items.append({
-                "key": str(item.get("url") or item.get("id") or item.get(text_field) or ""),
+                "key": str(
+                    item.get("url") or item.get("id") or item.get(text_field) or ""
+                ),
                 "source": source_key,
                 "sources": [source_key],
                 "url": str(item.get("url") or ""),
@@ -135,14 +137,21 @@ def retention(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left)
 
 
-def precision_at_k(ranking: list[dict[str, Any]], judgments: dict[str, int], k: int) -> float:
+def precision_at_k(
+    ranking: list[dict[str, Any]], judgments: dict[str, int], k: int
+) -> float:
     top = ranking[:k]
     if not top:
         return 0.0
     return sum(1 for item in top if judgments.get(item["key"], 0) >= 2) / len(top)
 
 
-def ndcg_at_k(ranking: list[dict[str, Any]], judgments: dict[str, int], k: int, judged_pool: list[dict[str, Any]]) -> float:
+def ndcg_at_k(
+    ranking: list[dict[str, Any]],
+    judgments: dict[str, int],
+    k: int,
+    judged_pool: list[dict[str, Any]],
+) -> float:
     top = ranking[:k]
     if not top:
         return 0.0
@@ -154,14 +163,20 @@ def ndcg_at_k(ranking: list[dict[str, Any]], judgments: dict[str, int], k: int, 
         return total
 
     actual = [judgments.get(item["key"], 0) for item in top]
-    ideal = sorted((judgments.get(item["key"], 0) for item in judged_pool), reverse=True)[: len(top)]
+    ideal = sorted(
+        (judgments.get(item["key"], 0) for item in judged_pool), reverse=True
+    )[: len(top)]
     ideal_score = dcg(ideal)
     if ideal_score == 0:
         return 0.0
     return dcg(actual) / ideal_score
 
 
-def source_coverage_recall(ranking: list[dict[str, Any]], judged_pool: list[dict[str, Any]], judgments: dict[str, int]) -> float:
+def source_coverage_recall(
+    ranking: list[dict[str, Any]],
+    judged_pool: list[dict[str, Any]],
+    judgments: dict[str, int],
+) -> float:
     good_sources = {
         source
         for item in judged_pool
@@ -274,7 +289,9 @@ def get_judgments(
         return {row["id"]: int(row["grade"]) for row in payload.get("judgments") or []}
     if not gemini_api_key or not items:
         return {}
-    payload = call_gemini_judge(gemini_api_key, judge_model, build_judge_prompt(topic, query_type, items))
+    payload = call_gemini_judge(
+        gemini_api_key, judge_model, build_judge_prompt(topic, query_type, items)
+    )
     cache_file.write_text(json.dumps(payload, indent=2))
     return {row["id"]: int(row["grade"]) for row in payload.get("judgments") or []}
 
@@ -308,7 +325,16 @@ def create_eval_env() -> dict[str, str]:
     return passthrough
 
 
-def run_last30days(repo_dir: Path, topic: str, *, search: str, timeout_seconds: int, quick: bool, mock: bool, env: dict[str, str]) -> dict[str, Any]:
+def run_last30days(
+    repo_dir: Path,
+    topic: str,
+    *,
+    search: str,
+    timeout_seconds: int,
+    quick: bool,
+    mock: bool,
+    env: dict[str, str],
+) -> dict[str, Any]:
     engine = repo_dir / "skills" / "last30days" / "scripts" / "last30days.py"
     if not engine.exists():
         engine = repo_dir / "scripts" / "last30days.py"
@@ -329,7 +355,9 @@ def run_last30days(repo_dir: Path, topic: str, *, search: str, timeout_seconds: 
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"{repo_dir.name} failed for '{topic}' with exit {result.returncode}\n{result.stderr.strip()}")
+        raise RuntimeError(
+            f"{repo_dir.name} failed for '{topic}' with exit {result.returncode}\n{result.stderr.strip()}"
+        )
     return json.loads(result.stdout)
 
 
@@ -366,7 +394,15 @@ def remove_worktree(path: Path) -> None:
         pass
 
 
-def summarize_topic(topic: str, query_type: str, baseline_report: dict[str, Any], candidate_report: dict[str, Any], judgments: dict[str, int], judged_pool: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+def summarize_topic(
+    topic: str,
+    query_type: str,
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    judgments: dict[str, int],
+    judged_pool: list[dict[str, Any]],
+    limit: int,
+) -> dict[str, Any]:
     baseline_ranked = build_ranked_items(baseline_report, limit)
     candidate_ranked = build_ranked_items(candidate_report, limit)
     baseline_sets = source_sets(baseline_report, limit)
@@ -380,12 +416,16 @@ def summarize_topic(topic: str, query_type: str, baseline_report: dict[str, Any]
         "baseline": {
             "precision_at_5": precision_at_k(baseline_ranked, judgments, 5),
             "ndcg_at_5": ndcg_at_k(baseline_ranked, judgments, 5, judged_pool),
-            "source_coverage_recall": source_coverage_recall(baseline_ranked, judged_pool, judgments),
+            "source_coverage_recall": source_coverage_recall(
+                baseline_ranked, judged_pool, judgments
+            ),
         },
         "candidate": {
             "precision_at_5": precision_at_k(candidate_ranked, judgments, 5),
             "ndcg_at_5": ndcg_at_k(candidate_ranked, judgments, 5, judged_pool),
-            "source_coverage_recall": source_coverage_recall(candidate_ranked, judged_pool, judgments),
+            "source_coverage_recall": source_coverage_recall(
+                candidate_ranked, judged_pool, judgments
+            ),
         },
         "stability": {
             "overall_jaccard": jaccard(overall_left, overall_right),
@@ -394,8 +434,14 @@ def summarize_topic(topic: str, query_type: str, baseline_report: dict[str, Any]
                 source: {
                     "baseline_count": len(baseline_sets.get(source, set())),
                     "candidate_count": len(candidate_sets.get(source, set())),
-                    "jaccard": jaccard(baseline_sets.get(source, set()), candidate_sets.get(source, set())),
-                    "retention_vs_baseline": retention(baseline_sets.get(source, set()), candidate_sets.get(source, set())),
+                    "jaccard": jaccard(
+                        baseline_sets.get(source, set()),
+                        candidate_sets.get(source, set()),
+                    ),
+                    "retention_vs_baseline": retention(
+                        baseline_sets.get(source, set()),
+                        candidate_sets.get(source, set()),
+                    ),
                 }
                 for source in sources
             },
@@ -403,7 +449,12 @@ def summarize_topic(topic: str, query_type: str, baseline_report: dict[str, Any]
     }
 
 
-def write_summary(output_dir: Path, baseline_label: str, candidate_label: str, summaries: list[dict[str, Any]]) -> None:
+def write_summary(
+    output_dir: Path,
+    baseline_label: str,
+    candidate_label: str,
+    summaries: list[dict[str, Any]],
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -447,17 +498,25 @@ def write_failure_summary(
 ) -> None:
     write_summary(output_dir, baseline_label, candidate_label, summaries)
     metrics_path = output_dir / "metrics.json"
-    payload = json.loads(metrics_path.read_text()) if metrics_path.exists() else {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "baseline": baseline_label,
-        "candidate": candidate_label,
-        "topics": [],
-    }
+    payload = (
+        json.loads(metrics_path.read_text())
+        if metrics_path.exists()
+        else {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "baseline": baseline_label,
+            "candidate": candidate_label,
+            "topics": [],
+        }
+    )
     payload["failures"] = failures
     metrics_path.write_text(json.dumps(payload, indent=2))
 
     summary_path = output_dir / "summary.md"
-    lines = summary_path.read_text().splitlines() if summary_path.exists() else ["# Search Quality Evaluation", ""]
+    lines = (
+        summary_path.read_text().splitlines()
+        if summary_path.exists()
+        else ["# Search Quality Evaluation", ""]
+    )
     if failures:
         lines.extend([
             "",
@@ -471,11 +530,15 @@ def write_failure_summary(
 
 def parse_topics_file(path: Path) -> list[tuple[str, str]]:
     rows = json.loads(path.read_text())
-    return [(str(row["topic"]), str(row.get("query_type") or "general")) for row in rows]
+    return [
+        (str(row["topic"]), str(row.get("query_type") or "general")) for row in rows
+    ]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Compare two last30days revisions on ranked candidate quality")
+    parser = argparse.ArgumentParser(
+        description="Compare two last30days revisions on ranked candidate quality"
+    )
     parser.add_argument("--baseline", default="HEAD~1")
     parser.add_argument("--candidate", default="WORKTREE")
     parser.add_argument("--search", default=DEFAULT_SEARCH)
@@ -491,7 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    topics = parse_topics_file(Path(args.topics_file)) if args.topics_file else DEFAULT_TOPICS
+    topics = (
+        parse_topics_file(Path(args.topics_file))
+        if args.topics_file
+        else DEFAULT_TOPICS
+    )
     output_dir = Path(args.output_dir).resolve()
     config = envlib.get_config()
     gemini_api_key = resolve_google_judge_api_key(config)
@@ -524,28 +591,51 @@ def main() -> int:
                 )
                 judged_pool_map = {
                     item["key"]: item
-                    for item in build_ranked_items(baseline_report, args.limit) + build_ranked_items(candidate_report, args.limit)
+                    for item in build_ranked_items(baseline_report, args.limit)
+                    + build_ranked_items(candidate_report, args.limit)
                 }
                 judged_pool = list(judged_pool_map.values())
                 judgments = get_judgments(
                     output_dir=output_dir,
-                    slug="".join(char.lower() if char.isalnum() else "-" for char in topic).strip("-"),
+                    slug="".join(
+                        char.lower() if char.isalnum() else "-" for char in topic
+                    ).strip("-"),
                     topic=topic,
                     query_type=query_type,
                     items=judged_pool,
                     judge_model=args.judge_model,
                     gemini_api_key=gemini_api_key,
                 )
-                summaries.append(summarize_topic(topic, query_type, baseline_report, candidate_report, judgments, judged_pool, args.limit))
+                summaries.append(
+                    summarize_topic(
+                        topic,
+                        query_type,
+                        baseline_report,
+                        candidate_report,
+                        judgments,
+                        judged_pool,
+                        args.limit,
+                    )
+                )
             except Exception as exc:
-                failures.append({"topic": topic, "query_type": query_type, "error": str(exc)})
-        write_failure_summary(output_dir, args.baseline, args.candidate, summaries, failures)
+                failures.append({
+                    "topic": topic,
+                    "query_type": query_type,
+                    "error": str(exc),
+                })
+        write_failure_summary(
+            output_dir, args.baseline, args.candidate, summaries, failures
+        )
     finally:
         if baseline_temp:
             remove_worktree(baseline_dir)
         if candidate_temp:
             remove_worktree(candidate_dir)
-    result = {"output_dir": str(output_dir), "topics": len(topics), "failures": len(failures)}
+    result = {
+        "output_dir": str(output_dir),
+        "topics": len(topics),
+        "failures": len(failures),
+    }
     print(json.dumps(result, indent=2))
     return 1 if failures else 0
 

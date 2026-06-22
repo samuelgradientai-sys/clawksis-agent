@@ -10,6 +10,7 @@ from agent.transports import get_transport, register_transport, _REGISTRY
 
 # ── ABC contract tests ──────────────────────────────────────────────────
 
+
 class TestProviderTransportABC:
     """Verify the ABC contract is enforceable."""
 
@@ -22,6 +23,7 @@ class TestProviderTransportABC:
             @property
             def api_mode(self):
                 return "test"
+
         with pytest.raises(TypeError):
             Incomplete()
 
@@ -30,14 +32,20 @@ class TestProviderTransportABC:
             @property
             def api_mode(self):
                 return "test_minimal"
+
             def convert_messages(self, messages, **kw):
                 return messages
+
             def convert_tools(self, tools):
                 return tools
+
             def build_kwargs(self, model, messages, tools=None, **params):
                 return {"model": model, "messages": messages}
+
             def normalize_response(self, response, **kw):
-                return NormalizedResponse(content="ok", tool_calls=None, finish_reason="stop")
+                return NormalizedResponse(
+                    content="ok", tool_calls=None, finish_reason="stop"
+                )
 
         t = Minimal()
         assert t.api_mode == "test_minimal"
@@ -48,13 +56,14 @@ class TestProviderTransportABC:
 
 # ── Registry tests ───────────────────────────────────────────────────────
 
-class TestTransportRegistry:
 
+class TestTransportRegistry:
     def test_get_unregistered_returns_none(self):
         assert get_transport("nonexistent_mode") is None
 
     def test_anthropic_registered_on_import(self):
         import agent.transports.anthropic  # noqa: F401
+
         t = get_transport("anthropic_messages")
         assert t is not None
         assert t.api_mode == "anthropic_messages"
@@ -62,6 +71,7 @@ class TestTransportRegistry:
     def test_discovers_missing_transport_when_registry_partially_populated(self):
         """Importing one transport directly must not hide other valid api_modes."""
         import agent.transports.chat_completions  # noqa: F401
+
         t = get_transport("codex_responses")
         assert t is not None
         assert t.api_mode == "codex_responses"
@@ -71,14 +81,20 @@ class TestTransportRegistry:
             @property
             def api_mode(self):
                 return "dummy_test"
+
             def convert_messages(self, messages, **kw):
                 return messages
+
             def convert_tools(self, tools):
                 return tools
+
             def build_kwargs(self, model, messages, tools=None, **params):
                 return {}
+
             def normalize_response(self, response, **kw):
-                return NormalizedResponse(content=None, tool_calls=None, finish_reason="stop")
+                return NormalizedResponse(
+                    content=None, tool_calls=None, finish_reason="stop"
+                )
 
         register_transport("dummy_test", DummyTransport)
         t = get_transport("dummy_test")
@@ -89,25 +105,28 @@ class TestTransportRegistry:
 
 # ── AnthropicTransport tests ────────────────────────────────────────────
 
-class TestAnthropicTransport:
 
+class TestAnthropicTransport:
     @pytest.fixture
     def transport(self):
         import agent.transports.anthropic  # noqa: F401
+
         return get_transport("anthropic_messages")
 
     def test_api_mode(self, transport):
         assert transport.api_mode == "anthropic_messages"
 
     def test_convert_tools_simple(self, transport):
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "test_tool",
-                "description": "A test",
-                "parameters": {"type": "object", "properties": {}},
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "test_tool",
+                    "description": "A test",
+                    "parameters": {"type": "object", "properties": {}},
+                },
             }
-        }]
+        ]
         result = transport.convert_tools(tools)
         assert len(result) == 1
         assert result[0]["name"] == "test_tool"
@@ -155,13 +174,17 @@ class TestAnthropicTransport:
         assert transport.extract_cache_stats(r) is None
 
     def test_extract_cache_stats_with_cache(self, transport):
-        usage = SimpleNamespace(cache_read_input_tokens=100, cache_creation_input_tokens=50)
+        usage = SimpleNamespace(
+            cache_read_input_tokens=100, cache_creation_input_tokens=50
+        )
         r = SimpleNamespace(usage=usage)
         result = transport.extract_cache_stats(r)
         assert result == {"cached_tokens": 100, "creation_tokens": 50}
 
     def test_extract_cache_stats_zero(self, transport):
-        usage = SimpleNamespace(cache_read_input_tokens=0, cache_creation_input_tokens=0)
+        usage = SimpleNamespace(
+            cache_read_input_tokens=0, cache_creation_input_tokens=0
+        )
         r = SimpleNamespace(usage=usage)
         assert transport.extract_cache_stats(r) is None
 

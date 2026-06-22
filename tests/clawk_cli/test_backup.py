@@ -233,8 +233,14 @@ class TestShouldExclude:
         """skills/autonomous-ai-agents/clawksis-agent/ must NOT be excluded —
         only the root-level clawksis-agent/ repo is skipped."""
         from clawk_cli.backup import _should_exclude
-        assert not _should_exclude(Path("skills/autonomous-ai-agents/clawksis-agent/SKILL.md"))
-        assert not _should_exclude(Path("skills/autonomous-ai-agents/clawksis-agent/sub/item.txt"))
+
+        assert not _should_exclude(
+            Path("skills/autonomous-ai-agents/clawksis-agent/SKILL.md")
+        )
+        assert not _should_exclude(
+            Path("skills/autonomous-ai-agents/clawksis-agent/sub/item.txt")
+        )
+
 
 # ---------------------------------------------------------------------------
 
@@ -317,6 +323,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         import clawk_cli.backup as backup_mod
+
         staged_dirs = []
         real_ntf = backup_mod.tempfile.NamedTemporaryFile
 
@@ -332,7 +339,9 @@ class TestBackup:
         assert staged_dirs, "no SQLite snapshot was staged"
         assert all(d == str(out_dir) for d in staged_dirs), staged_dirs
 
-    def test_pre_update_db_snapshots_staged_beside_output_zip(self, tmp_path, monkeypatch):
+    def test_pre_update_db_snapshots_staged_beside_output_zip(
+        self, tmp_path, monkeypatch
+    ):
         """The pre-update/pre-migration zip path (_write_full_zip_backup) must
         also stage SQLite snapshots beside its output zip, not in /tmp."""
         clawk_home = tmp_path / ".clawk"
@@ -346,6 +355,7 @@ class TestBackup:
         out_zip.parent.mkdir(parents=True, exist_ok=True)
 
         import clawk_cli.backup as backup_mod
+
         staged_dirs = []
         real_ntf = backup_mod.tempfile.NamedTemporaryFile
 
@@ -410,6 +420,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:

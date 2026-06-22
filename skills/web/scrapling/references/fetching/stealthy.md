@@ -82,17 +82,19 @@ In session classes, all these arguments can be set globally for the session. Sti
 
 ```python
 # Automatic Cloudflare solver
-page = StealthyFetcher.fetch('https://nopecha.com/demo/cloudflare', solve_cloudflare=True)
+page = StealthyFetcher.fetch(
+    "https://nopecha.com/demo/cloudflare", solve_cloudflare=True
+)
 
 # Works with other stealth options
 page = StealthyFetcher.fetch(
-    'https://protected-site.com',
+    "https://protected-site.com",
     solve_cloudflare=True,
     block_webrtc=True,
     real_chrome=True,
     hide_canvas=True,
     google_search=True,
-    proxy='http://username:password@host:port',  # It can also be a dictionary with only the keys 'server', 'username', and 'password'.
+    proxy="http://username:password@host:port",  # It can also be a dictionary with only the keys 'server', 'username', and 'password'.
 )
 ```
 
@@ -119,32 +121,34 @@ In the example below, I used the pages' [mouse events](https://playwright.dev/py
 ```python
 from playwright.sync_api import Page
 
+
 def scroll_page(page: Page):
     page.mouse.wheel(10, 0)
     page.mouse.move(100, 400)
     page.mouse.up()
 
-page = StealthyFetcher.fetch('https://example.com', page_action=scroll_page)
+
+page = StealthyFetcher.fetch("https://example.com", page_action=scroll_page)
 ```
 Of course, if you use the async fetch version, the function must also be async.
 ```python
 from playwright.async_api import Page
 
-async def scroll_page(page: Page):
-   await page.mouse.wheel(10, 0)
-   await page.mouse.move(100, 400)
-   await page.mouse.up()
 
-page = await StealthyFetcher.async_fetch('https://example.com', page_action=scroll_page)
+async def scroll_page(page: Page):
+    await page.mouse.wheel(10, 0)
+    await page.mouse.move(100, 400)
+    await page.mouse.up()
+
+
+page = await StealthyFetcher.async_fetch("https://example.com", page_action=scroll_page)
 ```
 
 ### Wait Conditions
 ```python
 # Wait for the selector
 page = StealthyFetcher.fetch(
-    'https://example.com',
-    wait_selector='h1',
-    wait_selector_state='visible'
+    "https://example.com", wait_selector="h1", wait_selector_state="visible"
 )
 ```
 This is the last wait the fetcher will do before returning the response (if enabled). You pass a CSS selector to the `wait_selector` argument, and the fetcher will wait for the state you passed in the `wait_selector_state` argument to be fulfilled. If you didn't pass a state, the default would be `attached`, which means it will wait for the element to be present in the DOM.
@@ -168,17 +172,17 @@ def scrape_amazon_product(url):
 
     # Extract product details
     return {
-        'title': page.css('#productTitle::text').get().clean(),
-        'price': page.css('.a-price .a-offscreen::text').get(),
-        'rating': page.css('[data-feature-name="averageCustomerReviews"] .a-popover-trigger .a-color-base::text').get(),
-        'reviews_count': page.css('#acrCustomerReviewText::text').re_first(r'[\d,]+'),
-        'features': [
-            li.get().clean() for li in page.css('#feature-bullets li span::text')
+        "title": page.css("#productTitle::text").get().clean(),
+        "price": page.css(".a-price .a-offscreen::text").get(),
+        "rating": page.css(
+            '[data-feature-name="averageCustomerReviews"] .a-popover-trigger .a-color-base::text'
+        ).get(),
+        "reviews_count": page.css("#acrCustomerReviewText::text").re_first(r"[\d,]+"),
+        "features": [
+            li.get().clean() for li in page.css("#feature-bullets li span::text")
         ],
-        'availability': page.css('#availability')[0].get_all_text(strip=True),
-        'images': [
-            img.attrib['src'] for img in page.css('#altImages img')
-        ]
+        "availability": page.css("#availability")[0].get_all_text(strip=True),
+        "images": [img.attrib["src"] for img in page.css("#altImages img")],
     }
 ```
 
@@ -191,16 +195,13 @@ from scrapling.fetchers import StealthySession
 
 # Create a session with default configuration
 with StealthySession(
-    headless=True,
-    real_chrome=True,
-    block_webrtc=True,
-    solve_cloudflare=True
+    headless=True, real_chrome=True, block_webrtc=True, solve_cloudflare=True
 ) as session:
     # Make multiple requests with the same browser instance
-    page1 = session.fetch('https://example1.com')
-    page2 = session.fetch('https://example2.com') 
-    page3 = session.fetch('https://nopecha.com/demo/cloudflare')
-    
+    page1 = session.fetch("https://example1.com")
+    page2 = session.fetch("https://example2.com")
+    page3 = session.fetch("https://nopecha.com/demo/cloudflare")
+
     # All requests reuse the same tab on the same browser instance
 ```
 
@@ -210,19 +211,20 @@ with StealthySession(
 import asyncio
 from scrapling.fetchers import AsyncStealthySession
 
+
 async def scrape_multiple_sites():
     async with AsyncStealthySession(
         real_chrome=True,
         block_webrtc=True,
         solve_cloudflare=True,
         timeout=60000,  # 60 seconds for Cloudflare challenges
-        max_pages=3
+        max_pages=3,
     ) as session:
         # Make async requests with shared browser configuration
         pages = await asyncio.gather(
-            session.fetch('https://site1.com'),
-            session.fetch('https://site2.com'), 
-            session.fetch('https://protected-site.com')
+            session.fetch("https://site1.com"),
+            session.fetch("https://site2.com"),
+            session.fetch("https://protected-site.com"),
         )
         return pages
 ```

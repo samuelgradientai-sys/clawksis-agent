@@ -5,6 +5,7 @@ run custom servers. This module does not try to sandbox that capability. It only
 blocks the high-signal exfiltration shape from #45620: a shell interpreter whose
 inline script invokes network egress tooling.
 """
+
 from __future__ import annotations
 
 import os

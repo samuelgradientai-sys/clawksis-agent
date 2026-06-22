@@ -158,7 +158,9 @@ print(f"Current: BTC=${data['bitcoin']['usd']}, ETH=${data['ethereum']['usd']}")
 print(f"Data points collected: {len(lines)} total, showing last {len(recent)}")
 print(f"\nRecent history:")
 for r in recent[-6:]:
-    print(f"  {r['timestamp']}: BTC=${r['prices']['bitcoin']['usd']}, ETH=${r['prices']['ethereum']['usd']}")
+    print(
+        f"  {r['timestamp']}: BTC=${r['prices']['bitcoin']['usd']}, ETH=${r['prices']['ethereum']['usd']}"
+    )
 ```
 
 ```bash
@@ -199,7 +201,7 @@ cronjob(
     prompt="Search arXiv for papers on 'language model reasoning' from the past day. Save the top 3 as Obsidian notes.",
     schedule="0 8 * * *",
     name="Paper digest",
-    deliver="local"
+    deliver="local",
 )
 ```
 

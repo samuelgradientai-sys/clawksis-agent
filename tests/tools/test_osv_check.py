@@ -41,7 +41,8 @@ class TestParseNpmPackage:
 
     def test_scoped(self):
         assert _parse_npm_package("@modelcontextprotocol/server-filesystem") == (
-            "@modelcontextprotocol/server-filesystem", None
+            "@modelcontextprotocol/server-filesystem",
+            None,
         )
 
     def test_scoped_with_version(self):
@@ -102,9 +103,7 @@ class TestParsePackageFromArgs:
 
     def test_short_p_form(self):
         # `npx -p left-pad@1.3.0 cli-cmd` -> package is left-pad, not cli-cmd.
-        name, ver = _parse_package_from_args(
-            ["-p", "left-pad@1.3.0", "cli-cmd"], "npm"
-        )
+        name, ver = _parse_package_from_args(["-p", "left-pad@1.3.0", "cli-cmd"], "npm")
         assert name == "left-pad"
         assert ver == "1.3.0"
 
@@ -123,8 +122,12 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
-            result = check_package_for_malware("npx", ["-y", "@modelcontextprotocol/server-filesystem"])
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ):
+            result = check_package_for_malware(
+                "npx", ["-y", "@modelcontextprotocol/server-filesystem"]
+            )
         assert result is None
 
     def test_malware_blocked(self):
@@ -133,13 +136,18 @@ class TestCheckPackageForMalware:
         mock_response.read.return_value = json.dumps({
             "vulns": [
                 {"id": "MAL-2023-7938", "summary": "Malicious code in evil-pkg"},
-                {"id": "CVE-2023-1234", "summary": "Regular vulnerability"},  # should be filtered
+                {
+                    "id": "CVE-2023-1234",
+                    "summary": "Regular vulnerability",
+                },  # should be filtered
             ]
         }).encode()
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ):
             result = check_package_for_malware("npx", ["evil-pkg"])
         assert result is not None
         assert "BLOCKED" in result
@@ -148,7 +156,10 @@ class TestCheckPackageForMalware:
 
     def test_network_error_fails_open(self):
         """Network errors allow the package (fail-open)."""
-        with patch("tools.osv_check.urllib.request.urlopen", side_effect=ConnectionError("timeout")):
+        with patch(
+            "tools.osv_check.urllib.request.urlopen",
+            side_effect=ConnectionError("timeout"),
+        ):
             result = check_package_for_malware("npx", ["some-package"])
         assert result is None
 
@@ -164,7 +175,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url:
             check_package_for_malware("uvx", ["mcp-server-fetch"])
             # Verify PyPI ecosystem was sent
             call_data = json.loads(mock_url.call_args[0][0].data)

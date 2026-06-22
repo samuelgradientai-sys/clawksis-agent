@@ -47,7 +47,9 @@ _FALLBACK_PATTERNS = re.compile(
     r"(access is denied|acceso denegado|přístup byl odepřen|schtasks timed out|schtasks produced no output)",
     re.IGNORECASE,
 )
-_ACCESS_DENIED_PATTERN = re.compile(r"(access is denied|acceso denegado)", re.IGNORECASE)
+_ACCESS_DENIED_PATTERN = re.compile(
+    r"(access is denied|acceso denegado)", re.IGNORECASE
+)
 
 _TASK_NAME_DEFAULT = "Clawksis_Gateway"
 _TASK_DESCRIPTION = "Clawksis Gateway - Messaging Platform Integration"
@@ -71,6 +73,7 @@ def _schtasks_encoding() -> str:
 # Platform guard
 # ---------------------------------------------------------------------------
 
+
 def _assert_windows() -> None:
     if sys.platform != "win32":
         raise RuntimeError("gateway_windows is Windows-only")
@@ -79,6 +82,7 @@ def _assert_windows() -> None:
 # ---------------------------------------------------------------------------
 # Quoting helpers (two DIFFERENT parsers — do not mix)
 # ---------------------------------------------------------------------------
+
 
 def _quote_cmd_script_arg(value: str) -> str:
     """Quote a single argument for use INSIDE a .cmd file, for cmd.exe parsing.
@@ -111,6 +115,7 @@ def _quote_schtasks_arg(value: str) -> str:
 # ---------------------------------------------------------------------------
 # schtasks.exe wrapper
 # ---------------------------------------------------------------------------
+
 
 def _exec_schtasks(args: list[str]) -> tuple[int, str, str]:
     """Run ``schtasks.exe`` with a hard timeout. Return (code, stdout, stderr).
@@ -171,7 +176,9 @@ def _current_profile_cli_args() -> list[str]:
     return shlex.split(profile_arg) if profile_arg else []
 
 
-def _launch_elevated_gateway_command(command: str, extra_args: list[str] | None = None) -> bool:
+def _launch_elevated_gateway_command(
+    command: str, extra_args: list[str] | None = None
+) -> bool:
     """Launch an elevated gateway subcommand via UAC and return True on handoff.
 
     Use pythonw.exe for the elevated child so approving UAC does not leave a
@@ -198,7 +205,9 @@ def _launch_elevated_gateway_command(command: str, extra_args: list[str] | None 
         print(f"⚠ Could not launch elevated gateway {command} prompt: {exc}")
         return False
     if result <= 32:
-        print(f"⚠ Elevated gateway {command} prompt was not started (ShellExecuteW={result})")
+        print(
+            f"⚠ Elevated gateway {command} prompt was not started (ShellExecuteW={result})"
+        )
         return False
     return True
 
@@ -217,7 +226,9 @@ def _launch_elevated_install(
         if start_now is not None:
             os.environ["CLAWK_GATEWAY_INSTALL_START_NOW"] = "1" if start_now else "0"
         if start_on_login is not None:
-            os.environ["CLAWK_GATEWAY_INSTALL_START_ON_LOGIN"] = "1" if start_on_login else "0"
+            os.environ["CLAWK_GATEWAY_INSTALL_START_ON_LOGIN"] = (
+                "1" if start_on_login else "0"
+            )
         os.environ["CLAWK_GATEWAY_ELEVATED_HANDOFF"] = "1"
         extra_args = ["--elevated-handoff"]
         if force:
@@ -225,7 +236,9 @@ def _launch_elevated_install(
         if start_now is not None:
             extra_args.append("--start-now" if start_now else "--no-start-now")
         if start_on_login is not None:
-            extra_args.append("--start-on-login" if start_on_login else "--no-start-on-login")
+            extra_args.append(
+                "--start-on-login" if start_on_login else "--no-start-on-login"
+            )
         return _launch_elevated_gateway_command("install", extra_args)
     finally:
         for key, old in (
@@ -247,6 +260,7 @@ def _launch_elevated_uninstall() -> bool:
 # ---------------------------------------------------------------------------
 # Paths: where we stash our task script and where Startup lives
 # ---------------------------------------------------------------------------
+
 
 def get_task_name() -> str:
     """Scheduled Task name, scoped per profile.
@@ -287,10 +301,21 @@ def get_task_script_path() -> Path:
 def _startup_dir() -> Path:
     appdata = os.environ.get("APPDATA", "").strip()
     if appdata:
-        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    userprofile = os.environ.get("USERPROFILE", "").strip() or os.environ.get("HOME", "").strip()
+        return (
+            Path(appdata)
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+        )
+    userprofile = (
+        os.environ.get("USERPROFILE", "").strip() or os.environ.get("HOME", "").strip()
+    )
     if not userprofile:
-        raise RuntimeError("neither APPDATA nor USERPROFILE is set — cannot resolve Startup folder")
+        raise RuntimeError(
+            "neither APPDATA nor USERPROFILE is set — cannot resolve Startup folder"
+        )
     return (
         Path(userprofile)
         / "AppData"
@@ -311,6 +336,7 @@ def get_startup_entry_path() -> Path:
 # ---------------------------------------------------------------------------
 # Stable working directory
 # ---------------------------------------------------------------------------
+
 
 def _stable_gateway_working_dir(project_root: Path) -> str:
     """Return a stable cwd for detached/startup gateway runs.
@@ -334,6 +360,7 @@ def _stable_gateway_working_dir(project_root: Path) -> str:
 # ---------------------------------------------------------------------------
 # Script rendering
 # ---------------------------------------------------------------------------
+
 
 def _build_gateway_cmd_script(
     python_path: str,
@@ -420,7 +447,9 @@ def _write_task_script() -> Path:
     clawk_home = str(Path(get_clawk_home()).resolve())
     profile_arg = _profile_arg(clawk_home)
 
-    content = _build_gateway_cmd_script(python_path, working_dir, clawk_home, profile_arg)
+    content = _build_gateway_cmd_script(
+        python_path, working_dir, clawk_home, profile_arg
+    )
     script_path = get_task_script_path()
     tmp = script_path.with_suffix(".tmp")
     tmp.write_text(content, encoding="utf-8", newline="")
@@ -432,9 +461,14 @@ def _write_task_script() -> Path:
 # Install / uninstall
 # ---------------------------------------------------------------------------
 
+
 def _resolve_task_user() -> str | None:
     """Return ``DOMAIN\\USER`` if available, else bare USERNAME, else None."""
-    username = os.environ.get("USERNAME") or os.environ.get("USER") or os.environ.get("LOGNAME")
+    username = (
+        os.environ.get("USERNAME")
+        or os.environ.get("USER")
+        or os.environ.get("LOGNAME")
+    )
     if not username:
         return None
     if "\\" in username:
@@ -453,11 +487,23 @@ def _install_scheduled_task(task_name: str, script_path: Path) -> tuple[bool, st
     """
     quoted_script = _quote_schtasks_arg(str(script_path))
 
-    delete_code, delete_out, delete_err = _exec_schtasks(["/Delete", "/F", "/TN", task_name])
+    delete_code, delete_out, delete_err = _exec_schtasks([
+        "/Delete",
+        "/F",
+        "/TN",
+        task_name,
+    ])
     delete_detail = (delete_err or delete_out or "").strip()
-    if delete_code != 0 and delete_detail and "cannot find" not in delete_detail.lower():
+    if (
+        delete_code != 0
+        and delete_detail
+        and "cannot find" not in delete_detail.lower()
+    ):
         if _is_access_denied(delete_detail):
-            return (False, f"schtasks /Delete failed (code {delete_code}): {delete_detail}")
+            return (
+                False,
+                f"schtasks /Delete failed (code {delete_code}): {delete_detail}",
+            )
         # Non-fatal: /Create /F below may still replace it. Keep the detail in
         # the final error if creation also fails.
     # password" variant; if that fails, retry without /RU /NP /IT.
@@ -489,8 +535,6 @@ def _install_scheduled_task(task_name: str, script_path: Path) -> tuple[bool, st
     if delete_detail and "cannot find" not in delete_detail.lower():
         last_err = f"{last_err.strip()} (delete detail: {delete_detail})"
     return (False, f"schtasks /Create failed (code {last_code}): {last_err.strip()}")
-
-
 
 
 def _install_startup_entry(script_path: Path) -> Path:
@@ -601,7 +645,10 @@ def _build_gateway_argv() -> tuple[list[str], str, dict[str, str]]:
         "CLAWK_GATEWAY_DETACHED": "1",
         "VIRTUAL_ENV": str(venv_dir),
     }
-    _prepend_pythonpath(env_overlay, [project_root, *extra_pythonpath] if extra_pythonpath else [project_root])
+    _prepend_pythonpath(
+        env_overlay,
+        [project_root, *extra_pythonpath] if extra_pythonpath else [project_root],
+    )
     return argv, working_dir, env_overlay
 
 
@@ -699,7 +746,9 @@ def _prompt_install_choices(
 ) -> tuple[bool, bool]:
     """Return (start_now, start_on_login), asking before any UAC escalation."""
     env_start_now = _install_choice_from_env("CLAWK_GATEWAY_INSTALL_START_NOW")
-    env_start_on_login = _install_choice_from_env("CLAWK_GATEWAY_INSTALL_START_ON_LOGIN")
+    env_start_on_login = _install_choice_from_env(
+        "CLAWK_GATEWAY_INSTALL_START_ON_LOGIN"
+    )
     if start_now is None:
         start_now = env_start_now
     if start_on_login is None:
@@ -721,7 +770,9 @@ def _prompt_install_choices(
 
 def _install_startup_fallback(script_path: Path, start_now: bool, detail: str) -> None:
     """Install the Startup-folder fallback and optionally start once."""
-    print(f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback")
+    print(
+        f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback"
+    )
     entry = _install_startup_entry(script_path)
     print(f"✓ Installed Windows login item: {entry}")
     print(f"  Task script: {script_path}")
@@ -740,7 +791,11 @@ def _install_startup_fallback(script_path: Path, start_now: bool, detail: str) -
         _report_gateway_start(f"direct spawn (PID {pid})")
     else:
         profile_arg = _profile_arg()
-        start_cmd = f"clawk {profile_arg} gateway start" if profile_arg else "clawk gateway start"
+        start_cmd = (
+            f"clawk {profile_arg} gateway start"
+            if profile_arg
+            else "clawk gateway start"
+        )
         print("ℹ Startup fallback installed; gateway not started now.")
         print(f"  Start manually with: {start_cmd}")
     _print_next_steps()
@@ -767,7 +822,9 @@ def install(
         if start_now:
             running_pids = _gateway_pids()
             if running_pids:
-                print(f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})")
+                print(
+                    f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})"
+                )
             else:
                 pid = _spawn_detached()
                 _report_gateway_start(f"direct spawn (PID {pid})")
@@ -786,20 +843,34 @@ def install(
     if not _is_running_as_admin() and not elevated_handoff:
         from clawk_cli.setup import prompt_yes_no
 
-        print("↻ Scheduled Task install may need administrator approval on this Windows account.")
-        print("  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task.")
+        print(
+            "↻ Scheduled Task install may need administrator approval on this Windows account."
+        )
+        print(
+            "  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task."
+        )
         if prompt_yes_no("  Open the UAC prompt now?", False):
-            if _launch_elevated_install(force=force, start_now=start_now, start_on_login=start_on_login):
+            if _launch_elevated_install(
+                force=force, start_now=start_now, start_on_login=start_on_login
+            ):
                 print("✓ Launched elevated Clawksis gateway install prompt.")
                 if start_now:
-                    print("  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards.")
+                    print(
+                        "  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards."
+                    )
                 else:
-                    print("  Approve the Windows UAC prompt, then run: clawk gateway status")
+                    print(
+                        "  Approve the Windows UAC prompt, then run: clawk gateway status"
+                    )
                 return
-            print("⚠ Falling back to Startup folder because elevation was unavailable or cancelled.")
+            print(
+                "⚠ Falling back to Startup folder because elevation was unavailable or cancelled."
+            )
         else:
             print("  Skipped elevation. Falling back to Startup folder.")
-        _install_startup_fallback(script_path, start_now, "administrator approval was not used")
+        _install_startup_fallback(
+            script_path, start_now, "administrator approval was not used"
+        )
         return
 
     ok, detail = _install_scheduled_task(task_name, script_path)
@@ -810,7 +881,9 @@ def install(
         if start_now:
             running_pids = _gateway_pids()
             if running_pids:
-                print(f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})")
+                print(
+                    f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})"
+                )
             else:
                 pid = _spawn_detached()
                 _report_gateway_start(f"direct spawn (PID {pid})")
@@ -827,23 +900,37 @@ def install(
     if _is_access_denied(detail) and not _is_running_as_admin():
         from clawk_cli.setup import prompt_yes_no
 
-        print(f"↻ Scheduled Task install needs administrator approval ({detail.splitlines()[0]})")
-        print("  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task.")
+        print(
+            f"↻ Scheduled Task install needs administrator approval ({detail.splitlines()[0]})"
+        )
+        print(
+            "  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task."
+        )
         if prompt_yes_no("  Open the UAC prompt now?", False):
-            if _launch_elevated_install(force=force, start_now=start_now, start_on_login=start_on_login):
+            if _launch_elevated_install(
+                force=force, start_now=start_now, start_on_login=start_on_login
+            ):
                 print("✓ Launched elevated Clawksis gateway install prompt.")
                 if start_now:
-                    print("  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards.")
+                    print(
+                        "  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards."
+                    )
                 else:
-                    print("  Approve the Windows UAC prompt, then run: clawk gateway status")
+                    print(
+                        "  Approve the Windows UAC prompt, then run: clawk gateway status"
+                    )
                 return
-            print("⚠ Falling back to Startup folder because elevation was unavailable or cancelled.")
+            print(
+                "⚠ Falling back to Startup folder because elevation was unavailable or cancelled."
+            )
         else:
             print("  Skipped elevation. Falling back to Startup folder.")
 
     # schtasks create didn't work. See if it's a "fall back to startup" case.
     if _should_fall_back(1, detail):
-        print(f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback")
+        print(
+            f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback"
+        )
         entry = _install_startup_entry(script_path)
         print(f"✓ Installed Windows login item: {entry}")
         print(f"  Task script: {script_path}")
@@ -856,13 +943,19 @@ def install(
 
         running_pids = list(find_gateway_pids())
         if running_pids:
-            print(f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})")
+            print(
+                f"✓ Gateway already running (PID: {', '.join(map(str, running_pids))})"
+            )
         elif start_now:
             pid = _spawn_detached()
             _report_gateway_start(f"direct spawn (PID {pid})")
         else:
             profile_arg = _profile_arg()
-            start_cmd = f"clawk {profile_arg} gateway start" if profile_arg else "clawk gateway start"
+            start_cmd = (
+                f"clawk {profile_arg} gateway start"
+                if profile_arg
+                else "clawk gateway start"
+            )
             print("ℹ Startup fallback installed; gateway not started now.")
             print(f"  Start manually with: {start_cmd}")
         _print_next_steps()
@@ -872,7 +965,9 @@ def install(
     raise RuntimeError(f"Windows gateway install failed: {detail}")
 
 
-def _wait_for_gateway_ready(timeout_s: float = 6.0, interval_s: float = 0.4) -> list[int]:
+def _wait_for_gateway_ready(
+    timeout_s: float = 6.0, interval_s: float = 0.4
+) -> list[int]:
     """Poll for a live gateway process for up to ``timeout_s`` seconds.
 
     Returns the list of PIDs found. Empty list means nothing came up in
@@ -897,6 +992,7 @@ def _report_gateway_start(via: str) -> None:
         print(f"⚠ Launched gateway via {via}, but no process detected after 6s.")
         print("  Check the log for startup errors:")
         from clawk_cli.config import get_clawk_home
+
         print(f"    type {Path(get_clawk_home()).resolve()}\\logs\\gateway.log")
         print(f"    type {Path(get_clawk_home()).resolve()}\\logs\\gateway-stdio.log")
 
@@ -928,12 +1024,18 @@ def uninstall() -> None:
         elif _is_access_denied(detail) and not _is_running_as_admin():
             from clawk_cli.setup import prompt_yes_no
 
-            print(f"↻ Scheduled Task uninstall needs administrator approval ({detail or 'access denied'})")
-            print("  UAC is Windows' admin approval prompt; it is needed to remove the Scheduled Task.")
+            print(
+                f"↻ Scheduled Task uninstall needs administrator approval ({detail or 'access denied'})"
+            )
+            print(
+                "  UAC is Windows' admin approval prompt; it is needed to remove the Scheduled Task."
+            )
             if prompt_yes_no("  Open the UAC prompt now?", False):
                 if _launch_elevated_uninstall():
                     print("✓ Launched elevated Clawksis gateway uninstall prompt.")
-                    print("  Approve the Windows UAC prompt, then run: clawk gateway status")
+                    print(
+                        "  Approve the Windows UAC prompt, then run: clawk gateway status"
+                    )
                     return
                 print("⚠ Elevated uninstall prompt was unavailable or cancelled.")
             else:
@@ -959,6 +1061,7 @@ def uninstall() -> None:
 # Status / start / stop / restart
 # ---------------------------------------------------------------------------
 
+
 def is_task_registered() -> bool:
     code, _out, _err = _exec_schtasks(["/Query", "/TN", get_task_name()])
     return code == 0
@@ -975,7 +1078,14 @@ def is_installed() -> bool:
 
 def query_task_status() -> dict[str, str]:
     """Parse ``schtasks /Query /V /FO LIST`` and pull the interesting keys."""
-    code, out, err = _exec_schtasks(["/Query", "/TN", get_task_name(), "/V", "/FO", "LIST"])
+    code, out, err = _exec_schtasks([
+        "/Query",
+        "/TN",
+        get_task_name(),
+        "/V",
+        "/FO",
+        "LIST",
+    ])
     if code != 0:
         return {}
     info: dict[str, str] = {}
@@ -1042,7 +1152,9 @@ def _print_deep_probes() -> None:
         try:
             data = json.loads(pid_path.read_text(encoding="utf-8"))
             pid_value = int(data.get("pid")) if data.get("pid") is not None else None
-            print(f"  [1] {_mark(True):4s}  PID file present: {pid_path} (pid={pid_value})")
+            print(
+                f"  [1] {_mark(True):4s}  PID file present: {pid_path} (pid={pid_value})"
+            )
         except Exception as exc:
             print(f"  [1] {_mark(False):4s}  PID file present but unreadable: {exc}")
     else:
@@ -1056,7 +1168,9 @@ def _print_deep_probes() -> None:
             from gateway.status import is_gateway_runtime_lock_active
 
             lock_held = is_gateway_runtime_lock_active(lock_path)
-            print(f"  [2] {_mark(lock_held):4s}  Lock file held by a live process: {lock_path}")
+            print(
+                f"  [2] {_mark(lock_held):4s}  Lock file held by a live process: {lock_path}"
+            )
         except Exception as exc:
             print(f"  [2] {_mark(False):4s}  Could not probe lock: {exc}")
     else:
@@ -1068,7 +1182,9 @@ def _print_deep_probes() -> None:
         from gateway.status import get_running_pid
 
         running_pid = get_running_pid(cleanup_stale=False)
-        print(f"  [3] {_mark(running_pid is not None):4s}  get_running_pid() => {running_pid}")
+        print(
+            f"  [3] {_mark(running_pid is not None):4s}  get_running_pid() => {running_pid}"
+        )
     except Exception as exc:
         print(f"  [3] {_mark(False):4s}  get_running_pid() raised: {exc!r}")
 
@@ -1094,16 +1210,22 @@ def _print_deep_probes() -> None:
             age_str = ""
             if updated_at:
                 try:
-                    updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                    updated_dt = datetime.fromisoformat(
+                        updated_at.replace("Z", "+00:00")
+                    )
                     now = datetime.now(timezone.utc)
                     age_seconds = int((now - updated_dt).total_seconds())
                     age_str = f" (updated {age_seconds}s ago)"
                 except Exception:
                     pass
             ok = gateway_state == "running"
-            print(f"  [5] {_mark(ok):4s}  gateway_state.json state={gateway_state!r}{age_str}")
+            print(
+                f"  [5] {_mark(ok):4s}  gateway_state.json state={gateway_state!r}{age_str}"
+            )
         except Exception as exc:
-            print(f"  [5] {_mark(False):4s}  gateway_state.json present but unreadable: {exc}")
+            print(
+                f"  [5] {_mark(False):4s}  gateway_state.json present but unreadable: {exc}"
+            )
     else:
         print(f"  [5] {_mark(False):4s}  gateway_state.json missing: {state_path}")
 
@@ -1124,9 +1246,13 @@ def _print_deep_probes() -> None:
                     pid = event.get("pid", "?")
                     ts = event.get("ts", "?")
                     healthy = tag in ("gateway.start",)
-                    print(f"  [6] {_mark(healthy):4s}  Last lifecycle event: tag={tag} pid={pid} ts={ts}")
+                    print(
+                        f"  [6] {_mark(healthy):4s}  Last lifecycle event: tag={tag} pid={pid} ts={ts}"
+                    )
                 except Exception:
-                    print(f"  [6] {_mark(False):4s}  Last lifecycle line not JSON: {last_event[:120]}")
+                    print(
+                        f"  [6] {_mark(False):4s}  Last lifecycle line not JSON: {last_event[:120]}"
+                    )
             else:
                 print(f"  [6] {_mark(False):4s}  exit-diag log empty: {diag_path}")
         except Exception as exc:
@@ -1206,7 +1332,9 @@ def start() -> None:
         if code == 0:
             _report_gateway_start(f"Scheduled Task {get_task_name()!r}")
             return
-        print(f"⚠ schtasks /Run failed (code {code}): {err.strip()} — falling back to direct spawn")
+        print(
+            f"⚠ schtasks /Run failed (code {code}): {err.strip()} — falling back to direct spawn"
+        )
 
     # Startup fallback or failed /Run: direct spawn one foreground-detached gateway.
     pid = _spawn_detached()

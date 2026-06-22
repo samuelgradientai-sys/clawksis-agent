@@ -129,14 +129,23 @@ These don't auto-reject but reduce the response score:
 ## Using in Python
 
 ```python
-exec(open(os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/red-teaming/godmode/scripts/godmode_race.py")).read())
+exec(
+    open(
+        os.path.join(
+            os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")),
+            "skills/red-teaming/godmode/scripts/godmode_race.py",
+        )
+    ).read()
+)
 
 # Check if a response is a refusal
 text = "I'm sorry, but I can't assist with that request."
-print(is_refusal(text))      # True
-print(count_hedges(text))    # 0
+print(is_refusal(text))  # True
+print(count_hedges(text))  # 0
 
 # Score a response
 result = score_response("Here's a detailed guide...", "How do I X?")
-print(f"Score: {result['score']}, Refusal: {result['is_refusal']}, Hedges: {result['hedge_count']}")
+print(
+    f"Score: {result['score']}, Refusal: {result['is_refusal']}, Hedges: {result['hedge_count']}"
+)
 ```

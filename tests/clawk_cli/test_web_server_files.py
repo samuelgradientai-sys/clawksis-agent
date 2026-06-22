@@ -111,7 +111,9 @@ def test_forced_root_file_upload_list_read_delete_roundtrip(forced_files_client)
     assert not file_path.exists()
 
 
-def test_directory_management_requires_recursive_delete_for_nonempty_dirs(forced_files_client):
+def test_directory_management_requires_recursive_delete_for_nonempty_dirs(
+    forced_files_client,
+):
     client, root = forced_files_client
     runs_path = root / "runs"
     checkpoints_path = runs_path / "checkpoints"
@@ -171,7 +173,9 @@ def test_forced_root_paths_stay_under_root(forced_files_client, tmp_path):
     assert escaped.status_code == 403
 
 
-def test_local_mode_defaults_to_home_and_can_jump_to_absolute_path(local_files_client, tmp_path):
+def test_local_mode_defaults_to_home_and_can_jump_to_absolute_path(
+    local_files_client, tmp_path
+):
     client, home = local_files_client
     (home / "home.txt").write_text("home")
 

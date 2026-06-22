@@ -7,6 +7,7 @@ still displayed and persisted the ROOT install's messaging credentials.
 These tests pin the new behavior: reads and writes land in the REQUESTED
 profile's CLAWK_HOME, and the dashboard's own profile stays untouched.
 """
+
 import pytest
 import yaml
 
@@ -76,9 +77,7 @@ class TestProfileScopedMessagingReads:
         assert token["is_set"] is False
         assert telegram["configured"] is False
 
-    def test_unscoped_read_shows_dashboard_profile_env(
-        self, client, isolated_profiles
-    ):
+    def test_unscoped_read_shows_dashboard_profile_env(self, client, isolated_profiles):
         resp = client.get("/api/messaging/platforms")
         assert resp.status_code == 200
         telegram = _telegram(resp.json())
@@ -93,9 +92,7 @@ class TestProfileScopedMessagingReads:
 
 
 class TestProfileScopedMessagingWrites:
-    def test_scoped_write_lands_in_target_profile_env(
-        self, client, isolated_profiles
-    ):
+    def test_scoped_write_lands_in_target_profile_env(self, client, isolated_profiles):
         resp = client.put(
             "/api/messaging/platforms/telegram",
             params={"profile": "worker_alpha"},
@@ -106,26 +103,30 @@ class TestProfileScopedMessagingWrites:
         )
         assert resp.status_code == 200
 
-        worker_env = (
-            isolated_profiles["worker_alpha"] / ".env"
-        ).read_text(encoding="utf-8")
+        worker_env = (isolated_profiles["worker_alpha"] / ".env").read_text(
+            encoding="utf-8"
+        )
         assert "TELEGRAM_BOT_TOKEN=worker-token" in worker_env
 
         # The dashboard's own .env must stay untouched — this was the bug.
-        root_env = (isolated_profiles["default"] / ".env").read_text(
-            encoding="utf-8"
-        )
+        root_env = (isolated_profiles["default"] / ".env").read_text(encoding="utf-8")
         assert "worker-token" not in root_env
         assert "TELEGRAM_BOT_TOKEN=root-token" in root_env
 
         # Enablement lands in the target profile's config.yaml.
-        worker_cfg = yaml.safe_load(
-            (isolated_profiles["worker_alpha"] / "config.yaml").read_text()
-        ) or {}
-        assert worker_cfg.get("platforms", {}).get("telegram", {}).get("enabled") is True
-        root_cfg = yaml.safe_load(
-            (isolated_profiles["default"] / "config.yaml").read_text()
-        ) or {}
+        worker_cfg = (
+            yaml.safe_load(
+                (isolated_profiles["worker_alpha"] / "config.yaml").read_text()
+            )
+            or {}
+        )
+        assert (
+            worker_cfg.get("platforms", {}).get("telegram", {}).get("enabled") is True
+        )
+        root_cfg = (
+            yaml.safe_load((isolated_profiles["default"] / "config.yaml").read_text())
+            or {}
+        )
         assert "telegram" not in (root_cfg.get("platforms") or {})
 
     def test_body_profile_beats_query_param(self, client, isolated_profiles):
@@ -137,9 +138,9 @@ class TestProfileScopedMessagingWrites:
             },
         )
         assert resp.status_code == 200
-        worker_env = (
-            isolated_profiles["worker_alpha"] / ".env"
-        ).read_text(encoding="utf-8")
+        worker_env = (isolated_profiles["worker_alpha"] / ".env").read_text(
+            encoding="utf-8"
+        )
         assert "TELEGRAM_BOT_TOKEN=body-token" in worker_env
 
     def test_scoped_read_after_scoped_write_round_trips(
@@ -158,9 +159,7 @@ class TestProfileScopedMessagingWrites:
         assert _env_field(telegram, "TELEGRAM_BOT_TOKEN")["is_set"] is True
         assert telegram["configured"] is True
 
-    def test_scoped_clear_env_removes_from_target_only(
-        self, client, isolated_profiles
-    ):
+    def test_scoped_clear_env_removes_from_target_only(self, client, isolated_profiles):
         client.put(
             "/api/messaging/platforms/telegram",
             params={"profile": "worker_alpha"},
@@ -172,11 +171,9 @@ class TestProfileScopedMessagingWrites:
             json={"clear_env": ["TELEGRAM_BOT_TOKEN"]},
         )
         assert resp.status_code == 200
-        worker_env = (
-            isolated_profiles["worker_alpha"] / ".env"
-        ).read_text(encoding="utf-8")
-        assert "worker-token" not in worker_env
-        root_env = (isolated_profiles["default"] / ".env").read_text(
+        worker_env = (isolated_profiles["worker_alpha"] / ".env").read_text(
             encoding="utf-8"
         )
+        assert "worker-token" not in worker_env
+        root_env = (isolated_profiles["default"] / ".env").read_text(encoding="utf-8")
         assert "TELEGRAM_BOT_TOKEN=root-token" in root_env

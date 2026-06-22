@@ -7,10 +7,26 @@ from typing import Any, Dict, List
 # Handles that appear too frequently to be useful for targeted search.
 # These are generic/platform accounts, not topic-specific voices.
 GENERIC_HANDLES = {
-    "elonmusk", "openai", "google", "microsoft", "apple", "meta",
-    "github", "youtube", "x", "twitter", "reddit", "wikipedia",
-    "nytimes", "washingtonpost", "cnn", "bbc", "reuters",
-    "verified", "jack", "sundarpichai",
+    "elonmusk",
+    "openai",
+    "google",
+    "microsoft",
+    "apple",
+    "meta",
+    "github",
+    "youtube",
+    "x",
+    "twitter",
+    "reddit",
+    "wikipedia",
+    "nytimes",
+    "washingtonpost",
+    "cnn",
+    "bbc",
+    "reuters",
+    "verified",
+    "jack",
+    "sundarpichai",
 }
 
 
@@ -66,7 +82,7 @@ def _extract_x_handles(x_items: List[Dict[str, Any]]) -> List[str]:
 
         # @mentions in text
         text = item.get("text", "")
-        mentions = re.findall(r'@(\w{1,15})', text)
+        mentions = re.findall(r"@(\w{1,15})", text)
         for mention in mentions:
             mention_lower = mention.lower()
             if mention_lower not in GENERIC_HANDLES:
@@ -85,7 +101,7 @@ def _extract_x_hashtags(x_items: List[Dict[str, Any]]) -> List[str]:
 
     for item in x_items:
         text = item.get("text", "")
-        tags = re.findall(r'#(\w{2,30})', text)
+        tags = re.findall(r"#(\w{2,30})", text)
         for tag in tags:
             hashtag_counts[tag.lower()] += 1
 
@@ -112,14 +128,14 @@ def _extract_subreddits(reddit_items: List[Dict[str, Any]]) -> List[str]:
 
         # Cross-references in comment insights
         for insight in item.get("comment_insights", []):
-            cross_refs = re.findall(r'r/(\w{2,30})', insight)
+            cross_refs = re.findall(r"r/(\w{2,30})", insight)
             for ref in cross_refs:
                 sub_counts[ref] += 1
 
         # Cross-references in top comments
         for comment in item.get("top_comments", []):
             excerpt = comment.get("excerpt", "")
-            cross_refs = re.findall(r'r/(\w{2,30})', excerpt)
+            cross_refs = re.findall(r"r/(\w{2,30})", excerpt)
             for ref in cross_refs:
                 sub_counts[ref] += 1
 

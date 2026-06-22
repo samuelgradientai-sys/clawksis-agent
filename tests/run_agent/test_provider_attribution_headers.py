@@ -246,9 +246,12 @@ def test_user_default_headers_override_sdk_user_agent(mock_openai):
         skip_memory=True,
     )
 
-    with patch("clawk_cli.config.load_config", return_value={
-        "model": {"default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"}},
-    }):
+    with patch(
+        "clawk_cli.config.load_config",
+        return_value={
+            "model": {"default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"}},
+        },
+    ):
         agent._apply_client_headers_for_base_url("http://localhost:8080/v1")
 
     headers = agent._client_kwargs["default_headers"]
@@ -269,14 +272,19 @@ def test_user_default_headers_win_over_provider_defaults(mock_openai):
         skip_memory=True,
     )
 
-    with patch("clawk_cli.config.load_config", return_value={
-        "model": {"default_headers": {"X-Title": "MyApp"}},
-    }):
+    with patch(
+        "clawk_cli.config.load_config",
+        return_value={
+            "model": {"default_headers": {"X-Title": "MyApp"}},
+        },
+    ):
         agent._apply_client_headers_for_base_url("https://openrouter.ai/api/v1")
 
     headers = agent._client_kwargs["default_headers"]
     assert headers["X-Title"] == "MyApp"  # user override wins
-    assert headers["HTTP-Referer"] == "https://clawksis-agent.nousresearch.com"  # default preserved
+    assert (
+        headers["HTTP-Referer"] == "https://clawksis-agent.nousresearch.com"
+    )  # default preserved
 
 
 @patch("run_agent.OpenAI")
@@ -315,9 +323,12 @@ def test_user_default_headers_skipped_for_anthropic_mode(mock_openai):
     agent.api_mode = "anthropic_messages"
     agent._client_kwargs = {}
 
-    with patch("clawk_cli.config.load_config", return_value={
-        "model": {"default_headers": {"User-Agent": "curl/8.7.1"}},
-    }):
+    with patch(
+        "clawk_cli.config.load_config",
+        return_value={
+            "model": {"default_headers": {"User-Agent": "curl/8.7.1"}},
+        },
+    ):
         agent._apply_user_default_headers()
 
     assert "default_headers" not in agent._client_kwargs

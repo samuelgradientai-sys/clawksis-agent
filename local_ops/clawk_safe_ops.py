@@ -61,7 +61,9 @@ def default_hermes_command() -> list[str]:
     )
 
 
-def run_hermes_lite(text: str, *, json_output: bool, dry_run: bool, timeout: int) -> tuple[int, str, str]:
+def run_hermes_lite(
+    text: str, *, json_output: bool, dry_run: bool, timeout: int
+) -> tuple[int, str, str]:
     cmd = default_hermes_command()
 
     if json_output:
@@ -86,10 +88,18 @@ def run_hermes_lite(text: str, *, json_output: bool, dry_run: bool, timeout: int
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Clawk Safe Ops bridge to Hermes Lite")
-    parser.add_argument("text", nargs="+", help="Natural-language safe operation request")
-    parser.add_argument("--json", action="store_true", help="Return Hermes Lite JSON output")
-    parser.add_argument("--dry-run", action="store_true", help="Detect intent without executing")
-    parser.add_argument("--timeout", type=int, default=15, help="Execution timeout in seconds")
+    parser.add_argument(
+        "text", nargs="+", help="Natural-language safe operation request"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Return Hermes Lite JSON output"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Detect intent without executing"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=15, help="Execution timeout in seconds"
+    )
     parser.add_argument("--version", action="store_true", help="Show version and exit")
 
     args = parser.parse_args()
@@ -109,22 +119,34 @@ def main() -> int:
         )
     except subprocess.TimeoutExpired:
         if args.json:
-            print(json.dumps({
-                "version": VERSION,
-                "status": "timeout",
-                "message": "Hermes Lite execution timed out.",
-            }, ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "version": VERSION,
+                        "status": "timeout",
+                        "message": "Hermes Lite execution timed out.",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         else:
             print("STATUS=timeout")
             print("MENSAJE=Hermes Lite execution timed out.")
         return 124
     except Exception as exc:
         if args.json:
-            print(json.dumps({
-                "version": VERSION,
-                "status": "error",
-                "message": f"{type(exc).__name__}: {exc}",
-            }, ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "version": VERSION,
+                        "status": "error",
+                        "message": f"{type(exc).__name__}: {exc}",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         else:
             print("STATUS=error")
             print(f"MENSAJE={type(exc).__name__}: {exc}")

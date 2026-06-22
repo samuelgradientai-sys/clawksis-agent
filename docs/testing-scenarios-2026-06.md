@@ -186,9 +186,9 @@ los 3 CLIs infinitamente.
 from clawk_cli.tools_config import _resolve_npm_cli
 import shutil
 
-npm = shutil.which('npm')
-print(shutil.which('cowsay'))           # None ← bug original
-print(_resolve_npm_cli('cowsay', npm))  # /path/to/cowsay ← fix
+npm = shutil.which("npm")
+print(shutil.which("cowsay"))  # None ← bug original
+print(_resolve_npm_cli("cowsay", npm))  # /path/to/cowsay ← fix
 ```
 
 **Qué evita este fix:**

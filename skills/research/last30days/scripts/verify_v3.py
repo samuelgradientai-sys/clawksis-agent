@@ -39,7 +39,9 @@ LATENCY_PROFILES = [
 ]
 
 
-def run_command(cmd: list[str], *, env: dict[str, str] | None = None, timeout: int = 600) -> subprocess.CompletedProcess[str]:
+def run_command(
+    cmd: list[str], *, env: dict[str, str] | None = None, timeout: int = 600
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=REPO_ROOT,
@@ -52,7 +54,10 @@ def run_command(cmd: list[str], *, env: dict[str, str] | None = None, timeout: i
 
 
 def verify_unit() -> dict[str, str]:
-    run_command([PYTHON, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], timeout=600)
+    run_command(
+        [PYTHON, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"],
+        timeout=600,
+    )
     run_command(
         [
             PYTHON,
@@ -98,16 +103,16 @@ def verify_smoke() -> list[dict[str, object]]:
         )
         duration = round(time.time() - start, 2)
         report = json.loads(result.stdout)
-        rows.append(
-            {
-                "provider": provider,
-                "duration_seconds": duration,
-                "reasoning_provider": (report.get("provider_runtime") or {}).get("reasoning_provider"),
-                "cluster_count": len(report.get("clusters") or []),
-                "candidate_count": len(report.get("ranked_candidates") or []),
-                "error_sources": sorted((report.get("errors_by_source") or {}).keys()),
-            }
-        )
+        rows.append({
+            "provider": provider,
+            "duration_seconds": duration,
+            "reasoning_provider": (report.get("provider_runtime") or {}).get(
+                "reasoning_provider"
+            ),
+            "cluster_count": len(report.get("clusters") or []),
+            "candidate_count": len(report.get("ranked_candidates") or []),
+            "error_sources": sorted((report.get("errors_by_source") or {}).keys()),
+        })
     return rows
 
 
@@ -159,12 +164,18 @@ def verify_eval(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the v3 verification bundle")
-    parser.add_argument("--skip-eval", action="store_true", help="Skip the judged evaluator")
-    parser.add_argument("--skip-latency", action="store_true", help="Skip live latency sampling")
+    parser.add_argument(
+        "--skip-eval", action="store_true", help="Skip the judged evaluator"
+    )
+    parser.add_argument(
+        "--skip-latency", action="store_true", help="Skip live latency sampling"
+    )
     parser.add_argument("--baseline", default="HEAD~1")
     parser.add_argument("--candidate", default="WORKTREE")
     parser.add_argument("--output-dir", default="/tmp/last30days-v3-verify")
-    parser.add_argument("--quick-eval", action="store_true", help="Use evaluator quick mode")
+    parser.add_argument(
+        "--quick-eval", action="store_true", help="Use evaluator quick mode"
+    )
     parser.add_argument("--eval-limit", type=int, default=20)
     parser.add_argument("--eval-timeout", type=int, default=240)
     return parser

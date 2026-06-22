@@ -37,7 +37,9 @@ def _make_event(text):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -73,7 +75,10 @@ def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
     clawk_home.mkdir()
     cfg_path = clawk_home / "config.yaml"
     cfg_path.write_text(
-        yaml.safe_dump({"model": {"default": "old-model", "provider": "openrouter"}, "providers": {}}),
+        yaml.safe_dump({
+            "model": {"default": "old-model", "provider": "openrouter"},
+            "providers": {},
+        }),
         encoding="utf-8",
     )
 
@@ -93,7 +98,9 @@ def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
 
 
 @pytest.mark.asyncio
-async def test_typed_model_expensive_prompts_instead_of_switching(tmp_path, monkeypatch):
+async def test_typed_model_expensive_prompts_instead_of_switching(
+    tmp_path, monkeypatch
+):
     """Expensive model typed directly → confirm prompt, no switch applied."""
     _setup_isolated_home(tmp_path, monkeypatch, warn=True)
     runner = _make_runner()
@@ -106,7 +113,9 @@ async def test_typed_model_expensive_prompts_instead_of_switching(tmp_path, monk
 
     runner._request_slash_confirm = _fake_request_slash_confirm
 
-    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
+    result = await runner._handle_model_command(
+        _make_event("/model openai/gpt-5.5-pro")
+    )
 
     assert result is not None
     assert "EXPENSIVE MODEL WARNING" in result
@@ -155,7 +164,9 @@ async def test_typed_model_expensive_cancel_keeps_current_model(tmp_path, monkey
 
     runner._request_slash_confirm = _fake_request_slash_confirm
 
-    await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro --global"))
+    await runner._handle_model_command(
+        _make_event("/model openai/gpt-5.5-pro --global")
+    )
 
     reply = await captured["handler"]("cancel")
 
@@ -178,7 +189,9 @@ async def test_typed_model_cheap_switches_without_prompt(tmp_path, monkeypatch):
 
     runner._request_slash_confirm = _fail_request_slash_confirm
 
-    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
+    result = await runner._handle_model_command(
+        _make_event("/model openai/gpt-5.5-pro")
+    )
 
     assert result is not None
     assert "gpt-5.5-pro" in result

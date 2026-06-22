@@ -6,6 +6,7 @@ at session open, not only after the first inference header. These tests assert t
 notice policy fires correctly for a seed-shaped CreditsState with the warn90 latch
 primed the way conversation_loop does it.
 """
+
 import time
 
 from agent.credits_tracker import CreditsState, evaluate_credits_notices
@@ -29,9 +30,12 @@ def _state(**kw) -> CreditsState:
 
 def test_cold_start_healthy_no_notice():
     s = _state(
-        remaining_micros=30_340_000, subscription_micros=18_000_000,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=30_340_000,
+        subscription_micros=18_000_000,
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     )
     assert abs(s.used_fraction - 0.1) < 1e-9
     assert _cold_start_notices(s) == []
@@ -41,9 +45,12 @@ def test_cold_start_opens_already_at_90pct_warns():
     """A session that OPENS already ≥90% must warn immediately — the seed primes
     seen_below_90 so warn90 fires without a prior live crossing."""
     s = _state(
-        remaining_micros=2_000_000, subscription_micros=2_000_000,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=2_000_000,
+        subscription_micros=2_000_000,
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     )
     assert s.used_fraction == 0.9
     assert "credits.usage" in _cold_start_notices(s)
@@ -57,9 +64,13 @@ def test_cold_start_grant_exhausted_grant_spent_only():
     spending, and previously the 90/100% warn banner stuck permanently
     alongside grant_spent."""
     s = _state(
-        remaining_micros=12_340_000, subscription_micros=0,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        purchased_micros=12_340_000, denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=12_340_000,
+        subscription_micros=0,
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        purchased_micros=12_340_000,
+        denominator_kind="subscription_cap",
+        paid_access=True,
     )
     assert s.used_fraction == 1.0
     keys = _cold_start_notices(s)
@@ -69,8 +80,11 @@ def test_cold_start_grant_exhausted_grant_spent_only():
 
 def test_cold_start_depleted_warns():
     s = _state(
-        remaining_micros=0, subscription_micros=0, purchased_micros=0,
-        paid_access=False, disabled_reason="out_of_credits",
+        remaining_micros=0,
+        subscription_micros=0,
+        purchased_micros=0,
+        paid_access=False,
+        disabled_reason="out_of_credits",
     )
     assert s.used_fraction is None  # no cap → no %, depletion keys off paid_access
     assert _cold_start_notices(s) == ["credits.depleted"]
@@ -79,9 +93,12 @@ def test_cold_start_depleted_warns():
 def test_cold_start_debt_warns_and_depleted():
     """Negative subscription balance (the only signed field) → 100% used + depleted."""
     s = _state(
-        remaining_micros=0, subscription_micros=-5_000_000,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=False,
+        remaining_micros=0,
+        subscription_micros=-5_000_000,
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=False,
         disabled_reason="out_of_credits",
     )
     assert s.used_fraction == 1.0
@@ -94,8 +111,11 @@ def test_cold_start_no_cap_degrades_to_depletion_only():
     """Without monthly_credits (older portals) the seed sets no limit → used_fraction
     None → only depletion can fire, never warn90."""
     healthy_no_cap = _state(
-        remaining_micros=30_000_000, subscription_micros=18_000_000,
-        subscription_limit_micros=None, denominator_kind="none", paid_access=True,
+        remaining_micros=30_000_000,
+        subscription_micros=18_000_000,
+        subscription_limit_micros=None,
+        denominator_kind="none",
+        paid_access=True,
     )
     assert healthy_no_cap.used_fraction is None
     assert _cold_start_notices(healthy_no_cap) == []
@@ -139,7 +159,11 @@ class _FakeAgent:
         self.model = model
         self._credits_state = None
         self._credits_session_start_micros = None
-        self._credits_latch = {"active": set(), "seen_below_90": False, "usage_band": None}
+        self._credits_latch = {
+            "active": set(),
+            "seen_below_90": False,
+            "usage_band": None,
+        }
         self.emitted: list = []
         self._eval = evaluate_credits_notices
         self._is_free = is_free_tier_model

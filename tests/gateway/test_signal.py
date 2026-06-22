@@ -1,4 +1,5 @@
 """Tests for Signal messenger platform adapter."""
+
 import asyncio
 import base64
 import pytest
@@ -14,6 +15,7 @@ def _reset_signal_scheduler():
     """The attachment scheduler is process-wide; drop it between tests
     so a fresh token bucket greets each case."""
     from gateway.platforms.signal_rate_limit import _reset_scheduler
+
     _reset_scheduler()
     yield
     _reset_scheduler()
@@ -23,10 +25,12 @@ def _reset_signal_scheduler():
 # Shared Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_signal_adapter(monkeypatch, account="+15551234567", **extra):
     """Create a SignalAdapter with sensible test defaults."""
     monkeypatch.setenv("SIGNAL_GROUP_ALLOWED_USERS", extra.pop("group_allowed", ""))
     from gateway.platforms.signal import SignalAdapter
+
     config = PlatformConfig()
     config.enabled = True
     config.extra = {
@@ -52,12 +56,14 @@ def _stub_rpc(return_value):
 # Platform & Config
 # ---------------------------------------------------------------------------
 
+
 class TestSignalConfigLoading:
     def test_apply_env_overrides_signal(self, monkeypatch):
         monkeypatch.setenv("SIGNAL_HTTP_URL", "http://localhost:9090")
         monkeypatch.setenv("SIGNAL_ACCOUNT", "+15551234567")
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -72,14 +78,17 @@ class TestSignalConfigLoading:
         # No SIGNAL_ACCOUNT
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
         assert Platform.SIGNAL not in config.platforms
 
+
 # ---------------------------------------------------------------------------
 # Adapter Init & Helpers
 # ---------------------------------------------------------------------------
+
 
 class TestSignalAdapterInit:
     def test_init_parses_config(self, monkeypatch):
@@ -105,16 +114,22 @@ class TestSignalConnectCleanup:
     """Regression coverage for failed connect() cleanup."""
 
     @pytest.mark.asyncio
-    async def test_releases_lock_and_closes_client_on_healthcheck_failure(self, monkeypatch):
+    async def test_releases_lock_and_closes_client_on_healthcheck_failure(
+        self, monkeypatch
+    ):
         adapter = _make_signal_adapter(monkeypatch)
 
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=MagicMock(status_code=503))
         mock_client.aclose = AsyncMock()
 
-        with patch("gateway.platforms.signal.httpx.AsyncClient", return_value=mock_client), \
-             patch("gateway.status.acquire_scoped_lock", return_value=(True, None)), \
-             patch("gateway.status.release_scoped_lock") as mock_release:
+        with (
+            patch(
+                "gateway.platforms.signal.httpx.AsyncClient", return_value=mock_client
+            ),
+            patch("gateway.status.acquire_scoped_lock", return_value=(True, None)),
+            patch("gateway.status.release_scoped_lock") as mock_release,
+        ):
             result = await adapter.connect()
 
         assert result is False
@@ -127,48 +142,59 @@ class TestSignalConnectCleanup:
 class TestSignalHelpers:
     def test_redact_phone_long(self):
         from gateway.platforms.helpers import redact_phone
+
         assert redact_phone("+155****4567") == "+155****4567"
 
     def test_redact_phone_short(self):
         from gateway.platforms.helpers import redact_phone
+
         assert redact_phone("+12345") == "+1****45"
 
     def test_redact_phone_empty(self):
         from gateway.platforms.helpers import redact_phone
+
         assert redact_phone("") == "<none>"
 
     def test_parse_comma_list(self):
         from gateway.platforms.signal import _parse_comma_list
+
         assert _parse_comma_list("+1234, +5678 , +9012") == ["+1234", "+5678", "+9012"]
         assert _parse_comma_list("") == []
         assert _parse_comma_list("  ,  ,  ") == []
 
     def test_guess_extension_png(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100) == ".png"
 
     def test_guess_extension_jpeg(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"\xff\xd8\xff\xe0" + b"\x00" * 100) == ".jpg"
 
     def test_guess_extension_pdf(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"%PDF-1.4" + b"\x00" * 100) == ".pdf"
 
     def test_guess_extension_zip(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"PK\x03\x04" + b"\x00" * 100) == ".zip"
 
     def test_guess_extension_mp4(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"\x00\x00\x00\x18ftypisom" + b"\x00" * 100) == ".mp4"
 
     def test_guess_extension_unknown(self):
         from gateway.platforms.signal import _guess_extension
+
         assert _guess_extension(b"\x00\x01\x02\x03" * 10) == ".bin"
 
     def test_is_image_ext(self):
         from gateway.platforms.signal import _is_image_ext
+
         assert _is_image_ext(".png") is True
         assert _is_image_ext(".jpg") is True
         assert _is_image_ext(".gif") is True
@@ -176,32 +202,37 @@ class TestSignalHelpers:
 
     def test_is_audio_ext(self):
         from gateway.platforms.signal import _is_audio_ext
+
         assert _is_audio_ext(".mp3") is True
         assert _is_audio_ext(".ogg") is True
         assert _is_audio_ext(".png") is False
 
     def test_check_requirements(self, monkeypatch):
         from gateway.platforms.signal import check_signal_requirements
+
         monkeypatch.setenv("SIGNAL_HTTP_URL", "http://localhost:8080")
         monkeypatch.setenv("SIGNAL_ACCOUNT", "+15551234567")
         assert check_signal_requirements() is True
 
     def test_render_mentions(self):
         from gateway.platforms.signal import _render_mentions
-        text = "Hello \uFFFC, how are you?"
+
+        text = "Hello \ufffc, how are you?"
         mentions = [{"start": 6, "length": 1, "number": "+15559999999"}]
         result = _render_mentions(text, mentions)
         assert "@+15559999999" in result
-        assert "\uFFFC" not in result
+        assert "\ufffc" not in result
 
     def test_render_mentions_no_mentions(self):
         from gateway.platforms.signal import _render_mentions
+
         text = "Hello world"
         result = _render_mentions(text, [])
         assert result == "Hello world"
 
     def test_check_requirements_missing(self, monkeypatch):
         from gateway.platforms.signal import check_signal_requirements
+
         monkeypatch.delenv("SIGNAL_HTTP_URL", raising=False)
         monkeypatch.delenv("SIGNAL_ACCOUNT", raising=False)
         assert check_signal_requirements() is False
@@ -210,6 +241,7 @@ class TestSignalHelpers:
 # ---------------------------------------------------------------------------
 # SSE URL Encoding (Bug Fix: phone numbers with + must be URL-encoded)
 # ---------------------------------------------------------------------------
+
 
 class TestSignalSSEUrlEncoding:
     """Verify that phone numbers with + are URL-encoded in the SSE endpoint."""
@@ -228,6 +260,7 @@ class TestSignalSSEUrlEncoding:
 # Attachment Fetch (Bug Fix: parameter must be "id" not "attachmentId")
 # ---------------------------------------------------------------------------
 
+
 class TestSignalAttachmentFetch:
     """Verify that _fetch_attachment uses the correct RPC parameter name."""
 
@@ -241,13 +274,18 @@ class TestSignalAttachmentFetch:
 
         adapter._rpc, captured = _stub_rpc({"data": b64_data})
 
-        with patch("gateway.platforms.signal.cache_image_from_bytes", return_value="/tmp/test.png"):
+        with patch(
+            "gateway.platforms.signal.cache_image_from_bytes",
+            return_value="/tmp/test.png",
+        ):
             await adapter._fetch_attachment("attachment-123")
 
         call = captured[0]
         assert call["method"] == "getAttachment"
         assert call["params"]["id"] == "attachment-123"
-        assert "attachmentId" not in call["params"], "Must NOT use 'attachmentId' — causes NullPointerException in signal-cli"
+        assert "attachmentId" not in call["params"], (
+            "Must NOT use 'attachmentId' — causes NullPointerException in signal-cli"
+        )
         assert call["params"]["account"] == "+15551234567"
 
     @pytest.mark.asyncio
@@ -267,7 +305,10 @@ class TestSignalAttachmentFetch:
 
         adapter._rpc, _ = _stub_rpc({"data": b64_data})
 
-        with patch("gateway.platforms.signal.cache_document_from_bytes", return_value="/tmp/test.pdf"):
+        with patch(
+            "gateway.platforms.signal.cache_document_from_bytes",
+            return_value="/tmp/test.pdf",
+        ):
             path, ext = await adapter._fetch_attachment("doc-456")
 
         assert path == "/tmp/test.pdf"
@@ -278,9 +319,11 @@ class TestSignalAttachmentFetch:
 # Session Source
 # ---------------------------------------------------------------------------
 
+
 class TestSignalSessionSource:
     def test_session_source_alt_fields(self):
         from gateway.session import SessionSource
+
         source = SessionSource(
             platform=Platform.SIGNAL,
             chat_id="+15551234567",
@@ -294,6 +337,7 @@ class TestSignalSessionSource:
 
     def test_session_source_roundtrip(self):
         from gateway.session import SessionSource
+
         source = SessionSource(
             platform=Platform.SIGNAL,
             chat_id="group:xyz",
@@ -313,6 +357,7 @@ class TestSignalSessionSource:
 # Phone Redaction in agent/redact.py
 # ---------------------------------------------------------------------------
 
+
 class TestSignalPhoneRedaction:
     @pytest.fixture(autouse=True)
     def _ensure_redaction_enabled(self, monkeypatch):
@@ -326,6 +371,7 @@ class TestSignalPhoneRedaction:
 
     def test_us_number(self):
         from agent.redact import redact_sensitive_text
+
         result = redact_sensitive_text("Call +15551234567 now")
         assert "+15551234567" not in result
         assert "+155" in result  # Prefix preserved
@@ -333,12 +379,14 @@ class TestSignalPhoneRedaction:
 
     def test_uk_number(self):
         from agent.redact import redact_sensitive_text
+
         result = redact_sensitive_text("UK: +442071838750")
         assert "+442071838750" not in result
         assert "****" in result
 
     def test_multiple_numbers(self):
         from agent.redact import redact_sensitive_text
+
         text = "From +15551234567 to +442071838750"
         result = redact_sensitive_text(text)
         assert "+15551234567" not in result
@@ -346,6 +394,7 @@ class TestSignalPhoneRedaction:
 
     def test_short_number_not_matched(self):
         from agent.redact import redact_sensitive_text
+
         result = redact_sensitive_text("Code: +12345")
         # 5 digits after + is below the 7-digit minimum
         assert "+12345" in result  # Too short to redact
@@ -354,6 +403,7 @@ class TestSignalPhoneRedaction:
 # ---------------------------------------------------------------------------
 # Authorization in run.py
 # ---------------------------------------------------------------------------
+
 
 class TestSignalAuthorization:
     def test_signal_in_allowlist_maps(self):
@@ -384,6 +434,7 @@ class TestSignalAuthorization:
 # send_image_file method (#5105)
 # ---------------------------------------------------------------------------
 
+
 class TestSignalSendImageFile:
     @pytest.mark.asyncio
     async def test_send_image_file_sends_via_rpc(self, monkeypatch, tmp_path):
@@ -396,7 +447,9 @@ class TestSignalSendImageFile:
         img_path = tmp_path / "chart.png"
         img_path.write_bytes(b"\x89PNG" + b"\x00" * 100)
 
-        result = await adapter.send_image_file(chat_id="+155****4567", image_path=str(img_path))
+        result = await adapter.send_image_file(
+            chat_id="+155****4567", image_path=str(img_path)
+        )
 
         assert result.success is True
         assert len(captured) == 1
@@ -422,7 +475,9 @@ class TestSignalSendImageFile:
         img_path.write_bytes(b"\xff\xd8" + b"\x00" * 100)
 
         result = await adapter.send_image_file(
-            chat_id="group:abc123==", image_path=str(img_path), caption="Here's the chart"
+            chat_id="group:abc123==",
+            image_path=str(img_path),
+            caption="Here's the chart",
         )
 
         assert result.success is True
@@ -435,7 +490,9 @@ class TestSignalSendImageFile:
         adapter = _make_signal_adapter(monkeypatch)
         adapter._stop_typing_indicator = AsyncMock()
 
-        result = await adapter.send_image_file(chat_id="+155****4567", image_path="/nonexistent.png")
+        result = await adapter.send_image_file(
+            chat_id="+155****4567", image_path="/nonexistent.png"
+        )
 
         assert result.success is False
         assert "not found" in result.error.lower()
@@ -452,10 +509,13 @@ class TestSignalSendImageFile:
         def mock_stat(self, **kwargs):
             class FakeStat:
                 st_size = 200 * 1024 * 1024  # 200 MB
+
             return FakeStat()
 
         with patch.object(Path, "stat", mock_stat):
-            result = await adapter.send_image_file(chat_id="+155****4567", image_path=str(img_path))
+            result = await adapter.send_image_file(
+                chat_id="+155****4567", image_path=str(img_path)
+            )
 
         assert result.success is False
         assert "too large" in result.error.lower()
@@ -471,7 +531,9 @@ class TestSignalSendImageFile:
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"\x89PNG" + b"\x00" * 100)
 
-        result = await adapter.send_image_file(chat_id="+155****4567", image_path=str(img_path))
+        result = await adapter.send_image_file(
+            chat_id="+155****4567", image_path=str(img_path)
+        )
 
         assert result.success is False
         assert "failed" in result.error.lower()
@@ -482,7 +544,9 @@ class TestSignalRecipientResolution:
     async def test_send_prefers_cached_uuid_for_direct_messages(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
         adapter._stop_typing_indicator = AsyncMock()
-        adapter._remember_recipient_identifiers("+15551230000", "68680952-6d86-45bc-85e0-1a4d186d53ee")
+        adapter._remember_recipient_identifiers(
+            "+15551230000", "68680952-6d86-45bc-85e0-1a4d186d53ee"
+        )
 
         captured = []
 
@@ -496,7 +560,9 @@ class TestSignalRecipientResolution:
 
         assert result.success is True
         assert captured[0]["method"] == "send"
-        assert captured[0]["params"]["recipient"] == ["68680952-6d86-45bc-85e0-1a4d186d53ee"]
+        assert captured[0]["params"]["recipient"] == [
+            "68680952-6d86-45bc-85e0-1a4d186d53ee"
+        ]
 
     @pytest.mark.asyncio
     async def test_send_looks_up_uuid_via_list_contacts(self, monkeypatch):
@@ -508,12 +574,14 @@ class TestSignalRecipientResolution:
         async def mock_rpc(method, params, rpc_id=None, **kwargs):
             captured.append({"method": method, "params": dict(params)})
             if method == "listContacts":
-                return [{
-                    "recipient": "351935789098",
-                    "number": "+15551230000",
-                    "uuid": "68680952-6d86-45bc-85e0-1a4d186d53ee",
-                    "isRegistered": True,
-                }]
+                return [
+                    {
+                        "recipient": "351935789098",
+                        "number": "+15551230000",
+                        "uuid": "68680952-6d86-45bc-85e0-1a4d186d53ee",
+                        "isRegistered": True,
+                    }
+                ]
             if method == "send":
                 return {"timestamp": 1234567890}
             return None
@@ -525,7 +593,9 @@ class TestSignalRecipientResolution:
         assert result.success is True
         assert captured[0]["method"] == "listContacts"
         assert captured[1]["method"] == "send"
-        assert captured[1]["params"]["recipient"] == ["68680952-6d86-45bc-85e0-1a4d186d53ee"]
+        assert captured[1]["params"]["recipient"] == [
+            "68680952-6d86-45bc-85e0-1a4d186d53ee"
+        ]
 
     @pytest.mark.asyncio
     async def test_send_falls_back_to_phone_when_no_uuid_found(self, monkeypatch):
@@ -552,12 +622,18 @@ class TestSignalRecipientResolution:
     @pytest.mark.asyncio
     async def test_send_typing_uses_cached_uuid(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
-        adapter._remember_recipient_identifiers("+15551230000", "68680952-6d86-45bc-85e0-1a4d186d53ee")
+        adapter._remember_recipient_identifiers(
+            "+15551230000", "68680952-6d86-45bc-85e0-1a4d186d53ee"
+        )
 
         captured = []
 
         async def mock_rpc(method, params, rpc_id=None, **kwargs):
-            captured.append({"method": method, "params": dict(params), "rpc_id": rpc_id})
+            captured.append({
+                "method": method,
+                "params": dict(params),
+                "rpc_id": rpc_id,
+            })
             return {}
 
         adapter._rpc = mock_rpc
@@ -565,12 +641,15 @@ class TestSignalRecipientResolution:
         await adapter.send_typing("+15551230000")
 
         assert captured[0]["method"] == "sendTyping"
-        assert captured[0]["params"]["recipient"] == ["68680952-6d86-45bc-85e0-1a4d186d53ee"]
+        assert captured[0]["params"]["recipient"] == [
+            "68680952-6d86-45bc-85e0-1a4d186d53ee"
+        ]
 
 
 # ---------------------------------------------------------------------------
 # send_voice method (#5105)
 # ---------------------------------------------------------------------------
+
 
 class TestSignalSendVoice:
     @pytest.mark.asyncio
@@ -584,7 +663,9 @@ class TestSignalSendVoice:
         audio_path = tmp_path / "reply.ogg"
         audio_path.write_bytes(b"OggS" + b"\x00" * 100)
 
-        result = await adapter.send_voice(chat_id="+155****4567", audio_path=str(audio_path))
+        result = await adapter.send_voice(
+            chat_id="+155****4567", audio_path=str(audio_path)
+        )
 
         assert result.success is True
         assert captured[0]["method"] == "send"
@@ -599,7 +680,9 @@ class TestSignalSendVoice:
         adapter = _make_signal_adapter(monkeypatch)
         adapter._stop_typing_indicator = AsyncMock()
 
-        result = await adapter.send_voice(chat_id="+155****4567", audio_path="/missing.ogg")
+        result = await adapter.send_voice(
+            chat_id="+155****4567", audio_path="/missing.ogg"
+        )
 
         assert result.success is False
         assert "not found" in result.error.lower()
@@ -615,7 +698,9 @@ class TestSignalSendVoice:
         audio_path = tmp_path / "note.mp3"
         audio_path.write_bytes(b"\xff\xe0" + b"\x00" * 100)
 
-        result = await adapter.send_voice(chat_id="group:grp1==", audio_path=str(audio_path))
+        result = await adapter.send_voice(
+            chat_id="group:grp1==", audio_path=str(audio_path)
+        )
 
         assert result.success is True
         assert captured[0]["params"]["groupId"] == "grp1=="
@@ -632,10 +717,13 @@ class TestSignalSendVoice:
         def mock_stat(self, **kwargs):
             class FakeStat:
                 st_size = 200 * 1024 * 1024
+
             return FakeStat()
 
         with patch.object(Path, "stat", mock_stat):
-            result = await adapter.send_voice(chat_id="+155****4567", audio_path=str(audio_path))
+            result = await adapter.send_voice(
+                chat_id="+155****4567", audio_path=str(audio_path)
+            )
 
         assert result.success is False
         assert "too large" in result.error.lower()
@@ -651,7 +739,9 @@ class TestSignalSendVoice:
         audio_path = tmp_path / "reply.ogg"
         audio_path.write_bytes(b"OggS" + b"\x00" * 100)
 
-        result = await adapter.send_voice(chat_id="+155****4567", audio_path=str(audio_path))
+        result = await adapter.send_voice(
+            chat_id="+155****4567", audio_path=str(audio_path)
+        )
 
         assert result.success is False
         assert "failed" in result.error.lower()
@@ -660,6 +750,7 @@ class TestSignalSendVoice:
 # ---------------------------------------------------------------------------
 # send_video method (#5105)
 # ---------------------------------------------------------------------------
+
 
 class TestSignalSendVideo:
     @pytest.mark.asyncio
@@ -673,7 +764,9 @@ class TestSignalSendVideo:
         vid_path = tmp_path / "demo.mp4"
         vid_path.write_bytes(b"\x00\x00\x00\x18ftyp" + b"\x00" * 100)
 
-        result = await adapter.send_video(chat_id="+155****4567", video_path=str(vid_path))
+        result = await adapter.send_video(
+            chat_id="+155****4567", video_path=str(vid_path)
+        )
 
         assert result.success is True
         assert captured[0]["method"] == "send"
@@ -688,7 +781,9 @@ class TestSignalSendVideo:
         adapter = _make_signal_adapter(monkeypatch)
         adapter._stop_typing_indicator = AsyncMock()
 
-        result = await adapter.send_video(chat_id="+155****4567", video_path="/missing.mp4")
+        result = await adapter.send_video(
+            chat_id="+155****4567", video_path="/missing.mp4"
+        )
 
         assert result.success is False
         assert "not found" in result.error.lower()
@@ -705,10 +800,13 @@ class TestSignalSendVideo:
         def mock_stat(self, **kwargs):
             class FakeStat:
                 st_size = 200 * 1024 * 1024
+
             return FakeStat()
 
         with patch.object(Path, "stat", mock_stat):
-            result = await adapter.send_video(chat_id="+155****4567", video_path=str(vid_path))
+            result = await adapter.send_video(
+                chat_id="+155****4567", video_path=str(vid_path)
+            )
 
         assert result.success is False
         assert "too large" in result.error.lower()
@@ -724,7 +822,9 @@ class TestSignalSendVideo:
         vid_path = tmp_path / "demo.mp4"
         vid_path.write_bytes(b"\x00\x00\x00\x18ftyp" + b"\x00" * 100)
 
-        result = await adapter.send_video(chat_id="+155****4567", video_path=str(vid_path))
+        result = await adapter.send_video(
+            chat_id="+155****4567", video_path=str(vid_path)
+        )
 
         assert result.success is False
         assert "failed" in result.error.lower()
@@ -734,12 +834,14 @@ class TestSignalSendVideo:
 # MEDIA: tag extraction integration
 # ---------------------------------------------------------------------------
 
+
 class TestSignalMediaExtraction:
     """Verify the full pipeline: MEDIA: tag → extract → send_image_file/send_voice."""
 
     def test_extract_media_finds_image_tag(self):
         """BasePlatformAdapter.extract_media should find MEDIA: image paths."""
         from gateway.platforms.base import BasePlatformAdapter
+
         media, cleaned = BasePlatformAdapter.extract_media(
             "Here's the chart.\nMEDIA:/tmp/price_graph.png"
         )
@@ -750,6 +852,7 @@ class TestSignalMediaExtraction:
     def test_extract_media_finds_audio_tag(self):
         """BasePlatformAdapter.extract_media should find MEDIA: audio paths."""
         from gateway.platforms.base import BasePlatformAdapter
+
         media, cleaned = BasePlatformAdapter.extract_media(
             "[[audio_as_voice]]\nMEDIA:/tmp/reply.ogg"
         )
@@ -773,6 +876,7 @@ class TestSignalMediaExtraction:
 # ---------------------------------------------------------------------------
 # Inbound attachment message type classification
 # ---------------------------------------------------------------------------
+
 
 def _make_dm_envelope(sender: str, attachments: list, text: str = "") -> dict:
     """Build a minimal signal-cli DM envelope with the given attachments."""
@@ -801,21 +905,29 @@ class TestSignalInboundMessageTypeClassification:
     silently dropped the file and the agent never saw it.
     """
 
-    async def _dispatch_single_attachment(self, monkeypatch, content_type: str,
-                                          att_id: str, fetch_path: str, fetch_ext: str):
+    async def _dispatch_single_attachment(
+        self,
+        monkeypatch,
+        content_type: str,
+        att_id: str,
+        fetch_path: str,
+        fetch_ext: str,
+    ):
         """Helper: run _handle_envelope with one attachment and return the dispatched event."""
         envelope = _make_dm_envelope(
             sender="+15559876543",
-            attachments=[{
-                "contentType": content_type,
-                "id": att_id,
-                "size": 1024,
-                "filename": None,
-                "width": None,
-                "height": None,
-                "caption": None,
-                "uploadTimestamp": 1700000000000,
-            }],
+            attachments=[
+                {
+                    "contentType": content_type,
+                    "id": att_id,
+                    "size": 1024,
+                    "filename": None,
+                    "width": None,
+                    "height": None,
+                    "caption": None,
+                    "uploadTimestamp": 1700000000000,
+                }
+            ],
         )
         adapter = _make_signal_adapter(monkeypatch)
         adapter._rpc, _ = _stub_rpc(None)
@@ -921,6 +1033,7 @@ class TestSignalInboundMessageTypeClassification:
 # send_document now routes through _send_attachment (#5105 bonus)
 # ---------------------------------------------------------------------------
 
+
 class TestSignalSendDocumentViaHelper:
     """Verify send_document gained size check and path-in-error via _send_attachment."""
 
@@ -936,10 +1049,13 @@ class TestSignalSendDocumentViaHelper:
         def mock_stat(self, **kwargs):
             class FakeStat:
                 st_size = 200 * 1024 * 1024
+
             return FakeStat()
 
         with patch.object(Path, "stat", mock_stat):
-            result = await adapter.send_document(chat_id="+155****4567", file_path=str(doc_path))
+            result = await adapter.send_document(
+                chat_id="+155****4567", file_path=str(doc_path)
+            )
 
         assert result.success is False
         assert "too large" in result.error.lower()
@@ -950,7 +1066,9 @@ class TestSignalSendDocumentViaHelper:
         adapter = _make_signal_adapter(monkeypatch)
         adapter._stop_typing_indicator = AsyncMock()
 
-        result = await adapter.send_document(chat_id="+155****4567", file_path="/nonexistent.pdf")
+        result = await adapter.send_document(
+            chat_id="+155****4567", file_path="/nonexistent.pdf"
+        )
 
         assert result.success is False
         assert "/nonexistent.pdf" in result.error
@@ -959,6 +1077,7 @@ class TestSignalSendDocumentViaHelper:
 # ---------------------------------------------------------------------------
 # Signal streaming edit capability / message_id behavior
 # ---------------------------------------------------------------------------
+
 
 class TestSignalStreamingCapabilities:
     """Signal must opt out of edit-based streaming behavior."""
@@ -1013,6 +1132,7 @@ class TestSignalSendReturnsMessageId:
 # stop_typing() delegates to _stop_typing_indicator (#4647)
 # ---------------------------------------------------------------------------
 
+
 class TestSignalStopTyping:
     """Signal must expose a public stop_typing() so base adapter's
     _keep_typing finally block can clean up platform-level typing tasks."""
@@ -1031,6 +1151,7 @@ class TestSignalStopTyping:
 # Typing-indicator backoff on repeated failures (Signal RPC spam fix)
 # ---------------------------------------------------------------------------
 
+
 class TestSignalTypingBackoff:
     """When base.py's _keep_typing refresh loop calls send_typing every ~2s
     and the recipient is unreachable (NETWORK_FAILURE), the adapter must:
@@ -1044,9 +1165,7 @@ class TestSignalTypingBackoff:
     """
 
     @pytest.mark.asyncio
-    async def test_first_failure_logs_at_warning_subsequent_at_debug(
-        self, monkeypatch
-    ):
+    async def test_first_failure_logs_at_warning_subsequent_at_debug(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
         calls = []
 
@@ -1060,13 +1179,11 @@ class TestSignalTypingBackoff:
         await adapter.send_typing("+155****4567")
 
         assert len(calls) == 2
-        assert calls[0]["log_failures"] is True   # first failure — warn
+        assert calls[0]["log_failures"] is True  # first failure — warn
         assert calls[1]["log_failures"] is False  # subsequent — debug
 
     @pytest.mark.asyncio
-    async def test_three_consecutive_failures_trigger_cooldown(
-        self, monkeypatch
-    ):
+    async def test_three_consecutive_failures_trigger_cooldown(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
         call_count = {"n": 0}
 
@@ -1113,9 +1230,7 @@ class TestSignalTypingBackoff:
         assert "+155****4567" in adapter._typing_skip_until
 
     @pytest.mark.asyncio
-    async def test_success_resets_failure_counter_and_cooldown(
-        self, monkeypatch
-    ):
+    async def test_success_resets_failure_counter_and_cooldown(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
         result_queue = [None, None, {"timestamp": 12345}]
         call_log = []
@@ -1126,9 +1241,9 @@ class TestSignalTypingBackoff:
 
         adapter._rpc = _fake_rpc
 
-        await adapter.send_typing("+155****4567")   # fail 1 — warn
-        await adapter.send_typing("+155****4567")   # fail 2 — debug
-        await adapter.send_typing("+155****4567")   # success — reset
+        await adapter.send_typing("+155****4567")  # fail 1 — warn
+        await adapter.send_typing("+155****4567")  # fail 2 — debug
+        await adapter.send_typing("+155****4567")  # success — reset
 
         assert adapter._typing_failures.get("+155****4567", 0) == 0
         assert "+155****4567" not in adapter._typing_skip_until
@@ -1140,12 +1255,10 @@ class TestSignalTypingBackoff:
 
         adapter._rpc = _fail
         await adapter.send_typing("+155****4567")
-        assert call_log[-1] is True   # first failure in a fresh cycle
+        assert call_log[-1] is True  # first failure in a fresh cycle
 
     @pytest.mark.asyncio
-    async def test_stop_typing_indicator_clears_backoff_state(
-        self, monkeypatch
-    ):
+    async def test_stop_typing_indicator_clears_backoff_state(self, monkeypatch):
         adapter = _make_signal_adapter(monkeypatch)
 
         async def _fail(method, params, rpc_id=None, *, log_failures=True):
@@ -1167,6 +1280,7 @@ class TestSignalTypingBackoff:
 # ---------------------------------------------------------------------------
 # Reply quote extraction
 # ---------------------------------------------------------------------------
+
 
 class TestSignalQuoteExtraction:
     """Verify Signal reply quote fields are propagated to MessageEvent."""
@@ -1204,7 +1318,9 @@ class TestSignalQuoteExtraction:
         assert event.reply_to_text == "want to grab lunch?"
 
     @pytest.mark.asyncio
-    async def test_handle_envelope_without_quote_leaves_reply_fields_none(self, monkeypatch):
+    async def test_handle_envelope_without_quote_leaves_reply_fields_none(
+        self, monkeypatch
+    ):
         adapter = _make_signal_adapter(monkeypatch)
         captured = {}
 
@@ -1231,7 +1347,9 @@ class TestSignalQuoteExtraction:
         assert event.reply_to_text is None
 
     @pytest.mark.asyncio
-    async def test_handle_envelope_quote_without_text_sets_only_reply_id(self, monkeypatch):
+    async def test_handle_envelope_quote_without_text_sets_only_reply_id(
+        self, monkeypatch
+    ):
         adapter = _make_signal_adapter(monkeypatch)
         captured = {}
 
@@ -1260,9 +1378,11 @@ class TestSignalQuoteExtraction:
         assert event.reply_to_message_id == "123"
         assert event.reply_to_text is None
 
+
 # ---------------------------------------------------------------------------
 # _rpc rate-limit detection
 # ---------------------------------------------------------------------------
+
 
 class _FakeHttpResponse:
     """Minimal stand-in for httpx.Response — only what _rpc touches."""
@@ -1295,9 +1415,12 @@ class TestSignalRpcRateLimit:
         from gateway.platforms.signal import SignalRateLimitError
 
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {"message": "Failed to send: [429] Rate Limited"},
-        })
+        _install_fake_client(
+            adapter,
+            {
+                "error": {"message": "Failed to send: [429] Rate Limited"},
+            },
+        )
 
         with pytest.raises(SignalRateLimitError):
             await adapter._rpc("send", {}, raise_on_rate_limit=True)
@@ -1308,9 +1431,12 @@ class TestSignalRpcRateLimit:
         from gateway.platforms.signal import SignalRateLimitError
 
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {"message": "RateLimitException occurred"},
-        })
+        _install_fake_client(
+            adapter,
+            {
+                "error": {"message": "RateLimitException occurred"},
+            },
+        )
 
         with pytest.raises(SignalRateLimitError):
             await adapter._rpc("send", {}, raise_on_rate_limit=True)
@@ -1319,9 +1445,12 @@ class TestSignalRpcRateLimit:
     async def test_default_swallows_rate_limit_returns_none(self, monkeypatch):
         """Without opt-in, 429 stays swallowed — preserves backwards compat."""
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {"message": "[429] Rate Limited"},
-        })
+        _install_fake_client(
+            adapter,
+            {
+                "error": {"message": "[429] Rate Limited"},
+            },
+        )
 
         result = await adapter._rpc("send", {})
         assert result is None
@@ -1330,9 +1459,12 @@ class TestSignalRpcRateLimit:
     async def test_non_rate_limit_error_does_not_raise_when_opted_in(self, monkeypatch):
         """Opt-in only escalates 429s; other errors still return None."""
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {"message": "Recipient unknown (UntrustedIdentityException)"},
-        })
+        _install_fake_client(
+            adapter,
+            {
+                "error": {"message": "Recipient unknown (UntrustedIdentityException)"},
+            },
+        )
 
         result = await adapter._rpc("send", {}, raise_on_rate_limit=True)
         assert result is None
@@ -1343,24 +1475,28 @@ class TestSignalRpcRateLimit:
         ``error.data.response.results[*].retryAfterSeconds`` — _rpc
         carries that value through SignalRateLimitError.retry_after."""
         from gateway.platforms.signal_rate_limit import (
-            SignalRateLimitError, SIGNAL_RPC_ERROR_RATELIMIT,
+            SignalRateLimitError,
+            SIGNAL_RPC_ERROR_RATELIMIT,
         )
 
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {
-                "code": SIGNAL_RPC_ERROR_RATELIMIT,
-                "message": "Failed to send message due to rate limiting",
-                "data": {
-                    "response": {
-                        "timestamp": 0,
-                        "results": [
-                            {"type": "RATE_LIMIT_FAILURE", "retryAfterSeconds": 90},
-                        ],
-                    }
+        _install_fake_client(
+            adapter,
+            {
+                "error": {
+                    "code": SIGNAL_RPC_ERROR_RATELIMIT,
+                    "message": "Failed to send message due to rate limiting",
+                    "data": {
+                        "response": {
+                            "timestamp": 0,
+                            "results": [
+                                {"type": "RATE_LIMIT_FAILURE", "retryAfterSeconds": 90},
+                            ],
+                        }
+                    },
                 },
             },
-        })
+        )
 
         with pytest.raises(SignalRateLimitError) as exc_info:
             await adapter._rpc("send", {}, raise_on_rate_limit=True)
@@ -1373,9 +1509,12 @@ class TestSignalRpcRateLimit:
         from gateway.platforms.signal import SignalRateLimitError
 
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {"message": "Failed: [429] Rate Limited"},
-        })
+        _install_fake_client(
+            adapter,
+            {
+                "error": {"message": "Failed: [429] Rate Limited"},
+            },
+        )
 
         with pytest.raises(SignalRateLimitError) as exc_info:
             await adapter._rpc("send", {}, raise_on_rate_limit=True)
@@ -1392,17 +1531,20 @@ class TestSignalRpcRateLimit:
         from gateway.platforms.signal import SignalRateLimitError
 
         adapter = _make_signal_adapter(monkeypatch)
-        _install_fake_client(adapter, {
-            "error": {
-                "code": -32603,
-                "message": (
-                    "Failed to send message: /home/max/sync/Memes/fengshui.jpeg: "
-                    "org.signal.libsignal.net.RetryLaterException: Retry after 4 seconds "
-                    "(AttachmentInvalidException) (UnexpectedErrorException)"
-                ),
-                "data": None,
+        _install_fake_client(
+            adapter,
+            {
+                "error": {
+                    "code": -32603,
+                    "message": (
+                        "Failed to send message: /home/max/sync/Memes/fengshui.jpeg: "
+                        "org.signal.libsignal.net.RetryLaterException: Retry after 4 seconds "
+                        "(AttachmentInvalidException) (UnexpectedErrorException)"
+                    ),
+                    "data": None,
+                },
             },
-        })
+        )
 
         with pytest.raises(SignalRateLimitError) as exc_info:
             await adapter._rpc("send", {}, raise_on_rate_limit=True)
@@ -1464,9 +1606,7 @@ def _patch_scheduler_sleep(monkeypatch, capture: list):
         else:
             await _real_sleep(0)
 
-    monkeypatch.setattr(
-        "gateway.platforms.signal_rate_limit.asyncio.sleep", fake_sleep
-    )
+    monkeypatch.setattr("gateway.platforms.signal_rate_limit.asyncio.sleep", fake_sleep)
     monkeypatch.setattr(
         "gateway.platforms.signal_rate_limit.time.monotonic", lambda: offset[0]
     )
@@ -1495,8 +1635,10 @@ class TestSignalSendMultipleImages:
 
         await adapter.send_multiple_images(
             chat_id="+155****4567",
-            images=[(f"file://{tmp_path}/missing_a.png", ""),
-                    (f"file://{tmp_path}/missing_b.png", "")],
+            images=[
+                (f"file://{tmp_path}/missing_a.png", ""),
+                (f"file://{tmp_path}/missing_b.png", ""),
+            ],
         )
 
         assert captured == []
@@ -1631,12 +1773,13 @@ class TestSignalSendMultipleImages:
         from gateway.platforms.signal import SIGNAL_MAX_ATTACHMENTS_PER_MSG
         from gateway.platforms.signal_rate_limit import (
             SIGNAL_RATE_LIMIT_BUCKET_CAPACITY,
-            SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER
+            SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER,
         )
 
         adapter = _make_signal_adapter(monkeypatch)
         mock_rpc, captured = _stub_rpc_responses([
-            {"timestamp": 1}, {"timestamp": 2},
+            {"timestamp": 1},
+            {"timestamp": 2},
         ])
         adapter._rpc = mock_rpc
         adapter._stop_typing_indicator = AsyncMock()
@@ -1649,8 +1792,12 @@ class TestSignalSendMultipleImages:
         await adapter.send_multiple_images(chat_id="+155****4567", images=images)
 
         assert len(captured) == 2
-        assert len(captured[0]["params"]["attachments"]) == SIGNAL_MAX_ATTACHMENTS_PER_MSG
-        assert len(captured[1]["params"]["attachments"]) == SIGNAL_MAX_ATTACHMENTS_PER_MSG
+        assert (
+            len(captured[0]["params"]["attachments"]) == SIGNAL_MAX_ATTACHMENTS_PER_MSG
+        )
+        assert (
+            len(captured[1]["params"]["attachments"]) == SIGNAL_MAX_ATTACHMENTS_PER_MSG
+        )
         assert len(sleep_calls) == 1
         # Batch 1 deficit: 32 - (50 - 32) = 14 tokens × 4s = 56s
         expected_wait = (
@@ -1661,14 +1808,13 @@ class TestSignalSendMultipleImages:
         adapter._notify_batch_pacing.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_short_followup_wait_skips_pacing_notice(
-        self, monkeypatch, tmp_path
-    ):
+    async def test_short_followup_wait_skips_pacing_notice(self, monkeypatch, tmp_path):
         """Batch 1 only needs 1 token but 18 remain after batch 0
         (50 capacity − 32 batch 0). No wait, no pacing notice."""
         adapter = _make_signal_adapter(monkeypatch)
         mock_rpc, captured = _stub_rpc_responses([
-            {"timestamp": 1}, {"timestamp": 2},
+            {"timestamp": 1},
+            {"timestamp": 2},
         ])
         adapter._rpc = mock_rpc
         adapter._stop_typing_indicator = AsyncMock()
@@ -1711,21 +1857,28 @@ class TestSignalRateLimitDetection:
             _is_signal_rate_limit_error,
             SIGNAL_RPC_ERROR_RATELIMIT,
         )
+
         err = {"code": SIGNAL_RPC_ERROR_RATELIMIT, "message": "any text"}
         assert _is_signal_rate_limit_error(err) is True
 
     def test_detect_substring_fallback(self):
         from gateway.platforms.signal import _is_signal_rate_limit_error
-        err = {"code": -32603, "message": "Failed: [429] Rate Limited (RateLimitException) (UnexpectedErrorException)"}
+
+        err = {
+            "code": -32603,
+            "message": "Failed: [429] Rate Limited (RateLimitException) (UnexpectedErrorException)",
+        }
         assert _is_signal_rate_limit_error(err) is True
 
     def test_detect_non_rate_limit(self):
         from gateway.platforms.signal import _is_signal_rate_limit_error
+
         err = {"code": -32603, "message": "UntrustedIdentityException"}
         assert _is_signal_rate_limit_error(err) is False
 
     def test_extract_retry_after_from_results(self):
         from gateway.platforms.signal import _extract_retry_after_seconds
+
         err = {
             "code": -5,
             "message": "Failed to send message due to rate limiting",
@@ -1744,6 +1897,7 @@ class TestSignalRateLimitDetection:
     def test_extract_retry_after_missing(self):
         """Old signal-cli builds don't expose retryAfterSeconds — return None."""
         from gateway.platforms.signal import _extract_retry_after_seconds
+
         err = {"code": -32603, "message": "[429] Rate Limited"}
         assert _extract_retry_after_seconds(err) is None
 
@@ -1752,6 +1906,7 @@ class TestSignalRateLimitDetection:
         AttachmentInvalidException → UnexpectedErrorException when the
         rate-limit fires inside attachment upload. Detect it by substring."""
         from gateway.platforms.signal import _is_signal_rate_limit_error
+
         err = {
             "code": -32603,
             "message": (
@@ -1766,6 +1921,7 @@ class TestSignalRateLimitDetection:
         """When the structured field is missing, parse the seconds out
         of the human 'Retry after N seconds' substring."""
         from gateway.platforms.signal import _extract_retry_after_seconds
+
         err = {
             "code": -32603,
             "message": (
@@ -1782,16 +1938,19 @@ class TestSignalSendTimeout:
 
     def test_zero_attachments_uses_default(self):
         from gateway.platforms.signal import _signal_send_timeout
+
         assert _signal_send_timeout(0) == 30.0
 
     def test_floor_at_60s(self):
         from gateway.platforms.signal import _signal_send_timeout
+
         # Few attachments (would be 5×N=5s) should still get 60s floor.
         assert _signal_send_timeout(1) == 60.0
         assert _signal_send_timeout(5) == 60.0
 
     def test_scales_with_batch_size(self):
         from gateway.platforms.signal import _signal_send_timeout
+
         # 32 attachments × 5s = 160s; ought to comfortably outlast a
         # serial upload of an attachment-heavy batch.
         assert _signal_send_timeout(32) == 160.0
@@ -1800,6 +1959,7 @@ class TestSignalSendTimeout:
 # ---------------------------------------------------------------------------
 # Contentless Envelope Filtering (profile key updates, empty messages)
 # ---------------------------------------------------------------------------
+
 
 class TestSignalContentlessEnvelope:
     """Verify that profile key updates and empty Signal messages are skipped."""
@@ -1898,7 +2058,10 @@ class TestSignalContentlessEnvelope:
         b64_data = base64.b64encode(png_data).decode()
         adapter._rpc, _ = _stub_rpc({"data": b64_data})
 
-        with patch("gateway.platforms.signal.cache_image_from_bytes", return_value="/tmp/img.png"):
+        with patch(
+            "gateway.platforms.signal.cache_image_from_bytes",
+            return_value="/tmp/img.png",
+        ):
             await adapter._handle_envelope({
                 "envelope": {
                     "sourceNumber": "+155****9999",

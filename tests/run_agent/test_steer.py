@@ -296,7 +296,10 @@ class TestSteerMarkerContract:
 
         emitted = format_steer_marker("hi")
         assert STEER_MARKER_OPEN in emitted and STEER_MARKER_CLOSE in emitted
-        assert STEER_MARKER_OPEN in STEER_CHANNEL_NOTE and STEER_MARKER_CLOSE in STEER_CHANNEL_NOTE
+        assert (
+            STEER_MARKER_OPEN in STEER_CHANNEL_NOTE
+            and STEER_MARKER_CLOSE in STEER_CHANNEL_NOTE
+        )
 
     def test_marker_no_longer_uses_the_distrusted_label(self):
         """Regression: the bare 'User guidance:' line read as tool content and

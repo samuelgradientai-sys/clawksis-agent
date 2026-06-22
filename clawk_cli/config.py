@@ -754,7 +754,9 @@ def recommended_update_command_for_method(method: str) -> str:
         return "brew upgrade clawksis-agent"
 
     if method == "docker":
-        return "git pull && docker compose build && docker compose up -d --force-recreate"
+        return (
+            "git pull && docker compose build && docker compose up -d --force-recreate"
+        )
 
     if method == "pip":
         if is_uv_tool_install():

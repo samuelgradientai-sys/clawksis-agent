@@ -33,7 +33,9 @@ def _make_runner(recovered_thread_id=None):
     runner._agent_cache_lock = threading.Lock()
     # Stub topic recovery: returns the bound topic id for a lobby message,
     # None otherwise (the real method's contract).
-    runner._recover_telegram_topic_thread_id = MagicMock(return_value=recovered_thread_id)
+    runner._recover_telegram_topic_thread_id = MagicMock(
+        return_value=recovered_thread_id
+    )
     return runner
 
 
@@ -74,7 +76,9 @@ def test_normalize_passthrough_when_no_recovery():
 def test_normalize_swallows_recovery_exceptions():
     """Recovery raising must not break the command — return the raw source."""
     runner = _make_runner()
-    runner._recover_telegram_topic_thread_id = MagicMock(side_effect=RuntimeError("boom"))
+    runner._recover_telegram_topic_thread_id = MagicMock(
+        side_effect=RuntimeError("boom")
+    )
     src = _topic_dm_source(thread_id="")
 
     normalized = runner._normalize_source_for_session_key(src)

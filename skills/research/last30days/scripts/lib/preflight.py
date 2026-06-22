@@ -44,13 +44,35 @@ _QUALIFIER_PATTERNS = [
     re.compile(r"\bbudget\b", re.IGNORECASE),
     re.compile(r"\bwho\s+(loves|likes|is\s+into|enjoys)\b", re.IGNORECASE),
     re.compile(r"\bhobbies?\b", re.IGNORECASE),
-    re.compile(r"\b(cooking|running|reading|gaming|golf|woodworking|coding|hiking|cycling|fishing|music)[\s-]?(obsessed|enthusiast|fan|lover)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(cooking|running|reading|gaming|golf|woodworking|coding|hiking|cycling|fishing|music)[\s-]?(obsessed|enthusiast|fan|lover)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 _RELATIONSHIP_WORDS = {
-    "husband", "wife", "dad", "mom", "father", "mother", "brother", "sister",
-    "friend", "boss", "coworker", "son", "daughter", "grandma", "grandpa",
-    "aunt", "uncle", "nephew", "niece", "partner", "boyfriend", "girlfriend",
+    "husband",
+    "wife",
+    "dad",
+    "mom",
+    "father",
+    "mother",
+    "brother",
+    "sister",
+    "friend",
+    "boss",
+    "coworker",
+    "son",
+    "daughter",
+    "grandma",
+    "grandpa",
+    "aunt",
+    "uncle",
+    "nephew",
+    "niece",
+    "partner",
+    "boyfriend",
+    "girlfriend",
 }
 
 _YEAR_OLD_NOUN = re.compile(r"\byear[\s-]?old\s+(\w+)", re.IGNORECASE)

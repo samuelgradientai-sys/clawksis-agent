@@ -213,7 +213,14 @@ class TestPlatformDefaults:
         """Signal, BlueBubbles, etc. default to 'off' tool progress."""
         from gateway.display_config import resolve_display_setting
 
-        for plat in ("signal", "bluebubbles", "weixin", "wecom", "dingtalk", "whatsapp_cloud"):
+        for plat in (
+            "signal",
+            "bluebubbles",
+            "weixin",
+            "wecom",
+            "dingtalk",
+            "whatsapp_cloud",
+        ):
             assert resolve_display_setting({}, plat, "tool_progress") == "off", plat
 
     def test_whatsapp_cloud_locked_to_low_tier_until_edit_message_lands(self):
@@ -227,6 +234,7 @@ class TestPlatformDefaults:
         TIER_MEDIUM and update this test to assert ``"new"`` accordingly.
         """
         from gateway.display_config import resolve_display_setting
+
         assert resolve_display_setting({}, "whatsapp_cloud", "tool_progress") == "off"
         assert resolve_display_setting({}, "whatsapp_cloud", "streaming") is False
 

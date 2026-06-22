@@ -16,6 +16,7 @@ def all_assignees_spawnable(monkeypatch):
     would break tests that assert spawn behavior.
     """
     from clawk_cli import profiles
+
     monkeypatch.setattr(profiles, "profile_exists", lambda name: True)
 
 

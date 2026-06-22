@@ -115,7 +115,8 @@ def match_blueprint(query: str) -> Tuple[Optional[Any], List[Any]]:
 
     # Prefix match on key or title word-start.
     prefix = [
-        r for r in CATALOG
+        r
+        for r in CATALOG
         if r.key.lower().startswith(q)
         or any(w.lower().startswith(q) for w in r.title.split())
     ]
@@ -126,7 +127,8 @@ def match_blueprint(query: str) -> Tuple[Optional[Any], List[Any]]:
 
     # Substring match anywhere in key/title/description.
     substr = [
-        r for r in CATALOG
+        r
+        for r in CATALOG
         if q in r.key.lower() or q in r.title.lower() or q in r.description.lower()
     ]
     if len(substr) == 1:
@@ -194,7 +196,7 @@ def build_blueprint_seed(blueprint) -> str:
         "(fill {minute}/{hour} from the chosen time, {dow} from the weekday "
         f"choice using {dict(WEEKDAY_PRESETS)}, {{interval_min}} from any "
         "interval). Use this exact prompt for the job (substituting my "
-        f"answers into any {{slot}} placeholders): \"{blueprint.prompt_template}\". "
+        f'answers into any {{slot}} placeholders): "{blueprint.prompt_template}". '
         "Confirm the schedule and what it will do before you create it."
     )
     return "\n".join(lines)
@@ -203,7 +205,9 @@ def build_blueprint_seed(blueprint) -> str:
 def _fmt_catalog() -> str:
     from cron.blueprint_catalog import CATALOG
 
-    lines = ["Automation Blueprints — `/blueprint <name>` and I'll ask you what I need:\n"]
+    lines = [
+        "Automation Blueprints — `/blueprint <name>` and I'll ask you what I need:\n"
+    ]
     for r in CATALOG:
         lines.append(f"  • {r.key} — {r.title}")
         lines.append(f"    {r.description}")
@@ -264,7 +268,9 @@ def handle_blueprint_command(
         from cron.blueprint_catalog import fill_blueprint, BlueprintFillError
     except Exception as e:  # pragma: no cover - import guard
         logger.debug("blueprint catalog import failed: %s", e)
-        return BlueprintCommandResult("Automation Blueprints are unavailable in this build.")
+        return BlueprintCommandResult(
+            "Automation Blueprints are unavailable in this build."
+        )
 
     try:
         tokens = shlex.split(args or "")

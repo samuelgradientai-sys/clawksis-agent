@@ -41,5 +41,9 @@ def test_gateway_runner_inherits_mixin():
 
 def test_watcher_loops_are_coroutines():
     # The two long-running watchers are async loops.
-    assert inspect.iscoroutinefunction(GatewayKanbanWatchersMixin._kanban_notifier_watcher)
-    assert inspect.iscoroutinefunction(GatewayKanbanWatchersMixin._kanban_dispatcher_watcher)
+    assert inspect.iscoroutinefunction(
+        GatewayKanbanWatchersMixin._kanban_notifier_watcher
+    )
+    assert inspect.iscoroutinefunction(
+        GatewayKanbanWatchersMixin._kanban_dispatcher_watcher
+    )

@@ -22,7 +22,9 @@ def _log(msg: str) -> None:
     print(f"[Resolve] {msg}", file=sys.stderr)
 
 
-def _merge_category_peers(topic: str, subreddits: list[str]) -> tuple[list[str], Optional[str]]:
+def _merge_category_peers(
+    topic: str, subreddits: list[str]
+) -> tuple[list[str], Optional[str]]:
     """Extend the WebSearch-extracted subreddit list with category peers.
 
     Classifies the topic, fetches the category's peer subs, dedupes
@@ -86,7 +88,9 @@ def _extract_subreddits(items: list[dict]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
     for item in items:
-        text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('url', '')}"
+        text = (
+            f"{item.get('title', '')} {item.get('snippet', '')} {item.get('url', '')}"
+        )
         for match in pattern.findall(text):
             lower = match.lower()
             if lower not in seen:
@@ -111,7 +115,18 @@ def _extract_x_handle(items: list[dict]) -> str:
             # URL matches are stronger signals
             counts[lower] = counts.get(lower, 0) + 3
     # Filter out generic handles
-    skip = {"twitter", "x", "search", "hashtag", "intent", "share", "i", "home", "explore", "settings"}
+    skip = {
+        "twitter",
+        "x",
+        "search",
+        "hashtag",
+        "intent",
+        "share",
+        "i",
+        "home",
+        "explore",
+        "settings",
+    }
     counts = {k: v for k, v in counts.items() if k not in skip}
     if not counts:
         return ""
@@ -132,7 +147,17 @@ def _extract_github_user(items: list[dict]) -> str:
             lower = match.lower()
             counts[lower] = counts.get(lower, 0) + 1
     # Filter out org/repo-like names and generic pages
-    skip = {"topics", "explore", "settings", "orgs", "search", "features", "about", "pricing", "enterprise"}
+    skip = {
+        "topics",
+        "explore",
+        "settings",
+        "orgs",
+        "search",
+        "features",
+        "about",
+        "pricing",
+        "enterprise",
+    }
     counts = {k: v for k, v in counts.items() if k not in skip}
     if not counts:
         return ""
@@ -142,7 +167,17 @@ def _extract_github_user(items: list[dict]) -> str:
 def _extract_github_repos(items: list[dict]) -> list[str]:
     """Extract owner/repo strings from search results."""
     repo_pattern = re.compile(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)")
-    skip_owners = {"topics", "explore", "settings", "orgs", "search", "features", "about", "pricing", "enterprise"}
+    skip_owners = {
+        "topics",
+        "explore",
+        "settings",
+        "orgs",
+        "search",
+        "features",
+        "about",
+        "pricing",
+        "enterprise",
+    }
     seen: set[str] = set()
     repos: list[str] = []
     for item in items:
@@ -216,7 +251,9 @@ def _canonicalize_integration_repo(topic: str, repo: str) -> str:
     return repo
 
 
-def canonicalize_github_repos(topic: str, repos: list[str], *, cap: int | None = 5) -> list[str]:
+def canonicalize_github_repos(
+    topic: str, repos: list[str], *, cap: int | None = 5
+) -> list[str]:
     """Normalize/priority-sort GitHub repos for the current topic.
 
     - Rewrites common integration suffixes to canonical product repos when
@@ -238,7 +275,12 @@ def canonicalize_github_repos(topic: str, repos: list[str], *, cap: int | None =
     topic_slugs = set(_topic_entity_slugs(topic))
     if topic_slugs:
         exact = [r for r in canonicalized if _repo_slug(r) in topic_slugs]
-        prefixed = [r for r in canonicalized if any(_repo_slug(r).startswith(f"{slug}-") for slug in topic_slugs) and r not in exact]
+        prefixed = [
+            r
+            for r in canonicalized
+            if any(_repo_slug(r).startswith(f"{slug}-") for slug in topic_slugs)
+            and r not in exact
+        ]
         rest = [r for r in canonicalized if r not in exact and r not in prefixed]
         canonicalized = exact + prefixed + rest
 
@@ -311,8 +353,7 @@ def auto_resolve(topic: str, config: dict) -> dict:
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(_search, label, q): label
-            for label, q in queries.items()
+            executor.submit(_search, label, q): label for label, q in queries.items()
         }
         for future in as_completed(futures):
             label = futures[future]
@@ -327,12 +368,16 @@ def auto_resolve(topic: str, config: dict) -> dict:
     subreddits = _extract_subreddits(results.get("subreddit", []))
     x_handle = _extract_x_handle(results.get("x_handle", []))
     github_user = _extract_github_user(results.get("github", []))
-    github_repos = canonicalize_github_repos(topic, _extract_github_repos(results.get("github", [])))
+    github_repos = canonicalize_github_repos(
+        topic, _extract_github_repos(results.get("github", []))
+    )
     context = _build_context_summary(results.get("news", []))
 
     subreddits, category = _merge_category_peers(topic, subreddits)
 
-    _log(f"Resolved {len(subreddits)} subreddits, x_handle={x_handle!r}, github_user={github_user!r}, github_repos={github_repos!r}, context_len={len(context)}, category={category!r}")
+    _log(
+        f"Resolved {len(subreddits)} subreddits, x_handle={x_handle!r}, github_user={github_user!r}, github_repos={github_repos!r}, context_len={len(context)}, category={category!r}"
+    )
 
     return {
         "subreddits": subreddits,

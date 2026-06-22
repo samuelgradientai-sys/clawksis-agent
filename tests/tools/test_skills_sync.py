@@ -1684,9 +1684,17 @@ class TestUpdateBackupRecovery:
 
     def _patches(self, bundled, skills_dir, manifest_file):
         from contextlib import ExitStack
+
         stack = ExitStack()
-        stack.enter_context(patch("tools.skills_sync._get_bundled_dir", return_value=bundled))
-        stack.enter_context(patch("tools.skills_sync._get_optional_dir", return_value=bundled.parent / "optional-skills"))
+        stack.enter_context(
+            patch("tools.skills_sync._get_bundled_dir", return_value=bundled)
+        )
+        stack.enter_context(
+            patch(
+                "tools.skills_sync._get_optional_dir",
+                return_value=bundled.parent / "optional-skills",
+            )
+        )
         stack.enter_context(patch("tools.skills_sync.SKILLS_DIR", skills_dir))
         stack.enter_context(patch("tools.skills_sync.MANIFEST_FILE", manifest_file))
         return stack
@@ -1718,8 +1726,10 @@ class TestUpdateBackupRecovery:
         def _boom(src, dst, **kwargs):
             raise OSError("simulated copy failure")
 
-        with self._patches(bundled, skills_dir, manifest_file), \
-                patch("tools.skills_sync.shutil.copytree", side_effect=_boom):
+        with (
+            self._patches(bundled, skills_dir, manifest_file),
+            patch("tools.skills_sync.shutil.copytree", side_effect=_boom),
+        ):
             sync_skills(quiet=True)
 
         # The live copy must survive the failed update untouched...
@@ -1767,8 +1777,10 @@ class TestUpdateBackupRecovery:
             (Path(dst) / "PARTIAL").write_text("half-written")
             raise OSError("simulated failure mid-copy")
 
-        with self._patches(bundled, skills_dir, manifest_file), \
-                patch("tools.skills_sync.shutil.copytree", side_effect=_partial_then_fail):
+        with (
+            self._patches(bundled, skills_dir, manifest_file),
+            patch("tools.skills_sync.shutil.copytree", side_effect=_partial_then_fail),
+        ):
             sync_skills(quiet=True)
 
         # Original content restored, partial debris and backup gone.

@@ -1342,11 +1342,12 @@ class TestBuildAnthropicKwargs:
             _forbids_sampling_params,
             _get_anthropic_max_output,
         )
+
         # New / unknown Claude models → modern contract by default.
         for m in (
             "claude-fable-5",
             "anthropic/claude-fable-5",
-            "claude-saga-2",            # hypothetical future named model
+            "claude-saga-2",  # hypothetical future named model
             "anthropic/claude-opus-9",  # hypothetical future numbered model
         ):
             assert _supports_adaptive_thinking(m) is True, m
@@ -1361,6 +1362,7 @@ class TestBuildAnthropicKwargs:
             _supports_adaptive_thinking,
             _forbids_sampling_params,
         )
+
         for m in (
             "claude-3-5-sonnet",
             "claude-3-7-sonnet",
@@ -1378,6 +1380,7 @@ class TestBuildAnthropicKwargs:
             _supports_xhigh_effort,
             _forbids_sampling_params,
         )
+
         for m in ("claude-opus-4.6", "claude-sonnet-4-6"):
             assert _supports_adaptive_thinking(m) is True, m
             assert _supports_xhigh_effort(m) is False, m
@@ -1391,6 +1394,7 @@ class TestBuildAnthropicKwargs:
             _supports_xhigh_effort,
             _forbids_sampling_params,
         )
+
         for m in ("minimax-m2", "qwen3-max", "moonshotai/kimi-k2.5", "glm-4.6"):
             assert _supports_adaptive_thinking(m) is False, m
             assert _supports_xhigh_effort(m) is False, m

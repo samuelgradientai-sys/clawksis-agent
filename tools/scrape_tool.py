@@ -70,7 +70,14 @@ _IP_BLOCK_STRONG = (
     "select all squares containing",
 )
 # Ambiguous block words — only count as a block on a SHORT page.
-_IP_BLOCK_WEAK = ("captcha", "are you a robot", "access denied", "forbidden", "429", "403")
+_IP_BLOCK_WEAK = (
+    "captcha",
+    "are you a robot",
+    "access denied",
+    "forbidden",
+    "429",
+    "403",
+)
 # Unambiguous anti-bot / JS interstitials — escalating to a stealthier mode helps.
 _ANTIBOT_STRONG = (
     "just a moment",  # Cloudflare interstitial
@@ -229,7 +236,15 @@ async def _handle_scrape(args, **kw):
         # Browser modes get a longer budget than the fast HTTP `get`.
         timeout_s = 45 if subcmd == "get" else 90
         ran_ok, content, stderr = await asyncio.to_thread(
-            _run_one, base, subcmd, url, ext, css_selector, wait_selector, proxy, timeout_s
+            _run_one,
+            base,
+            subcmd,
+            url,
+            ext,
+            css_selector,
+            wait_selector,
+            proxy,
+            timeout_s,
         )
         last_stderr = stderr or last_stderr
         status = _classify(content) if content else "empty"

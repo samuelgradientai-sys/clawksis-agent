@@ -12,9 +12,7 @@ def _drop_none(value: Any) -> Any:
         return _drop_none(asdict(value))
     if isinstance(value, dict):
         return {
-            key: _drop_none(item)
-            for key, item in value.items()
-            if item is not None
+            key: _drop_none(item) for key, item in value.items() if item is not None
         }
     if isinstance(value, list):
         return [_drop_none(item) for item in value]
@@ -161,7 +159,9 @@ class Report:
 class RetrievalBundle:
     """Structured retrieval output before global ranking."""
 
-    items_by_source_and_query: dict[tuple[str, str], list[SourceItem]] = field(default_factory=dict)
+    items_by_source_and_query: dict[tuple[str, str], list[SourceItem]] = field(
+        default_factory=dict
+    )
     items_by_source: dict[str, list[SourceItem]] = field(default_factory=dict)
     errors_by_source: dict[str, str] = field(default_factory=dict)
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -202,7 +202,9 @@ def query_plan_from_dict(payload: dict[str, Any]) -> QueryPlan:
         freshness_mode=payload["freshness_mode"],
         cluster_mode=payload["cluster_mode"],
         raw_topic=payload["raw_topic"],
-        subqueries=[subquery_from_dict(item) for item in payload.get("subqueries") or []],
+        subqueries=[
+            subquery_from_dict(item) for item in payload.get("subqueries") or []
+        ],
         source_weights=dict(payload.get("source_weights") or {}),
         notes=list(payload.get("notes") or []),
     )
@@ -225,11 +227,19 @@ def source_item_from_dict(payload: dict[str, Any]) -> SourceItem:
         why_relevant=payload.get("why_relevant") or "",
         snippet=payload.get("snippet") or "",
         metadata=dict(meta),
-        local_relevance=_first_non_none(payload.get("local_relevance"), meta.get("local_relevance")),
+        local_relevance=_first_non_none(
+            payload.get("local_relevance"), meta.get("local_relevance")
+        ),
         freshness=_first_non_none(payload.get("freshness"), meta.get("freshness")),
-        engagement_score=_first_non_none(payload.get("engagement_score"), meta.get("engagement_score")),
-        source_quality=_first_non_none(payload.get("source_quality"), meta.get("source_quality")),
-        local_rank_score=_first_non_none(payload.get("local_rank_score"), meta.get("local_rank_score")),
+        engagement_score=_first_non_none(
+            payload.get("engagement_score"), meta.get("engagement_score")
+        ),
+        source_quality=_first_non_none(
+            payload.get("source_quality"), meta.get("source_quality")
+        ),
+        local_rank_score=_first_non_none(
+            payload.get("local_rank_score"), meta.get("local_rank_score")
+        ),
     )
 
 
@@ -242,18 +252,27 @@ def candidate_from_dict(payload: dict[str, Any]) -> Candidate:
         url=payload.get("url") or "",
         snippet=payload.get("snippet") or "",
         subquery_labels=list(payload.get("subquery_labels") or []),
-        native_ranks={key: int(value) for key, value in (payload.get("native_ranks") or {}).items()},
+        native_ranks={
+            key: int(value)
+            for key, value in (payload.get("native_ranks") or {}).items()
+        },
         local_relevance=float(_first_non_none(payload.get("local_relevance"), 0.0)),
         freshness=int(_first_non_none(payload.get("freshness"), 0)),
         engagement=payload.get("engagement"),
         source_quality=float(_first_non_none(payload.get("source_quality"), 0.0)),
         rrf_score=float(_first_non_none(payload.get("rrf_score"), 0.0)),
         sources=list(payload.get("sources") or []),
-        source_items=[source_item_from_dict(item) for item in payload.get("source_items") or []],
-        rerank_score=float(payload["rerank_score"]) if payload.get("rerank_score") is not None else None,
+        source_items=[
+            source_item_from_dict(item) for item in payload.get("source_items") or []
+        ],
+        rerank_score=float(payload["rerank_score"])
+        if payload.get("rerank_score") is not None
+        else None,
         final_score=float(_first_non_none(payload.get("final_score"), 0.0)),
         explanation=payload.get("explanation"),
-        fun_score=float(payload["fun_score"]) if payload.get("fun_score") is not None else None,
+        fun_score=float(payload["fun_score"])
+        if payload.get("fun_score") is not None
+        else None,
         fun_explanation=payload.get("fun_explanation"),
         cluster_id=payload.get("cluster_id"),
         metadata=dict(payload.get("metadata") or {}),
@@ -281,7 +300,9 @@ def report_from_dict(payload: dict[str, Any]) -> Report:
         provider_runtime=provider_runtime_from_dict(payload["provider_runtime"]),
         query_plan=query_plan_from_dict(payload["query_plan"]),
         clusters=[cluster_from_dict(item) for item in payload.get("clusters") or []],
-        ranked_candidates=[candidate_from_dict(item) for item in payload.get("ranked_candidates") or []],
+        ranked_candidates=[
+            candidate_from_dict(item) for item in payload.get("ranked_candidates") or []
+        ],
         items_by_source={
             source: [source_item_from_dict(item) for item in items]
             for source, items in (payload.get("items_by_source") or {}).items()

@@ -41,14 +41,20 @@ def test_validator_flags_shell_with_network_egress():
 def test_validator_allows_clean_npx_and_benign_shell_pipe():
     from clawk_cli.mcp_security import validate_mcp_server_entry
 
-    assert validate_mcp_server_entry(
-        "linear",
-        {"command": "npx", "args": ["-y", "@linear/mcp-server"]},
-    ) == []
-    assert validate_mcp_server_entry(
-        "local-wrapper",
-        {"command": "bash", "args": ["-c", "printf foo | sort"]},
-    ) == []
+    assert (
+        validate_mcp_server_entry(
+            "linear",
+            {"command": "npx", "args": ["-y", "@linear/mcp-server"]},
+        )
+        == []
+    )
+    assert (
+        validate_mcp_server_entry(
+            "local-wrapper",
+            {"command": "bash", "args": ["-c", "printf foo | sort"]},
+        )
+        == []
+    )
 
 
 def test_save_mcp_server_rejects_dangerous_entry(tmp_path):
@@ -70,17 +76,21 @@ def test_mcp_add_rejects_dangerous_entry_before_probe(monkeypatch, capsys):
         probed = True
         raise AssertionError("dangerous MCP config reached probe/spawn path")
 
-    monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", _probe_should_not_run)
+    monkeypatch.setattr(
+        "clawk_cli.mcp_config._probe_single_server", _probe_should_not_run
+    )
 
-    cmd_mcp_add(Namespace(
-        name="evil",
-        url=None,
-        mcp_command="bash",
-        args=_dangerous_entry()["args"],
-        auth=None,
-        preset=None,
-        env=None,
-    ))
+    cmd_mcp_add(
+        Namespace(
+            name="evil",
+            url=None,
+            mcp_command="bash",
+            args=_dangerous_entry()["args"],
+            auth=None,
+            preset=None,
+            env=None,
+        )
+    )
 
     out = capsys.readouterr().out
     assert probed is False
@@ -112,7 +122,9 @@ def test_runtime_loader_skips_dangerous_entry(monkeypatch):
         "evil": _dangerous_entry(),
         "clean": {"command": "npx", "args": ["-y", "clean-mcp"]},
     }
-    monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"mcp_servers": servers})
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config", lambda: {"mcp_servers": servers}
+    )
 
     loaded = _load_mcp_config()
 
@@ -135,6 +147,7 @@ def test_explicit_registration_skips_dangerous_entry_before_connect(monkeypatch)
     def _run_on_loop(coro_or_factory, timeout=30):
         import asyncio
         import inspect
+
         coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
         assert inspect.iscoroutine(coro)
         return asyncio.run(coro)
@@ -174,7 +187,10 @@ def test_migration_disables_existing_dangerous_entry(tmp_path):
 
     config_path = Path(tmp_path) / "config.yaml"
     config_path.write_text(
-        yaml.safe_dump({"_config_version": 29, "mcp_servers": {"evil": _dangerous_entry()}}),
+        yaml.safe_dump({
+            "_config_version": 29,
+            "mcp_servers": {"evil": _dangerous_entry()},
+        }),
         encoding="utf-8",
     )
 

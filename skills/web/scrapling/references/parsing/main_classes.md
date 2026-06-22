@@ -7,13 +7,10 @@ from scrapling.parser import Selector
 ```
 Usage:
 ```python
-page = Selector(
-    '<html>...</html>',
-    url='https://example.com'
-)
+page = Selector("<html>...</html>", url="https://example.com")
 
 # Then select elements as you like
-elements = page.css('.product')
+elements = page.css(".product")
 ```
 In Scrapling, the main object you deal with after passing an HTML source or fetching a website is, of course, a [Selector](#selector) object. Any operation you do, like selection, navigation, etc., will return either a [Selector](#selector) object or a [Selectors](#selectors) object, given that the result is element/elements from the page, not text or similar.
 
@@ -80,6 +77,7 @@ Parsing this HTML page as an example:
 Load the page directly as shown before:
 ```python
 from scrapling import Selector
+
 page = Selector(html_doc)
 ```
 Get all text content on the page recursively
@@ -89,7 +87,7 @@ Get all text content on the page recursively
 ```
 Get the first article (used as an example throughout):
 ```python
-article = page.find('article')
+article = page.find("article")
 ```
 With the same logic, get all text content on the element recursively
 ```python
@@ -131,14 +129,14 @@ Getting the attributes of the element
 ```
 Access a specific attribute with any of the following
 ```python
-article.attrib['class']
-article.attrib.get('class')
-article['class']  # new in v0.3
+article.attrib["class"]
+article.attrib.get("class")
+article["class"]  # new in v0.3
 ```
 Check if the attributes contain a specific attribute with any of the methods below
 ```python
-'class' in article.attrib
-'class' in article  # new in v0.3
+"class" in article.attrib
+"class" in article  # new in v0.3
 ```
 Get the HTML content of the element
 ```python
@@ -279,13 +277,13 @@ In the [Selector](#selector) class, all methods/properties that should return a 
 Starting with v0.4, all selection methods consistently return [Selector](#selector)/[Selectors](#selectors) objects, even for text nodes and attribute values. Text nodes (selected via `::text`, `/text()`, `::attr()`, `/@attr`) are wrapped in [Selector](#selector) objects. These text node selectors have `tag` set to `"#text"`, and their `text` property returns the text value. You can still access the text value directly, and all other properties return empty/default values gracefully.
 
 ```python
-page.css('a::text')              # -> Selectors (of text node Selectors)
-page.xpath('//a/text()')         # -> Selectors
-page.css('a::text').get()        # -> TextHandler (the first text value)
-page.css('a::text').getall()     # -> TextHandlers (all text values)
-page.css('a::attr(href)')        # -> Selectors
-page.xpath('//a/@href')          # -> Selectors
-page.css('.price_color')         # -> Selectors
+page.css("a::text")  # -> Selectors (of text node Selectors)
+page.xpath("//a/text()")  # -> Selectors
+page.css("a::text").get()  # -> TextHandler (the first text value)
+page.css("a::text").getall()  # -> TextHandlers (all text values)
+page.css("a::attr(href)")  # -> Selectors
+page.xpath("//a/@href")  # -> Selectors
+page.css(".price_color")  # -> Selectors
 ```
 
 ### Data extraction methods
@@ -392,11 +390,11 @@ Safe access to the first or last element without index errors:
 
 Get the number of [Selector](#selector) instances in a [Selectors](#selectors) instance:
 ```python
-page.css('.product_pod').length
+page.css(".product_pod").length
 ```
 which is equivalent to
 ```python
-len(page.css('.product_pod'))
+len(page.css(".product_pod"))
 ```
 
 ## TextHandler

@@ -38,7 +38,10 @@ def test_focus_topic_injected_into_summary_prompt():
     compressor = _make_compressor()
     turns = [
         {"role": "user", "content": "Tell me about the database schema"},
-        {"role": "assistant", "content": "The schema has tables: users, orders, products."},
+        {
+            "role": "assistant",
+            "content": "The schema has tables: users, orders, products.",
+        },
     ]
 
     captured_prompt = {}
@@ -110,7 +113,9 @@ def test_compress_passes_focus_to_generate_summary():
         {"role": "assistant", "content": "reply4"},
     ]
 
-    compressor.compress(messages, current_tokens=100000, focus_topic="authentication flow")
+    compressor.compress(
+        messages, current_tokens=100000, focus_topic="authentication flow"
+    )
 
     assert received_kwargs.get("focus_topic") == "authentication flow"
 

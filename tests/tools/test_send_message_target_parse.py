@@ -17,4 +17,3 @@ def test_photon_e164_target_is_explicit() -> None:
 
 def test_e164_target_still_requires_phone_platform() -> None:
     assert _parse_target_ref("matrix", "+15551234567")[2] is False
-

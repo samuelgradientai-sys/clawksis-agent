@@ -642,17 +642,32 @@ class TestDelegateObservability(unittest.TestCase):
                 "interrupted": False,
                 "api_calls": 1,
                 "messages": [
-                    {"role": "assistant", "tool_calls": [
-                        {"id": "tc_1", "function": {"name": "image_generate", "arguments": '{"prompt": "x"}'}}
-                    ]},
-                    {"role": "tool", "tool_call_id": "tc_1", "content": [
-                        {"type": "text", "text": '{"success": true}'},
-                    ]},
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "tc_1",
+                                "function": {
+                                    "name": "image_generate",
+                                    "arguments": '{"prompt": "x"}',
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": "tc_1",
+                        "content": [
+                            {"type": "text", "text": '{"success": true}'},
+                        ],
+                    },
                 ],
             }
             MockAgent.return_value = mock_child
 
-            result = json.loads(delegate_task(goal="Test list content", parent_agent=parent))
+            result = json.loads(
+                delegate_task(goal="Test list content", parent_agent=parent)
+            )
             trace = result["results"][0]["tool_trace"]
             self.assertEqual(trace[0]["tool"], "image_generate")
             self.assertEqual(trace[0]["status"], "ok")
@@ -664,19 +679,36 @@ class TestDelegateObservability(unittest.TestCase):
         real text, not a "[{'type': 'text'...}]" repr blob."""
         result = {
             "messages": [
-                {"role": "assistant", "tool_calls": [
-                    {"id": "t1", "function": {"name": "terminal", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": "t1", "content": [
-                    {"type": "text", "text": "Error: command not found"},
-                ]},
-                {"role": "assistant", "tool_calls": [
-                    {"id": "t2", "function": {"name": "vision", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": "t2", "content": [
-                    {"type": "text", "text": "all good"},
-                    {"type": "image_url", "image_url": {"url": "data:x"}},
-                ]},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "t1",
+                            "function": {"name": "terminal", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "t1",
+                    "content": [
+                        {"type": "text", "text": "Error: command not found"},
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "t2", "function": {"name": "vision", "arguments": "{}"}}
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "t2",
+                    "content": [
+                        {"type": "text", "text": "all good"},
+                        {"type": "image_url", "image_url": {"url": "data:x"}},
+                    ],
+                },
             ]
         }
         tail = _extract_output_tail(result, max_entries=8, max_chars=600)
@@ -1698,8 +1730,15 @@ class TestChildCredentialPoolResolution(unittest.TestCase):
                 "https://endpoint-b.example.com/v1": "custom:endpoint-b",
             }.get(base_url)
 
-        with patch("agent.credential_pool.get_custom_provider_pool_key", side_effect=fake_key), \
-             patch("agent.credential_pool.load_pool", return_value=child_pool) as load_mock:
+        with (
+            patch(
+                "agent.credential_pool.get_custom_provider_pool_key",
+                side_effect=fake_key,
+            ),
+            patch(
+                "agent.credential_pool.load_pool", return_value=child_pool
+            ) as load_mock,
+        ):
             result = _resolve_child_credential_pool(
                 "custom", parent, "https://endpoint-b.example.com/v1"
             )

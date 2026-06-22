@@ -165,10 +165,12 @@ class TestToolRest:
         """_async_list_entities returns all entities from the fake server."""
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             result = await _async_list_entities()
@@ -183,10 +185,12 @@ class TestToolRest:
         """Domain filter is applied after fetching from server."""
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             result = await _async_list_entities(domain="light")
@@ -200,10 +204,12 @@ class TestToolRest:
         """_async_get_state returns full entity details."""
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             result = await _async_get_state("light.bedroom")
@@ -220,10 +226,12 @@ class TestToolRest:
 
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             with pytest.raises(_aiohttp.ClientResponseError) as exc_info:
@@ -235,10 +243,12 @@ class TestToolRest:
         """_async_call_service sends correct payload and server records it."""
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             result = await _async_call_service(
@@ -312,10 +322,12 @@ class TestAuthAndErrors:
 
         async with FakeHAServer() as server:
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", "bad-token",
+                "tools.homeassistant_tool._HASS_TOKEN",
+                "bad-token",
             )
 
             with pytest.raises(_aiohttp.ClientResponseError) as exc_info:
@@ -330,10 +342,12 @@ class TestAuthAndErrors:
         async with FakeHAServer() as server:
             server.force_500 = True
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_URL", server.url,
+                "tools.homeassistant_tool._HASS_URL",
+                server.url,
             )
             monkeypatch.setattr(
-                "tools.homeassistant_tool._HASS_TOKEN", server.token,
+                "tools.homeassistant_tool._HASS_TOKEN",
+                server.token,
             )
 
             with pytest.raises(_aiohttp.ClientResponseError) as exc_info:

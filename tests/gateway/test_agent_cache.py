@@ -2405,11 +2405,7 @@ class TestAgentCacheMessageCountRebaseline:
         with runner._agent_cache_lock:
             cached = runner._agent_cache.get(session_key)
         cached_mc = cached[2] if cached and len(cached) > 2 else None
-        invalidate = (
-            cached_mc is not None
-            and live is not None
-            and live != cached_mc
-        )
+        invalidate = cached_mc is not None and live is not None and live != cached_mc
         return not invalidate
 
     def test_same_process_turns_preserve_cached_agent(self, tmp_path):
@@ -2465,7 +2461,9 @@ class TestAgentCacheMessageCountRebaseline:
         with runner._agent_cache_lock:
             _row = db.get_session("s1")
             runner._agent_cache["telegram:s1"] = (
-                agent, "sig", (_row.get("message_count", 0) if _row else 0),
+                agent,
+                "sig",
+                (_row.get("message_count", 0) if _row else 0),
             )
 
         # Our own turn + re-baseline -> reuse next turn.

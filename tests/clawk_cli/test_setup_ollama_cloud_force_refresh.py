@@ -6,7 +6,6 @@ serving a stale cache (models.dev only, no live API probe) for up to an hour.
 from __future__ import annotations
 
 
-
 def test_setup_ollama_cloud_passes_force_refresh(monkeypatch):
     """The provider-setup model-fetch for ollama-cloud must pass ``force_refresh=True``."""
     # The ollama-cloud branch lives in ``_model_flow_api_key_provider``, which was
@@ -22,7 +21,7 @@ def test_setup_ollama_cloud_passes_force_refresh(monkeypatch):
     assert marker in src, "ollama-cloud branch missing from provider setup"
     idx = src.index(marker)
     # The call to fetch_ollama_cloud_models should be within the next ~2000 chars.
-    snippet = src[idx:idx + 2000]
+    snippet = src[idx : idx + 2000]
     assert "fetch_ollama_cloud_models(" in snippet, snippet[:500]
     assert "force_refresh=True" in snippet, (
         "ollama-cloud setup must pass force_refresh=True so newly released "

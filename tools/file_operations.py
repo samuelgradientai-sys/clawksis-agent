@@ -3293,9 +3293,7 @@ class ShellFileOperations(FileOperations):
         diagnostics, payload = _split_tool_diagnostics(result.stdout)
 
         stderr = (
-            result.stderr.strip()
-            if hasattr(result, "stderr") and result.stderr
-            else ""
+            result.stderr.strip() if hasattr(result, "stderr") and result.stderr else ""
         )
 
         if not payload.strip() and (
@@ -3456,9 +3454,7 @@ class ShellFileOperations(FileOperations):
         diagnostics, payload = _split_tool_diagnostics(result.stdout)
 
         stderr = (
-            result.stderr.strip()
-            if hasattr(result, "stderr") and result.stderr
-            else ""
+            result.stderr.strip() if hasattr(result, "stderr") and result.stderr else ""
         )
 
         if not payload.strip() and (

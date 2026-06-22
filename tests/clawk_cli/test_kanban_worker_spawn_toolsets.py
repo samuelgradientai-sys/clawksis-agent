@@ -85,15 +85,26 @@ agent:
     assert captured["env"]["CLAWK_KANBAN_TASK"] == "t_spawn_tools"
     assert "--toolsets" in captured["cmd"]
     pinned = captured["cmd"][captured["cmd"].index("--toolsets") + 1].split(",")
-    for required in ("terminal", "web", "file", "skills", "code_execution", "delegation"):
+    for required in (
+        "terminal",
+        "web",
+        "file",
+        "skills",
+        "code_execution",
+        "delegation",
+    ):
         assert required in pinned
 
 
-def test_resolve_worker_cli_toolsets_uses_profile_home_not_parent_config(monkeypatch, tmp_path):
+def test_resolve_worker_cli_toolsets_uses_profile_home_not_parent_config(
+    monkeypatch, tmp_path
+):
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "elias"
     profile.mkdir(parents=True)
-    root.joinpath("config.yaml").write_text("platform_toolsets:\n  cli:\n    - kanban\n", encoding="utf-8")
+    root.joinpath("config.yaml").write_text(
+        "platform_toolsets:\n  cli:\n    - kanban\n", encoding="utf-8"
+    )
     profile.joinpath("config.yaml").write_text(
         """
 platform_toolsets:

@@ -1013,9 +1013,12 @@ def _strip_blocked_tools(toolsets: List[str]) -> List[str]:
     return [t for t in toolsets if t not in blocked_toolset_names]
 
 
-_SUBAGENT_LOG_EVENTS = frozenset(
-    {"subagent.start", "subagent.tool", "subagent.thinking", "subagent.complete"}
-)
+_SUBAGENT_LOG_EVENTS = frozenset({
+    "subagent.start",
+    "subagent.tool",
+    "subagent.thinking",
+    "subagent.complete",
+})
 
 
 def _log_subagent_event(

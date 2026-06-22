@@ -71,7 +71,7 @@ def _stored_assistant_message(normalized) -> dict:
     """
     provider_data = normalized.provider_data or {}
     tool_calls = []
-    for tc in (normalized.tool_calls or []):
+    for tc in normalized.tool_calls or []:
         tool_calls.append({
             "id": tc.id,
             "type": "function",
@@ -158,8 +158,8 @@ class TestInterleavedThinkingBlockOrder:
 
         _system, anthropic_messages = convert_messages_to_anthropic(
             messages,
-            base_url=None,             # direct Anthropic
-            model="claude-opus-4-8",   # adaptive thinking family
+            base_url=None,  # direct Anthropic
+            model="claude-opus-4-8",  # adaptive thinking family
         )
 
         # Find the (latest) assistant message in the converted output.
@@ -200,14 +200,20 @@ class TestInterleavedThinkingBlockOrder:
             {"role": "tool", "tool_call_id": "toolu_2", "content": "b ok"},
         ]
         _system, anthropic_messages = convert_messages_to_anthropic(
-            messages, base_url=None, model="claude-opus-4-8",
+            messages,
+            base_url=None,
+            model="claude-opus-4-8",
         )
         assistant_out = [m for m in anthropic_messages if m.get("role") == "assistant"]
         assert assistant_out, "no assistant message in converted output"
         content = assistant_out[-1]["content"]
         assert isinstance(content, list) and content, "fallback produced empty content"
         # Reconstruction keeps both tool_use blocks (answered by results).
-        tool_ids = [b.get("id") for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+        tool_ids = [
+            b.get("id")
+            for b in content
+            if isinstance(b, dict) and b.get("type") == "tool_use"
+        ]
         assert set(tool_ids) == {"toolu_1", "toolu_2"}
 
 
@@ -233,9 +239,15 @@ class TestInterleavedReplayCredentialRedaction:
                 "type": "tool_use",
                 "id": "toolu_1",
                 "name": "terminal",
-                "input": {"command": "curl -H 'Authorization: Bearer sk-LIVE-SECRET-123'"},
+                "input": {
+                    "command": "curl -H 'Authorization: Bearer sk-LIVE-SECRET-123'"
+                },
             },
-            {"type": "thinking", "thinking": "Now the second call.", "signature": "sig-BBB"},
+            {
+                "type": "thinking",
+                "thinking": "Now the second call.",
+                "signature": "sig-BBB",
+            },
             {
                 "type": "tool_use",
                 "id": "toolu_2",
@@ -254,9 +266,9 @@ class TestInterleavedReplayCredentialRedaction:
                     "type": "function",
                     "function": {
                         "name": "terminal",
-                        "arguments": json.dumps(
-                            {"command": f"curl -H 'Authorization: Bearer {REDACTED}'"}
-                        ),
+                        "arguments": json.dumps({
+                            "command": f"curl -H 'Authorization: Bearer {REDACTED}'"
+                        }),
                     },
                 },
                 {
@@ -278,14 +290,18 @@ class TestInterleavedReplayCredentialRedaction:
         ]
 
         _system, anthropic_messages = convert_messages_to_anthropic(
-            messages, base_url=None, model="claude-opus-4-8",
+            messages,
+            base_url=None,
+            model="claude-opus-4-8",
         )
         assistant_out = [m for m in anthropic_messages if m.get("role") == "assistant"]
         assert assistant_out, "no assistant message in converted output"
         blocks = assistant_out[-1]["content"]
 
         tool_uses = {b["id"]: b for b in blocks if b.get("type") == "tool_use"}
-        assert set(tool_uses) == {"toolu_1", "toolu_2"}, "tool_use blocks missing/renamed"
+        assert set(tool_uses) == {"toolu_1", "toolu_2"}, (
+            "tool_use blocks missing/renamed"
+        )
 
         # The replayed input must be the REDACTED value, not the live secret.
         replayed_cmd = tool_uses["toolu_1"]["input"]["command"]
@@ -298,9 +314,11 @@ class TestInterleavedReplayCredentialRedaction:
 
         # Interleave order is still preserved (the reason the channel exists).
         order = [
-            ("thinking", b.get("signature")) if b.get("type") == "thinking"
+            ("thinking", b.get("signature"))
+            if b.get("type") == "thinking"
             else ("tool_use", b.get("id"))
-            for b in blocks if b.get("type") in ("thinking", "tool_use")
+            for b in blocks
+            if b.get("type") in ("thinking", "tool_use")
         ]
         assert order == [
             ("thinking", "sig-AAA"),

@@ -1591,7 +1591,11 @@ class ClawksisACPAgent(acp.Agent):
         previous_session_id = None
 
         def _run_agent() -> dict:
-            nonlocal previous_approval_cb, previous_interactive, edit_approval_token, previous_session_id
+            nonlocal \
+                previous_approval_cb, \
+                previous_interactive, \
+                edit_approval_token, \
+                previous_session_id
             # Bind CLAWK_SESSION_KEY for this session so per-session caches
             # (e.g. the interactive sudo password cache in tools.terminal_tool)
             # scope to the ACP session rather than leaking across sessions

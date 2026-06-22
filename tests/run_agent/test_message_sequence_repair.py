@@ -18,17 +18,25 @@ def _bare_agent():
 
 # ── _drop_trailing_empty_response_scaffolding ──────────────────────────────
 
+
 def test_drop_scaffolding_rewinds_orphan_tool_tail():
     """When scaffolding is stripped, also rewind the orphan assistant+tool pair."""
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
-        {"role": "assistant", "content": "(empty)",
-         "_empty_terminal_sentinel": True},
+        {"role": "assistant", "content": "(empty)", "_empty_terminal_sentinel": True},
     ]
 
     AIAgent._drop_trailing_empty_response_scaffolding(agent, messages)
@@ -41,9 +49,17 @@ def test_drop_scaffolding_keeps_tail_when_no_scaffolding():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
     ]
     original = [dict(m) for m in messages]
@@ -58,17 +74,25 @@ def test_drop_scaffolding_handles_multiple_parallel_tool_results():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [
-             {"id": "t1", "type": "function",
-              "function": {"name": "f", "arguments": "{}"}},
-             {"id": "t2", "type": "function",
-              "function": {"name": "g", "arguments": "{}"}},
-         ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                },
+                {
+                    "id": "t2",
+                    "type": "function",
+                    "function": {"name": "g", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out1"},
         {"role": "tool", "tool_call_id": "t2", "content": "out2"},
-        {"role": "assistant", "content": "(empty)",
-         "_empty_terminal_sentinel": True},
+        {"role": "assistant", "content": "(empty)", "_empty_terminal_sentinel": True},
     ]
 
     AIAgent._drop_trailing_empty_response_scaffolding(agent, messages)
@@ -77,6 +101,7 @@ def test_drop_scaffolding_handles_multiple_parallel_tool_results():
 
 
 # ── _repair_message_sequence ───────────────────────────────────────────────
+
 
 def test_repair_merges_consecutive_user_messages():
     agent = _bare_agent()
@@ -114,9 +139,17 @@ def test_repair_does_not_rewind_ongoing_dialog_tool_pair():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "Q1"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
         {"role": "user", "content": "Q2"},
     ]
@@ -147,9 +180,17 @@ def test_repair_leaves_valid_conversation_unchanged():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "list files"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "ls", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "ls", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "a.txt b.txt"},
         {"role": "assistant", "content": "Found 2 files"},
         {"role": "user", "content": "more"},
@@ -166,8 +207,13 @@ def test_repair_preserves_multimodal_user_content():
     """Multimodal (list) content must NOT be merged — risks mangling attachments."""
     agent = _bare_agent()
     messages = [
-        {"role": "user", "content": [{"type": "text", "text": "hi"},
-                                     {"type": "image_url", "image_url": {"url": "..."}}]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "hi"},
+                {"type": "image_url", "image_url": {"url": "..."}},
+            ],
+        },
         {"role": "user", "content": "follow-up"},
     ]
 

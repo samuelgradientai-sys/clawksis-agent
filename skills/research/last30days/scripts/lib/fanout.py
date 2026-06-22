@@ -54,7 +54,9 @@ def run_competitor_fanout(
 
     workers = min(len(competitors) + 1, MAX_PARALLEL_SUBRUNS)
 
-    def _run_one(label: str, fn: Callable[[], schema.Report]) -> tuple[str, schema.Report | None, Exception | None]:
+    def _run_one(
+        label: str, fn: Callable[[], schema.Report]
+    ) -> tuple[str, schema.Report | None, Exception | None]:
         try:
             return label, fn(), None
         except Exception as exc:
@@ -68,8 +70,7 @@ def run_competitor_fanout(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
-            executor.submit(_run_one, label, fn): label
-            for label, fn in submissions
+            executor.submit(_run_one, label, fn): label for label, fn in submissions
         }
         results: dict[str, schema.Report] = {}
         for future in as_completed(futures):

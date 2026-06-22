@@ -54,13 +54,13 @@ BeautifulSoup supports modifying/manipulating the parsed DOM. Scrapling does not
 import requests
 from bs4 import BeautifulSoup
 
-url = 'https://example.com'
+url = "https://example.com"
 response = requests.get(url)
-soup = BeautifulSoup(response.text, 'html.parser')
+soup = BeautifulSoup(response.text, "html.parser")
 
-links = soup.find_all('a')
+links = soup.find_all("a")
 for link in links:
-    print(link['href'])
+    print(link["href"])
 ```
 
 **With Scrapling:**
@@ -68,10 +68,10 @@ for link in links:
 ```python
 from scrapling import Fetcher
 
-url = 'https://example.com'
+url = "https://example.com"
 page = Fetcher.get(url)
 
-links = page.css('a::attr(href)')
+links = page.css("a::attr(href)")
 for link in links:
     print(link)
 ```

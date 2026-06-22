@@ -18,7 +18,9 @@ from pathlib import Path
 MIN_PYTHON = (3, 12)
 
 
-def ensure_supported_python(version_info: tuple[int, int, int] | object | None = None) -> None:
+def ensure_supported_python(
+    version_info: tuple[int, int, int] | object | None = None,
+) -> None:
     if version_info is None:
         version_info = sys.version_info
     major, minor, micro = tuple(version_info[:3])
@@ -105,6 +107,7 @@ def save_output(
     rendered_content: str | None = None,
 ) -> Path:
     from datetime import datetime
+
     path = Path(save_dir).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
     slug = slugify(topic_override or report.topic)
@@ -113,7 +116,10 @@ def save_output(
     suffix_part = f"-{suffix}" if suffix else ""
     out_path = path / f"{slug}-{raw_label}{suffix_part}.{extension}"
     if out_path.exists():
-        out_path = path / f"{slug}-{raw_label}{suffix_part}-{datetime.now().strftime('%Y-%m-%d')}.{extension}"
+        out_path = (
+            path
+            / f"{slug}-{raw_label}{suffix_part}-{datetime.now().strftime('%Y-%m-%d')}.{extension}"
+        )
     # Markdown saves keep the complete debug artifact. JSON and HTML preserve
     # their requested wire format so file extensions match their content.
     if rendered_content is not None:
@@ -137,7 +143,10 @@ def emit_output(
         return json.dumps(schema.to_dict(report), indent=2, sort_keys=True)
     if emit == "html":
         return html_render.render_html(
-            report, fun_level=fun_level, save_path=save_path, synthesis_md=synthesis_md,
+            report,
+            fun_level=fun_level,
+            save_path=save_path,
+            synthesis_md=synthesis_md,
         )
     if emit in {"compact", "md"}:
         return render.render_compact(report, fun_level=fun_level, save_path=save_path)
@@ -172,7 +181,9 @@ def emit_comparison_output(
         )
     if emit in {"compact", "md"}:
         return render.render_comparison_multi(
-            entity_reports, fun_level=fun_level, save_path=save_path,
+            entity_reports,
+            fun_level=fun_level,
+            save_path=save_path,
         )
     if emit == "context":
         return render.render_comparison_multi_context(entity_reports)
@@ -190,6 +201,7 @@ def compute_save_path_display(save_dir: str, topic: str, suffix: str, emit: str)
     returns the absolute path.
     """
     from pathlib import Path as _Path
+
     path = _Path(save_dir).expanduser().resolve()
     slug = slugify(topic)
     extension = "json" if emit == "json" else "html" if emit == "html" else "md"
@@ -236,31 +248,82 @@ def persist_report(report: schema.Report) -> dict[str, int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Research a topic across live social, market, and grounded web sources.")
+    parser = argparse.ArgumentParser(
+        description="Research a topic across live social, market, and grounded web sources."
+    )
     parser.add_argument("topic", nargs="*", help="Research topic")
-    parser.add_argument("--emit", default="compact", choices=["compact", "json", "context", "md", "html"])
+    parser.add_argument(
+        "--emit",
+        default="compact",
+        choices=["compact", "json", "context", "md", "html"],
+    )
     parser.add_argument("--search", help="Comma-separated source list")
-    parser.add_argument("--quick", action="store_true", help="Lower-latency retrieval profile")
-    parser.add_argument("--deep", action="store_true", help="Higher-recall retrieval profile")
-    parser.add_argument("--debug", action="store_true", help="Enable HTTP debug logging")
-    parser.add_argument("--mock", action="store_true", help="Use mock retrieval fixtures")
-    parser.add_argument("--diagnose", action="store_true", help="Print provider and source availability")
-    parser.add_argument("--save-dir", help="Optional directory for saving the rendered output")
-    parser.add_argument("--synthesis-file", help="Markdown synthesis to embed in --emit=html output")
-    parser.add_argument("--store", action="store_true", help="Persist ranked findings to the SQLite research store")
+    parser.add_argument(
+        "--quick", action="store_true", help="Lower-latency retrieval profile"
+    )
+    parser.add_argument(
+        "--deep", action="store_true", help="Higher-recall retrieval profile"
+    )
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable HTTP debug logging"
+    )
+    parser.add_argument(
+        "--mock", action="store_true", help="Use mock retrieval fixtures"
+    )
+    parser.add_argument(
+        "--diagnose", action="store_true", help="Print provider and source availability"
+    )
+    parser.add_argument(
+        "--save-dir", help="Optional directory for saving the rendered output"
+    )
+    parser.add_argument(
+        "--synthesis-file", help="Markdown synthesis to embed in --emit=html output"
+    )
+    parser.add_argument(
+        "--store",
+        action="store_true",
+        help="Persist ranked findings to the SQLite research store",
+    )
     parser.add_argument("--x-handle", help="X handle for targeted supplemental search")
-    parser.add_argument("--x-related", help="Comma-separated related X handles (searched with lower weight)")
-    parser.add_argument("--web-backend", default="auto",
-                        choices=["auto", "brave", "exa", "serper", "parallel", "none"],
-                        help="Web search backend (default: auto, tries Brave then Exa then Serper then Parallel)")
-    parser.add_argument("--deep-research", action="store_true",
-                        help="Use Perplexity Deep Research (~$0.90/query) for in-depth analysis. Requires OPENROUTER_API_KEY.")
-    parser.add_argument("--plan", help="JSON query plan (skips internal LLM planner). Can be a JSON string or a file path.")
-    parser.add_argument("--save-suffix", help="Suffix for saved output filename (e.g., 'gemini' → kanye-west-raw-gemini.md)")
-    parser.add_argument("--subreddits", help="Comma-separated subreddit names to search (e.g., SaaS,Entrepreneur)")
-    parser.add_argument("--tiktok-hashtags", help="Comma-separated TikTok hashtags without # (e.g., tella,screenrecording)")
-    parser.add_argument("--tiktok-creators", help="Comma-separated TikTok creator handles (e.g., TellaHQ,taborplace)")
-    parser.add_argument("--ig-creators", help="Comma-separated Instagram creator handles (e.g., tella.tv,laborstories)")
+    parser.add_argument(
+        "--x-related",
+        help="Comma-separated related X handles (searched with lower weight)",
+    )
+    parser.add_argument(
+        "--web-backend",
+        default="auto",
+        choices=["auto", "brave", "exa", "serper", "parallel", "none"],
+        help="Web search backend (default: auto, tries Brave then Exa then Serper then Parallel)",
+    )
+    parser.add_argument(
+        "--deep-research",
+        action="store_true",
+        help="Use Perplexity Deep Research (~$0.90/query) for in-depth analysis. Requires OPENROUTER_API_KEY.",
+    )
+    parser.add_argument(
+        "--plan",
+        help="JSON query plan (skips internal LLM planner). Can be a JSON string or a file path.",
+    )
+    parser.add_argument(
+        "--save-suffix",
+        help="Suffix for saved output filename (e.g., 'gemini' → kanye-west-raw-gemini.md)",
+    )
+    parser.add_argument(
+        "--subreddits",
+        help="Comma-separated subreddit names to search (e.g., SaaS,Entrepreneur)",
+    )
+    parser.add_argument(
+        "--tiktok-hashtags",
+        help="Comma-separated TikTok hashtags without # (e.g., tella,screenrecording)",
+    )
+    parser.add_argument(
+        "--tiktok-creators",
+        help="Comma-separated TikTok creator handles (e.g., TellaHQ,taborplace)",
+    )
+    parser.add_argument(
+        "--ig-creators",
+        help="Comma-separated Instagram creator handles (e.g., tella.tv,laborstories)",
+    )
     parser.add_argument(
         "--days",
         "--lookback-days",
@@ -269,10 +332,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=30,
         help="Number of days to look back for research (default: 30, watchlist uses 90)",
     )
-    parser.add_argument("--auto-resolve", action="store_true",
-                        help="Use web search to discover subreddits/handles before planning (for platforms without WebSearch)")
-    parser.add_argument("--github-user", help="GitHub username for person-mode search (e.g., steipete)")
-    parser.add_argument("--github-repo", help="Comma-separated owner/repo for project-mode search (e.g., openclaw/openclaw,paperclipai/paperclip)")
+    parser.add_argument(
+        "--auto-resolve",
+        action="store_true",
+        help="Use web search to discover subreddits/handles before planning (for platforms without WebSearch)",
+    )
+    parser.add_argument(
+        "--github-user", help="GitHub username for person-mode search (e.g., steipete)"
+    )
+    parser.add_argument(
+        "--github-repo",
+        help="Comma-separated owner/repo for project-mode search (e.g., openclaw/openclaw,paperclipai/paperclip)",
+    )
     parser.add_argument(
         "--competitors",
         nargs="?",
@@ -341,8 +412,12 @@ def parse_competitors_plan(raw: str | None) -> dict[str, dict]:
         )
         raise SystemExit(2)
     known_fields = {
-        "x_handle", "x_related", "subreddits",
-        "github_user", "github_repos", "context",
+        "x_handle",
+        "x_related",
+        "subreddits",
+        "github_user",
+        "github_repos",
+        "context",
     }
     normalized: dict[str, dict] = {}
     for entity, entry in parsed.items():
@@ -378,6 +453,7 @@ def subrun_kwargs_for(
     This helper is the single source of truth for sub-run kwargs — main-topic
     flags can only leak if a caller bypasses it.
     """
+
     def _choose(plan_key: str, resolved_key: str | None = None):
         if plan_key in plan_entry and plan_entry[plan_key]:
             return plan_entry[plan_key]
@@ -391,7 +467,9 @@ def subrun_kwargs_for(
 
     subreddits = _choose("subreddits", "subreddits")
     if isinstance(subreddits, list):
-        subreddits = [s.strip().removeprefix("r/") for s in subreddits if s.strip()] or None
+        subreddits = [
+            s.strip().removeprefix("r/") for s in subreddits if s.strip()
+        ] or None
 
     x_related = plan_entry.get("x_related")
     if isinstance(x_related, list):
@@ -405,7 +483,9 @@ def subrun_kwargs_for(
 
     github_repos = _choose("github_repos", "github_repos")
     if isinstance(github_repos, list):
-        github_repos = [r.strip() for r in github_repos if r.strip() and "/" in r.strip()] or None
+        github_repos = [
+            r.strip() for r in github_repos if r.strip() and "/" in r.strip()
+        ] or None
 
     context = plan_entry.get("context") or resolved.get("context") or ""
 
@@ -505,13 +585,11 @@ def _show_runtime_ui(
 ) -> None:
     counts = {source: len(items) for source, items in report.items_by_source.items()}
     display_sources = list(
-        dict.fromkeys(
-            [
-                *report.query_plan.source_weights.keys(),
-                *report.items_by_source.keys(),
-                *report.errors_by_source.keys(),
-            ]
-        )
+        dict.fromkeys([
+            *report.query_plan.source_weights.keys(),
+            *report.items_by_source.keys(),
+            *report.errors_by_source.keys(),
+        ])
     )
     progress.end_processing()
     progress.show_complete(
@@ -541,7 +619,9 @@ def _write_last_run(topic: str, report: "schema.Report") -> None:
             return
         target = env.CONFIG_DIR
         target.mkdir(parents=True, exist_ok=True)
-        counts = {source: len(items) for source, items in report.items_by_source.items()}
+        counts = {
+            source: len(items) for source, items in report.items_by_source.items()
+        }
         payload = {
             "topic": topic,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -567,13 +647,19 @@ def main() -> int:
     # youtube_yt) can read it without taking a config dependency. This
     # routes yt-dlp through `ssh <host>` to bypass YouTube's bot-wall on
     # datacenter IPs (see lib/youtube_yt.py for details).
-    if config.get("LAST30DAYS_YOUTUBE_SSH_HOST") and "LAST30DAYS_YOUTUBE_SSH_HOST" not in os.environ:
-        os.environ["LAST30DAYS_YOUTUBE_SSH_HOST"] = config["LAST30DAYS_YOUTUBE_SSH_HOST"]
+    if (
+        config.get("LAST30DAYS_YOUTUBE_SSH_HOST")
+        and "LAST30DAYS_YOUTUBE_SSH_HOST" not in os.environ
+    ):
+        os.environ["LAST30DAYS_YOUTUBE_SSH_HOST"] = config[
+            "LAST30DAYS_YOUTUBE_SSH_HOST"
+        ]
 
     # Handle setup subcommand
     topic = " ".join(args.topic).strip()
     if topic.lower() == "setup":
         from lib import setup_wizard
+
         if "--openclaw" in extra_argv:
             results = setup_wizard.run_openclaw_setup(config)
             print(json.dumps(results))
@@ -613,10 +699,13 @@ def main() -> int:
         if args.emit == "html":
             synthesis_md = read_synthesis_file(args.synthesis_file)
         else:
-            sys.stderr.write("[last30days] Warning: --synthesis-file is only used with --emit=html; ignoring.\n")
+            sys.stderr.write(
+                "[last30days] Warning: --synthesis-file is only used with --emit=html; ignoring.\n"
+            )
 
     if not os.environ.get("LAST30DAYS_SKIP_PREFLIGHT"):
         from lib import preflight
+
         refuse_msg = preflight.check_class_1_trap(topic)
         if refuse_msg:
             sys.stderr.write(refuse_msg)
@@ -627,15 +716,48 @@ def main() -> int:
 
     depth = "deep" if args.deep else "quick" if args.quick else "default"
     try:
-        x_related = [h.strip() for h in args.x_related.split(",") if h.strip()] if args.x_related else None
-        subreddits = [s.strip().removeprefix("r/") for s in args.subreddits.split(",") if s.strip()] if args.subreddits else None
-        tiktok_hashtags = [h.strip().lstrip("#") for h in args.tiktok_hashtags.split(",") if h.strip()] if args.tiktok_hashtags else None
-        tiktok_creators = [c.strip().lstrip("@") for c in args.tiktok_creators.split(",") if c.strip()] if args.tiktok_creators else None
-        ig_creators = [c.strip().lstrip("@") for c in args.ig_creators.split(",") if c.strip()] if args.ig_creators else None
+        x_related = (
+            [h.strip() for h in args.x_related.split(",") if h.strip()]
+            if args.x_related
+            else None
+        )
+        subreddits = (
+            [
+                s.strip().removeprefix("r/")
+                for s in args.subreddits.split(",")
+                if s.strip()
+            ]
+            if args.subreddits
+            else None
+        )
+        tiktok_hashtags = (
+            [
+                h.strip().lstrip("#")
+                for h in args.tiktok_hashtags.split(",")
+                if h.strip()
+            ]
+            if args.tiktok_hashtags
+            else None
+        )
+        tiktok_creators = (
+            [
+                c.strip().lstrip("@")
+                for c in args.tiktok_creators.split(",")
+                if c.strip()
+            ]
+            if args.tiktok_creators
+            else None
+        )
+        ig_creators = (
+            [c.strip().lstrip("@") for c in args.ig_creators.split(",") if c.strip()]
+            if args.ig_creators
+            else None
+        )
         # Parse external plan if provided via --plan flag
         external_plan = None
         if args.plan:
             import json as _json
+
             plan_str = args.plan
             if os.path.isfile(plan_str):
                 plan_str = open(plan_str).read()
@@ -650,6 +772,7 @@ def main() -> int:
         repos_from_auto_resolve = False
         if args.auto_resolve and not external_plan:
             from lib import resolve
+
             resolution = resolve.auto_resolve(topic, config)
             if resolution.get("subreddits") and not subreddits:
                 subreddits = resolution["subreddits"]
@@ -672,10 +795,20 @@ def main() -> int:
                     external_plan = None  # planner will use its own, but with context
                 # Store context for the planner prompt injection
                 config["_auto_resolve_context"] = resolution["context"]
-                sys.stderr.write(f"[AutoResolve] Context: {resolution['context'][:80]}...\n")
+                sys.stderr.write(
+                    f"[AutoResolve] Context: {resolution['context'][:80]}...\n"
+                )
 
         github_user = args.github_user.lstrip("@").lower() if args.github_user else None
-        github_repos = [r.strip() for r in args.github_repo.split(",") if r.strip() and "/" in r.strip()] if args.github_repo else None
+        github_repos = (
+            [
+                r.strip()
+                for r in args.github_repo.split(",")
+                if r.strip() and "/" in r.strip()
+            ]
+            if args.github_repo
+            else None
+        )
 
         # Only canonicalize when repos came from a user-supplied --github-repo flag.
         # When repos_from_auto_resolve is True, auto_resolve already ran
@@ -683,8 +816,11 @@ def main() -> int:
         # with cap=None can re-sort by topic-slug match and lose that ordering.
         if github_repos and not repos_from_auto_resolve:
             from lib import resolve as resolve_lib
+
             original_github_repos = github_repos[:]
-            github_repos = resolve_lib.canonicalize_github_repos(topic, github_repos, cap=None)
+            github_repos = resolve_lib.canonicalize_github_repos(
+                topic, github_repos, cap=None
+            )
             if github_repos != original_github_repos:
                 sys.stderr.write(
                     "[GitHub] Canonicalized repos: "
@@ -694,13 +830,18 @@ def main() -> int:
         # --deep-research: auto-enable perplexity source and set deep flag
         if args.deep_research:
             if not config.get("OPENROUTER_API_KEY"):
-                print("Error: --deep-research requires OPENROUTER_API_KEY", file=sys.stderr)
+                print(
+                    "Error: --deep-research requires OPENROUTER_API_KEY",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             config["_deep_research"] = True
             # Auto-enable perplexity in INCLUDE_SOURCES
             include = config.get("INCLUDE_SOURCES") or ""
             if "perplexity" not in include.lower():
-                config["INCLUDE_SOURCES"] = f"{include},perplexity" if include else "perplexity"
+                config["INCLUDE_SOURCES"] = (
+                    f"{include},perplexity" if include else "perplexity"
+                )
 
         comp_enabled, comp_count, comp_explicit = resolve_competitors_args(args)
         comp_plan = parse_competitors_plan(args.competitors_plan)
@@ -723,6 +864,7 @@ def main() -> int:
         # outer --x-handle / --subreddits apply to the first entity unless
         # --competitors-plan covers it.
         from lib import planner as _planner
+
         vs_entities = _planner._comparison_entities(topic)
         if len(vs_entities) >= 2 and not comp_enabled:
             topic = vs_entities[0]
@@ -781,8 +923,8 @@ def main() -> int:
                         "  1. WebSearch for '{topic} competitors' or '{topic} alternatives'.\n"
                         "  2. For each peer, WebSearch for handles/subs/github (Step 0.55).\n"
                         "  3. Re-invoke: /last30days '{topic} vs {peer1} vs {peer2}' "
-                        "--competitors-plan '{\"Peer1\":{\"x_handle\":\"h1\",\"subreddits\":"
-                        "[\"s1\"],...},\"Peer2\":{...}}'.\n"
+                        '--competitors-plan \'{"Peer1":{"x_handle":"h1","subreddits":'
+                        '["s1"],...},"Peer2":{...}}\'.\n'
                         "See SKILL.md 'Competitor mode' for the full protocol.\n"
                         "\n"
                         "HEADLESS / CRON PATH (no hosting model available): set "
@@ -795,7 +937,10 @@ def main() -> int:
                     )
                     return 2
                 discovered = competitors_mod.discover_competitors(
-                    topic, comp_count, config, lookback_days=args.lookback_days,
+                    topic,
+                    comp_count,
+                    config,
+                    lookback_days=args.lookback_days,
                 )
                 if not discovered:
                     sys.stderr.write(
@@ -907,7 +1052,9 @@ def main() -> int:
         progress.show_error(str(exc))
         raise
     _show_runtime_ui(
-        report, progress, diag,
+        report,
+        progress,
+        diag,
         suppress_web_promo=bool(external_plan or comp_plan),
     )
     _write_last_run(topic, report)
@@ -917,9 +1064,7 @@ def main() -> int:
     # to os.environ). Mirrors the LAST30DAYS_DEBUG / LAST30DAYS_SKIP_PREFLIGHT
     # convention; env-var or config wins, with `--store` flag still working.
     _store_env = (
-        os.environ.get("LAST30DAYS_STORE")
-        or config.get("LAST30DAYS_STORE")
-        or ""
+        os.environ.get("LAST30DAYS_STORE") or config.get("LAST30DAYS_STORE") or ""
     ).lower()
     if args.store or _store_env in ("1", "true", "yes"):
         counts = persist_report(report)
@@ -931,6 +1076,7 @@ def main() -> int:
     # Show quality nudge if applicable
     try:
         from lib import quality_nudge
+
         # Populate transcript-fetch ratio so quality_nudge can detect the
         # degraded-YouTube failure mode (videos returned but transcripts
         # silently failed - typically a stale yt-dlp binary).
@@ -939,8 +1085,12 @@ def main() -> int:
         research_results = {
             "youtube_videos_count": len(youtube_items),
             "youtube_transcripts_count": sum(
-                1 for it in youtube_items
-                if (it.metadata.get("transcript_highlights") or it.metadata.get("transcript_snippet"))
+                1
+                for it in youtube_items
+                if (
+                    it.metadata.get("transcript_highlights")
+                    or it.metadata.get("transcript_snippet")
+                )
             ),
             "youtube_error": report.errors_by_source.get("youtube"),
             "x_error": report.errors_by_source.get("x"),
@@ -970,7 +1120,9 @@ def main() -> int:
     is_comparison_html = bool(entity_reports) and args.emit == "html"
     footer_save_path = None
     if args.save_dir:
-        save_topic_for_display = comparison_topic(entity_reports) if is_comparison_html else report.topic
+        save_topic_for_display = (
+            comparison_topic(entity_reports) if is_comparison_html else report.topic
+        )
         footer_save_path = compute_save_path_display(
             args.save_dir, save_topic_for_display, args.save_suffix or "", args.emit
         )
@@ -1013,7 +1165,9 @@ def main() -> int:
             args.save_dir,
             suffix=args.save_suffix or "",
             synthesis_md=synthesis_md,
-            topic_override=comparison_topic(entity_reports) if is_comparison_html else None,
+            topic_override=comparison_topic(entity_reports)
+            if is_comparison_html
+            else None,
             rendered_content=rendered if is_comparison_html else None,
         )
         sys.stderr.write(f"[last30days] Saved output to {save_path}\n")
@@ -1022,7 +1176,9 @@ def main() -> int:
         if entity_reports and len(entity_reports) > 1:
             for label, entity_report in entity_reports[1:]:
                 peer_path = save_output(
-                    entity_report, args.emit, args.save_dir,
+                    entity_report,
+                    args.emit,
+                    args.save_dir,
                     suffix=args.save_suffix or "",
                     synthesis_md=synthesis_md,
                 )

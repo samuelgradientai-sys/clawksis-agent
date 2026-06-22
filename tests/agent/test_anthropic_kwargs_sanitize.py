@@ -19,15 +19,24 @@ from agent.anthropic_adapter import (
 def _fake_anthropic_call(**kwargs):
     """Mimic the Anthropic SDK's strict kwarg signature."""
     allowed = {
-        "model", "messages", "max_tokens", "system", "tools", "tool_choice",
-        "extra_body", "extra_headers", "temperature", "top_p", "top_k",
-        "thinking", "timeout",
+        "model",
+        "messages",
+        "max_tokens",
+        "system",
+        "tools",
+        "tool_choice",
+        "extra_body",
+        "extra_headers",
+        "temperature",
+        "top_p",
+        "top_k",
+        "thinking",
+        "timeout",
     }
     bad = set(kwargs) - allowed
     if bad:
         raise TypeError(
-            "Messages.stream() got an unexpected keyword argument "
-            f"{sorted(bad)[0]!r}"
+            f"Messages.stream() got an unexpected keyword argument {sorted(bad)[0]!r}"
         )
     return "OK"
 
@@ -72,8 +81,7 @@ def test_warns_when_keys_are_stripped(caplog):
             {"model": "m", "instructions": "sys"}, log_prefix="[pfx] "
         )
     assert any(
-        "31673" in r.message and "[pfx] " in r.message
-        for r in caplog.records
+        "31673" in r.message and "[pfx] " in r.message for r in caplog.records
     ), caplog.records
 
 
@@ -91,4 +99,9 @@ def test_non_dict_input_is_noop():
 def test_responses_only_kwargs_membership():
     # Contract: instructions (the reported symptom) plus the sibling
     # Responses-shape keys are all covered.
-    assert {"instructions", "input", "store", "parallel_tool_calls"} <= _RESPONSES_ONLY_KWARGS
+    assert {
+        "instructions",
+        "input",
+        "store",
+        "parallel_tool_calls",
+    } <= _RESPONSES_ONLY_KWARGS

@@ -39,7 +39,7 @@ def build_acp_parser(subparsers, *, cmd_acp: Callable) -> None:
         "--setup-browser",
         action="store_true",
         help="Install agent-browser + Playwright Chromium into ~/.clawksis/node/ "
-             "for browser tool support (idempotent).",
+        "for browser tool support (idempotent).",
     )
     acp_parser.add_argument(
         "--yes",
@@ -47,6 +47,6 @@ def build_acp_parser(subparsers, *, cmd_acp: Callable) -> None:
         action="store_true",
         dest="assume_yes",
         help="Accept all prompts (used by --setup-browser to skip the "
-             "~400 MB Chromium download confirmation).",
+        "~400 MB Chromium download confirmation).",
     )
     acp_parser.set_defaults(func=cmd_acp)

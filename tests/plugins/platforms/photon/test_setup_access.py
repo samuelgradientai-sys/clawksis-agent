@@ -5,6 +5,7 @@ channel at their DM, writing to the per-test ~/.clawksis/.env (the hermetic
 CLAWK_HOME fixture isolates this). It must fill only unset keys so a re-run
 never clobbers a hand-tuned allowlist.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,7 +57,9 @@ def test_env_enablement_seeds_home_channel(monkeypatch: pytest.MonkeyPatch) -> N
     }
 
 
-def test_env_enablement_home_channel_defaults_name(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_enablement_home_channel_defaults_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "project_123")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "secret_123")
     monkeypatch.setenv("PHOTON_HOME_CHANNEL", "+15551234567")
@@ -71,9 +74,13 @@ def test_env_enablement_home_channel_defaults_name(monkeypatch: pytest.MonkeyPat
     }
 
 
-def test_setup_hint_uses_gateway_service_command(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+def test_setup_hint_uses_gateway_service_command(
+    monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
     monkeypatch.setattr(cli.photon_auth, "load_photon_token", lambda: "token")
-    monkeypatch.setattr(cli.photon_auth, "load_dashboard_project_id", lambda: "dashboard")
+    monkeypatch.setattr(
+        cli.photon_auth, "load_dashboard_project_id", lambda: "dashboard"
+    )
     monkeypatch.setattr(
         cli.photon_auth,
         "ensure_spectrum_enabled",
@@ -84,13 +91,20 @@ def test_setup_hint_uses_gateway_service_command(monkeypatch: pytest.MonkeyPatch
         "regenerate_project_secret",
         lambda token, dashboard_id: "secret_123",
     )
-    monkeypatch.setattr(cli.photon_auth, "store_project_credentials", lambda **kwargs: None)
+    monkeypatch.setattr(
+        cli.photon_auth, "store_project_credentials", lambda **kwargs: None
+    )
     monkeypatch.setattr(
         cli.photon_auth,
         "register_user_if_absent",
-        lambda *args, **kwargs: ({"id": "user_123", "phoneNumber": "+15551234567"}, True),
+        lambda *args, **kwargs: (
+            {"id": "user_123", "phoneNumber": "+15551234567"},
+            True,
+        ),
     )
-    monkeypatch.setattr(cli.photon_auth, "user_assigned_line", lambda user: "+15557654321")
+    monkeypatch.setattr(
+        cli.photon_auth, "user_assigned_line", lambda user: "+15557654321"
+    )
     monkeypatch.setattr(cli.photon_auth, "store_user_numbers", lambda **kwargs: None)
     monkeypatch.setattr(cli, "_install_sidecar", lambda: 0)
 

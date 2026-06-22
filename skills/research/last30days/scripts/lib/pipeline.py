@@ -97,7 +97,9 @@ def normalize_requested_sources(sources: list[str] | None) -> list[str] | None:
     return normalized
 
 
-def available_sources(config: dict[str, Any], requested_sources: list[str] | None = None) -> list[str]:
+def available_sources(
+    config: dict[str, Any], requested_sources: list[str] | None = None
+) -> list[str]:
     available: list[str] = []
     # reddit_public needs no API key - always available
     available.append("reddit")
@@ -116,29 +118,49 @@ def available_sources(config: dict[str, Any], requested_sources: list[str] | Non
         available.append("bluesky")
     if env.is_truthsocial_available(config):
         available.append("truthsocial")
-    if config.get("BRAVE_API_KEY") or config.get("EXA_API_KEY") or config.get("SERPER_API_KEY") or config.get("PARALLEL_API_KEY"):
+    if (
+        config.get("BRAVE_API_KEY")
+        or config.get("EXA_API_KEY")
+        or config.get("SERPER_API_KEY")
+        or config.get("PARALLEL_API_KEY")
+    ):
         available.append("grounding")
     # Perplexity Sonar: opt-in additive source via INCLUDE_SOURCES=perplexity
     include_sources = (config.get("INCLUDE_SOURCES") or "").lower().split(",")
     if config.get("OPENROUTER_API_KEY") and (
-        "perplexity" in include_sources or (requested_sources and "perplexity" in requested_sources)
+        "perplexity" in include_sources
+        or (requested_sources and "perplexity" in requested_sources)
     ):
         available.append("perplexity")
-    if requested_sources and "xiaohongshu" in requested_sources and env.is_xiaohongshu_available(config):
+    if (
+        requested_sources
+        and "xiaohongshu" in requested_sources
+        and env.is_xiaohongshu_available(config)
+    ):
         available.append("xiaohongshu")
     if env.is_threads_available(config):
         available.append("threads")
-    if requested_sources and "pinterest" in requested_sources and env.is_pinterest_available(config):
+    if (
+        requested_sources
+        and "pinterest" in requested_sources
+        and env.is_pinterest_available(config)
+    ):
         available.append("pinterest")
     if env.is_xquik_available(config):
         available.append("xquik")
-    exclude = {s.strip().lower() for s in (config.get("EXCLUDE_SOURCES") or "").split(",") if s.strip()}
+    exclude = {
+        s.strip().lower()
+        for s in (config.get("EXCLUDE_SOURCES") or "").split(",")
+        if s.strip()
+    }
     if exclude:
         available = [s for s in available if s not in exclude]
     return available
 
 
-def diagnose(config: dict[str, Any], requested_sources: list[str] | None = None) -> dict[str, Any]:
+def diagnose(
+    config: dict[str, Any], requested_sources: list[str] | None = None
+) -> dict[str, Any]:
     requested_sources = normalize_requested_sources(requested_sources)
     google_key = _google_key(config)
     x_status = env.get_x_source_status(config)
@@ -153,14 +175,17 @@ def diagnose(config: dict[str, Any], requested_sources: list[str] | None = None)
         native_web_backend = "parallel"
     providers_status = {
         "google": bool(google_key),
-        "openai": bool(config.get("OPENAI_API_KEY")) and config.get("OPENAI_AUTH_STATUS") == env.AUTH_STATUS_OK,
+        "openai": bool(config.get("OPENAI_API_KEY"))
+        and config.get("OPENAI_AUTH_STATUS") == env.AUTH_STATUS_OK,
         "xai": bool(config.get("XAI_API_KEY")),
         "openrouter": bool(config.get("OPENROUTER_API_KEY")),
     }
     return {
         "providers": providers_status,
         "local_mode": not any(providers_status.values()),
-        "reasoning_provider": (config.get("LAST30DAYS_REASONING_PROVIDER") or "auto").lower(),
+        "reasoning_provider": (
+            config.get("LAST30DAYS_REASONING_PROVIDER") or "auto"
+        ).lower(),
         "x_backend": x_status["source"],
         "bird_installed": x_status["bird_installed"],
         "bird_authenticated": x_status["bird_authenticated"],
@@ -207,7 +232,10 @@ def run(
             available = [source for source in available if source in requested_sources]
     if web_backend == "none":
         available = [s for s in available if s != "grounding"]
-    elif web_backend in ("brave", "exa", "serper", "parallel") and "grounding" not in available:
+    elif (
+        web_backend in ("brave", "exa", "serper", "parallel")
+        and "grounding" not in available
+    ):
         available.append("grounding")
     if not available:
         raise RuntimeError("No sources are available for this run.")
@@ -216,7 +244,11 @@ def run(
         # External plan provided (e.g., from Claude Code via --plan flag).
         # Parse it through the same sanitizer to validate structure.
         plan = planner._sanitize_plan(
-            external_plan, topic, available, requested_sources, depth,
+            external_plan,
+            topic,
+            available,
+            requested_sources,
+            depth,
         )
         plan_source = "external"
     else:
@@ -232,7 +264,9 @@ def run(
         )
         # Source labelling: the fallback path annotates notes with "fallback-plan"
         # or "deterministic-comparison-plan"; anything else came from the LLM.
-        if any("fallback" in note or "deterministic" in note for note in (plan.notes or [])):
+        if any(
+            "fallback" in note or "deterministic" in note for note in (plan.notes or [])
+        ):
             plan_source = "deterministic"
         elif not mock and reasoning_provider and runtime.planner_model:
             plan_source = "llm"
@@ -282,16 +316,24 @@ def run(
     if github_repos and "github" in available:
         try:
             project_items = github.search_github_project(
-                github_repos, from_date, to_date,
-                depth=depth, token=config.get("GITHUB_TOKEN"),
+                github_repos,
+                from_date,
+                to_date,
+                depth=depth,
+                token=config.get("GITHUB_TOKEN"),
             )
             if project_items:
                 normalized = _normalize_score_dedupe(
-                    "github", project_items, from_date, to_date,
+                    "github",
+                    project_items,
+                    from_date,
+                    to_date,
                     freshness_mode=plan.freshness_mode,
                     ranking_query=f"What are {', '.join(github_repos)} doing on GitHub?",
                 )
-                primary_label = plan.subqueries[0].label if plan.subqueries else "primary"
+                primary_label = (
+                    plan.subqueries[0].label if plan.subqueries else "primary"
+                )
                 bundle.add_items(primary_label, "github", normalized)
                 _github_custom_done = True
                 _github_enriched_repos = {r.lower() for r in github_repos}
@@ -302,17 +344,25 @@ def run(
     if github_user and "github" in available and not _github_custom_done:
         try:
             person_items = github.search_github_person(
-                github_user, from_date, to_date,
-                depth=depth, token=config.get("GITHUB_TOKEN"),
+                github_user,
+                from_date,
+                to_date,
+                depth=depth,
+                token=config.get("GITHUB_TOKEN"),
             )
             if person_items:
                 normalized = _normalize_score_dedupe(
-                    "github", person_items, from_date, to_date,
+                    "github",
+                    person_items,
+                    from_date,
+                    to_date,
                     freshness_mode=plan.freshness_mode,
                     ranking_query=f"What is @{github_user} doing on GitHub?",
                 )
                 # Use the first subquery's label so RRF can look up the weight
-                primary_label = plan.subqueries[0].label if plan.subqueries else "primary"
+                primary_label = (
+                    plan.subqueries[0].label if plan.subqueries else "primary"
+                )
                 bundle.add_items(primary_label, "github", normalized)
                 _github_person_done = True
         except Exception as exc:
@@ -385,9 +435,14 @@ def run(
                     time.sleep(3)
                     try:
                         raw_items, artifact = _retrieve_stream(
-                            topic=topic, subquery=subquery, source=source,
-                            config=config, depth=depth, date_range=(from_date, to_date),
-                            runtime=runtime, mock=mock,
+                            topic=topic,
+                            subquery=subquery,
+                            source=source,
+                            config=config,
+                            depth=depth,
+                            date_range=(from_date, to_date),
+                            runtime=runtime,
+                            mock=mock,
                             rate_limited_sources=rate_limited_sources,
                             rate_limit_lock=rate_limit_lock,
                             web_backend=web_backend,
@@ -398,13 +453,18 @@ def run(
                             ig_creators=ig_creators,
                         )
                     except Exception as retry_exc:
-                        bundle.errors_by_source[source] = f"{exc} (retried once, still failed: {retry_exc})"
+                        bundle.errors_by_source[source] = (
+                            f"{exc} (retried once, still failed: {retry_exc})"
+                        )
                         continue
                 else:
                     bundle.errors_by_source[source] = str(exc)
                     continue
             normalized = _normalize_score_dedupe(
-                source, raw_items, from_date, to_date,
+                source,
+                raw_items,
+                from_date,
+                to_date,
                 freshness_mode=plan.freshness_mode,
                 ranking_query=subquery.ranking_query,
             )
@@ -432,7 +492,9 @@ def run(
     # Phase 2b: retry thin sources with simplified query
     # Note: _github_skip_sources tells the retry to not re-run GitHub keyword search
     # when project-mode or person-mode already provided authoritative data.
-    _github_skip_retry = {"github"} if (_github_person_done or _github_custom_done) else set()
+    _github_skip_retry = (
+        {"github"} if (_github_person_done or _github_custom_done) else set()
+    )
     _retry_thin_sources(
         topic=topic,
         bundle=bundle,
@@ -455,8 +517,12 @@ def run(
         if bundle.items_by_source.get(source):
             del bundle.errors_by_source[source]
 
-    items_by_source = _finalize_items_by_source(bundle.items_by_source, topic=topic, config=config)
-    candidates = weighted_rrf(bundle.items_by_source_and_query, plan, pool_limit=settings["pool_limit"])
+    items_by_source = _finalize_items_by_source(
+        bundle.items_by_source, topic=topic, config=config
+    )
+    candidates = weighted_rrf(
+        bundle.items_by_source_and_query, plan, pool_limit=settings["pool_limit"]
+    )
     ranked_candidates = rerank.rerank_candidates(
         topic=topic,
         plan=plan,
@@ -509,7 +575,10 @@ def _normalize_score_dedupe(
 ) -> list[schema.SourceItem]:
     """Normalize, annotate, prune, dedupe, and extract snippets for a batch of raw items."""
     normalized = normalize.normalize_source_items(
-        source, raw_items, from_date, to_date,
+        source,
+        raw_items,
+        from_date,
+        to_date,
         freshness_mode=freshness_mode,
     )
     prepared_query = relevance.PreparedQuery(ranking_query)
@@ -528,7 +597,9 @@ def _finalize_items_by_source(
 ) -> dict[str, list[schema.SourceItem]]:
     finalized = {}
     for source, items in items_by_source_raw.items():
-        items = sorted(items, key=lambda item: item.local_rank_score or 0.0, reverse=True)
+        items = sorted(
+            items, key=lambda item: item.local_rank_score or 0.0, reverse=True
+        )
         items = dedupe.dedupe_items(items)
         # Post-merge topic-relevance filter for Polymarket: comparison queries
         # fan out into per-entity subqueries ("Hermes", "OpenClaw") whose topic
@@ -539,7 +610,9 @@ def _finalize_items_by_source(
             items = polymarket.filter_items_against_topic(topic, items)
             # --polymarket-keywords (via config): additional keyword filter
             # for ambiguous single-token topics (e.g., "Warriors" → nba,gsw).
-            keywords = config.get("_polymarket_keywords") if isinstance(config, dict) else None
+            keywords = (
+                config.get("_polymarket_keywords") if isinstance(config, dict) else None
+            )
             if keywords:
                 items = polymarket.filter_items_against_keywords(items, keywords)
         if source == "digg" and items:
@@ -635,8 +708,10 @@ def _run_supplemental_searches(
         return
 
     entities = entity_extract.extract_entities(
-        reddit_dicts, x_dicts,
-        max_handles=3, max_subreddits=3,
+        reddit_dicts,
+        x_dicts,
+        max_handles=3,
+        max_subreddits=3,
     )
 
     handles = entities.get("x_handles", [])
@@ -653,7 +728,11 @@ def _run_supplemental_searches(
         primary_lower = x_handle.lstrip("@").lower() if x_handle else ""
         for rh in x_related:
             rh_clean = rh.lstrip("@").lower().strip()
-            if rh_clean and rh_clean != primary_lower and rh_clean not in [h.lower() for h in handles]:
+            if (
+                rh_clean
+                and rh_clean != primary_lower
+                and rh_clean not in [h.lower() for h in handles]
+            ):
                 related_handles.append(rh_clean)
 
     if not handles and not related_handles:
@@ -682,7 +761,10 @@ def _run_supplemental_searches(
     if handles:
         try:
             raw_items = bird_x.search_handles(
-                handles, topic, from_date, count_per=3,
+                handles,
+                topic,
+                from_date,
+                count_per=3,
             )
         except Exception as exc:
             print(f"[Pipeline] Phase 2 handle search failed: {exc}", file=sys.stderr)
@@ -692,7 +774,10 @@ def _run_supplemental_searches(
 
         if raw_items:
             normalized = _normalize_score_dedupe(
-                "x", raw_items, from_date, to_date,
+                "x",
+                raw_items,
+                from_date,
+                to_date,
                 freshness_mode=plan.freshness_mode,
                 ranking_query=ranking_query,
             )
@@ -709,15 +794,24 @@ def _run_supplemental_searches(
     if related_handles:
         try:
             raw_items = bird_x.search_handles(
-                related_handles, topic, from_date, count_per=3,
+                related_handles,
+                topic,
+                from_date,
+                count_per=3,
             )
         except Exception as exc:
-            print(f"[Pipeline] Phase 2 related handle search failed: {exc}", file=sys.stderr)
+            print(
+                f"[Pipeline] Phase 2 related handle search failed: {exc}",
+                file=sys.stderr,
+            )
             raw_items = []
 
         if raw_items:
             normalized = _normalize_score_dedupe(
-                "x", raw_items, from_date, to_date,
+                "x",
+                raw_items,
+                from_date,
+                to_date,
                 freshness_mode=plan.freshness_mode,
                 ranking_query=ranking_query,
             )
@@ -728,7 +822,9 @@ def _run_supplemental_searches(
                 # scores related-handle results below primary results.
                 bundle.add_items("supplemental-related", "x", normalized)
                 # Register the supplemental-related label in the plan for fusion
-                if not any(sq.label == "supplemental-related" for sq in plan.subqueries):
+                if not any(
+                    sq.label == "supplemental-related" for sq in plan.subqueries
+                ):
                     plan.subqueries.append(
                         schema.SubQuery(
                             label="supplemental-related",
@@ -819,26 +915,40 @@ def _retry_thin_sources(
             freshness_mode=plan.freshness_mode,
             ranking_query=retry_subquery.ranking_query,
         )
-        return source, normalized[:settings["per_stream_limit"]]
+        return source, normalized[: settings["per_stream_limit"]]
 
     retryable = [s for s in thin_sources if s not in rate_limited_sources]
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
     with ThreadPoolExecutor(max_workers=min(4, len(retryable) or 1)) as executor:
         futures = {executor.submit(_retry_one_source, s): s for s in retryable}
         for future in as_completed(futures):
             source = futures[future]
             try:
                 source, normalized = future.result()
-                existing_urls = {item.url for item in bundle.items_by_source.get(source, []) if item.url}
-                new_items = [item for item in normalized if item.url not in existing_urls]
+                existing_urls = {
+                    item.url
+                    for item in bundle.items_by_source.get(source, [])
+                    if item.url
+                }
+                new_items = [
+                    item for item in normalized if item.url not in existing_urls
+                ]
 
                 if new_items:
                     bundle.items_by_source.setdefault(source, []).extend(new_items)
-                    primary_label = plan.subqueries[0].label if plan.subqueries else "primary"
-                    bundle.items_by_source_and_query.setdefault((primary_label, source), []).extend(new_items)
+                    primary_label = (
+                        plan.subqueries[0].label if plan.subqueries else "primary"
+                    )
+                    bundle.items_by_source_and_query.setdefault(
+                        (primary_label, source), []
+                    ).extend(new_items)
             except Exception as exc:
-                print(f"[Pipeline] Retry failed for {source}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                print(
+                    f"[Pipeline] Retry failed for {source}: {type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
 
 
 def _retrieve_stream(
@@ -868,7 +978,8 @@ def _retrieve_stream(
         return _mock_stream_results(source, subquery)
     if source == "grounding":
         return grounding.web_search(
-            subquery.search_query, date_range, config, backend=web_backend)
+            subquery.search_query, date_range, config, backend=web_backend
+        )
     if source == "reddit":
         # Use raw_topic so expand_reddit_queries() generates diverse variants
         # from the original user topic, not the planner's narrowed search_query.
@@ -876,7 +987,10 @@ def _retrieve_stream(
         # Public Reddit first (free, gets comments); SC as backup
         try:
             public_results = reddit_public.search_reddit_public(
-                reddit_query, from_date, to_date, depth=depth,
+                reddit_query,
+                from_date,
+                to_date,
+                depth=depth,
                 subreddits=subreddits,
             )
             if public_results:
@@ -910,10 +1024,16 @@ def _retrieve_stream(
     if source == "x":
         backend = runtime.x_search_backend or env.get_x_source(config)
         if backend == "bird":
-            result = bird_x.search_x(subquery.search_query, from_date, to_date, depth=depth)
+            result = bird_x.search_x(
+                subquery.search_query, from_date, to_date, depth=depth
+            )
             return bird_x.parse_bird_response(result, query=subquery.search_query), {}
         if backend == "xai":
-            model = config.get("LAST30DAYS_X_MODEL") or config.get("XAI_MODEL_PIN") or providers.XAI_DEFAULT
+            model = (
+                config.get("LAST30DAYS_X_MODEL")
+                or config.get("XAI_MODEL_PIN")
+                or providers.XAI_DEFAULT
+            )
             result = xai_x.search_x(
                 config["XAI_API_KEY"],
                 model,
@@ -935,12 +1055,18 @@ def _retrieve_stream(
         # Try yt-dlp first, fall back to SC YouTube if it fails or isn't installed
         if which("yt-dlp"):
             try:
-                result = youtube_yt.search_and_transcribe(yt_query, from_date, to_date, depth=depth)
+                result = youtube_yt.search_and_transcribe(
+                    yt_query, from_date, to_date, depth=depth
+                )
             except Exception:
                 result = None
-        if (result is None or not result.get("items")) and env.is_youtube_sc_available(config):
+        if (result is None or not result.get("items")) and env.is_youtube_sc_available(
+            config
+        ):
             sc_token = config.get("SCRAPECREATORS_API_KEY", "")
-            result = youtube_yt.search_youtube_sc(yt_query, from_date, to_date, depth=depth, token=sc_token)
+            result = youtube_yt.search_youtube_sc(
+                yt_query, from_date, to_date, depth=depth, token=sc_token
+            )
         if result is None:
             result = {"items": []}
         # Enrich top videos with comments when SC key is available
@@ -981,43 +1107,63 @@ def _retrieve_stream(
         )
         return instagram.parse_instagram_response(result), {}
     if source == "hackernews":
-        result = hackernews.search_hackernews(subquery.search_query, from_date, to_date, depth=depth)
-        return hackernews.parse_hackernews_response(result, query=subquery.search_query), {}
+        result = hackernews.search_hackernews(
+            subquery.search_query, from_date, to_date, depth=depth
+        )
+        return hackernews.parse_hackernews_response(
+            result, query=subquery.search_query
+        ), {}
     if source == "digg":
-        result = digg.search_digg(subquery.search_query, from_date, to_date, depth=depth)
+        result = digg.search_digg(
+            subquery.search_query, from_date, to_date, depth=depth
+        )
         items = digg.parse_digg_response(result, query=subquery.search_query)
         # Enrichment with attached X posts is deferred to
         # _finalize_items_by_source so it runs on the items that actually
         # survive dedupe rather than on top-K of the raw fanout.
         return items, {}
     if source == "bluesky":
-        result = bluesky.search_bluesky(subquery.search_query, from_date, to_date, depth=depth, config=config)
+        result = bluesky.search_bluesky(
+            subquery.search_query, from_date, to_date, depth=depth, config=config
+        )
         return bluesky.parse_bluesky_response(result), {}
     if source == "threads":
         result = threads.search_threads(
-            subquery.search_query, from_date, to_date,
+            subquery.search_query,
+            from_date,
+            to_date,
             depth=depth,
             token=config.get("SCRAPECREATORS_API_KEY"),
         )
         return threads.parse_threads_response(result), {}
     if source == "truthsocial":
-        result = truthsocial.search_truthsocial(subquery.search_query, from_date, to_date, depth=depth, config=config)
+        result = truthsocial.search_truthsocial(
+            subquery.search_query, from_date, to_date, depth=depth, config=config
+        )
         return truthsocial.parse_truthsocial_response(result), {}
     if source == "polymarket":
-        result = polymarket.search_polymarket(subquery.search_query, from_date, to_date, depth=depth)
-        return polymarket.parse_polymarket_response(result, topic=subquery.search_query), {}
+        result = polymarket.search_polymarket(
+            subquery.search_query, from_date, to_date, depth=depth
+        )
+        return polymarket.parse_polymarket_response(
+            result, topic=subquery.search_query
+        ), {}
     if source == "github":
         # Resolve once at the pipeline boundary so search and enrich
         # share the result; otherwise each call would re-run the env
         # lookup and gh-CLI subprocess fallback (up to 5s timeout each).
         token = github.resolve_token(config.get("GITHUB_TOKEN"))
-        response = github.search_github(subquery.search_query, from_date, to_date, depth=depth, token=token)
+        response = github.search_github(
+            subquery.search_query, from_date, to_date, depth=depth, token=token
+        )
         items = github.parse_github_response(response)
         items = github.enrich_with_comments(items, depth=depth, token=token)
         return items, {}
     if source == "pinterest":
         result = pinterest.search_pinterest(
-            subquery.search_query, from_date, to_date,
+            subquery.search_query,
+            from_date,
+            to_date,
             depth=depth,
             token=env.get_pinterest_token(config),
         )
@@ -1031,10 +1177,17 @@ def _retrieve_stream(
             depth=depth,
         ), {}
     if source == "perplexity":
-        return perplexity.search(subquery.search_query, date_range, config, deep=config.get("_deep_research", False))
+        return perplexity.search(
+            subquery.search_query,
+            date_range,
+            config,
+            deep=config.get("_deep_research", False),
+        )
     if source == "xquik":
         result = xquik.search_xquik(
-            subquery.search_query, from_date, to_date,
+            subquery.search_query,
+            from_date,
+            to_date,
             depth=depth,
             token=env.get_xquik_token(config),
         )
@@ -1043,12 +1196,16 @@ def _retrieve_stream(
 
 
 def _google_key(config: dict[str, Any]) -> str | None:
-    return config.get("GOOGLE_API_KEY") or config.get("GEMINI_API_KEY") or config.get("GOOGLE_GENAI_API_KEY")
+    return (
+        config.get("GOOGLE_API_KEY")
+        or config.get("GEMINI_API_KEY")
+        or config.get("GOOGLE_GENAI_API_KEY")
+    )
 
 
-
-
-def _mock_stream_results(source: str, subquery: schema.SubQuery) -> tuple[list[dict], dict]:
+def _mock_stream_results(
+    source: str, subquery: schema.SubQuery
+) -> tuple[list[dict], dict]:
     payloads = {
         "reddit": [
             {
@@ -1096,7 +1253,12 @@ def _mock_stream_results(source: str, subquery: schema.SubQuery) -> tuple[list[d
                 "tldr": f"Curated cluster summarizing recent {subquery.search_query} discussion across the AI 1000.",
                 "author": "",
                 "date": dates.get_date_range(3)[0],
-                "engagement": {"postCount": 8, "uniqueAuthors": 5, "rank": 2, "rank_score": 49.0},
+                "engagement": {
+                    "postCount": 8,
+                    "uniqueAuthors": 5,
+                    "rank": 2,
+                    "rank_score": 49.0,
+                },
                 "first_post_age": "3d",
                 "posts": [
                     {
@@ -1120,7 +1282,12 @@ def _mock_stream_results(source: str, subquery: schema.SubQuery) -> tuple[list[d
                 "tldr": f"Another angle on {subquery.search_query}.",
                 "author": "",
                 "date": dates.get_date_range(8)[0],
-                "engagement": {"postCount": 3, "uniqueAuthors": 2, "rank": 18, "rank_score": 33.0},
+                "engagement": {
+                    "postCount": 3,
+                    "uniqueAuthors": 2,
+                    "rank": 18,
+                    "rank_score": 33.0,
+                },
                 "first_post_age": "8d",
                 "posts": [],
                 "relevance": 0.71,

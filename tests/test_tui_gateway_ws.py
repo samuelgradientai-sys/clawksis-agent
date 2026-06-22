@@ -30,8 +30,11 @@ def _run_disconnect(monkeypatch, seed):
     created = []
     real_transport = ws_mod.WSTransport
     monkeypatch.setattr(
-        ws_mod, "WSTransport",
-        lambda ws, loop, **kw: created.append(real_transport(ws, loop, **kw)) or created[-1],
+        ws_mod,
+        "WSTransport",
+        lambda ws, loop, **kw: (
+            created.append(real_transport(ws, loop, **kw)) or created[-1]
+        ),
     )
 
     class FakeWS:

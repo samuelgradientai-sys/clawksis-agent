@@ -106,13 +106,18 @@ class HookRegistry:
             try:
                 manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
                 if not manifest or not isinstance(manifest, dict):
-                    print(f"[hooks] Skipping {hook_dir.name}: invalid HOOK.yaml", flush=True)
+                    print(
+                        f"[hooks] Skipping {hook_dir.name}: invalid HOOK.yaml",
+                        flush=True,
+                    )
                     continue
 
                 hook_name = manifest.get("name", hook_dir.name)
                 events = manifest.get("events", [])
                 if not events:
-                    print(f"[hooks] Skipping {hook_name}: no events declared", flush=True)
+                    print(
+                        f"[hooks] Skipping {hook_name}: no events declared", flush=True
+                    )
                     continue
 
                 # Dynamically load the handler module.
@@ -123,11 +128,12 @@ class HookRegistry:
                 # Pydantic BaseModel for webhook/event payloads fails at first
                 # dispatch with "TypeAdapter ... is not fully defined".
                 module_name = f"clawk_hook_{hook_name}"
-                spec = importlib.util.spec_from_file_location(
-                    module_name, handler_path
-                )
+                spec = importlib.util.spec_from_file_location(module_name, handler_path)
                 if spec is None or spec.loader is None:
-                    print(f"[hooks] Skipping {hook_name}: could not load handler.py", flush=True)
+                    print(
+                        f"[hooks] Skipping {hook_name}: could not load handler.py",
+                        flush=True,
+                    )
                     continue
 
                 module = importlib.util.module_from_spec(spec)
@@ -140,7 +146,10 @@ class HookRegistry:
 
                 handle_fn = getattr(module, "handle", None)
                 if handle_fn is None:
-                    print(f"[hooks] Skipping {hook_name}: no 'handle' function found", flush=True)
+                    print(
+                        f"[hooks] Skipping {hook_name}: no 'handle' function found",
+                        flush=True,
+                    )
                     continue
 
                 # Register the handler for each declared event
@@ -154,7 +163,10 @@ class HookRegistry:
                     "path": str(hook_dir),
                 })
 
-                print(f"[hooks] Loaded hook '{hook_name}' for events: {events}", flush=True)
+                print(
+                    f"[hooks] Loaded hook '{hook_name}' for events: {events}",
+                    flush=True,
+                )
 
             except Exception as e:
                 print(f"[hooks] Error loading hook {hook_dir.name}: {e}", flush=True)
@@ -172,7 +184,9 @@ class HookRegistry:
             handlers.extend(self._handlers.get(wildcard_key, []))
         return handlers
 
-    async def emit(self, event_type: str, context: Optional[Dict[str, Any]] = None) -> None:
+    async def emit(
+        self, event_type: str, context: Optional[Dict[str, Any]] = None
+    ) -> None:
         """
         Fire all handlers registered for an event, discarding return values.
 

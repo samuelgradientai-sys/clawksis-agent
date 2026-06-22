@@ -159,11 +159,11 @@ terminal(command="pytest -v tests/", background=true)
 # Returns: {"session_id": "proc_abc123", "pid": 12345}
 
 # Then manage with the process tool:
-process(action="list")       # Show all running processes
-process(action="poll", session_id="proc_abc123")   # Check status
-process(action="wait", session_id="proc_abc123")   # Block until done
-process(action="log", session_id="proc_abc123")    # Full output
-process(action="kill", session_id="proc_abc123")   # Terminate
+process(action="list")  # Show all running processes
+process(action="poll", session_id="proc_abc123")  # Check status
+process(action="wait", session_id="proc_abc123")  # Block until done
+process(action="log", session_id="proc_abc123")  # Full output
+process(action="kill", session_id="proc_abc123")  # Terminate
 process(action="write", session_id="proc_abc123", data="y")  # Send input
 ```
 

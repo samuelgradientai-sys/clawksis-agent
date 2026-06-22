@@ -17,9 +17,7 @@ def test_ollama_accepts_even_when_endpoint_unreachable():
 
     # Force the probe to look unreachable (models=None) — the custom path would
     # return accepted=False here; the ollama branch must still accept.
-    with patch(
-        "clawk_cli.models.probe_api_models", return_value={"models": None}
-    ):
+    with patch("clawk_cli.models.probe_api_models", return_value={"models": None}):
         result = validate_requested_model(
             "phi3:3.8b",
             "ollama",

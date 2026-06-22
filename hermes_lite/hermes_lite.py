@@ -22,7 +22,13 @@ SAFE_COMMANDS = {
     "date": ["date"],
     "disk": ["df", "-h", "/"],
     "memory": ["free", "-h"],
-    "list_hermes_data": ["ls", "-la", os.getenv("HERMES_LITE_DATA_DIR", str(Path(__file__).resolve().parent / "data"))],
+    "list_hermes_data": [
+        "ls",
+        "-la",
+        os.getenv(
+            "HERMES_LITE_DATA_DIR", str(Path(__file__).resolve().parent / "data")
+        ),
+    ],
 }
 
 DANGEROUS_PATTERNS = [
@@ -186,9 +192,15 @@ def print_human(response: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Hermes Lite - ejecutor seguro por allowlist")
+    parser = argparse.ArgumentParser(
+        description="Hermes Lite - ejecutor seguro por allowlist"
+    )
     parser.add_argument("text", nargs="+", help="Orden en lenguaje natural")
-    parser.add_argument("--dry-run", action="store_true", help="Detecta intención y comando, pero no ejecuta")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Detecta intención y comando, pero no ejecuta",
+    )
     parser.add_argument("--json", action="store_true", help="Imprime salida en JSON")
     args = parser.parse_args()
 

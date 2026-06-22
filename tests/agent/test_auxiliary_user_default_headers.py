@@ -25,6 +25,7 @@ def _isolate(tmp_path, monkeypatch):
 
 def _write_config(tmp_path, config_dict):
     import yaml
+
     (tmp_path / ".clawk" / "config.yaml").write_text(yaml.dump(config_dict))
 
 
@@ -32,10 +33,17 @@ class TestApplyUserDefaultHeadersHelper:
     """Direct unit tests for the merge helper."""
 
     def test_user_headers_merged_and_win(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "m", "default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"}},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "m",
+                    "default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"},
+                },
+            },
+        )
         from agent.auxiliary_client import _apply_user_default_headers
+
         merged = _apply_user_default_headers({"User-Agent": "OpenAI/Python 2.24.0"})
         assert merged["User-Agent"] == "curl/8.7.1"  # user wins
         assert merged["X-Extra"] == "1"
@@ -43,28 +51,44 @@ class TestApplyUserDefaultHeadersHelper:
     def test_no_config_is_noop_returns_original(self, tmp_path):
         _write_config(tmp_path, {"model": {"default": "m"}})
         from agent.auxiliary_client import _apply_user_default_headers
+
         original = {"User-Agent": "OpenAI/Python"}
         merged = _apply_user_default_headers(original)
         assert merged == original
 
     def test_none_headers_with_config_creates_dict(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "m", "default_headers": {"User-Agent": "curl/8.7.1"}},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "m",
+                    "default_headers": {"User-Agent": "curl/8.7.1"},
+                },
+            },
+        )
         from agent.auxiliary_client import _apply_user_default_headers
+
         merged = _apply_user_default_headers(None)
         assert merged == {"User-Agent": "curl/8.7.1"}
 
     def test_none_headers_no_config_returns_none(self, tmp_path):
         _write_config(tmp_path, {"model": {"default": "m"}})
         from agent.auxiliary_client import _apply_user_default_headers
+
         assert _apply_user_default_headers(None) is None
 
     def test_none_values_skipped(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "m", "default_headers": {"User-Agent": "curl/8.7.1", "X-Drop": None}},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "m",
+                    "default_headers": {"User-Agent": "curl/8.7.1", "X-Drop": None},
+                },
+            },
+        )
         from agent.auxiliary_client import _apply_user_default_headers
+
         merged = _apply_user_default_headers({})
         assert merged == {"User-Agent": "curl/8.7.1"}
         assert "X-Drop" not in merged
@@ -75,17 +99,21 @@ class TestAuxClientHonorsUserDefaultHeaders:
 
     def test_custom_provider_overrides_sdk_user_agent(self, tmp_path):
         """The #40033 reproduction on the auxiliary path."""
-        _write_config(tmp_path, {
-            "model": {
-                "default": "my-custom-model",
-                "provider": "custom",
-                "base_url": "http://localhost:8080/v1",
-                "default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"},
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "my-custom-model",
+                    "provider": "custom",
+                    "base_url": "http://localhost:8080/v1",
+                    "default_headers": {"User-Agent": "curl/8.7.1", "X-Extra": "1"},
+                },
             },
-        })
+        )
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("main", "my-custom-model")
 
         assert client is not None
@@ -96,16 +124,20 @@ class TestAuxClientHonorsUserDefaultHeaders:
 
     def test_custom_provider_no_override_sends_no_user_agent(self, tmp_path):
         """Without config, the aux client injects nothing — SDK defaults apply."""
-        _write_config(tmp_path, {
-            "model": {
-                "default": "my-custom-model",
-                "provider": "custom",
-                "base_url": "http://localhost:8080/v1",
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "my-custom-model",
+                    "provider": "custom",
+                    "base_url": "http://localhost:8080/v1",
+                },
             },
-        })
+        )
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("main", "my-custom-model")
 
         assert client is not None
@@ -118,18 +150,26 @@ class TestAuxClientHonorsUserDefaultHeaders:
         This is a distinct construction path (_extra2) from the config-level
         `model.provider: custom` path — both must apply the global override.
         """
-        _write_config(tmp_path, {
-            "model": {
-                "default": "test-model",
-                "default_headers": {"User-Agent": "curl/8.7.1"},
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "test-model",
+                    "default_headers": {"User-Agent": "curl/8.7.1"},
+                },
+                "custom_providers": [
+                    {
+                        "name": "my-gw",
+                        "base_url": "http://my-gw.local/v1",
+                        "api_key": "k",
+                    },
+                ],
             },
-            "custom_providers": [
-                {"name": "my-gw", "base_url": "http://my-gw.local/v1", "api_key": "k"},
-            ],
-        })
+        )
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("my-gw", "test-model")
 
         assert client is not None

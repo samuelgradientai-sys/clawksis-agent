@@ -86,9 +86,14 @@ class TestBrowserSecretExfil:
                 captured["url"] = args[0]
             return {"success": True, "data": {"title": "ok", "url": args[0]}}
 
-        with patch("tools.browser_tool._run_browser_command", side_effect=mock_run), \
-             patch("tools.browser_tool._get_session_info", return_value={"_first_nav": False}), \
-             patch("tools.browser_tool._is_local_backend", return_value=True):
+        with (
+            patch("tools.browser_tool._run_browser_command", side_effect=mock_run),
+            patch(
+                "tools.browser_tool._get_session_info",
+                return_value={"_first_nav": False},
+            ),
+            patch("tools.browser_tool._is_local_backend", return_value=True),
+        ):
             result = browser_navigate("https://wttr.in/Köln")
 
         parsed = json.loads(result)

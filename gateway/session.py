@@ -31,6 +31,7 @@ def _now() -> datetime:
 # PII redaction helpers
 # ---------------------------------------------------------------------------
 
+
 def _hash_id(value: str) -> str:
     """Deterministic 12-char hex hash of an identifier."""
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
@@ -50,7 +51,7 @@ def _hash_chat_id(value: str) -> str:
     colon = value.find(":")
     if colon > 0:
         prefix = value[:colon]
-        return f"{prefix}:{_hash_id(value[colon + 1:])}"
+        return f"{prefix}:{_hash_id(value[colon + 1 :])}"
     return _hash_id(value)
 
 
@@ -71,12 +72,13 @@ from utils import atomic_replace
 class SessionSource:
     """
     Describes where a message originated from.
-    
+
     This information is used to:
     1. Route responses back to the right place
     2. Inject context into the system prompt
     3. Track origin for cron job delivery
     """
+
     platform: Platform
     chat_id: str
     chat_name: Optional[str] = None
@@ -85,20 +87,30 @@ class SessionSource:
     user_name: Optional[str] = None
     thread_id: Optional[str] = None  # For forum topics, Discord threads, etc.
     chat_topic: Optional[str] = None  # Channel topic/description (Discord, Slack)
-    user_id_alt: Optional[str] = None  # Platform-specific stable alt ID (Signal UUID, Feishu union_id)
+    user_id_alt: Optional[str] = (
+        None  # Platform-specific stable alt ID (Signal UUID, Feishu union_id)
+    )
     chat_id_alt: Optional[str] = None  # Signal group internal ID
     is_bot: bool = False  # True when the message author is a bot/webhook (Discord)
-    guild_id: Optional[str] = None  # Discord guild / Slack workspace / Matrix server scope
-    parent_chat_id: Optional[str] = None  # Parent channel when chat_id refers to a thread
-    message_id: Optional[str] = None  # ID of the triggering message (for pin/reply/react)
-    role_authorized: bool = False  # True when adapter granted access via role (not user ID)
-    
+    guild_id: Optional[str] = (
+        None  # Discord guild / Slack workspace / Matrix server scope
+    )
+    parent_chat_id: Optional[str] = (
+        None  # Parent channel when chat_id refers to a thread
+    )
+    message_id: Optional[str] = (
+        None  # ID of the triggering message (for pin/reply/react)
+    )
+    role_authorized: bool = (
+        False  # True when adapter granted access via role (not user ID)
+    )
+
     @property
     def description(self) -> str:
         """Human-readable description of the source."""
         if self.platform == Platform.LOCAL:
             return "CLI terminal"
-        
+
         parts = []
         if self.chat_type == "dm":
             parts.append(f"DM with {self.user_name or self.user_id or 'user'}")
@@ -108,12 +120,12 @@ class SessionSource:
             parts.append(f"channel: {self.chat_name or self.chat_id}")
         else:
             parts.append(self.chat_name or self.chat_id)
-        
+
         if self.thread_id:
             parts.append(f"thread: {self.thread_id}")
-        
+
         return ", ".join(parts)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "platform": self.platform.value,
@@ -154,30 +166,30 @@ class SessionSource:
             parent_chat_id=data.get("parent_chat_id"),
             message_id=data.get("message_id"),
         )
-    
 
 
 @dataclass
 class SessionContext:
     """
     Full context for a session, used for dynamic system prompt injection.
-    
+
     The agent receives this information to understand:
     - Where messages are coming from
     - What platforms are available
     - Where it can deliver scheduled task outputs
     """
+
     source: SessionSource
     connected_platforms: List[Platform]
     home_channels: Dict[Platform, HomeChannel]
     shared_multi_user_session: bool = False
-    
+
     # Session metadata
     session_key: str = ""
     session_id: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "source": self.source.to_dict(),
@@ -222,6 +234,7 @@ def _discord_tools_loaded() -> bool:
     try:
         from clawk_cli.config import load_config
         from clawk_cli.tools_config import _get_platform_tools
+
         cfg = load_config()
         enabled = _get_platform_tools(cfg, "discord", include_default_mcp_servers=False)
         return "discord" in enabled or "discord_admin" in enabled
@@ -254,6 +267,7 @@ def build_session_context_prompt(
     if not _is_pii_safe:
         try:
             from gateway.platform_registry import platform_registry
+
             entry = platform_registry.get(context.source.platform.value)
             if entry and entry.pii_safe:
                 _is_pii_safe = True
@@ -318,7 +332,9 @@ def build_session_context_prompt(
     # this is a multi-user session; individual sender names are prefixed on
     # each user message by the gateway.
     if context.shared_multi_user_session:
-        session_label = "Multi-user thread" if context.source.thread_id else "Multi-user session"
+        session_label = (
+            "Multi-user thread" if context.source.thread_id else "Multi-user session"
+        )
         lines.append(
             f"**Session type:** {session_label} — messages are prefixed "
             "with [sender name]. Multiple users may participate."
@@ -350,12 +366,17 @@ def build_session_context_prompt(
         # honest so we never promise tools the agent lacks.
         if _discord_tools_loaded():
             src = context.source
-            id_lines = ["", "**Discord IDs (for the `discord` / `discord_admin` tools):**"]
+            id_lines = [
+                "",
+                "**Discord IDs (for the `discord` / `discord_admin` tools):**",
+            ]
             if src.guild_id:
                 id_lines.append(f"  - Guild: `{src.guild_id}`")
             if src.thread_id and src.parent_chat_id:
                 id_lines.append(f"  - Parent channel: `{src.parent_chat_id}`")
-                id_lines.append(f"  - Thread: `{src.thread_id}` (use as `channel_id` for fetch_messages etc.)")
+                id_lines.append(
+                    f"  - Thread: `{src.thread_id}` (use as `channel_id` for fetch_messages etc.)"
+                )
             else:
                 id_lines.append(f"  - Channel: `{src.chat_id}`")
             if src.message_id:
@@ -415,25 +436,29 @@ def build_session_context_prompt(
 
     # Origin delivery
     if context.source.platform == Platform.LOCAL:
-        lines.append("- `\"origin\"` → Local output (saved to files)")
+        lines.append('- `"origin"` → Local output (saved to files)')
     else:
         _origin_label = context.source.chat_name or (
-            _hash_chat_id(context.source.chat_id) if redact_pii else context.source.chat_id
+            _hash_chat_id(context.source.chat_id)
+            if redact_pii
+            else context.source.chat_id
         )
-        lines.append(f"- `\"origin\"` → Back to this chat ({_origin_label})")
+        lines.append(f'- `"origin"` → Back to this chat ({_origin_label})')
 
     # Local always available
     lines.append(
-        f"- `\"local\"` → Save to local files only ({display_clawk_home()}/cron/output/)"
+        f'- `"local"` → Save to local files only ({display_clawk_home()}/cron/output/)'
     )
 
     # Platform home channels
     for platform, home in context.home_channels.items():
-        lines.append(f"- `\"{platform.value}\"` → Home channel ({home.name})")
+        lines.append(f'- `"{platform.value}"` → Home channel ({home.name})')
 
     # Note about explicit targeting
     lines.append("")
-    lines.append("*For explicit targeting, use `\"platform:chat_id\"` format if the user provides a specific chat ID.*")
+    lines.append(
+        '*For explicit targeting, use `"platform:chat_id"` format if the user provides a specific chat ID.*'
+    )
 
     return "\n".join(lines)
 
@@ -442,22 +467,23 @@ def build_session_context_prompt(
 class SessionEntry:
     """
     Entry in the session store.
-    
+
     Maps a session key to its current session ID and metadata.
     """
+
     session_key: str
     session_id: str
     created_at: datetime
     updated_at: datetime
-    
+
     # Origin metadata for delivery routing
     origin: Optional[SessionSource] = None
-    
+
     # Display metadata
     display_name: Optional[str] = None
     platform: Optional[Platform] = None
     chat_type: str = "dm"
-    
+
     # Token tracking
     input_tokens: int = 0
     output_tokens: int = 0
@@ -466,10 +492,10 @@ class SessionEntry:
     total_tokens: int = 0
     estimated_cost_usd: float = 0.0
     cost_status: str = "unknown"
-    
+
     # Last API-reported prompt tokens (for accurate compression pre-check)
     last_prompt_tokens: int = 0
-    
+
     # Set when a session was created because the previous one expired;
     # consumed once by the message handler to inject a notice into context
     was_auto_reset: bool = False
@@ -484,7 +510,7 @@ class SessionEntry:
     # context-note prepend — both wrong for an explicit manual reset.
     # See issue #6508.
     is_fresh_reset: bool = False
-    
+
     # Set by the background expiry watcher after it finalizes an expired
     # session (invoking on_session_finalize hooks and evicting the cached
     # agent).  Persisted to sessions.json so the flag survives gateway
@@ -542,13 +568,13 @@ class SessionEntry:
         if self.origin:
             result["origin"] = self.origin.to_dict()
         return result
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SessionEntry":
         origin = None
         if "origin" in data and data["origin"]:
             origin = SessionSource.from_dict(data["origin"])
-        
+
         platform = None
         if data.get("platform"):
             try:
@@ -581,7 +607,9 @@ class SessionEntry:
             last_prompt_tokens=data.get("last_prompt_tokens", 0),
             estimated_cost_usd=data.get("estimated_cost_usd", 0.0),
             cost_status=data.get("cost_status", "unknown"),
-            expiry_finalized=data.get("expiry_finalized", data.get("memory_flushed", False)),
+            expiry_finalized=data.get(
+                "expiry_finalized", data.get("memory_flushed", False)
+            ),
             suspended=data.get("suspended", False),
             resume_pending=data.get("resume_pending", False),
             resume_reason=data.get("resume_reason"),
@@ -666,7 +694,9 @@ def build_session_key(
             )
         if dm_participant_id:
             if source.thread_id:
-                return f"agent:main:{platform}:dm:{dm_participant_id}:{source.thread_id}"
+                return (
+                    f"agent:main:{platform}:dm:{dm_participant_id}:{source.thread_id}"
+                )
             return f"agent:main:{platform}:dm:{dm_participant_id}"
         if source.thread_id:
             return f"agent:main:{platform}:dm:{source.thread_id}"
@@ -677,7 +707,9 @@ def build_session_key(
         # Same JID/LID-flip bug as the DM case: without canonicalisation, a
         # single group member gets two isolated per-user sessions when the
         # bridge reshuffles alias forms.
-        participant_id = canonical_whatsapp_identifier(str(participant_id)) or participant_id
+        participant_id = (
+            canonical_whatsapp_identifier(str(participant_id)) or participant_id
+        )
     key_parts = ["agent:main", platform, source.chat_type]
 
     if source.chat_id:
@@ -701,28 +733,32 @@ def build_session_key(
 class SessionStore:
     """
     Manages session storage and retrieval.
-    
+
     Uses SQLite (via SessionDB) for session metadata and message transcripts.
     Falls back to legacy JSONL files if SQLite is unavailable.
     """
-    
-    def __init__(self, sessions_dir: Path, config: GatewayConfig,
-                 has_active_processes_fn=None):
+
+    def __init__(
+        self, sessions_dir: Path, config: GatewayConfig, has_active_processes_fn=None
+    ):
         self.sessions_dir = sessions_dir
         self.config = config
         self._entries: Dict[str, SessionEntry] = {}
         self._loaded = False
         self._lock = threading.Lock()
         self._has_active_processes_fn = has_active_processes_fn
-        
+
         # Initialize SQLite session database
         self._db = None
         try:
             from clawk_state import SessionDB
+
             self._db = SessionDB()
         except Exception as e:
-            print(f"[gateway] Warning: SQLite session store unavailable, falling back to JSONL: {e}")
-    
+            print(
+                f"[gateway] Warning: SQLite session store unavailable, falling back to JSONL: {e}"
+            )
+
     def _ensure_loaded(self) -> None:
         """Load sessions index from disk if not already loaded."""
         with self._lock:
@@ -750,10 +786,11 @@ class SessionStore:
                 print(f"[gateway] Warning: Failed to load sessions: {e}")
 
         self._loaded = True
-    
+
     def _save(self) -> None:
         """Save sessions index to disk (kept for session key -> ID mapping)."""
         import tempfile
+
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         sessions_file = self.sessions_dir / "sessions.json"
 
@@ -773,18 +810,22 @@ class SessionStore:
             except OSError as e:
                 logger.debug("Could not remove temp file %s: %s", tmp_path, e)
             raise
-    
+
     def _generate_session_key(self, source: SessionSource) -> str:
         """Generate a session key from a source."""
         return build_session_key(
             source,
-            group_sessions_per_user=getattr(self.config, "group_sessions_per_user", True),
-            thread_sessions_per_user=getattr(self.config, "thread_sessions_per_user", False),
+            group_sessions_per_user=getattr(
+                self.config, "group_sessions_per_user", True
+            ),
+            thread_sessions_per_user=getattr(
+                self.config, "thread_sessions_per_user", False
+            ),
         )
-    
+
     def _is_session_expired(self, entry: SessionEntry) -> bool:
         """Check if a session has expired based on its reset policy.
-        
+
         Works from the entry alone — no SessionSource needed.
         Used by the background expiry watcher to proactively flush memories.
         Sessions with active background processes are never considered expired.
@@ -811,7 +852,9 @@ class SessionStore:
         if policy.mode in {"daily", "both"}:
             today_reset = now.replace(
                 hour=policy.at_hour,
-                minute=0, second=0, microsecond=0,
+                minute=0,
+                second=0,
+                microsecond=0,
             )
             if now.hour < policy.at_hour:
                 today_reset -= timedelta(days=1)
@@ -820,13 +863,15 @@ class SessionStore:
 
         return False
 
-    def _should_reset(self, entry: SessionEntry, source: SessionSource) -> Optional[str]:
+    def _should_reset(
+        self, entry: SessionEntry, source: SessionSource
+    ) -> Optional[str]:
         """
         Check if a session should be reset based on policy.
-        
+
         Returns the reset reason ("idle" or "daily") if a reset is needed,
         or None if the session is still valid.
-        
+
         Sessions with active background processes are never reset.
         """
         if self._has_active_processes_fn:
@@ -835,35 +880,31 @@ class SessionStore:
                 return None
 
         policy = self.config.get_reset_policy(
-            platform=source.platform,
-            session_type=source.chat_type
+            platform=source.platform, session_type=source.chat_type
         )
-        
+
         if policy.mode == "none":
             return None
-        
+
         now = _now()
-        
+
         if policy.mode in {"idle", "both"}:
             idle_deadline = entry.updated_at + timedelta(minutes=policy.idle_minutes)
             if now > idle_deadline:
                 return "idle"
-        
+
         if policy.mode in {"daily", "both"}:
             today_reset = now.replace(
-                hour=policy.at_hour, 
-                minute=0, 
-                second=0, 
-                microsecond=0
+                hour=policy.at_hour, minute=0, second=0, microsecond=0
             )
             if now.hour < policy.at_hour:
                 today_reset -= timedelta(days=1)
-            
+
             if entry.updated_at < today_reset:
                 return "daily"
-        
+
         return None
-    
+
     def has_any_sessions(self) -> bool:
         """Check if any sessions have ever been created (across all platforms).
 
@@ -887,9 +928,7 @@ class SessionStore:
             return len(self._entries) > 1
 
     def get_or_create_session(
-        self,
-        source: SessionSource,
-        force_new: bool = False
+        self, source: SessionSource, force_new: bool = False
     ) -> SessionEntry:
         """
         Get an existing session or create a new one.
@@ -1108,7 +1147,8 @@ class SessionStore:
                     except Exception as exc:
                         logger.debug(
                             "has_active_processes_fn raised during prune for %s: %s",
-                            entry.session_key, exc,
+                            entry.session_key,
+                            exc,
                         )
                 if entry.updated_at < cutoff:
                     removed_keys.append(key)
@@ -1120,7 +1160,8 @@ class SessionStore:
         if removed_keys:
             logger.info(
                 "SessionStore pruned %d entries older than %d days",
-                len(removed_keys), max_age_days,
+                len(removed_keys),
+                max_age_days,
             )
         return len(removed_keys)
 
@@ -1160,7 +1201,9 @@ class SessionStore:
                 self._save()
         return count
 
-    def reset_session(self, session_key: str, display_name: Optional[str] = None) -> Optional[SessionEntry]:
+    def reset_session(
+        self, session_key: str, display_name: Optional[str] = None
+    ) -> Optional[SessionEntry]:
         """Force reset a session, creating a new session ID."""
         db_end_session_id = None
         db_create_kwargs = None
@@ -1184,7 +1227,9 @@ class SessionStore:
                 created_at=now,
                 updated_at=now,
                 origin=old_entry.origin,
-                display_name=display_name if display_name is not None else old_entry.display_name,
+                display_name=display_name
+                if display_name is not None
+                else old_entry.display_name,
                 platform=old_entry.platform,
                 chat_type=old_entry.chat_type,
                 is_fresh_reset=True,
@@ -1212,7 +1257,9 @@ class SessionStore:
 
         return new_entry
 
-    def switch_session(self, session_key: str, target_session_id: str) -> Optional[SessionEntry]:
+    def switch_session(
+        self, session_key: str, target_session_id: str
+    ) -> Optional[SessionEntry]:
         """Switch a session key to point at an existing session ID.
 
         Used by ``/resume`` to restore a previously-named session.
@@ -1291,8 +1338,10 @@ class SessionStore:
                 if entry.session_id == session_id:
                     return entry
         return None
-    
-    def append_to_transcript(self, session_id: str, message: Dict[str, Any], skip_db: bool = False) -> None:
+
+    def append_to_transcript(
+        self, session_id: str, message: Dict[str, Any], skip_db: bool = False
+    ) -> None:
         """Append a message to a session's transcript (SQLite).
 
         Args:
@@ -1310,11 +1359,21 @@ class SessionStore:
                     tool_name=message.get("tool_name"),
                     tool_calls=message.get("tool_calls"),
                     tool_call_id=message.get("tool_call_id"),
-                    reasoning=message.get("reasoning") if message.get("role") == "assistant" else None,
-                    reasoning_content=message.get("reasoning_content") if message.get("role") == "assistant" else None,
-                    reasoning_details=message.get("reasoning_details") if message.get("role") == "assistant" else None,
-                    codex_reasoning_items=message.get("codex_reasoning_items") if message.get("role") == "assistant" else None,
-                    codex_message_items=message.get("codex_message_items") if message.get("role") == "assistant" else None,
+                    reasoning=message.get("reasoning")
+                    if message.get("role") == "assistant"
+                    else None,
+                    reasoning_content=message.get("reasoning_content")
+                    if message.get("role") == "assistant"
+                    else None,
+                    reasoning_details=message.get("reasoning_details")
+                    if message.get("role") == "assistant"
+                    else None,
+                    codex_reasoning_items=message.get("codex_reasoning_items")
+                    if message.get("role") == "assistant"
+                    else None,
+                    codex_message_items=message.get("codex_message_items")
+                    if message.get("role") == "assistant"
+                    else None,
                     # Platform-side message id (yuanbao msg_id, telegram update_id, …).
                     # Accept either explicit ``platform_message_id`` or the legacy
                     # ``message_id`` key the JSONL transcript used.
@@ -1325,8 +1384,10 @@ class SessionStore:
                 )
             except Exception as e:
                 logger.debug("Session DB operation failed: %s", e)
-    
-    def rewrite_transcript(self, session_id: str, messages: List[Dict[str, Any]]) -> None:
+
+    def rewrite_transcript(
+        self, session_id: str, messages: List[Dict[str, Any]]
+    ) -> None:
         """Replace the entire transcript for a session with new messages.
 
         Used by /retry, /undo, and /compress to persist modified conversation
@@ -1409,21 +1470,21 @@ class SessionStore:
 def build_session_context(
     source: SessionSource,
     config: GatewayConfig,
-    session_entry: Optional[SessionEntry] = None
+    session_entry: Optional[SessionEntry] = None,
 ) -> SessionContext:
     """
     Build a full session context from a source and config.
-    
+
     This is used to inject context into the agent's system prompt.
     """
     connected = config.get_connected_platforms()
-    
+
     home_channels = {}
     for platform in connected:
         home = config.get_home_channel(platform)
         if home:
             home_channels[platform] = home
-    
+
     context = SessionContext(
         source=source,
         connected_platforms=connected,
@@ -1434,11 +1495,11 @@ def build_session_context(
             thread_sessions_per_user=getattr(config, "thread_sessions_per_user", False),
         ),
     )
-    
+
     if session_entry:
         context.session_key = session_entry.session_key
         context.session_id = session_entry.session_id
         context.created_at = session_entry.created_at
         context.updated_at = session_entry.updated_at
-    
+
     return context

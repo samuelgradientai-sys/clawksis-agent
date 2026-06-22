@@ -26,6 +26,7 @@ from clawk_cli.subcommands.tools import build_tools_parser
 def _h(name):
     def handler(args):  # pragma: no cover - identity only
         return name
+
     handler.__name__ = f"cmd_{name}"
     return handler
 

@@ -110,7 +110,7 @@ def _assert_user_call_has_skip_db(calls, expected_skip_db: bool):
                 user_calls.append(call)
     assert len(user_calls) >= 1, (
         f"Expected at least one user-role append_to_transcript call, "
-        f"got calls: {[c.args for c in calls if len(c.args)>=2]}"
+        f"got calls: {[c.args for c in calls if len(c.args) >= 2]}"
     )
     for call in user_calls:
         actual = call.kwargs.get("skip_db", False)
@@ -154,9 +154,7 @@ async def test_agent_failed_early_skip_db_when_agent_has_session_db(
 
 
 @pytest.mark.asyncio
-async def test_agent_failed_early_no_skip_db_when_no_session_db(
-    monkeypatch, tmp_path
-):
+async def test_agent_failed_early_no_skip_db_when_no_session_db(monkeypatch, tmp_path):
     runner = _bootstrap(monkeypatch, tmp_path)
     runner._session_db = None  # No agent DB → agent_persisted=False
 
@@ -213,9 +211,7 @@ async def test_not_new_messages_skip_db_when_agent_has_session_db(
 
 
 @pytest.mark.asyncio
-async def test_normal_path_skip_db_when_agent_has_session_db(
-    monkeypatch, tmp_path
-):
+async def test_normal_path_skip_db_when_agent_has_session_db(monkeypatch, tmp_path):
     runner = _bootstrap(monkeypatch, tmp_path)
 
     # Agent succeeds with new messages

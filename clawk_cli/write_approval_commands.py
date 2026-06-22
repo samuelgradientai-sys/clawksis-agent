@@ -30,6 +30,7 @@ def _fmt_state(subsystem: str) -> str:
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
+
 def _fmt_pending_list(subsystem: str) -> str:
     records = wa.list_pending(subsystem)
     if not records:
@@ -50,6 +51,7 @@ def _fmt_pending_list(subsystem: str) -> str:
 # ---------------------------------------------------------------------------
 # Subcommand dispatch
 # ---------------------------------------------------------------------------
+
 
 def handle_pending_subcommand(
     subsystem: str,
@@ -145,10 +147,12 @@ def _apply_one(subsystem: str, rec, memory_store):
             if memory_store is None:
                 return False, "memory store unavailable"
             from tools.memory_tool import apply_memory_pending
+
             result = apply_memory_pending(payload, memory_store)
             return bool(result.get("success")), result.get("error", "")
         else:
             from tools.skill_manager_tool import apply_skill_pending
+
             result = json.loads(apply_skill_pending(payload))
             return bool(result.get("success")), result.get("error", "")
     except Exception as e:
@@ -187,8 +191,7 @@ def _set_approval(subsystem: str, rest: List[str], set_mode_fn) -> str:
     ``set_mode_fn`` (when provided) persists the new boolean to config.
     """
     if not rest:
-        return (f"{_fmt_state(subsystem)}\n"
-                f"Set with: /{subsystem} approval <on|off>")
+        return f"{_fmt_state(subsystem)}\nSet with: /{subsystem} approval <on|off>"
     arg = rest[0].strip().lower()
     truthy = {"on", "true", "yes", "1", "enable", "enabled"}
     falsey = {"off", "false", "no", "0", "disable", "disabled"}
@@ -200,8 +203,10 @@ def _set_approval(subsystem: str, rest: List[str], set_mode_fn) -> str:
         return f"Invalid value '{arg}'. Use: on or off."
     if set_mode_fn is None:
         val = "true" if enabled else "false"
-        return (f"To change the {subsystem} approval gate, run:\n"
-                f"  clawk config set {subsystem}.write_approval {val}")
+        return (
+            f"To change the {subsystem} approval gate, run:\n"
+            f"  clawk config set {subsystem}.write_approval {val}"
+        )
     try:
         set_mode_fn(enabled)
     except Exception as e:

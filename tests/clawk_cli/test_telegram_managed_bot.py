@@ -147,18 +147,14 @@ class TestCreatePairing:
     def test_failure_status(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch(
-            "clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp
-        ):
+        with patch("clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp):
             assert create_pairing("https://api.example.com") is None
 
     def test_invalid_payload(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 201
         mock_resp.json.return_value = {"pairing_id": "missing-poll-token"}
-        with patch(
-            "clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp
-        ):
+        with patch("clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp):
             assert create_pairing("https://api.example.com") is None
 
     def test_uses_env_override(self, monkeypatch):
@@ -323,7 +319,9 @@ class TestSetupTelegramAuto:
 
         assert callable(_setup_telegram_auto)
 
-    def test_setup_result_passes_profile_name_for_profile_home(self, monkeypatch, tmp_path):
+    def test_setup_result_passes_profile_name_for_profile_home(
+        self, monkeypatch, tmp_path
+    ):
         from clawk_cli import setup
 
         seen = {}

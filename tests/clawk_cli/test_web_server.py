@@ -1031,10 +1031,7 @@ class TestWebServerEndpoints:
 
         assert status_data["pid"] is None
 
-        assert any(
-            "docker compose build" in line
-            for line in status_data["lines"]
-        )
+        assert any("docker compose build" in line for line in status_data["lines"])
 
     def test_update_clawk_spawns_on_non_docker_install(self, monkeypatch):
 

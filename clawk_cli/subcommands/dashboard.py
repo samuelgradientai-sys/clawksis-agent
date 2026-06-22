@@ -23,7 +23,10 @@ def build_dashboard_parser(
         description="Launch the Clawksis web dashboard for managing config, API keys, and sessions",
     )
     dashboard_parser.add_argument(
-        "--port", type=int, default=9119, help="Port (default 9119, 0 for auto-assign by OS)"
+        "--port",
+        type=int,
+        default=9119,
+        help="Port (default 9119, 0 for auto-assign by OS)",
     )
     dashboard_parser.add_argument(
         "--host", default="127.0.0.1", help="Host (default 127.0.0.1)"
@@ -102,9 +105,7 @@ def build_dashboard_parser(
     # client with Nous Portal and write the client_id into ~/.clawksis/.env.
     # Nested subparser so bare `clawk dashboard` keeps launching the server
     # (set_defaults(func=cmd_dashboard) above remains the default).
-    dashboard_subparsers = dashboard_parser.add_subparsers(
-        dest="dashboard_subcommand"
-    )
+    dashboard_subparsers = dashboard_parser.add_subparsers(dest="dashboard_subcommand")
     dashboard_register_parser = dashboard_subparsers.add_parser(
         "register",
         help="Register a self-hosted dashboard with Nous Portal (writes the OAuth client ID to .env)",

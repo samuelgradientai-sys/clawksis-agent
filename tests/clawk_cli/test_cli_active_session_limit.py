@@ -33,9 +33,9 @@ def test_cli_claim_active_session_respects_global_limit(tmp_path, monkeypatch):
         held.release()
 
         assert cli._claim_active_session("cli") is True
-        assert [entry["session_id"] for entry in active_session_registry_snapshot()] == [
-            "new-cli-session"
-        ]
+        assert [
+            entry["session_id"] for entry in active_session_registry_snapshot()
+        ] == ["new-cli-session"]
     finally:
         held.release()
         cli._release_active_session()

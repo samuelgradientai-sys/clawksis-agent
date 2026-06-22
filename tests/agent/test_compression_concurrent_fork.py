@@ -130,9 +130,7 @@ def test_concurrent_compression_does_not_fork_session(tmp_path: Path) -> None:
 
     # And exactly one of the two agents actually rotated its session_id; the
     # other should still hold the parent_sid (its compression was skipped).
-    rotated = sum(
-        1 for a in (agent_a, agent_b) if a.session_id != parent_sid
-    )
+    rotated = sum(1 for a in (agent_a, agent_b) if a.session_id != parent_sid)
     assert rotated == 1, (
         f"Expected exactly one agent to rotate session_id, got {rotated}. "
         "Both agents rotating means the lock didn't serialize them."
@@ -195,10 +193,14 @@ class _NoLockSubsystemDB:
         )
 
     def get_compression_lock_holder(self, *_a, **_k):
-        raise AttributeError("'SessionDB' object has no attribute 'get_compression_lock_holder'")
+        raise AttributeError(
+            "'SessionDB' object has no attribute 'get_compression_lock_holder'"
+        )
 
     def release_compression_lock(self, *_a, **_k):
-        raise AttributeError("'SessionDB' object has no attribute 'release_compression_lock'")
+        raise AttributeError(
+            "'SessionDB' object has no attribute 'release_compression_lock'"
+        )
 
     def __getattr__(self, name):
         # Everything else (create_session, append, rotation helpers) goes to

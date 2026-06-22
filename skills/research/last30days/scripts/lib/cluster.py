@@ -10,19 +10,83 @@ CLUSTERABLE_INTENTS = {"breaking_news", "opinion", "comparison", "prediction"}
 
 # Words too common to signal shared topic between clusters.
 _ENTITY_STOPWORDS = frozenset({
-    "the", "a", "an", "to", "for", "how", "is", "in", "of", "on", "and",
-    "with", "from", "by", "at", "this", "that", "it", "what", "are", "do",
-    "can", "his", "her", "he", "she", "its", "was", "has", "new", "just",
-    "says", "said", "will", "about", "after", "now", "all", "been", "here",
-    "not", "out", "up", "more", "also", "but", "who", "year", "first",
-    "make", "being", "making", "over", "into", "than", "they", "their",
-    "would", "could", "get", "got", "some", "like", "back", "going",
-    "breaking", "https", "http", "www", "com",
+    "the",
+    "a",
+    "an",
+    "to",
+    "for",
+    "how",
+    "is",
+    "in",
+    "of",
+    "on",
+    "and",
+    "with",
+    "from",
+    "by",
+    "at",
+    "this",
+    "that",
+    "it",
+    "what",
+    "are",
+    "do",
+    "can",
+    "his",
+    "her",
+    "he",
+    "she",
+    "its",
+    "was",
+    "has",
+    "new",
+    "just",
+    "says",
+    "said",
+    "will",
+    "about",
+    "after",
+    "now",
+    "all",
+    "been",
+    "here",
+    "not",
+    "out",
+    "up",
+    "more",
+    "also",
+    "but",
+    "who",
+    "year",
+    "first",
+    "make",
+    "being",
+    "making",
+    "over",
+    "into",
+    "than",
+    "they",
+    "their",
+    "would",
+    "could",
+    "get",
+    "got",
+    "some",
+    "like",
+    "back",
+    "going",
+    "breaking",
+    "https",
+    "http",
+    "www",
+    "com",
 })
 
 
 def _candidate_text(candidate: schema.Candidate) -> str:
-    return " ".join(part for part in [candidate.title, candidate.snippet] if part).strip()
+    return " ".join(
+        part for part in [candidate.title, candidate.snippet] if part
+    ).strip()
 
 
 def _extract_entities(text: str) -> set[str]:
@@ -38,7 +102,12 @@ def _extract_entities(text: str) -> set[str]:
         if lower in _ENTITY_STOPWORDS or len(word) <= 2:
             continue
         # Keep words that are: capitalized, ALL CAPS, contain digits, or 4+ chars
-        if word[0].isupper() or word.isupper() or any(c.isdigit() for c in word) or len(word) >= 4:
+        if (
+            word[0].isupper()
+            or word.isupper()
+            or any(c.isdigit() for c in word)
+            or len(word) >= 4
+        ):
             entities.add(lower)
     return entities
 
@@ -79,7 +148,9 @@ def _mmr_representatives(
             diversity_penalty = max(
                 dedupe.prepared_similarity(prep, sp) for sp in selected_preps
             )
-            return (diversity_lambda * candidate.final_score) - ((1 - diversity_lambda) * diversity_penalty * 100)
+            return (diversity_lambda * candidate.final_score) - (
+                (1 - diversity_lambda) * diversity_penalty * 100
+            )
 
         best = max(remaining, key=score)
         selected.append(best)
@@ -112,8 +183,7 @@ def cluster_candidates(
         return clusters
 
     text_cache: dict[str, dedupe._PreparedText] = {
-        c.candidate_id: dedupe._PreparedText(_candidate_text(c))
-        for c in candidates
+        c.candidate_id: dedupe._PreparedText(_candidate_text(c)) for c in candidates
     }
 
     groups: list[list[schema.Candidate]] = []
@@ -125,7 +195,9 @@ def cluster_candidates(
         cand_prep = text_cache[candidate.candidate_id]
         for group in groups:
             leader = group[0]
-            similarity = dedupe.prepared_similarity(cand_prep, text_cache[leader.candidate_id])
+            similarity = dedupe.prepared_similarity(
+                cand_prep, text_cache[leader.candidate_id]
+            )
             if similarity >= threshold:
                 group.append(candidate)
                 assigned = True
@@ -146,7 +218,11 @@ def cluster_candidates(
                 title=group[0].title,
                 candidate_ids=[candidate.candidate_id for candidate in group],
                 representative_ids=representatives,
-                sources=sorted({source for candidate in group for source in schema.candidate_sources(candidate)}),
+                sources=sorted({
+                    source
+                    for candidate in group
+                    for source in schema.candidate_sources(candidate)
+                }),
                 score=max(candidate.final_score for candidate in group),
                 uncertainty=_cluster_uncertainty(group),
             )
@@ -235,7 +311,9 @@ def _merge_entity_clusters(
             best_score = max(best_score, clusters[idx].score)
 
         # Pick representatives from combined pool
-        combined_candidates = [candidate_map[cid] for cid in combined_cids if cid in candidate_map]
+        combined_candidates = [
+            candidate_map[cid] for cid in combined_cids if cid in candidate_map
+        ]
         combined_candidates.sort(key=lambda c: c.final_score, reverse=True)
         merge_text_cache = {
             c.candidate_id: dedupe._PreparedText(_candidate_text(c))
@@ -249,21 +327,25 @@ def _merge_entity_clusters(
             if cand:
                 cand.cluster_id = cluster_id
 
-        result.append(schema.Cluster(
-            cluster_id=cluster_id,
-            title=combined_candidates[0].title if combined_candidates else cl.title,
-            candidate_ids=combined_cids,
-            representative_ids=reps,
-            sources=sorted(combined_sources),
-            score=best_score,
-            uncertainty=_cluster_uncertainty(combined_candidates),
-        ))
+        result.append(
+            schema.Cluster(
+                cluster_id=cluster_id,
+                title=combined_candidates[0].title if combined_candidates else cl.title,
+                candidate_ids=combined_cids,
+                representative_ids=reps,
+                sources=sorted(combined_sources),
+                score=best_score,
+                uncertainty=_cluster_uncertainty(combined_candidates),
+            )
+        )
 
     return result
 
 
 def _cluster_uncertainty(group: list[schema.Candidate]) -> str | None:
-    sources = {source for candidate in group for source in schema.candidate_sources(candidate)}
+    sources = {
+        source for candidate in group for source in schema.candidate_sources(candidate)
+    }
     if len(sources) == 1:
         return "single-source"
     if max(candidate.final_score for candidate in group) < 55:

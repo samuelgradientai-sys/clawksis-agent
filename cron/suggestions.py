@@ -89,7 +89,9 @@ def _load_raw() -> Dict[str, Any]:
 
 def _save_raw(suggestions: List[Dict[str, Any]]) -> None:
     _ensure_dir()
-    fd, tmp_path = tempfile.mkstemp(dir=str(SUGGESTIONS_FILE.parent), suffix=".tmp", prefix=".sugg_")
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(SUGGESTIONS_FILE.parent), suffix=".tmp", prefix=".sugg_"
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(
@@ -154,7 +156,9 @@ def add_suggestion(
                 if existing.get("status") == _STATUS_PENDING:
                     return None
 
-        pending_count = sum(1 for s in suggestions if s.get("status") == _STATUS_PENDING)
+        pending_count = sum(
+            1 for s in suggestions if s.get("status") == _STATUS_PENDING
+        )
         if pending_count >= MAX_PENDING:
             logger.info("Suggestion backlog full (%d); dropping %r", MAX_PENDING, title)
             return None
@@ -217,7 +221,9 @@ def dismiss_suggestion(ref: str) -> bool:
     return _set_status(s["id"], _STATUS_DISMISSED)
 
 
-def accept_suggestion(ref: str, *, origin: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+def accept_suggestion(
+    ref: str, *, origin: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
     """Accept a suggestion: create the real cron job from its ``job_spec``.
 
     Returns the created cron job dict, or None if the suggestion isn't found /

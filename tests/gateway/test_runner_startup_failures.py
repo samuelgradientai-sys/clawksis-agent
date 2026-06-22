@@ -74,14 +74,16 @@ async def test_runner_stays_alive_for_retryable_startup_errors(monkeypatch, tmp_
     """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config = GatewayConfig(
-        platforms={
-            Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")
-        },
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
 
-    monkeypatch.setattr(runner, "_create_adapter", lambda platform, platform_config: _RetryableFailureAdapter())
+    monkeypatch.setattr(
+        runner,
+        "_create_adapter",
+        lambda platform, platform_config: _RetryableFailureAdapter(),
+    )
 
     ok = await runner.start()
 
@@ -97,12 +99,12 @@ async def test_runner_stays_alive_for_retryable_startup_errors(monkeypatch, tmp_
 
 
 @pytest.mark.asyncio
-async def test_runner_allows_cron_only_mode_when_no_platforms_are_enabled(monkeypatch, tmp_path):
+async def test_runner_allows_cron_only_mode_when_no_platforms_are_enabled(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config = GatewayConfig(
-        platforms={
-            Platform.TELEGRAM: PlatformConfig(enabled=False, token="***")
-        },
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=False, token="***")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
@@ -117,17 +119,21 @@ async def test_runner_allows_cron_only_mode_when_no_platforms_are_enabled(monkey
 
 
 @pytest.mark.asyncio
-async def test_runner_records_connected_platform_state_on_success(monkeypatch, tmp_path):
+async def test_runner_records_connected_platform_state_on_success(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config = GatewayConfig(
-        platforms={
-            Platform.DISCORD: PlatformConfig(enabled=True, token="***")
-        },
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="***")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
 
-    monkeypatch.setattr(runner, "_create_adapter", lambda platform, platform_config: _SuccessfulAdapter())
+    monkeypatch.setattr(
+        runner,
+        "_create_adapter",
+        lambda platform, platform_config: _SuccessfulAdapter(),
+    )
     monkeypatch.setattr(runner.hooks, "discover_and_load", lambda: None)
     monkeypatch.setattr(runner.hooks, "emit", AsyncMock())
 
@@ -142,7 +148,9 @@ async def test_runner_records_connected_platform_state_on_success(monkeypatch, t
 
 
 @pytest.mark.asyncio
-async def test_start_gateway_verbosity_imports_redacting_formatter(monkeypatch, tmp_path):
+async def test_start_gateway_verbosity_imports_redacting_formatter(
+    monkeypatch, tmp_path
+):
     """Verbosity != None must not crash with NameError on RedactingFormatter (#8044)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -161,8 +169,12 @@ async def test_start_gateway_verbosity_imports_redacting_formatter(monkeypatch, 
 
     monkeypatch.setattr("gateway.status.get_running_pid", lambda: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _CleanExitRunner)
 
     from gateway.run import start_gateway
@@ -196,16 +208,20 @@ async def test_start_gateway_replace_force_uses_terminate_pid(monkeypatch, tmp_p
     # get_running_pid returns 42 before we kill the old gateway, then None
     # after remove_pid_file() clears the record (reflects real behavior).
     _pid_state = {"alive": True}
+
     def _mock_get_running_pid():
         return 42 if _pid_state["alive"] else None
+
     def _mock_remove_pid_file():
         _pid_state["alive"] = False
+
     monkeypatch.setattr("gateway.status.get_running_pid", _mock_get_running_pid)
     monkeypatch.setattr("gateway.status.remove_pid_file", _mock_remove_pid_file)
     monkeypatch.setattr(
         "gateway.status.release_all_scoped_locks",
         lambda **kwargs: 0,
     )
+
     # force-kill reaps the process: terminate_pid(force=True) flips it dead,
     # and the post-kill re-poll via _pid_exists then sees it gone so the
     # replacement proceeds.
@@ -213,16 +229,19 @@ async def test_start_gateway_replace_force_uses_terminate_pid(monkeypatch, tmp_p
         calls.append((pid, force))
         if force:
             _pid_state["alive"] = False
+
     monkeypatch.setattr("gateway.status.terminate_pid", _mock_terminate_pid)
-    monkeypatch.setattr(
-        "gateway.status._pid_exists", lambda pid: _pid_state["alive"]
-    )
+    monkeypatch.setattr("gateway.status._pid_exists", lambda pid: _pid_state["alive"])
     monkeypatch.setattr("gateway.run.os.getpid", lambda: 100)
     monkeypatch.setattr("gateway.run.os.kill", lambda pid, sig: None)
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _CleanExitRunner)
 
     from gateway.run import start_gateway
@@ -278,8 +297,12 @@ async def test_start_gateway_replace_aborts_when_force_killed_pid_still_alive(
     monkeypatch.setattr("gateway.run.os.kill", lambda pid, sig: None)
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _RunnerShouldNotStart)
 
     from gateway.run import start_gateway
@@ -317,12 +340,16 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
         )
         # Actually write the marker so we can verify cleanup later
         from gateway.status import _get_takeover_marker_path, _write_json_file
-        _write_json_file(_get_takeover_marker_path(), {
-            "target_pid": target_pid,
-            "target_start_time": 0,
-            "replacer_pid": 100,
-            "written_at": "2026-04-17T00:00:00+00:00",
-        })
+
+        _write_json_file(
+            _get_takeover_marker_path(),
+            {
+                "target_pid": target_pid,
+                "target_start_time": 0,
+                "replacer_pid": 100,
+                "written_at": "2026-04-17T00:00:00+00:00",
+            },
+        )
         return True
 
     def record_terminate(pid, force=False):
@@ -342,10 +369,13 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
             return None
 
     _pid_state = {"alive": True}
+
     def _mock_get_running_pid():
         return 42 if _pid_state["alive"] else None
+
     def _mock_remove_pid_file():
         _pid_state["alive"] = False
+
     monkeypatch.setattr("gateway.status.get_running_pid", _mock_get_running_pid)
     monkeypatch.setattr("gateway.status.remove_pid_file", _mock_remove_pid_file)
     monkeypatch.setattr(
@@ -362,8 +392,12 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
     )
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _CleanExitRunner)
 
     from gateway.run import start_gateway
@@ -388,12 +422,16 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
 
     def write_marker(target_pid: int) -> bool:
         from gateway.status import _get_takeover_marker_path, _write_json_file
-        _write_json_file(_get_takeover_marker_path(), {
-            "target_pid": target_pid,
-            "target_start_time": 0,
-            "replacer_pid": 100,
-            "written_at": "2026-04-17T00:00:00+00:00",
-        })
+
+        _write_json_file(
+            _get_takeover_marker_path(),
+            {
+                "target_pid": target_pid,
+                "target_start_time": 0,
+                "replacer_pid": 100,
+                "written_at": "2026-04-17T00:00:00+00:00",
+            },
+        )
         return True
 
     def raise_permission(pid, force=False):
@@ -404,8 +442,12 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
     monkeypatch.setattr("gateway.status.terminate_pid", raise_permission)
     monkeypatch.setattr("gateway.run.os.getpid", lambda: 100)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
 
     from gateway.run import start_gateway
 
@@ -418,7 +460,9 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
 
 
 @pytest.mark.asyncio
-async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch, tmp_path, caplog):
+async def test_runner_degrades_gracefully_when_all_adapters_missing(
+    monkeypatch, tmp_path, caplog
+):
     """When all enabled platforms have no adapter (missing library or credentials),
     the gateway should NOT return failure — it should warn and continue running for
     cron job execution, matching the behaviour of 'no platforms enabled' (#5196).
@@ -441,6 +485,7 @@ async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch,
     monkeypatch.setattr(runner, "_create_adapter", lambda platform, cfg: None)
 
     import logging
+
     with caplog.at_level(logging.WARNING):
         ok = await runner.start()
 
@@ -453,19 +498,20 @@ async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch,
     assert state["gateway_state"] == "running"
     # A warning must be emitted explaining why no platforms connected.
     assert any(
-        "No adapter could be created" in record.message
-        for record in caplog.records
+        "No adapter could be created" in record.message for record in caplog.records
     ), "Expected degraded-mode warning when all adapters are missing"
 
 
-def test_runner_warns_when_docker_gateway_lacks_explicit_output_mount(monkeypatch, tmp_path, caplog):
+def test_runner_warns_when_docker_gateway_lacks_explicit_output_mount(
+    monkeypatch, tmp_path, caplog
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("TERMINAL_ENV", "docker")
-    monkeypatch.setenv("TERMINAL_DOCKER_VOLUMES", '["/etc/localtime:/etc/localtime:ro"]')
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_VOLUMES", '["/etc/localtime:/etc/localtime:ro"]'
+    )
     config = GatewayConfig(
-        platforms={
-            Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")
-        },
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")},
         sessions_dir=tmp_path / "sessions",
     )
 
@@ -473,6 +519,5 @@ def test_runner_warns_when_docker_gateway_lacks_explicit_output_mount(monkeypatc
         GatewayRunner(config)
 
     assert any(
-        "host-visible output mount" in record.message
-        for record in caplog.records
+        "host-visible output mount" in record.message for record in caplog.records
     )

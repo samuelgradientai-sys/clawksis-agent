@@ -191,13 +191,13 @@ class TestWizardFlow:
     def test_happy_path_minimal(self, isolated_home, monkeypatch):
         """Provide only the required fields; skip optional steps."""
         inputs = iter([
-            "",                                       # press Enter to continue
-            "7794189252778687",                       # Phone Number ID
-            "EAA" + "x" * 200,                        # Access Token
-            "0123456789abcdef0123456789abcdef",       # App Secret
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "15551234567",                            # Allowed users
+            "",  # press Enter to continue
+            "7794189252778687",  # Phone Number ID
+            "EAA" + "x" * 200,  # Access Token
+            "0123456789abcdef0123456789abcdef",  # App Secret
+            "",  # App ID — skip
+            "",  # WABA ID — skip
+            "15551234567",  # Allowed users
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -207,24 +207,33 @@ class TestWizardFlow:
         out = buf.getvalue()
         assert "SETUP COMPLETE" in out
         # Required fields written
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID") == "7794189252778687"
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ACCESS_TOKEN").startswith("EAA")
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID")
+            == "7794189252778687"
+        )
+        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ACCESS_TOKEN").startswith(
+            "EAA"
+        )
         assert len(_env_value(isolated_home, "WHATSAPP_CLOUD_APP_SECRET")) == 32
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ALLOWED_USERS") == "15551234567"
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_ALLOWED_USERS") == "15551234567"
+        )
         # Verify token auto-generated
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_VERIFY_TOKEN")
         # Optional fields stayed unset
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_APP_ID") is None
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_WABA_ID") is None
 
-    def test_phone_number_id_validator_catches_phone_number(self, isolated_home, monkeypatch):
+    def test_phone_number_id_validator_catches_phone_number(
+        self, isolated_home, monkeypatch
+    ):
         """The trap test — user pastes their phone number into the
         Phone Number ID field. Wizard MUST reject with a helpful
         explanation, not pass through."""
         inputs = iter([
-            "",                                       # press Enter to continue
-            "15556422442",                            # phone number — rejected
-            "",                                       # empty — gives up
+            "",  # press Enter to continue
+            "15556422442",  # phone number — rejected
+            "",  # empty — gives up
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -238,13 +247,15 @@ class TestWizardFlow:
         # Should NOT have saved the bad value
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID") is None
 
-    def test_access_token_validator_catches_openai_key(self, isolated_home, monkeypatch):
+    def test_access_token_validator_catches_openai_key(
+        self, isolated_home, monkeypatch
+    ):
         """User pastes 'sk-proj-...' by mistake. Wizard rejects."""
         inputs = iter([
-            "",                                       # continue
-            "7794189252778687",                       # good Phone ID
-            "sk-proj-" + "x" * 100,                   # OpenAI key — rejected
-            "",                                       # give up
+            "",  # continue
+            "7794189252778687",  # good Phone ID
+            "sk-proj-" + "x" * 100,  # OpenAI key — rejected
+            "",  # give up
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -254,20 +265,23 @@ class TestWizardFlow:
         out = buf.getvalue()
         assert "OpenAI" in out  # diagnostic in error message
         # Phone Number ID was saved (it was valid), but access token was not
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID") == "7794189252778687"
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID")
+            == "7794189252778687"
+        )
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_ACCESS_TOKEN") is None
 
     def test_verify_token_is_auto_generated(self, isolated_home, monkeypatch):
         """The verify token is one of the few things the user shouldn't
         have to invent. Wizard generates a strong random one."""
         inputs = iter([
-            "",                                       # continue
-            "7794189252778687",                       # Phone ID
-            "EAA" + "x" * 200,                        # Token
-            "0123456789abcdef0123456789abcdef",       # App Secret
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "15551234567",                            # Allowed users
+            "",  # continue
+            "7794189252778687",  # Phone ID
+            "EAA" + "x" * 200,  # Token
+            "0123456789abcdef0123456789abcdef",  # App Secret
+            "",  # App ID — skip
+            "",  # WABA ID — skip
+            "15551234567",  # Allowed users
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -280,18 +294,20 @@ class TestWizardFlow:
         # Should also be echoed to user output so they can paste into Meta
         assert verify_token in buf.getvalue()
 
-    def test_setup_complete_block_includes_post_setup_instructions(self, isolated_home, monkeypatch):
+    def test_setup_complete_block_includes_post_setup_instructions(
+        self, isolated_home, monkeypatch
+    ):
         """The wizard can't smoke-test the webhook itself (the gateway
         isn't running yet), so it MUST print the exact curl/cloudflared
         steps the user needs after the wizard exits."""
         inputs = iter([
-            "",                                       # continue
-            "7794189252778687",                       # Phone ID
-            "EAA" + "x" * 200,                        # Token
-            "0123456789abcdef0123456789abcdef",       # App Secret
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "15551234567",                            # Allowed users
+            "",  # continue
+            "7794189252778687",  # Phone ID
+            "EAA" + "x" * 200,  # Token
+            "0123456789abcdef0123456789abcdef",  # App Secret
+            "",  # App ID — skip
+            "",  # WABA ID — skip
+            "15551234567",  # Allowed users
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -319,14 +335,14 @@ class TestWizardFlow:
             "WHATSAPP_CLOUD_VERIFY_TOKEN=existing_verify_token_already_set\n"
         )
         inputs = iter([
-            "",                                       # continue
-            "",                                       # Phone ID — keep existing
-            "",                                       # Token — keep existing
-            "",                                       # App Secret — keep existing
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "",                                       # verify token: regenerate? [y/N] — no
-            "",                                       # Allowed users — keep
+            "",  # continue
+            "",  # Phone ID — keep existing
+            "",  # Token — keep existing
+            "",  # App Secret — keep existing
+            "",  # App ID — skip
+            "",  # WABA ID — skip
+            "",  # verify token: regenerate? [y/N] — no
+            "",  # Allowed users — keep
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
@@ -338,7 +354,10 @@ class TestWizardFlow:
         assert token is not None
         assert token.startswith("EAAprevious_token_here_")
         # Verify token preserved (user said no to regenerate)
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_VERIFY_TOKEN") == "existing_verify_token_already_set"
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_VERIFY_TOKEN")
+            == "existing_verify_token_already_set"
+        )
 
 
 # =========================================================================
@@ -360,8 +379,8 @@ class TestProfilePolishGuidance:
             "7794189252778687",
             "EAA" + "x" * 200,
             "0123456789abcdef0123456789abcdef",
-            "",                          # App ID — skip
-            "",                          # WABA ID — skip
+            "",  # App ID — skip
+            "",  # WABA ID — skip
             "15551234567",
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
@@ -391,8 +410,8 @@ class TestProfilePolishGuidance:
             "7794189252778687",
             "EAA" + "x" * 200,
             "0123456789abcdef0123456789abcdef",
-            "",                          # App ID — skip
-            waba,                        # WABA ID — provided
+            "",  # App ID — skip
+            waba,  # WABA ID — provided
             "15551234567",
         ])
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))

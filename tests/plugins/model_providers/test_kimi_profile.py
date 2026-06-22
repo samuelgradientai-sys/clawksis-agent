@@ -41,7 +41,9 @@ class TestKimiReasoningWireShape:
         ``reasoning_effort="medium"``, pairing thinking + effort on every
         default call.
         """
-        extra_body, top_level = kimi_profile.build_api_kwargs_extras(reasoning_config=None)
+        extra_body, top_level = kimi_profile.build_api_kwargs_extras(
+            reasoning_config=None
+        )
         assert extra_body == {"thinking": {"type": "enabled"}}
         assert top_level == {}
 

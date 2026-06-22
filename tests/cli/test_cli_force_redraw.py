@@ -44,7 +44,9 @@ class TestForceFullRedraw:
         out.cursor_goto.side_effect = lambda *_: events.append("home")
         out.flush.side_effect = lambda: events.append("flush")
         app.renderer.reset.side_effect = lambda **_: events.append("renderer_reset")
-        monkeypatch.setattr(cli_mod, "_replay_output_history", lambda: events.append("replay"))
+        monkeypatch.setattr(
+            cli_mod, "_replay_output_history", lambda: events.append("replay")
+        )
         app.invalidate.side_effect = lambda: events.append("invalidate")
 
         bare_cli._force_full_redraw()
@@ -71,7 +73,9 @@ class TestForceFullRedraw:
             "invalidate",
         ]
 
-    def test_resize_recovery_uses_prompt_toolkit_original_resize_before_reset(self, bare_cli, monkeypatch):
+    def test_resize_recovery_uses_prompt_toolkit_original_resize_before_reset(
+        self, bare_cli, monkeypatch
+    ):
         """Resize recovery must preserve prompt_toolkit's tracked cursor state.
 
         prompt_toolkit's built-in Application._on_resize() starts with
@@ -100,7 +104,9 @@ class TestForceFullRedraw:
         # Status bar / input rules must be suppressed until the next prompt.
         assert bare_cli._status_bar_suppressed_after_resize is True
 
-    def test_force_redraw_uses_full_screen_clear_without_scrollback_clear(self, bare_cli):
+    def test_force_redraw_uses_full_screen_clear_without_scrollback_clear(
+        self, bare_cli
+    ):
         app = MagicMock()
         bare_cli._app = app
 

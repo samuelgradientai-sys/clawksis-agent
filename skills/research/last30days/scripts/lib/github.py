@@ -53,7 +53,9 @@ def _resolve_token(token: Optional[str] = None) -> Optional[str]:
     try:
         result = subprocess.run(
             ["gh", "auth", "token"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
@@ -201,8 +203,15 @@ def search_github(
 
     data = _fetch_json(url, token=resolved_token, timeout=30)
     if not data:
-        return {"items": [], "context": {"core": core, "from_date": from_date,
-                                          "to_date": to_date, "count": count}}
+        return {
+            "items": [],
+            "context": {
+                "core": core,
+                "from_date": from_date,
+                "to_date": to_date,
+                "count": count,
+            },
+        }
 
     raw_items = data.get("items", [])
     _log(f"Found {len(raw_items)} issues/PRs")
@@ -241,15 +250,24 @@ def parse_github_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         repo = _parse_repo_from_url(html_url)
         title = item.get("title", "")
         body_text = item.get("body") or ""
-        reactions_total = item.get("reactions", {}).get("total_count", 0) if isinstance(item.get("reactions"), dict) else 0
+        reactions_total = (
+            item.get("reactions", {}).get("total_count", 0)
+            if isinstance(item.get("reactions"), dict)
+            else 0
+        )
         comment_count = item.get("comments", 0)
         labels = [
-            lbl.get("name", "") for lbl in (item.get("labels") or [])
+            lbl.get("name", "")
+            for lbl in (item.get("labels") or [])
             if isinstance(lbl, dict)
         ]
         state = item.get("state", "")
         is_pr = "pull_request" in item
-        author = item.get("user", {}).get("login", "") if isinstance(item.get("user"), dict) else ""
+        author = (
+            item.get("user", {}).get("login", "")
+            if isinstance(item.get("user"), dict)
+            else ""
+        )
 
         relevance = _compute_relevance(core, title, i, reactions_total, comment_count)
 
@@ -281,7 +299,8 @@ def parse_github_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Date filter
     if from_date and to_date:
         items = [
-            item for item in items
+            item
+            for item in items
             if item.get("date") is None or (from_date <= item["date"] <= to_date)
         ]
 
@@ -344,7 +363,9 @@ def _enrich_top_items(
                 comments = future.result(timeout=15)
                 items[idx]["metadata"]["top_comments"] = comments
             except (KeyError, TypeError, OSError) as exc:
-                _log(f"Comment enrichment failed for {items[idx].get('url', '?')}: {type(exc).__name__}: {exc}")
+                _log(
+                    f"Comment enrichment failed for {items[idx].get('url', '?')}: {type(exc).__name__}: {exc}"
+                )
                 items[idx]["metadata"]["top_comments"] = []
 
     return items
@@ -378,8 +399,14 @@ def _fetch_item_comments(
         body = c.get("body") or ""
         excerpt = body[:300] + "..." if len(body) > 300 else body
         reactions = c.get("reactions", {})
-        reaction_count = reactions.get("total_count", 0) if isinstance(reactions, dict) else 0
-        author = c.get("user", {}).get("login", "") if isinstance(c.get("user"), dict) else ""
+        reaction_count = (
+            reactions.get("total_count", 0) if isinstance(reactions, dict) else 0
+        )
+        author = (
+            c.get("user", {}).get("login", "")
+            if isinstance(c.get("user"), dict)
+            else ""
+        )
 
         comments.append({
             "score": reaction_count,
@@ -431,7 +458,10 @@ def _fetch_readme_snippet(repo: str, token: str, max_chars: int = 500) -> Option
 
 
 def _fetch_latest_releases(
-    repo: str, token: str, count: int = 3, max_body: int = 300,
+    repo: str,
+    token: str,
+    count: int = 3,
+    max_body: int = 300,
 ) -> List[Dict[str, str]]:
     """Fetch latest releases for a repo."""
     url = f"https://api.github.com/repos/{repo}/releases?per_page={count}"
@@ -460,20 +490,26 @@ def _fetch_top_issues(repo: str, token: str) -> Dict[str, Any]:
         item = feat_data["items"][0]
         result["top_feature_request"] = {
             "title": item.get("title", ""),
-            "reactions": item.get("reactions", {}).get("total_count", 0) if isinstance(item.get("reactions"), dict) else 0,
+            "reactions": item.get("reactions", {}).get("total_count", 0)
+            if isinstance(item.get("reactions"), dict)
+            else 0,
             "comments": item.get("comments", 0),
             "url": item.get("html_url", ""),
         }
     elif feat_data and feat_data.get("total_count", 0) == 0:
         # No enhancement label; fall back to top issue by reactions
         fallback_q = urllib.parse.quote(f"repo:{repo} is:issue is:open")
-        fallback_url = f"{SEARCH_URL}?q={fallback_q}&sort=reactions&order=desc&per_page=1"
+        fallback_url = (
+            f"{SEARCH_URL}?q={fallback_q}&sort=reactions&order=desc&per_page=1"
+        )
         fallback_data = _fetch_json(fallback_url, token=token, timeout=10)
         if fallback_data and fallback_data.get("items"):
             item = fallback_data["items"][0]
             result["top_feature_request"] = {
                 "title": item.get("title", ""),
-                "reactions": item.get("reactions", {}).get("total_count", 0) if isinstance(item.get("reactions"), dict) else 0,
+                "reactions": item.get("reactions", {}).get("total_count", 0)
+                if isinstance(item.get("reactions"), dict)
+                else 0,
                 "comments": item.get("comments", 0),
                 "url": item.get("html_url", ""),
             }
@@ -486,7 +522,9 @@ def _fetch_top_issues(repo: str, token: str) -> Dict[str, Any]:
         item = bug_data["items"][0]
         result["top_complaint"] = {
             "title": item.get("title", ""),
-            "reactions": item.get("reactions", {}).get("total_count", 0) if isinstance(item.get("reactions"), dict) else 0,
+            "reactions": item.get("reactions", {}).get("total_count", 0)
+            if isinstance(item.get("reactions"), dict)
+            else 0,
             "comments": item.get("comments", 0),
             "url": item.get("html_url", ""),
         }
@@ -542,7 +580,9 @@ def search_github_person(
 
     # Phase 1: PR velocity via search API
     total_q = urllib.parse.quote(f"author:{username} type:pr created:>{from_date}")
-    merged_q = urllib.parse.quote(f"author:{username} type:pr is:merged created:>{from_date}")
+    merged_q = urllib.parse.quote(
+        f"author:{username} type:pr is:merged created:>{from_date}"
+    )
 
     total_url = f"{SEARCH_URL}?q={total_q}&per_page=1"
     merged_url = f"{SEARCH_URL}?q={merged_q}&sort=reactions&order=desc&per_page=100"
@@ -590,8 +630,10 @@ def search_github_person(
                 })
 
     # Separate external repos from own repos
-    external_repos = [(repo, count) for repo, count in sorted_repos if repo not in own_repo_names]
-    external_repos = external_repos[:limits["external_repos"]]
+    external_repos = [
+        (repo, count) for repo, count in sorted_repos if repo not in own_repo_names
+    ]
+    external_repos = external_repos[: limits["external_repos"]]
 
     # Phase 4: Parallel enrichment (star counts, releases, READMEs, top issues)
     items: List[Dict[str, Any]] = []
@@ -632,18 +674,24 @@ def search_github_person(
     })
 
     # Phase 5: Enrich external repos (parallel: star counts + releases)
-    _log(f"Enriching {len(external_repos)} external repos + {len(own_repos_info)} own repos")
+    _log(
+        f"Enriching {len(external_repos)} external repos + {len(own_repos_info)} own repos"
+    )
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         # External repo enrichment: stars + releases
         ext_futures = {}
         for repo, pr_count in external_repos:
-            ext_futures[executor.submit(_enrich_external_repo, repo, resolved_token)] = (repo, pr_count)
+            ext_futures[
+                executor.submit(_enrich_external_repo, repo, resolved_token)
+            ] = (repo, pr_count)
 
         # Own repo enrichment: README + releases + top issues
         own_futures = {}
         for own_repo in own_repos_info:
-            own_futures[executor.submit(_enrich_own_repo, own_repo["full_name"], resolved_token)] = own_repo
+            own_futures[
+                executor.submit(_enrich_own_repo, own_repo["full_name"], resolved_token)
+            ] = own_repo
 
         # Collect external repo results
         for future in as_completed(ext_futures):
@@ -661,26 +709,34 @@ def search_github_person(
             stars_str = _format_stars(stars)
             desc = repo_info["description"] if repo_info else ""
 
-            snippet_parts = [f"Contributed {pr_count} merged PRs to {repo} ({stars_str} stars)"]
+            snippet_parts = [
+                f"Contributed {pr_count} merged PRs to {repo} ({stars_str} stars)"
+            ]
             if desc:
                 snippet_parts.append(f"  {desc}")
             if releases:
                 for rel in releases[:2]:
                     body_preview = f" - {rel['body'][:150]}" if rel.get("body") else ""
-                    snippet_parts.append(f"  Latest release: {rel['name']} ({rel['date']}){body_preview}")
+                    snippet_parts.append(
+                        f"  Latest release: {rel['name']} ({rel['date']}){body_preview}"
+                    )
 
             idx += 1
             items.append({
                 "id": f"GH{idx}",
                 "title": f"{repo} ({stars_str} stars) - {pr_count} PRs merged",
                 "url": f"https://github.com/{repo}",
-                "date": releases[0]["date"] if releases and releases[0].get("date") else to_date,
+                "date": releases[0]["date"]
+                if releases and releases[0].get("date")
+                else to_date,
                 "author": username,
                 "source": "github",
                 "score": stars,
                 "container": repo,
                 "snippet": "\n".join(snippet_parts),
-                "relevance": min(0.9, 0.6 + math.log1p(stars) / 30 + min(0.15, pr_count / 20)),
+                "relevance": min(
+                    0.9, 0.6 + math.log1p(stars) / 30 + min(0.15, pr_count / 20)
+                ),
                 "why_relevant": f"GitHub contribution: {pr_count} PRs merged to {repo} ({stars_str} stars)",
                 "engagement": {"reactions": stars, "comments": pr_count},
                 "metadata": {
@@ -711,7 +767,9 @@ def search_github_person(
             releases = enrichment.get("releases", [])
             top_issues = enrichment.get("top_issues", {})
 
-            snippet_parts = [f"Own project: {repo_name} ({stars_str} stars, {open_issues} open issues)"]
+            snippet_parts = [
+                f"Own project: {repo_name} ({stars_str} stars, {open_issues} open issues)"
+            ]
             if desc:
                 snippet_parts.append(f"  {desc}")
             if readme:
@@ -719,20 +777,28 @@ def search_github_person(
             if releases:
                 for rel in releases[:2]:
                     body_preview = f" - {rel['body'][:150]}" if rel.get("body") else ""
-                    snippet_parts.append(f"  Latest release: {rel['name']} ({rel['date']}){body_preview}")
+                    snippet_parts.append(
+                        f"  Latest release: {rel['name']} ({rel['date']}){body_preview}"
+                    )
             feat = top_issues.get("top_feature_request")
             if feat:
-                snippet_parts.append(f"  Top feature request: \"{feat['title']}\" ({feat['reactions']} reactions, {feat['comments']} comments)")
+                snippet_parts.append(
+                    f'  Top feature request: "{feat["title"]}" ({feat["reactions"]} reactions, {feat["comments"]} comments)'
+                )
             complaint = top_issues.get("top_complaint")
             if complaint:
-                snippet_parts.append(f"  Top complaint: \"{complaint['title']}\" ({complaint['comments']} comments)")
+                snippet_parts.append(
+                    f'  Top complaint: "{complaint["title"]}" ({complaint["comments"]} comments)'
+                )
 
             idx += 1
             items.append({
                 "id": f"GH{idx}",
                 "title": f"{repo_name} ({stars_str} stars) - own project, {open_issues} open issues",
                 "url": f"https://github.com/{repo_name}",
-                "date": releases[0]["date"] if releases and releases[0].get("date") else to_date,
+                "date": releases[0]["date"]
+                if releases and releases[0].get("date")
+                else to_date,
                 "author": username,
                 "source": "github",
                 "score": stars,
@@ -774,6 +840,7 @@ def _enrich_own_repo(repo: str, token: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Project-mode search: fetch comprehensive data for specific repos
 # ---------------------------------------------------------------------------
+
 
 def search_github_project(
     repos: List[str],
@@ -832,7 +899,9 @@ def search_github_project(
             desc = info["description"]
             lang = info["language"]
 
-            snippet_parts = [f"Project: {repo} ({stars_str} stars, {open_issues} open issues, {lang})"]
+            snippet_parts = [
+                f"Project: {repo} ({stars_str} stars, {open_issues} open issues, {lang})"
+            ]
             if desc:
                 snippet_parts.append(f"  {desc}")
             if readme:
@@ -840,19 +909,27 @@ def search_github_project(
             if releases:
                 for rel in releases[:2]:
                     body_preview = f" - {rel['body'][:150]}" if rel.get("body") else ""
-                    snippet_parts.append(f"  Latest release: {rel['name']} ({rel['date']}){body_preview}")
+                    snippet_parts.append(
+                        f"  Latest release: {rel['name']} ({rel['date']}){body_preview}"
+                    )
             feat = top_issues.get("top_feature_request")
             if feat:
-                snippet_parts.append(f"  Top feature request: \"{feat['title']}\" ({feat['reactions']} reactions, {feat['comments']} comments)")
+                snippet_parts.append(
+                    f'  Top feature request: "{feat["title"]}" ({feat["reactions"]} reactions, {feat["comments"]} comments)'
+                )
             complaint = top_issues.get("top_complaint")
             if complaint:
-                snippet_parts.append(f"  Top complaint: \"{complaint['title']}\" ({complaint['comments']} comments)")
+                snippet_parts.append(
+                    f'  Top complaint: "{complaint["title"]}" ({complaint["comments"]} comments)'
+                )
 
             items.append({
                 "id": f"GH{idx + 1}",
                 "title": f"{repo} ({stars_str} stars) - {open_issues} open issues",
                 "url": f"https://github.com/{repo}",
-                "date": releases[0]["date"] if releases and releases[0].get("date") else to_date,
+                "date": releases[0]["date"]
+                if releases and releases[0].get("date")
+                else to_date,
                 "author": repo.split("/")[0],
                 "source": "github",
                 "score": stars,
@@ -882,7 +959,12 @@ def _enrich_project_repo(repo: str, token: str) -> Dict[str, Any]:
     readme = _fetch_readme_snippet(repo, token, max_chars=500)
     releases = _fetch_latest_releases(repo, token, count=3)
     top_issues = _fetch_top_issues(repo, token)
-    return {"info": info, "readme": readme, "releases": releases, "top_issues": top_issues}
+    return {
+        "info": info,
+        "readme": readme,
+        "releases": releases,
+        "top_issues": top_issues,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -890,7 +972,19 @@ def _enrich_project_repo(repo: str, token: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 _REPO_URL_PATTERN = re.compile(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)")
-_SKIP_PATHS = {"topics", "search", "orgs", "settings", "features", "about", "pricing", "enterprise", "explore", "marketplace", "sponsors"}
+_SKIP_PATHS = {
+    "topics",
+    "search",
+    "orgs",
+    "settings",
+    "features",
+    "about",
+    "pricing",
+    "enterprise",
+    "explore",
+    "marketplace",
+    "sponsors",
+}
 
 
 def extract_repo_refs(candidates: List[Any]) -> List[str]:
@@ -938,7 +1032,9 @@ def enrich_candidates_with_stars(
         return 0
 
     skip = already_enriched or set()
-    to_fetch = [r for r in refs if r.lower() not in {s.lower() for s in skip}][:max_repos]
+    to_fetch = [r for r in refs if r.lower() not in {s.lower() for s in skip}][
+        :max_repos
+    ]
     if not to_fetch:
         return 0
 
@@ -947,7 +1043,10 @@ def enrich_candidates_with_stars(
     # Parallel fetch star counts
     star_map: Dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=min(8, len(to_fetch))) as executor:
-        futures = {executor.submit(_fetch_repo_info, repo, resolved_token): repo for repo in to_fetch}
+        futures = {
+            executor.submit(_fetch_repo_info, repo, resolved_token): repo
+            for repo in to_fetch
+        }
         for future in as_completed(futures):
             repo = futures[future]
             try:
@@ -980,7 +1079,11 @@ def enrich_candidates_with_stars(
                     c.metadata["github_stars"] = {}
                 c.metadata["github_stars"][match] = stars
                 # Append to evidence if present
-                if hasattr(c, "evidence") and c.evidence and f"(live:" not in c.evidence:
+                if (
+                    hasattr(c, "evidence")
+                    and c.evidence
+                    and f"(live:" not in c.evidence
+                ):
                     c.evidence = c.evidence + f" (live: {stars_str} stars)"
                 enriched_count += 1
                 break  # one annotation per candidate

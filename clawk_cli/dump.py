@@ -32,7 +32,9 @@ def _get_git_commit(project_root: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short=8", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=str(project_root),
         )
         if result.returncode == 0:
@@ -47,6 +49,7 @@ def _get_git_commit(project_root: Path) -> str:
     # stays cheap on non-dump code paths.
     try:
         from clawk_cli.build_info import get_build_sha
+
         baked = get_build_sha(short=8)
         if baked:
             return baked
@@ -64,6 +67,7 @@ def _redact(value: str) -> str:
     ``clawk dump`` formats empty values as blank, not as ``"(not set)"``).
     """
     from agent.redact import mask_secret
+
     return mask_secret(value)
 
 
@@ -154,7 +158,12 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
     """Extract model and provider from config."""
     model_cfg = config.get("model", "")
     if isinstance(model_cfg, dict):
-        model = model_cfg.get("default") or model_cfg.get("model") or model_cfg.get("name") or "(not set)"
+        model = (
+            model_cfg.get("default")
+            or model_cfg.get("model")
+            or model_cfg.get("name")
+            or "(not set)"
+        )
         provider = model_cfg.get("provider") or "(auto)"
     elif isinstance(model_cfg, str):
         model = model_cfg or "(not set)"
@@ -167,7 +176,7 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
 
 def _config_overrides(config: dict) -> dict[str, str]:
     """Find non-default config values worth reporting.
-    
+
     Returns a flat dict of dotpath -> value for interesting overrides.
     """
     from clawk_cli.config import DEFAULT_CONFIG
@@ -248,6 +257,7 @@ def run_dump(args):
     # Profile
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         profile = get_active_profile_name() or "(default)"
     except Exception:
         profile = "(default)"
@@ -259,6 +269,7 @@ def run_dump(args):
     # OpenAI SDK version
     try:
         import openai
+
         openai_ver = openai.__version__
     except ImportError:
         openai_ver = "not installed"
@@ -336,13 +347,17 @@ def run_dump(args):
     lines.append("features:")
 
     toolsets = config.get("toolsets", ["clawk-cli"])
-    lines.append(f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}")
+    lines.append(
+        f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}"
+    )
     lines.append(f"  mcp_servers:        {_count_mcp_servers(config)}")
     lines.append(f"  memory_provider:    {_memory_provider(config)}")
     lines.append(f"  gateway:            {_gateway_status()}")
 
     platforms = _configured_platforms()
-    lines.append(f"  platforms:          {', '.join(platforms) if platforms else 'none'}")
+    lines.append(
+        f"  platforms:          {', '.join(platforms) if platforms else 'none'}"
+    )
     lines.append(f"  cron_jobs:          {_cron_summary(clawk_home)}")
     lines.append(f"  skills:             {_count_skills(clawk_home)}")
 

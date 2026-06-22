@@ -22,7 +22,9 @@ def read_terminal_tool(
 ) -> str:
     """Return the in-app terminal's contents (+ line metadata) as a JSON string."""
     if callback is None:
-        return tool_error("read_terminal is only available in the Clawksis desktop app.")
+        return tool_error(
+            "read_terminal is only available in the Clawksis desktop app."
+        )
 
     try:
         window = {

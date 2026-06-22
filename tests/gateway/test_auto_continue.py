@@ -7,7 +7,6 @@ does not re-execute stale interrupted tool calls before addressing new input.
 """
 
 
-
 def _simulate_auto_continue(agent_history: list, user_message: str) -> str:
     """Reproduce the auto-continue injection logic from _run_agent().
 
@@ -33,10 +32,21 @@ class TestAutoDetection:
     def test_trailing_tool_result_triggers_note(self):
         history = [
             {"role": "user", "content": "deploy the app"},
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}
-            ]},
-            {"role": "tool", "tool_call_id": "call_1", "content": "deployed successfully"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "deployed successfully",
+            },
         ]
         result = _simulate_auto_continue(history, "what happened?")
         assert "[System note:" in result
@@ -70,10 +80,14 @@ class TestAutoDetection:
         """Multiple tool calls in a row — last one is still role=tool."""
         history = [
             {"role": "user", "content": "search and read"},
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "call_1", "function": {"name": "search", "arguments": "{}"}},
-                {"id": "call_2", "function": {"name": "read", "arguments": "{}"}},
-            ]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "call_1", "function": {"name": "search", "arguments": "{}"}},
+                    {"id": "call_2", "function": {"name": "read", "arguments": "{}"}},
+                ],
+            },
             {"role": "tool", "tool_call_id": "call_1", "content": "found it"},
             {"role": "tool", "tool_call_id": "call_2", "content": "file content here"},
         ]
@@ -83,9 +97,13 @@ class TestAutoDetection:
     def test_original_message_preserved_after_note(self):
         """The user's actual message must appear after the system note."""
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
-            ]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "done"},
         ]
         result = _simulate_auto_continue(history, "now do X")
@@ -105,7 +123,10 @@ class TestInterruptedReplayFiltering:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}},
+                    {
+                        "id": "call_1",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    },
                 ],
             },
             {
@@ -129,8 +150,14 @@ class TestInterruptedReplayFiltering:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "call_1", "function": {"name": "web_search", "arguments": "{}"}},
-                    {"id": "call_2", "function": {"name": "terminal", "arguments": "{}"}},
+                    {
+                        "id": "call_1",
+                        "function": {"name": "web_search", "arguments": "{}"},
+                    },
+                    {
+                        "id": "call_2",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "found URL"},
@@ -154,10 +181,17 @@ class TestInterruptedReplayFiltering:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}},
+                    {
+                        "id": "call_1",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    },
                 ],
             },
-            {"role": "tool", "tool_call_id": "call_1", "content": "deployed successfully"},
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "deployed successfully",
+            },
         ]
 
         agent_history, _observed_context = _build_gateway_agent_history(history)

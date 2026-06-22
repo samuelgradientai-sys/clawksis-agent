@@ -119,7 +119,9 @@ def main():
         print("=" * 50)
         print(f"Your ScrapeCreators API key: {api_key}")
         print("=" * 50)
-        print(f"\nTo use it: echo 'SCRAPECREATORS_API_KEY={api_key}' >> ~/.config/last30days/.env")
+        print(
+            f"\nTo use it: echo 'SCRAPECREATORS_API_KEY={api_key}' >> ~/.config/last30days/.env"
+        )
     else:
         print("No api_key in profile response. Full response printed above.")
 

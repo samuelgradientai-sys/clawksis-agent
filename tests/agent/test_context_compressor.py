@@ -1489,8 +1489,12 @@ class TestCompressWithClient:
         mock_response.choices[0].message.content = "[CONTEXT SUMMARY]: stuff happened"
         mock_client.chat.completions.create.return_value = mock_response
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
-            c = ContextCompressor(model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2)
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
+            c = ContextCompressor(
+                model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2
+            )
 
         # head_last=user → summary_role="assistant" (same setup as
         # test_summary_role_avoids_consecutive_user_when_head_ends_with_user).
@@ -1515,8 +1519,10 @@ class TestCompressWithClient:
         )
         assert summary_msg["role"] == "assistant"
         assert "END OF CONTEXT SUMMARY" in summary_msg["content"]
-        assert summary_msg["content"].rstrip().endswith(
-            "respond to the message below, not the summary above ---"
+        assert (
+            summary_msg["content"]
+            .rstrip()
+            .endswith("respond to the message below, not the summary above ---")
         )
 
     def test_summary_role_avoids_consecutive_user_messages(self):
@@ -2637,7 +2643,7 @@ class TestPreflightSentinelGuard:
         _last = last_prompt_tokens
         if _last >= 0 and preflight_tokens > _last:
             return preflight_tokens  # would overwrite
-        return last_prompt_tokens   # preserved
+        return last_prompt_tokens  # preserved
 
     def test_sentinel_preserved_after_compression(self, compressor):
         compressor.last_prompt_tokens = -1

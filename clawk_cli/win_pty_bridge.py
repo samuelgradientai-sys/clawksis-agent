@@ -21,6 +21,7 @@ from typing import Optional, Sequence
 
 try:
     from winpty import PtyProcess  # type: ignore
+
     _PTY_AVAILABLE = sys.platform.startswith("win")
 except ImportError:  # pragma: no cover - non-Windows or pywinpty missing
     PtyProcess = None  # type: ignore
@@ -88,7 +89,7 @@ class WinPtyBridge:
                     "pywinpty is not installed. Install with: pip install pywinpty"
                 )
             raise PtyUnavailableError("ConPTY is unavailable on this platform.")
-        spawn_env = (os.environ.copy() if env is None else dict(env))
+        spawn_env = os.environ.copy() if env is None else dict(env)
         if not spawn_env.get("TERM"):
             spawn_env["TERM"] = "xterm-256color"
         # pywinpty mirrors ptyprocess: dimensions=(rows, cols).

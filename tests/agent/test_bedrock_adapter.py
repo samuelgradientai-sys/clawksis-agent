@@ -1942,6 +1942,7 @@ class TestStreamingAccessDeniedDetection:
 
     def _denied_client_error(self):
         from botocore.exceptions import ClientError
+
         return ClientError(
             error_response={
                 "Error": {
@@ -1959,15 +1960,21 @@ class TestStreamingAccessDeniedDetection:
         )
 
     def test_matches_access_denied_client_error(self):
-        pytest.importorskip("botocore", reason="botocore required for Bedrock exception tests")
+        pytest.importorskip(
+            "botocore", reason="botocore required for Bedrock exception tests"
+        )
         from agent.bedrock_adapter import is_streaming_access_denied_error
+
         assert is_streaming_access_denied_error(self._denied_client_error()) is True
 
     def test_ignores_access_denied_for_other_actions(self):
         """AccessDenied on InvokeModel itself is NOT a streaming-only denial."""
-        pytest.importorskip("botocore", reason="botocore required for Bedrock exception tests")
+        pytest.importorskip(
+            "botocore", reason="botocore required for Bedrock exception tests"
+        )
         from agent.bedrock_adapter import is_streaming_access_denied_error
         from botocore.exceptions import ClientError
+
         exc = ClientError(
             error_response={
                 "Error": {
@@ -1983,9 +1990,12 @@ class TestStreamingAccessDeniedDetection:
 
     def test_ignores_validation_error_mentioning_action(self):
         """Non-authz ClientErrors don't match even if the action name appears."""
-        pytest.importorskip("botocore", reason="botocore required for Bedrock exception tests")
+        pytest.importorskip(
+            "botocore", reason="botocore required for Bedrock exception tests"
+        )
         from agent.bedrock_adapter import is_streaming_access_denied_error
         from botocore.exceptions import ClientError
+
         exc = ClientError(
             error_response={
                 "Error": {
@@ -2000,6 +2010,7 @@ class TestStreamingAccessDeniedDetection:
     def test_matches_wrapped_sdk_permission_error(self):
         """Non-ClientError wrappers (AnthropicBedrock SDK) match on message."""
         from agent.bedrock_adapter import is_streaming_access_denied_error
+
         exc = RuntimeError(
             "PermissionDeniedError: user is not authorized to perform: "
             "bedrock:InvokeModelWithResponseStream"
@@ -2008,10 +2019,12 @@ class TestStreamingAccessDeniedDetection:
 
     def test_ignores_unrelated_errors(self):
         from agent.bedrock_adapter import is_streaming_access_denied_error
+
         assert is_streaming_access_denied_error(ValueError("boom")) is False
-        assert is_streaming_access_denied_error(
-            RuntimeError("stream not supported")
-        ) is False
+        assert (
+            is_streaming_access_denied_error(RuntimeError("stream not supported"))
+            is False
+        )
 
 
 class TestCallConverseStreamIamFallback:
@@ -2019,7 +2032,9 @@ class TestCallConverseStreamIamFallback:
     streaming action — InvokeModel-only policies keep working."""
 
     def test_falls_back_to_converse_on_streaming_denial(self):
-        pytest.importorskip("botocore", reason="botocore required for Bedrock exception tests")
+        pytest.importorskip(
+            "botocore", reason="botocore required for Bedrock exception tests"
+        )
         from agent.bedrock_adapter import (
             _bedrock_runtime_client_cache,
             call_converse_stream,

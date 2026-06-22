@@ -23,7 +23,9 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 
 # Content exercising rich-only constructs: a heading, a real Markdown table,
 # and a task list. Pipes / brackets must survive untouched into the payload.
-RICH_CONTENT = "## Results\n\n| Case | Status |\n|---|---|\n| rich | ✅ |\n\n- [x] table renders"
+RICH_CONTENT = (
+    "## Results\n\n| Case | Status |\n|---|---|\n| rich | ✅ |\n\n- [x] table renders"
+)
 DANGEROUS_DETAILS_MATH = (
     "<details><summary>Complex proof</summary>\n\n"
     "$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$\n\n"
@@ -276,7 +278,9 @@ async def test_permanent_rich_error_falls_back_to_legacy(exc):
 async def test_unknown_endpoint_error_falls_back_to_legacy():
     """A non-BadRequest 'Method not found' (old PTB/endpoint) degrades gracefully."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=RuntimeError("Method not found"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=RuntimeError("Method not found")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
 
@@ -289,7 +293,9 @@ async def test_capability_error_latches_rich_send_off():
     """Endpoint-missing errors latch rich off so later sends skip the
     doomed extra roundtrip entirely."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=RuntimeError("Method not found"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=RuntimeError("Method not found")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
     assert result.success is True
@@ -336,21 +342,27 @@ async def test_per_message_bad_request_does_not_latch_off():
     """A parser/limit BadRequest is per-message — rich must stay enabled
     for subsequent messages."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=BadRequest("can't parse rich message"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=BadRequest("can't parse rich message")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
     assert result.success is True
     assert adapter._rich_send_disabled is False
 
     # Next message re-attempts rich.
-    adapter._bot.do_api_request = AsyncMock(return_value=SimpleNamespace(message_id=124))
+    adapter._bot.do_api_request = AsyncMock(
+        return_value=SimpleNamespace(message_id=124)
+    )
     result2 = await adapter.send("12345", RICH_CONTENT)
     assert result2.success is True
     adapter._bot.do_api_request.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exc", [TimedOut("timed out"), NetworkError("connection reset")])
+@pytest.mark.parametrize(
+    "exc", [TimedOut("timed out"), NetworkError("connection reset")]
+)
 async def test_transient_rich_error_does_not_legacy_resend(exc):
     """Transient transport errors must NOT trigger a legacy resend (duplicate risk)."""
     adapter = _make_adapter()
@@ -390,7 +402,9 @@ async def test_routing_thread_id_maps_to_message_thread_id():
 async def test_routing_direct_messages_topic_id_drops_message_thread_id():
     adapter = _make_adapter()
 
-    await adapter.send("-100123", RICH_CONTENT, metadata={"direct_messages_topic_id": "20189"})
+    await adapter.send(
+        "-100123", RICH_CONTENT, metadata={"direct_messages_topic_id": "20189"}
+    )
 
     api_kwargs = _rich_api_kwargs(adapter)
     assert api_kwargs["direct_messages_topic_id"] == 20189
@@ -458,7 +472,9 @@ async def test_details_with_math_skips_rich_draft_to_avoid_tdesktop_crash():
     assert bot is not None
     bot.do_api_request = AsyncMock(return_value=True)
 
-    result = await adapter.send_draft("12345", draft_id=7, content=DANGEROUS_DETAILS_MATH)
+    result = await adapter.send_draft(
+        "12345", draft_id=7, content=DANGEROUS_DETAILS_MATH
+    )
 
     assert result.success is True
     bot.do_api_request.assert_not_called()

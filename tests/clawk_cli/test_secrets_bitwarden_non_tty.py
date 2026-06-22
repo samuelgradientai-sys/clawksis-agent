@@ -3,6 +3,7 @@
 Issue #40274: cmd_setup() crashes with EOFError when stdin is not a TTY
 because getpass.getpass() and console.input() require an interactive terminal.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,11 +28,10 @@ class TestCmdSetupNonTtyGuard:
         """Non-TTY with no flags → exit 1 with missing flags listed."""
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         monkeypatch.setattr(
-            "clawk_cli.secrets_cli.bw.find_bws", lambda install_if_missing=False: "/usr/bin/bws"
+            "clawk_cli.secrets_cli.bw.find_bws",
+            lambda install_if_missing=False: "/usr/bin/bws",
         )
-        monkeypatch.setattr(
-            "clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0"
-        )
+        monkeypatch.setattr("clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0")
 
         from clawk_cli.secrets_cli import cmd_setup
 
@@ -47,18 +47,19 @@ class TestCmdSetupNonTtyGuard:
         """Non-TTY with server-url and project-id but no token → reports --access-token."""
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         monkeypatch.setattr(
-            "clawk_cli.secrets_cli.bw.find_bws", lambda install_if_missing=False: "/usr/bin/bws"
+            "clawk_cli.secrets_cli.bw.find_bws",
+            lambda install_if_missing=False: "/usr/bin/bws",
         )
-        monkeypatch.setattr(
-            "clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0"
-        )
+        monkeypatch.setattr("clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0")
 
         from clawk_cli.secrets_cli import cmd_setup
 
-        result = cmd_setup(self._make_args(
-            server_url="https://vault.bitwarden.com",
-            project_id="aaaa-bbbb",
-        ))
+        result = cmd_setup(
+            self._make_args(
+                server_url="https://vault.bitwarden.com",
+                project_id="aaaa-bbbb",
+            )
+        )
         assert result == 1
         captured = capsys.readouterr()
         # The "Missing:" line should list --access-token only
@@ -76,11 +77,10 @@ class TestCmdSetupNonTtyGuard:
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         monkeypatch.setenv("BWS_SERVER_URL", "https://vault.bitwarden.com")
         monkeypatch.setattr(
-            "clawk_cli.secrets_cli.bw.find_bws", lambda install_if_missing=False: "/usr/bin/bws"
+            "clawk_cli.secrets_cli.bw.find_bws",
+            lambda install_if_missing=False: "/usr/bin/bws",
         )
-        monkeypatch.setattr(
-            "clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0"
-        )
+        monkeypatch.setattr("clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0")
         monkeypatch.setattr("clawk_cli.secrets_cli.load_config", lambda: {})
         monkeypatch.setattr("clawk_cli.secrets_cli.save_env_value", lambda *a: None)
         monkeypatch.setattr("clawk_cli.secrets_cli.get_env_path", lambda: "/tmp/.env")
@@ -91,21 +91,22 @@ class TestCmdSetupNonTtyGuard:
 
         from clawk_cli.secrets_cli import cmd_setup
 
-        result = cmd_setup(self._make_args(
-            access_token="0.valid-token",
-            project_id="aaaa-bbbb",
-        ))
+        result = cmd_setup(
+            self._make_args(
+                access_token="0.valid-token",
+                project_id="aaaa-bbbb",
+            )
+        )
         assert result == 0
 
     def test_all_flags_provided_passes_guard(self, monkeypatch):
         """Non-TTY with all three flags → guard passes, proceeds to setup."""
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         monkeypatch.setattr(
-            "clawk_cli.secrets_cli.bw.find_bws", lambda install_if_missing=False: "/usr/bin/bws"
+            "clawk_cli.secrets_cli.bw.find_bws",
+            lambda install_if_missing=False: "/usr/bin/bws",
         )
-        monkeypatch.setattr(
-            "clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0"
-        )
+        monkeypatch.setattr("clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0")
         monkeypatch.setattr("clawk_cli.secrets_cli.load_config", lambda: {})
         monkeypatch.setattr("clawk_cli.secrets_cli.save_env_value", lambda *a: None)
         monkeypatch.setattr("clawk_cli.secrets_cli.get_env_path", lambda: "/tmp/.env")
@@ -116,22 +117,23 @@ class TestCmdSetupNonTtyGuard:
 
         from clawk_cli.secrets_cli import cmd_setup
 
-        result = cmd_setup(self._make_args(
-            access_token="0.valid-token",
-            server_url="https://vault.bitwarden.com",
-            project_id="aaaa-bbbb",
-        ))
+        result = cmd_setup(
+            self._make_args(
+                access_token="0.valid-token",
+                server_url="https://vault.bitwarden.com",
+                project_id="aaaa-bbbb",
+            )
+        )
         assert result == 0
 
     def test_tty_does_not_trigger_guard(self, monkeypatch):
         """With TTY, the guard should not trigger (interactive mode allowed)."""
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         monkeypatch.setattr(
-            "clawk_cli.secrets_cli.bw.find_bws", lambda install_if_missing=False: "/usr/bin/bws"
+            "clawk_cli.secrets_cli.bw.find_bws",
+            lambda install_if_missing=False: "/usr/bin/bws",
         )
-        monkeypatch.setattr(
-            "clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0"
-        )
+        monkeypatch.setattr("clawk_cli.secrets_cli._bws_version", lambda _: "2.0.0")
         monkeypatch.setattr(
             "clawk_cli.secrets_cli.masked_secret_prompt", lambda prompt: "0.valid-token"
         )
@@ -151,9 +153,11 @@ class TestCmdSetupNonTtyGuard:
         from clawk_cli.secrets_cli import cmd_setup
 
         # With TTY + all flags → should complete without hitting guard
-        result = cmd_setup(self._make_args(
-            access_token="0.valid-token",
-            server_url="https://vault.bitwarden.com",
-            project_id="aaaa-bbbb",
-        ))
+        result = cmd_setup(
+            self._make_args(
+                access_token="0.valid-token",
+                server_url="https://vault.bitwarden.com",
+                project_id="aaaa-bbbb",
+            )
+        )
         assert result == 0

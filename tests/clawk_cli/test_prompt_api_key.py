@@ -256,9 +256,7 @@ def test_keep_does_not_copy_bitwarden_key_to_disk(profile_env, monkeypatch):
 
     from clawk_cli.config import load_env
 
-    monkeypatch.setitem(
-        env_loader._SECRET_SOURCES, "DEEPSEEK_API_KEY", "bitwarden"
-    )
+    monkeypatch.setitem(env_loader._SECRET_SOURCES, "DEEPSEEK_API_KEY", "bitwarden")
 
     key, abort = _run_prompt(existing_key="sk-from-bitwarden", choice="")
 

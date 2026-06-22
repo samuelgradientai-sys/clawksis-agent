@@ -41,7 +41,11 @@ def test_fs_list_sorts_and_hides_noise(client, tmp_path):
     assert response.status_code == 200
     entries = response.json()["entries"]
     assert [entry["name"] for entry in entries] == ["a_dir", "a.txt", "b.txt"]
-    assert entries[0] == {"name": "a_dir", "path": str(root / "a_dir"), "isDirectory": True}
+    assert entries[0] == {
+        "name": "a_dir",
+        "path": str(root / "a_dir"),
+        "isDirectory": True,
+    }
     assert all(entry["name"] not in {".git", "node_modules"} for entry in entries)
 
 
@@ -54,7 +58,11 @@ def test_fs_list_accepts_relative_paths(client, tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["entries"] == [
-        {"name": "file.txt", "path": str(tmp_path / "rel" / "file.txt"), "isDirectory": False}
+        {
+            "name": "file.txt",
+            "path": str(tmp_path / "rel" / "file.txt"),
+            "isDirectory": False,
+        }
     ]
 
 
@@ -65,7 +73,9 @@ def test_fs_list_missing_path_returns_structured_error(client, tmp_path):
     assert response.json() == {"entries": [], "error": "ENOENT"}
 
 
-def test_fs_read_text_matches_preview_shape_and_truncates(client, tmp_path, monkeypatch):
+def test_fs_read_text_matches_preview_shape_and_truncates(
+    client, tmp_path, monkeypatch
+):
     monkeypatch.setattr(web_server, "_FS_TEXT_SOURCE_MAX_BYTES", 32)
     monkeypatch.setattr(web_server, "_FS_TEXT_PREVIEW_MAX_BYTES", 5)
     target = tmp_path / "sample.py"
@@ -115,7 +125,10 @@ def test_fs_read_data_url_returns_capped_data_url(client, tmp_path, monkeypatch)
     response = client.get("/api/fs/read-data-url", params={"path": str(target)})
 
     assert response.status_code == 200
-    assert response.json() == {"dataUrl": "data:image/png;base64," + base64.b64encode(b"pngbytes").decode("ascii")}
+    assert response.json() == {
+        "dataUrl": "data:image/png;base64,"
+        + base64.b64encode(b"pngbytes").decode("ascii")
+    }
 
 
 def test_fs_read_data_url_rejects_over_cap(client, tmp_path, monkeypatch):
@@ -149,7 +162,9 @@ def test_fs_git_root_returns_null_outside_repo(client, tmp_path):
 
 
 def test_fs_default_cwd_prefers_existing_terminal_cwd(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(web_server, "load_config", lambda: {"terminal": {"cwd": str(tmp_path)}})
+    monkeypatch.setattr(
+        web_server, "load_config", lambda: {"terminal": {"cwd": str(tmp_path)}}
+    )
     monkeypatch.setenv("TERMINAL_CWD", str(tmp_path / "env"))
     monkeypatch.setattr(web_server.Path, "cwd", lambda: tmp_path / "process")
     monkeypatch.setattr(web_server, "_fs_git_branch", lambda cwd: "main")
@@ -160,10 +175,14 @@ def test_fs_default_cwd_prefers_existing_terminal_cwd(client, tmp_path, monkeypa
     assert response.json() == {"cwd": str(tmp_path), "branch": "main"}
 
 
-def test_fs_default_cwd_falls_back_when_terminal_cwd_is_invalid(client, tmp_path, monkeypatch):
+def test_fs_default_cwd_falls_back_when_terminal_cwd_is_invalid(
+    client, tmp_path, monkeypatch
+):
     fallback = tmp_path / "backend"
     fallback.mkdir()
-    monkeypatch.setattr(web_server, "load_config", lambda: {"terminal": {"cwd": "/client/missing"}})
+    monkeypatch.setattr(
+        web_server, "load_config", lambda: {"terminal": {"cwd": "/client/missing"}}
+    )
     monkeypatch.setenv("TERMINAL_CWD", "/client/missing")
     monkeypatch.setattr(web_server.Path, "cwd", lambda: fallback)
     monkeypatch.setattr(web_server, "_fs_git_branch", lambda cwd: "")

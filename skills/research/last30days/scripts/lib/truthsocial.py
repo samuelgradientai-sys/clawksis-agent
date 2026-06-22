@@ -26,19 +26,34 @@ def _log(msg: str):
 
 def _strip_html(html: str) -> str:
     """Strip HTML tags from Truth Social post content."""
-    text = re.sub(r'<br\s*/?>', '\n', html)
-    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r"<br\s*/?>", "\n", html)
+    text = re.sub(r"<[^>]+>", "", text)
     return text.strip()
 
 
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Truth Social search."""
     from .query import extract_core_subject
+
     _TS_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features', 'recommendations', 'advice',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
     })
     return extract_core_subject(topic, noise=_TS_NOISE)
 
@@ -85,6 +100,7 @@ def search_truthsocial(
     _log(f"Searching for '{core_topic}' (depth={depth}, limit={count})")
 
     from urllib.parse import urlencode
+
     params = {
         "q": core_topic,
         "type": "statuses",
@@ -94,7 +110,8 @@ def search_truthsocial(
 
     try:
         response = http.request(
-            "GET", url,
+            "GET",
+            url,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30,
         )
@@ -110,7 +127,10 @@ def search_truthsocial(
             return {"statuses": [], "error": "Truth Social rate limited"}
         else:
             _log(f"Search failed: {e}")
-            return {"statuses": [], "error": f"Truth Social search failed: {e.status_code}"}
+            return {
+                "statuses": [],
+                "error": f"Truth Social search failed: {e.status_code}",
+            }
     except Exception as e:
         _log(f"Search failed: {e}")
         return {"statuses": [], "error": str(e)}
@@ -162,7 +182,9 @@ def parse_truthsocial_response(response: Dict[str, Any]) -> List[Dict[str, Any]]
                 "replies": replies,
             },
             "relevance": round(relevance, 2),
-            "why_relevant": f"Truth Social: @{handle}: {text[:60]}" if text else f"Truth Social: {handle}",
+            "why_relevant": f"Truth Social: @{handle}: {text[:60]}"
+            if text
+            else f"Truth Social: {handle}",
         })
 
     return items

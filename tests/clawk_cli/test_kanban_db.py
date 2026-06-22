@@ -3047,6 +3047,7 @@ def test_cleanup_workspace_honors_workspaces_root_env_override(tmp_path, monkeyp
 # Deferred scratch cleanup for parent/child handoff (#33774)
 # ---------------------------------------------------------------------------
 
+
 def test_cleanup_workspace_deferred_while_child_active(kanban_home):
     """A scratch parent's workspace survives completion while a child is still active.
 
@@ -3109,7 +3110,9 @@ def test_dir_child_completion_unblocks_deferred_scratch_parent(kanban_home, tmp_
     with kb.connect() as conn:
         parent = kb.create_task(conn, title="scratch parent")
         child = kb.create_task(
-            conn, title="dir child", workspace_kind="dir",
+            conn,
+            title="dir child",
+            workspace_kind="dir",
             workspace_path=str(child_dir),
         )
         kb.link_tasks(conn, parent, child)

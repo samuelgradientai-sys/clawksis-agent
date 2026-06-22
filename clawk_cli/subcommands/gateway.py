@@ -29,7 +29,9 @@ def _add_compat_platform_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def build_gateway_parser(subparsers, *, cmd_gateway: Callable, cmd_proxy: Callable) -> None:
+def build_gateway_parser(
+    subparsers, *, cmd_gateway: Callable, cmd_proxy: Callable
+) -> None:
     """Attach the ``gateway`` and ``proxy`` subcommands to ``subparsers``."""
     # =========================================================================
     # gateway command
@@ -206,7 +208,9 @@ def build_gateway_parser(subparsers, *, cmd_gateway: Callable, cmd_proxy: Callab
     )
 
     # gateway list
-    gateway_subparsers.add_parser("list", help="List all profiles and their gateway status")
+    gateway_subparsers.add_parser(
+        "list", help="List all profiles and their gateway status"
+    )
 
     # gateway setup
     gateway_subparsers.add_parser("setup", help="Configure messaging platforms")
@@ -274,9 +278,7 @@ def build_gateway_parser(subparsers, *, cmd_gateway: Callable, cmd_proxy: Callab
         help="Bind port (default: 8645)",
     )
 
-    proxy_subparsers.add_parser(
-        "status", help="Show which proxy upstreams are ready"
-    )
+    proxy_subparsers.add_parser("status", help="Show which proxy upstreams are ready")
     proxy_subparsers.add_parser(
         "providers", help="List available proxy upstream providers"
     )

@@ -31,6 +31,7 @@ if _repo not in sys.path:
 # Mock slack-bolt so SlackAdapter can be imported even without the package
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock() -> None:
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -46,8 +47,10 @@ def _ensure_slack_mock() -> None:
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -59,6 +62,7 @@ def _ensure_slack_mock() -> None:
 _ensure_slack_mock()
 
 import gateway.platforms.slack as _slack_mod  # noqa: E402
+
 _slack_mod.SLACK_AVAILABLE = True
 
 from gateway.config import PlatformConfig  # noqa: E402
@@ -74,6 +78,7 @@ from clawk_cli.plugins import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # PluginContext.register_slack_action_handler — input validation + queuing
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(name: str = "test_plugin") -> tuple[PluginManager, PluginContext]:
     """Build a fresh PluginManager + PluginContext bound to it."""
@@ -108,6 +113,7 @@ class TestRegisterSlackActionHandlerAPI:
     def test_regex_action_id_is_accepted(self):
         """slack_bolt accepts re.Pattern matchers — so should the plugin API."""
         import re as _re
+
         mgr, ctx = _make_ctx()
 
         async def cb(ack, body, action):  # pragma: no cover
@@ -212,16 +218,19 @@ def _connect_with_recording_app(
         def decorator(fn):
             registered_actions.append((action_id, fn))
             return fn
+
         return decorator
 
     def mock_event(_event_type):
         def decorator(fn):
             return fn
+
         return decorator
 
     def mock_command(_cmd):
         def decorator(fn):
             return fn
+
         return decorator
 
     mock_app = MagicMock()
@@ -231,24 +240,28 @@ def _connect_with_recording_app(
     mock_app.client = AsyncMock()
 
     mock_web_client = AsyncMock()
-    mock_web_client.auth_test = AsyncMock(return_value={
-        "user_id": "U_BOT",
-        "user": "testbot",
-        "team_id": "T_FAKE",
-        "team": "FakeTeam",
-    })
+    mock_web_client.auth_test = AsyncMock(
+        return_value={
+            "user_id": "U_BOT",
+            "user": "testbot",
+            "team_id": "T_FAKE",
+            "team": "FakeTeam",
+        }
+    )
 
     fake_mgr = MagicMock()
     fake_mgr.get_slack_action_handlers.return_value = plugin_handlers
 
-    with patch.object(_slack_mod, "AsyncApp", return_value=mock_app), \
-         patch.object(_slack_mod, "AsyncWebClient", return_value=mock_web_client), \
-         patch.object(_slack_mod, "AsyncSocketModeHandler", return_value=MagicMock()), \
-         patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-fake"}), \
-         patch("gateway.status.acquire_scoped_lock", return_value=(True, None)), \
-         patch("gateway.status.release_scoped_lock"), \
-         patch("clawk_cli.plugins.get_plugin_manager", return_value=fake_mgr), \
-         patch("asyncio.create_task"):
+    with (
+        patch.object(_slack_mod, "AsyncApp", return_value=mock_app),
+        patch.object(_slack_mod, "AsyncWebClient", return_value=mock_web_client),
+        patch.object(_slack_mod, "AsyncSocketModeHandler", return_value=MagicMock()),
+        patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-fake"}),
+        patch("gateway.status.acquire_scoped_lock", return_value=(True, None)),
+        patch("gateway.status.release_scoped_lock"),
+        patch("clawk_cli.plugins.get_plugin_manager", return_value=fake_mgr),
+        patch("asyncio.create_task"),
+    ):
         result = asyncio.run(adapter.connect())
 
     return result, registered_actions
@@ -266,7 +279,8 @@ class TestSlackAdapterPluginActionWiring:
 
         plugin_handlers = [("inbox_sweep_approve", my_handler, "jarvis")]
         result, registered = _connect_with_recording_app(
-            adapter, plugin_handlers=plugin_handlers,
+            adapter,
+            plugin_handlers=plugin_handlers,
         )
 
         assert result is True
@@ -283,7 +297,8 @@ class TestSlackAdapterPluginActionWiring:
         adapter = SlackAdapter(config)
 
         result, registered = _connect_with_recording_app(
-            adapter, plugin_handlers=[],
+            adapter,
+            plugin_handlers=[],
         )
         assert result is True
         # Built-ins still wired
@@ -304,7 +319,8 @@ class TestSlackAdapterPluginActionWiring:
 
         plugin_handlers = [("explode", boom, "buggy_plugin")]
         _result, registered = _connect_with_recording_app(
-            adapter, plugin_handlers=plugin_handlers,
+            adapter,
+            plugin_handlers=plugin_handlers,
         )
 
         wrapped = next(cb for aid, cb in registered if aid == "explode")
@@ -332,7 +348,8 @@ class TestSlackAdapterPluginActionWiring:
 
         plugin_handlers = [("approve_x", cb, "plug_x")]
         _result, registered = _connect_with_recording_app(
-            adapter, plugin_handlers=plugin_handlers,
+            adapter,
+            plugin_handlers=plugin_handlers,
         )
 
         wrapped = next(c for aid, c in registered if aid == "approve_x")
@@ -362,7 +379,8 @@ class TestSlackAdapterPluginActionWiring:
 
         plugin_handlers = [("approve_x", cb, "plug_x")]
         _result, registered = _connect_with_recording_app(
-            adapter, plugin_handlers=plugin_handlers,
+            adapter,
+            plugin_handlers=plugin_handlers,
         )
 
         wrapped = next(c for aid, c in registered if aid == "approve_x")
@@ -386,10 +404,13 @@ class TestSlackAdapterPluginActionWiring:
             def decorator(fn):
                 registered_actions.append((action_id, fn))
                 return fn
+
             return decorator
 
         def _noop(_):
-            def decorator(fn): return fn
+            def decorator(fn):
+                return fn
+
             return decorator
 
         mock_app = MagicMock()
@@ -399,22 +420,30 @@ class TestSlackAdapterPluginActionWiring:
         mock_app.client = AsyncMock()
 
         mock_web_client = AsyncMock()
-        mock_web_client.auth_test = AsyncMock(return_value={
-            "user_id": "U_BOT",
-            "user": "testbot",
-            "team_id": "T_FAKE",
-            "team": "FakeTeam",
-        })
+        mock_web_client.auth_test = AsyncMock(
+            return_value={
+                "user_id": "U_BOT",
+                "user": "testbot",
+                "team_id": "T_FAKE",
+                "team": "FakeTeam",
+            }
+        )
 
-        with patch.object(_slack_mod, "AsyncApp", return_value=mock_app), \
-             patch.object(_slack_mod, "AsyncWebClient", return_value=mock_web_client), \
-             patch.object(_slack_mod, "AsyncSocketModeHandler", return_value=MagicMock()), \
-             patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-fake"}), \
-             patch("gateway.status.acquire_scoped_lock", return_value=(True, None)), \
-             patch("gateway.status.release_scoped_lock"), \
-             patch("clawk_cli.plugins.get_plugin_manager",
-                   side_effect=RuntimeError("plugins broken")), \
-             patch("asyncio.create_task"):
+        with (
+            patch.object(_slack_mod, "AsyncApp", return_value=mock_app),
+            patch.object(_slack_mod, "AsyncWebClient", return_value=mock_web_client),
+            patch.object(
+                _slack_mod, "AsyncSocketModeHandler", return_value=MagicMock()
+            ),
+            patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-fake"}),
+            patch("gateway.status.acquire_scoped_lock", return_value=(True, None)),
+            patch("gateway.status.release_scoped_lock"),
+            patch(
+                "clawk_cli.plugins.get_plugin_manager",
+                side_effect=RuntimeError("plugins broken"),
+            ),
+            patch("asyncio.create_task"),
+        ):
             result = asyncio.run(adapter.connect())
 
         assert result is True

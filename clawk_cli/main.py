@@ -3578,7 +3578,11 @@ def cmd_cookbook(args):
 
     print("🍳 Cookbook — local models")
 
-    gpu = f"{hw['gpu_name']} ({hw['vram_gb']:g}GB VRAM)" if hw.get("gpu_name") else "no GPU"
+    gpu = (
+        f"{hw['gpu_name']} ({hw['vram_gb']:g}GB VRAM)"
+        if hw.get("gpu_name")
+        else "no GPU"
+    )
 
     print(f"   Hardware: {hw['ram_gb']:g}GB RAM · {hw['cpu_cores']} cores · {gpu}")
 
@@ -7930,7 +7934,6 @@ def _model_flow_copilot_acp(config, current_model=""):
 
 
 def _persist_env_only_key(key_env: str, value: str) -> None:
-
     """Write a kept API key to ``.env`` when it only lives in the process env.
 
 
@@ -20976,8 +20979,17 @@ def main():
 
     # Bug #28 fix: --all es ahora redundante (default es mostrar todos),
     # se mantiene por retrocompatibilidad con scripts existentes.
-    cron_list.add_argument("--all", action="store_true", help="(deprecated, ya es default) Incluir jobs pausados")
-    cron_list.add_argument("--active-only", action="store_true", dest="active_only", help="Filtrar para mostrar solo jobs activos (no pausados)")
+    cron_list.add_argument(
+        "--all",
+        action="store_true",
+        help="(deprecated, ya es default) Incluir jobs pausados",
+    )
+    cron_list.add_argument(
+        "--active-only",
+        action="store_true",
+        dest="active_only",
+        help="Filtrar para mostrar solo jobs activos (no pausados)",
+    )
 
     # cron create/add
 

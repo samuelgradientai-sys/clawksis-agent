@@ -81,14 +81,22 @@ class TestCloudReadTimeoutFloor:
     @pytest.mark.parametrize("base_url", CLOUD_URLS)
     def test_large_context_tracks_scaled_stale(self, base_url):
         """Big contexts scale the stale detector; the read timeout follows."""
-        assert _resolve_read_timeout(base_url, _resolve_stale_timeout(base_url, 60_000)) == 240.0
-        assert _resolve_read_timeout(base_url, _resolve_stale_timeout(base_url, 150_000)) == 300.0
+        assert (
+            _resolve_read_timeout(base_url, _resolve_stale_timeout(base_url, 60_000))
+            == 240.0
+        )
+        assert (
+            _resolve_read_timeout(base_url, _resolve_stale_timeout(base_url, 150_000))
+            == 300.0
+        )
 
     def test_user_override_is_respected(self):
         """An explicit CLAWK_STREAM_READ_TIMEOUT is never overridden by the floor."""
         with pytest.MonkeyPatch.context() as mp:
             mp.setenv("CLAWK_STREAM_READ_TIMEOUT", "90")
-            stale = _resolve_stale_timeout("https://api.githubcopilot.com", est_tokens=0)
+            stale = _resolve_stale_timeout(
+                "https://api.githubcopilot.com", est_tokens=0
+            )
             assert _resolve_read_timeout("https://api.githubcopilot.com", stale) == 90.0
 
 

@@ -44,7 +44,17 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status as http_status
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status as http_status,
+)
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -60,6 +70,7 @@ router = APIRouter()
 # Auth helper — WebSocket only (HTTP routes live behind the dashboard's
 # existing plugin-bypass; this is documented above).
 # ---------------------------------------------------------------------------
+
 
 def _ws_upgrade_authorized(ws: "WebSocket") -> bool:
     """Authorize a WebSocket upgrade by delegating to the dashboard's canonical
@@ -108,7 +119,11 @@ def _resolve_board(board: Optional[str]) -> Optional[str]:
         normed = kanban_db._normalize_board_slug(board)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if normed and normed != kanban_db.DEFAULT_BOARD and not kanban_db.board_exists(normed):
+    if (
+        normed
+        and normed != kanban_db.DEFAULT_BOARD
+        and not kanban_db.board_exists(normed)
+    ):
         raise HTTPException(
             status_code=404,
             detail=f"board {normed!r} does not exist",
@@ -148,7 +163,14 @@ def _conn(board: Optional[str] = None):
 # tasks into ``todo`` and makes the dashboard look like the Scheduled column
 # disappeared.
 BOARD_COLUMNS: list[str] = [
-    "triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done",
+    "triage",
+    "todo",
+    "scheduled",
+    "ready",
+    "running",
+    "blocked",
+    "review",
+    "done",
 ]
 
 
@@ -166,7 +188,11 @@ def _task_dict(
     try:
         d["age"] = kanban_db.task_age(task)
     except Exception:
-        d["age"] = {"created_age_seconds": None, "started_age_seconds": None, "time_to_complete_seconds": None}
+        d["age"] = {
+            "created_age_seconds": None,
+            "started_age_seconds": None,
+            "time_to_complete_seconds": None,
+        }
     # Surface the latest non-null run summary so dashboards don't show
     # blank cards/drawers for tasks where the worker handed off via
     # ``task_runs.summary`` (the kanban-worker pattern) instead of
@@ -375,16 +401,21 @@ def _links_for(conn: sqlite3.Connection, task_id: str) -> dict[str, list[str]]:
 # GET /board
 # ---------------------------------------------------------------------------
 
+
 @router.get("/board")
 def get_board(
     tenant: Optional[str] = Query(None, description="Filter to a single tenant"),
     include_archived: bool = Query(False),
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
     workflow_template_id: Optional[str] = Query(
-        None, description="Restrict to tasks using this workflow template id",
+        None,
+        description="Restrict to tasks using this workflow template id",
     ),
     current_step_key: Optional[str] = Query(
-        None, description="Restrict to tasks at this workflow step key",
+        None,
+        description="Restrict to tasks at this workflow step key",
     ),
 ):
     """Return the full board grouped by status column.
@@ -461,9 +492,7 @@ def get_board(
 
         for t in tasks:
             full = summary_map.get(t.id)
-            preview = (
-                full[:_CARD_SUMMARY_PREVIEW_CHARS] if full else None
-            )
+            preview = full[:_CARD_SUMMARY_PREVIEW_CHARS] if full else None
             d = _task_dict(t, latest_summary=preview)
             d["link_counts"] = link_counts.get(t.id, {"parents": 0, "children": 0})
             d["comment_count"] = comment_counts.get(t.id, 0)
@@ -514,15 +543,18 @@ def get_board(
 # GET /tasks/:id
 # ---------------------------------------------------------------------------
 
+
 @router.get("/tasks/{task_id}")
 def get_task(
     task_id: str,
     board: Optional[str] = Query(None),
     run_state_type: Optional[str] = Query(
-        None, description="With run_state_name: filter runs by column 'status' or 'outcome'",
+        None,
+        description="With run_state_name: filter runs by column 'status' or 'outcome'",
     ),
     run_state_name: Optional[str] = Query(
-        None, description="With run_state_type: exact value for that run column",
+        None,
+        description="With run_state_type: exact value for that run column",
     ),
 ):
     board = _resolve_board(board)
@@ -555,9 +587,13 @@ def get_task(
             task_d["warnings"] = _warnings_summary_from_diagnostics(diag_list)
         return {
             "task": task_d,
-            "comments": [_comment_dict(c) for c in kanban_db.list_comments(conn, task_id)],
+            "comments": [
+                _comment_dict(c) for c in kanban_db.list_comments(conn, task_id)
+            ],
             "events": [_event_dict(e) for e in kanban_db.list_events(conn, task_id)],
-            "attachments": [_attachment_dict(a) for a in kanban_db.list_attachments(conn, task_id)],
+            "attachments": [
+                _attachment_dict(a) for a in kanban_db.list_attachments(conn, task_id)
+            ],
             "links": _links_for(conn, task_id),
             "runs": [
                 _run_dict(r)
@@ -576,6 +612,7 @@ def get_task(
 # ---------------------------------------------------------------------------
 # POST /tasks
 # ---------------------------------------------------------------------------
+
 
 class CreateTaskBody(BaseModel):
     title: str
@@ -627,6 +664,7 @@ def create_task(payload: CreateTaskBody, board: Optional[str] = Query(None)):
         if task and task.status == "ready" and task.assignee:
             try:
                 from clawk_cli.kanban import _check_dispatcher_presence
+
                 running, message = _check_dispatcher_presence()
                 if not running and message:
                     body["warning"] = message
@@ -661,7 +699,7 @@ def _safe_attachment_name(raw: str) -> str:
     name = (raw or "").replace("\\", "/").split("/")[-1].strip()
     # Drop control chars and leading dots so we never write a dotfile or
     # a name with embedded NULs/newlines.
-    name = "".join(ch for ch in name if ch.isprintable() and ch not in '\x00').strip()
+    name = "".join(ch for ch in name if ch.isprintable() and ch not in "\x00").strip()
     name = name.lstrip(".").strip()
     if not name:
         raise HTTPException(status_code=400, detail="invalid attachment filename")
@@ -740,7 +778,9 @@ async def upload_task_attachment(
         except HTTPException:
             raise
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"failed to store attachment: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"failed to store attachment: {exc}"
+            )
 
         att_id = kanban_db.add_attachment(
             conn,
@@ -776,7 +816,9 @@ def download_attachment(attachment_id: int, board: Optional[str] = Query(None)):
         except (ValueError, OSError):
             raise HTTPException(status_code=404, detail="attachment file unavailable")
         if not stored.is_file():
-            raise HTTPException(status_code=404, detail="attachment file missing on disk")
+            raise HTTPException(
+                status_code=404, detail="attachment file missing on disk"
+            )
         return FileResponse(
             path=str(stored),
             filename=att.filename,
@@ -803,6 +845,7 @@ def remove_attachment(attachment_id: int, board: Optional[str] = Query(None)):
 # PATCH /tasks/:id  (status / assignee / priority / title / body)
 # ---------------------------------------------------------------------------
 
+
 class UpdateTaskBody(BaseModel):
     status: Optional[str] = None
     assignee: Optional[str] = None
@@ -819,7 +862,9 @@ class UpdateTaskBody(BaseModel):
 
 
 @router.patch("/tasks/{task_id}")
-def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Query(None)):
+def update_task(
+    task_id: str, payload: UpdateTaskBody, board: Optional[str] = Query(None)
+):
     board = _resolve_board(board)
     conn = _conn(board=board)
     try:
@@ -831,7 +876,9 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
         if payload.assignee is not None:
             try:
                 ok = kanban_db.assign_task(
-                    conn, task_id, payload.assignee or None,
+                    conn,
+                    task_id,
+                    payload.assignee or None,
                 )
             except RuntimeError as e:
                 raise HTTPException(status_code=409, detail=str(e))
@@ -844,7 +891,8 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
             ok = True
             if s == "done":
                 ok = kanban_db.complete_task(
-                    conn, task_id,
+                    conn,
+                    task_id,
                     result=payload.result,
                     summary=payload.summary,
                     metadata=payload.metadata,
@@ -905,8 +953,11 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
                 conn.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) "
                     "VALUES (?, 'reprioritized', ?, ?)",
-                    (task_id, json.dumps({"priority": int(payload.priority)}),
-                     int(time.time())),
+                    (
+                        task_id,
+                        json.dumps({"priority": int(payload.priority)}),
+                        int(time.time()),
+                    ),
                 )
 
         # --- title / body -------------------------------------------------
@@ -915,7 +966,9 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
                 sets, vals = [], []
                 if payload.title is not None:
                     if not payload.title.strip():
-                        raise HTTPException(status_code=400, detail="title cannot be empty")
+                        raise HTTPException(
+                            status_code=400, detail="title cannot be empty"
+                        )
                     sets.append("title = ?")
                     vals.append(payload.title.strip())
                 if payload.body is not None:
@@ -923,7 +976,8 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
                     vals.append(payload.body)
                 vals.append(task_id)
                 conn.execute(
-                    f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?", vals,
+                    f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?",
+                    vals,
                 )
                 conn.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) "
@@ -941,6 +995,7 @@ def update_task(task_id: str, payload: UpdateTaskBody, board: Optional[str] = Qu
 # DELETE /tasks/:id
 # ---------------------------------------------------------------------------
 
+
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, board: Optional[str] = Query(None)):
     board = _resolve_board(board)
@@ -955,7 +1010,8 @@ def delete_task(task_id: str, board: Optional[str] = Query(None)):
 
 
 def _parents_blocking_ready(
-    conn: sqlite3.Connection, task_id: str,
+    conn: sqlite3.Connection,
+    task_id: str,
 ) -> list:
     """Return parent rows (``id``, ``title``, ``status``) that aren't ``done``
     and therefore prevent ``task_id`` from being promoted to ``ready``.
@@ -971,14 +1027,13 @@ def _parents_blocking_ready(
         "WHERE l.child_id = ? AND t.status != 'done'",
         (task_id,),
     ).fetchall()
-    return [
-        {"id": r["id"], "title": r["title"], "status": r["status"]}
-        for r in rows
-    ]
+    return [{"id": r["id"], "title": r["title"], "status": r["status"]} for r in rows]
 
 
 def _set_status_direct(
-    conn: sqlite3.Connection, task_id: str, new_status: str,
+    conn: sqlite3.Connection,
+    task_id: str,
+    new_status: str,
 ) -> bool:
     """Direct status write for drag-drop moves that aren't covered by the
     structured complete/block/unblock/archive verbs (e.g. todo<->ready,
@@ -1015,10 +1070,10 @@ def _set_status_direct(
                 return False
 
         was_running = prev["status"] == "running"
-        reopening_satisfied_parent = (
-            prev["status"] in {"done", "archived"}
-            and new_status not in {"done", "archived"}
-        )
+        reopening_satisfied_parent = prev["status"] in {
+            "done",
+            "archived",
+        } and new_status not in {"done", "archived"}
 
         cur = conn.execute(
             "UPDATE tasks SET status = ?, "
@@ -1033,8 +1088,10 @@ def _set_status_direct(
         run_id = None
         if was_running and new_status != "running" and prev["current_run_id"]:
             run_id = kanban_db._end_run(
-                conn, task_id,
-                outcome="reclaimed", status="reclaimed",
+                conn,
+                task_id,
+                outcome="reclaimed",
+                status="reclaimed",
                 summary=f"status changed to {new_status} (dashboard/direct)",
             )
         conn.execute(
@@ -1063,13 +1120,11 @@ def _set_status_direct(
                         "VALUES (?, 'status', ?, ?)",
                         (
                             child_id,
-                            json.dumps(
-                                {
-                                    "status": "todo",
-                                    "reason": "parent_reopened",
-                                    "parent": task_id,
-                                }
-                            ),
+                            json.dumps({
+                                "status": "todo",
+                                "reason": "parent_reopened",
+                                "parent": task_id,
+                            }),
                             int(time.time()),
                         ),
                     )
@@ -1082,6 +1137,7 @@ def _set_status_direct(
 # ---------------------------------------------------------------------------
 # Comments
 # ---------------------------------------------------------------------------
+
 
 class CommentBody(BaseModel):
     body: str
@@ -1098,7 +1154,10 @@ def add_comment(task_id: str, payload: CommentBody, board: Optional[str] = Query
         if kanban_db.get_task(conn, task_id) is None:
             raise HTTPException(status_code=404, detail=f"task {task_id} not found")
         kanban_db.add_comment(
-            conn, task_id, author=payload.author or "dashboard", body=payload.body,
+            conn,
+            task_id,
+            author=payload.author or "dashboard",
+            body=payload.body,
         )
         return {"ok": True}
     finally:
@@ -1108,6 +1167,7 @@ def add_comment(task_id: str, payload: CommentBody, board: Optional[str] = Query
 # ---------------------------------------------------------------------------
 # Links
 # ---------------------------------------------------------------------------
+
 
 class LinkBody(BaseModel):
     parent_id: str
@@ -1145,6 +1205,7 @@ def delete_link(
 # ---------------------------------------------------------------------------
 # Bulk actions (multi-select on the board)
 # ---------------------------------------------------------------------------
+
 
 class BulkTaskBody(BaseModel):
     ids: list[str]
@@ -1187,7 +1248,8 @@ def bulk_update(payload: BulkTaskBody, board: Optional[str] = Query(None)):
                     s = payload.status
                     if s == "done":
                         ok = kanban_db.complete_task(
-                            conn, tid,
+                            conn,
+                            tid,
                             result=payload.result,
                             summary=payload.summary,
                             metadata=payload.metadata,
@@ -1224,12 +1286,16 @@ def bulk_update(payload: BulkTaskBody, board: Optional[str] = Query(None)):
                     try:
                         if payload.reclaim_first:
                             ok = kanban_db.reassign_task(
-                                conn, tid, payload.assignee or None,
+                                conn,
+                                tid,
+                                payload.assignee or None,
                                 reclaim_first=True,
                             )
                         else:
                             ok = kanban_db.assign_task(
-                                conn, tid, payload.assignee or None,
+                                conn,
+                                tid,
+                                payload.assignee or None,
                             )
                         if not ok:
                             entry.update(ok=False, error="assign refused")
@@ -1244,8 +1310,11 @@ def bulk_update(payload: BulkTaskBody, board: Optional[str] = Query(None)):
                         conn.execute(
                             "INSERT INTO task_events (task_id, kind, payload, created_at) "
                             "VALUES (?, 'reprioritized', ?, ?)",
-                            (tid, json.dumps({"priority": int(payload.priority)}),
-                             int(time.time())),
+                            (
+                                tid,
+                                json.dumps({"priority": int(payload.priority)}),
+                                int(time.time()),
+                            ),
                         )
             except Exception as e:  # defensive — one bad id shouldn't kill the batch
                 entry.update(ok=False, error=str(e))
@@ -1261,9 +1330,12 @@ def bulk_update(payload: BulkTaskBody, board: Optional[str] = Query(None)):
 # the rule engine.
 # ---------------------------------------------------------------------------
 
+
 @router.get("/diagnostics")
 def list_diagnostics(
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
     severity: Optional[str] = Query(
         None,
         description="Filter by severity: warning|error|critical",
@@ -1290,7 +1362,11 @@ def list_diagnostics(
         if severity:
             filtered: dict[str, list[dict]] = {}
             for tid, dl in diags_by_task.items():
-                keep = [d for d in dl if kd.severity_at_or_above(d.get("severity"), severity)]
+                keep = [
+                    d
+                    for d in dl
+                    if kd.severity_at_or_above(d.get("severity"), severity)
+                ]
                 if keep:
                     filtered[tid] = keep
             diags_by_task = filtered
@@ -1321,13 +1397,16 @@ def list_diagnostics(
             })
         # Sort: highest severity first, then most recent.
         from clawk_cli.kanban_diagnostics import SEVERITY_ORDER
+
         sev_idx = {s: i for i, s in enumerate(SEVERITY_ORDER)}
+
         def _sort_key(row):
             top = row["diagnostics"][0]
             return (
                 -sev_idx.get(top.get("severity"), -1),
                 -(top.get("last_seen_at") or 0),
             )
+
         out.sort(key=_sort_key)
 
         return {
@@ -1336,7 +1415,6 @@ def list_diagnostics(
         }
     finally:
         conn.close()
-
 
 
 # ---------------------------------------------------------------------------
@@ -1351,7 +1429,9 @@ except ImportError:
 
 @router.get("/workers/active")
 def list_active_workers(
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
 ):
     """Return every currently-running worker on the board.
 
@@ -1405,7 +1485,11 @@ def list_active_workers(
             }
             for row in rows
         ]
-        return {"workers": workers, "count": len(workers), "checked_at": int(time.time())}
+        return {
+            "workers": workers,
+            "count": len(workers),
+            "checked_at": int(time.time()),
+        }
     finally:
         conn.close()
 
@@ -1413,7 +1497,9 @@ def list_active_workers(
 @router.get("/runs/{run_id}")
 def get_run_endpoint(
     run_id: int,
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
 ):
     """Direct lookup of a ``task_runs`` row by its integer id.
 
@@ -1435,7 +1521,9 @@ def get_run_endpoint(
 @router.get("/runs/{run_id}/inspect")
 def inspect_run_endpoint(
     run_id: int,
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
 ):
     """Live PID stats for a run's worker process via psutil.
 
@@ -1467,14 +1555,25 @@ def inspect_run_endpoint(
     pid = r.worker_pid
 
     if _psutil is None:
-        return {"run_id": run_id, "alive": False, "pid": pid, "reason": "psutil not available"}
+        return {
+            "run_id": run_id,
+            "alive": False,
+            "pid": pid,
+            "reason": "psutil not available",
+        }
 
     try:
         proc = _psutil.Process(pid)
-        info = proc.as_dict(attrs=[
-            "cpu_percent", "memory_info", "num_threads",
-            "status", "create_time", "cmdline",
-        ])
+        info = proc.as_dict(
+            attrs=[
+                "cpu_percent",
+                "memory_info",
+                "num_threads",
+                "status",
+                "create_time",
+                "cmdline",
+            ]
+        )
         # num_fds is POSIX-only; skip gracefully on Windows.
         try:
             num_fds = proc.num_fds()
@@ -1495,7 +1594,12 @@ def inspect_run_endpoint(
             "cmdline": info.get("cmdline"),
         }
     except _psutil.NoSuchProcess:
-        return {"run_id": run_id, "alive": False, "pid": pid, "reason": "process not found"}
+        return {
+            "run_id": run_id,
+            "alive": False,
+            "pid": pid,
+            "reason": "process not found",
+        }
     except _psutil.AccessDenied:
         return {"run_id": run_id, "alive": True, "pid": pid, "error": "access denied"}
 
@@ -1508,7 +1612,9 @@ class TerminateRunBody(BaseModel):
 def terminate_run_endpoint(
     run_id: int,
     payload: TerminateRunBody,
-    board: Optional[str] = Query(None, description="Kanban board slug (omit for current)"),
+    board: Optional[str] = Query(
+        None, description="Kanban board slug (omit for current)"
+    ),
 ):
     """Terminate the worker process backing an in-flight run.
 
@@ -1555,6 +1661,7 @@ def terminate_run_endpoint(
 # ---------------------------------------------------------------------------
 # Recovery actions — reclaim a running claim, reassign to a new profile
 # ---------------------------------------------------------------------------
+
 
 class ReclaimBody(BaseModel):
     reason: Optional[str] = None
@@ -1665,7 +1772,8 @@ def reassign_task_endpoint(
     conn = _conn(board=board)
     try:
         ok = kanban_db.reassign_task(
-            conn, task_id,
+            conn,
+            task_id,
             payload.profile or None,
             reclaim_first=bool(payload.reclaim_first),
             reason=payload.reason,
@@ -1687,6 +1795,7 @@ def reassign_task_endpoint(
 # Plugin config (read dashboard.kanban.* defaults from config.yaml)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/config")
 def get_config():
     """Return kanban dashboard preferences from ~/.clawksis/config.yaml.
@@ -1697,16 +1806,19 @@ def get_config():
     """
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
     except Exception:
         cfg = {}
-    dash_cfg = (cfg.get("dashboard") or {})
+    dash_cfg = cfg.get("dashboard") or {}
     # dashboard.kanban may itself be a dict; fall back to {}.
     k_cfg = dash_cfg.get("kanban") or {}
     return {
         "default_tenant": k_cfg.get("default_tenant") or "",
         "lane_by_profile": bool(k_cfg.get("lane_by_profile", True)),
-        "include_archived_by_default": bool(k_cfg.get("include_archived_by_default", False)),
+        "include_archived_by_default": bool(
+            k_cfg.get("include_archived_by_default", False)
+        ),
         "render_markdown": bool(k_cfg.get("render_markdown", True)),
     }
 
@@ -1762,6 +1874,7 @@ def _active_profile_name() -> str:
     """Return the current Clawksis profile name for notify-sub ownership."""
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         return get_active_profile_name() or "default"
     except Exception:
         return "default"
@@ -1823,8 +1936,8 @@ def subscribe_home(task_id: str, platform: str, board: Optional[str] = Query(Non
         raise HTTPException(
             status_code=404,
             detail=f"No home channel configured for platform {platform!r}. "
-                   f"Set one from the messenger via /sethome, or configure "
-                   f"gateway.platforms.{platform}.home_channel in config.yaml.",
+            f"Set one from the messenger via /sethome, or configure "
+            f"gateway.platforms.{platform}.home_channel in config.yaml.",
         )
     board = _resolve_board(board)
     conn = _conn(board=board)
@@ -1874,6 +1987,7 @@ def unsubscribe_home(task_id: str, platform: str, board: Optional[str] = Query(N
 # Stats (per-profile / per-status counts + oldest-ready age)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/stats")
 def get_stats(board: Optional[str] = Query(None)):
     """Per-status + per-assignee counts + oldest-ready age.
@@ -1910,6 +2024,7 @@ def get_assignees(board: Optional[str] = Query(None)):
 # ---------------------------------------------------------------------------
 # Worker log (read-only; file written by _default_spawn)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/tasks/{task_id}/log")
 def get_task_log(
@@ -1951,6 +2066,7 @@ def get_task_log(
 # Dispatch nudge (optional quick-path so the UI doesn't wait 60 s)
 # ---------------------------------------------------------------------------
 
+
 @router.post("/dispatch")
 def dispatch(
     dry_run: bool = Query(False),
@@ -1961,7 +2077,10 @@ def dispatch(
     conn = _conn(board=board)
     try:
         result = kanban_db.dispatch_once(
-            conn, dry_run=dry_run, max_spawn=max_n, board=board,
+            conn,
+            dry_run=dry_run,
+            max_spawn=max_n,
+            board=board,
         )
         # DispatchResult is a dataclass.
         try:
@@ -1975,6 +2094,7 @@ def dispatch(
 # ---------------------------------------------------------------------------
 # Boards CRUD (multi-project support)
 # ---------------------------------------------------------------------------
+
 
 class CreateBoardBody(BaseModel):
     slug: str
@@ -2016,7 +2136,7 @@ def list_boards(include_archived: bool = Query(False)):
     boards = kanban_db.list_boards(include_archived=include_archived)
     current = kanban_db.get_current_board()
     for b in boards:
-        b["is_current"] = (b["slug"] == current)
+        b["is_current"] = b["slug"] == current
         b["counts"] = _board_counts(b["slug"])
         b["total"] = sum(b["counts"].values())
     return {"boards": boards, "current": current}
@@ -2063,7 +2183,9 @@ def rename_board(slug: str, payload: RenameBoardBody):
 
 
 @router.delete("/boards/{slug}")
-def delete_board(slug: str, delete: bool = Query(False, description="Hard-delete instead of archive")):
+def delete_board(
+    slug: str, delete: bool = Query(False, description="Hard-delete instead of archive")
+):
     """Archive (default) or hard-delete a board."""
     try:
         res = kanban_db.remove_board(slug, archive=not delete)
@@ -2104,6 +2226,7 @@ _EVENT_POLL_SECONDS = 0.3
 # Profile metadata & description editing (consumed by the kanban orchestrator)
 # ---------------------------------------------------------------------------
 
+
 class DescribeBody(BaseModel):
     description: Optional[str] = None  # explicit user-authored text
 
@@ -2123,6 +2246,7 @@ def list_profile_roster():
     """
     try:
         from clawk_cli import profiles as profiles_mod
+
         profiles = profiles_mod.list_profiles()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"failed to list profiles: {exc}")
@@ -2153,15 +2277,19 @@ def update_profile_description(profile_name: str, payload: DescribeBody):
     """
     try:
         from clawk_cli import profiles as profiles_mod
+
         canon = profiles_mod.normalize_profile_name(profile_name)
         if canon == "default":
             from clawk_constants import get_clawk_home  # type: ignore
             from pathlib import Path as _Path
+
             profile_dir = _Path(get_clawk_home())
         else:
             profile_dir = profiles_mod.get_profile_dir(canon)
         if not profile_dir.is_dir():
-            raise HTTPException(status_code=404, detail=f"profile '{profile_name}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"profile '{profile_name}' not found"
+            )
         text = (payload.description or "").strip()
         profiles_mod.write_profile_meta(
             profile_dir,
@@ -2189,6 +2317,7 @@ def auto_describe_profile(profile_name: str, payload: DescribeAutoBody):
     """
     try:
         from clawk_cli import profile_describer  # noqa: WPS433 (intentional)
+
         outcome = profile_describer.describe_profile(
             profile_name,
             overwrite=bool(payload.overwrite),
@@ -2206,6 +2335,7 @@ def auto_describe_profile(profile_name: str, payload: DescribeAutoBody):
 # ---------------------------------------------------------------------------
 # Decompose endpoint (built-in decomposer fan-out)
 # ---------------------------------------------------------------------------
+
 
 class DecomposeBody(BaseModel):
     author: Optional[str] = None
@@ -2235,6 +2365,7 @@ def decompose_task_endpoint(
     # different boards race and cross-write (issue #38323).
     with kanban_db.scoped_current_board(board or kanban_db.DEFAULT_BOARD):
         from clawk_cli import kanban_decompose  # noqa: WPS433 (intentional)
+
         outcome = kanban_decompose.decompose_task(
             task_id,
             author=(payload.author or None),
@@ -2255,6 +2386,7 @@ def decompose_task_endpoint(
 # auto_decompose) — surfaced to the dashboard's settings panel
 # ---------------------------------------------------------------------------
 
+
 class OrchestrationSettingsBody(BaseModel):
     orchestrator_profile: Optional[str] = None
     default_assignee: Optional[str] = None
@@ -2268,6 +2400,7 @@ def get_orchestration_settings():
     plus the resolved effective values (filling in fallbacks)."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
     except Exception:
         cfg = {}
@@ -2282,6 +2415,7 @@ def get_orchestration_settings():
     resolved_default = explicit_default
     try:
         from clawk_cli import profiles as profiles_mod
+
         active_default = profiles_mod.get_active_profile_name() or "default"
         if not resolved_orch or not profiles_mod.profile_exists(resolved_orch):
             resolved_orch = active_default
@@ -2316,6 +2450,7 @@ def set_orchestration_settings(payload: OrchestrationSettingsBody):
     """
     try:
         from clawk_cli.config import load_config, save_config
+
         cfg = load_config() or {}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"failed to load config: {exc}")
@@ -2400,7 +2535,9 @@ async def stream_events(ws: WebSocket):
         # board change.
         ws_board_raw = ws.query_params.get("board")
         try:
-            ws_board = kanban_db._normalize_board_slug(ws_board_raw) if ws_board_raw else None
+            ws_board = (
+                kanban_db._normalize_board_slug(ws_board_raw) if ws_board_raw else None
+            )
         except ValueError:
             ws_board = None
 

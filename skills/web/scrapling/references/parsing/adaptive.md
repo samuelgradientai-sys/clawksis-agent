@@ -19,7 +19,7 @@ Consider a page with a structure like this:
 ```
 To scrape the first product (the one with the `p1` ID), a selector like this would be used:
 ```python
-page.css('#p1')
+page.css("#p1")
 ```
 When website owners implement structural changes like
 ```html
@@ -48,15 +48,16 @@ With Scrapling, you can enable the `adaptive` feature the first time you select 
 
 ```python
 from scrapling import Selector, Fetcher
+
 # Before the change
-page = Selector(page_source, adaptive=True, url='example.com')
+page = Selector(page_source, adaptive=True, url="example.com")
 # or
 Fetcher.adaptive = True
-page = Fetcher.get('https://example.com')
+page = Fetcher.get("https://example.com")
 # then
-element = page.css('#p1', auto_save=True)
+element = page.css("#p1", auto_save=True)
 if not element:  # One day website changes?
-    element = page.css('#p1', adaptive=True)  # Scrapling still finds it!
+    element = page.css("#p1", adaptive=True)  # Scrapling still finds it!
 # the rest of your code...
 ```
 It works with all selection methods, not just CSS/XPath selection.
@@ -127,10 +128,11 @@ First, enable the `adaptive` feature by passing `adaptive=True` to the [Selector
 Examples:
 ```python
 from scrapling import Selector, Fetcher
+
 page = Selector(html_doc, adaptive=True)
 # OR
 Fetcher.adaptive = True
-page = Fetcher.get('https://example.com')
+page = Fetcher.get("https://example.com")
 ```
 When using the [Selector](main_classes.md#selector) class, pass the URL of the website with the `url` argument so Scrapling can separate the properties saved for each element by domain.
 
@@ -143,11 +145,11 @@ There are two main ways to use the `adaptive` feature:
 ### The CSS/XPath Selection way
 First, use the `auto_save` argument while selecting an element that exists on the page:
 ```python
-element = page.css('#p1', auto_save=True)
+element = page.css("#p1", auto_save=True)
 ```
 When the element no longer exists, use the same selector with the `adaptive` argument to have the library find it:
 ```python
-element = page.css('#p1', adaptive=True)
+element = page.css("#p1", adaptive=True)
 ```
 With the `css`/`xpath` methods, the identifier is set automatically to the selector string passed to the method.
 
@@ -158,11 +160,11 @@ Elements can be manually saved, retrieved, and relocated within the `adaptive` f
 
 Example of getting an element by text:
 ```python
-element = page.find_by_text('Tipping the Velvet', first_match=True)
+element = page.find_by_text("Tipping the Velvet", first_match=True)
 ```
 Save its unique properties using the `save` method. The identifier must be set manually (use a meaningful identifier):
 ```python
-page.save(element, 'my_special_element')
+page.save(element, "my_special_element")
 ```
 Later, retrieve and relocate the element inside the page with `adaptive`:
 ```python
@@ -185,25 +187,25 @@ To keep it as a `lxml.etree` object, omit the `selector_type` argument:
 ### No Matches Found
 ```python
 # 1. Check if data was saved
-element_data = page.retrieve('identifier')
+element_data = page.retrieve("identifier")
 if not element_data:
     print("No data saved for this identifier")
 
 # 2. Try with different identifier
-products = page.css('.product', adaptive=True, identifier='old_selector')
+products = page.css(".product", adaptive=True, identifier="old_selector")
 
 # 3. Save again with new identifier
-products = page.css('.new-product', auto_save=True, identifier='new_identifier')
+products = page.css(".new-product", auto_save=True, identifier="new_identifier")
 ```
 
 ### Wrong Elements Matched
 ```python
 # Use more specific selectors
-products = page.css('.product-list .product', auto_save=True)
+products = page.css(".product-list .product", auto_save=True)
 
 # Or save with more context
-product = page.find_by_text('Product Name').parent
-page.save(product, 'specific_product')
+product = page.find_by_text("Product Name").parent
+page.save(product, "specific_product")
 ```
 
 ## Known Issues
