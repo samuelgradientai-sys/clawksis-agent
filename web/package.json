@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "build:vite": "vite build",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "preview": "vite preview"
   },
   "dependencies": {
