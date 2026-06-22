@@ -7,10 +7,10 @@ const config: Config = {
   tagline: 'The self-improving AI agent',
   favicon: 'img/favicon.ico',
 
-  url: 'https://github.com/samuelgradientai-sys/clawksis-agent',
-  baseUrl: '/docs/',
+  url: 'https://samuelgradientai-sys.github.io',
+  baseUrl: '/clawksis-agent/',
 
-  organizationName: 'NousResearch',
+  organizationName: 'samuelgradientai-sys',
   projectName: 'clawksis-agent',
 
   onBrokenLinks: 'warn',

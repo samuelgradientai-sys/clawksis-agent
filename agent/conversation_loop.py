@@ -104,6 +104,13 @@ from utils import base_url_host_matches, env_var_enabled
 
 logger = logging.getLogger(__name__)
 
+# Prefix of the local "waiting for model response" interrupt status. It's
+# metadata, not assistant prose, so consumers (e.g. the ACP adapter) match on
+# this prefix to suppress it from the user-facing response.
+INTERRUPT_WAITING_FOR_MODEL_PREFIX = (
+    "Operation interrupted: waiting for model response ("
+)
+
 
 def _ollama_context_limit_error(agent: Any, request_tokens: int) -> Optional[str]:
     """Return a user-facing error when Ollama is loaded with too little context."""
@@ -3146,7 +3153,9 @@ def run_conversation(
 
                 interrupted = True
 
-                final_response = f"Operation interrupted: waiting for model response ({api_elapsed:.1f}s elapsed)."
+                final_response = (
+                    f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{api_elapsed:.1f}s elapsed)."
+                )
 
                 break
 

@@ -1,0 +1,66 @@
+name: Deploy Docs Site
+
+# Builds the Docusaurus docs site under website/ and publishes it to GitHub
+# Pages. Adapted for this fork from upstream's deploy-site.yml: the Vercel hook,
+# the expensive multi-source skills-index crawl and the upstream-only repo guard
+# are dropped. website/scripts/prebuild.mjs still seeds skills.json (with a
+# graceful empty fallback when the Python extractors find nothing), so the build
+# is self-contained.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # prebuild.mjs runs website/scripts/extract-skills.py + generate-llms-txt.py
+      # to seed static/api/skills.json and llms.txt before the Docusaurus build.
+      - name: Install Python deps for skill extraction
+        run: pip install pyyaml==6.0.2 httpx==0.28.1
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Build site
+        working-directory: website
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
