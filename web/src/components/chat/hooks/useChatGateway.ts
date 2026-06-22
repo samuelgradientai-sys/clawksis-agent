@@ -230,8 +230,9 @@ export function useChatGateway(): UseChatGatewayResult {
           ];
         });
         setBusy(false);
-        // Acumular tokens del usage para el contador del header. El backend no
-        // emite session.info por turno, así que sin esto quedaban en 0.
+        // El usage del backend (_get_usage) es el total ACUMULADO de la sesión
+        // (session_*_tokens), no un delta por turno: por eso se ASIGNA, no se
+        // suma (sumar inflaba el contador en cada respuesta).
         const u =
           payload.usage && typeof payload.usage === "object"
             ? (payload.usage as Record<string, unknown>)
@@ -239,11 +240,10 @@ export function useChatGateway(): UseChatGatewayResult {
         const inTok = Number(u.input ?? u.prompt ?? u.input_tokens ?? 0) || 0;
         const outTok =
           Number(u.output ?? u.completion ?? u.output_tokens ?? 0) || 0;
-        if (inTok || outTok) {
-          setSession((prev) => ({
-            ...prev,
-            tokensUsed: prev.tokensUsed + inTok + outTok,
-          }));
+        const totalTok =
+          Number(u.total ?? u.total_tokens ?? 0) || inTok + outTok;
+        if (totalTok) {
+          setSession((prev) => ({ ...prev, tokensUsed: totalTok }));
         }
         break;
       }
@@ -305,6 +305,13 @@ export function useChatGateway(): UseChatGatewayResult {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           if (last.role === "assistant" && last.streaming) {
+            const empty =
+              !last.content.trim() &&
+              last.toolCalls.length === 0 &&
+              !(last.reasoning ?? "").trim();
+            // Error antes de cualquier contenido → dropear la burbuja vacía
+            // (si no, queda un avatar huérfano al lado del banner de error).
+            if (empty) return prev.slice(0, -1);
             return [...prev.slice(0, -1), { ...last, streaming: false }];
           }
           return prev;
@@ -615,8 +622,10 @@ export function useChatGateway(): UseChatGatewayResult {
         setSession((prev) => ({
           ...prev,
           sessionId: liveSid,
-          model: (info.model as string) || prev.model,
-          modelProvider: (info.model_provider as string) ?? prev.modelProvider,
+          // Reset por-sesión (consistente con los tokens): si el resume no trae
+          // info.model, no dejar pegado el modelo del chat anterior.
+          model: (info.model as string) ?? null,
+          modelProvider: (info.model_provider as string) ?? null,
           tokensUsed: 0,
           tokensMax: 0,
         }));
@@ -652,6 +661,10 @@ export function useChatGateway(): UseChatGatewayResult {
       }
     }
     if (lastUserText == null) return;
+    // Si el último turno fue un slash command, NO regenerar: re-ejecutaría el
+    // comando y session.undo borraría el turno real previo (los slash no quedan
+    // en el history del backend).
+    if (lastUserText.trim().startsWith("/")) return;
 
     // Sacar localmente el último turno (desde el último user, inclusive). El
     // backend hace lo mismo con session.undo; re-enviamos el prompt para
