@@ -38,6 +38,7 @@ import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
 import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
+import { useImageAttachments } from "./hooks/useImageAttachments";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -458,6 +459,40 @@ function Composer({
     error: attachError,
     buildPromptWithAttachments,
   } = useAttachments();
+  const {
+    images,
+    addImage,
+    removeImage,
+    clear: clearImages,
+    error: imgError,
+  } = useImageAttachments(sendRpc, sessionId);
+  const [dragging, setDragging] = useState(false);
+
+  // Pegar / soltar: imágenes → adjunto de imagen (upload + image.attach);
+  // documentos de texto → adjunto inline (useAttachments).
+  const handleIncomingFiles = async (files: File[]) => {
+    const textFiles: File[] = [];
+    for (const f of files) {
+      if (f.type.startsWith("image/")) await addImage(f);
+      else textFiles.push(f);
+    }
+    if (textFiles.length) await addFiles(textFiles);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length > 0) {
+      e.preventDefault();
+      void handleIncomingFiles(files);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length > 0) void handleIncomingFiles(files);
+  };
 
   const handleMic = () => {
     if (voice.listening) {
@@ -472,7 +507,8 @@ function Composer({
   const canSend =
     (value.trim().length > 0 ||
       attachments.length > 0 ||
-      citations.length > 0) &&
+      citations.length > 0 ||
+      images.length > 0) &&
     !busy &&
     !disabled;
 
@@ -491,6 +527,9 @@ function Composer({
     setValue("");
     clearAttachments();
     onClearCitations();
+    // Las imágenes ya están stageadas en la sesión (image.attach); el backend
+    // las consume en este turno. Limpiamos los chips locales.
+    clearImages();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -509,7 +548,7 @@ function Composer({
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      await addFiles(files);
+      await handleIncomingFiles(Array.from(files));
     }
     // Reset input para que se pueda seleccionar el mismo archivo otra vez
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -517,7 +556,23 @@ function Composer({
 
   return (
     <div className="border-t border-border px-4 py-3">
-      <div className="mx-auto w-full max-w-3xl">
+      <div
+        className="relative mx-auto w-full max-w-3xl"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={handleDrop}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#6C4FD6] bg-[#6C4FD6]/10 text-sm font-medium text-foreground">
+            Soltá para adjuntar (imágenes o documentos)
+          </div>
+        )}
       {/* Chips de citas */}
       {citations.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
@@ -544,11 +599,35 @@ function Composer({
         </div>
       )}
 
-      {/* Error de adjuntar / voz */}
-      {(attachError || voice.error) && (
+      {/* Chips de imágenes (pegadas / arrastradas) */}
+      {images.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {images.map((img) => (
+            <div key={img.id} className="group relative">
+              <img
+                src={img.previewUrl}
+                alt={img.name}
+                title={img.name}
+                className="size-14 rounded-md border border-border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(img.id)}
+                aria-label={"Quitar " + img.name}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error de adjuntar / voz / imagen */}
+      {(attachError || voice.error || imgError) && (
         <div className="mb-2 flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
           <AlertCircle className="size-3 shrink-0" />
-          <span>{attachError ?? voice.error}</span>
+          <span>{attachError ?? voice.error ?? imgError}</span>
         </div>
       )}
 
@@ -557,7 +636,8 @@ function Composer({
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".txt,.md,.markdown,.json,.yaml,.yml,.toml,.xml,.py,.ts,.tsx,.js,.jsx,.mjs,.cjs,.rs,.go,.java,.kt,.rb,.php,.swift,.c,.cpp,.h,.hpp,.cs,.sh,.bash,.zsh,.fish,.html,.css,.scss,.sass,.csv,.tsv,.sql,.env,.ini,.conf,.cfg,.log,.vue,.svelte,.graphql,.gql,text/*"
+        accept=".txt,.md,.markdown,.json,.yaml,.yml,.toml,.xml,.py,.ts,.tsx,.js,.jsx,.mjs,.cjs,.rs,.go,.java,.kt,.rb,.php,.swift,.c,.cpp,.h,.hpp,.cs,.sh,.bash,.zsh,.fish,.html,.css,.scss,.sass,.csv,.tsv,.sql,.env,.ini,.conf,.cfg,.log,.vue,.svelte,.graphql,.gql,text/*,image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp"
+        title="Adjuntar archivo de texto o imagen"
         onChange={handleFileInputChange}
         className="hidden"
       />
@@ -571,6 +651,7 @@ function Composer({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={
             disabled
               ? "Esperando conexión..."
@@ -586,7 +667,7 @@ function Composer({
             onClick={handlePaperclipClick}
             disabled={disabled}
             aria-label="Adjuntar archivo"
-            title="Adjuntar archivo de texto (.txt, .md, .py, .ts, etc — máx 100KB)"
+            title="Adjuntar documento o imagen (también podés pegar o arrastrar)"
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <Paperclip className="size-4" />
