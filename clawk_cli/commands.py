@@ -494,6 +494,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
     CommandDef(
         "usage", "Show token usage and rate limits for the current session", "Info"
     ),
+    CommandDef("credits", "Show your Nous credit balance and top-up handoff", "Info"),
     CommandDef(
         "insights", "Show usage insights and analytics", "Info", args_hint="[days]"
     ),
@@ -1782,6 +1783,10 @@ def discord_skill_commands_by_category(
 
 _SLACK_MAX_SLASH_COMMANDS = 50
 
+# High-value aliases that must survive Slack's 50-slash cap ahead of
+# lower-priority registry-order aliases (the short everyday forms users type).
+_SLACK_PRIORITY_ALIASES = frozenset({"btw", "bg", "reset", "q"})
+
 _SLACK_NAME_LIMIT = 32
 
 _SLACK_INVALID_CHARS = re.compile(r"[^a-z0-9_\-]")
@@ -1915,20 +1920,38 @@ def slack_native_slashes() -> list[tuple[str, str, str]]:
 
         _add(cmd.name, cmd.description, cmd.args_hint or "")
 
-    # Second pass: aliases.
+    # Second pass: aliases. High-value short aliases (the ones users type most:
+    # /btw, /bg, /reset, /q, ...) are surfaced first so they win the scarce
+    # slots ahead of registry-order aliases when we're up against Slack's
+    # 50-command cap.
+
+    def _emit_alias(cmd: CommandDef, alias: str) -> None:
+        # Skip aliases that only differ from canonical by case/punctuation
+        # normalization (already covered by _add dedup).
+
+        _add(alias, f"Alias for /{cmd.name} — {cmd.description}", cmd.args_hint or "")
+
+    emitted_aliases: set[str] = set()
 
     for cmd in COMMAND_REGISTRY:
         if not _is_gateway_available(cmd, overrides):
             continue
 
         for alias in cmd.aliases:
-            # Skip aliases that only differ from canonical by case/punctuation
+            if alias in _SLACK_PRIORITY_ALIASES:
+                _emit_alias(cmd, alias)
 
-            # normalization (already covered by _add dedup).
+                emitted_aliases.add(alias)
 
-            _add(
-                alias, f"Alias for /{cmd.name} — {cmd.description}", cmd.args_hint or ""
-            )
+    for cmd in COMMAND_REGISTRY:
+        if not _is_gateway_available(cmd, overrides):
+            continue
+
+        for alias in cmd.aliases:
+            if alias in emitted_aliases:
+                continue
+
+            _emit_alias(cmd, alias)
 
     # Third pass: plugin commands.
 

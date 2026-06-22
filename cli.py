@@ -14078,6 +14078,9 @@ class ClawksisCLI:
         elif canonical == "usage":
             self._show_usage()
 
+        elif canonical == "credits":
+            self._show_credits()
+
         elif canonical == "insights":
             self._show_insights(cmd_original)
 
@@ -16734,6 +16737,96 @@ class ClawksisCLI:
             # Console quietness is enforced by clawk_logging not
 
             # installing a console StreamHandler in non-verbose mode.
+
+    def _show_credits(self):
+        """Show Nous credit balance + the top-up handoff (the /credits surface).
+
+        Builds the surface-agnostic view once, then renders it. With a live
+        prompt_toolkit app the interactive top-up modal is offered; without one
+        (e.g. the TUI slash-worker, where the modal would read the worker's
+        JSON-RPC stdin and crash) we render the plain-text variant instead.
+        Fail-open: any auth/portal hiccup degrades to the logged-out copy.
+        """
+
+        import agent.account_usage as account_usage
+
+        from agent.i18n import t
+
+        try:
+            view = account_usage.build_credits_view(markdown=False)
+
+        except Exception:
+            view = None
+
+        if view is None or not view.logged_in:
+            print(t("gateway.credits.not_logged_in"))
+
+            return
+
+        lines: list[str] = ["💳 Nous credits"]
+
+        for line in view.balance_lines:
+            if line.lstrip().startswith("📈"):
+                continue  # drop the helper's header; we print our own 💳 one
+
+            lines.append(line)
+
+        if view.identity_line:
+            lines.append("")
+
+            lines.append(view.identity_line)
+
+        if view.topup_url:
+            lines.append("")
+
+            lines.append(f"Top up: {view.topup_url}")
+
+            lines.append(
+                "Complete your top-up in the browser — "
+                "credits will appear in /credits shortly."
+            )
+
+        # Interactive surfaces may offer a modal that opens the URL; the
+        # text-only path (no live app) always prints. The modal must NOT run
+        # without a live app — it would read the slash-worker's stdin.
+        if getattr(self, "_app", None) is not None:
+            self._prompt_credits_topup_modal(view)
+
+            return
+
+        print("\n".join(lines))
+
+    def _prompt_credits_topup_modal(self, view) -> None:
+        """Interactive /credits panel — render the block, then offer to open the
+        top-up URL via the prompt_toolkit modal. Only ever called with a live
+        ``self._app`` (the non-interactive path prints text instead)."""
+
+        lines: list[str] = ["💳 Nous credits"]
+
+        for line in view.balance_lines:
+            if line.lstrip().startswith("📈"):
+                continue
+
+            lines.append(line)
+
+        if view.identity_line:
+            lines.append("")
+
+            lines.append(view.identity_line)
+
+        print("\n".join(lines))
+
+        if not view.topup_url:
+            return
+
+        self._prompt_text_input_modal(
+            title="💳 Top up credits",
+            detail=(
+                f"Open {view.topup_url} to top up. "
+                "Credits will appear in /credits shortly."
+            ),
+            choices=[("ok", "Got it", "Close this panel")],
+        )
 
     def _show_insights(self, command: str = "/insights"):
         """Show usage insights and analytics from session history."""
