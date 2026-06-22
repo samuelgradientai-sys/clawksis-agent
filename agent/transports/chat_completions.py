@@ -670,8 +670,34 @@ class ChatCompletionsTransport(ProviderTransport):
         if rd:
             provider_data["reasoning_details"] = rd
 
+        content = msg.content
+
+        # OpenAI-compatible refusals.  Some proxies (e.g. Nous Portal fronting
+        # Anthropic) surface a Claude refusal via ``message.refusal`` while
+        # leaving ``content`` empty and ``finish_reason="stop"``.  Left alone,
+        # the agent loop sees an empty response and retries it three times
+        # before giving up.  Promote a *standalone* refusal to a terminal
+        # ``content_filter`` so the loop's refusal handler surfaces it.
+        #
+        # A refusal alongside real content or tool calls is NOT terminal — the
+        # turn is a usable response and promoting it would discard the model's
+        # actual work.  In that case record the refusal in provider_data only
+        # and leave content / finish_reason untouched.
+        refusal = getattr(msg, "refusal", None)
+        if refusal is None and hasattr(msg, "model_extra"):
+            model_extra = getattr(msg, "model_extra", None) or {}
+            if isinstance(model_extra, dict) and model_extra.get("refusal") is not None:
+                refusal = model_extra["refusal"]
+        if refusal is not None:
+            provider_data["refusal"] = refusal
+            standalone = not tool_calls and content in (None, "")
+            if standalone:
+                content = refusal
+                if finish_reason != "content_filter":
+                    finish_reason = "content_filter"
+
         return NormalizedResponse(
-            content=msg.content,
+            content=content,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
             reasoning=reasoning,

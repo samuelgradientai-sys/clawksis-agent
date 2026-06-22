@@ -119,6 +119,18 @@ class TurnResult:
 
     thread_id: Optional[str] = None
 
+    # Token accounting from codex's ``thread/tokenUsage/updated`` notification.
+    # ``last`` is the most recent turn's counts, ``total`` the cumulative
+    # thread total, and ``model_context_window`` the model's context size.
+    # Captured so the caller can surface usage / context budget without
+    # re-deriving it from the streamed items.
+
+    token_usage_last: dict = field(default_factory=dict)
+
+    token_usage_total: dict = field(default_factory=dict)
+
+    model_context_window: Optional[int] = None
+
     # Hint to the caller that the underlying codex subprocess is likely
 
     # wedged (turn-level timeout fired, post-tool watchdog tripped, or
@@ -763,6 +775,8 @@ class CodexAppServerSession:
                     if pending is None:
                         break
 
+                    self._capture_token_usage(pending, result)
+
                     self._track_pending_file_change(pending)
 
                     proj = projector.project(pending)
@@ -801,6 +815,8 @@ class CodexAppServerSession:
                 continue
 
             method = note.get("method", "")
+
+            self._capture_token_usage(note, result)
 
             if self._on_event is not None:
                 try:
@@ -1140,6 +1156,33 @@ class CodexAppServerSession:
                 return "decline"
 
         return "decline"
+
+    def _capture_token_usage(self, note: dict, result: TurnResult) -> None:
+        """Record token accounting from codex's ``thread/tokenUsage/updated``.
+
+        Codex streams a ``thread/tokenUsage/updated`` notification carrying the
+        most recent turn's counts (``last``), the cumulative thread total
+        (``total``), and the model's context window. Capture them onto the
+        TurnResult so the caller can surface usage / remaining context budget
+        without re-deriving it from the streamed items. Non-tokenUsage
+        notifications are ignored."""
+
+        if note.get("method") != "thread/tokenUsage/updated":
+            return
+
+        token_usage = (note.get("params") or {}).get("tokenUsage") or {}
+
+        last = token_usage.get("last")
+        if isinstance(last, dict):
+            result.token_usage_last = last
+
+        total = token_usage.get("total")
+        if isinstance(total, dict):
+            result.token_usage_total = total
+
+        window = token_usage.get("modelContextWindow")
+        if isinstance(window, int) and not isinstance(window, bool):
+            result.model_context_window = window
 
     def _track_pending_file_change(self, note: dict) -> None:
         """Maintain self._pending_file_changes from item/started + item/completed
