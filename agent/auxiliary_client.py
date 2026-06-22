@@ -86,6 +86,8 @@ import logging
 
 import os
 
+import re
+
 import threading
 
 import time
@@ -6344,7 +6346,7 @@ def get_auxiliary_extra_body() -> dict:
     return {}
 
 
-def auxiliary_max_tokens_param(value: int) -> dict:
+def auxiliary_max_tokens_param(value: int, model: Optional[str] = None) -> dict:
     """Return the correct max tokens kwarg for the auxiliary client's provider.
 
 
@@ -6362,6 +6364,12 @@ def auxiliary_max_tokens_param(value: int) -> dict:
     custom_base = _current_custom_base_url()
 
     or_key = os.getenv("OPENROUTER_API_KEY")
+
+    # Name-based detection: the newer OpenAI families (gpt-4o, o-series, gpt-5+)
+    # reject max_tokens and need max_completion_tokens even when served via a
+    # third-party gateway or OpenRouter, where the host check below can't see it.
+    if model and re.search(r"(gpt-4o|gpt-5|(?:^|[/:_-])o[1-9])", model, re.IGNORECASE):
+        return {"max_completion_tokens": value}
 
     # Use max_completion_tokens for direct OpenAI-compatible providers that reject
 
