@@ -139,19 +139,38 @@ class AnthropicTransport(ProviderTransport):
 
         tool_calls = []
 
+        # Verbatim, order-preserving block list. Populated into provider_data
+        # below only for turns that interleave SIGNED thinking with tool_use, so
+        # replay (_convert_assistant_message) keeps the original ordering that
+        # Anthropic signs thinking blocks against (else HTTP 400 on the latest
+        # assistant message).
+        ordered_blocks = []
+
+        has_signed_thinking = False
+
+        has_tool_use = False
+
         for block in response.content:
+            block_plain = _to_plain_data(block)
+
+            if isinstance(block_plain, dict):
+                ordered_blocks.append(block_plain)
+
             if block.type == "text":
                 text_parts.append(block.text)
 
             elif block.type == "thinking":
                 reasoning_parts.append(block.thinking)
 
-                block_dict = _to_plain_data(block)
+                if isinstance(block_plain, dict):
+                    reasoning_details.append(block_plain)
 
-                if isinstance(block_dict, dict):
-                    reasoning_details.append(block_dict)
+                if getattr(block, "signature", None):
+                    has_signed_thinking = True
 
             elif block.type == "tool_use":
+                has_tool_use = True
+
                 name = block.name
 
                 if strip_tool_prefix and name.startswith(_MCP_PREFIX):
@@ -190,6 +209,14 @@ class AnthropicTransport(ProviderTransport):
 
         if reasoning_details:
             provider_data["reasoning_details"] = reasoning_details
+
+        # Preserve interleave order for signed-thinking + tool_use turns so the
+        # latest assistant message replays blocks in their original positions
+        # (_convert_assistant_message reads this channel). The plain split into
+        # reasoning_details + tool_calls loses the cross-type ordering, which
+        # invalidates the thinking-block signatures on replay.
+        if has_signed_thinking and has_tool_use:
+            provider_data["anthropic_content_blocks"] = ordered_blocks
 
         return NormalizedResponse(
             content="\n".join(text_parts) if text_parts else None,
