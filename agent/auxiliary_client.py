@@ -582,6 +582,56 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
     return {}
 
 
+def _apply_user_default_headers(
+    headers: Optional[Dict[str, str]],
+) -> Optional[Dict[str, str]]:
+    """Merge user-configured ``model.default_headers`` onto request headers.
+
+    Reads ``model.default_headers`` from config.yaml and merges those entries
+    onto *headers*, with user values taking precedence over the provider- and
+    SDK-supplied defaults already present.  This lets a ``custom`` OpenAI-
+    compatible endpoint behind a gateway/WAF that rejects the OpenAI Python
+    SDK's identifying headers (``User-Agent: OpenAI/Python ...``) reach its
+    upstream by overriding e.g. ``User-Agent: curl/8.7.1``. (#40033)
+
+    Shared by the main agent client (``run_agent.py``) and this auxiliary
+    client so the two paths can never drift on precedence or value handling.
+
+    Behavior:
+
+    - No ``model.default_headers`` configured → no-op; returns *headers*
+      unchanged (the same object, ``None`` stays ``None``).
+    - ``headers is None`` with overrides present → returns a new dict.
+    - ``None`` override values are skipped (used to clear a key, not set it).
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        model_cfg = load_config().get("model", {})
+
+    except Exception:
+        return headers
+
+    if not isinstance(model_cfg, dict):
+        return headers
+
+    user_headers = model_cfg.get("default_headers")
+
+    if not isinstance(user_headers, dict) or not user_headers:
+        return headers
+
+    merged: Dict[str, str] = dict(headers) if headers else {}
+
+    for key, value in user_headers.items():
+        if value is None:
+            continue
+
+        merged[str(key)] = str(value)
+
+    return merged
+
+
 # Default auxiliary models per provider
 
 _OPENROUTER_MODEL = "google/gemini-3-flash-preview"
@@ -2614,6 +2664,15 @@ def _try_custom_endpoint() -> Tuple[Optional[Any], Optional[str]]:
     _clean_base, _dq = _extract_url_query_params(custom_base)
 
     _extra = {"default_query": _dq} if _dq else {}
+
+    # User-configured model.default_headers override the SDK's identifying
+    # headers on every OpenAI-wire branch below (#40033). The anthropic_messages
+    # branch builds a native Anthropic client and is intentionally excluded,
+    # mirroring run_agent.py which skips the override for Anthropic mode.
+    _merged_headers = _apply_user_default_headers(_extra.get("default_headers"))
+
+    if _merged_headers:
+        _extra["default_headers"] = _merged_headers
 
     if custom_mode == "codex_responses":
         real_client = OpenAI(api_key=custom_key, base_url=_clean_base, **_extra)
@@ -5270,6 +5329,14 @@ def resolve_provider_client(
                 except Exception:
                     pass
 
+            # User-configured model.default_headers override provider/SDK
+            # defaults on this auxiliary path too (#40033) — otherwise the main
+            # turn reaches a header-rejecting gateway but aux calls still 4xx.
+            _merged_headers = _apply_user_default_headers(extra.get("default_headers"))
+
+            if _merged_headers:
+                extra["default_headers"] = _merged_headers
+
             client = OpenAI(api_key=custom_key, base_url=_clean_base, **extra)
 
             client = _wrap_if_needed(client, final_model, custom_base, custom_key)
@@ -5469,6 +5536,17 @@ def resolve_provider_client(
                         ), final_model
 
                     return sync_anthropic, final_model
+
+                # Same #40033 override on the named ``custom_providers`` path:
+                # this is a distinct construction site (_extra2) from the
+                # config-level ``model.provider: custom`` branch above, and both
+                # must honor the global ``model.default_headers``.
+                _merged_headers2 = _apply_user_default_headers(
+                    _extra2.get("default_headers")
+                )
+
+                if _merged_headers2:
+                    _extra2["default_headers"] = _merged_headers2
 
                 client = OpenAI(api_key=custom_key, base_url=_clean_base2, **_extra2)
 
