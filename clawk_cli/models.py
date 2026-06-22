@@ -77,12 +77,15 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     ("deepseek/deepseek-v4-flash", ""),
     # Qwen
     ("qwen/qwen3.7-max", ""),
+    ("qwen/qwen3.7-plus", ""),
     ("qwen/qwen3.6-35b-a3b", ""),
     # MoonshotAI
     ("moonshotai/kimi-k2.6", "recommended"),
+    ("moonshotai/kimi-k2.7-code", ""),
     # MiniMax
     ("minimax/minimax-m3", ""),
     # Z-AI
+    ("z-ai/glm-5.2", ""),
     ("z-ai/glm-5.1", ""),
     # Xiaomi
     ("xiaomi/mimo-v2.5-pro", ""),
@@ -100,8 +103,10 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     # Free tier
     ("openrouter/elephant-alpha", "free"),
     ("openrouter/owl-alpha", "free"),
+    ("poolside/laguna-m.1:free", "free"),
     ("tencent/hy3-preview:free", "free"),
     ("nvidia/nemotron-3-super-120b-a12b:free", "free"),
+    ("nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
     ("inclusionai/ring-2.6-1t:free", "free"),
 ]
 
