@@ -19177,6 +19177,23 @@ def _report_dashboard_status() -> int:
     return len(pids)
 
 
+def _dashboard_listening(host: str, port: int) -> bool:
+    """Return True if something already accepts TCP connections on host:port.
+
+    Used by the unified-dashboard router to choose between attaching to a
+    running dashboard and re-launching one.
+    """
+
+    import socket
+
+    try:
+        with socket.create_connection((host, int(port)), timeout=0.5):
+            return True
+
+    except OSError:
+        return False
+
+
 def cmd_dashboard(args):
     """Start the web UI server, or (with --stop/--status) manage running ones."""
 
@@ -19238,6 +19255,73 @@ def cmd_dashboard(args):
     ):
         _run_dashboard_detached(args)
         return
+
+    # ── Unified dashboard routing ──────────────────────────────────────────
+    # A named-profile `clawk dashboard` rides the single machine (default-
+    # profile) dashboard instead of starting its own, so every profile shares
+    # one UI with a profile switcher. Either attach to a dashboard that's
+    # already up (open it scoped to this profile) or re-exec as the default
+    # profile with the launching profile preselected.
+    #
+    # Opt-outs (skip routing entirely, before any probe):
+    #   • --isolated            — explicit "I want my own dashboard"
+    #   • --open-profile <name> — we ARE the re-exec'd child; never re-route
+    #   • CLAWK_DESKTOP=1       — desktop spawns per-profile pool backends
+    #   • active profile default — already the machine dashboard
+    from clawk_cli.profiles import get_active_profile_name
+
+    _profile = get_active_profile_name()
+
+    if (
+        _profile
+        and _profile != "default"
+        and not getattr(args, "isolated", False)
+        and not getattr(args, "open_profile", "")
+        and not os.environ.get("CLAWK_DESKTOP")
+    ):
+        if _dashboard_listening(args.host, args.port):
+            # A dashboard is already up — attach to it, scoped to this profile.
+            scoped_url = f"http://{args.host}:{args.port}/?profile={_profile}"
+
+            if not getattr(args, "no_open", False):
+                import webbrowser
+
+                webbrowser.open(scoped_url)
+
+            print(f"Dashboard already running — attached at {scoped_url}")
+
+            sys.exit(0)
+
+        # Nothing listening — re-exec as the machine (default-profile) dashboard
+        # with this profile preselected. Drop CLAWK_HOME so the child binds the
+        # machine root rather than this profile's directory.
+        child_argv = [
+            sys.executable,
+            sys.argv[0],
+            "-p",
+            "default",
+            "dashboard",
+            "--host",
+            str(args.host),
+            "--port",
+            str(args.port),
+            "--open-profile",
+            _profile,
+        ]
+
+        if getattr(args, "no_open", False):
+            child_argv.append("--no-open")
+
+        if getattr(args, "insecure", False):
+            child_argv.append("--insecure")
+
+        if getattr(args, "skip_build", False):
+            child_argv.append("--skip-build")
+
+        child_env = dict(os.environ)
+        child_env.pop("CLAWK_HOME", None)
+
+        os.execvpe(sys.executable, child_argv, child_env)
 
     # Attach gui.log early so dashboard startup/build failures are captured in
 
@@ -19335,6 +19419,20 @@ def cmd_dashboard(args):
         # the missing-provider state if it matters.
 
         print(f"⚠ Plugin discovery failed: {exc}", file=sys.stderr)
+
+    # The dashboard process serves the /api/ws gateway directly but never runs
+    # tui_gateway/entry.py, so it must kick off MCP discovery itself — otherwise
+    # desktop/web sessions never see the active profile's MCP tools.
+    try:
+        from clawk_cli.mcp_startup import start_background_mcp_discovery
+
+        start_background_mcp_discovery(
+            logger=logger,
+            thread_name="dashboard-mcp-discovery",
+        )
+
+    except Exception:
+        logger.debug("dashboard MCP discovery failed to start", exc_info=True)
 
     from clawk_cli.web_server import start_server
 
@@ -23923,6 +24021,15 @@ Examples:
     dashboard_parser.add_argument(
         "--tui",
         action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
+    # Internal: set by the unified-dashboard re-exec so the machine dashboard
+    # preselects the launching profile and the child skips re-routing.
+    dashboard_parser.add_argument(
+        "--open-profile",
+        default="",
+        metavar="NAME",
         help=argparse.SUPPRESS,
     )
 
