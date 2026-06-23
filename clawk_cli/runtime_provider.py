@@ -59,6 +59,62 @@ def _normalize_custom_provider_name(value: str) -> str:
     return value.strip().lower().replace(" ", "-")
 
 
+def find_custom_provider_identity(base_url: Optional[str]) -> Optional[str]:
+    """Reverse-map an endpoint URL to its ``custom:<name>`` identity.
+
+    Used by gateway session persistence to recover a named ``providers:`` /
+    ``custom_providers:`` entry after the provider was resolved to the bare
+    string ``"custom"`` — the endpoint URL is the only durable fact left on the
+    session row. Matching is trailing-slash and case insensitive. The returned
+    slug round-trips through ``_get_named_custom_provider``; returns None on no
+    match or an empty URL.
+    """
+
+    if not base_url:
+        return None
+
+    target = str(base_url).strip().rstrip("/").lower()
+
+    if not target:
+        return None
+
+    config = load_config()
+
+    # New-style providers dict first (mirrors _get_named_custom_provider's
+    # precedence): the key is the provider name, ``api`` is the endpoint.
+    providers = config.get("providers")
+
+    if isinstance(providers, dict):
+        for ep_name, entry in providers.items():
+            if not isinstance(entry, dict):
+                continue
+
+            entry_url = (
+                entry.get("api") or entry.get("url") or entry.get("base_url") or ""
+            )
+
+            if str(entry_url).strip().rstrip("/").lower() == target:
+                return f"custom:{_normalize_custom_provider_name(str(ep_name))}"
+
+    # Legacy custom_providers list: the display ``name`` is the identity.
+    custom_list = config.get("custom_providers")
+
+    if isinstance(custom_list, list):
+        for entry in custom_list:
+            if not isinstance(entry, dict):
+                continue
+
+            entry_url = entry.get("base_url") or entry.get("url") or ""
+
+            if str(entry_url).strip().rstrip("/").lower() == target:
+                name = entry.get("name")
+
+                if name:
+                    return f"custom:{_normalize_custom_provider_name(str(name))}"
+
+    return None
+
+
 def _loopback_hostname(host: str) -> bool:
 
     h = (host or "").lower().rstrip(".")
