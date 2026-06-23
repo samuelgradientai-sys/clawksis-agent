@@ -1706,6 +1706,32 @@ def _store_provider_state(
         auth_store["active_provider"] = provider_id
 
 
+def mark_provider_active_if_unset(provider_id: str) -> None:
+    """Set ``active_provider`` to *provider_id* only when none is set yet.
+
+    Adding the FIRST credential for a provider should make it the active one
+    (the legacy singleton save path did this implicitly via
+    ``_save_provider_state``). Subsequent adds must leave the user's active
+    choice untouched. No-op on an empty id or when an active provider already
+    exists.
+    """
+
+    normalized = (provider_id or "").strip().lower()
+
+    if not normalized:
+        return
+
+    with _auth_store_lock():
+        auth_store = _load_auth_store()
+
+        current = str(auth_store.get("active_provider") or "").strip()
+
+        if not current:
+            auth_store["active_provider"] = normalized
+
+            _save_auth_store(auth_store)
+
+
 def is_known_auth_provider(provider_id: str) -> bool:
 
     normalized = (provider_id or "").strip().lower()
