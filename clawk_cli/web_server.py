@@ -357,7 +357,17 @@ def _has_valid_session_token(request: Request) -> bool:
 
 
 def _require_token(request: Request) -> None:
-    """Validate the ephemeral session token.  Raises 401 on mismatch."""
+    """Validate the ephemeral session token.  Raises 401 on mismatch.
+
+    Under the OAuth gate the legacy session token is not injected into the SPA;
+    the gate middleware authenticates via the session cookie and attaches a
+    verified ``request.state.session`` before the handler runs. Defer to that so
+    cookie-authenticated requests aren't re-checked against an absent token —
+    that double-check is the plugin install-popup 401 bug.
+    """
+
+    if getattr(request.state, "session", None):
+        return
 
     if not _has_valid_session_token(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
