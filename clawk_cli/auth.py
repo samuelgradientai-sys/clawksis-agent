@@ -4857,6 +4857,7 @@ def _sync_codex_pool_entries(
     auth_store: Dict[str, Any],
     tokens: Dict[str, str],
     last_refresh: Optional[str],
+    prev_singleton_access_token: Optional[str] = None,
 ) -> None:
     """Mirror a fresh Codex re-auth into the credential_pool OAuth entries.
 
@@ -4958,6 +4959,18 @@ def _sync_codex_pool_entries(
         if source not in REFRESHABLE_SOURCES:
             continue
 
+        # A ``manual:device_code`` entry is only a true alias of the singleton
+        # when its stored access_token matches the PREVIOUS singleton token. A
+        # distinct token means an independent account added via
+        # ``clawk auth add openai-codex`` — a re-auth that targeted a different
+        # account must not clobber it (#39236). The singleton-seeded
+        # ``device_code`` entry is always the singleton and always refreshes.
+        if source == "manual:device_code" and (
+            prev_singleton_access_token is None
+            or entry.get("access_token") != prev_singleton_access_token
+        ):
+            continue
+
         entry["access_token"] = access_token
 
         if refresh_token:
@@ -4992,6 +5005,11 @@ def _save_codex_tokens(
 
         state = _load_provider_state(auth_store, "openai-codex") or {}
 
+        # Capture the PREVIOUS singleton access_token before overwriting it, so
+        # _sync_codex_pool_entries can tell true singleton-alias pool entries
+        # apart from independent accounts (#39236).
+        prev_singleton_access_token = (state.get("tokens") or {}).get("access_token")
+
         state["tokens"] = tokens
 
         state["last_refresh"] = last_refresh
@@ -5003,7 +5021,9 @@ def _save_codex_tokens(
 
         _save_provider_state(auth_store, "openai-codex", state)
 
-        _sync_codex_pool_entries(auth_store, tokens, last_refresh)
+        _sync_codex_pool_entries(
+            auth_store, tokens, last_refresh, prev_singleton_access_token
+        )
 
         _save_auth_store(auth_store)
 
