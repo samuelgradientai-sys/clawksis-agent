@@ -1514,8 +1514,29 @@ def get_gateway_runtime_snapshot(system: bool = False) -> GatewayRuntimeSnapshot
             from clawk_cli.service_manager import detect_service_manager
 
             if detect_service_manager() == "s6":
+                from clawk_cli.service_manager import get_service_manager
+
+                service_name = f"gateway-{_profile_suffix() or 'default'}"
+
+                installed = False
+
+                running = False
+
+                try:
+                    mgr = get_service_manager()
+
+                    installed = (mgr.scandir / service_name).exists()
+
+                    running = bool(mgr.is_running(service_name))
+
+                except Exception:
+                    pass
+
                 return GatewayRuntimeSnapshot(
                     manager="s6 (container supervisor)",
+                    service_installed=installed,
+                    service_running=running,
+                    service_scope="s6",
                     gateway_pids=gateway_pids,
                 )
 
@@ -4998,7 +5019,31 @@ def _guard_official_docker_root_gateway() -> None:
     sys.exit(1)
 
 
-def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
+def _running_under_gateway_supervisor() -> bool:
+    """True when THIS process was started by a service supervisor (systemd /
+    s6 / launchd) — i.e. we ARE the managed gateway, not a stray shell
+    ``gateway run`` competing with it.
+    """
+
+    if os.environ.get("INVOCATION_ID"):
+        return True
+
+    if os.environ.get("CLAWK_S6_SUPERVISED_CHILD"):
+        return True
+
+    # launchd sets XPC_SERVICE_NAME to the job label; interactive shells
+    # inherit the "0" sentinel.
+    xpc = os.environ.get("XPC_SERVICE_NAME", "0")
+
+    if xpc and xpc != "0":
+        return True
+
+    return False
+
+
+def run_gateway(
+    verbose: int = 0, quiet: bool = False, replace: bool = False, force: bool = False
+):
     """Run the gateway in foreground.
 
 
@@ -5018,6 +5063,36 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
     """
 
     _guard_official_docker_root_gateway()
+
+    # Refuse to become a second writer when a service supervisor already owns
+    # the gateway for this profile. ``--force`` overrides; and if WE are the
+    # supervised process (systemd/s6/launchd), this IS the legitimate start.
+    if not force and not _running_under_gateway_supervisor():
+        _snap = get_gateway_runtime_snapshot()
+
+        if _snap.service_installed and _snap.service_running:
+            print(f"Gateway already running under {_snap.manager}.")
+
+            print("  Restart the managed service with:  clawk gateway restart")
+
+            print("  Or run a foreground instance anyway with:  --force")
+
+            sys.exit(1)
+
+    # Cheap preflight: refuse before importing the heavy gateway_run module when
+    # another live process already owns this profile. ``--replace`` skips it (it
+    # kills the incumbent itself).
+    if not replace:
+        from gateway.status import get_running_pid
+
+        _existing_pid = get_running_pid()
+
+        if _existing_pid:
+            print(f"Another gateway instance is already running (PID {_existing_pid}).")
+
+            print("  Start with:  clawk gateway run --replace")
+
+            sys.exit(1)
 
     sys.path.insert(0, str(PROJECT_ROOT))
 
