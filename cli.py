@@ -12877,6 +12877,45 @@ class ClawksisCLI:
 
         self._output_console().print(*args, **kwargs)
 
+    def _claim_active_session(self, surface: str) -> bool:
+        """Acquire a global active-session slot for this CLI session.
+
+        Returns True when the slot is acquired (or the cap is disabled), False
+        when the global ``max_concurrent_sessions`` limit is hit — in which case
+        a red notice is printed and the caller should bail out.
+        """
+
+        from clawk_cli.active_sessions import try_acquire_active_session
+
+        lease, message = try_acquire_active_session(
+            session_id=self.session_id,
+            surface=surface,
+            config=self.config,
+        )
+
+        if message:
+            self._console_print(f"[bold red]{message}[/]")
+
+            return False
+
+        self._active_session_lease = lease
+
+        return True
+
+    def _release_active_session(self) -> None:
+        """Release the active-session slot acquired by ``_claim_active_session``."""
+
+        lease = getattr(self, "_active_session_lease", None)
+
+        if lease is not None:
+            try:
+                lease.release()
+
+            except Exception:
+                pass
+
+            self._active_session_lease = None
+
     @staticmethod
     def _resolve_personality_prompt(value) -> str:
         """Accept string or dict personality value; return system prompt string."""
