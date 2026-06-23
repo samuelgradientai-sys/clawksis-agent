@@ -212,6 +212,12 @@ def _detect_api_mode_for_url(base_url: str) -> Optional[str]:
     if normalized.endswith("/anthropic"):
         return "anthropic_messages"
 
+    # Tolerate a single trailing version segment (``.../anthropic/v1``) but not
+    # a deeper API path (``.../anthropic/v1/models`` is a request URL, not the
+    # provider base URL).
+    if re.search(r"/anthropic/v[\w.\-]+$", normalized):
+        return "anthropic_messages"
+
     if hostname == "api.kimi.com" and "/coding" in normalized:
         return "anthropic_messages"
 
