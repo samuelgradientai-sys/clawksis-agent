@@ -1747,7 +1747,7 @@ class TestDoctorXaiOAuthStatus:
     def test_import_failure_does_not_affect_other_providers(
         self, monkeypatch, tmp_path
     ):
-        """Nous / Codex / Gemini / MiniMax rows must survive an xAI import failure."""
+        """Codex / Gemini / MiniMax rows must survive an xAI import failure."""
 
         home = tmp_path / ".clawksis"
 
@@ -1779,7 +1779,7 @@ class TestDoctorXaiOAuthStatus:
         )
 
         monkeypatch.setattr(
-            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": False}
+            _auth_mod, "get_codex_auth_status", lambda: {"logged_in": True}
         )
 
         monkeypatch.setattr(
@@ -1799,7 +1799,7 @@ class TestDoctorXaiOAuthStatus:
 
         out = buf.getvalue()
 
-        assert "Nous Portal auth" in out
+        assert "OpenAI Codex auth" in out
 
         assert "logged in" in out
 
