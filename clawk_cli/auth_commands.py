@@ -202,6 +202,7 @@ def auth_add_command(args) -> None:
     if (
         provider not in PROVIDER_REGISTRY
         and provider != "openrouter"
+        and provider != "nous"
         and not provider.startswith(CUSTOM_POOL_PREFIX)
     ):
         raise SystemExit(f"Unknown provider: {provider}")
@@ -778,6 +779,7 @@ def _interactive_add() -> None:
     if (
         provider not in PROVIDER_REGISTRY
         and provider != "openrouter"
+        and provider != "nous"
         and not provider.startswith(CUSTOM_POOL_PREFIX)
     ):
         raise SystemExit(f"Unknown provider: {provider}")
