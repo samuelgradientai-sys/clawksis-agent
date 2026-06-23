@@ -41,15 +41,41 @@ def get_clawk_home_override() -> str | None:
     return str(override)
 
 
+def _account_home() -> Path:
+    """Home directory the Clawksis default home is anchored to.
+
+    Normally the current user's home. But under ``sudo`` (running as root with
+    ``SUDO_USER`` set), resolve the INVOKING user's home so that
+    ``sudo clawk -p <profile> gateway install`` targets that user's profiles
+    and state instead of root's. POSIX-only; on Windows or outside sudo this is
+    just ``Path.home()``.
+    """
+    try:
+        sudo_user = os.environ.get("SUDO_USER", "").strip()
+        if (
+            sudo_user
+            and sudo_user != "root"
+            and hasattr(os, "geteuid")
+            and os.geteuid() == 0
+        ):
+            import pwd
+
+            pw_dir = pwd.getpwnam(sudo_user).pw_dir
+            if pw_dir:
+                return Path(pw_dir)
+    except Exception:
+        pass
+    return Path.home()
+
+
 def _get_platform_default_clawk_home() -> Path:
     """Return the platform-native default Clawksis home path."""
+    home = _account_home()
     if sys.platform == "win32":
         local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
-        base = (
-            Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
-        )
+        base = Path(local_appdata) if local_appdata else home / "AppData" / "Local"
         return base / "clawksis"
-    return Path.home() / ".clawksis"
+    return home / ".clawksis"
 
 
 def get_clawk_home() -> Path:
