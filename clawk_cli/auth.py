@@ -5355,13 +5355,14 @@ def resolve_codex_runtime_credentials(
                 "auth_mode": "chatgpt",
             }
 
-        # Singleton has no usable creds (e.g. a refresh_token-only state that
-        # lost its access_token) and the pool is empty. For a relogin-required
-        # failure, self-heal from the Codex CLI shared file (~/.codex/auth.json)
-        # when it holds a FULL token: import + persist it to the Clawksis store
-        # and use it, instead of surfacing a hard 401. A half-token (no
-        # refresh_token) must NOT mask the original error.
-        if getattr(exc, "relogin_required", False):
+        # Singleton lost ONLY its access_token (a refresh_token-only state) and
+        # the pool is empty. In that specific partial state, self-heal from the
+        # Codex CLI shared file (~/.codex/auth.json) when it holds a FULL token:
+        # import + persist it to the Clawksis store and use it, instead of
+        # surfacing a hard 401. A half-token (no refresh_token) must NOT mask the
+        # original error, and other failures (no provider at all →
+        # codex_auth_missing) are NOT silently healed from ~/.codex — they propagate.
+        if getattr(exc, "code", "") == "codex_auth_missing_access_token":
             imported = _import_codex_cli_tokens()
 
             if (
