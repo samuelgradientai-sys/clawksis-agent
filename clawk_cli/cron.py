@@ -23,7 +23,7 @@ from clawk_cli.colors import Colors, color
 # the API gateway logs and report restart events").
 _GATEWAY_LIFECYCLE_PATTERNS = re.compile(
     r"(?i)"
-    r"(clawk\s+gateway\s+(restart|stop|start))"
+    r"((clawk|clawksis|hermes)\s+gateway\s+(restart|stop|start))"
     r"|(launchctl\s+(kickstart|unload|load|stop|restart)\s+.*clawk)"
     r"|(systemctl\s+(restart|stop|start)\s+.*clawk)"
     r"|(p?kill\s+.*clawk.*gateway)"
