@@ -390,6 +390,7 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "MiniMax-M2",
     ],
     "anthropic": [
+        "claude-fable-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-opus-4-6",
@@ -3097,7 +3098,24 @@ def provider_model_ids(
         live = _fetch_anthropic_models()
 
         if live:
-            return live
+            # Anthropic's /v1/models lags freshly-routed aliases (e.g.
+            # claude-fable-5), so merge the curated list in FRONT of the live
+            # catalog — curated first, live-only models appended, deduped —
+            # mirroring the OpenAI curated-merge philosophy. Returning live
+            # verbatim dropped curated aliases the API hadn't enumerated yet.
+            curated = _PROVIDER_MODELS.get("anthropic", [])
+
+            merged = list(curated)
+
+            seen = set(merged)
+
+            for model_id in live:
+                if model_id not in seen:
+                    merged.append(model_id)
+
+                    seen.add(model_id)
+
+            return merged
 
     if normalized == "ollama-cloud":
         live = fetch_ollama_cloud_models(force_refresh=force_refresh)
