@@ -472,6 +472,142 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
+# Top-level subcommands that argparse knows about WITHOUT running plugin
+
+# discovery.  Used to short-circuit eager plugin imports (which can take
+
+# 500ms+ pulling in google.cloud.pubsub_v1, aiohttp, grpc, etc.) when the
+
+# user's invocation clearly doesn't need any plugin-registered subcommand.
+
+# Also used by ``_apply_profile_override`` to know where the top-level flag
+
+# region ends so a subcommand's own ``--profile`` isn't hijacked.
+
+#
+
+# Keep this in sync with the ``subparsers.add_parser("NAME", ...)`` calls
+
+# in ``main()``. Missing an entry here only costs a one-time
+
+# discovery; extra entries here would let a plugin command silently fail
+
+# to parse.
+
+_BUILTIN_SUBCOMMANDS = frozenset({
+    "acp",
+    "auth",
+    "backup",
+    "bundles",
+    "checkpoints",
+    "claw",
+    "completion",
+    "computer-use",
+    "config",
+    "cron",
+    "curator",
+    "dashboard",
+    "debug",
+    "doctor",
+    "dump",
+    "fallback",
+    "gateway",
+    "hooks",
+    "import",
+    "insights",
+    "gui",
+    "desktop",
+    "kanban",
+    "login",
+    "logout",
+    "logs",
+    "lsp",
+    "mcp",
+    "memory",
+    "migrate",
+    "model",
+    "pairing",
+    "plugins",
+    "portal",
+    "postinstall",
+    "profile",
+    "proxy",
+    "prompt-size",
+    "send",
+    "sessions",
+    "setup",
+    "skills",
+    "slack",
+    "status",
+    "tools",
+    "uninstall",
+    "update",
+    "version",
+    "webhook",
+    "whatsapp",
+    "chat",
+    "secrets",
+    "security",
+    "soul",
+    "user",
+    "connect",
+    "disconnect",
+    "cookbook",
+    # Help-ish invocations — plugin commands not being listed in
+    # top-level --help is an acceptable trade-off for skipping an
+    # expensive eager import of every bundled plugin module.
+    "help",
+})
+
+
+# Top-level flags that take a value. Needed by ``_first_positional_argv``
+
+# so that in ``clawk -m gpt5 chat``, ``gpt5`` is correctly skipped as a
+
+# flag value rather than misclassified as a subcommand. Kept in sync with
+
+# the top-level flags declared in ``clawk_cli/_parser.py``.
+
+#
+
+# Correctness-safe either way: missing an entry here only makes the
+
+# fast-path bail out too eagerly (we run plugin discovery when we didn't
+
+# need to); extra entries would make us skip a real positional.
+
+_TOP_LEVEL_VALUE_FLAGS = frozenset({
+    "-z",
+    "--oneshot",
+    "-m",
+    "--model",
+    "--provider",
+    "-t",
+    "--toolsets",
+    "-r",
+    "--resume",
+    "-s",
+    "--skills",
+    # ``-c / --continue`` is nargs='?' (optional value). Treat it as
+    # value-taking: if the next token is a subcommand-looking word
+    # the user almost certainly meant it as the session name, and
+    # either interpretation keeps us on the safe side.
+    "-c",
+    "--continue",
+})
+
+
+# Flags whose value is optional (argparse ``nargs='?'``).  Unlike the rest of
+
+# ``_TOP_LEVEL_VALUE_FLAGS`` these only swallow the next token when it is NOT
+
+# itself a flag, so ``clawk --continue --profile coder`` reads ``--profile`` as
+
+# a flag rather than as ``--continue``'s session name.
+
+_OPTIONAL_VALUE_FLAGS = frozenset({"-c", "--continue"})
+
+
 # ---------------------------------------------------------------------------
 
 # Profile override — MUST happen before any clawk module import.
@@ -491,31 +627,118 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ---------------------------------------------------------------------------
 
 
+def _find_top_level_profile_flag(argv: list[str]) -> tuple[str | None, int, int]:
+    """Locate a top-level ``--profile`` / ``-p`` in ``argv`` (``sys.argv[1:]``).
+
+    Returns ``(profile_name, flag_index, consume)`` where ``flag_index`` is the
+    offset into ``argv`` of the flag token and ``consume`` is how many tokens it
+    occupies (2 for ``-p coder``, 1 for ``--profile=coder``).  When no profile
+    flag applies, returns ``(None, -1, 0)``.
+
+    Scanning stops at the first subcommand so a subcommand's own ``--profile``
+    (e.g. Docker's ``mcp gateway run --profile`` carried via ``clawk mcp add
+    --args``) is left untouched.  ``chat`` is the historical exception: it
+    accepts a profile flag, so scanning continues into its arguments.
+    """
+
+    i = 0
+
+    while i < len(argv):
+        tok = argv[i]
+
+        if tok == "--":
+            break
+
+        if tok in {"--profile", "-p"} and i + 1 < len(argv):
+            return argv[i + 1], i, 2
+
+        if tok.startswith("--profile="):
+            return tok.split("=", 1)[1], i, 1
+
+        if tok.startswith("-"):
+            if "=" in tok:
+                i += 1
+
+                continue
+
+            if tok in _OPTIONAL_VALUE_FLAGS:
+                # Optional value: only the next token is the value, and only
+                # when it is not itself a flag.
+                if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                    i += 2
+
+                else:
+                    i += 1
+
+                continue
+
+            if tok in _TOP_LEVEL_VALUE_FLAGS and i + 1 < len(argv):
+                i += 2
+
+                continue
+
+            i += 1
+
+            continue
+
+        # First positional token: a subcommand boundary.
+        if tok == "chat":
+            # ``chat`` accepts the profile flag — keep scanning its args.
+            i += 1
+
+            continue
+
+        # Any other subcommand owns the rest of argv; stop.
+        break
+
+    return None, -1, 0
+
+
+def _invoking_user_clawk_root() -> Path | None:
+    """Return the invoking user's clawk root when running under ``sudo``.
+
+    When ``clawk`` is launched via ``sudo`` (effective uid 0 with ``SUDO_USER``
+    set), ``Path.home()`` resolves to root's home, so an explicit ``--profile``
+    would be looked up under ``/root`` instead of the real user's profile dir.
+    Resolve the invoking user's home via ``pwd`` and return its clawk root so
+    the profile can be found where the user actually created it.
+
+    Returns ``None`` on non-POSIX platforms, when not running under sudo, or
+    when the invoking user can't be resolved.
+    """
+
+    geteuid = getattr(os, "geteuid", None)
+
+    if geteuid is None or geteuid() != 0:
+        return None
+
+    sudo_user = os.environ.get("SUDO_USER", "").strip()
+
+    if not sudo_user or sudo_user == "root":
+        return None
+
+    try:
+        import pwd
+
+        home = pwd.getpwnam(sudo_user).pw_dir
+
+    except (ImportError, KeyError):
+        return None
+
+    if not home:
+        return None
+
+    return Path(home) / ".clawk"
+
+
 def _apply_profile_override() -> None:
     """Pre-parse --profile/-p and set CLAWK_HOME before module imports."""
 
     argv = sys.argv[1:]
 
-    profile_name = None
+    # 1. Check for an explicit top-level -p / --profile flag.
 
-    consume = 0
-
-    # 1. Check for explicit -p / --profile flag
-
-    for i, arg in enumerate(argv):
-        if arg in {"--profile", "-p"} and i + 1 < len(argv):
-            profile_name = argv[i + 1]
-
-            consume = 2
-
-            break
-
-        elif arg.startswith("--profile="):
-            profile_name = arg.split("=", 1)[1]
-
-            consume = 1
-
-            break
+    profile_name, flag_index, consume = _find_top_level_profile_flag(argv)
 
     # 1b. Reject values that can't be valid profile names (e.g. pytest's
 
@@ -530,6 +753,8 @@ def _apply_profile_override() -> None:
 
         if not _re.match(r"^[a-z0-9][a-z0-9_-]{0,63}$", profile_name):
             profile_name = None
+
+            flag_index = -1
 
             consume = 0
 
@@ -571,6 +796,8 @@ def _apply_profile_override() -> None:
                 if name and name != "default":
                     profile_name = name
 
+                    flag_index = -1
+
                     consume = 0  # don't strip anything from argv
 
         except (UnicodeDecodeError, OSError):
@@ -580,9 +807,7 @@ def _apply_profile_override() -> None:
 
     if profile_name is not None:
         try:
-            from clawk_cli.profiles import resolve_profile_env
-
-            clawk_home = resolve_profile_env(profile_name)
+            clawk_home = _resolve_profile_home(profile_name)
 
         except (ValueError, FileNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -603,21 +828,47 @@ def _apply_profile_override() -> None:
 
         # Strip the flag from argv so argparse doesn't choke
 
-        if consume > 0:
-            for i, arg in enumerate(argv):
-                if arg in {"--profile", "-p"}:
-                    start = i + 1  # +1 because argv is sys.argv[1:]
+        if consume > 0 and flag_index >= 0:
+            start = flag_index + 1  # +1 because argv is sys.argv[1:]
 
-                    sys.argv = sys.argv[:start] + sys.argv[start + consume :]
+            sys.argv = sys.argv[:start] + sys.argv[start + consume :]
 
-                    break
 
-                elif arg.startswith("--profile="):
-                    start = i + 1
+def _resolve_profile_home(profile_name: str) -> str:
+    """Resolve *profile_name* to a CLAWK_HOME path string.
 
-                    sys.argv = sys.argv[:start] + sys.argv[start + 1 :]
+    Under ``sudo`` an explicit profile is resolved against the *invoking*
+    user's clawk root (see :func:`_invoking_user_clawk_root`) so that, e.g.,
+    ``sudo clawk -p elias gateway install --system`` finds ``elias`` in the
+    real user's home rather than root's.  Falls back to the normal
+    :func:`clawk_cli.profiles.resolve_profile_env` resolution otherwise.
+    """
 
-                    break
+    from clawk_cli.profiles import (
+        normalize_profile_name,
+        resolve_profile_env,
+        validate_profile_name,
+    )
+
+    user_root = _invoking_user_clawk_root()
+
+    if user_root is not None:
+        canon = normalize_profile_name(profile_name)
+
+        validate_profile_name(canon)
+
+        if canon == "default":
+            return str(user_root)
+
+        profile_dir = user_root / "profiles" / canon
+
+        if profile_dir.is_dir():
+            return str(profile_dir)
+
+        # Fall through to the default resolution, which raises a helpful
+        # FileNotFoundError if the profile is missing everywhere.
+
+    return resolve_profile_env(profile_name)
 
 
 _apply_profile_override()
@@ -19418,122 +19669,6 @@ def cmd_logs(args):
         since=getattr(args, "since", None),
         component=getattr(args, "component", None),
     )
-
-
-# Top-level subcommands that argparse knows about WITHOUT running plugin
-
-# discovery.  Used to short-circuit eager plugin imports (which can take
-
-# 500ms+ pulling in google.cloud.pubsub_v1, aiohttp, grpc, etc.) when the
-
-# user's invocation clearly doesn't need any plugin-registered subcommand.
-
-#
-
-# Keep this in sync with the ``subparsers.add_parser("NAME", ...)`` calls
-
-# below in ``main()``. Missing an entry here only costs a one-time
-
-# discovery; extra entries here would let a plugin command silently fail
-
-# to parse.
-
-_BUILTIN_SUBCOMMANDS = frozenset({
-    "acp",
-    "auth",
-    "backup",
-    "bundles",
-    "checkpoints",
-    "claw",
-    "completion",
-    "computer-use",
-    "config",
-    "cron",
-    "curator",
-    "dashboard",
-    "debug",
-    "doctor",
-    "dump",
-    "fallback",
-    "gateway",
-    "hooks",
-    "import",
-    "insights",
-    "gui",
-    "desktop",
-    "kanban",
-    "login",
-    "logout",
-    "logs",
-    "lsp",
-    "mcp",
-    "memory",
-    "migrate",
-    "model",
-    "pairing",
-    "plugins",
-    "portal",
-    "postinstall",
-    "profile",
-    "proxy",
-    "prompt-size",
-    "send",
-    "sessions",
-    "setup",
-    "skills",
-    "slack",
-    "status",
-    "tools",
-    "uninstall",
-    "update",
-    "version",
-    "webhook",
-    "whatsapp",
-    "chat",
-    "secrets",
-    "security",
-    # Help-ish invocations — plugin commands not being listed in
-    # top-level --help is an acceptable trade-off for skipping an
-    # expensive eager import of every bundled plugin module.
-    "help",
-})
-
-
-# Top-level flags that take a value. Needed by ``_first_positional_argv``
-
-# so that in ``clawk -m gpt5 chat``, ``gpt5`` is correctly skipped as a
-
-# flag value rather than misclassified as a subcommand. Kept in sync with
-
-# the top-level flags declared in ``clawk_cli/_parser.py``.
-
-#
-
-# Correctness-safe either way: missing an entry here only makes the
-
-# fast-path bail out too eagerly (we run plugin discovery when we didn't
-
-# need to); extra entries would make us skip a real positional.
-
-_TOP_LEVEL_VALUE_FLAGS = frozenset({
-    "-z",
-    "--oneshot",
-    "-m",
-    "--model",
-    "--provider",
-    "-t",
-    "--toolsets",
-    "-r",
-    "--resume",
-    "-s",
-    "--skills",
-    # ``-c / --continue`` is nargs='?' (optional value). Treat it as
-    # value-taking: if the next token is a subcommand-looking word
-    # the user almost certainly meant it as the session name, and
-    # either interpretation keeps us on the safe side.
-    "-c",
-    "--continue",
-})
 
 
 def _first_positional_argv() -> str | None:
