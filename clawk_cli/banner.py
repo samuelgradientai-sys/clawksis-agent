@@ -1102,6 +1102,14 @@ def build_welcome_banner(
                     f"[dim {dim}]— disabled[/]"
                 )
 
+            elif srv.get("status") == "configured":
+                # Configured but not connected YET — no connection attempt has
+                # failed, so render it neutrally rather than red/"failed".
+                right_lines.append(
+                    f"[dim {dim}]{srv['name']}[/] [dim]({srv['transport']})[/] "
+                    f"[dim {dim}]— configured[/]"
+                )
+
             else:
                 right_lines.append(
                     f"[red]{srv['name']}[/] [dim]({srv['transport']})[/] "
