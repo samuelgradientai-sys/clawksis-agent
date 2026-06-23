@@ -3870,12 +3870,39 @@ def _xai_start_callback_server(
     return server, thread, result, redirect_uri
 
 
+def _read_ready_stdin_line() -> Optional[str]:
+    """Return a stdin line if one is already available (non-blocking), else None.
+
+    Lets a user paste an authorization code while a loopback callback wait is
+    still running (xAI's consent page often shows the code in-page instead of
+    redirecting through 127.0.0.1). POSIX/tty only — returns None where stdin
+    can't be polled (Windows, non-tty, or no select support).
+    """
+
+    try:
+        import select
+
+        if not getattr(sys.stdin, "isatty", lambda: False)():
+            return None
+
+        rlist, _, _ = select.select([sys.stdin], [], [], 0)
+
+        if rlist:
+            return sys.stdin.readline()
+
+    except Exception:
+        return None
+
+    return None
+
+
 def _xai_wait_for_callback(
     server: HTTPServer,
     thread: threading.Thread,
     result: dict[str, Any],
     *,
     timeout_seconds: float = 180.0,
+    manual_paste_redirect_uri: Optional[str] = None,
 ) -> dict[str, Any]:
 
     deadline = time.monotonic() + max(5.0, timeout_seconds)
@@ -3884,6 +3911,21 @@ def _xai_wait_for_callback(
         while time.monotonic() < deadline:
             if result["code"] or result["error"]:
                 return result
+
+            # Accept an authorization code pasted on stdin while we wait for the
+            # loopback callback: xAI's consent page often renders the code
+            # in-page instead of redirecting, so a ready stdin line short-circuits
+            # the wait (PKCE still binds the exchange to this client).
+            if manual_paste_redirect_uri:
+                line = _read_ready_stdin_line()
+
+                if line and line.strip():
+                    parsed = _parse_pasted_callback(line)
+
+                    if parsed.get("code") or parsed.get("error"):
+                        parsed["_manual_paste"] = True
+
+                        return parsed
 
             time.sleep(0.1)
 
@@ -9710,6 +9752,12 @@ def _xai_oauth_loopback_login(
 
     token_endpoint = discovery["token_endpoint"]
 
+    # True when the eventual callback comes from a manual paste — either the
+    # explicit --manual-paste path or the loopback-timeout fallback below. On
+    # that path a bare authorization-code paste yields state=None, and the local
+    # state-equality check is redundant (PKCE binds the exchange to this client).
+    bare_code_paste_ok = manual_paste
+
     if manual_paste:
         # No HTTP listener — synthesize a redirect_uri matching what
 
@@ -9830,6 +9878,8 @@ def _xai_oauth_loopback_login(
 
                 callback = _prompt_manual_callback_paste(redirect_uri)
 
+                bare_code_paste_ok = True
+
                 if callback.get("code") is None and callback.get("error") is None:
                     raise exc
 
@@ -9883,7 +9933,7 @@ def _xai_oauth_loopback_login(
 
     # See #26923 (AccursedGalaxy comment, 2026-05-20).
 
-    if callback_state is None and manual_paste:
+    if callback_state is None and bare_code_paste_ok:
         callback_state = state
 
     if callback_state != state:
