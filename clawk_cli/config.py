@@ -7343,7 +7343,10 @@ def remove_env_value(key: str) -> bool:
 
             raise
 
-        _secure_file(env_path)
+        # The existing file's mode was restored above and must be preserved
+        # (#31518) — only re-secure if we couldn't capture the original mode.
+        if original_mode is None:
+            _secure_file(env_path)
 
     os.environ.pop(key, None)
 
