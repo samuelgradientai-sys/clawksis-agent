@@ -2387,7 +2387,11 @@ def resolve_provider(
 
         active = _active_provider_from_store(auth_store)
 
-        if active and active in PROVIDER_REGISTRY:
+        # ``nous`` is a dormant-but-supported provider intentionally kept OUT of
+        # PROVIDER_REGISTRY (so it doesn't surface in the model picker), so accept
+        # it explicitly here — a globally-authenticated Nous login must still
+        # resolve under ``auto``. Mirrors the auth-add special-case.
+        if active and (active in PROVIDER_REGISTRY or active == "nous"):
             status = get_auth_status(active)
 
             if status.get("logged_in"):
