@@ -23917,6 +23917,15 @@ Examples:
         ),
     )
 
+    # Deprecated back-compat shim: the `--tui` flag was removed (cae6b5486) but
+    # older desktop-app builds still pass it. Accept and ignore it so their argv
+    # parses without an argparse error; hidden from --help.
+    dashboard_parser.add_argument(
+        "--tui",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
     # Lifecycle flags — mutually exclusive with each other and with the
 
     # start-a-server flags above (if both are passed, --stop / --status win
