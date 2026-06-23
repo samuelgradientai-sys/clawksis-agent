@@ -4527,10 +4527,9 @@ def generate_launchd_plist() -> str:
     
 
     <key>KeepAlive</key>
-
     <true/>
 
-    
+
 
     <key>StandardOutPath</key>
 
