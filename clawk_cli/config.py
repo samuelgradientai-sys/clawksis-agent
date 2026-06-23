@@ -850,6 +850,12 @@ Notes:
 
     across image upgrades — re-pulling doesn't lose any state.
 
+  • Pin the image tag (e.g. ``clawksis-agent:v2026.6.5``) instead of relying
+
+    on ``:latest`` so rebuilds stay reproducible and don't silently drift
+
+    between versions.
+
   • Running a fork?  Build your own image with this repo's ``Dockerfile``
 
     and replace the ``docker pull`` step with your build/push pipeline."""
