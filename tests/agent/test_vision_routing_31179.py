@@ -61,39 +61,6 @@ import tempfile
 import pytest
 
 
-_RELOADED_PREFIXES = (
-    "agent.auxiliary_client",
-    "agent.image_routing",
-    "tools.vision_tools",
-    "tools.browser_tool",
-    "clawk_cli.config",
-)
-
-
-@pytest.fixture(autouse=True)
-def _restore_reloaded_modules():
-    """Heal the ``_fresh_modules()`` sys.modules deletion after each test.
-
-    ``_fresh_modules()`` drops these modules so each test reloads against a
-    freshly written config/env, but the deletion+reimport leaks across files
-    under a single-process ``pytest tests/ -x`` run: a later test (e.g. the GMI
-    aux-client test) still holds the module object it imported at collection
-    time, while ``patch('agent.auxiliary_client.OpenAI')`` patches the freshly
-    re-imported instance — so the patch silently misses. Snapshot the originals
-    and restore them on teardown (post-assertion; doesn't affect this file's own
-    reload-based tests, and is scoped to this module so it can't disturb others).
-    """
-
-    saved = {k: v for k, v in sys.modules.items() if k.startswith(_RELOADED_PREFIXES)}
-
-    yield
-
-    for k in [k for k in sys.modules if k.startswith(_RELOADED_PREFIXES)]:
-        del sys.modules[k]
-
-    sys.modules.update(saved)
-
-
 # ---------------------------------------------------------------------------
 
 # Test infrastructure
