@@ -1240,17 +1240,12 @@ async def get_status():
 
         pass
 
-    return {
+    body = {
         "version": __version__,
         "release_date": __release_date__,
-        "clawk_home": str(get_clawk_home()),
-        "config_path": str(get_config_path()),
-        "env_path": str(get_env_path()),
         "config_version": current_ver,
         "latest_config_version": latest_ver,
         "gateway_running": gateway_running,
-        "gateway_pid": gateway_pid,
-        "gateway_health_url": _GATEWAY_HEALTH_URL,
         "gateway_state": gateway_state,
         "gateway_platforms": gateway_platforms,
         "gateway_exit_reason": gateway_exit_reason,
@@ -1259,6 +1254,21 @@ async def get_status():
         "auth_required": auth_required,
         "auth_providers": auth_providers,
     }
+
+    # Host/deployment recon (absolute paths, gateway PID, internal health URL)
+    # is only safe on a trusted loopback bind. Under the OAuth gate this probe
+    # bypasses dashboard auth and is reachable cold by anyone who can hit the
+    # host, so withhold it there — the SPA reads it from authenticated routes.
+    if not auth_required:
+        body.update({
+            "clawk_home": str(get_clawk_home()),
+            "config_path": str(get_config_path()),
+            "env_path": str(get_env_path()),
+            "gateway_pid": gateway_pid,
+            "gateway_health_url": _GATEWAY_HEALTH_URL,
+        })
+
+    return body
 
 
 @app.get("/api/system/stats")
