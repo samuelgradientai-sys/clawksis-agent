@@ -5210,11 +5210,34 @@ def _refresh_codex_auth_tokens(
 
     """
 
-    refreshed = refresh_codex_oauth_pure(
-        str(tokens.get("access_token", "") or ""),
-        str(tokens.get("refresh_token", "") or ""),
-        timeout_seconds=timeout_seconds,
-    )
+    try:
+        refreshed = refresh_codex_oauth_pure(
+            str(tokens.get("access_token", "") or ""),
+            str(tokens.get("refresh_token", "") or ""),
+            timeout_seconds=timeout_seconds,
+        )
+
+    except AuthError as exc:
+        # A relogin-required failure (invalid_grant / refresh_token_reused) means
+        # our frozen refresh_token went stale because the Codex CLI — or another
+        # Clawksis process — rotated the single-use shared token. Self-heal by
+        # re-importing the canonical token from ~/.codex/auth.json and persisting
+        # it, instead of surfacing a hard 401. Transient failures (e.g. 429 quota,
+        # relogin_required=False) keep the stored token valid → propagate.
+        if not getattr(exc, "relogin_required", False):
+            raise
+
+        imported = _import_codex_cli_tokens()
+
+        if not imported or not imported.get("refresh_token"):
+            # No usable Codex CLI token (absent/expired) or a half-token with no
+            # refresh_token — persisting it would just break the next refresh.
+            # Let the original relogin-required error surface.
+            raise
+
+        _save_codex_tokens(imported, last_refresh=imported.get("last_refresh"))
+
+        return imported
 
     updated_tokens = dict(tokens)
 
@@ -5314,7 +5337,7 @@ def resolve_codex_runtime_credentials(
     try:
         data = _read_codex_tokens()
 
-    except AuthError:
+    except AuthError as exc:
         pool_token = _pool_codex_access_token()
 
         if pool_token:
@@ -5331,6 +5354,36 @@ def resolve_codex_runtime_credentials(
                 "last_refresh": None,
                 "auth_mode": "chatgpt",
             }
+
+        # Singleton has no usable creds (e.g. a refresh_token-only state that
+        # lost its access_token) and the pool is empty. For a relogin-required
+        # failure, self-heal from the Codex CLI shared file (~/.codex/auth.json)
+        # when it holds a FULL token: import + persist it to the Clawksis store
+        # and use it, instead of surfacing a hard 401. A half-token (no
+        # refresh_token) must NOT mask the original error.
+        if getattr(exc, "relogin_required", False):
+            imported = _import_codex_cli_tokens()
+
+            if (
+                imported
+                and imported.get("access_token")
+                and imported.get("refresh_token")
+            ):
+                _save_codex_tokens(imported, last_refresh=imported.get("last_refresh"))
+
+                base_url = (
+                    os.getenv("CLAWK_CODEX_BASE_URL", "").strip().rstrip("/")
+                    or DEFAULT_CODEX_BASE_URL
+                )
+
+                return {
+                    "provider": "openai-codex",
+                    "base_url": base_url,
+                    "api_key": imported["access_token"],
+                    "source": "clawk-auth-store",
+                    "last_refresh": imported.get("last_refresh"),
+                    "auth_mode": "chatgpt",
+                }
 
         raise
 
