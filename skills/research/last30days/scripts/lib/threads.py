@@ -18,9 +18,9 @@ SCRAPECREATORS_BASE = "https://api.scrapecreators.com/v1/threads"
 
 # Depth configurations: how many results to fetch
 DEPTH_CONFIG = {
-    "quick":   {"results": 10},
+    "quick": {"results": 10},
     "default": {"results": 20},
-    "deep":    {"results": 40},
+    "deep": {"results": 40},
 }
 
 
@@ -31,11 +31,26 @@ def _log(msg: str):
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Threads search."""
     from .query import extract_core_subject
+
     _THREADS_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features', 'recommendations', 'advice',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
     })
     return extract_core_subject(topic, noise=_THREADS_NOISE)
 
@@ -57,16 +72,13 @@ def _parse_date(item: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[str, Any]]:
+def _parse_items(
+    raw_items: List[Dict[str, Any]], core_topic: str
+) -> List[Dict[str, Any]]:
     """Parse raw Threads items into normalized dicts."""
     items = []
     for i, raw in enumerate(raw_items):
-        post_id = str(
-            raw.get("id")
-            or raw.get("pk")
-            or raw.get("code")
-            or f"TH{i + 1}"
-        )
+        post_id = str(raw.get("id") or raw.get("pk") or raw.get("code") or f"TH{i + 1}")
         text = raw.get("text") or raw.get("caption") or raw.get("content") or ""
         if isinstance(text, dict):
             text = text.get("text", "")
@@ -103,7 +115,9 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
         rank_score = max(0.3, 1.0 - (i * 0.02))
         engagement_boost = min(0.2, math.log1p(likes + reposts) / 40)
         text_relevance = _compute_relevance(core_topic, text)
-        relevance = min(1.0, text_relevance * 0.5 + rank_score * 0.3 + engagement_boost + 0.1)
+        relevance = min(
+            1.0, text_relevance * 0.5 + rank_score * 0.3 + engagement_boost + 0.1
+        )
 
         items.append({
             "id": post_id,
@@ -119,7 +133,9 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
                 "quotes": quotes,
             },
             "relevance": round(relevance, 2),
-            "why_relevant": f"Threads: @{handle}: {text[:60]}" if text else f"Threads: {handle}",
+            "why_relevant": f"Threads: @{handle}: {text[:60]}"
+            if text
+            else f"Threads: {handle}",
         })
     return items
 
@@ -174,7 +190,7 @@ def search_threads(
     )
 
     # Limit to configured count
-    raw_items = raw_items[:config["results"]]
+    raw_items = raw_items[: config["results"]]
 
     # Parse items
     items = _parse_items(raw_items, core_topic)

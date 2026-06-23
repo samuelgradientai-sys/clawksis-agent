@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional, Set
 
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -75,7 +76,9 @@ class HomeAssistantAdapter(BasePlatformAdapter):
         # Configuration from extra
         extra = config.extra or {}
         token = config.token or os.getenv("HASS_TOKEN", "")
-        url = extra.get("url") or os.getenv("HASS_URL", "http://homeassistant.local:8123")
+        url = extra.get("url") or os.getenv(
+            "HASS_URL", "http://homeassistant.local:8123"
+        )
         self._hass_url: str = url.rstrip("/")
         self._hass_token: str = token
 
@@ -101,7 +104,9 @@ class HomeAssistantAdapter(BasePlatformAdapter):
     async def connect(self) -> bool:
         """Connect to HA WebSocket API and subscribe to events."""
         if not AIOHTTP_AVAILABLE:
-            logger.warning("[%s] aiohttp not installed. Run: pip install aiohttp", self.name)
+            logger.warning(
+                "[%s] aiohttp not installed. Run: pip install aiohttp", self.name
+            )
             return False
 
         if not self._hass_token:
@@ -119,7 +124,11 @@ class HomeAssistantAdapter(BasePlatformAdapter):
             )
 
             # Warn if no event filters are configured
-            if not self._watch_domains and not self._watch_entities and not self._watch_all:
+            if (
+                not self._watch_domains
+                and not self._watch_entities
+                and not self._watch_all
+            ):
                 logger.warning(
                     "[%s] No watch_domains, watch_entities, or watch_all configured. "
                     "All state_changed events will be dropped. Configure filters in "
@@ -139,12 +148,12 @@ class HomeAssistantAdapter(BasePlatformAdapter):
 
     async def _ws_connect(self) -> bool:
         """Establish WebSocket connection and authenticate."""
-        ws_url = self._hass_url.replace("https://", "wss://").replace("http://", "ws://")
+        ws_url = self._hass_url.replace("https://", "wss://").replace(
+            "http://", "ws://"
+        )
         ws_url = f"{ws_url}/api/websocket"
 
-        self._session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30)
-        )
+        self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
         self._ws = await self._session.ws_connect(ws_url, heartbeat=30, timeout=30)
 
         # Step 1: Receive auth_required
@@ -275,8 +284,12 @@ class HomeAssistantAdapter(BasePlatformAdapter):
         # explicit watch_domains, watch_entities, or watch_all to forward)
         domain = entity_id.split(".")[0] if "." in entity_id else ""
         if self._watch_domains or self._watch_entities:
-            domain_match = domain in self._watch_domains if self._watch_domains else False
-            entity_match = entity_id in self._watch_entities if self._watch_entities else False
+            domain_match = (
+                domain in self._watch_domains if self._watch_domains else False
+            )
+            entity_match = (
+                entity_id in self._watch_entities if self._watch_entities else False
+            )
             if not domain_match and not entity_match:
                 return
         elif not self._watch_all:
@@ -402,7 +415,7 @@ class HomeAssistantAdapter(BasePlatformAdapter):
         }
         payload = {
             "title": "Clawksis",
-            "message": content[:self.MAX_MESSAGE_LENGTH],
+            "message": content[: self.MAX_MESSAGE_LENGTH],
         }
 
         try:
@@ -414,10 +427,14 @@ class HomeAssistantAdapter(BasePlatformAdapter):
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     if resp.status < 300:
-                        return SendResult(success=True, message_id=uuid.uuid4().hex[:12])
+                        return SendResult(
+                            success=True, message_id=uuid.uuid4().hex[:12]
+                        )
                     else:
                         body = await resp.text()
-                        return SendResult(success=False, error=f"HTTP {resp.status}: {body}")
+                        return SendResult(
+                            success=False, error=f"HTTP {resp.status}: {body}"
+                        )
             else:
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
@@ -427,10 +444,14 @@ class HomeAssistantAdapter(BasePlatformAdapter):
                         timeout=aiohttp.ClientTimeout(total=10),
                     ) as resp:
                         if resp.status < 300:
-                            return SendResult(success=True, message_id=uuid.uuid4().hex[:12])
+                            return SendResult(
+                                success=True, message_id=uuid.uuid4().hex[:12]
+                            )
                         else:
                             body = await resp.text()
-                            return SendResult(success=False, error=f"HTTP {resp.status}: {body}")
+                            return SendResult(
+                                success=False, error=f"HTTP {resp.status}: {body}"
+                            )
 
         except asyncio.TimeoutError:
             return SendResult(success=False, error="Timeout sending notification to HA")
@@ -510,9 +531,7 @@ async def _standalone_send(
                 if resp.status not in {200, 201}:
                     body = await resp.text()
                     return {
-                        "error": (
-                            f"Home Assistant API error ({resp.status}): {body}"
-                        )
+                        "error": (f"Home Assistant API error ({resp.status}): {body}")
                     }
         return {
             "success": True,
@@ -540,6 +559,7 @@ def _is_connected(config) -> bool:
     this migration.
     """
     import clawk_cli.gateway as gateway_mod
+
     return bool((gateway_mod.get_env_value("HASS_TOKEN") or "").strip())
 
 

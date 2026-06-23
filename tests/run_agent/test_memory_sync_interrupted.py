@@ -297,7 +297,10 @@ class TestSyncExternalMemoryForTurn:
         agent._sync_external_memory_for_turn(
             original_user_message=[
                 {"type": "text", "text": "what is in this screenshot?"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,abc"},
+                },
             ],
             final_response="A terminal window showing a stack trace.",
             interrupted=False,
@@ -320,7 +323,8 @@ class TestSyncExternalMemoryForTurn:
             interrupted=False,
         )
         agent._memory_manager.sync_all.assert_called_once_with(
-            "describe it", "a cat",
+            "describe it",
+            "a cat",
             session_id="test_session_001",
         )
 

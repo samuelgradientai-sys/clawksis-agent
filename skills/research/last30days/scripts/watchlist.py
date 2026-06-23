@@ -19,15 +19,16 @@ from lib import http, schema
 
 # --- Webhook Delivery Functions ---
 
+
 def _deliver_findings(topic_name: str, counts: dict) -> None:
     """Send webhook notification if delivery is configured and there are new findings."""
     channel = store.get_setting("delivery_channel", "")
     if not channel or counts.get("new", 0) == 0:
         return
-    
+
     mode = store.get_setting("delivery_mode", "announce")
     message = _format_delivery_message(topic_name, counts, mode)
-    
+
     try:
         if "hooks.slack.com" in channel:
             _send_slack_webhook(channel, message)
@@ -42,7 +43,7 @@ def _format_delivery_message(topic: str, counts: dict, mode: str) -> str:
     """Format notification message based on delivery mode."""
     new = counts.get("new", 0)
     updated = counts.get("updated", 0)
-    
+
     if mode == "announce":
         return f"📰 *last30days update: {topic}*\n{new} new, {updated} updated"
     elif mode == "silent":
@@ -72,31 +73,47 @@ def _send_generic_webhook(url: str, text: str) -> None:
 
 # --- Command Handlers ---
 
+
 def cmd_add(args):
     schedule = "0 8 * * 1" if args.weekly else (args.schedule or "0 8 * * *")
-    queries = [query.strip() for query in (args.queries or "").split(",") if query.strip()] or None
+    queries = [
+        query.strip() for query in (args.queries or "").split(",") if query.strip()
+    ] or None
     topic = store.add_topic(args.topic, search_queries=queries, schedule=schedule)
     sched_desc = "weekly (Mondays 8am)" if args.weekly else f"daily ({schedule})"
-    print(json.dumps({
-        "action": "added",
-        "topic": topic["name"],
-        "schedule": sched_desc,
-        "message": f'Added "{topic["name"]}" to watchlist. Schedule: {sched_desc}.',
-    }, default=str))
+    print(
+        json.dumps(
+            {
+                "action": "added",
+                "topic": topic["name"],
+                "schedule": sched_desc,
+                "message": f'Added "{topic["name"]}" to watchlist. Schedule: {sched_desc}.',
+            },
+            default=str,
+        )
+    )
 
 
 def cmd_remove(args):
     removed = store.remove_topic(args.topic)
     if not removed:
-        print(json.dumps({"action": "not_found", "topic": args.topic, "message": f'Topic not found: "{args.topic}"'}))
+        print(
+            json.dumps({
+                "action": "not_found",
+                "topic": args.topic,
+                "message": f'Topic not found: "{args.topic}"',
+            })
+        )
         return
     remaining = store.list_topics()
-    print(json.dumps({
-        "action": "removed",
-        "topic": args.topic,
-        "message": f'Removed "{args.topic}" from watchlist.',
-        "remaining": len(remaining),
-    }))
+    print(
+        json.dumps({
+            "action": "removed",
+            "topic": args.topic,
+            "message": f'Removed "{args.topic}" from watchlist.',
+            "remaining": len(remaining),
+        })
+    )
 
 
 def cmd_list(args):
@@ -104,11 +121,16 @@ def cmd_list(args):
     topics = store.list_topics()
     budget_used = store.get_daily_cost()
     budget_limit = float(store.get_setting("daily_budget", "5.00"))
-    print(json.dumps({
-        "topics": topics,
-        "budget_used": budget_used,
-        "budget_limit": budget_limit,
-    }, default=str))
+    print(
+        json.dumps(
+            {
+                "topics": topics,
+                "budget_used": budget_used,
+                "budget_limit": budget_limit,
+            },
+            default=str,
+        )
+    )
 
 
 def cmd_delta(args):
@@ -146,12 +168,17 @@ def cmd_run_all(args):
             continue
         results.append(_run_topic(topic))
 
-    print(json.dumps({
-        "action": "run_all",
-        "results": results,
-        "budget_used": store.get_daily_cost(),
-        "budget_limit": budget_limit,
-    }, default=str))
+    print(
+        json.dumps(
+            {
+                "action": "run_all",
+                "results": results,
+                "budget_used": store.get_daily_cost(),
+                "budget_limit": budget_limit,
+            },
+            default=str,
+        )
+    )
 
 
 def _run_topic(topic: dict) -> dict:
@@ -160,7 +187,9 @@ def _run_topic(topic: dict) -> dict:
     run_id = store.record_run(topic_id, source_mode="v3", status="running")
 
     try:
-        search_queries = json.loads(topic["search_queries"]) if topic.get("search_queries") else None
+        search_queries = (
+            json.loads(topic["search_queries"]) if topic.get("search_queries") else None
+        )
         search_term = search_queries[0] if search_queries else topic["name"]
         result = subprocess.run(
             [
@@ -201,10 +230,10 @@ def _run_topic(topic: dict) -> dict:
             findings_new=counts["new"],
             findings_updated=counts["updated"],
         )
-        
+
         # Deliver webhook notification if configured
         _deliver_findings(topic["name"], counts)
-        
+
         return {
             "topic": topic["name"],
             "status": "completed",
@@ -229,15 +258,33 @@ def _run_topic(topic: dict) -> dict:
             error_message=f"Invalid JSON output: {exc}",
             duration_seconds=duration,
         )
-        return {"topic": topic["name"], "status": "failed", "error": f"parse error: {exc}"}
+        return {
+            "topic": topic["name"],
+            "status": "failed",
+            "error": f"parse error: {exc}",
+        }
+
+
 def cmd_config(args):
     if args.key == "budget":
         store.set_setting("daily_budget", str(args.value))
-        print(json.dumps({"action": "config", "key": "daily_budget", "value": str(args.value)}))
+        print(
+            json.dumps({
+                "action": "config",
+                "key": "daily_budget",
+                "value": str(args.value),
+            })
+        )
         return
     if args.key == "delivery":
         store.set_setting("delivery_channel", str(args.value))
-        print(json.dumps({"action": "config", "key": "delivery_channel", "value": str(args.value)}))
+        print(
+            json.dumps({
+                "action": "config",
+                "key": "delivery_channel",
+                "value": str(args.value),
+            })
+        )
         return
     raise SystemExit(f"Unknown config key: {args.key}")
 

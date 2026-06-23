@@ -213,12 +213,17 @@ class TestRouteDecision:
                 "supports_vision": True,
             }
         }
-        with patch.object(vision_routing,
-                          "_provider_accepts_multimodal_tool_result",
-                          return_value=False):
-            assert vision_routing.should_route_capture_to_aux_vision(
-                "custom", "Qwen3.6-35B-A3B-local-vlm", cfg
-            ) is False
+        with patch.object(
+            vision_routing,
+            "_provider_accepts_multimodal_tool_result",
+            return_value=False,
+        ):
+            assert (
+                vision_routing.should_route_capture_to_aux_vision(
+                    "custom", "Qwen3.6-35B-A3B-local-vlm", cfg
+                )
+                is False
+            )
 
     def test_user_declared_no_vision_routes_custom_provider_to_aux(self):
         """An explicit false override should not fall through to native routing."""
@@ -231,12 +236,17 @@ class TestRouteDecision:
                 "supports_vision": False,
             }
         }
-        with patch.object(vision_routing,
-                          "_provider_accepts_multimodal_tool_result",
-                          return_value=True):
-            assert vision_routing.should_route_capture_to_aux_vision(
-                "custom", "local-text-model", cfg
-            ) is True
+        with patch.object(
+            vision_routing,
+            "_provider_accepts_multimodal_tool_result",
+            return_value=True,
+        ):
+            assert (
+                vision_routing.should_route_capture_to_aux_vision(
+                    "custom", "local-text-model", cfg
+                )
+                is True
+            )
 
     def test_unknown_provider_capabilities_fail_closed(self):
         """When tool-result lookup returns None, route to aux (safe default)."""

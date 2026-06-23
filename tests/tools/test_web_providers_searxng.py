@@ -338,6 +338,7 @@ class TestGetBackendSearXNG:
         must still drive auto-detect via the now config-aware ``_has_env``."""
         from clawk_cli import config as clawk_config
         from tools import web_tools
+
         monkeypatch.setattr(web_tools, "_load_web_config", lambda: {})
         monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
         monkeypatch.delenv("FIRECRAWL_API_URL", raising=False)
@@ -373,7 +374,10 @@ class TestCheckWebApiKey:
         """#34290 follow-up: config-only SEARXNG_URL satisfies the credential check."""
         from clawk_cli import config as clawk_config
         from tools import web_tools
-        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {"backend": "searxng"})
+
+        monkeypatch.setattr(
+            web_tools, "_load_web_config", lambda: {"backend": "searxng"}
+        )
         monkeypatch.delenv("SEARXNG_URL", raising=False)
         monkeypatch.setattr(
             clawk_config,

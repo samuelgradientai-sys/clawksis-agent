@@ -86,6 +86,8 @@ import logging
 
 import os
 
+import re
+
 import threading
 
 import time
@@ -580,6 +582,56 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
     return {}
 
 
+def _apply_user_default_headers(
+    headers: Optional[Dict[str, str]],
+) -> Optional[Dict[str, str]]:
+    """Merge user-configured ``model.default_headers`` onto request headers.
+
+    Reads ``model.default_headers`` from config.yaml and merges those entries
+    onto *headers*, with user values taking precedence over the provider- and
+    SDK-supplied defaults already present.  This lets a ``custom`` OpenAI-
+    compatible endpoint behind a gateway/WAF that rejects the OpenAI Python
+    SDK's identifying headers (``User-Agent: OpenAI/Python ...``) reach its
+    upstream by overriding e.g. ``User-Agent: curl/8.7.1``. (#40033)
+
+    Shared by the main agent client (``run_agent.py``) and this auxiliary
+    client so the two paths can never drift on precedence or value handling.
+
+    Behavior:
+
+    - No ``model.default_headers`` configured → no-op; returns *headers*
+      unchanged (the same object, ``None`` stays ``None``).
+    - ``headers is None`` with overrides present → returns a new dict.
+    - ``None`` override values are skipped (used to clear a key, not set it).
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        model_cfg = load_config().get("model", {})
+
+    except Exception:
+        return headers
+
+    if not isinstance(model_cfg, dict):
+        return headers
+
+    user_headers = model_cfg.get("default_headers")
+
+    if not isinstance(user_headers, dict) or not user_headers:
+        return headers
+
+    merged: Dict[str, str] = dict(headers) if headers else {}
+
+    for key, value in user_headers.items():
+        if value is None:
+            continue
+
+        merged[str(key)] = str(value)
+
+    return merged
+
+
 # Default auxiliary models per provider
 
 _OPENROUTER_MODEL = "google/gemini-3-flash-preview"
@@ -948,18 +1000,19 @@ class _CodexCompletionsAdapter:
         input_msgs: List[Dict[str, Any]] = []
 
         for msg in messages:
-            role = msg.get("role", "user")
+            if msg.get("role") == "system":
+                content = msg.get("content") or ""
 
-            content = msg.get("content") or ""
-
-            if role == "system":
                 instructions = content if isinstance(content, str) else str(content)
 
-            else:
-                input_msgs.append({
-                    "role": role,
-                    "content": _convert_content_for_responses(content),
-                })
+        # Convert the conversation through the canonical Responses converter so
+        # tool turns become function_call / function_call_output items instead of
+        # leaking a raw role="tool" (or an unconverted assistant tool_calls)
+        # message, which the Responses API rejects with HTTP 400. Mirrors
+        # agent/transports/codex.py rather than re-deriving the mapping here.
+        from agent.codex_responses_adapter import _chat_messages_to_responses_input
+
+        input_msgs = _chat_messages_to_responses_input(messages)
 
         resp_kwargs: Dict[str, Any] = {
             "model": model,
@@ -1684,7 +1737,10 @@ def _endpoint_speaks_anthropic_messages(base_url: str) -> bool:
     if not normalized:
         return False
 
-    if normalized.endswith("/anthropic"):
+    # ``/anthropic`` suffix (MiniMax, ``/v1/anthropic``) and the ``/anthropic/v1``
+    # base form (LiteLLM-style proxies) both speak Anthropic Messages. A deeper
+    # resource path like ``/anthropic/v1/models`` is NOT the base endpoint.
+    if normalized.endswith("/anthropic") or normalized.endswith("/anthropic/v1"):
         return True
 
     hostname = base_url_hostname(normalized)
@@ -2609,6 +2665,15 @@ def _try_custom_endpoint() -> Tuple[Optional[Any], Optional[str]]:
 
     _extra = {"default_query": _dq} if _dq else {}
 
+    # User-configured model.default_headers override the SDK's identifying
+    # headers on every OpenAI-wire branch below (#40033). The anthropic_messages
+    # branch builds a native Anthropic client and is intentionally excluded,
+    # mirroring run_agent.py which skips the override for Anthropic mode.
+    _merged_headers = _apply_user_default_headers(_extra.get("default_headers"))
+
+    if _merged_headers:
+        _extra["default_headers"] = _merged_headers
+
     if custom_mode == "codex_responses":
         real_client = OpenAI(api_key=custom_key, base_url=_clean_base, **_extra)
 
@@ -3512,6 +3577,26 @@ def _is_connection_error(exc: Exception) -> bool:
         return True
 
     return False
+
+
+def _is_server_error(exc: Exception) -> bool:
+    """Detect transient 5xx server errors (502/503/504 etc.).
+
+
+
+    Unlike _is_connection_error (the endpoint is unreachable), the provider IS
+
+    reachable here but returned a 5xx — typically an upstream blip that is
+
+    safe to retry once against the same target.  A 4xx (e.g. 400 bad request)
+
+    is NOT transient and must NOT match.
+
+    """
+
+    status = getattr(exc, "status_code", None)
+
+    return isinstance(status, int) and 500 <= status <= 599
 
 
 def _is_auth_error(exc: Exception) -> bool:
@@ -4595,9 +4680,13 @@ def _resolve_auto(
 
             # so that a working key is reused instead of re-selecting from the pool
 
-            # (which might pick a different, potentially exhausted key).
+            # (which might pick a different, potentially exhausted key). Named
+            # API-key providers (xiaomi, etc.) also inherit the live session
+            # endpoint so aux work hits the same base_url as the main chat.
 
             explicit_api_key = runtime_api_key
+
+            explicit_base_url = runtime_base_url or None
 
         # Skip Step-1 if the main provider was recently 402'd. The unhealthy
 
@@ -5240,6 +5329,14 @@ def resolve_provider_client(
                 except Exception:
                     pass
 
+            # User-configured model.default_headers override provider/SDK
+            # defaults on this auxiliary path too (#40033) — otherwise the main
+            # turn reaches a header-rejecting gateway but aux calls still 4xx.
+            _merged_headers = _apply_user_default_headers(extra.get("default_headers"))
+
+            if _merged_headers:
+                extra["default_headers"] = _merged_headers
+
             client = OpenAI(api_key=custom_key, base_url=_clean_base, **extra)
 
             client = _wrap_if_needed(client, final_model, custom_base, custom_key)
@@ -5439,6 +5536,17 @@ def resolve_provider_client(
                         ), final_model
 
                     return sync_anthropic, final_model
+
+                # Same #40033 override on the named ``custom_providers`` path:
+                # this is a distinct construction site (_extra2) from the
+                # config-level ``model.provider: custom`` branch above, and both
+                # must honor the global ``model.default_headers``.
+                _merged_headers2 = _apply_user_default_headers(
+                    _extra2.get("default_headers")
+                )
+
+                if _merged_headers2:
+                    _extra2["default_headers"] = _merged_headers2
 
                 client = OpenAI(api_key=custom_key, base_url=_clean_base2, **_extra2)
 
@@ -5947,16 +6055,12 @@ def get_async_text_auxiliary_client(
 
 # Aggregators auto-probed as vision fallbacks.  ``nous`` is deliberately
 # NOT here — Clawksis is BYOK and never probes Nous Portal automatically.
-_VISION_AUTO_PROVIDER_ORDER = (
-    "openrouter",
-)
+_VISION_AUTO_PROVIDER_ORDER = ("openrouter",)
 
 
 # Providers with a dedicated strict vision backend, valid for EXPLICIT
 # selection only (user-configured main provider or per-task override).
-_VISION_STRICT_PROVIDERS = (
-    "openrouter",
-)
+_VISION_STRICT_PROVIDERS = ("openrouter",)
 
 
 def _main_model_supports_vision(provider: str, model: Optional[str]) -> bool:
@@ -6348,7 +6452,7 @@ def get_auxiliary_extra_body() -> dict:
     return {}
 
 
-def auxiliary_max_tokens_param(value: int) -> dict:
+def auxiliary_max_tokens_param(value: int, model: Optional[str] = None) -> dict:
     """Return the correct max tokens kwarg for the auxiliary client's provider.
 
 
@@ -6366,6 +6470,12 @@ def auxiliary_max_tokens_param(value: int) -> dict:
     custom_base = _current_custom_base_url()
 
     or_key = os.getenv("OPENROUTER_API_KEY")
+
+    # Name-based detection: the newer OpenAI families (gpt-4o, o-series, gpt-5+)
+    # reject max_tokens and need max_completion_tokens even when served via a
+    # third-party gateway or OpenRouter, where the host check below can't see it.
+    if model and re.search(r"(gpt-4o|gpt-5|(?:^|[/:_-])o[1-9])", model, re.IGNORECASE):
+        return {"max_completion_tokens": value}
 
     # Use max_completion_tokens for direct OpenAI-compatible providers that reject
 
@@ -7757,10 +7867,7 @@ def call_llm(
 
         # ── Auth refresh retry ───────────────────────────────────────
 
-        if (
-            _is_auth_error(first_err)
-            and resolved_provider not in {"auto", "", None}
-        ):
+        if _is_auth_error(first_err) and resolved_provider not in {"auto", "", None}:
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
                     "Auxiliary %s: refreshed %s credentials after auth error, retrying",
@@ -7878,6 +7985,44 @@ def call_llm(
 
                     else:
                         raise
+
+        # ── Same-target transient transport retry (PR #16587) ─────────
+
+        # A plain connection blip (premature stream close, peer reset) or a
+
+        # 5xx server error is transient: the same provider is very likely to
+
+        # succeed on an immediate second attempt.  Retry ONCE against the same
+
+        # client/kwargs before escalating to the provider-fallback chain.  A
+
+        # second transient failure (or a non-transient retry error) is NOT
+
+        # swallowed — connection/5xx fall through to the fallback chain below,
+
+        # anything else propagates as before.
+
+        if _is_connection_error(first_err) or _is_server_error(first_err):
+            logger.info(
+                "Auxiliary %s: transient transport error on %s (%s), "
+                "retrying once on same provider",
+                task or "call",
+                resolved_provider,
+                type(first_err).__name__,
+            )
+
+            try:
+                return _validate_llm_response(
+                    client.chat.completions.create(**kwargs), task
+                )
+
+            except Exception as retry_err:
+                # Still transient → fall through to the fallback chain so the
+                # request can be rerouted.  Otherwise propagate immediately.
+                if not (_is_connection_error(retry_err) or _is_server_error(retry_err)):
+                    raise
+
+                first_err = retry_err
 
         # ── Payment / credit exhaustion fallback ──────────────────────
 
@@ -8349,10 +8494,7 @@ async def async_call_llm(
 
         # ── Auth refresh retry (mirrors sync call_llm) ───────────────
 
-        if (
-            _is_auth_error(first_err)
-            and resolved_provider not in {"auto", "", None}
-        ):
+        if _is_auth_error(first_err) and resolved_provider not in {"auto", "", None}:
             if _refresh_provider_credentials(resolved_provider):
                 logger.info(
                     "Auxiliary %s (async): refreshed %s credentials after auth error, retrying",

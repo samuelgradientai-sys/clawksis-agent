@@ -1209,7 +1209,7 @@ def test_s6_stop_writes_planned_stop_marker(monkeypatch, s6_scandir):
     def _fake(cmd, **kw):
         seq = list(cmd) if isinstance(cmd, (list, tuple)) else [str(cmd)]
         if seq and seq[0].startswith("/command/"):
-            seq[0] = seq[0][len("/command/"):]
+            seq[0] = seq[0][len("/command/") :]
         svc_calls.append(seq)
         if seq and seq[0] == "s6-svstat":
             return _sp.CompletedProcess(cmd, 0, "up (pid 9090) 5 seconds\n", "")
@@ -1231,9 +1231,9 @@ def test_s6_stop_writes_planned_stop_marker(monkeypatch, s6_scandir):
         f"marked={marked}"
     )
     # And it must still issue the down command.
-    assert any(
-        cmd[0] == "s6-svc" and "-d" in cmd for cmd in svc_calls
-    ), f"s6-svc -d not invoked; saw: {svc_calls}"
+    assert any(cmd[0] == "s6-svc" and "-d" in cmd for cmd in svc_calls), (
+        f"s6-svc -d not invoked; saw: {svc_calls}"
+    )
 
 
 def test_s6_stop_tolerates_marker_write_failure(monkeypatch, s6_scandir):
@@ -1248,7 +1248,7 @@ def test_s6_stop_tolerates_marker_write_failure(monkeypatch, s6_scandir):
     def _fake(cmd, **kw):
         seq = list(cmd) if isinstance(cmd, (list, tuple)) else [str(cmd)]
         if seq and seq[0].startswith("/command/"):
-            seq[0] = seq[0][len("/command/"):]
+            seq[0] = seq[0][len("/command/") :]
         svc_calls.append(seq)
         if seq and seq[0] == "s6-svstat":
             return _sp.CompletedProcess(cmd, 0, "up (pid 9090) 5 seconds\n", "")

@@ -96,7 +96,16 @@ def _build_prompt(items: List[Dict[str, Any]], criteria: str) -> str:
         # Show a compact view; the model sees the salient fields.
         view = {
             k: item[k]
-            for k in ("title", "subject", "summary", "text", "body", "from", "sender", "url")
+            for k in (
+                "title",
+                "subject",
+                "summary",
+                "text",
+                "body",
+                "from",
+                "sender",
+                "url",
+            )
             if k in item
         }
         if not view:
@@ -142,11 +151,29 @@ def _parse_scores(content: str, n_items: int) -> Dict[int, Dict[str, Any]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Classify items by urgency; emit only urgent ones.")
-    parser.add_argument("--criteria", required=True, help="Plain-language importance criteria.")
-    parser.add_argument("--threshold", type=int, default=7, help="Minimum score (0-10) to surface. Default 7.")
-    parser.add_argument("--input-file", default=None, help="Read items JSON from this file instead of stdin.")
-    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format for surfaced items.")
+    parser = argparse.ArgumentParser(
+        description="Classify items by urgency; emit only urgent ones."
+    )
+    parser.add_argument(
+        "--criteria", required=True, help="Plain-language importance criteria."
+    )
+    parser.add_argument(
+        "--threshold",
+        type=int,
+        default=7,
+        help="Minimum score (0-10) to surface. Default 7.",
+    )
+    parser.add_argument(
+        "--input-file",
+        default=None,
+        help="Read items JSON from this file instead of stdin.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format for surfaced items.",
+    )
     args = parser.parse_args()
 
     items = _load_items(args.input_file)
@@ -203,7 +230,7 @@ def main() -> int:
         print(json.dumps(out, ensure_ascii=False, indent=2))
     else:
         blocks = []
-        for (i, item, s) in surfaced:
+        for i, item, s in surfaced:
             title = (
                 item.get("title")
                 or item.get("subject")

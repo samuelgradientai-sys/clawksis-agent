@@ -6936,14 +6936,15 @@ class GatewayRunner:
         # the connects under one gather caps it at the single slowest adapter.
         async def _connect_one(_adapter, _platform):
             try:
-                return ("ok", await self._connect_adapter_with_timeout(_adapter, _platform))
+                return (
+                    "ok",
+                    await self._connect_adapter_with_timeout(_adapter, _platform),
+                )
             except Exception as exc:  # noqa: BLE001 — handled per-platform in Phase 3
                 return ("err", exc)
 
         _connect_results = (
-            await asyncio.gather(
-                *(_connect_one(a, p) for p, _c, a in pending_connects)
-            )
+            await asyncio.gather(*(_connect_one(a, p) for p, _c, a in pending_connects))
             if pending_connects
             else []
         )
@@ -7006,9 +7007,7 @@ class GatewayRunner:
                         if adapter.fatal_error_retryable
                         else startup_nonretryable_errors
                     )
-                    target.append(
-                        f"{platform.value}: {adapter.fatal_error_message}"
-                    )
+                    target.append(f"{platform.value}: {adapter.fatal_error_message}")
                     # Queue for reconnection if the error is retryable
                     if adapter.fatal_error_retryable:
                         self._failed_platforms[platform] = {

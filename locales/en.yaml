@@ -70,6 +70,14 @@ gateway:
 
 
 
+  # /credits command output -- balance + top-up handoff.
+
+  credits:
+
+    not_logged_in: "Not logged into Nous Portal — run `/model` to sign in, then `/credits`."
+
+
+
   # /model command output -- shown after a model switch or when listing models.
 
   # Provider names, model IDs, capability strings, and cost figures are NOT

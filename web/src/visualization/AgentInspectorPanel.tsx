@@ -12,7 +12,7 @@
  * `describe()` so the labels match the global feed exactly.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { describe, TONE_CLASS } from "./ActivityFeedView";
 import type { GatewayEvent, GatewayFeed } from "./gatewayFeed";
@@ -118,21 +118,31 @@ function buildAgents(events: GatewayEvent[], now: number): AgentInfo[] {
 interface AgentInspectorPanelProps {
   feed: GatewayFeed;
   className?: string;
+  /** Controlled selection — e.g. driven by clicking an agent in the office.
+   *  When `onSelectKey` is provided the panel is controlled; otherwise it
+   *  keeps its own selection state. */
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
 }
 
-export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProps) {
+export function AgentInspectorPanel({
+  feed,
+  className,
+  selectedKey: externalKey,
+  onSelectKey,
+}: AgentInspectorPanelProps) {
   // Re-fold on every feed change; cheap (the ring buffer is ≤500 events) and
   // keeps the "active" dot honest without a separate timer.
   const agents = useMemo(() => buildAgents(feed.events, Date.now()), [feed.events]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-
-  // Auto-select the first agent the moment one appears, so the panel is never
-  // an empty shell once there's something to show.
-  useEffect(() => {
-    if (selectedKey === null && agents.length > 0) {
-      setSelectedKey(agents[0].key);
-    }
-  }, [agents, selectedKey]);
+  // Nothing is selected until the user clicks an agent — in the list here OR a
+  // sprite in the office (which the host pipes in via the controlled prop).
+  const [internalKey, setInternalKey] = useState<string | null>(null);
+  const controlled = onSelectKey !== undefined;
+  const selectedKey = controlled ? externalKey ?? null : internalKey;
+  const selectAgent = (key: string) => {
+    if (controlled) onSelectKey?.(key);
+    else setInternalKey(key);
+  };
 
   const selected = agents.find((a) => a.key === selectedKey) ?? null;
 
@@ -167,7 +177,7 @@ export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProp
             <li key={a.key}>
               <button
                 type="button"
-                onClick={() => setSelectedKey(a.key)}
+                onClick={() => selectAgent(a.key)}
                 className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                   isSel
                     ? "bg-[var(--color-primary)]/15 text-foreground"
@@ -192,7 +202,12 @@ export function AgentInspectorPanel({ feed, className }: AgentInspectorPanelProp
         })}
       </ul>
 
-      {/* Selected-agent detail */}
+      {/* Selected-agent detail — only after the user clicks an agent. */}
+      {!selected && (
+        <div className="flex min-h-0 flex-1 items-center justify-center border-t border-border p-4 text-center text-xs text-muted-foreground">
+          Hacé clic en un agente para ver su modelo, herramientas y actividad.
+        </div>
+      )}
       {selected && (
         <div className="flex min-h-0 flex-1 flex-col border-t border-border">
           <div className="shrink-0 px-3 pt-2">

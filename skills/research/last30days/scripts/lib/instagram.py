@@ -20,9 +20,9 @@ SCRAPECREATORS_BASE = "https://api.scrapecreators.com"
 
 # Depth configurations: how many results to fetch / captions to extract
 DEPTH_CONFIG = {
-    "quick":   {"results_per_page": 10, "max_captions": 3},
+    "quick": {"results_per_page": 10, "max_captions": 3},
     "default": {"results_per_page": 20, "max_captions": 5},
-    "deep":    {"results_per_page": 40, "max_captions": 8},
+    "deep": {"results_per_page": 40, "max_captions": 8},
 }
 
 # Max words to keep from each caption
@@ -69,14 +69,33 @@ def _resolve_transcript_timeout(
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Instagram search."""
     from .query import extract_core_subject
+
     _INSTAGRAM_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome', 'killer',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features',
-        'recommendations', 'advice',
-        'prompt', 'prompts', 'prompting',
-        'methods', 'strategies', 'approaches',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
+        "prompt",
+        "prompts",
+        "prompting",
+        "methods",
+        "strategies",
+        "approaches",
     })
     return extract_core_subject(topic, noise=_INSTAGRAM_NOISE)
 
@@ -89,7 +108,7 @@ def _to_hashtag_form(query: str) -> str:
     hashtag page lookup which is the stable path. Used as a 500-retry
     fallback before the request bubbles up as a silent failure.
     """
-    return ''.join(query.split()).lower()
+    return "".join(query.split()).lower()
 
 
 def _infer_query_intent(topic: str) -> str:
@@ -97,7 +116,9 @@ def _infer_query_intent(topic: str) -> str:
     text = topic.lower().strip()
     if re.search(r"\b(vs|versus|compare|difference between)\b", text):
         return "comparison"
-    if re.search(r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text):
+    if re.search(
+        r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text
+    ):
         return "how_to"
     if re.search(r"\b(thoughts on|worth it|should i|opinion|review)\b", text):
         return "opinion"
@@ -121,7 +142,7 @@ def expand_instagram_queries(topic: str, depth: str) -> List[str]:
     queries = [core]
 
     # Include cleaned original topic as variant if different from core
-    original_clean = topic.strip().rstrip('?!.')
+    original_clean = topic.strip().rstrip("?!.")
     if core.lower() != original_clean.lower() and len(original_clean.split()) <= 8:
         queries.append(original_clean)
 
@@ -190,10 +211,12 @@ def _extract_hashtags(caption_text: str) -> List[str]:
     """Extract hashtags from Instagram caption text."""
     if not caption_text:
         return []
-    return re.findall(r'#(\w+)', caption_text)
+    return re.findall(r"#(\w+)", caption_text)
 
 
-def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[str, Any]]:
+def _parse_items(
+    raw_items: List[Dict[str, Any]], core_topic: str
+) -> List[Dict[str, Any]]:
     """Parse raw Instagram items into normalized dicts."""
     items = []
     for raw in raw_items:
@@ -214,7 +237,12 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
             text = raw.get("desc", raw.get("text", ""))
 
         # Engagement metrics
-        play_count = raw.get("video_play_count") or raw.get("video_view_count") or raw.get("play_count") or 0
+        play_count = (
+            raw.get("video_play_count")
+            or raw.get("video_view_count")
+            or raw.get("play_count")
+            or 0
+        )
         like_count = raw.get("like_count") or 0
         comment_count = raw.get("comment_count") or 0
 
@@ -258,7 +286,9 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
             "hashtags": hashtags,
             "duration": duration,
             "relevance": relevance,
-            "why_relevant": f"Instagram: {text[:60]}" if text else f"Instagram: {core_topic}",
+            "why_relevant": f"Instagram: {text[:60]}"
+            if text
+            else f"Instagram: {core_topic}",
             "caption_snippet": "",  # populated by fetch_captions
         })
     return items
@@ -321,7 +351,9 @@ def search_instagram(
     config = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
     core_topic = _extract_core_subject(topic)
 
-    _log(f"Searching Instagram for '{core_topic}' (depth={depth}, count={config['results_per_page']})")
+    _log(
+        f"Searching Instagram for '{core_topic}' (depth={depth}, count={config['results_per_page']})"
+    )
 
     try:
         data = http.get(
@@ -335,7 +367,7 @@ def search_instagram(
         # SC's v2 reels search wraps Google Search and 500s frequently on
         # multi-token queries. Single tokens hit the stable hashtag-page
         # path. Retry once with hashtag form before bubbling up.
-        if getattr(e, "status_code", None) == 500 and ' ' in core_topic:
+        if getattr(e, "status_code", None) == 500 and " " in core_topic:
             _log(f"IG search 500 on '{core_topic}', retrying with hashtag form")
             try:
                 data = http.get(
@@ -359,7 +391,7 @@ def search_instagram(
     raw_items = data.get("reels") or data.get("items") or data.get("data") or []
 
     # Limit to configured count
-    raw_items = raw_items[:config["results_per_page"]]
+    raw_items = raw_items[: config["results_per_page"]]
 
     # Parse items
     items = _parse_items(raw_items, core_topic)
@@ -427,7 +459,7 @@ def fetch_captions(
         if text:
             words = text.split()
             if len(words) > CAPTION_MAX_WORDS:
-                text = ' '.join(words[:CAPTION_MAX_WORDS]) + '...'
+                text = " ".join(words[:CAPTION_MAX_WORDS]) + "..."
             captions[vid] = text
 
     # Second pass: try to get spoken-word transcripts (1 credit each)
@@ -447,13 +479,14 @@ def fetch_captions(
             transcripts = data.get("transcripts") or []
             if transcripts and isinstance(transcripts, list):
                 transcript_text = " ".join(
-                    t.get("text", "") for t in transcripts
+                    t.get("text", "")
+                    for t in transcripts
                     if isinstance(t, dict) and t.get("text")
                 )
                 if transcript_text:
                     words = transcript_text.split()
                     if len(words) > CAPTION_MAX_WORDS:
-                        transcript_text = ' '.join(words[:CAPTION_MAX_WORDS]) + '...'
+                        transcript_text = " ".join(words[:CAPTION_MAX_WORDS]) + "..."
                     captions[vid] = transcript_text
         except Exception as e:
             _log(f"Transcript fetch failed for {vid}: {e}")

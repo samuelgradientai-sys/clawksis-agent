@@ -143,7 +143,9 @@ The spider automatically deduplicates requests based on a fingerprint computed f
 To allow duplicate requests (e.g., re-visiting a page after login), set `dont_filter=True`:
 
 ```python
-yield Request("https://example.com/dashboard", dont_filter=True, callback=self.parse_dashboard)
+yield Request(
+    "https://example.com/dashboard", dont_filter=True, callback=self.parse_dashboard
+)
 
 # Or with response.follow
 yield response.follow("/dashboard", dont_filter=True, callback=self.parse_dashboard)
@@ -181,6 +183,7 @@ async def parse(self, response: Response):
                 callback=self.parse_product,
                 meta={"category": category},
             )
+
 
 async def parse_product(self, response: Response):
     yield {

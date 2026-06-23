@@ -42,9 +42,7 @@ def test_compression_split_continuation(db):
     time.sleep(0.001)
     _mk(db, "new", parent="old")
 
-    prov = build_session_provenance(
-        db, "acp-1", "new", previous_clawk_session_id="old"
-    )
+    prov = build_session_provenance(db, "acp-1", "new", previous_clawk_session_id="old")
     assert prov["sessionKind"] == "continuation"
     assert prov["parentClawksisSessionId"] == "old"
     assert prov["rootClawksisSessionId"] == "old"
@@ -82,9 +80,7 @@ def test_non_compression_parent_is_root_not_continuation(db):
 def test_no_false_rotation_when_head_unchanged(db):
     _mk(db, "s")
     # previous == current → no rotation reason emitted.
-    prov = build_session_provenance(
-        db, "acp-1", "s", previous_clawk_session_id="s"
-    )
+    prov = build_session_provenance(db, "acp-1", "s", previous_clawk_session_id="s")
     assert "reason" not in prov
     assert "creatorKind" not in prov
     assert prov["previousClawksisSessionId"] == "s"

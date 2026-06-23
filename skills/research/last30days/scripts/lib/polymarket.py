@@ -71,7 +71,11 @@ def _expand_queries(topic: str) -> List[str]:
     words = core.split()
     if len(words) >= 2:
         for word in words:
-            if len(word) > 1 and word.lower() not in LOW_SIGNAL_QUERY_TOKENS and word.lower() not in _NOISE_WORDS:
+            if (
+                len(word) > 1
+                and word.lower() not in LOW_SIGNAL_QUERY_TOKENS
+                and word.lower() not in _NOISE_WORDS
+            ):
                 queries.append(word)
 
     # Add the full topic if different from core
@@ -89,37 +93,153 @@ def _expand_queries(topic: str) -> List[str]:
     return unique[:6]
 
 
-_GENERIC_TAGS = frozenset({"sports", "politics", "crypto", "science", "culture", "pop culture"})
+_GENERIC_TAGS = frozenset({
+    "sports",
+    "politics",
+    "crypto",
+    "science",
+    "culture",
+    "pop culture",
+})
 
 # Words that are too generic to serve as the sole topic-match signal.
 # If ALL core words from the topic are in this set, we skip filtering (can't meaningfully filter).
 # But if some words are informative and some are generic, we require at least one informative word.
 _NOISE_WORDS = frozenset({
     # Articles, prepositions, conjunctions
-    "the", "a", "an", "in", "on", "at", "of", "for", "and", "or", "to", "is", "are",
-    "was", "were", "will", "be", "by", "with", "from", "as", "it", "its", "not", "no",
-    "but", "if", "so", "do", "has", "had", "have", "this", "that", "what", "who",
+    "the",
+    "a",
+    "an",
+    "in",
+    "on",
+    "at",
+    "of",
+    "for",
+    "and",
+    "or",
+    "to",
+    "is",
+    "are",
+    "was",
+    "were",
+    "will",
+    "be",
+    "by",
+    "with",
+    "from",
+    "as",
+    "it",
+    "its",
+    "not",
+    "no",
+    "but",
+    "if",
+    "so",
+    "do",
+    "has",
+    "had",
+    "have",
+    "this",
+    "that",
+    "what",
+    "who",
     # Directional / geographic terms that cause false matches
-    "west", "east", "north", "south", "central", "southern", "northern", "eastern", "western",
+    "west",
+    "east",
+    "north",
+    "south",
+    "central",
+    "southern",
+    "northern",
+    "eastern",
+    "western",
     # Common sports / category terms
-    "champion", "championship", "league", "division", "conference", "cup", "series",
-    "team", "game", "match", "season", "win", "winner", "finals",
+    "champion",
+    "championship",
+    "league",
+    "division",
+    "conference",
+    "cup",
+    "series",
+    "team",
+    "game",
+    "match",
+    "season",
+    "win",
+    "winner",
+    "finals",
     # Common geographic / place nouns that cause false matches
     # "club" -> Athletic Club, Racing Club; "island" -> Epstein's Island, Rhode Island
-    "club", "island", "city", "park", "hill", "lake", "bay", "beach", "valley",
-    "river", "mountain", "county", "state", "village", "town", "point", "creek",
-    "springs", "heights", "ridge", "bridge", "harbor", "port", "station", "center",
-    "square", "field", "forest", "garden", "tower", "school", "church", "camp",
-    "ranch", "crossing", "shore", "rock", "summit", "falls", "grove", "haven",
+    "club",
+    "island",
+    "city",
+    "park",
+    "hill",
+    "lake",
+    "bay",
+    "beach",
+    "valley",
+    "river",
+    "mountain",
+    "county",
+    "state",
+    "village",
+    "town",
+    "point",
+    "creek",
+    "springs",
+    "heights",
+    "ridge",
+    "bridge",
+    "harbor",
+    "port",
+    "station",
+    "center",
+    "square",
+    "field",
+    "forest",
+    "garden",
+    "tower",
+    "school",
+    "church",
+    "camp",
+    "ranch",
+    "crossing",
+    "shore",
+    "rock",
+    "summit",
+    "falls",
+    "grove",
+    "haven",
     # Generic tech terms that match too broadly on Polymarket
     # "cli" -> any CLI tool market; "mcp" -> protocol markets; "ai" -> every AI market
-    "cli", "mcp", "protocol", "tool", "app", "code", "model", "ai", "api",
-    "software", "plugin", "skill", "agent", "bot", "search", "research",
+    "cli",
+    "mcp",
+    "protocol",
+    "tool",
+    "app",
+    "code",
+    "model",
+    "ai",
+    "api",
+    "software",
+    "plugin",
+    "skill",
+    "agent",
+    "bot",
+    "search",
+    "research",
     # Generic prediction market terms
-    "market", "odds", "prediction", "forecast", "chance", "probability",
+    "market",
+    "odds",
+    "prediction",
+    "forecast",
+    "chance",
+    "probability",
     # Comparison-query conjunctions — should not count as informative filter tokens
     # when the topic is "X vs Y vs Z"
-    "vs", "versus",
+    "vs",
+    "versus",
 })
 
 
@@ -227,7 +347,9 @@ def filter_items_against_topic(topic: str, items: List[Any]) -> List[Any]:
 
     dropped = len(items) - len(filtered)
     if dropped:
-        _log(f"Post-merge topic filter dropped {dropped} Polymarket items against full topic '{topic}'")
+        _log(
+            f"Post-merge topic filter dropped {dropped} Polymarket items against full topic '{topic}'"
+        )
 
     return filtered
 
@@ -292,7 +414,8 @@ def _extract_domain_queries(topic: str, events: List[Dict]) -> List[str]:
 
     # Sort by frequency, take top 2 that appear in 2+ events
     domain_queries = [
-        label for label, count in sorted(tag_counts.items(), key=lambda x: -x[1])
+        label
+        for label, count in sorted(tag_counts.items(), key=lambda x: -x[1])
         if count >= 2
     ][:2]
 
@@ -302,7 +425,9 @@ def _extract_domain_queries(topic: str, events: List[Dict]) -> List[str]:
 def _infer_query_intent(topic: str) -> str:
     """Tiny local fallback for Polymarket search tuning only."""
     text = topic.lower().strip()
-    if re.search(r"\b(predict|prediction|odds|forecast|chance|probability|will .* win)\b", text):
+    if re.search(
+        r"\b(predict|prediction|odds|forecast|chance|probability|will .* win)\b", text
+    ):
         return "prediction"
     return "breaking_news"
 
@@ -329,7 +454,11 @@ def _search_single_query(query: str, page: int = 1) -> Dict[str, Any]:
 
 
 def _run_queries_parallel(
-    queries: List[str], pages: int, all_events: Dict, errors: List, start_idx: int = 0,
+    queries: List[str],
+    pages: int,
+    all_events: Dict,
+    errors: List,
+    start_idx: int = 0,
 ) -> None:
     """Run (query, page) combinations in parallel, merging into all_events."""
     with ThreadPoolExecutor(max_workers=min(8, len(queries) * pages)) as executor:
@@ -399,7 +528,9 @@ def search_polymarket(
 
     if domain_queries:
         _log(f"Domain expansion queries: {domain_queries}")
-        _run_queries_parallel(domain_queries, 1, all_events, errors, start_idx=len(queries))
+        _run_queries_parallel(
+            domain_queries, 1, all_events, errors, start_idx=len(queries)
+        )
 
     merged_events = [ev for ev, _ in sorted(all_events.values(), key=lambda x: x[1])]
     total_queries = len(queries) + len(domain_queries)
@@ -417,9 +548,21 @@ def _format_price_movement(market: Dict[str, Any]) -> Optional[str]:
     Returns string like 'down 11.7% this month' or None if no significant change.
     """
     changes = [
-        (abs(market.get("oneDayPriceChange") or 0), market.get("oneDayPriceChange"), "today"),
-        (abs(market.get("oneWeekPriceChange") or 0), market.get("oneWeekPriceChange"), "this week"),
-        (abs(market.get("oneMonthPriceChange") or 0), market.get("oneMonthPriceChange"), "this month"),
+        (
+            abs(market.get("oneDayPriceChange") or 0),
+            market.get("oneDayPriceChange"),
+            "today",
+        ),
+        (
+            abs(market.get("oneWeekPriceChange") or 0),
+            market.get("oneWeekPriceChange"),
+            "this week",
+        ),
+        (
+            abs(market.get("oneMonthPriceChange") or 0),
+            market.get("oneMonthPriceChange"),
+            "this month",
+        ),
     ]
 
     # Pick the largest absolute change
@@ -466,7 +609,7 @@ def _parse_outcome_prices(market: Dict[str, Any]) -> List[tuple]:
             p = float(price)
         except (ValueError, TypeError):
             continue
-        name = outcomes[i] if i < len(outcomes) else f"Outcome {i+1}"
+        name = outcomes[i] if i < len(outcomes) else f"Outcome {i + 1}"
         result.append((name, p))
 
     return result
@@ -480,7 +623,11 @@ def _shorten_question(question: str) -> str:
     """
     q = question.strip().rstrip("?")
     # Common patterns: "Will X win/be/...", "X wins/loses..."
-    m = re.match(r"^Will\s+(.+?)\s+(?:win|be|make|reach|have|lose|qualify|advance|strike|agree|pass|sign|get|become|remain|stay|leave|survive|next)\b", q, re.IGNORECASE)
+    m = re.match(
+        r"^Will\s+(.+?)\s+(?:win|be|make|reach|have|lose|qualify|advance|strike|agree|pass|sign|get|become|remain|stay|leave|survive|next)\b",
+        q,
+        re.IGNORECASE,
+    )
     if m:
         return m.group(1).strip()
     m = re.match(r"^Will\s+(.+?)\s+", q, re.IGNORECASE)
@@ -490,7 +637,9 @@ def _shorten_question(question: str) -> str:
     return question[:40] if len(question) > 40 else question
 
 
-def _compute_text_similarity(topic: str, title: str, outcomes: List[str] = None) -> float:
+def _compute_text_similarity(
+    topic: str, title: str, outcomes: List[str] = None
+) -> float:
     """Score how well the event title (or outcome names) match the search topic.
 
     Returns 0.0-1.0. Exact title phrase match gets 1.0. Otherwise we reuse the
@@ -514,12 +663,16 @@ def _compute_text_similarity(topic: str, title: str, outcomes: List[str] = None)
             outcome_lower = outcome_name.lower()
             outcome_score = token_overlap_relevance(core, outcome_name)
             if _strong_phrase_match(core, outcome_lower):
-                outcome_score = max(outcome_score, 0.92 if len(outcome_lower.split()) >= 2 else 0.88)
+                outcome_score = max(
+                    outcome_score, 0.92 if len(outcome_lower.split()) >= 2 else 0.88
+                )
             if title_score < 0.3:
                 outcome_cap = 0.55 if query_type == "prediction" else 0.24
                 outcome_score = min(outcome_cap, outcome_score)
             else:
-                outcome_score = max(title_score, 0.75 * title_score + 0.25 * outcome_score)
+                outcome_score = max(
+                    title_score, 0.75 * title_score + 0.25 * outcome_score
+                )
             best_score = max(best_score, outcome_score)
 
     return round(best_score, 2)
@@ -554,7 +707,9 @@ def _safe_float(val, default=0.0) -> float:
         return default
 
 
-def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List[Dict[str, Any]]:
+def parse_polymarket_response(
+    response: Dict[str, Any], topic: str = ""
+) -> List[Dict[str, Any]]:
     """Parse Gamma API response into normalized item dicts.
 
     Each event becomes one item showing its title and top markets.
@@ -616,6 +771,7 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
                 return float(m.get("volume", 0) or 0)
             except (ValueError, TypeError):
                 return 0
+
         active_markets.sort(key=market_volume, reverse=True)
 
         # Take top market for the event
@@ -639,10 +795,9 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
         # sub-markets, synthesize from market questions to show actual
         # team/entity probabilities instead of a single market's Yes/No
         outcome_prices = _parse_outcome_prices(top_market)
-        top_outcomes_are_binary = (
-            len(outcome_prices) == 2
-            and {n.lower() for n, _ in outcome_prices} == {"yes", "no"}
-        )
+        top_outcomes_are_binary = len(outcome_prices) == 2 and {
+            n.lower() for n, _ in outcome_prices
+        } == {"yes", "no"}
         if top_outcomes_are_binary and len(active_markets) > 1:
             synth_outcomes = []
             for m in active_markets:
@@ -650,7 +805,9 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
                 if not q:
                     continue
                 pairs = _parse_outcome_prices(m)
-                yes_price = next((p for name, p in pairs if name.lower() == "yes"), None)
+                yes_price = next(
+                    (p for name, p in pairs if name.lower() == "yes"), None
+                )
                 if yes_price is not None and yes_price > 0.005:
                     synth_outcomes.append((q, yes_price))
             if synth_outcomes:
@@ -665,11 +822,17 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
         event_volume1wk = _safe_float(event.get("volume1wk"))
         event_liquidity = _safe_float(event.get("liquidity"))
         event_competitive = _safe_float(event.get("competitive"))
-        volume24hr = _safe_float(event.get("volume24hr")) or _safe_float(top_market.get("volume24hr"))
+        volume24hr = _safe_float(event.get("volume24hr")) or _safe_float(
+            top_market.get("volume24hr")
+        )
         liquidity = event_liquidity or _safe_float(top_market.get("liquidity"))
 
         # Event URL
-        url = f"https://polymarket.com/event/{slug}" if slug else f"https://polymarket.com/event/{event_id}"
+        url = (
+            f"https://polymarket.com/event/{slug}"
+            if slug
+            else f"https://polymarket.com/event/{event_id}"
+        )
 
         # Date: use updatedAt from event
         updated_at = event.get("updatedAt", "")
@@ -690,7 +853,9 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
 
         # Semantic relevance should dominate. Market quality should refine
         # relevant matches, not rescue unrelated high-liquidity events.
-        text_score = _compute_text_similarity(topic, title, all_outcome_names) if topic else 0.5
+        text_score = (
+            _compute_text_similarity(topic, title, all_outcome_names) if topic else 0.5
+        )
 
         # Volume signal: log-scaled monthly volume (most stable signal)
         vol_raw = event_volume1mo or event_volume1wk or volume24hr
@@ -710,10 +875,10 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
         competitive_score = event_competitive
 
         market_quality = (
-            0.50 * vol_score +
-            0.25 * liq_score +
-            0.15 * movement_score +
-            0.10 * competitive_score
+            0.50 * vol_score
+            + 0.25 * liq_score
+            + 0.15 * movement_score
+            + 0.10 * competitive_score
         )
         relevance = min(1.0, text_score * (0.75 + 0.25 * market_quality))
 
@@ -727,8 +892,11 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
                 name_lower = pair[0].lower()
                 # Match if full core is substring, or name is substring of core,
                 # or any core token appears in the name (handles long question strings)
-                if (core in name_lower or name_lower in core
-                        or any(tok in name_lower for tok in core_tokens if len(tok) > 2)):
+                if (
+                    core in name_lower
+                    or name_lower in core
+                    or any(tok in name_lower for tok in core_tokens if len(tok) > 2)
+                ):
                     reordered.append(pair)
                 else:
                     rest.append(pair)
@@ -770,8 +938,10 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
     # for a "CLI vs MCP" query). Better to show 0 than noise.
     _MIN_RELEVANCE = 0.15
     if items and items[0]["relevance"] < _MIN_RELEVANCE:
-        _log(f"All {len(items)} Polymarket results below relevance threshold "
-             f"({items[0]['relevance']:.2f} < {_MIN_RELEVANCE}), dropping all")
+        _log(
+            f"All {len(items)} Polymarket results below relevance threshold "
+            f"({items[0]['relevance']:.2f} < {_MIN_RELEVANCE}), dropping all"
+        )
         return []
 
     # Per-item floor: drop individual noise items even if the best item passed
@@ -780,7 +950,9 @@ def parse_polymarket_response(response: Dict[str, Any], topic: str = "") -> List
     items = [i for i in items if i["relevance"] >= _ITEM_MIN_RELEVANCE]
     dropped = before_count - len(items)
     if dropped:
-        _log(f"Dropped {dropped} Polymarket items below per-item relevance floor ({_ITEM_MIN_RELEVANCE})")
+        _log(
+            f"Dropped {dropped} Polymarket items below per-item relevance floor ({_ITEM_MIN_RELEVANCE})"
+        )
 
     cap = response.get("_cap", len(items))
     return items[:cap]

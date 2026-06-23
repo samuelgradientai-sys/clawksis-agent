@@ -151,10 +151,7 @@ class TestMCPStatus:
             mcp_tool._server_connect_errors["failed"] = "Connection closed"
 
         try:
-            statuses = {
-                entry["name"]: entry
-                for entry in mcp_tool.get_mcp_status()
-            }
+            statuses = {entry["name"]: entry for entry in mcp_tool.get_mcp_status()}
         finally:
             with mcp_tool._lock:
                 mcp_tool._servers.clear()
@@ -2530,9 +2527,11 @@ class TestReconnection:
             server = MCPServerTask("http_srv")
             target_server = server
 
-            with patch.object(MCPServerTask, "_run_http", patched_run_http), \
-                 patch.object(MCPServerTask, "_preflight_content_type", probe), \
-                 patch("asyncio.sleep", new_callable=AsyncMock):
+            with (
+                patch.object(MCPServerTask, "_run_http", patched_run_http),
+                patch.object(MCPServerTask, "_preflight_content_type", probe),
+                patch("asyncio.sleep", new_callable=AsyncMock),
+            ):
                 await server.run({"url": "https://example.com/mcp"})
 
             # Probe ran exactly once on the initial (pre-_ready) connect.
@@ -2570,9 +2569,11 @@ class TestReconnection:
             # Simulate a reconnect: _ready was set by the prior connect.
             server._ready.set()
 
-            with patch.object(MCPServerTask, "_run_http", patched_run_http), \
-                 patch.object(MCPServerTask, "_preflight_content_type", probe), \
-                 patch("asyncio.sleep", new_callable=AsyncMock):
+            with (
+                patch.object(MCPServerTask, "_run_http", patched_run_http),
+                patch.object(MCPServerTask, "_preflight_content_type", probe),
+                patch("asyncio.sleep", new_callable=AsyncMock),
+            ):
                 await server.run({"url": "https://example.com/mcp"})
 
             # Probe skipped because _ready was already set.

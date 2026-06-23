@@ -65,7 +65,9 @@ def _today() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _parse_first_post_age(age: Optional[str], today: Optional[datetime] = None) -> Optional[str]:
+def _parse_first_post_age(
+    age: Optional[str], today: Optional[datetime] = None
+) -> Optional[str]:
     """Convert a digg firstPostAge token (e.g. '5d', '17d', '5h', '1w', '1m')
     into a YYYY-MM-DD string. Returns None when the value is outside the
     last-30-day window or cannot be parsed.
@@ -268,30 +270,32 @@ def parse_digg_response(
         rank_boost = min(0.2, _rank_score(rank) / 250.0)
         relevance = min(1.0, 0.55 * rank_decay + 0.35 * content_score + rank_boost)
 
-        items.append(
-            {
-                "id": str(cluster_url_id),
-                "title": title or f"Digg cluster {i + 1}",
-                "url": _build_url(str(cluster_url_id)),
-                "tldr": tldr,
-                "author": "",
-                "date": date_str,
-                "engagement": {
-                    "postCount": int(post_count) if isinstance(post_count, (int, float)) else 0,
-                    "uniqueAuthors": int(unique_authors) if isinstance(unique_authors, (int, float)) else 0,
-                    "rank": int(rank) if isinstance(rank, (int, float)) else None,
-                    "rank_score": _rank_score(rank),
-                },
-                "first_post_age": first_post_age,
-                "posts": [],
-                "relevance": round(relevance, 2),
-                "why_relevant": (
-                    f"Digg cluster (rank {rank}, {post_count} posts, {unique_authors} authors)"
-                    if rank is not None
-                    else f"Digg cluster ({post_count} posts, {unique_authors} authors)"
-                ),
-            }
-        )
+        items.append({
+            "id": str(cluster_url_id),
+            "title": title or f"Digg cluster {i + 1}",
+            "url": _build_url(str(cluster_url_id)),
+            "tldr": tldr,
+            "author": "",
+            "date": date_str,
+            "engagement": {
+                "postCount": int(post_count)
+                if isinstance(post_count, (int, float))
+                else 0,
+                "uniqueAuthors": int(unique_authors)
+                if isinstance(unique_authors, (int, float))
+                else 0,
+                "rank": int(rank) if isinstance(rank, (int, float)) else None,
+                "rank_score": _rank_score(rank),
+            },
+            "first_post_age": first_post_age,
+            "posts": [],
+            "relevance": round(relevance, 2),
+            "why_relevant": (
+                f"Digg cluster (rank {rank}, {post_count} posts, {unique_authors} authors)"
+                if rank is not None
+                else f"Digg cluster ({post_count} posts, {unique_authors} authors)"
+            ),
+        })
 
     return items
 
@@ -328,7 +332,9 @@ def _parse_post(raw_post: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def fetch_top_posts(cluster_url_id: str, posts_per: int = POSTS_PER_CLUSTER) -> List[Dict[str, Any]]:
+def fetch_top_posts(
+    cluster_url_id: str, posts_per: int = POSTS_PER_CLUSTER
+) -> List[Dict[str, Any]]:
     """Fetch top-ranked X posts attached to a cluster.
 
     Returns an empty list on any failure (timeout, missing cluster, JSON
@@ -379,7 +385,9 @@ def enrich_with_top_posts(
     return items
 
 
-def enrich_source_items(items: list, top_k: int = 3, posts_per: int = POSTS_PER_CLUSTER) -> list:
+def enrich_source_items(
+    items: list, top_k: int = 3, posts_per: int = POSTS_PER_CLUSTER
+) -> list:
     """Attach top X posts to the first ``top_k`` SourceItems that survived dedupe.
 
     Reads ``metadata['clusterUrlId']`` and writes ``metadata['posts']`` in

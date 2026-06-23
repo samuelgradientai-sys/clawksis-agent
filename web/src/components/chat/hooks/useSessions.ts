@@ -19,6 +19,8 @@ export interface SessionSummary {
   started_at: number;
   message_count: number;
   source: string;
+  /** Modelo de la sesión (lo agrega session.list; puede faltar en gateways viejos). */
+  model?: string;
 }
 
 export type RpcSender = (
@@ -32,9 +34,10 @@ interface UseSessionsResult {
   error: string | null;
   refresh: () => Promise<void>;
   createSession: () => Promise<string | null>;
+  deleteSession: (id: string) => Promise<void>;
 }
 
-const SESSION_LIST_LIMIT = 50;
+const SESSION_LIST_LIMIT = 100;
 
 /**
  * Patrones que indican que el "title" es basura (system prompt o slash command
@@ -171,11 +174,36 @@ export function useSessions(
     }
   }, [sendRpc, ready, refresh]);
 
+  const deleteSession = useCallback(
+    async (id: string): Promise<void> => {
+      if (!ready || !id) return;
+      try {
+        await sendRpc("session.delete", { session_id: id });
+      } catch (err) {
+        // NO la sacamos ni refrescamos: el refresh borraría el error y parecería
+        // que "no borra" sin explicar por qué (p.ej. sesión activa). Mostramos
+        // el motivo real.
+        console.error("[useSessions] session.delete failed", err);
+        setError(
+          err instanceof Error
+            ? err.message.replace(/^\d+:\s*/, "")
+            : "No se pudo borrar la sesión",
+        );
+        return;
+      }
+      // Éxito: sacarla ya y re-sincronizar con el backend.
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      void refresh();
+    },
+    [sendRpc, ready, refresh],
+  );
+
   return {
     sessions,
     loading,
     error,
     refresh,
     createSession,
+    deleteSession,
   };
 }

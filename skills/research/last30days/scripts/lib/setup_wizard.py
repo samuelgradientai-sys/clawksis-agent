@@ -49,7 +49,9 @@ def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
         cookie_names = spec["cookies"]
 
         try:
-            result = cookie_extract.extract_cookies_with_source("auto", domain, cookie_names)
+            result = cookie_extract.extract_cookies_with_source(
+                "auto", domain, cookie_names
+            )
         except Exception as exc:
             logger.debug("Cookie extraction failed for %s: %s", source_name, exc)
             continue
@@ -68,7 +70,9 @@ def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
         try:
             proc = subprocess.run(
                 ["brew", "install", "yt-dlp"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if proc.returncode == 0:
                 ytdlp_installed = True
@@ -172,9 +176,13 @@ def get_setup_status_text(results: Dict[str, Any]) -> str:
     if ytdlp_action == "installed":
         lines.append("  - Installed yt-dlp via Homebrew")
     elif ytdlp_action == "install_failed":
-        lines.append("  - yt-dlp install failed \u2014 run `brew install yt-dlp` manually")
+        lines.append(
+            "  - yt-dlp install failed \u2014 run `brew install yt-dlp` manually"
+        )
     elif ytdlp_action == "no_homebrew":
-        lines.append("  - yt-dlp not found. Install Homebrew first, then: brew install yt-dlp")
+        lines.append(
+            "  - yt-dlp not found. Install Homebrew first, then: brew install yt-dlp"
+        )
     elif ytdlp_action == "already_installed":
         lines.append("  - yt-dlp already installed")
     elif results.get("ytdlp_installed", False):
@@ -217,7 +225,13 @@ def run_openclaw_setup(config: Dict[str, Any]) -> Dict[str, Any]:
 
     keys: Dict[str, bool] = {}
     for key_name in _OPENCLAW_KEY_NAMES:
-        short = key_name.lower().replace("_api_key", "").replace("_key", "").replace("_token", "")
+        short = (
+            key_name
+            .lower()
+            .replace("_api_key", "")
+            .replace("_key", "")
+            .replace("_token", "")
+        )
         # Normalize: AUTH_TOKEN -> auth, SCRAPECREATORS_API_KEY -> scrapecreators
         keys[short] = bool(config.get(key_name))
 
@@ -439,7 +453,10 @@ def run_full_device_auth(timeout: int = 300) -> Dict[str, Any]:
     if sys.platform == "darwin":
         try:
             subprocess.run(
-                ["pbcopy"], input=user_code.encode(), check=True, timeout=5,
+                ["pbcopy"],
+                input=user_code.encode(),
+                check=True,
+                timeout=5,
             )
             clipboard_ok = True
         except Exception:
@@ -466,11 +483,18 @@ def run_full_device_auth(timeout: int = 300) -> Dict[str, Any]:
 
     # Step 4: Poll for token (with periodic code reminders)
     access_token = poll_device_auth(
-        device_code, interval, timeout=timeout,
-        user_code=user_code, clipboard_ok=clipboard_ok,
+        device_code,
+        interval,
+        timeout=timeout,
+        user_code=user_code,
+        clipboard_ok=clipboard_ok,
     )
     if access_token is None:
-        return {"status": "timeout", "user_code": user_code, "clipboard_ok": clipboard_ok}
+        return {
+            "status": "timeout",
+            "user_code": user_code,
+            "clipboard_ok": clipboard_ok,
+        }
 
     # Step 4: Fetch API key
     api_key = fetch_api_key(access_token)
@@ -481,7 +505,13 @@ def run_full_device_auth(timeout: int = 300) -> Dict[str, Any]:
             "clipboard_ok": clipboard_ok,
         }
 
-    return {"status": "success", "method": "device", "api_key": api_key, "user_code": user_code, "clipboard_ok": clipboard_ok}
+    return {
+        "status": "success",
+        "method": "device",
+        "api_key": api_key,
+        "user_code": user_code,
+        "clipboard_ok": clipboard_ok,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +537,9 @@ def run_github_auth(timeout: int = 300) -> Dict[str, Any]:
         try:
             result = subprocess.run(
                 ["gh", "auth", "token"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode == 0 and result.stdout.strip():
                 token = result.stdout.strip()

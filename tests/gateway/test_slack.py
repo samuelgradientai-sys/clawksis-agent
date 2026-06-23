@@ -246,17 +246,17 @@ class TestAppMentionHandler:
         # covering every COMMAND_REGISTRY entry (e.g. /clawk, /btw, /stop,
         # /model, ...) so users get native-slash parity with Discord and
         # Telegram. Verify the regex matches the key expected slashes.
-        assert (
-            len(registered_commands) == 1
-        ), f"expected 1 combined slash matcher, got {registered_commands!r}"
+        assert len(registered_commands) == 1, (
+            f"expected 1 combined slash matcher, got {registered_commands!r}"
+        )
         slash_matcher = registered_commands[0]
         import re as _re
 
         assert isinstance(slash_matcher, _re.Pattern)
         for expected in ("/clawk", "/btw", "/stop", "/model", "/help"):
-            assert slash_matcher.match(
-                expected
-            ), f"Slack slash regex does not match {expected}"
+            assert slash_matcher.match(expected), (
+                f"Slack slash regex does not match {expected}"
+            )
 
 
 class TestSlackConnectCleanup:
@@ -657,9 +657,9 @@ class TestSlackSocketWatchdog:
 
                 new_handlers = len(instances) - baseline
                 assert new_handlers >= 1
-                assert (
-                    new_handlers <= 2
-                ), f"reconnect lock failed: {new_handlers} new handlers"
+                assert new_handlers <= 2, (
+                    f"reconnect lock failed: {new_handlers} new handlers"
+                )
             finally:
                 await adapter.disconnect()
 
@@ -698,13 +698,11 @@ class TestSlackProxyBehavior:
             ) as excluded,
         ):
             assert _slack_mod._resolve_slack_proxy_url() is None
-            excluded.assert_has_calls(
-                [
-                    call("slack.com"),
-                    call("files.slack.com"),
-                    call("wss-primary.slack.com"),
-                ]
-            )
+            excluded.assert_has_calls([
+                call("slack.com"),
+                call("files.slack.com"),
+                call("wss-primary.slack.com"),
+            ])
 
     @pytest.mark.asyncio
     async def test_connect_uses_proxy_when_not_bypassed(self):
@@ -1508,15 +1506,13 @@ class TestIncomingDocumentHandling:
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             dl.return_value = video_bytes
-            await adapter._handle_slack_file_shared(
-                {
-                    "type": "file_shared",
-                    "channel_id": "D123",
-                    "file_id": "FVIDEO",
-                    "user_id": "U_USER",
-                    "event_ts": "1234567890.000002",
-                }
-            )
+            await adapter._handle_slack_file_shared({
+                "type": "file_shared",
+                "channel_id": "D123",
+                "file_id": "FVIDEO",
+                "user_id": "U_USER",
+                "event_ts": "1234567890.000002",
+            })
 
         adapter._app.client.files_info.assert_awaited_once_with(file="FVIDEO")
         msg_event = adapter.handle_message.call_args[0][0]
@@ -2818,23 +2814,19 @@ class TestAssistantThreadLifecycle:
         assistant_adapter._ASSISTANT_THREADS_MAX = 10
         # Fill to the limit
         for i in range(10):
-            assistant_adapter._cache_assistant_thread_metadata(
-                {
-                    "channel_id": f"D{i}",
-                    "thread_ts": f"{i}.000",
-                    "user_id": f"U{i}",
-                }
-            )
+            assistant_adapter._cache_assistant_thread_metadata({
+                "channel_id": f"D{i}",
+                "thread_ts": f"{i}.000",
+                "user_id": f"U{i}",
+            })
         assert len(assistant_adapter._assistant_threads) == 10
 
         # Adding one more should trigger eviction (down to max // 2 = 5)
-        assistant_adapter._cache_assistant_thread_metadata(
-            {
-                "channel_id": "D999",
-                "thread_ts": "999.000",
-                "user_id": "U999",
-            }
-        )
+        assistant_adapter._cache_assistant_thread_metadata({
+            "channel_id": "D999",
+            "thread_ts": "999.000",
+            "user_id": "U999",
+        })
         assert len(assistant_adapter._assistant_threads) <= 10
         # The newest entry must survive eviction
         assert ("D999", "999.000") in assistant_adapter._assistant_threads
@@ -3496,9 +3488,9 @@ class TestSlackReplyToText:
         ):
             await adapter._handle_slack_message(event)
 
-        assert (
-            adapter.handle_message.call_args is not None
-        ), "handle_message must be invoked for thread-reply DM"
+        assert adapter.handle_message.call_args is not None, (
+            "handle_message must be invoked for thread-reply DM"
+        )
         msg_event = adapter.handle_message.call_args[0][0]
         assert msg_event.reply_to_message_id == "1000.0"
         # The critical assertion: parent text is exposed as reply_to_text so the

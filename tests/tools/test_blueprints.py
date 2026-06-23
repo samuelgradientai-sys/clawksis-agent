@@ -83,7 +83,9 @@ class TestParseBlueprint:
             parse_blueprint(MALFORMED_BLUEPRINT)
 
     def test_blueprint_not_mapping_raises(self):
-        bad = "---\nname: x\nmetadata:\n  clawk:\n    blueprint: not-a-dict\n---\n\nbody"
+        bad = (
+            "---\nname: x\nmetadata:\n  clawk:\n    blueprint: not-a-dict\n---\n\nbody"
+        )
         with pytest.raises(BlueprintError):
             parse_blueprint(bad)
 

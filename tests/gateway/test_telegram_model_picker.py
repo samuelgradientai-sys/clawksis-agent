@@ -228,7 +228,12 @@ class TestTelegramModelPicker:
         callback = AsyncMock(return_value="Switched to `openai/gpt-5.5-pro`")
         adapter._model_picker_state["12345"] = {
             "providers": [
-                {"slug": "openrouter", "name": "OpenRouter", "total_models": 1, "is_current": True}
+                {
+                    "slug": "openrouter",
+                    "name": "OpenRouter",
+                    "total_models": 1,
+                    "is_current": True,
+                }
             ],
             "current_model": "model_1",
             "current_provider": "openrouter",

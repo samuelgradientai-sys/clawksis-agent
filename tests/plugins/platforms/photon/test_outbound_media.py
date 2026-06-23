@@ -6,6 +6,7 @@ Photon ships outbound attachments via spectrum-ts' ``attachment()`` /
 can assert the endpoint + body shape each ``send_*`` override produces
 without spawning Node or binding ports.
 """
+
 from __future__ import annotations
 
 import os
@@ -160,7 +161,7 @@ async def test_send_image_url_caches_then_sends_attachment(
 
 @pytest.mark.asyncio
 async def test_send_image_url_fetch_failure_falls_back_to_text(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     adapter = _make_adapter(monkeypatch)
     calls = _capture_sidecar(adapter)
@@ -184,7 +185,7 @@ async def test_send_image_url_fetch_failure_falls_back_to_text(
 
 @pytest.mark.asyncio
 async def test_send_attachment_rejects_unsafe_path(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Default validation (no passthrough patch) should reject a nonexistent /
     # traversal path, returning a failed SendResult without calling the sidecar.

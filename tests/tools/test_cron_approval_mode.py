@@ -612,9 +612,7 @@ class TestCronInsideGatewayProcessDoesNotHang:
         from unittest.mock import patch as mock_patch
 
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
-            result = check_all_command_guards(
-                "cat ~/.clawksis/auth.json", "local"
-            )
+            result = check_all_command_guards("cat ~/.clawksis/auth.json", "local")
 
         # Non-dangerous read → allowed; the key invariant is "no pending hang".
 

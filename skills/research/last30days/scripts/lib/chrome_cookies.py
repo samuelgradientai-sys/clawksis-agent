@@ -22,8 +22,18 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Cookie DB locations on macOS
-CHROME_COOKIES_DB = Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default" / "Cookies"
-BRAVE_BASE_DIR = Path.home() / "Library" / "Application Support" / "BraveSoftware" / "Brave-Browser"
+CHROME_COOKIES_DB = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "Google"
+    / "Chrome"
+    / "Default"
+    / "Cookies"
+)
+BRAVE_BASE_DIR = (
+    Path.home() / "Library" / "Application Support" / "BraveSoftware" / "Brave-Browser"
+)
 
 # Chromium v10 encryption constants (shared by Chrome and Brave)
 CHROME_SALT = b"saltysalt"
@@ -49,7 +59,11 @@ def _get_chromium_encryption_key(service_name: str) -> Optional[bytes]:
             timeout=10,
         )
         if result.returncode != 0:
-            logger.info("%s Keychain access denied or browser not installed: %s", service_name, result.stderr.strip())
+            logger.info(
+                "%s Keychain access denied or browser not installed: %s",
+                service_name,
+                result.stderr.strip(),
+            )
             return None
         passphrase = result.stdout.strip()
         if not passphrase:
@@ -82,7 +96,9 @@ def _derive_aes_key(passphrase: bytes) -> bytes:
     )
 
 
-def _decrypt_v10_value(encrypted_value: bytes, aes_key: bytes, db_version: int) -> Optional[str]:
+def _decrypt_v10_value(
+    encrypted_value: bytes, aes_key: bytes, db_version: int
+) -> Optional[str]:
     """Decrypt a Chrome v10-encrypted cookie value.
 
     Uses system openssl CLI for AES-128-CBC decryption (zero pip deps).
@@ -100,9 +116,14 @@ def _decrypt_v10_value(encrypted_value: bytes, aes_key: bytes, db_version: int) 
     try:
         result = subprocess.run(
             [
-                "openssl", "enc", "-aes-128-cbc", "-d",
-                "-K", hex_key,
-                "-iv", CHROME_IV_HEX,
+                "openssl",
+                "enc",
+                "-aes-128-cbc",
+                "-d",
+                "-K",
+                hex_key,
+                "-iv",
+                CHROME_IV_HEX,
                 "-nopad",
             ],
             input=ciphertext,
@@ -110,7 +131,10 @@ def _decrypt_v10_value(encrypted_value: bytes, aes_key: bytes, db_version: int) 
             timeout=5,
         )
         if result.returncode != 0:
-            logger.debug("openssl decryption failed: %s", result.stderr.decode(errors="replace").strip())
+            logger.debug(
+                "openssl decryption failed: %s",
+                result.stderr.decode(errors="replace").strip(),
+            )
             return None
 
         decrypted = result.stdout
@@ -218,6 +242,7 @@ def _extract_chromium_cookies_macos(
     finally:
         if tmp_fd is not None:
             import os
+
             os.close(tmp_fd)
 
     try:
@@ -243,7 +268,9 @@ def _extract_chromium_cookies_macos(
 
             if encrypted_value and encrypted_value[:3] == b"v10":
                 if aes_key is None:
-                    logger.debug("Skipping encrypted cookie %s — no Keychain access", name)
+                    logger.debug(
+                        "Skipping encrypted cookie %s — no Keychain access", name
+                    )
                     continue
                 decrypted = _decrypt_v10_value(encrypted_value, aes_key, db_version)
                 if decrypted:
@@ -251,12 +278,20 @@ def _extract_chromium_cookies_macos(
                 else:
                     logger.debug("Failed to decrypt cookie %s", name)
             elif encrypted_value:
-                logger.debug("Unknown encryption for cookie %s (prefix: %r)", name, encrypted_value[:3])
+                logger.debug(
+                    "Unknown encryption for cookie %s (prefix: %r)",
+                    name,
+                    encrypted_value[:3],
+                )
 
         conn.close()
 
         if not results:
-            logger.info("No matching cookies found in %s for domain %s", keychain_service, domain)
+            logger.info(
+                "No matching cookies found in %s for domain %s",
+                keychain_service,
+                domain,
+            )
             return None
 
         return results
@@ -274,7 +309,9 @@ def _extract_chromium_cookies_macos(
             pass
 
 
-def extract_chrome_cookies_macos(domain: str, cookie_names: list[str]) -> Optional[dict[str, str]]:
+def extract_chrome_cookies_macos(
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Chrome on macOS."""
     return _extract_chromium_cookies_macos(
         CHROME_COOKIES_DB, "Chrome Safe Storage", domain, cookie_names
@@ -296,7 +333,8 @@ def _find_brave_cookies_db() -> Optional[Path]:
 
     try:
         candidates = [
-            child for child in BRAVE_BASE_DIR.iterdir()
+            child
+            for child in BRAVE_BASE_DIR.iterdir()
             if child.is_dir() and child.name.startswith("Profile ")
         ]
         for child in sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True):
@@ -309,7 +347,9 @@ def _find_brave_cookies_db() -> Optional[Path]:
     return None
 
 
-def extract_brave_cookies_macos(domain: str, cookie_names: list[str]) -> Optional[dict[str, str]]:
+def extract_brave_cookies_macos(
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Brave on macOS.
 
     Brave uses the same v10 AES-128-CBC encryption as Chrome; only the DB
@@ -319,4 +359,6 @@ def extract_brave_cookies_macos(domain: str, cookie_names: list[str]) -> Optiona
     if db_path is None:
         logger.info("Brave cookies database not found under %s", BRAVE_BASE_DIR)
         return None
-    return _extract_chromium_cookies_macos(db_path, "Brave Safe Storage", domain, cookie_names)
+    return _extract_chromium_cookies_macos(
+        db_path, "Brave Safe Storage", domain, cookie_names
+    )

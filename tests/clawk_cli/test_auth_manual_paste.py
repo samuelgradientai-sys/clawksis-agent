@@ -170,14 +170,13 @@ def test_parse_malformed_url_does_not_crash():
 
 def test_prompt_reads_stdin_and_parses(monkeypatch):
     monkeypatch.setattr(
-        builtins, "input",
+        builtins,
+        "input",
         lambda *_a, **_k: "http://127.0.0.1:56121/callback?code=abc&state=xyz",
     )
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        out = auth_mod._prompt_manual_callback_paste(
-            "http://127.0.0.1:56121/callback"
-        )
+        out = auth_mod._prompt_manual_callback_paste("http://127.0.0.1:56121/callback")
     rendered = buf.getvalue()
     assert "Manual callback paste" in rendered
     assert "127.0.0.1:56121" in rendered
@@ -191,9 +190,7 @@ def test_prompt_eof_returns_all_none(monkeypatch):
 
     monkeypatch.setattr(builtins, "input", _raise_eof)
     with contextlib.redirect_stdout(io.StringIO()):
-        out = auth_mod._prompt_manual_callback_paste(
-            "http://127.0.0.1:56121/callback"
-        )
+        out = auth_mod._prompt_manual_callback_paste("http://127.0.0.1:56121/callback")
     assert out["code"] is None
 
 
@@ -203,9 +200,7 @@ def test_prompt_keyboard_interrupt_returns_all_none(monkeypatch):
 
     monkeypatch.setattr(builtins, "input", _raise_kbi)
     with contextlib.redirect_stdout(io.StringIO()):
-        out = auth_mod._prompt_manual_callback_paste(
-            "http://127.0.0.1:56121/callback"
-        )
+        out = auth_mod._prompt_manual_callback_paste("http://127.0.0.1:56121/callback")
     assert out["code"] is None
 
 
@@ -236,7 +231,8 @@ def test_xai_loopback_login_manual_paste_skips_http_server(monkeypatch):
     + stubbed token endpoint.
     """
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
@@ -266,9 +262,7 @@ def test_xai_loopback_login_manual_paste_skips_http_server(monkeypatch):
             "error_description": None,
         }
 
-    monkeypatch.setattr(
-        auth_mod, "_prompt_manual_callback_paste", _fake_prompt
-    )
+    monkeypatch.setattr(auth_mod, "_prompt_manual_callback_paste", _fake_prompt)
 
     original_build = auth_mod._xai_oauth_build_authorize_url
 
@@ -276,20 +270,16 @@ def test_xai_loopback_login_manual_paste_skips_http_server(monkeypatch):
         captured_state["value"] = kwargs["state"]
         return original_build(**kwargs)
 
-    monkeypatch.setattr(
-        auth_mod, "_xai_oauth_build_authorize_url", _capture_state
-    )
+    monkeypatch.setattr(auth_mod, "_xai_oauth_build_authorize_url", _capture_state)
 
     def _fake_token_post(*_a, **_k):
-        return _StubTokenResponse(
-            {
-                "access_token": "at",
-                "refresh_token": "rt",
-                "id_token": "",
-                "expires_in": 3600,
-                "token_type": "Bearer",
-            }
-        )
+        return _StubTokenResponse({
+            "access_token": "at",
+            "refresh_token": "rt",
+            "id_token": "",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        })
 
     monkeypatch.setattr(auth_mod.httpx, "post", _fake_token_post)
 
@@ -308,14 +298,16 @@ def test_xai_loopback_login_manual_paste_state_mismatch_raises(monkeypatch):
     must not be a CSRF bypass.
     """
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
         },
     )
     monkeypatch.setattr(
-        auth_mod, "_prompt_manual_callback_paste",
+        auth_mod,
+        "_prompt_manual_callback_paste",
         lambda _ru: {
             "code": "fake",
             "state": "WRONG-STATE",
@@ -342,14 +334,16 @@ def test_xai_loopback_login_manual_paste_bare_code_succeeds(monkeypatch):
     ``xai_state_mismatch``. Regression for the bare-code branch of #26923.
     """
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
         },
     )
     monkeypatch.setattr(
-        auth_mod, "_prompt_manual_callback_paste",
+        auth_mod,
+        "_prompt_manual_callback_paste",
         lambda _ru: {
             "code": "bare-opaque-code",
             "state": None,
@@ -359,15 +353,13 @@ def test_xai_loopback_login_manual_paste_bare_code_succeeds(monkeypatch):
     )
 
     def _fake_token_post(*_a, **_k):
-        return _StubTokenResponse(
-            {
-                "access_token": "at",
-                "refresh_token": "rt",
-                "id_token": "",
-                "expires_in": 3600,
-                "token_type": "Bearer",
-            }
-        )
+        return _StubTokenResponse({
+            "access_token": "at",
+            "refresh_token": "rt",
+            "id_token": "",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        })
 
     monkeypatch.setattr(auth_mod.httpx, "post", _fake_token_post)
 
@@ -389,7 +381,8 @@ def test_xai_loopback_login_loopback_path_rejects_missing_state(monkeypatch):
     must still raise ``xai_state_mismatch``.
     """
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
@@ -404,17 +397,18 @@ def test_xai_loopback_login_loopback_path_rejects_missing_state(monkeypatch):
             return None
 
     monkeypatch.setattr(
-        auth_mod, "_xai_start_callback_server",
+        auth_mod,
+        "_xai_start_callback_server",
         lambda *_a, **_k: (
             _StubServer(),
             None,
-            {"code": "fake", "state": None, "error": None,
-             "error_description": None},
+            {"code": "fake", "state": None, "error": None, "error_description": None},
             "http://127.0.0.1:56121/callback",
         ),
     )
     monkeypatch.setattr(
-        auth_mod, "_xai_wait_for_callback",
+        auth_mod,
+        "_xai_wait_for_callback",
         lambda *_a, **_k: {
             "code": "fake",
             "state": None,
@@ -422,7 +416,9 @@ def test_xai_loopback_login_loopback_path_rejects_missing_state(monkeypatch):
             "error_description": None,
         },
     )
-    monkeypatch.setattr(auth_mod, "_xai_validate_loopback_redirect_uri", lambda _u: None)
+    monkeypatch.setattr(
+        auth_mod, "_xai_validate_loopback_redirect_uri", lambda _u: None
+    )
     monkeypatch.setattr(auth_mod, "_print_loopback_ssh_hint", lambda *_a, **_k: None)
 
     with contextlib.redirect_stdout(io.StringIO()):
@@ -434,7 +430,8 @@ def test_xai_loopback_login_loopback_path_rejects_missing_state(monkeypatch):
 def test_xai_loopback_login_manual_paste_missing_code_raises(monkeypatch):
     """Empty paste must surface as ``xai_code_missing``, not crash."""
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
@@ -449,7 +446,8 @@ def test_xai_loopback_login_manual_paste_missing_code_raises(monkeypatch):
 
     monkeypatch.setattr(auth_mod, "_xai_oauth_build_authorize_url", _capture)
     monkeypatch.setattr(
-        auth_mod, "_prompt_manual_callback_paste",
+        auth_mod,
+        "_prompt_manual_callback_paste",
         lambda _ru: {
             "code": None,
             "state": captured["state"],
@@ -467,7 +465,8 @@ def test_xai_loopback_login_manual_paste_missing_code_raises(monkeypatch):
 def test_xai_loopback_login_timeout_falls_back_to_manual_paste(monkeypatch):
     """Loopback timeout should accept a bare Grok Build code paste."""
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",
@@ -535,15 +534,13 @@ def test_xai_loopback_login_timeout_falls_back_to_manual_paste(monkeypatch):
     monkeypatch.setattr(
         auth_mod.httpx,
         "post",
-        lambda *_a, **_k: _StubTokenResponse(
-            {
-                "access_token": "at-timeout",
-                "refresh_token": "rt-timeout",
-                "id_token": "",
-                "expires_in": 3600,
-                "token_type": "Bearer",
-            }
-        ),
+        lambda *_a, **_k: _StubTokenResponse({
+            "access_token": "at-timeout",
+            "refresh_token": "rt-timeout",
+            "id_token": "",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }),
     )
 
     buf = io.StringIO()
@@ -560,6 +557,7 @@ def test_xai_loopback_login_timeout_falls_back_to_manual_paste(monkeypatch):
 
 def test_xai_wait_for_callback_accepts_ready_stdin_code(monkeypatch):
     """Users can paste the Grok Build code while Clawksis is still waiting."""
+
     class _StubServer:
         shutdown_called = False
         close_called = False
@@ -603,7 +601,8 @@ def test_xai_wait_for_callback_accepts_ready_stdin_code(monkeypatch):
 def test_xai_loopback_login_timeout_noninteractive_reraises(monkeypatch):
     """Non-interactive stdin must keep the original timeout error."""
     monkeypatch.setattr(
-        auth_mod, "_xai_oauth_discovery",
+        auth_mod,
+        "_xai_oauth_discovery",
         lambda *_a, **_k: {
             "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
             "token_endpoint": "https://auth.x.ai/oauth2/token",

@@ -17,6 +17,7 @@ black" / dim gray) which does not exist on 8-color terminals.  The fix
 clamps with ``min(8, curses.COLORS - 1)``.
 
 """
+
 import sys
 
 import pytest

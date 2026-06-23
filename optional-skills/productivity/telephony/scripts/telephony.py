@@ -127,12 +127,14 @@ def _load_dotenv_values(path: Path | None = None) -> dict[str, str]:
         key = key.strip()
         value = value.strip()
         if value.startswith('"') and value.endswith('"') and len(value) >= 2:
-            value = value[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+            value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
         values[key] = value
     return values
 
 
-def _env_or_config(env_key: str, *config_paths: tuple[str, ...], default: str = "") -> str:
+def _env_or_config(
+    env_key: str, *config_paths: tuple[str, ...], default: str = ""
+) -> str:
     value = os.environ.get(env_key, "")
     if value:
         return value
@@ -159,7 +161,9 @@ def _load_state(path: Path | None = None) -> dict[str, Any]:
 def _save_state(state: dict[str, Any], path: Path | None = None) -> Path:
     state_file = path or _state_path()
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    state_file.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return state_file
 
 
@@ -229,7 +233,11 @@ def _parse_twilio_date(value: str | None) -> datetime | None:
         return None
     try:
         dt = parsedate_to_datetime(value)
-        return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        return (
+            dt.astimezone(timezone.utc)
+            if dt.tzinfo
+            else dt.replace(tzinfo=timezone.utc)
+        )
     except Exception:
         return None
 
@@ -256,7 +264,9 @@ def _json_request(
         body = urllib.parse.urlencode(form, doseq=True).encode("utf-8")
         request_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
 
-    req = urllib.request.Request(url, data=body, headers=request_headers, method=method.upper())
+    req = urllib.request.Request(
+        url, data=body, headers=request_headers, method=method.upper()
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             payload = resp.read().decode("utf-8")
@@ -267,7 +277,9 @@ def _json_request(
             parsed = json.loads(body_text) if body_text else {}
         except Exception:
             parsed = {"raw": body_text}
-        raise TelephonyError(f"HTTP {exc.code} from {url}: {parsed or exc.reason}") from exc
+        raise TelephonyError(
+            f"HTTP {exc.code} from {url}: {parsed or exc.reason}"
+        ) from exc
     except urllib.error.URLError as exc:
         raise TelephonyError(f"Connection error for {url}: {exc.reason}") from exc
 
@@ -297,7 +309,9 @@ def _twilio_basic_headers() -> dict[str, str]:
     return {"Authorization": f"Basic {auth}"}
 
 
-def _twilio_request(method: str, path: str, *, params=None, form=None) -> dict[str, Any]:
+def _twilio_request(
+    method: str, path: str, *, params=None, form=None
+) -> dict[str, Any]:
     sid, _token = _twilio_creds()
     return _json_request(
         method,
@@ -309,13 +323,19 @@ def _twilio_request(method: str, path: str, *, params=None, form=None) -> dict[s
 
 
 def _twilio_owned_numbers(limit: int = 50) -> list[OwnedTwilioNumber]:
-    payload = _twilio_request("GET", "IncomingPhoneNumbers.json", params={"PageSize": limit})
+    payload = _twilio_request(
+        "GET", "IncomingPhoneNumbers.json", params={"PageSize": limit}
+    )
     items = payload.get("incoming_phone_numbers", []) or []
     results: list[OwnedTwilioNumber] = []
     for item in items:
         if not isinstance(item, dict):
             continue
-        caps = item.get("capabilities") if isinstance(item.get("capabilities"), dict) else {}
+        caps = (
+            item.get("capabilities")
+            if isinstance(item.get("capabilities"), dict)
+            else {}
+        )
         results.append(
             OwnedTwilioNumber(
                 sid=str(item.get("sid", "")),
@@ -388,7 +408,9 @@ def _resolve_twilio_number(identifier: str | None = None) -> OwnedTwilioNumber:
         for item in _twilio_owned_numbers(limit=100):
             if item.sid == wanted or item.phone_number == normalized:
                 return item
-        raise TelephonyError(f"Could not find an owned Twilio number matching {identifier}")
+        raise TelephonyError(
+            f"Could not find an owned Twilio number matching {identifier}"
+        )
 
     env_number = _env_or_config(
         "TWILIO_PHONE_NUMBER",
@@ -401,7 +423,9 @@ def _resolve_twilio_number(identifier: str | None = None) -> OwnedTwilioNumber:
         ("phone", "twilio", "phone_number_sid"),
     )
     state = _load_state()
-    twilio_state = state.get("twilio", {}) if isinstance(state.get("twilio"), dict) else {}
+    twilio_state = (
+        state.get("twilio", {}) if isinstance(state.get("twilio"), dict) else {}
+    )
     preferred_number = env_number or str(twilio_state.get("default_phone_number", ""))
     preferred_sid = env_sid or str(twilio_state.get("default_phone_sid", ""))
 
@@ -452,12 +476,16 @@ def _bland_api_key() -> str:
 
 
 def _ai_provider(default: str = DEFAULT_AI_PROVIDER) -> str:
-    return _env_or_config(
-        "PHONE_PROVIDER",
-        ("telephony", "provider"),
-        ("phone", "provider"),
-        default=default,
-    ).lower().strip()
+    return (
+        _env_or_config(
+            "PHONE_PROVIDER",
+            ("telephony", "provider"),
+            ("phone", "provider"),
+            default=default,
+        )
+        .lower()
+        .strip()
+    )
 
 
 def _twilio_search_numbers(
@@ -517,7 +545,9 @@ def _twilio_buy_number(
     env_path: Path | None = None,
 ) -> dict[str, Any]:
     normalized = _normalize_phone(phone_number)
-    payload = _twilio_request("POST", "IncomingPhoneNumbers.json", form={"PhoneNumber": normalized})
+    payload = _twilio_request(
+        "POST", "IncomingPhoneNumbers.json", form={"PhoneNumber": normalized}
+    )
     purchased = {
         "success": True,
         "provider": "twilio",
@@ -577,7 +607,7 @@ def _twilio_set_default(identifier: str, *, save_env: bool = False) -> dict[str,
 
 
 def _twiml_say(message: str, voice: str) -> str:
-    return f"<Response><Say voice=\"{xml_escape(voice)}\">{xml_escape(message)}</Say></Response>"
+    return f'<Response><Say voice="{xml_escape(voice)}">{xml_escape(message)}</Say></Response>'
 
 
 def _twiml_play(audio_url: str) -> str:
@@ -597,7 +627,9 @@ def _twilio_call(
     destination = _normalize_phone(to_number)
     source = _resolve_twilio_number(from_identifier)
     if bool(message) == bool(audio_url):
-        raise TelephonyError("Provide exactly one of 'message' or 'audio_url' for twilio-call")
+        raise TelephonyError(
+            "Provide exactly one of 'message' or 'audio_url' for twilio-call"
+        )
 
     twiml = _twiml_play(audio_url) if audio_url else _twiml_say(message or "", voice)
     form: dict[str, Any] = {
@@ -676,10 +708,14 @@ def _checkpoint_for_messages(messages: list[dict[str, Any]]) -> tuple[str, str]:
     if not messages:
         return "", ""
     newest = messages[0]
-    return str(newest.get("sid") or ""), str(newest.get("date_sent") or newest.get("date_created") or "")
+    return str(newest.get("sid") or ""), str(
+        newest.get("date_sent") or newest.get("date_created") or ""
+    )
 
 
-def _messages_after_checkpoint(messages: list[dict[str, Any]], last_sid: str) -> list[dict[str, Any]]:
+def _messages_after_checkpoint(
+    messages: list[dict[str, Any]], last_sid: str
+) -> list[dict[str, Any]]:
     if not last_sid:
         return messages
     filtered: list[dict[str, Any]] = []
@@ -846,7 +882,9 @@ def _bland_status(call_id: str, analyze: str | None = None) -> dict[str, Any]:
     api_key = _bland_api_key()
     if not api_key:
         raise TelephonyError("Bland.ai is not configured.")
-    payload = _json_request("GET", f"{BLAND_API_BASE}/calls/{call_id}", headers={"authorization": api_key})
+    payload = _json_request(
+        "GET", f"{BLAND_API_BASE}/calls/{call_id}", headers={"authorization": api_key}
+    )
     result = {
         "success": True,
         "provider": "bland",
@@ -995,7 +1033,9 @@ def _provider_decision_tree() -> list[dict[str, str]]:
 
 def diagnose() -> dict[str, Any]:
     state = _load_state()
-    twilio_state = state.get("twilio", {}) if isinstance(state.get("twilio"), dict) else {}
+    twilio_state = (
+        state.get("twilio", {}) if isinstance(state.get("twilio"), dict) else {}
+    )
     vapi_state = state.get("vapi", {}) if isinstance(state.get("vapi"), dict) else {}
     provider = _ai_provider()
 
@@ -1018,7 +1058,9 @@ def diagnose() -> dict[str, Any]:
 
     bland_key = _bland_api_key()
     vapi_key = _vapi_api_key()
-    vapi_phone_id = _vapi_phone_number_id() or str(vapi_state.get("phone_number_id", ""))
+    vapi_phone_id = _vapi_phone_number_id() or str(
+        vapi_state.get("phone_number_id", "")
+    )
 
     return {
         "success": True,
@@ -1031,8 +1073,12 @@ def diagnose() -> dict[str, Any]:
                 "auth_token_configured": bool(twilio_token),
                 "default_phone_number": twilio_phone,
                 "default_phone_sid": twilio_state.get("default_phone_sid", ""),
-                "last_inbound_message_sid": twilio_state.get("last_inbound_message_sid", ""),
-                "last_inbound_message_date": twilio_state.get("last_inbound_message_date", ""),
+                "last_inbound_message_sid": twilio_state.get(
+                    "last_inbound_message_sid", ""
+                ),
+                "last_inbound_message_date": twilio_state.get(
+                    "last_inbound_message_date", ""
+                ),
             },
             "bland": {
                 "configured": bool(bland_key),
@@ -1076,7 +1122,9 @@ def diagnose() -> dict[str, Any]:
     }
 
 
-def save_twilio(account_sid: str, auth_token: str, phone_number: str = "", phone_sid: str = "") -> dict[str, Any]:
+def save_twilio(
+    account_sid: str, auth_token: str, phone_number: str = "", phone_sid: str = ""
+) -> dict[str, Any]:
     updates = {
         "TWILIO_ACCOUNT_SID": account_sid.strip(),
         "TWILIO_AUTH_TOKEN": auth_token.strip(),
@@ -1094,18 +1142,22 @@ def save_twilio(account_sid: str, auth_token: str, phone_number: str = "", phone
         "message": f"Twilio credentials saved to {env_file}.",
     }
     if phone_number:
-        result.update(_remember_twilio_number(phone_number=updates["TWILIO_PHONE_NUMBER"], phone_sid=phone_sid.strip(), save_env=False))
+        result.update(
+            _remember_twilio_number(
+                phone_number=updates["TWILIO_PHONE_NUMBER"],
+                phone_sid=phone_sid.strip(),
+                save_env=False,
+            )
+        )
     return result
 
 
 def save_bland(api_key: str, voice: str = BLAND_DEFAULT_VOICE) -> dict[str, Any]:
-    env_file = _upsert_env_file(
-        {
-            "BLAND_API_KEY": api_key.strip(),
-            "BLAND_DEFAULT_VOICE": voice.strip() or BLAND_DEFAULT_VOICE,
-            "PHONE_PROVIDER": "bland",
-        }
-    )
+    env_file = _upsert_env_file({
+        "BLAND_API_KEY": api_key.strip(),
+        "BLAND_DEFAULT_VOICE": voice.strip() or BLAND_DEFAULT_VOICE,
+        "PHONE_PROVIDER": "bland",
+    })
     return {
         "success": True,
         "provider": "bland",
@@ -1141,7 +1193,11 @@ def save_vapi(
         "message": f"Vapi configuration saved to {env_file}.",
     }
     if phone_number_id:
-        result.update(_remember_vapi_number(phone_number_id=phone_number_id.strip(), save_env=False))
+        result.update(
+            _remember_vapi_number(
+                phone_number_id=phone_number_id.strip(), save_env=False
+            )
+        )
     return result
 
 
@@ -1151,13 +1207,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("diagnose", help="Show saved telephony state and provider readiness")
 
-    p = sub.add_parser("save-twilio", help="Save Twilio credentials to the Clawksis .env file")
+    p = sub.add_parser(
+        "save-twilio", help="Save Twilio credentials to the Clawksis .env file"
+    )
     p.add_argument("account_sid")
     p.add_argument("auth_token")
     p.add_argument("--phone-number", default="")
     p.add_argument("--phone-sid", default="")
 
-    p = sub.add_parser("save-bland", help="Save Bland.ai settings to the Clawksis .env file")
+    p = sub.add_parser(
+        "save-bland", help="Save Bland.ai settings to the Clawksis .env file"
+    )
     p.add_argument("api_key")
     p.add_argument("--voice", default=BLAND_DEFAULT_VOICE)
 
@@ -1168,21 +1228,29 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--voice-id", default=VAPI_DEFAULT_VOICE_ID)
     p.add_argument("--model", default=VAPI_DEFAULT_MODEL)
 
-    p = sub.add_parser("twilio-search", help="Search Twilio numbers available for purchase")
+    p = sub.add_parser(
+        "twilio-search", help="Search Twilio numbers available for purchase"
+    )
     p.add_argument("--country", default="US")
     p.add_argument("--area-code", default="")
     p.add_argument("--contains", default="")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--sms-enabled", action=argparse.BooleanOptionalAction, default=True)
-    p.add_argument("--voice-enabled", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument(
+        "--voice-enabled", action=argparse.BooleanOptionalAction, default=True
+    )
 
     p = sub.add_parser("twilio-buy", help="Buy a Twilio phone number")
     p.add_argument("phone_number")
     p.add_argument("--save-env", action="store_true")
 
-    sub.add_parser("twilio-owned", help="List Twilio numbers already owned by the account")
+    sub.add_parser(
+        "twilio-owned", help="List Twilio numbers already owned by the account"
+    )
 
-    p = sub.add_parser("twilio-set-default", help="Remember one owned Twilio number as the default")
+    p = sub.add_parser(
+        "twilio-set-default", help="Remember one owned Twilio number as the default"
+    )
     p.add_argument("identifier", help="Owned phone number in E.164 or Twilio phone SID")
     p.add_argument("--save-env", action="store_true")
 
@@ -1204,17 +1272,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--media-url", action="append", default=[])
     p.add_argument("--from-number", default="")
 
-    p = sub.add_parser("twilio-inbox", help="Poll inbound SMS for the default or specified Twilio number")
+    p = sub.add_parser(
+        "twilio-inbox",
+        help="Poll inbound SMS for the default or specified Twilio number",
+    )
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--since-last", action="store_true")
     p.add_argument("--mark-seen", action="store_true")
     p.add_argument("--phone-number", default="")
 
-    p = sub.add_parser("vapi-import-twilio", help="Import an owned Twilio number into Vapi")
+    p = sub.add_parser(
+        "vapi-import-twilio", help="Import an owned Twilio number into Vapi"
+    )
     p.add_argument("--phone-number", default="")
     p.add_argument("--save-env", action="store_true")
 
-    p = sub.add_parser("ai-call", help="Place an outbound AI voice call via Bland.ai or Vapi")
+    p = sub.add_parser(
+        "ai-call", help="Place an outbound AI voice call via Bland.ai or Vapi"
+    )
     p.add_argument("to_number")
     p.add_argument("task")
     p.add_argument("--provider", choices=["bland", "vapi"], default="")
@@ -1235,7 +1310,12 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     if cmd == "diagnose":
         return diagnose()
     if cmd == "save-twilio":
-        return save_twilio(args.account_sid, args.auth_token, phone_number=args.phone_number, phone_sid=args.phone_sid)
+        return save_twilio(
+            args.account_sid,
+            args.auth_token,
+            phone_number=args.phone_number,
+            phone_sid=args.phone_sid,
+        )
     if cmd == "save-bland":
         return save_bland(args.api_key, voice=args.voice)
     if cmd == "save-vapi":
@@ -1335,7 +1415,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except TelephonyError as exc:
-        print(json.dumps({"success": False, "error": str(exc)}, indent=2, ensure_ascii=False), file=sys.stderr)
+        print(
+            json.dumps(
+                {"success": False, "error": str(exc)}, indent=2, ensure_ascii=False
+            ),
+            file=sys.stderr,
+        )
         return 1
 
 

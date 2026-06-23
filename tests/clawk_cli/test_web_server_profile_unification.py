@@ -6,6 +6,7 @@ profile switcher can target any profile's CLAWK_HOME. These tests pin:
 reads/writes land in the REQUESTED profile, the dashboard's own profile
 stays untouched, and the chat PTY env is scoped via CLAWK_HOME.
 """
+
 import pytest
 import yaml
 
@@ -92,13 +93,17 @@ class TestProfileScopedConfig:
         resp = client.get("/api/config/raw")
         assert "Io/Volcano" not in resp.json()["yaml"]
 
-    def test_config_raw_path_reflects_requested_profile(self, client, isolated_profiles):
+    def test_config_raw_path_reflects_requested_profile(
+        self, client, isolated_profiles
+    ):
         """The Config page header shows /api/config/raw's ``path`` — it must
         point at the SWITCHED profile's config.yaml, not the dashboard's own
         (the stale-path bug reported after the profile unification launch)."""
         resp = client.get("/api/config/raw", params={"profile": "worker_beta"})
         assert resp.status_code == 200
-        assert resp.json()["path"] == str(isolated_profiles["worker_beta"] / "config.yaml")
+        assert resp.json()["path"] == str(
+            isolated_profiles["worker_beta"] / "config.yaml"
+        )
         resp = client.get("/api/config/raw")
         assert resp.json()["path"] == str(isolated_profiles["default"] / "config.yaml")
 
@@ -147,16 +152,23 @@ class TestProfileScopedMcp:
     def test_mcp_add_and_list_scoped(self, client, isolated_profiles):
         resp = client.post(
             "/api/mcp/servers",
-            json={"name": "scoped-srv", "url": "http://localhost:1234/sse",
-                  "profile": "worker_beta"},
+            json={
+                "name": "scoped-srv",
+                "url": "http://localhost:1234/sse",
+                "profile": "worker_beta",
+            },
         )
         assert resp.status_code == 200
 
         worker_cfg = _cfg(isolated_profiles["worker_beta"])
         assert "scoped-srv" in worker_cfg.get("mcp_servers", {})
-        assert "scoped-srv" not in _cfg(isolated_profiles["default"]).get("mcp_servers", {})
+        assert "scoped-srv" not in _cfg(isolated_profiles["default"]).get(
+            "mcp_servers", {}
+        )
 
-        listing = client.get("/api/mcp/servers", params={"profile": "worker_beta"}).json()
+        listing = client.get(
+            "/api/mcp/servers", params={"profile": "worker_beta"}
+        ).json()
         assert any(s["name"] == "scoped-srv" for s in listing["servers"])
         listing = client.get("/api/mcp/servers").json()
         assert not any(s["name"] == "scoped-srv" for s in listing["servers"])
@@ -209,7 +221,9 @@ class TestProfileScopedMcp:
         assert resp.status_code == 404
         resp = client.delete("/api/mcp/servers/srv2", params={"profile": "worker_beta"})
         assert resp.status_code == 200
-        assert "srv2" not in _cfg(isolated_profiles["worker_beta"]).get("mcp_servers", {})
+        assert "srv2" not in _cfg(isolated_profiles["worker_beta"]).get(
+            "mcp_servers", {}
+        )
 
 
 class TestProfileScopedModel:
@@ -322,9 +336,7 @@ class TestProfileScopedPostSetup:
             json={"key": "agent_browser", "profile": "worker_beta"},
         )
         assert resp.status_code == 200
-        assert calls == [
-            ["-p", "worker_beta", "tools", "post-setup", "agent_browser"]
-        ]
+        assert calls == [["-p", "worker_beta", "tools", "post-setup", "agent_browser"]]
 
     def test_post_setup_without_profile_keeps_legacy_argv(
         self, client, isolated_profiles, monkeypatch

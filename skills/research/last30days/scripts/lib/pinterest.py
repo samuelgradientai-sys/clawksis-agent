@@ -17,9 +17,9 @@ SCRAPECREATORS_BASE = "https://api.scrapecreators.com/v1/pinterest"
 
 # Depth configurations: how many results to fetch
 DEPTH_CONFIG = {
-    "quick":   {"results_per_page": 10},
+    "quick": {"results_per_page": 10},
     "default": {"results_per_page": 20},
-    "deep":    {"results_per_page": 40},
+    "deep": {"results_per_page": 40},
 }
 
 from .relevance import token_overlap_relevance as _compute_relevance
@@ -28,14 +28,33 @@ from .relevance import token_overlap_relevance as _compute_relevance
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Pinterest search."""
     from .query import extract_core_subject
+
     _PINTEREST_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome', 'killer',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features',
-        'recommendations', 'advice',
-        'prompt', 'prompts', 'prompting',
-        'methods', 'strategies', 'approaches',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
+        "prompt",
+        "prompts",
+        "prompting",
+        "methods",
+        "strategies",
+        "approaches",
     })
     return extract_core_subject(topic, noise=_PINTEREST_NOISE)
 
@@ -44,7 +63,9 @@ def _log(msg: str):
     log.source_log("Pinterest", msg)
 
 
-def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[str, Any]]:
+def _parse_items(
+    raw_items: List[Dict[str, Any]], core_topic: str
+) -> List[Dict[str, Any]]:
     """Parse raw Pinterest items into normalized dicts.
 
     Pinterest pins are visual content with descriptions. Saves are the
@@ -59,7 +80,9 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
         description = str(raw.get("description") or raw.get("title") or "")
 
         # Engagement metrics - saves are the primary signal
-        save_count = raw.get("save_count") or raw.get("saves") or raw.get("repin_count") or 0
+        save_count = (
+            raw.get("save_count") or raw.get("saves") or raw.get("repin_count") or 0
+        )
         comment_count = raw.get("comment_count") or raw.get("comments") or 0
 
         # Author info
@@ -94,7 +117,9 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
                 "comments": comment_count,
             },
             "relevance": relevance,
-            "why_relevant": f"Pinterest: {description[:60]}" if description else f"Pinterest: {core_topic}",
+            "why_relevant": f"Pinterest: {description[:60]}"
+            if description
+            else f"Pinterest: {core_topic}",
         })
     return items
 
@@ -133,7 +158,9 @@ def search_pinterest(
     config = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
     core_topic = _extract_core_subject(topic)
 
-    _log(f"Searching Pinterest for '{core_topic}' (depth={depth}, count={config['results_per_page']})")
+    _log(
+        f"Searching Pinterest for '{core_topic}' (depth={depth}, count={config['results_per_page']})"
+    )
 
     try:
         data = http.get(
@@ -148,10 +175,16 @@ def search_pinterest(
         return {"items": [], "error": f"{type(e).__name__}: {e}"}
 
     # Extract items from response - try common SC response shapes
-    raw_items = data.get("pins") or data.get("results") or data.get("data") or data.get("items") or []
+    raw_items = (
+        data.get("pins")
+        or data.get("results")
+        or data.get("data")
+        or data.get("items")
+        or []
+    )
 
     # Limit to configured count
-    raw_items = raw_items[:config["results_per_page"]]
+    raw_items = raw_items[: config["results_per_page"]]
 
     # Parse items
     items = _parse_items(raw_items, core_topic)

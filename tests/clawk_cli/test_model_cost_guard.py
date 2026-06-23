@@ -15,7 +15,9 @@ def test_no_warning_when_known_prices_are_at_threshold():
         cost_output=100.0,
     )
 
-    assert expensive_model_warning("edge/model", provider="test", model_info=info) is None
+    assert (
+        expensive_model_warning("edge/model", provider="test", model_info=info) is None
+    )
 
 
 def test_warns_when_models_dev_input_price_exceeds_threshold():
@@ -41,7 +43,9 @@ def test_warns_when_models_dev_input_price_exceeds_threshold():
 
 
 def test_warns_when_pricing_entry_output_price_exceeds_threshold(monkeypatch):
-    monkeypatch.setattr("agent.models_dev.get_model_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "agent.models_dev.get_model_info", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         "agent.usage_pricing.get_pricing_entry",
         lambda *_args, **_kwargs: PricingEntry(
@@ -51,7 +55,9 @@ def test_warns_when_pricing_entry_output_price_exceeds_threshold(monkeypatch):
         ),
     )
 
-    warning = expensive_model_warning("provider/expensive-output", provider="openrouter")
+    warning = expensive_model_warning(
+        "provider/expensive-output", provider="openrouter"
+    )
 
     assert warning is not None
     assert warning.output_cost_per_million == Decimal("100.01")
@@ -59,7 +65,9 @@ def test_warns_when_pricing_entry_output_price_exceeds_threshold(monkeypatch):
 
 
 def test_openai_gpt55_pro_adds_suggestion(monkeypatch):
-    monkeypatch.setattr("agent.models_dev.get_model_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "agent.models_dev.get_model_info", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         "agent.usage_pricing.get_pricing_entry",
         lambda *_args, **_kwargs: PricingEntry(
@@ -76,7 +84,9 @@ def test_openai_gpt55_pro_adds_suggestion(monkeypatch):
 
 
 def test_openai_gpt55_pro_warns_for_nous_portal_pricing(monkeypatch):
-    monkeypatch.setattr("agent.models_dev.get_model_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "agent.models_dev.get_model_info", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         "agent.usage_pricing.fetch_endpoint_model_metadata",
         lambda base_url, api_key="": {

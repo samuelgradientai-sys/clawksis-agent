@@ -79,14 +79,15 @@ def search_feeds(
     # Quick login sanity check.
     login = http.get(f"{base}/api/v1/login/status", timeout=8, retries=1)
     is_logged_in = (
-        login.get("data", {}).get("is_logged_in")
-        if isinstance(login, dict) else False
+        login.get("data", {}).get("is_logged_in") if isinstance(login, dict) else False
     )
     if not is_logged_in:
         raise http.HTTPError("Xiaohongshu API reachable but not logged in")
 
     # API supports filters; use recency-oriented defaults.
-    publish_time = "一天内" if depth == "quick" else "一周内" if depth == "default" else "半年内"
+    publish_time = (
+        "一天内" if depth == "quick" else "一周内" if depth == "default" else "半年内"
+    )
     payload = {
         "keyword": topic,
         "filters": {
@@ -122,16 +123,9 @@ def search_feeds(
             continue
 
         xsec_token = str(feed.get("xsecToken") or note.get("xsecToken") or "").strip()
-        title = str(
-            note.get("displayTitle")
-            or note.get("title")
-            or ""
-        ).strip()
+        title = str(note.get("displayTitle") or note.get("title") or "").strip()
         snippet = str(
-            note.get("desc")
-            or note.get("displayDesc")
-            or title
-            or ""
+            note.get("desc") or note.get("displayDesc") or title or ""
         ).strip()
 
         likes = _to_int(interact.get("likedCount"))
@@ -142,7 +136,7 @@ def search_feeds(
         why = f"Xiaohongshu engagement: likes={likes}, comments={comments}, favorites={favorites}"
 
         items.append({
-            "id": f"XHS{i+1}",
+            "id": f"XHS{i + 1}",
             "title": title[:200] if title else f"Xiaohongshu note {feed_id}",
             "url": _build_note_url(feed_id, xsec_token),
             "source_domain": "xiaohongshu.com",

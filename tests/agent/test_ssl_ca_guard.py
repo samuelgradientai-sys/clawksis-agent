@@ -11,7 +11,12 @@ from agent.ssl_guard import verify_ca_bundle, verify_ca_bundle_with_fallback
 
 def test_healthy_bundle_passes(monkeypatch):
     """A real, non-empty certifi bundle must verify without raising."""
-    for key in ("CLAWK_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+    for key in (
+        "CLAWK_CA_BUNDLE",
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    ):
         monkeypatch.delenv(key, raising=False)
     bundle = Path(certifi.where())
     assert bundle.exists()
@@ -41,8 +46,13 @@ def test_empty_certifi_bundle_raises_ssl_error(monkeypatch, tmp_path):
     assert "too small" in str(exc.value).lower()
 
 
-@pytest.mark.parametrize("env_var", ["CLAWK_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"])
-def test_missing_explicit_ca_bundle_env_raises_before_httpx(monkeypatch, tmp_path, env_var):
+@pytest.mark.parametrize(
+    "env_var",
+    ["CLAWK_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"],
+)
+def test_missing_explicit_ca_bundle_env_raises_before_httpx(
+    monkeypatch, tmp_path, env_var
+):
     """Bad CA-bundle env vars should be reported before OpenAI/httpx init."""
     fake = tmp_path / "missing.pem"
     monkeypatch.setenv(env_var, str(fake))

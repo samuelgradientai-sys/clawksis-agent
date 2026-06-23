@@ -1180,15 +1180,13 @@ def test_launch_tui_applies_terminal_backend_config(
     captured = {}
     config_path = Path(os.environ["CLAWK_HOME"]) / "config.yaml"
     config_path.write_text(
-        "\n".join(
-            [
-                "terminal:",
-                "  backend: docker",
-                "  docker_image: example/clawk-tools:latest",
-                "  docker_extra_args:",
-                "    - --network=host",
-            ]
-        ),
+        "\n".join([
+            "terminal:",
+            "  backend: docker",
+            "  docker_image: example/clawk-tools:latest",
+            "  docker_extra_args:",
+            "    - --network=host",
+        ]),
         encoding="utf-8",
     )
     monkeypatch.delenv("TERMINAL_ENV", raising=False)

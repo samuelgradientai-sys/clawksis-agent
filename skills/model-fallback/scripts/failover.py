@@ -15,6 +15,7 @@ own when the primary returns 402 / quota / billing errors.
   failover.py --switch MODEL  set the primary model now (backup)
   failover.py --home DIR --config FILE         overrides (testing)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -125,7 +126,9 @@ def apply_chain(config_path: Path, providers: list[dict]) -> list[dict]:
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        config_path.with_name(config_path.name + f".bak-{ts}").write_text(raw, encoding="utf-8")
+        config_path.with_name(config_path.name + f".bak-{ts}").write_text(
+            raw, encoding="utf-8"
+        )
     chain = [{"provider": p["provider"], "model": p["model"]} for p in providers]
     cfg["fallback_providers"] = chain
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -145,7 +148,9 @@ def switch_model(config_path: Path, model: str) -> None:
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        config_path.with_name(config_path.name + f".bak-{ts}").write_text(raw, encoding="utf-8")
+        config_path.with_name(config_path.name + f".bak-{ts}").write_text(
+            raw, encoding="utf-8"
+        )
     m = cfg.get("model")
     if isinstance(m, dict):
         m["default"] = model
@@ -164,17 +169,26 @@ def main() -> int:
         except (AttributeError, ValueError):
             pass
 
-    ap = argparse.ArgumentParser(description="Audit + configure model/billing failover.")
+    ap = argparse.ArgumentParser(
+        description="Audit + configure model/billing failover."
+    )
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--apply-chain", nargs="?", const="", default=None,
-                    help="write fallback_providers (optionally a CSV order of providers)")
+    ap.add_argument(
+        "--apply-chain",
+        nargs="?",
+        const="",
+        default=None,
+        help="write fallback_providers (optionally a CSV order of providers)",
+    )
     ap.add_argument("--switch", default="", help="set the primary model now")
     ap.add_argument("--home", default="")
     ap.add_argument("--config", default="")
     args = ap.parse_args()
 
     home = Path(args.home).expanduser() if args.home else resolve_home()
-    config_path = Path(args.config).expanduser() if args.config else home / "config.yaml"
+    config_path = (
+        Path(args.config).expanduser() if args.config else home / "config.yaml"
+    )
     env = read_env(home)
     detected = detect_providers(env)
 
@@ -182,16 +196,22 @@ def main() -> int:
         try:
             switch_model(config_path, args.switch.strip())
         except SystemExit as exc:
-            print(str(exc)); return 1
+            print(str(exc))
+            return 1
         except Exception as exc:  # noqa: BLE001
-            print(f"switch failed: {exc}"); return 1
-        print(f"Modelo principal → {args.switch.strip()}  (backup del config guardado).")
+            print(f"switch failed: {exc}")
+            return 1
+        print(
+            f"Modelo principal → {args.switch.strip()}  (backup del config guardado)."
+        )
         print("Reiniciá el gateway/agente para que tome efecto.")
         return 0
 
     if args.apply_chain is not None:
         if args.apply_chain.strip():
-            order = [p.strip().lower() for p in args.apply_chain.split(",") if p.strip()]
+            order = [
+                p.strip().lower() for p in args.apply_chain.split(",") if p.strip()
+            ]
             by_prov = {d["provider"]: d for d in detected}
             chosen = [by_prov[p] for p in order if p in by_prov]
             # include any explicitly named provider even without a detected key,
@@ -204,15 +224,19 @@ def main() -> int:
         else:
             chosen = detected
         if not chosen:
-            print("No detecté API keys de ningún provider en ~/.clawksis/.env. "
-                  "Agregá al menos una (ej. OPENAI_API_KEY=...) y reintentá.")
+            print(
+                "No detecté API keys de ningún provider en ~/.clawksis/.env. "
+                "Agregá al menos una (ej. OPENAI_API_KEY=...) y reintentá."
+            )
             return 1
         try:
             chain = apply_chain(config_path, chosen)
         except SystemExit as exc:
-            print(str(exc)); return 1
+            print(str(exc))
+            return 1
         except Exception as exc:  # noqa: BLE001
-            print(f"apply-chain failed: {exc}"); return 1
+            print(f"apply-chain failed: {exc}")
+            return 1
         print("Cadena de fallback escrita en config.yaml (backup al lado):")
         for c in chain:
             print(f"  → {c['provider']}: {c['model']}")
@@ -228,12 +252,20 @@ def main() -> int:
     chain = current_chain(cfg)
 
     if args.json:
-        print(json.dumps({
-            "current_model": model,
-            "detected_providers": [{"provider": d["provider"], "key_tail": d["key_tail"]} for d in detected],
-            "fallback_chain": chain,
-            "has_chain": bool(chain),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "current_model": model,
+                    "detected_providers": [
+                        {"provider": d["provider"], "key_tail": d["key_tail"]}
+                        for d in detected
+                    ],
+                    "fallback_chain": chain,
+                    "has_chain": bool(chain),
+                },
+                indent=2,
+            )
+        )
         return 0
 
     print("🔁 model-fallback — estado del failover")
@@ -259,18 +291,24 @@ def main() -> int:
     # verdict
     provs = [d["provider"] for d in detected]
     if chain:
-        print("✅ Auto-failover configurado: ante billing/error el runtime cae por esa cadena.")
+        print(
+            "✅ Auto-failover configurado: ante billing/error el runtime cae por esa cadena."
+        )
     elif len(provs) >= 2:
         print(f"⚠️ Tenés keys de {', '.join(provs)} pero SIN cadena de fallback.")
         print("   Configurala (cae solo a otro provider ante 402/error):")
         print(f'   python3 "{Path(__file__)}" --apply-chain')
     else:
         print("⚠️ Tenés una sola key/provider y sin cadena. Para resiliencia real:")
-        print("   - agregá una 2ª API key del MISMO provider (el pool la rota solo ante 402/429), o")
+        print(
+            "   - agregá una 2ª API key del MISMO provider (el pool la rota solo ante 402/429), o"
+        )
         print("   - agregá una key de OTRO provider y corré --apply-chain.")
     print()
-    print("Recordá: el runtime ya rota keys del pool ante 402/429 sin intervención; "
-          "esta cadena agrega el salto a otro provider/modelo.")
+    print(
+        "Recordá: el runtime ya rota keys del pool ante 402/429 sin intervención; "
+        "esta cadena agrega el salto a otro provider/modelo."
+    )
     return 0
 
 

@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
 
 export type ConnectionStatus =
   | "idle"
@@ -30,6 +30,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Cadena de razonamiento de modelos "thinking" (reasoning.delta). */
+  reasoning?: string;
   toolCalls: ToolCall[];
   streaming: boolean;
   timestamp: number;
@@ -77,12 +79,18 @@ interface UseChatGatewayResult {
   sendMessage: (text: string) => void;
   interrupt: () => void;
   errorMessage: string | null;
+  /** Descartar el error visible (lo dispara el banner de error). */
+  clearError: () => void;
   /** Para hooks satélite que necesitan reusar la conexión (ej: useSessions) */
   sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
   readyForRpc: boolean;
-  /** Cambiar a otra sesión: limpia mensajes, carga history, actualiza sessionId */
+  /** Cambiar a otra sesión: muestra el historial al instante y resume en 2do plano. */
   switchSession: (targetId: string) => Promise<void>;
+  /** true mientras se resume una sesión (el agente se está construyendo). */
+  resuming: boolean;
+  /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
+  regenerateLast: () => Promise<void>;
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -97,6 +105,7 @@ export function useChatGateway(): UseChatGatewayResult {
   });
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const nextIdRef = useRef(1);
@@ -146,18 +155,53 @@ export function useChatGateway(): UseChatGatewayResult {
         break;
 
       case "message.start": {
-        const assistantMsgId = "asst-" + Date.now();
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantMsgId,
-            role: "assistant",
-            content: "",
-            toolCalls: [],
-            streaming: true,
-            timestamp: Date.now(),
-          },
-        ]);
+        setMessages((prev) => {
+          // Si reasoning.delta ya creó el bubble del assistant, reusarlo
+          // (los modelos thinking razonan ANTES de empezar a responder).
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.streaming) return prev;
+          return [
+            ...prev,
+            {
+              id: "asst-" + Date.now(),
+              role: "assistant",
+              content: "",
+              reasoning: "",
+              toolCalls: [],
+              streaming: true,
+              timestamp: Date.now(),
+            },
+          ];
+        });
+        setBusy(true);
+        break;
+      }
+
+      case "reasoning.delta":
+      case "thinking.delta": {
+        const text = (payload.text as string) ?? "";
+        if (!text) break;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, reasoning: (last.reasoning ?? "") + text },
+            ];
+          }
+          return [
+            ...prev,
+            {
+              id: "asst-" + Date.now(),
+              role: "assistant",
+              content: "",
+              reasoning: text,
+              toolCalls: [],
+              streaming: true,
+              timestamp: Date.now(),
+            },
+          ];
+        });
         setBusy(true);
         break;
       }
@@ -174,15 +218,38 @@ export function useChatGateway(): UseChatGatewayResult {
         break;
       }
 
-      case "message.complete":
+      case "message.complete": {
         setMessages((prev) => {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           if (last.role !== "assistant" || !last.streaming) return prev;
-          return [...prev.slice(0, -1), { ...last, streaming: false }];
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              streaming: false,
+              reasoning: (payload.reasoning as string) || last.reasoning,
+            },
+          ];
         });
         setBusy(false);
+        // El usage del backend (_get_usage) es el total ACUMULADO de la sesión
+        // (session_*_tokens), no un delta por turno: por eso se ASIGNA, no se
+        // suma (sumar inflaba el contador en cada respuesta).
+        const u =
+          payload.usage && typeof payload.usage === "object"
+            ? (payload.usage as Record<string, unknown>)
+            : {};
+        const inTok = Number(u.input ?? u.prompt ?? u.input_tokens ?? 0) || 0;
+        const outTok =
+          Number(u.output ?? u.completion ?? u.output_tokens ?? 0) || 0;
+        const totalTok =
+          Number(u.total ?? u.total_tokens ?? 0) || inTok + outTok;
+        if (totalTok) {
+          setSession((prev) => ({ ...prev, tokensUsed: totalTok }));
+        }
         break;
+      }
 
       case "tool.start": {
         const toolId = (payload.tool_id as string) ?? "tool-" + Date.now();
@@ -233,6 +300,25 @@ export function useChatGateway(): UseChatGatewayResult {
       case "error": {
         const msg = (payload.message as string) ?? "Unknown error";
         setErrorMessage(msg);
+        // Desatascar la UI: el agente falló a mitad de turno, así que liberamos
+        // el "busy" y finalizamos el mensaje en streaming para que no quede
+        // colgado en "Pensando..." para siempre.
+        setBusy(false);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role === "assistant" && last.streaming) {
+            const empty =
+              !last.content.trim() &&
+              last.toolCalls.length === 0 &&
+              !(last.reasoning ?? "").trim();
+            // Error antes de cualquier contenido → dropear la burbuja vacía
+            // (si no, queda un avatar huérfano al lado del banner de error).
+            if (empty) return prev.slice(0, -1);
+            return [...prev.slice(0, -1), { ...last, streaming: false }];
+          }
+          return prev;
+        });
         break;
       }
 
@@ -426,6 +512,8 @@ export function useChatGateway(): UseChatGatewayResult {
         setErrorMessage("No hay sesión activa todavía");
         return;
       }
+      // Nuevo turno: limpiar cualquier error previo.
+      setErrorMessage(null);
       const userMsgId = "usr-" + Date.now();
       setMessages((prev) => [
         ...prev,
@@ -438,6 +526,43 @@ export function useChatGateway(): UseChatGatewayResult {
           timestamp: Date.now(),
         },
       ]);
+
+      // Slash command (/model, /help, /status, …): ejecutarlo vía slash.exec —
+      // como el terminal — en lugar de mandarlo al modelo. El output se muestra
+      // como respuesta; los comandos con efectos (model/new/stop) emiten eventos
+      // que el chat ya procesa.
+      if (text.trim().startsWith("/")) {
+        sendRpc("slash.exec", {
+          session_id: session.sessionId,
+          command: text.trim(),
+        })
+          .then((res) => {
+            const output = (res as { output?: string })?.output ?? "";
+            if (output) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: "slash-" + Date.now(),
+                  role: "assistant",
+                  content: output,
+                  toolCalls: [],
+                  streaming: false,
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
+          })
+          .catch((err) => {
+            console.error("[useChatGateway] slash.exec failed", err);
+            setErrorMessage(
+              err instanceof Error
+                ? err.message.replace(/^\d+:\s*/, "")
+                : "El comando falló",
+            );
+          });
+        return;
+      }
+
       sendRpc("prompt.submit", {
         session_id: session.sessionId,
         text,
@@ -467,38 +592,77 @@ export function useChatGateway(): UseChatGatewayResult {
       const mySeq = ++switchSeqRef.current;
       setMessages([]);
       setBusy(false);
+      setResuming(true);
+      setErrorMessage(null);
+      // Mostrar ya el header/asociación de la sesión; el composer queda
+      // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
+      setSession((prev) => ({
+        ...prev,
+        sessionId: targetId,
+        model: null,
+        modelProvider: null,
+        tokensUsed: 0,
+        tokensMax: 0,
+      }));
+
+      // 1) Historial al INSTANTE: lee del DB por HTTP (no construye el agente),
+      //    así la conversación aparece sin esperar el build lento del resume.
+      try {
+        const fast = await api.getSessionMessages(targetId);
+        if (mySeq !== switchSeqRef.current) return;
+        const fastMsgs: ChatMessage[] = (fast?.messages ?? [])
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m, i) => ({
+            id: "hist-" + targetId + "-" + i,
+            role: m.role as "user" | "assistant",
+            content: m.content ?? "",
+            toolCalls: [],
+            streaming: false,
+            timestamp: Date.now() - 1000 * (1000 - i),
+          }));
+        if (fastMsgs.length) setMessages(fastMsgs);
+      } catch {
+        // best-effort: el resume de abajo igual trae los mensajes.
+      }
+
+      // 2) Resume: construye el agente (lento) y deja la sesión VIVA para poder
+      //    enviar. El historial ya se mostró en el paso 1.
       try {
         const resumeResult = (await sendRpc("session.resume", {
           session_id: targetId,
         })) as {
           session_id?: string;
           messages?: Array<Record<string, unknown>>;
+          info?: Record<string, unknown>;
         };
         if (mySeq !== switchSeqRef.current) return;
         const liveSid = resumeResult?.session_id ?? targetId;
-        // session.resume ya retorna messages en la respuesta
-        // — NO necesitamos llamar session.history aparte
         const historyMessages = resumeResult?.messages ?? [];
-        const initialMessages: ChatMessage[] = historyMessages
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m, i) => ({
-            id: "hist-" + Date.now() + "-" + i,
-            role: m.role as "user" | "assistant",
-            content: (m.text as string) ?? (m.content as string) ?? "",
-            toolCalls: [],
-            streaming: false,
-            timestamp:
-              (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
-          }));
-        setMessages(initialMessages);
+        if (historyMessages.length) {
+          const initialMessages: ChatMessage[] = historyMessages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m, i) => ({
+              id: "hist-" + Date.now() + "-" + i,
+              role: m.role as "user" | "assistant",
+              content: (m.text as string) ?? (m.content as string) ?? "",
+              toolCalls: [],
+              streaming: false,
+              timestamp:
+                (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
+            }));
+          setMessages(initialMessages);
+        }
         if (mySeq !== switchSeqRef.current) return;
-        setSession((prev) => ({ ...prev, sessionId: liveSid }));
-        console.log(
-          "[useChatGateway] switched to session",
-          targetId,
-          "→ live sid",
-          liveSid,
-        );
+        // Tokens por conversación + modelo de la sesión resumida.
+        const info = resumeResult?.info ?? {};
+        setSession((prev) => ({
+          ...prev,
+          sessionId: liveSid,
+          model: (info.model as string) ?? null,
+          modelProvider: (info.model_provider as string) ?? null,
+          tokensUsed: 0,
+          tokensMax: 0,
+        }));
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
         if (mySeq === switchSeqRef.current) {
@@ -506,10 +670,60 @@ export function useChatGateway(): UseChatGatewayResult {
             err instanceof Error ? err.message : "Failed to switch session",
           );
         }
+      } finally {
+        if (mySeq === switchSeqRef.current) setResuming(false);
       }
     },
     [sendRpc],
   );
+
+  const regenerateLast = useCallback(async (): Promise<void> => {
+    if (busy) return;
+    const sid = session.sessionId;
+    if (!sid) return;
+
+    // El último mensaje user es el prompt que produjo la última respuesta.
+    let lastUserText: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserText = messages[i].content;
+        break;
+      }
+    }
+    if (lastUserText == null) return;
+    // Si el último turno fue un slash command, NO regenerar: re-ejecutaría el
+    // comando y session.undo borraría el turno real previo (los slash no quedan
+    // en el history del backend).
+    if (lastUserText.trim().startsWith("/")) return;
+
+    // Sacar localmente el último turno (desde el último user, inclusive). El
+    // backend hace lo mismo con session.undo; re-enviamos el prompt para
+    // generar una respuesta fresca sin duplicar el turno.
+    setMessages((prev) => {
+      let cut = prev.length;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === "user") {
+          cut = i;
+          break;
+        }
+      }
+      return prev.slice(0, cut);
+    });
+
+    try {
+      await sendRpc("session.undo", { session_id: sid });
+    } catch (err) {
+      console.error("[useChatGateway] session.undo failed", err);
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to regenerate",
+      );
+      return;
+    }
+
+    sendMessage(lastUserText);
+  }, [busy, session.sessionId, messages, sendRpc, sendMessage]);
+
+  const clearError = useCallback(() => setErrorMessage(null), []);
 
   return {
     status,
@@ -519,8 +733,11 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage,
     interrupt,
     errorMessage,
+    clearError,
     sendRpc,
     readyForRpc: status === "connected",
     switchSession,
+    resuming,
+    regenerateLast,
   };
 }

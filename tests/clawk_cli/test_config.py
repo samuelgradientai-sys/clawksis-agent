@@ -1070,32 +1070,30 @@ class TestCustomProviderCompatibility:
             "moonshotai/Kimi-K2.6-ACED": {"context_length": 131072},
         }
         config_path.write_text(
-            yaml.safe_dump(
-                {
-                    "_config_version": 11,
-                    "custom_providers": [
-                        {
-                            "name": "Kimi Coding Plan",
-                            "base_url": "https://api.kimi.example.com/coding",
-                            "api_key_env": "KIMI_CODING_API_KEY",
-                            "api_mode": "anthropic_messages",
-                            "model": "kimi-k2.6",
-                            "models": model_map,
-                            "context_length": 262144,
-                            "rate_limit_delay": 0.25,
-                            "discover_models": False,
-                            "extra_body": {
-                                "chat_template_kwargs": {"enable_thinking": False}
-                            },
+            yaml.safe_dump({
+                "_config_version": 11,
+                "custom_providers": [
+                    {
+                        "name": "Kimi Coding Plan",
+                        "base_url": "https://api.kimi.example.com/coding",
+                        "api_key_env": "KIMI_CODING_API_KEY",
+                        "api_mode": "anthropic_messages",
+                        "model": "kimi-k2.6",
+                        "models": model_map,
+                        "context_length": 262144,
+                        "rate_limit_delay": 0.25,
+                        "discover_models": False,
+                        "extra_body": {
+                            "chat_template_kwargs": {"enable_thinking": False}
                         },
-                        {
-                            "name": "List Models",
-                            "base_url": "https://list.example.com/v1",
-                            "models": ["alpha", "beta"],
-                        },
-                    ],
-                }
-            ),
+                    },
+                    {
+                        "name": "List Models",
+                        "base_url": "https://list.example.com/v1",
+                        "models": ["alpha", "beta"],
+                    },
+                ],
+            }),
             encoding="utf-8",
         )
 
@@ -1516,9 +1514,11 @@ class TestWriteApprovalMigration:
 
     def test_approve_maps_to_true(self, tmp_path):
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
-            self._write(tmp_path,
-                        "_config_version: 28\nmemory:\n  write_mode: approve\n"
-                        "skills:\n  write_mode: approve\n")
+            self._write(
+                tmp_path,
+                "_config_version: 28\nmemory:\n  write_mode: approve\n"
+                "skills:\n  write_mode: approve\n",
+            )
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load((tmp_path / "config.yaml").read_text())
             assert raw["memory"]["write_approval"] is True
@@ -1530,9 +1530,11 @@ class TestWriteApprovalMigration:
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             # YAML 1.1 parses bare on/off as bools — write_mode could be either
             # the string or the bool; both legacy "not gating" values → False.
-            self._write(tmp_path,
-                        "_config_version: 28\nmemory:\n  write_mode: 'on'\n"
-                        "skills:\n  write_mode: 'off'\n")
+            self._write(
+                tmp_path,
+                "_config_version: 28\nmemory:\n  write_mode: 'on'\n"
+                "skills:\n  write_mode: 'off'\n",
+            )
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load((tmp_path / "config.yaml").read_text())
             assert raw["memory"]["write_approval"] is False
@@ -1540,7 +1542,9 @@ class TestWriteApprovalMigration:
 
     def test_unset_key_defaults_to_false(self, tmp_path):
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
-            self._write(tmp_path, "_config_version: 28\nmemory:\n  memory_enabled: true\n")
+            self._write(
+                tmp_path, "_config_version: 28\nmemory:\n  memory_enabled: true\n"
+            )
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load((tmp_path / "config.yaml").read_text())
             # No write_mode was persisted, so the rename is a no-op; the missing-

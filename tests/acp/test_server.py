@@ -68,7 +68,9 @@ async def test_new_session_exposes_edit_approvals_as_modes_not_config_options(ag
 
 
 @pytest.mark.asyncio
-async def test_set_config_option_persists_edit_approval_policy_without_advertising_config(agent):
+async def test_set_config_option_persists_edit_approval_policy_without_advertising_config(
+    agent,
+):
     resp = await agent.new_session(cwd="/tmp")
     update = await agent.set_config_option(
         "edit_approval_policy",
@@ -125,26 +127,40 @@ class TestInitialize:
         assert "resume" in session_caps
 
     @pytest.mark.asyncio
-    async def test_initialize_advertises_provider_and_terminal_auth_methods(self, agent, monkeypatch):
+    async def test_initialize_advertises_provider_and_terminal_auth_methods(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr("acp_adapter.auth.detect_provider", lambda: "openrouter")
         monkeypatch.setattr("acp_adapter.server.detect_provider", lambda: "openrouter")
 
         resp = await agent.initialize(protocol_version=1)
-        payloads = [method.model_dump(by_alias=True, exclude_none=True) for method in resp.auth_methods]
+        payloads = [
+            method.model_dump(by_alias=True, exclude_none=True)
+            for method in resp.auth_methods
+        ]
 
         assert payloads[0]["id"] == "openrouter"
         assert payloads[0]["name"] == "openrouter runtime credentials"
-        terminal = next(payload for payload in payloads if payload["id"] == TERMINAL_SETUP_AUTH_METHOD_ID)
+        terminal = next(
+            payload
+            for payload in payloads
+            if payload["id"] == TERMINAL_SETUP_AUTH_METHOD_ID
+        )
         assert terminal["type"] == "terminal"
         assert terminal["args"] == ["--setup"]
 
     @pytest.mark.asyncio
-    async def test_initialize_advertises_terminal_setup_auth_when_no_provider(self, agent, monkeypatch):
+    async def test_initialize_advertises_terminal_setup_auth_when_no_provider(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr("acp_adapter.auth.detect_provider", lambda: None)
         monkeypatch.setattr("acp_adapter.server.detect_provider", lambda: None)
 
         resp = await agent.initialize(protocol_version=1)
-        payloads = [method.model_dump(by_alias=True, exclude_none=True) for method in resp.auth_methods]
+        payloads = [
+            method.model_dump(by_alias=True, exclude_none=True)
+            for method in resp.auth_methods
+        ]
 
         assert payloads == [
             {
@@ -203,7 +219,9 @@ class TestAuthenticate:
         assert resp is None
 
     @pytest.mark.asyncio
-    async def test_authenticate_accepts_terminal_setup_after_provider_configured(self, agent, monkeypatch):
+    async def test_authenticate_accepts_terminal_setup_after_provider_configured(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr(
             "acp_adapter.server.detect_provider",
             lambda: "openrouter",
@@ -212,7 +230,9 @@ class TestAuthenticate:
         assert isinstance(resp, AuthenticateResponse)
 
     @pytest.mark.asyncio
-    async def test_authenticate_rejects_terminal_setup_without_provider(self, agent, monkeypatch):
+    async def test_authenticate_rejects_terminal_setup_without_provider(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr(
             "acp_adapter.server.detect_provider",
             lambda: None,
@@ -240,7 +260,9 @@ class TestSessionOps:
     @pytest.mark.asyncio
     async def test_new_session_returns_model_state(self):
         manager = SessionManager(
-            agent_factory=lambda: SimpleNamespace(model="gpt-5.4", provider="openai-codex")
+            agent_factory=lambda: SimpleNamespace(
+                model="gpt-5.4", provider="openai-codex"
+            )
         )
         acp_agent = ClawksisACPAgent(session_manager=manager)
 
@@ -367,7 +389,10 @@ class TestSessionOps:
         state.history = [
             {"role": "system", "content": "hidden system"},
             {"role": "user", "content": "what controls the / slash commands?"},
-            {"role": "assistant", "content": "ClawksisACPAgent._ADVERTISED_COMMANDS controls them."},
+            {
+                "role": "assistant",
+                "content": "ClawksisACPAgent._ADVERTISED_COMMANDS controls them.",
+            },
             {
                 "role": "assistant",
                 "content": "",
@@ -397,15 +422,21 @@ class TestSessionOps:
         assert isinstance(resp, LoadSessionResponse)
         calls = mock_conn.session_update.await_args_list
         replay_calls = [
-            call for call in calls
+            call
+            for call in calls
             if getattr(call.kwargs.get("update"), "session_update", None)
             in {"user_message_chunk", "agent_message_chunk"}
         ]
         assert len(replay_calls) == 2
         assert isinstance(replay_calls[0].kwargs["update"], UserMessageChunk)
-        assert replay_calls[0].kwargs["update"].content.text == "what controls the / slash commands?"
+        assert (
+            replay_calls[0].kwargs["update"].content.text
+            == "what controls the / slash commands?"
+        )
         assert isinstance(replay_calls[1].kwargs["update"], AgentMessageChunk)
-        assert replay_calls[1].kwargs["update"].content.text.startswith("ClawksisACPAgent")
+        assert (
+            replay_calls[1].kwargs["update"].content.text.startswith("ClawksisACPAgent")
+        )
 
         tool_updates = [
             call.kwargs["update"]
@@ -423,7 +454,9 @@ class TestSessionOps:
         assert "cli.py:42" in tool_updates[1].content[0].content.text
 
     @pytest.mark.asyncio
-    async def test_load_session_replays_native_plan_for_persisted_todo_tool(self, agent):
+    async def test_load_session_replays_native_plan_for_persisted_todo_tool(
+        self, agent
+    ):
         """Persisted todo tool results should rebuild Zed's native plan panel."""
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
@@ -460,10 +493,17 @@ class TestSessionOps:
 
         assert isinstance(resp, LoadSessionResponse)
         relevant_updates = [
-            update for update in (call.kwargs["update"] for call in mock_conn.session_update.await_args_list)
-            if getattr(update, "session_update", None) in {"tool_call", "tool_call_update", "plan"}
+            update
+            for update in (
+                call.kwargs["update"]
+                for call in mock_conn.session_update.await_args_list
+            )
+            if getattr(update, "session_update", None)
+            in {"tool_call", "tool_call_update", "plan"}
         ]
-        assert [getattr(update, "session_update", None) for update in relevant_updates] == [
+        assert [
+            getattr(update, "session_update", None) for update in relevant_updates
+        ] == [
             "tool_call",
             "tool_call_update",
             "plan",
@@ -489,7 +529,9 @@ class TestSessionOps:
         await asyncio.sleep(0)
 
         assert isinstance(resp, ResumeSessionResponse)
-        updates = [call.kwargs["update"] for call in mock_conn.session_update.await_args_list]
+        updates = [
+            call.kwargs["update"] for call in mock_conn.session_update.await_args_list
+        ]
         assert any(
             isinstance(update, UserMessageChunk)
             and update.content.text == "So tell me the current state"
@@ -557,8 +599,14 @@ class TestSessionOps:
             if isinstance(call.kwargs.get("update"), AgentThoughtChunk)
         ]
         assert len(thought_updates) == 2
-        assert thought_updates[0].content.text == "Let me think step by step about the request."
-        assert thought_updates[1].content.text == "Older sessions stored the trace under the internal key."
+        assert (
+            thought_updates[0].content.text
+            == "Let me think step by step about the request."
+        )
+        assert (
+            thought_updates[1].content.text
+            == "Older sessions stored the trace under the internal key."
+        )
 
     @pytest.mark.asyncio
     async def test_load_session_replays_reasoning_only_turn(self, agent):
@@ -633,7 +681,9 @@ class TestSessionOps:
         assert thought_updates == []
 
     @pytest.mark.asyncio
-    async def test_load_session_replays_thought_then_tool_call_without_message(self, agent):
+    async def test_load_session_replays_thought_then_tool_call_without_message(
+        self, agent
+    ):
         """Canonical thinking-model shape: reasoning + tool_call + no body text.
 
         Thinking models commonly emit a pre-tool thought followed by a
@@ -730,7 +780,9 @@ class TestSessionOps:
         assert events == ["replay", "returned"]
 
     @pytest.mark.asyncio
-    async def test_resume_session_replays_history_before_returning_response(self, agent):
+    async def test_resume_session_replays_history_before_returning_response(
+        self, agent
+    ):
         """Same spec rationale as ``load_session`` — replay before responding."""
         new_resp = await agent.new_session(cwd="/tmp")
         state = agent.session_manager.get_session(new_resp.session_id)
@@ -741,7 +793,9 @@ class TestSessionOps:
             events.append("replay")
 
         with patch.object(agent, "_replay_session_history", side_effect=replay_records):
-            resp = await agent.resume_session(cwd="/tmp", session_id=new_resp.session_id)
+            resp = await agent.resume_session(
+                cwd="/tmp", session_id=new_resp.session_id
+            )
             events.append("returned")
 
         assert isinstance(resp, ResumeSessionResponse)
@@ -766,7 +820,9 @@ class TestSessionOps:
 
         with caplog.at_level("WARNING", logger="acp_adapter.server"):
             with patch.object(agent, "_replay_session_history", side_effect=boom):
-                resp = await agent.load_session(cwd="/tmp", session_id=new_resp.session_id)
+                resp = await agent.load_session(
+                    cwd="/tmp", session_id=new_resp.session_id
+                )
 
         assert isinstance(resp, LoadSessionResponse)
         assert "history replay raised during session/load" in caplog.text
@@ -783,7 +839,9 @@ class TestSessionOps:
 
         with caplog.at_level("WARNING", logger="acp_adapter.server"):
             with patch.object(agent, "_replay_session_history", side_effect=boom):
-                resp = await agent.resume_session(cwd="/tmp", session_id=new_resp.session_id)
+                resp = await agent.resume_session(
+                    cwd="/tmp", session_id=new_resp.session_id
+                )
 
         assert isinstance(resp, ResumeSessionResponse)
         assert "history replay raised during session/resume" in caplog.text
@@ -803,7 +861,9 @@ class TestListAndFork:
     @pytest.mark.asyncio
     async def test_fork_session(self, agent):
         new_resp = await agent.new_session(cwd="/original")
-        fork_resp = await agent.fork_session(cwd="/forked", session_id=new_resp.session_id)
+        fork_resp = await agent.fork_session(
+            cwd="/forked", session_id=new_resp.session_id
+        )
         assert fork_resp.session_id
         assert fork_resp.session_id != new_resp.session_id
 
@@ -829,7 +889,9 @@ class TestListAndFork:
 
     @pytest.mark.asyncio
     async def test_list_sessions_passes_cwd_filter(self, agent):
-        with patch.object(agent.session_manager, "list_sessions", return_value=[]) as mock_list:
+        with patch.object(
+            agent.session_manager, "list_sessions", return_value=[]
+        ) as mock_list:
             await agent.list_sessions(cwd="/mnt/e/Projects/AI/browser-link-3")
 
         mock_list.assert_called_once_with(cwd="/mnt/e/Projects/AI/browser-link-3")
@@ -885,6 +947,7 @@ class TestListAndFork:
         assert resp.sessions == []
         assert resp.next_cursor is None
 
+
 # ---------------------------------------------------------------------------
 # session configuration / model routing
 # ---------------------------------------------------------------------------
@@ -894,7 +957,9 @@ class TestSessionConfiguration:
     @pytest.mark.asyncio
     async def test_set_session_mode_returns_response(self, agent):
         new_resp = await agent.new_session(cwd="/tmp")
-        resp = await agent.set_session_mode(mode_id="accept_edits", session_id=new_resp.session_id)
+        resp = await agent.set_session_mode(
+            mode_id="accept_edits", session_id=new_resp.session_id
+        )
         state = agent.session_manager.get_session(new_resp.session_id)
 
         assert isinstance(resp, SetSessionModeResponse)
@@ -939,7 +1004,9 @@ class TestSessionConfiguration:
         assert state.model == "gpt-5.4"
 
     @pytest.mark.asyncio
-    async def test_set_session_model_accepts_provider_prefixed_choice(self, tmp_path, monkeypatch):
+    async def test_set_session_model_accepts_provider_prefixed_choice(
+        self, tmp_path, monkeypatch
+    ):
         runtime_calls = []
 
         def fake_resolve_runtime_provider(requested=None, **kwargs):
@@ -947,7 +1014,9 @@ class TestSessionConfiguration:
             provider = requested or "openrouter"
             return {
                 "provider": provider,
-                "api_mode": "anthropic_messages" if provider == "anthropic" else "chat_completions",
+                "api_mode": "anthropic_messages"
+                if provider == "anthropic"
+                else "chat_completions",
                 "base_url": f"https://{provider}.example/v1",
                 "api_key": f"{provider}-key",
                 "command": None,
@@ -962,9 +1031,12 @@ class TestSessionConfiguration:
                 api_mode=kwargs.get("api_mode"),
             )
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": "openrouter", "default": "openrouter/gpt-5"}
-        })
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {
+                "model": {"provider": "openrouter", "default": "openrouter/gpt-5"}
+            },
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -1025,13 +1097,15 @@ class TestPrompt:
         state = agent.session_manager.get_session(new_resp.session_id)
 
         # Mock the agent's run_conversation
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "Hello! How can I help?",
-            "messages": [
-                {"role": "user", "content": "hello"},
-                {"role": "assistant", "content": "Hello! How can I help?"},
-            ],
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "Hello! How can I help?",
+                "messages": [
+                    {"role": "user", "content": "hello"},
+                    {"role": "assistant", "content": "Hello! How can I help?"},
+                ],
+            }
+        )
 
         # Set up a mock connection
         mock_conn = MagicMock(spec=acp.Client)
@@ -1060,10 +1134,12 @@ class TestPrompt:
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hey"},
         ]
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "hey",
-            "messages": expected_history,
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "hey",
+                "messages": expected_history,
+            }
+        )
 
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
@@ -1080,10 +1156,12 @@ class TestPrompt:
         new_resp = await agent.new_session(cwd=".")
         state = agent.session_manager.get_session(new_resp.session_id)
 
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "I can help with that!",
-            "messages": [],
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "I can help with that!",
+                "messages": [],
+            }
+        )
 
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
@@ -1137,7 +1215,9 @@ class TestPrompt:
         ]
         assert resp.stop_reason == "cancelled"
         assert sentinel not in agent_texts
-        assert not any(text.startswith("Operation interrupted:") for text in agent_texts)
+        assert not any(
+            text.startswith("Operation interrupted:") for text in agent_texts
+        )
         mock_title.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1273,7 +1353,11 @@ class TestPrompt:
             call.kwargs.get("update") or call.args[1]
             for call in mock_conn.session_update.call_args_list
         ]
-        agent_chunks = [update for update in updates if update.session_update == "agent_message_chunk"]
+        agent_chunks = [
+            update
+            for update in updates
+            if update.session_update == "agent_message_chunk"
+        ]
         assert len(agent_chunks) == 1
         assert agent_chunks[0].content.text == "streamed answer"
 
@@ -1311,25 +1395,25 @@ class TestPrompt:
         # both be present (final delivery is a separate update_agent_message_text
         # call carrying the full transformed text).
         all_texts = [
-            getattr(getattr(u, "content", None), "text", None)
-            for u in updates
+            getattr(getattr(u, "content", None), "text", None) for u in updates
         ]
-        assert any(
-            text and "[plugin appended this]" in text for text in all_texts
-        ), f"expected transformed final to be delivered, got: {all_texts!r}"
-
+        assert any(text and "[plugin appended this]" in text for text in all_texts), (
+            f"expected transformed final to be delivered, got: {all_texts!r}"
+        )
 
     @pytest.mark.asyncio
     async def test_prompt_auto_titles_session(self, agent):
         new_resp = await agent.new_session(cwd=".")
         state = agent.session_manager.get_session(new_resp.session_id)
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "Here is the fix.",
-            "messages": [
-                {"role": "user", "content": "fix the broken ACP history"},
-                {"role": "assistant", "content": "Here is the fix."},
-            ],
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "Here is the fix.",
+                "messages": [
+                    {"role": "user", "content": "fix the broken ACP history"},
+                    {"role": "assistant", "content": "Here is the fix."},
+                ],
+            }
+        )
 
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
@@ -1353,22 +1437,28 @@ class TestPrompt:
 
         resp = await agent.new_session(cwd="/tmp")
         state = agent.session_manager.get_session(resp.session_id)
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "Done.",
-            "messages": [
-                {"role": "user", "content": "fix zed titles"},
-                {"role": "assistant", "content": "Done."},
-            ],
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-            "total_tokens": 2,
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "Done.",
+                "messages": [
+                    {"role": "user", "content": "fix zed titles"},
+                    {"role": "assistant", "content": "Done."},
+                ],
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+            }
+        )
 
-        def fake_auto_title(db, session_id, user_text, final_response, history, **kwargs):
+        def fake_auto_title(
+            db, session_id, user_text, final_response, history, **kwargs
+        ):
             db.set_session_title(session_id, "Fix Zed titles")
             kwargs["title_callback"]("Fix Zed titles")
 
-        with patch("agent.title_generator.maybe_auto_title", side_effect=fake_auto_title):
+        with patch(
+            "agent.title_generator.maybe_auto_title", side_effect=fake_auto_title
+        ):
             mock_conn.session_update.reset_mock()
             await agent.prompt(
                 session_id=resp.session_id,
@@ -1387,20 +1477,24 @@ class TestPrompt:
         assert info_updates[0].title == "Fix Zed titles"
 
     @pytest.mark.asyncio
-    async def test_prompt_populates_usage_from_top_level_run_conversation_fields(self, agent):
+    async def test_prompt_populates_usage_from_top_level_run_conversation_fields(
+        self, agent
+    ):
         """ACP should map top-level token fields into PromptResponse.usage."""
         new_resp = await agent.new_session(cwd=".")
         state = agent.session_manager.get_session(new_resp.session_id)
 
-        state.agent.run_conversation = MagicMock(return_value={
-            "final_response": "usage attached",
-            "messages": [],
-            "prompt_tokens": 123,
-            "completion_tokens": 45,
-            "total_tokens": 168,
-            "reasoning_tokens": 7,
-            "cache_read_tokens": 11,
-        })
+        state.agent.run_conversation = MagicMock(
+            return_value={
+                "final_response": "usage attached",
+                "messages": [],
+                "prompt_tokens": 123,
+                "completion_tokens": 45,
+                "total_tokens": 168,
+                "reasoning_tokens": 7,
+                "cache_read_tokens": 11,
+            }
+        )
 
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
@@ -1517,7 +1611,9 @@ class TestSlashCommands:
         assert "Compression: ~55,000 tokens until threshold (~80,000, 80%)" in result
         assert "Tip: run /compact" in result
 
-    def test_context_says_compression_due_when_past_threshold(self, agent, mock_manager):
+    def test_context_says_compression_due_when_past_threshold(
+        self, agent, mock_manager
+    ):
         state = self._make_state(mock_manager)
         state.history = [{"role": "user", "content": "hello"}]
         state.agent.context_compressor = MagicMock(
@@ -1631,10 +1727,12 @@ class TestSlashCommands:
 
         # Mock run_in_executor to avoid actually running the agent
         with patch("asyncio.get_running_loop") as mock_loop:
-            mock_loop.return_value.run_in_executor = AsyncMock(return_value={
-                "final_response": "I processed /foo",
-                "messages": [],
-            })
+            mock_loop.return_value.run_in_executor = AsyncMock(
+                return_value={
+                    "final_response": "I processed /foo",
+                    "messages": [],
+                }
+            )
             prompt = [TextContentBlock(type="text", text="/foo bar")]
             resp = await agent.prompt(prompt=prompt, session_id=new_resp.session_id)
 
@@ -1649,7 +1747,9 @@ class TestSlashCommands:
             provider = requested or "openrouter"
             return {
                 "provider": provider,
-                "api_mode": "anthropic_messages" if provider == "anthropic" else "chat_completions",
+                "api_mode": "anthropic_messages"
+                if provider == "anthropic"
+                else "chat_completions",
                 "base_url": f"https://{provider}.example/v1",
                 "api_key": f"{provider}-key",
                 "command": None,
@@ -1664,9 +1764,12 @@ class TestSlashCommands:
                 api_mode=kwargs.get("api_mode"),
             )
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": "openrouter", "default": "openrouter/gpt-5"}
-        })
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {
+                "model": {"provider": "openrouter", "default": "openrouter/gpt-5"}
+            },
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -1741,12 +1844,15 @@ class TestRegisterSessionMcpServers:
         )
 
         registered_config = {}
+
         def capture_register(config_map):
             registered_config.update(config_map)
             return ["mcp_test_server_tool1"]
 
-        with patch("tools.mcp_tool.register_mcp_servers", side_effect=capture_register), \
-             patch("model_tools.get_tool_definitions", return_value=[]):
+        with (
+            patch("tools.mcp_tool.register_mcp_servers", side_effect=capture_register),
+            patch("model_tools.get_tool_definitions", return_value=[]),
+        ):
             await agent._register_session_mcp_servers(state, [server])
 
         assert "test-server" in registered_config
@@ -1773,12 +1879,15 @@ class TestRegisterSessionMcpServers:
         )
 
         registered_config = {}
+
         def capture_register(config_map):
             registered_config.update(config_map)
             return []
 
-        with patch("tools.mcp_tool.register_mcp_servers", side_effect=capture_register), \
-             patch("model_tools.get_tool_definitions", return_value=[]):
+        with (
+            patch("tools.mcp_tool.register_mcp_servers", side_effect=capture_register),
+            patch("model_tools.get_tool_definitions", return_value=[]),
+        ):
             await agent._register_session_mcp_servers(state, [server])
 
         assert "http-server" in registered_config
@@ -1816,8 +1925,14 @@ class TestRegisterSessionMcpServers:
             {"function": {"name": "terminal"}},
         ]
 
-        with patch("tools.mcp_tool.register_mcp_servers", return_value=["mcp_srv_search"]), \
-             patch("model_tools.get_tool_definitions", return_value=fake_tools) as mock_defs:
+        with (
+            patch(
+                "tools.mcp_tool.register_mcp_servers", return_value=["mcp_srv_search"]
+            ),
+            patch(
+                "model_tools.get_tool_definitions", return_value=fake_tools
+            ) as mock_defs,
+        ):
             await agent._register_session_mcp_servers(state, [server])
 
         mock_defs.assert_called_once_with(
@@ -1857,6 +1972,8 @@ class TestRegisterSessionMcpServers:
             env=[],
         )
 
-        with patch("tools.mcp_tool.register_mcp_servers", side_effect=RuntimeError("boom")):
+        with patch(
+            "tools.mcp_tool.register_mcp_servers", side_effect=RuntimeError("boom")
+        ):
             # Should not raise
             await agent._register_session_mcp_servers(state, [server])

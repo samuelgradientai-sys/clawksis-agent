@@ -16,6 +16,8 @@ import type {
 
   AuxiliaryModelsResponse,
 
+  BackendUpdateCheckResponse,
+
   ConfigSchemaResponse,
 
   CronJob,
@@ -65,6 +67,8 @@ import type {
   ProfileSoul,
 
   ProfilesResponse,
+
+  SessionInfo,
 
   SessionMessagesResponse,
 
@@ -190,6 +194,8 @@ export type {
 
   SkillInfo,
 
+  StaleAuxAssignment,
+
   StatusResponse,
 
   ToolsetConfig,
@@ -224,6 +230,22 @@ export class ClawksisGateway extends JsonRpcGatewayClient {
 
 
 
+// The profile whose backend profile-scoped REST calls should target by default,
+// set from `$activeGatewayProfile`. Empty string / "default" means the primary
+// (window) backend. Kept here so the gateway swap can re-point settings reads
+// without each call site threading the profile through.
+let _apiRequestProfile = ''
+
+export function setApiRequestProfile(profile: string | null): void {
+  _apiRequestProfile = (profile ?? '').trim()
+}
+
+export function getApiRequestProfile(): string {
+  return _apiRequestProfile
+}
+
+
+
 export async function listSessions(
 
   limit = 40,
@@ -238,7 +260,9 @@ export async function listSessions(
 
   const result = await window.clawkDesktop.api<PaginatedSessions>({
 
-    path: `/api/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}&archived=${archived}&order=${order}`
+    path: `/api/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}&archived=${archived}&order=${order}`,
+
+    timeoutMs: 60_000
 
   })
 
@@ -258,7 +282,63 @@ export async function listSessions(
 
 
 
-export function setSessionArchived(id: string, archived: boolean): Promise<{ ok: boolean }> {
+// Cross-profile session list, served by the primary backend's aggregator. The
+// extra optional `profile`/`options` args let the sidebar scope a fetch to one
+// profile and/or filter by message source without changing the simpler call
+// sites (the test's `listAllProfileSessions(50, 1)`, the pickers' three-arg
+// form). Like `listSessions`, it uses a longer timeout because aggregating
+// every profile's recent sessions is heavier than a single-profile read.
+export interface ListProfileSessionsOptions {
+  /** Restrict to a single message source (e.g. 'cron', a platform name). */
+  source?: string
+  /** Drop these message sources from the result (e.g. messaging platforms). */
+  excludeSources?: readonly string[]
+}
+
+export async function listAllProfileSessions(
+  limit = 40,
+  minMessages = 0,
+  archived: 'exclude' | 'include' | 'only' = 'exclude',
+  order: 'created' | 'recent' = 'recent',
+  profile = 'all',
+  options: ListProfileSessionsOptions = {}
+): Promise<PaginatedSessions> {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    offset: '0',
+    min_messages: String(Math.max(0, minMessages)),
+    archived,
+    order,
+    profile
+  })
+
+  if (options.source) {
+    query.set('source', options.source)
+  }
+
+  if (options.excludeSources && options.excludeSources.length > 0) {
+    query.set('exclude_sources', options.excludeSources.join(','))
+  }
+
+  const result = await window.clawkDesktop.api<PaginatedSessions>({
+    path: `/api/profiles/sessions?${query.toString()}`,
+    timeoutMs: 60_000
+  })
+
+  return {
+    ...result,
+    sessions: result.sessions.slice(0, limit),
+    offset: 0
+  }
+}
+
+
+
+export function setSessionArchived(
+  id: string,
+  archived: boolean,
+  profile?: string | null
+): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
 
@@ -266,7 +346,9 @@ export function setSessionArchived(id: string, archived: boolean): Promise<{ ok:
 
     method: 'PATCH',
 
-    body: { archived }
+    body: { archived },
+
+    ...(profile ? { profile } : {})
 
   })
 
@@ -286,11 +368,15 @@ export function searchSessions(query: string): Promise<SessionSearchResponse> {
 
 
 
-export function getSessionMessages(id: string): Promise<SessionMessagesResponse> {
+export function getSessionMessages(id: string, profile?: string | null): Promise<SessionMessagesResponse> {
+
+  const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : ''
 
   return window.clawkDesktop.api<SessionMessagesResponse>({
 
-    path: `/api/sessions/${encodeURIComponent(id)}/messages`
+    path: `/api/sessions/${encodeURIComponent(id)}/messages${suffix}`,
+
+    ...(profile ? { profile } : {})
 
   })
 
@@ -298,13 +384,35 @@ export function getSessionMessages(id: string): Promise<SessionMessagesResponse>
 
 
 
-export function deleteSession(id: string): Promise<{ ok: boolean }> {
+// Single-session lookup by id. Used to resolve a session that isn't in the
+// sidebar's recent window (e.g. a deep-linked id, a cron run) — mirrors
+// `getSessionMessages`'s profile routing so a cross-profile id resolves against
+// the owning profile's backend.
+export function getSession(id: string, profile?: string | null): Promise<SessionInfo> {
+
+  const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : ''
+
+  return window.clawkDesktop.api<SessionInfo>({
+
+    path: `/api/sessions/${encodeURIComponent(id)}${suffix}`,
+
+    ...(profile ? { profile } : {})
+
+  })
+
+}
+
+
+
+export function deleteSession(id: string, profile?: string | null): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
 
     path: `/api/sessions/${encodeURIComponent(id)}`,
 
-    method: 'DELETE'
+    method: 'DELETE',
+
+    ...(profile ? { profile } : {})
 
   })
 
@@ -312,7 +420,11 @@ export function deleteSession(id: string): Promise<{ ok: boolean }> {
 
 
 
-export function renameSession(id: string, title: string): Promise<{ ok: boolean; title: string }> {
+export function renameSession(
+  id: string,
+  title: string,
+  profile?: string | null
+): Promise<{ ok: boolean; title: string }> {
 
   return window.clawkDesktop.api<{ ok: boolean; title: string }>({
 
@@ -320,7 +432,9 @@ export function renameSession(id: string, title: string): Promise<{ ok: boolean;
 
     method: 'PATCH',
 
-    body: { title }
+    body: { title },
+
+    ...(profile ? { profile } : {})
 
   })
 
@@ -510,7 +624,9 @@ export function validateProviderCredential(
 
   key: string,
 
-  value: string
+  value: string,
+
+  apiKey?: string
 
 ): Promise<{ ok: boolean; reachable: boolean; message: string; models?: string[] }> {
 
@@ -520,7 +636,7 @@ export function validateProviderCredential(
 
     method: 'POST',
 
-    body: { key, value }
+    body: { key, value, ...(apiKey ? { api_key: apiKey } : {}) }
 
   })
 
@@ -630,6 +746,23 @@ export function cancelOAuthSession(sessionId: string): Promise<{ ok: boolean }> 
 
 
 
+// Forget a connected OAuth account (clears its stored tokens). Mirrors the
+// CLI's "remove account" — the provider settings page calls it then refetches
+// the provider list to drop the now-disconnected row.
+export function disconnectOAuthProvider(providerId: string): Promise<{ ok: boolean; provider: string }> {
+
+  return window.clawkDesktop.api<{ ok: boolean; provider: string }>({
+
+    path: `/api/providers/oauth/${encodeURIComponent(providerId)}`,
+
+    method: 'DELETE'
+
+  })
+
+}
+
+
+
 export function getSkills(): Promise<SkillInfo[]> {
 
   return window.clawkDesktop.api<SkillInfo[]>({
@@ -726,6 +859,30 @@ export function selectToolsetProvider(
 
 
 
+// Spawn a toolset provider's post-setup install hook (npm / pip / binary) as a
+// background action, returning the spawned action's handle. `ok:false` means
+// the spawn itself failed (unknown key, server-side launch error) — the caller
+// then skips polling. The returned `name` is the action id to tail via
+// `getActionStatus`; `key` echoes the post-setup hook that ran.
+export function runToolsetPostSetup(
+  name: string,
+  key: string
+): Promise<{ ok: boolean; pid: number; name: string; key?: string }> {
+
+  return window.clawkDesktop.api<{ ok: boolean; pid: number; name: string; key?: string }>({
+
+    path: `/api/tools/toolsets/${encodeURIComponent(name)}/post-setup`,
+
+    method: 'POST',
+
+    body: { key }
+
+  })
+
+}
+
+
+
 export function getMessagingPlatforms(): Promise<MessagingPlatformsResponse> {
 
   return window.clawkDesktop.api<MessagingPlatformsResponse>({
@@ -791,6 +948,24 @@ export function getCronJob(jobId: string): Promise<CronJob> {
   return window.clawkDesktop.api<CronJob>({
 
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}`
+
+  })
+
+}
+
+
+
+// Recent run sessions for a cron job, newest first. Each run is a normal
+// session (the agent's execution of that scheduled prompt), so the result is a
+// `SessionInfo[]` the run lists can render with the same row components as the
+// sidebar. `limit` caps how many the peek lists pull.
+export function getCronJobRuns(jobId: string, limit?: number): Promise<SessionInfo[]> {
+
+  const suffix = typeof limit === 'number' ? `?limit=${Math.max(1, Math.floor(limit))}` : ''
+
+  return window.clawkDesktop.api<SessionInfo[]>({
+
+    path: `/api/cron/jobs/${encodeURIComponent(jobId)}/runs${suffix}`
 
   })
 
@@ -1119,6 +1294,25 @@ export function updateClawksis(): Promise<ActionResponse> {
     path: '/api/clawksis/update',
 
     method: 'POST'
+
+  })
+
+}
+
+
+
+// The backend's own update state (install method, distance from upstream,
+// whether it can self-apply). Drives the remote update overlay so the *backend*
+// version — not the Electron client clone — decides "what's changed + Install"
+// in remote mode. `refresh` forces a fresh upstream check instead of a cached
+// answer.
+export function checkClawksisUpdate(refresh?: boolean): Promise<BackendUpdateCheckResponse> {
+
+  const suffix = refresh ? '?refresh=1' : ''
+
+  return window.clawkDesktop.api<BackendUpdateCheckResponse>({
+
+    path: `/api/clawksis/update/check${suffix}`
 
   })
 

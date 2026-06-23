@@ -275,6 +275,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Gzip JS/CSS/JSON on the wire. The dashboard ships ~1MB of hashed JS/CSS per
+# cold load; gzip cuts that ~3-4x (e.g. the 405KB index chunk → ~131KB),
+# which dominates first-load time over the Cloudflare tunnel.
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+@app.middleware("http")
+async def _immutable_asset_cache(request: "Request", call_next):
+    """Mark Vite's content-hashed assets immutable so the browser stops doing a
+    conditional GET + 304 for every chunk on each reload. The filename changes
+    when the content changes, and index.html (served elsewhere) is never cached,
+    so it always re-resolves the current hashes."""
+    response = await call_next(request)
+    if response.status_code == 200 and request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
 
 # ---------------------------------------------------------------------------
 
@@ -338,7 +357,17 @@ def _has_valid_session_token(request: Request) -> bool:
 
 
 def _require_token(request: Request) -> None:
-    """Validate the ephemeral session token.  Raises 401 on mismatch."""
+    """Validate the ephemeral session token.  Raises 401 on mismatch.
+
+    Under the OAuth gate the legacy session token is not injected into the SPA;
+    the gate middleware authenticates via the session cookie and attaches a
+    verified ``request.state.session`` before the handler runs. Defer to that so
+    cookie-authenticated requests aren't re-checked against an absent token —
+    that double-check is the plugin install-popup 401 bug.
+    """
+
+    if getattr(request.state, "session", None):
+        return
 
     if not _has_valid_session_token(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -1211,17 +1240,12 @@ async def get_status():
 
         pass
 
-    return {
+    body = {
         "version": __version__,
         "release_date": __release_date__,
-        "clawk_home": str(get_clawk_home()),
-        "config_path": str(get_config_path()),
-        "env_path": str(get_env_path()),
         "config_version": current_ver,
         "latest_config_version": latest_ver,
         "gateway_running": gateway_running,
-        "gateway_pid": gateway_pid,
-        "gateway_health_url": _GATEWAY_HEALTH_URL,
         "gateway_state": gateway_state,
         "gateway_platforms": gateway_platforms,
         "gateway_exit_reason": gateway_exit_reason,
@@ -1230,6 +1254,21 @@ async def get_status():
         "auth_required": auth_required,
         "auth_providers": auth_providers,
     }
+
+    # Host/deployment recon (absolute paths, gateway PID, internal health URL)
+    # is only safe on a trusted loopback bind. Under the OAuth gate this probe
+    # bypasses dashboard auth and is reachable cold by anyone who can hit the
+    # host, so withhold it there — the SPA reads it from authenticated routes.
+    if not auth_required:
+        body.update({
+            "clawk_home": str(get_clawk_home()),
+            "config_path": str(get_config_path()),
+            "env_path": str(get_env_path()),
+            "gateway_pid": gateway_pid,
+            "gateway_health_url": _GATEWAY_HEALTH_URL,
+        })
+
+    return body
 
 
 @app.get("/api/system/stats")
@@ -6588,6 +6627,89 @@ async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
         db.close()
 
 
+class SessionCleanup(BaseModel):
+    source: Optional[str] = None
+    model: Optional[str] = None
+    older_than_days: Optional[int] = None
+    max_messages: Optional[int] = None
+    dry_run: bool = True
+
+
+@app.post("/api/sessions/cleanup")
+async def cleanup_sessions_endpoint(body: SessionCleanup):
+    """Filtered bulk session cleanup to free space.
+
+    Deletes sessions matching ANY combination of: ``source`` (cron / cli /
+    telegram…), ``model`` (substring — e.g. a model that no longer works),
+    ``older_than_days``, and ``max_messages`` (empty / near-empty junk).
+    ``dry_run`` (default True) returns the match count + total messages so the
+    dashboard can preview before committing. Matches the same logical-session
+    listing the sessions page shows, then reuses ``delete_sessions``.
+    """
+    has_filter = (
+        bool((body.source or "").strip())
+        or bool((body.model or "").strip())
+        or body.older_than_days is not None
+        or body.max_messages is not None
+    )
+    if not has_filter:
+        raise HTTPException(status_code=400, detail="at least one filter is required")
+
+    import time as _time
+
+    from clawk_state import SessionDB
+
+    db = SessionDB()
+    try:
+        src = (body.source or "").strip().lower()
+        rows = db.list_sessions_rich(
+            source=src or None,
+            limit=1_000_000,
+            offset=0,
+            include_archived=True,
+        )
+        now = _time.time()
+        model_q = (body.model or "").strip().lower()
+        matched_ids: List[str] = []
+        matched_msgs = 0
+        for s in rows:
+            if model_q and model_q not in str(s.get("model") or "").lower():
+                continue
+            mc = int(s.get("message_count") or 0)
+            if body.max_messages is not None and mc > body.max_messages:
+                continue
+            if body.older_than_days is not None:
+                last = (
+                    s.get("last_active")
+                    or s.get("ended_at")
+                    or s.get("started_at")
+                    or 0
+                )
+                try:
+                    last = float(last)
+                except (TypeError, ValueError):
+                    last = 0.0
+                if not last or (now - last) < body.older_than_days * 86400:
+                    continue
+            sid = s.get("id")
+            if sid:
+                matched_ids.append(sid)
+                matched_msgs += mc
+
+        if body.dry_run:
+            return {"ok": True, "matched": len(matched_ids), "messages": matched_msgs}
+
+        if len(matched_ids) > 2000:
+            raise HTTPException(
+                status_code=400,
+                detail="too many matches (>2000) — narrow the filter or delete in batches",
+            )
+        deleted = db.delete_sessions(matched_ids)
+        return {"ok": True, "deleted": deleted}
+    finally:
+        db.close()
+
+
 @app.get("/api/sessions/empty/count")
 async def count_empty_sessions_endpoint():
     """Return the number of empty, ended, non-archived sessions.
@@ -6665,7 +6787,7 @@ async def delete_empty_sessions_endpoint():
 
 
 @app.get("/api/sessions/stats")
-async def get_session_stats():
+def get_session_stats():
     """Session-store statistics for the Sessions page (mirrors `clawk sessions stats`).
 
 
@@ -12064,7 +12186,10 @@ def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
 async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
     now = time.time()
 
-    if now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL or not _VIZ_SESSION_META["data"]:
+    if (
+        now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL
+        or not _VIZ_SESSION_META["data"]
+    ):
         data = await asyncio.to_thread(_build_viz_session_meta)
 
         if data:

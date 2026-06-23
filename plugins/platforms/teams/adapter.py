@@ -52,12 +52,17 @@ try:
     from microsoft_teams.common.http.client import ClientOptions
     from microsoft_teams.api import MessageActivity, ConversationReference
     from microsoft_teams.api.activities.typing import TypingActivityInput
-    from microsoft_teams.api.activities.invoke.adaptive_card import AdaptiveCardInvokeActivity
+    from microsoft_teams.api.activities.invoke.adaptive_card import (
+        AdaptiveCardInvokeActivity,
+    )
     from microsoft_teams.api.models.adaptive_card import (
         AdaptiveCardActionCardResponse,
         AdaptiveCardActionMessageResponse,
     )
-    from microsoft_teams.api.models.invoke_response import InvokeResponse, AdaptiveCardInvokeResponse
+    from microsoft_teams.api.models.invoke_response import (
+        InvokeResponse,
+        AdaptiveCardInvokeResponse,
+    )
     from microsoft_teams.apps.http.adapter import (
         HttpMethod,
         HttpRequest,
@@ -133,7 +138,9 @@ class _StaticAccessTokenProvider:
     async def get_access_token(self, *, force_refresh: bool = False) -> str:
         del force_refresh
         if not self._access_token:
-            raise ValueError("TEAMS_GRAPH_ACCESS_TOKEN is required for graph delivery mode.")
+            raise ValueError(
+                "TEAMS_GRAPH_ACCESS_TOKEN is required for graph delivery mode."
+            )
         return self._access_token
 
     def clear_cache(self) -> None:
@@ -166,10 +173,14 @@ class TeamsSummaryWriter:
         existing_record: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         merged = self._resolve_delivery_config(config)
-        if existing_record and not _parse_bool(merged.get("force_resend"), default=False):
+        if existing_record and not _parse_bool(
+            merged.get("force_resend"), default=False
+        ):
             return dict(existing_record)
 
-        mode = str(merged.get("delivery_mode") or merged.get("mode") or "").strip().lower()
+        mode = (
+            str(merged.get("delivery_mode") or merged.get("mode") or "").strip().lower()
+        )
         if not mode:
             if merged.get("incoming_webhook_url"):
                 mode = "incoming_webhook"
@@ -181,9 +192,7 @@ class TeamsSummaryWriter:
             return await self._write_summary_via_incoming_webhook(payload, merged)
         if mode == "graph":
             return await self._write_summary_via_graph(payload, merged)
-        raise ValueError(
-            "Teams delivery_mode must be 'incoming_webhook' or 'graph'."
-        )
+        raise ValueError("Teams delivery_mode must be 'incoming_webhook' or 'graph'.")
 
     def _resolve_delivery_config(self, config: dict[str, Any] | None) -> dict[str, Any]:
         merged: dict[str, Any] = {}
@@ -218,9 +227,12 @@ class TeamsSummaryWriter:
         # every CLI invocation as a side effect of plugin discovery, but
         # 99% of those processes never reach this method.
         import httpx
+
         webhook_url = str(config.get("incoming_webhook_url") or "").strip()
         if not webhook_url:
-            raise ValueError("TEAMS_INCOMING_WEBHOOK_URL is required for incoming_webhook mode.")
+            raise ValueError(
+                "TEAMS_INCOMING_WEBHOOK_URL is required for incoming_webhook mode."
+            )
         body = {"text": self._render_summary_markdown(payload)}
         async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
             response = await client.post(webhook_url, json=body)
@@ -243,7 +255,12 @@ class TeamsSummaryWriter:
             path = f"/chats/{quote(chat_id, safe='')}/messages"
             response = await graph_client.post_json(
                 path,
-                json_body={"body": {"contentType": "html", "content": self._render_summary_html(payload)}},
+                json_body={
+                    "body": {
+                        "contentType": "html",
+                        "content": self._render_summary_html(payload),
+                    }
+                },
             )
             return {
                 "delivery_mode": "graph",
@@ -265,7 +282,12 @@ class TeamsSummaryWriter:
         )
         response = await graph_client.post_json(
             path,
-            json_body={"body": {"contentType": "html", "content": self._render_summary_html(payload)}},
+            json_body={
+                "body": {
+                    "contentType": "html",
+                    "content": self._render_summary_html(payload),
+                }
+            },
         )
         return {
             "delivery_mode": "graph",
@@ -313,7 +335,14 @@ class TeamsSummaryWriter:
 
     def _render_summary_html(self, payload: Any) -> str:
         sections = [
-            ("Summary", [self._text(getattr(payload, "summary", None), "No summary available.")]),
+            (
+                "Summary",
+                [
+                    self._text(
+                        getattr(payload, "summary", None), "No summary available."
+                    )
+                ],
+            ),
             ("Key decisions", list(getattr(payload, "key_decisions", None) or [])),
             ("Action items", list(getattr(payload, "action_items", None) or [])),
             ("Risks", list(getattr(payload, "risks", None) or [])),
@@ -325,7 +354,11 @@ class TeamsSummaryWriter:
                 blocks.append(f"<p>{html.escape(str(items[0]))}</p>")
                 continue
             if items:
-                rendered = "".join(f"<li>{html.escape(str(item))}</li>" for item in items if str(item).strip())
+                rendered = "".join(
+                    f"<li>{html.escape(str(item))}</li>"
+                    for item in items
+                    if str(item).strip()
+                )
                 blocks.append(rendered and f"<ul>{rendered}</ul>" or "<p>None</p>")
             else:
                 blocks.append("<p>None</p>")
@@ -362,13 +395,17 @@ class _AiohttpBridgeAdapter:
     def __init__(self, aiohttp_app: "web.Application"):
         self._aiohttp_app = aiohttp_app
 
-    def register_route(self, method: "HttpMethod", path: str, handler: "HttpRouteHandler") -> None:
+    def register_route(
+        self, method: "HttpMethod", path: str, handler: "HttpRouteHandler"
+    ) -> None:
         """Register an SDK route handler as an aiohttp route."""
 
         async def _aiohttp_handler(request: "web.Request") -> "web.Response":
             body = await request.json()
             headers = dict(request.headers)
-            result: "HttpResponse" = await handler(HttpRequest(body=body, headers=headers))
+            result: "HttpResponse" = await handler(
+                HttpRequest(body=body, headers=headers)
+            )
             status = result.get("status", 200)
             resp_body = result.get("body")
             if resp_body is not None:
@@ -468,6 +505,7 @@ _ALLOWED_TEAMS_SERVICE_HOSTS = frozenset({
 # ``thread.tacv2`` suffixes; reject anything outside this set so a hostile
 # value cannot path-traverse out of ``/v3/conversations/<id>/activities``.
 import re as _re_teams
+
 _TEAMS_CONV_ID_RE = _re_teams.compile(r"^[A-Za-z0-9:@\-_.]+$")
 
 
@@ -530,7 +568,9 @@ async def _standalone_send(
     client_secret = os.getenv("TEAMS_CLIENT_SECRET") or extra.get("client_secret", "")
     tenant_id = os.getenv("TEAMS_TENANT_ID") or extra.get("tenant_id", "")
     if not (client_id and client_secret and tenant_id):
-        return {"error": "Teams standalone send: TEAMS_CLIENT_ID, TEAMS_CLIENT_SECRET, and TEAMS_TENANT_ID are all required"}
+        return {
+            "error": "Teams standalone send: TEAMS_CLIENT_ID, TEAMS_CLIENT_SECRET, and TEAMS_TENANT_ID are all required"
+        }
 
     raw_service_url = (
         os.getenv("TEAMS_SERVICE_URL")
@@ -539,11 +579,13 @@ async def _standalone_send(
     )
     service_url = _validate_teams_service_url(raw_service_url)
     if service_url is None:
-        return {"error": (
-            f"Teams standalone send: TEAMS_SERVICE_URL host is not on the "
-            f"Bot Framework allowlist; expected one of "
-            f"{sorted(_ALLOWED_TEAMS_SERVICE_HOSTS)}"
-        )}
+        return {
+            "error": (
+                f"Teams standalone send: TEAMS_SERVICE_URL host is not on the "
+                f"Bot Framework allowlist; expected one of "
+                f"{sorted(_ALLOWED_TEAMS_SERVICE_HOSTS)}"
+            )
+        }
 
     # Bot Framework conversation IDs are restricted to a known character
     # set; anything else means a tampered chat_id trying to break out of
@@ -551,9 +593,13 @@ async def _standalone_send(
     if not chat_id:
         return {"error": "Teams standalone send: chat_id (conversation ID) is required"}
     if not _TEAMS_CONV_ID_RE.match(chat_id):
-        return {"error": "Teams standalone send: chat_id contains characters outside the Bot Framework conversation ID set"}
+        return {
+            "error": "Teams standalone send: chat_id contains characters outside the Bot Framework conversation ID set"
+        }
     if not _TEAMS_CONV_ID_RE.match(tenant_id):
-        return {"error": "Teams standalone send: TEAMS_TENANT_ID contains characters outside the expected set"}
+        return {
+            "error": "Teams standalone send: TEAMS_TENANT_ID contains characters outside the expected set"
+        }
 
     token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
     activities_url = f"{service_url}v3/conversations/{chat_id}/activities"
@@ -581,11 +627,15 @@ async def _standalone_send(
             ) as token_resp:
                 if token_resp.status >= 400:
                     body = await token_resp.text()
-                    return {"error": f"Teams standalone send: token request failed ({token_resp.status}): {body[:300]}"}
+                    return {
+                        "error": f"Teams standalone send: token request failed ({token_resp.status}): {body[:300]}"
+                    }
                 token_payload = await token_resp.json()
             access_token = token_payload.get("access_token")
             if not access_token:
-                return {"error": "Teams standalone send: token response missing access_token"}
+                return {
+                    "error": "Teams standalone send: token response missing access_token"
+                }
 
             activity = {
                 "type": "message",
@@ -603,7 +653,9 @@ async def _standalone_send(
             ) as send_resp:
                 if send_resp.status >= 400:
                     body = await send_resp.text()
-                    return {"error": f"Teams standalone send: activity post failed ({send_resp.status}): {body[:300]}"}
+                    return {
+                        "error": f"Teams standalone send: activity post failed ({send_resp.status}): {body[:300]}"
+                    }
                 send_payload = await send_resp.json()
         return {
             "success": True,
@@ -629,7 +681,9 @@ class TeamsAdapter(BasePlatformAdapter):
         super().__init__(config, Platform("teams"))
         extra = config.extra or {}
         self._client_id = extra.get("client_id") or os.getenv("TEAMS_CLIENT_ID", "")
-        self._client_secret = extra.get("client_secret") or os.getenv("TEAMS_CLIENT_SECRET", "")
+        self._client_secret = extra.get("client_secret") or os.getenv(
+            "TEAMS_CLIENT_SECRET", ""
+        )
         self._tenant_id = extra.get("tenant_id") or os.getenv("TEAMS_TENANT_ID", "")
         self._port = _coerce_port(
             extra.get("port") or os.getenv("TEAMS_PORT", str(_DEFAULT_PORT))
@@ -780,6 +834,7 @@ class TeamsAdapter(BasePlatformAdapter):
         # Strip <at>BotName</at> HTML tags that Teams prepends for @mentions
         if "<at>" in text:
             import re
+
             text = re.sub(r"<at>[^<]*</at>\s*", "", text).strip()
 
         # Determine chat type from conversation
@@ -796,7 +851,9 @@ class TeamsAdapter(BasePlatformAdapter):
 
         # Build source
         from_account = activity.from_
-        user_id = getattr(from_account, "aad_object_id", None) or getattr(from_account, "id", "")
+        user_id = getattr(from_account, "aad_object_id", None) or getattr(
+            from_account, "id", ""
+        )
         user_name = getattr(from_account, "name", None) or ""
 
         source = self.build_source(
@@ -832,10 +889,14 @@ class TeamsAdapter(BasePlatformAdapter):
                 if not isinstance(content, dict):
                     content = getattr(content, "__dict__", None) or {}
                 download_url = content.get("downloadUrl") or content.get("download_url")
-                file_type = (content.get("fileType") or content.get("file_type") or "").lstrip(".")
+                file_type = (
+                    content.get("fileType") or content.get("file_type") or ""
+                ).lstrip(".")
                 if not download_url:
                     continue
-                filename = att_name or (f"document.{file_type}" if file_type else "document")
+                filename = att_name or (
+                    f"document.{file_type}" if file_type else "document"
+                )
                 try:
                     data = await self._fetch_attachment_bytes(download_url)
                     cached = cache_media_bytes(data, filename=filename, mime_type="")
@@ -849,7 +910,9 @@ class TeamsAdapter(BasePlatformAdapter):
                             filename,
                         )
                 except Exception as e:
-                    logger.warning("[teams] Failed to cache file attachment '%s': %s", filename, e)
+                    logger.warning(
+                        "[teams] Failed to cache file attachment '%s': %s", filename, e
+                    )
                 continue
 
             if content_url and content_type.startswith("image/"):
@@ -877,7 +940,9 @@ class TeamsAdapter(BasePlatformAdapter):
                 except Exception as e:
                     logger.warning(
                         "[teams] Failed to cache attachment '%s' (%s): %s",
-                        att_name or content_url, content_type, e,
+                        att_name or content_url,
+                        content_type,
+                        e,
                     )
 
         # Classification: DOCUMENT wins over PHOTO/VIDEO/AUDIO for mixed
@@ -941,7 +1006,11 @@ class TeamsAdapter(BasePlatformAdapter):
         # bot silently treated every clicker as authorized — meaning any
         # Teams user who could message the bot could approve dangerous commands.
         allowed_csv = os.getenv("TEAMS_ALLOWED_USERS", "").strip()
-        allow_all = os.getenv("TEAMS_ALLOW_ALL_USERS", "").strip().lower() in {"1", "true", "yes"}
+        allow_all = os.getenv("TEAMS_ALLOW_ALL_USERS", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
         if not allow_all:
             if not allowed_csv:
@@ -956,10 +1025,14 @@ class TeamsAdapter(BasePlatformAdapter):
                     ),
                 )
             from_account = ctx.activity.from_
-            clicker_id = getattr(from_account, "aad_object_id", None) or getattr(from_account, "id", "")
+            clicker_id = getattr(from_account, "aad_object_id", None) or getattr(
+                from_account, "id", ""
+            )
             allowed_ids = {uid.strip() for uid in allowed_csv.split(",") if uid.strip()}
             if "*" not in allowed_ids and clicker_id not in allowed_ids:
-                logger.warning("[teams] Unauthorized card action by %s — ignoring", clicker_id)
+                logger.warning(
+                    "[teams] Unauthorized card action by %s — ignoring", clicker_id
+                )
                 return InvokeResponse(
                     status=200,
                     body=AdaptiveCardActionMessageResponse(value="⛔ Not authorized."),
@@ -984,7 +1057,11 @@ class TeamsAdapter(BasePlatformAdapter):
                 body=AdaptiveCardActionCardResponse(
                     value=AdaptiveCard()
                     .with_version("1.4")
-                    .with_body([TextBlock(text="⚠️ Approval already resolved or expired.", wrap=True)])
+                    .with_body([
+                        TextBlock(
+                            text="⚠️ Approval already resolved or expired.", wrap=True
+                        )
+                    ])
                 ),
             )
 
@@ -1000,7 +1077,11 @@ class TeamsAdapter(BasePlatformAdapter):
         desc = data.get("desc", "")
         body = []
         if cmd:
-            body.append(TextBlock(text="⚠️ Command Approval Required", wrap=True, weight="Bolder"))
+            body.append(
+                TextBlock(
+                    text="⚠️ Command Approval Required", wrap=True, weight="Bolder"
+                )
+            )
             body.append(TextBlock(text=f"```\n{cmd}\n```", wrap=True))
         if desc:
             body.append(TextBlock(text=f"Reason: {desc}", wrap=True, isSubtle=True))
@@ -1037,7 +1118,9 @@ class TeamsAdapter(BasePlatformAdapter):
             AdaptiveCard()
             .with_version("1.4")
             .with_body([
-                TextBlock(text="⚠️ Command Approval Required", wrap=True, weight="Bolder"),
+                TextBlock(
+                    text="⚠️ Command Approval Required", wrap=True, weight="Bolder"
+                ),
                 TextBlock(text=f"```\n{cmd_preview}\n```", wrap=True),
                 TextBlock(text=f"Reason: {description}", wrap=True, isSubtle=True),
             ])
@@ -1111,7 +1194,9 @@ class TeamsAdapter(BasePlatformAdapter):
 
         return SendResult(success=True, message_id=last_message_id)
 
-    async def send_typing(self, chat_id: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+    async def send_typing(
+        self, chat_id: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
         if not self._app:
             return
         try:
@@ -1143,7 +1228,9 @@ class TeamsAdapter(BasePlatformAdapter):
                 path = image_url.removeprefix("file://")
                 mime_type = mimetypes.guess_type(path)[0] or "image/png"
                 with open(path, "rb") as f:
-                    content_url = f"data:{mime_type};base64,{base64.b64encode(f.read()).decode()}"
+                    content_url = (
+                        f"data:{mime_type};base64,{base64.b64encode(f.read()).decode()}"
+                    )
 
             attachment = Attachment(content_type=mime_type, content_url=content_url)
             activity = MessageActivityInput().add_attachments(attachment)
@@ -1182,6 +1269,7 @@ class TeamsAdapter(BasePlatformAdapter):
 
 # ── Interactive setup ─────────────────────────────────────────────────────────
 
+
 def interactive_setup() -> None:
     """Guide the user through Teams setup using the Teams CLI."""
     from clawk_cli.config import (
@@ -1208,9 +1296,13 @@ def interactive_setup() -> None:
     print()
     print_info("Then expose port 3978 publicly (devtunnel / ngrok / cloudflared),")
     print_info("and create your bot:")
-    print_info("  teams app create --name \"Clawksis\" --endpoint \"https://<tunnel>/api/messages\"")
+    print_info(
+        '  teams app create --name "Clawksis" --endpoint "https://<tunnel>/api/messages"'
+    )
     print()
-    print_info("The CLI will print CLIENT_ID, CLIENT_SECRET, and TENANT_ID. Paste them below.")
+    print_info(
+        "The CLI will print CLIENT_ID, CLIENT_SECRET, and TENANT_ID. Paste them below."
+    )
     print()
 
     client_id = prompt("Client ID", default=existing_id or "")
@@ -1219,7 +1311,11 @@ def interactive_setup() -> None:
         return
     save_env_value("TEAMS_CLIENT_ID", client_id.strip())
 
-    client_secret = prompt("Client secret", default=get_env_value("TEAMS_CLIENT_SECRET") or "", password=True)
+    client_secret = prompt(
+        "Client secret",
+        default=get_env_value("TEAMS_CLIENT_SECRET") or "",
+        password=True,
+    )
     if not client_secret:
         print_warning("Client secret is required — skipping Teams setup")
         return
@@ -1254,6 +1350,7 @@ def interactive_setup() -> None:
 
 
 # ── Plugin entry point ────────────────────────────────────────────────────────
+
 
 def register(ctx) -> None:
     """Plugin entry point — called by the Clawksis plugin system."""

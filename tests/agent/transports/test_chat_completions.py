@@ -1242,13 +1242,17 @@ class TestChatCompletionsNormalize:
         finish reason so the agent loop's refusal handler surfaces it instead
         of retrying an empty response three times and giving up."""
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content=None, tool_calls=None, reasoning_content=None,
-                    refusal="I can't help with that.",
-                ),
-                finish_reason="stop",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=None,
+                        tool_calls=None,
+                        reasoning_content=None,
+                        refusal="I can't help with that.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)
@@ -1259,13 +1263,17 @@ class TestChatCompletionsNormalize:
     def test_refusal_none_is_noop(self, transport):
         """The common case: ``refusal`` is None → behavior unchanged."""
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content="hello", tool_calls=None, reasoning_content=None,
-                    refusal=None,
-                ),
-                finish_reason="stop",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="hello",
+                        tool_calls=None,
+                        reasoning_content=None,
+                        refusal=None,
+                    ),
+                    finish_reason="stop",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)
@@ -1278,13 +1286,17 @@ class TestChatCompletionsNormalize:
         also provides refusal text, surface the text without disturbing the
         finish reason."""
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content=None, tool_calls=None, reasoning_content=None,
-                    refusal="declined",
-                ),
-                finish_reason="content_filter",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=None,
+                        tool_calls=None,
+                        reasoning_content=None,
+                        refusal="declined",
+                    ),
+                    finish_reason="content_filter",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)
@@ -1301,13 +1313,17 @@ class TestChatCompletionsNormalize:
         This is the OpenRouter coverage path (OpenRouter uses the default
         chat_completions transport)."""
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content=None, tool_calls=None, reasoning_content=None,
-                    refusal=None,
-                ),
-                finish_reason="content_filter",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=None,
+                        tool_calls=None,
+                        reasoning_content=None,
+                        refusal=None,
+                    ),
+                    finish_reason="content_filter",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)
@@ -1320,13 +1336,17 @@ class TestChatCompletionsNormalize:
         provider_data, and do NOT promote to a terminal content_filter (which
         would discard the model's actual work by reframing it as a failure)."""
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content="partial answer", tool_calls=None,
-                    reasoning_content=None, refusal="cannot continue",
-                ),
-                finish_reason="stop",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="partial answer",
+                        tool_calls=None,
+                        reasoning_content=None,
+                        refusal="cannot continue",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)
@@ -1339,17 +1359,22 @@ class TestChatCompletionsNormalize:
         usable tool turn — record the refusal but keep the tool calls and do
         NOT terminate it as a content_filter refusal."""
         tc = SimpleNamespace(
-            id="call_1", type="function",
+            id="call_1",
+            type="function",
             function=SimpleNamespace(name="do_thing", arguments="{}"),
         )
         r = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content=None, tool_calls=[tc],
-                    reasoning_content=None, refusal="cannot continue",
-                ),
-                finish_reason="tool_calls",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=None,
+                        tool_calls=[tc],
+                        reasoning_content=None,
+                        refusal="cannot continue",
+                    ),
+                    finish_reason="tool_calls",
+                )
+            ],
             usage=None,
         )
         nr = transport.normalize_response(r)

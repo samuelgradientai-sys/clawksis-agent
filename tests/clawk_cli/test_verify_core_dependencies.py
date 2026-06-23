@@ -248,14 +248,18 @@ class TestVerifyCoreDependencies:
 
         fake_scripts = venv_root / "Scripts"  # created by fake_venv_python
 
-        with patch("clawk_cli.main._resolve_install_target_python", return_value=py), \
-             patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run), \
-             patch("clawk_cli.main._is_windows", return_value=True), \
-             patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts), \
-             patch("clawk_cli.main._run_install_with_heartbeat"), \
-             patch("clawk_cli.main._quarantine_running_clawk_exe", return_value=[]) as mock_quar:
-
+        with (
+            patch("clawk_cli.main._resolve_install_target_python", return_value=py),
+            patch("clawk_cli.main.subprocess.run", side_effect=fake_subprocess_run),
+            patch("clawk_cli.main._is_windows", return_value=True),
+            patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts),
+            patch("clawk_cli.main._run_install_with_heartbeat"),
+            patch(
+                "clawk_cli.main._quarantine_running_clawk_exe", return_value=[]
+            ) as mock_quar,
+        ):
             from clawk_cli.main import _verify_core_dependencies_installed
+
             _verify_core_dependencies_installed(["uv", "pip"], env=env)
 
             assert mock_quar.called, (

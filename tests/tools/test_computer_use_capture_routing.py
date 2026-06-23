@@ -71,12 +71,17 @@ def _make_capture(
 ):
     from tools.computer_use.backend import CaptureResult, UIElement
 
-    elements = list(elements or [
-        UIElement(index=0, role="AXButton", label="Sign in",
-                  bounds=(10, 20, 80, 30)),
-        UIElement(index=1, role="AXTextField", label="username",
-                  bounds=(10, 60, 200, 24)),
-    ])
+    elements = list(
+        elements
+        or [
+            UIElement(
+                index=0, role="AXButton", label="Sign in", bounds=(10, 20, 80, 30)
+            ),
+            UIElement(
+                index=1, role="AXTextField", label="username", bounds=(10, 60, 200, 24)
+            ),
+        ]
+    )
     raw = base64.b64decode(png_b64, validate=False)
     return CaptureResult(
         mode=mode,
@@ -99,6 +104,7 @@ def _stub_aux_analysis(text: str):
 # _capture_response: routing OFF (current/native behaviour)
 # ---------------------------------------------------------------------------
 
+
 class TestCaptureResponseDefaultPath:
     """When routing helper says 'native', the existing multimodal envelope wins."""
 
@@ -106,16 +112,15 @@ class TestCaptureResponseDefaultPath:
         from tools.computer_use import tool as cu_tool
 
         cap = _make_capture(png_b64=_PNG_B64, mode="som")
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=False):
+        with patch.object(
+            cu_tool, "_should_route_through_aux_vision", return_value=False
+        ):
             resp = cu_tool._capture_response(cap)
 
         assert isinstance(resp, dict)
         assert resp.get("_multimodal") is True
         # Image part must use image/png MIME for a PNG payload.
-        image_part = next(
-            p for p in resp["content"] if p.get("type") == "image_url"
-        )
+        image_part = next(p for p in resp["content"] if p.get("type") == "image_url")
         url = image_part["image_url"]["url"]
         assert url.startswith("data:image/png;base64,")
         assert "vision_analysis" not in resp
@@ -124,8 +129,9 @@ class TestCaptureResponseDefaultPath:
         from tools.computer_use import tool as cu_tool
 
         cap = _make_capture(png_b64=_JPEG_B64, mode="som")
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=False):
+        with patch.object(
+            cu_tool, "_should_route_through_aux_vision", return_value=False
+        ):
             resp = cu_tool._capture_response(cap)
 
         url = next(p for p in resp["content"] if p.get("type") == "image_url")
@@ -136,8 +142,9 @@ class TestCaptureResponseDefaultPath:
 
         cap = _make_capture(mode="ax", png_b64="")
         # ax mode never has a PNG so neither path matters; assert pure text.
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True) as routing:
+        with patch.object(
+            cu_tool, "_should_route_through_aux_vision", return_value=True
+        ) as routing:
             resp = cu_tool._capture_response(cap)
 
         # ax never even consults the routing helper — short-circuited above
@@ -152,12 +159,14 @@ class TestCaptureResponseDefaultPath:
 # _capture_response: routing ON (the #24015 fix)
 # ---------------------------------------------------------------------------
 
+
 class TestCaptureResponseRoutedToAuxVision:
     """When routing helper says 'aux', the PNG is pre-analysed and a text
     response is returned with no image_url parts at all."""
 
     def test_som_capture_returns_text_with_vision_analysis(
-        self, tmp_cache_dir,
+        self,
+        tmp_cache_dir,
     ):
         from tools.computer_use import tool as cu_tool
 
@@ -176,11 +185,15 @@ class TestCaptureResponseRoutedToAuxVision:
         # assert positional args without dealing with awaitables.
         fake_vat = MagicMock(return_value="<coro>")
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         # Must be a JSON string, NOT a multimodal envelope. This is exactly
@@ -210,7 +223,8 @@ class TestCaptureResponseRoutedToAuxVision:
         assert "Sign in" in prompt_arg
 
     def test_temp_screenshot_file_is_cleaned_up_after_routing(
-        self, tmp_cache_dir,
+        self,
+        tmp_cache_dir,
     ):
         from tools.computer_use import tool as cu_tool
 
@@ -230,11 +244,15 @@ class TestCaptureResponseRoutedToAuxVision:
 
         fake_vat = MagicMock(side_effect=_fake_vat)
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             cu_tool._capture_response(cap)
 
         # File must be unlinked after _capture_response returns.
@@ -261,12 +279,16 @@ class TestCaptureResponseRoutedToAuxVision:
 
         fake_vat = MagicMock(side_effect=_fake_vat)
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("clawk_constants.get_clawk_dir", _fake_get), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("clawk_constants.get_clawk_dir", _fake_get),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         assert isinstance(resp, str)
@@ -275,7 +297,8 @@ class TestCaptureResponseRoutedToAuxVision:
         assert not os.path.exists(observed_path["path"])
 
     def test_temp_file_cleaned_up_even_when_aux_call_raises(
-        self, tmp_cache_dir,
+        self,
+        tmp_cache_dir,
     ):
         from tools.computer_use import tool as cu_tool
 
@@ -291,11 +314,15 @@ class TestCaptureResponseRoutedToAuxVision:
 
         fake_vat = MagicMock(side_effect=_fake_vat)
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         # Aux failure → fall back to multimodal envelope (so the user still
@@ -316,11 +343,15 @@ class TestCaptureResponseRoutedToAuxVision:
 
         fake_vat = MagicMock(return_value="<coro>")
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         # Empty analysis is treated as failure — we'd rather show pixels
@@ -338,11 +369,15 @@ class TestCaptureResponseRoutedToAuxVision:
 
         fake_vat = MagicMock(return_value="<coro>")
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         assert isinstance(resp, dict)
@@ -352,6 +387,7 @@ class TestCaptureResponseRoutedToAuxVision:
 # ---------------------------------------------------------------------------
 # _should_route_through_aux_vision: end-to-end with real config plumbing
 # ---------------------------------------------------------------------------
+
 
 class TestRoutingDecisionWiring:
     """Verify _should_route_through_aux_vision wires the right config + helper."""
@@ -368,11 +404,16 @@ class TestRoutingDecisionWiring:
                 }
             },
         }
-        with patch("agent.auxiliary_client._read_main_provider",
-                   return_value="openrouter"), \
-             patch("agent.auxiliary_client._read_main_model",
-                   return_value="tencent/hy3-preview"), \
-             patch("clawk_cli.config.load_config", return_value=cfg):
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider", return_value="openrouter"
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="tencent/hy3-preview",
+            ),
+            patch("clawk_cli.config.load_config", return_value=cfg),
+        ):
             assert cu_tool._should_route_through_aux_vision() is True
 
     def test_no_explicit_aux_and_vision_capable_main_keeps_multimodal(self):
@@ -381,23 +422,34 @@ class TestRoutingDecisionWiring:
         cfg = {
             "model": {"default": "claude-opus-4-5", "provider": "anthropic"},
         }
-        with patch("agent.auxiliary_client._read_main_provider",
-                   return_value="anthropic"), \
-             patch("agent.auxiliary_client._read_main_model",
-                   return_value="claude-opus-4-5"), \
-             patch("clawk_cli.config.load_config", return_value=cfg), \
-             patch("tools.computer_use.vision_routing._lookup_supports_vision",
-                   return_value=True), \
-             patch("tools.computer_use.vision_routing."
-                   "_provider_accepts_multimodal_tool_result",
-                   return_value=True):
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider", return_value="anthropic"
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus-4-5",
+            ),
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "tools.computer_use.vision_routing._lookup_supports_vision",
+                return_value=True,
+            ),
+            patch(
+                "tools.computer_use.vision_routing."
+                "_provider_accepts_multimodal_tool_result",
+                return_value=True,
+            ),
+        ):
             assert cu_tool._should_route_through_aux_vision() is False
 
     def test_config_load_failure_disables_routing_safely(self):
         from tools.computer_use import tool as cu_tool
 
-        with patch("clawk_cli.config.load_config",
-                   side_effect=RuntimeError("config.yaml unreadable")):
+        with patch(
+            "clawk_cli.config.load_config",
+            side_effect=RuntimeError("config.yaml unreadable"),
+        ):
             # No exception should bubble up — fail open by returning False
             # so the legacy multimodal envelope continues to work.
             assert cu_tool._should_route_through_aux_vision() is False
@@ -406,19 +458,25 @@ class TestRoutingDecisionWiring:
         from tools.computer_use import tool as cu_tool
         from tools.computer_use import vision_routing as vr_mod
 
-        with patch("agent.auxiliary_client._read_main_provider",
-                   return_value="openrouter"), \
-             patch("agent.auxiliary_client._read_main_model",
-                   return_value="x"), \
-             patch("clawk_cli.config.load_config", return_value={}), \
-             patch.object(vr_mod, "should_route_capture_to_aux_vision",
-                          side_effect=ValueError("policy bug")):
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider", return_value="openrouter"
+            ),
+            patch("agent.auxiliary_client._read_main_model", return_value="x"),
+            patch("clawk_cli.config.load_config", return_value={}),
+            patch.object(
+                vr_mod,
+                "should_route_capture_to_aux_vision",
+                side_effect=ValueError("policy bug"),
+            ),
+        ):
             assert cu_tool._should_route_through_aux_vision() is False
 
 
 # ---------------------------------------------------------------------------
 # Bug reproduction marker — proves the fix is needed.
 # ---------------------------------------------------------------------------
+
 
 class TestBugReproductionAnchor:
     """Without the fix, this test would assert the wrong thing.
@@ -432,7 +490,8 @@ class TestBugReproductionAnchor:
     """
 
     def test_non_vision_main_model_never_returns_image_url_when_routed(
-        self, tmp_cache_dir,
+        self,
+        tmp_cache_dir,
     ):
         from tools.computer_use import tool as cu_tool
 
@@ -440,17 +499,20 @@ class TestBugReproductionAnchor:
 
         def _fake_run_async(_coro):
             return _stub_aux_analysis(
-                "Screenshot showing a GitHub.com window with a sign-in "
-                "form."
+                "Screenshot showing a GitHub.com window with a sign-in form."
             )
 
         fake_vat = MagicMock(return_value="<coro>")
 
-        with patch.object(cu_tool, "_should_route_through_aux_vision",
-                          return_value=True), \
-             patch("model_tools._run_async", side_effect=_fake_run_async), \
-             patch("tools.vision_tools.vision_analyze_tool",
-                   new_callable=lambda: fake_vat):
+        with (
+            patch.object(
+                cu_tool, "_should_route_through_aux_vision", return_value=True
+            ),
+            patch("model_tools._run_async", side_effect=_fake_run_async),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=lambda: fake_vat
+            ),
+        ):
             resp = cu_tool._capture_response(cap)
 
         # Must be a string (text-only result).

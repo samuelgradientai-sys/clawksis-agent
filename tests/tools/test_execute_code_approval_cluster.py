@@ -29,6 +29,7 @@ from tools.thread_context import propagate_context_to_thread
 # 1. Context + callback propagation helper
 # ---------------------------------------------------------------------------
 
+
 def test_helper_propagates_contextvar_and_approval_callback():
     from tools import terminal_tool as TT
 
@@ -50,7 +51,7 @@ def test_helper_propagates_contextvar_and_approval_callback():
         t.join(timeout=5)
 
         assert seen["probe"] == "parent-value"  # ContextVar propagated
-        assert seen["cb"] is sentinel            # thread-local callback propagated
+        assert seen["cb"] is sentinel  # thread-local callback propagated
     finally:
         TT.set_approval_callback(None)
 
@@ -76,7 +77,7 @@ def test_helper_clears_callbacks_on_teardown():
             ex.submit(second).result(timeout=5)
 
         assert seen["during"] is sentinel  # installed for the wrapped target
-        assert seen["after"] is None       # cleared on teardown
+        assert seen["after"] is None  # cleared on teardown
     finally:
         TT.set_approval_callback(None)
 
@@ -102,6 +103,7 @@ def test_both_rpc_threads_use_propagation_helper():
 # ---------------------------------------------------------------------------
 # 3. check_execute_code_guard decision matrix
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def gw_session(monkeypatch):
@@ -131,6 +133,7 @@ def gw_session(monkeypatch):
 def _register_resolver(session_key: str, result):
     """Register a gateway notify callback that immediately resolves the most
     recent queued approval entry with *result* (simulating a user response)."""
+
     def cb(_approval_data):
         with A._lock:
             entries = A._gateway_queues.get(session_key, [])
@@ -138,6 +141,7 @@ def _register_resolver(session_key: str, result):
                 entry = entries[-1]
                 entry.result = result
                 entry.event.set()
+
     with A._lock:
         A._gateway_notify_cbs[session_key] = cb
 
@@ -280,29 +284,41 @@ def test_guard_session_yolo_bypasses(gw_session):
 # 4. Env scrubbing (#27303)
 # ---------------------------------------------------------------------------
 
+
 def test_env_scrub_clawk_allowlist_and_secret_blocks():
     from tools.code_execution_tool import _scrub_child_env
 
     env = {
         # operational allowlist → kept
-        "CLAWK_HOME": "/h", "CLAWK_PROFILE": "p",
-        "CLAWK_CONFIG": "/c.yaml", "CLAWK_ENV": "/e",
+        "CLAWK_HOME": "/h",
+        "CLAWK_PROFILE": "p",
+        "CLAWK_CONFIG": "/c.yaml",
+        "CLAWK_ENV": "/e",
         # other CLAWK_* → dropped (broad prefix removed)
-        "CLAWK_BASE_URL": "https://x", "CLAWK_INTERACTIVE": "1",
+        "CLAWK_BASE_URL": "https://x",
+        "CLAWK_INTERACTIVE": "1",
         "CLAWK_KANBAN_DB": "postgres://u:p@h/db",
         # secret substrings (incl. new DSN/WEBHOOK) → dropped
-        "SENTRY_DSN": "https://a@s.io/1", "SLACK_WEBHOOK": "https://h/x",
-        "OPENAI_API_KEY": "sk", "GITHUB_TOKEN": "ghp",
+        "SENTRY_DSN": "https://a@s.io/1",
+        "SLACK_WEBHOOK": "https://h/x",
+        "OPENAI_API_KEY": "sk",
+        "GITHUB_TOKEN": "ghp",
         # safe prefix → kept; uncategorized → dropped
-        "PATH": "/usr/bin", "RANDOM_X": "y",
+        "PATH": "/usr/bin",
+        "RANDOM_X": "y",
     }
     out = _scrub_child_env(env, is_passthrough=lambda _: False, is_windows=False)
 
     for kept in ("CLAWK_HOME", "CLAWK_PROFILE", "CLAWK_CONFIG", "CLAWK_ENV", "PATH"):
         assert kept in out, f"{kept} should be kept"
     for dropped in (
-        "CLAWK_BASE_URL", "CLAWK_INTERACTIVE", "CLAWK_KANBAN_DB",
-        "SENTRY_DSN", "SLACK_WEBHOOK", "OPENAI_API_KEY", "GITHUB_TOKEN",
+        "CLAWK_BASE_URL",
+        "CLAWK_INTERACTIVE",
+        "CLAWK_KANBAN_DB",
+        "SENTRY_DSN",
+        "SLACK_WEBHOOK",
+        "OPENAI_API_KEY",
+        "GITHUB_TOKEN",
         "RANDOM_X",
     ):
         assert dropped not in out, f"{dropped} should be dropped"
@@ -314,8 +330,9 @@ def test_env_scrub_passthrough_overrides_secret_block():
     from tools.code_execution_tool import _scrub_child_env
 
     env = {"MY_SERVICE_DSN": "value"}
-    out = _scrub_child_env(env, is_passthrough=lambda k: k == "MY_SERVICE_DSN",
-                           is_windows=False)
+    out = _scrub_child_env(
+        env, is_passthrough=lambda k: k == "MY_SERVICE_DSN", is_windows=False
+    )
     assert out.get("MY_SERVICE_DSN") == "value"
 
 
@@ -323,7 +340,10 @@ def test_env_scrub_passthrough_overrides_secret_block():
 # 5. File-tool sensitive-path refusal (security B1)
 # ---------------------------------------------------------------------------
 
-def test_execute_code_entry_blocks_before_spawn_when_guard_denies(monkeypatch, tmp_path):
+
+def test_execute_code_entry_blocks_before_spawn_when_guard_denies(
+    monkeypatch, tmp_path
+):
     """Behavioral wiring test: execute_code() consults the entry guard and, on
     denial, returns the block message WITHOUT spawning the child — proven by a
     marker file the script would create that never appears."""
@@ -352,6 +372,7 @@ def test_execute_code_entry_blocks_before_spawn_when_guard_denies(monkeypatch, t
 # 6. Env-scrub diagnosability mitigation (#27303 follow-up)
 # ---------------------------------------------------------------------------
 
+
 def test_env_scrub_logs_dropped_clawk_vars(caplog):
     """Dropping a non-allowlisted, non-secret CLAWK_* var must be diagnosable:
     the scrub emits a one-shot debug log naming the dropped vars and pointing at
@@ -362,11 +383,11 @@ def test_env_scrub_logs_dropped_clawk_vars(caplog):
     from tools.code_execution_tool import _scrub_child_env
 
     env = {
-        "CLAWK_HOME": "/h",          # allowlisted → kept, not logged
-        "CLAWK_BASE_URL": "https://x",   # dropped → logged
+        "CLAWK_HOME": "/h",  # allowlisted → kept, not logged
+        "CLAWK_BASE_URL": "https://x",  # dropped → logged
         "CLAWK_KANBAN_DB": "postgres://u:p@h/db",  # dropped → logged
-        "CLAWK_API_KEY": "sk",       # secret → dropped silently (not logged)
-        "PATH": "/usr/bin",           # safe prefix → kept
+        "CLAWK_API_KEY": "sk",  # secret → dropped silently (not logged)
+        "PATH": "/usr/bin",  # safe prefix → kept
     }
     with caplog.at_level(logging.DEBUG, logger="tools.code_execution_tool"):
         out = _scrub_child_env(env, is_passthrough=lambda _: False, is_windows=False)

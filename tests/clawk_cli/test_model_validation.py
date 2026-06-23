@@ -338,19 +338,22 @@ class TestProviderModelIds:
             def read(self):
                 return b'{"data": [{"id": "enterprise-claude"}]}'
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "model": {
-                    "provider": "anthropic",
-                    "base_url": "http://localhost:6655/anthropic/v1",
-                    "api_key": "proxy-key",
-                }
-            },
-        ), patch(
-            "clawk_cli.models.urllib.request.urlopen",
-            return_value=_Resp(),
-        ) as mock_urlopen:
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "model": {
+                        "provider": "anthropic",
+                        "base_url": "http://localhost:6655/anthropic/v1",
+                        "api_key": "proxy-key",
+                    }
+                },
+            ),
+            patch(
+                "clawk_cli.models.urllib.request.urlopen",
+                return_value=_Resp(),
+            ) as mock_urlopen,
+        ):
             assert provider_model_ids("anthropic") == ["enterprise-claude"]
 
         req = mock_urlopen.call_args[0][0]
@@ -358,19 +361,22 @@ class TestProviderModelIds:
         assert req.get_header("X-api-key") == "proxy-key"
 
     def test_custom_provider_passes_anthropic_mode_for_versioned_proxy_catalog(self):
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "model": {
-                    "provider": "custom",
-                    "base_url": "http://localhost:6655/anthropic/v1",
-                    "api_key": "proxy-key",
-                }
-            },
-        ), patch(
-            "clawk_cli.models.fetch_api_models",
-            return_value=["enterprise-claude"],
-        ) as mock_fetch:
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "model": {
+                        "provider": "custom",
+                        "base_url": "http://localhost:6655/anthropic/v1",
+                        "api_key": "proxy-key",
+                    }
+                },
+            ),
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["enterprise-claude"],
+            ) as mock_fetch,
+        ):
             assert provider_model_ids("custom") == ["enterprise-claude"]
 
         mock_fetch.assert_called_once_with(

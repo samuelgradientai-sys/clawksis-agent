@@ -98,9 +98,7 @@ def expensive_model_warning(
             output_cost = entry.output_cost_per_million
             source = entry.source
 
-    over_input = (
-        input_cost is not None and input_cost > INPUT_COST_WARNING_THRESHOLD
-    )
+    over_input = input_cost is not None and input_cost > INPUT_COST_WARNING_THRESHOLD
     over_output = (
         output_cost is not None and output_cost > OUTPUT_COST_WARNING_THRESHOLD
     )
@@ -113,10 +111,7 @@ def expensive_model_warning(
         f"{model} has known pricing above Clawksis' safety threshold.",
         f"Input tokens: {_format_money(input_cost)}",
         f"Output tokens: {_format_money(output_cost)}",
-        (
-            "Threshold: more than $20/M input tokens or more than "
-            "$100/M output tokens."
-        ),
+        ("Threshold: more than $20/M input tokens or more than $100/M output tokens."),
     ]
     if source:
         lines.append(f"Pricing source: {source}.")

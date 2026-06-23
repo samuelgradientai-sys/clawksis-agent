@@ -17,9 +17,9 @@ SCRAPECREATORS_BASE = "https://api.scrapecreators.com/v1/tiktok"
 
 # Depth configurations: how many results to fetch / captions to extract
 DEPTH_CONFIG = {
-    "quick":   {"results_per_page": 10, "max_captions": 3},
+    "quick": {"results_per_page": 10, "max_captions": 3},
     "default": {"results_per_page": 20, "max_captions": 5},
-    "deep":    {"results_per_page": 40, "max_captions": 8},
+    "deep": {"results_per_page": 40, "max_captions": 8},
 }
 
 # Max words to keep from each caption
@@ -31,14 +31,33 @@ from .relevance import token_overlap_relevance as _compute_relevance
 def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for TikTok search."""
     from .query import extract_core_subject
+
     _TIKTOK_NOISE = frozenset({
-        'best', 'top', 'good', 'great', 'awesome', 'killer',
-        'latest', 'new', 'news', 'update', 'updates',
-        'trending', 'hottest', 'popular', 'viral',
-        'practices', 'features',
-        'recommendations', 'advice',
-        'prompt', 'prompts', 'prompting',
-        'methods', 'strategies', 'approaches',
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "recommendations",
+        "advice",
+        "prompt",
+        "prompts",
+        "prompting",
+        "methods",
+        "strategies",
+        "approaches",
     })
     return extract_core_subject(topic, noise=_TIKTOK_NOISE)
 
@@ -48,7 +67,9 @@ def _infer_query_intent(topic: str) -> str:
     text = topic.lower().strip()
     if re.search(r"\b(vs|versus|compare|difference between)\b", text):
         return "comparison"
-    if re.search(r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text):
+    if re.search(
+        r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text
+    ):
         return "how_to"
     if re.search(r"\b(thoughts on|worth it|should i|opinion|review)\b", text):
         return "opinion"
@@ -72,7 +93,7 @@ def expand_tiktok_queries(topic: str, depth: str) -> List[str]:
     queries = [core]
 
     # Include cleaned original topic as variant if different from core
-    original_clean = topic.strip().rstrip('?!.')
+    original_clean = topic.strip().rstrip("?!.")
     if core.lower() != original_clean.lower() and len(original_clean.split()) <= 8:
         queries.append(original_clean)
 
@@ -119,23 +140,25 @@ def _clean_webvtt(text: str) -> str:
     """Strip WebVTT timestamps and headers from transcript text."""
     if not text:
         return ""
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned = []
     for line in lines:
         line = line.strip()
         if not line:
             continue
-        if line.startswith('WEBVTT'):
+        if line.startswith("WEBVTT"):
             continue
-        if re.match(r'^\d{2}:\d{2}', line):
+        if re.match(r"^\d{2}:\d{2}", line):
             continue
-        if '-->' in line:
+        if "-->" in line:
             continue
         cleaned.append(line)
-    return ' '.join(cleaned)
+    return " ".join(cleaned)
 
 
-def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[str, Any]]:
+def _parse_items(
+    raw_items: List[Dict[str, Any]], core_topic: str
+) -> List[Dict[str, Any]]:
     """Parse raw TikTok items into normalized dicts."""
     items = []
     for raw in raw_items:
@@ -143,10 +166,18 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
         text = raw.get("desc", "")
 
         stats = raw.get("statistics") if isinstance(raw.get("statistics"), dict) else {}
-        play_count = stats.get("play_count") if stats.get("play_count") is not None else 0
-        digg_count = stats.get("digg_count") if stats.get("digg_count") is not None else 0
-        comment_count = stats.get("comment_count") if stats.get("comment_count") is not None else 0
-        share_count = stats.get("share_count") if stats.get("share_count") is not None else 0
+        play_count = (
+            stats.get("play_count") if stats.get("play_count") is not None else 0
+        )
+        digg_count = (
+            stats.get("digg_count") if stats.get("digg_count") is not None else 0
+        )
+        comment_count = (
+            stats.get("comment_count") if stats.get("comment_count") is not None else 0
+        )
+        share_count = (
+            stats.get("share_count") if stats.get("share_count") is not None else 0
+        )
 
         author_raw = raw.get("author")
         if isinstance(author_raw, dict):
@@ -158,8 +189,11 @@ def _parse_items(raw_items: List[Dict[str, Any]], core_topic: str) -> List[Dict[
 
         share_url = raw.get("share_url", "")
         text_extra = raw.get("text_extra") or []
-        hashtag_names = [t.get("hashtag_name", "") for t in text_extra
-                         if isinstance(t, dict) and t.get("hashtag_name")]
+        hashtag_names = [
+            t.get("hashtag_name", "")
+            for t in text_extra
+            if isinstance(t, dict) and t.get("hashtag_name")
+        ]
 
         video_raw = raw.get("video")
         duration = video_raw.get("duration") if isinstance(video_raw, dict) else None
@@ -285,7 +319,9 @@ def search_tiktok(
     config = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
     core_topic = _extract_core_subject(topic)
 
-    _log(f"Searching TikTok for '{core_topic}' (depth={depth}, count={config['results_per_page']})")
+    _log(
+        f"Searching TikTok for '{core_topic}' (depth={depth}, count={config['results_per_page']})"
+    )
 
     try:
         data = http.get(
@@ -308,7 +344,7 @@ def search_tiktok(
             raw_items.append(info)
 
     # Limit to configured count
-    raw_items = raw_items[:config["results_per_page"]]
+    raw_items = raw_items[: config["results_per_page"]]
 
     # Parse items
     items = _parse_items(raw_items, core_topic)
@@ -367,7 +403,7 @@ def fetch_captions(
         if text:
             words = text.split()
             if len(words) > CAPTION_MAX_WORDS:
-                text = ' '.join(words[:CAPTION_MAX_WORDS]) + '...'
+                text = " ".join(words[:CAPTION_MAX_WORDS]) + "..."
             captions[vid] = text
 
     # Second pass: try to get spoken-word transcripts (1 credit each)
@@ -392,7 +428,7 @@ def fetch_captions(
                 if transcript:
                     words = transcript.split()
                     if len(words) > CAPTION_MAX_WORDS:
-                        transcript = ' '.join(words[:CAPTION_MAX_WORDS]) + '...'
+                        transcript = " ".join(words[:CAPTION_MAX_WORDS]) + "..."
                     captions[vid] = transcript
         except Exception as e:
             _log(f"Transcript fetch failed for {vid}: {e}")
@@ -498,7 +534,11 @@ def parse_tiktok_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _tiktok_total_engagement(item: Dict[str, Any]) -> int:
     """Total engagement for ranking which posts deserve comment enrichment."""
     eng = item.get("engagement", {})
-    return (eng.get("views", 0) or 0) + (eng.get("likes", 0) or 0) + (eng.get("comments", 0) or 0)
+    return (
+        (eng.get("views", 0) or 0)
+        + (eng.get("likes", 0) or 0)
+        + (eng.get("comments", 0) or 0)
+    )
 
 
 def enrich_with_comments(

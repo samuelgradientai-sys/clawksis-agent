@@ -33,9 +33,7 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.delenv("CLAWK_MAX_TOKENS", raising=False)
 
     _saved = {
-        k: v
-        for k, v in sys.modules.items()
-        if k.startswith(("clawk_cli", "gateway"))
+        k: v for k, v in sys.modules.items() if k.startswith(("clawk_cli", "gateway"))
     }
 
     def write_cfg(body: str) -> None:

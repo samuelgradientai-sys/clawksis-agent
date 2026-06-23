@@ -23,7 +23,7 @@ from clawk_cli.colors import Colors, color
 # the API gateway logs and report restart events").
 _GATEWAY_LIFECYCLE_PATTERNS = re.compile(
     r"(?i)"
-    r"(clawk\s+gateway\s+(restart|stop|start))"
+    r"((clawk|clawksis|hermes)\s+gateway\s+(restart|stop|start))"
     r"|(launchctl\s+(kickstart|unload|load|stop|restart)\s+.*clawk)"
     r"|(systemctl\s+(restart|stop|start)\s+.*clawk)"
     r"|(p?kill\s+.*clawk.*gateway)"
@@ -113,7 +113,9 @@ def cron_list(show_all: bool = True):
         state = job.get("state", "scheduled" if job.get("enabled", True) else "paused")
         next_run = job.get("next_run_at", "?")
 
-        repeat_info = job.get("repeat", {})
+        # ``or {}`` (not the get default) — a one-shot job can persist
+        # ``"repeat": null``, where the key is present but None.
+        repeat_info = job.get("repeat") or {}
         repeat_times = repeat_info.get("times")
         repeat_completed = repeat_info.get("completed", 0)
         repeat_str = f"{repeat_completed}/{repeat_times}" if repeat_times else "∞"

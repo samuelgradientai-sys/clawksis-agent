@@ -28,7 +28,11 @@ import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from clawk_constants import get_bundled_skills_dir, get_clawk_home, get_optional_skills_dir
+from clawk_constants import (
+    get_bundled_skills_dir,
+    get_clawk_home,
+    get_optional_skills_dir,
+)
 from agent.skill_utils import is_excluded_skill_path
 from typing import Dict, List, Tuple
 from utils import atomic_replace
@@ -127,7 +131,10 @@ def _write_manifest(entries: Dict[str, str]):
     import tempfile
 
     MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    data = "\n".join(f"{name}:{hash_val}" for name, hash_val in sorted(entries.items())) + "\n"
+    data = (
+        "\n".join(f"{name}:{hash_val}" for name, hash_val in sorted(entries.items()))
+        + "\n"
+    )
 
     try:
         fd, tmp_path = tempfile.mkstemp(
@@ -148,7 +155,9 @@ def _write_manifest(entries: Dict[str, str]):
                 pass
             raise
     except Exception as e:
-        logger.debug("Failed to write skills manifest %s: %s", MANIFEST_FILE, e, exc_info=True)
+        logger.debug(
+            "Failed to write skills manifest %s: %s", MANIFEST_FILE, e, exc_info=True
+        )
 
 
 def _read_skill_name(skill_md: Path, fallback: str) -> str:
@@ -296,13 +305,29 @@ def restore_official_optional_skill(name: str, *, restore: bool = False) -> dict
     """
     index = _optional_skill_index()
     if not index:
-        return {"ok": False, "message": "No official optional skills directory found.", "restored": [], "backfilled": [], "backed_up": []}
+        return {
+            "ok": False,
+            "message": "No official optional skills directory found.",
+            "restored": [],
+            "backfilled": [],
+            "backed_up": [],
+        }
 
-    targets = sorted(set(index.values()), key=lambda item: item[1]) if name in {"all", "*"} else []
+    targets = (
+        sorted(set(index.values()), key=lambda item: item[1])
+        if name in {"all", "*"}
+        else []
+    )
     if not targets:
         target = index.get(name)
         if target is None:
-            return {"ok": False, "message": f"Official optional skill not found: {name}", "restored": [], "backfilled": [], "backed_up": []}
+            return {
+                "ok": False,
+                "message": f"Official optional skill not found: {name}",
+                "restored": [],
+                "backfilled": [],
+                "backed_up": [],
+            }
         targets = [target]
 
     restored: List[str] = []
@@ -331,7 +356,10 @@ def restore_official_optional_skill(name: str, *, restore: bool = False) -> dict
                 candidate_name = _read_skill_name(skill_md, candidate.name)
                 if candidate == dest:
                     continue
-                if candidate.name == folder_name or candidate_name in {folder_name, src_frontmatter}:
+                if candidate.name == folder_name or candidate_name in {
+                    folder_name,
+                    src_frontmatter,
+                }:
                     matches.append(candidate)
 
         if restore:
@@ -373,7 +401,11 @@ def _backfill_optional_provenance(quiet: bool = False) -> List[str]:
 
     lock_path = SKILLS_DIR / ".hub" / "lock.json"
     try:
-        data = json.loads(lock_path.read_text()) if lock_path.exists() else {"version": 1, "installed": {}}
+        data = (
+            json.loads(lock_path.read_text())
+            if lock_path.exists()
+            else {"version": 1, "installed": {}}
+        )
     except (json.JSONDecodeError, OSError):
         data = {"version": 1, "installed": {}}
     installed = data.setdefault("installed", {})
@@ -466,18 +498,30 @@ def sync_skills(quiet: bool = False) -> dict:
     # to seed_profile_skills()'s marker check for named profiles.
     if (CLAWK_HOME / NO_BUNDLED_SKILLS_MARKER).exists():
         if not quiet:
-            print("  (skipped — profile opted out of bundled skills via .no-bundled-skills)")
+            print(
+                "  (skipped — profile opted out of bundled skills via .no-bundled-skills)"
+            )
         return {
-            "copied": [], "updated": [], "skipped": 0,
-            "user_modified": [], "cleaned": [], "total_bundled": 0,
-            "optional_provenance_backfilled": [], "skipped_opt_out": True,
+            "copied": [],
+            "updated": [],
+            "skipped": 0,
+            "user_modified": [],
+            "cleaned": [],
+            "total_bundled": 0,
+            "optional_provenance_backfilled": [],
+            "skipped_opt_out": True,
         }
 
     bundled_dir = _get_bundled_dir()
     if not bundled_dir.exists():
         return {
-            "copied": [], "updated": [], "skipped": 0,
-            "user_modified": [], "cleaned": [], "suppressed": [], "total_bundled": 0,
+            "copied": [],
+            "updated": [],
+            "skipped": 0,
+            "user_modified": [],
+            "cleaned": [],
+            "suppressed": [],
+            "total_bundled": 0,
             "optional_provenance_backfilled": [],
         }
 
@@ -520,7 +564,8 @@ def sync_skills(quiet: bool = False) -> dict:
                 logger.info("Recovered orphaned skill backup: %s", _orphan)
             except (OSError, IOError):
                 logger.warning(
-                    "Could not recover orphaned skill backup %s", _orphan,
+                    "Could not recover orphaned skill backup %s",
+                    _orphan,
                     exc_info=True,
                 )
 
@@ -604,7 +649,9 @@ def sync_skills(quiet: bool = False) -> dict:
                         try:
                             _rmtree_writable(backup)
                         except (OSError, IOError):
-                            logger.debug("Could not remove backup %s", backup, exc_info=True)
+                            logger.debug(
+                                "Could not remove backup %s", backup, exc_info=True
+                            )
                     except (OSError, IOError):
                         # Restore from backup. A partially-written dest must
                         # not shadow the user's copy or block the restore —
@@ -616,7 +663,8 @@ def sync_skills(quiet: bool = False) -> dict:
                                 except (OSError, IOError):
                                     logger.warning(
                                         "Could not clear partial copy %s during restore",
-                                        dest, exc_info=True,
+                                        dest,
+                                        exc_info=True,
                                     )
                             if not dest.exists():
                                 shutil.move(str(backup), str(dest))
@@ -829,7 +877,9 @@ def set_bundled_skills_opt_out(enabled: bool) -> dict:
             )
     except OSError as e:
         return {
-            "ok": False, "changed": False, "marker": str(marker),
+            "ok": False,
+            "changed": False,
+            "marker": str(marker),
             "message": f"Could not update opt-out marker at {marker}: {e}",
         }
     return {"ok": True, "changed": changed, "marker": str(marker), "message": message}
@@ -874,7 +924,10 @@ def remove_pristine_bundled_skills(dry_run: bool = False) -> dict:
         src = bundled_by_name.get(name)
         if src is None:
             # Tracked but no longer bundled upstream — leave it; not ours to judge.
-            skipped.append({"name": name, "reason": "no bundled source (removed upstream)"})
+            skipped.append({
+                "name": name,
+                "reason": "no bundled source (removed upstream)",
+            })
             continue
         dest = _compute_relative_dest(src, bundled_dir)
         if not dest.exists():
@@ -905,8 +958,11 @@ def remove_pristine_bundled_skills(dry_run: bool = False) -> dict:
     verb = "Would remove" if dry_run else "Removed"
     message = f"{verb} {len(removed)} pristine bundled skill(s); kept {len(skipped)}."
     return {
-        "ok": True, "removed": removed, "skipped": skipped,
-        "dry_run": dry_run, "message": message,
+        "ok": True,
+        "removed": removed,
+        "skipped": skipped,
+        "dry_run": dry_run,
+        "message": message,
     }
 
 
@@ -928,5 +984,7 @@ if __name__ == "__main__":
     if result["cleaned"]:
         parts.append(f"{len(result['cleaned'])} cleaned from manifest")
     if result.get("optional_provenance_backfilled"):
-        parts.append(f"{len(result['optional_provenance_backfilled'])} official optional backfilled")
+        parts.append(
+            f"{len(result['optional_provenance_backfilled'])} official optional backfilled"
+        )
     print(f"\nDone: {', '.join(parts)}. {result['total_bundled']} total bundled.")

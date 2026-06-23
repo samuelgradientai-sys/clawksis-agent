@@ -17,10 +17,18 @@ transport:
   args:
     - "mcp-server-linkedin@latest"
 
-# No API key. The server drives a real browser session: the first tool call
-# (or `uvx mcp-server-linkedin@latest --login`) opens a LinkedIn login window
-# and caches the session under ~/.linkedin-mcp/profile/. It's the operator's
-# own account on their own machine — nothing is pasted into chat.
+# No credential clawk can store or inject. This server authenticates ONLY by
+# driving a real browser and saving a session profile under ~/.linkedin-mcp/.
+# There is NO cookie/email/password env var and NO --cookie flag (v4.x), so
+# clawk cannot hand it credentials — `--login` does an interactive password
+# sign-in inside that browser.
+#
+# CRITICAL: run `--login` ONLY on the operator's own laptop on a normal
+# residential IP — NEVER on a VPS/datacenter IP. A fresh password login from a
+# datacenter IP + new device + headless browser is exactly what makes LinkedIn
+# throw a verification challenge and then BAN the account for automation; the
+# verification code does NOT save it. On a server you transplant the session
+# instead (see post_install + the `linkedin-outreach` skill).
 auth:
   type: none
 
@@ -50,8 +58,25 @@ post_install: |
   restricted/banned — there is no "safe at scale". Use low daily volume,
   personalize every message, and keep yourself in the loop.
 
-  First-time login (opens a browser window to sign in once):
-    uvx mcp-server-linkedin@latest --login
+  >> DO NOT run `--login` on this server if it's a VPS / cloud / datacenter IP. <<
+  A fresh email+password login from a datacenter IP + new device triggers a
+  LinkedIn verification challenge, and the account gets banned for automation.
+  Entering the verification code does NOT rescue it. (This server has no cookie
+  or password env var — auth is a saved browser session only.)
+
+  Authenticate by TRANSPLANTING a session created on your own machine:
+    1. On YOUR OWN laptop (normal home/residential IP), with `uv` installed:
+         UV_HTTP_TIMEOUT=300 uvx mcp-server-linkedin@latest --login
+       Sign in, clear any captcha / confirm in the LinkedIn mobile app, then:
+         uvx mcp-server-linkedin@latest --status   # should say session valid
+    2. Copy the WHOLE ~/.linkedin-mcp/ directory (the full cookie set, not just
+       li_at) to this server. Point the server at it via USER_DATA_DIR /
+       --user-data-dir, or for Docker mount it: -v ~/.linkedin-mcp:/home/pwuser/.linkedin-mcp
+    3. Route this server's browser through a residential proxy in your region
+       (there is no proxy flag — do it at the OS/network/container layer). This
+       is what neutralizes the datacenter-IP signal the code can't fix.
+  If unattended cloud use is the goal, running the MCP on your own machine, or a
+  managed auth API (e.g. Unipile), is far lower ban-risk than a raw VPS.
 
   The two action tools — `send_message` and `connect_with_person` — are OFF by
   default. Enable them in the checklist (or `clawk mcp configure linkedin`)

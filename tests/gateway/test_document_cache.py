@@ -22,6 +22,7 @@ from gateway.platforms.base import (
 # Fixture: redirect DOCUMENT_CACHE_DIR to a temp directory for every test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _redirect_cache(tmp_path, monkeypatch):
     """Point the module-level DOCUMENT_CACHE_DIR to a fresh tmp_path."""
@@ -33,6 +34,7 @@ def _redirect_cache(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # TestGetDocumentCacheDir
 # ---------------------------------------------------------------------------
+
 
 class TestGetDocumentCacheDir:
     def test_creates_directory(self, tmp_path):
@@ -50,6 +52,7 @@ class TestGetDocumentCacheDir:
 # ---------------------------------------------------------------------------
 # TestCacheDocumentFromBytes
 # ---------------------------------------------------------------------------
+
 
 class TestCacheDocumentFromBytes:
     def test_basic_caching(self):
@@ -103,6 +106,7 @@ class TestCacheDocumentFromBytes:
 # TestCleanupDocumentCache
 # ---------------------------------------------------------------------------
 
+
 class TestCleanupDocumentCache:
     def test_removes_old_files(self, tmp_path):
         cache_dir = get_document_cache_dir()
@@ -143,6 +147,7 @@ class TestCleanupDocumentCache:
 # TestSupportedDocumentTypes
 # ---------------------------------------------------------------------------
 
+
 class TestSupportedDocumentTypes:
     def test_all_extensions_have_mime_types(self):
         for ext, mime in SUPPORTED_DOCUMENT_TYPES.items():
@@ -182,7 +187,10 @@ _PNG_1PX = bytes.fromhex(
 class TestCacheMediaBytes:
     def test_pdf_routes_to_document(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"%PDF-1.4 body", filename="report.pdf", mime_type="application/pdf")
+
+        result = cache_media_bytes(
+            b"%PDF-1.4 body", filename="report.pdf", mime_type="application/pdf"
+        )
         assert result is not None
         assert result.kind == "document"
         assert result.media_type == "application/pdf"
@@ -192,7 +200,10 @@ class TestCacheMediaBytes:
 
     def test_png_routes_to_image(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(_PNG_1PX, filename="photo.png", mime_type="image/png")
+
+        result = cache_media_bytes(
+            _PNG_1PX, filename="photo.png", mime_type="image/png"
+        )
         assert result is not None
         assert result.kind == "image"
         assert result.media_type == "image/png"
@@ -200,19 +211,26 @@ class TestCacheMediaBytes:
 
     def test_native_photo_without_filename_uses_default_kind(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(_PNG_1PX, filename="", mime_type="", default_kind="image")
+
+        result = cache_media_bytes(
+            _PNG_1PX, filename="", mime_type="", default_kind="image"
+        )
         assert result is not None
         assert result.kind == "image"
 
     def test_mp4_routes_to_video(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"\x00\x00\x00\x18ftypmp42", filename="clip.mp4", mime_type="video/mp4")
+
+        result = cache_media_bytes(
+            b"\x00\x00\x00\x18ftypmp42", filename="clip.mp4", mime_type="video/mp4"
+        )
         assert result is not None
         assert result.kind == "video"
         assert result.media_type == "video/mp4"
 
     def test_mime_only_resolves_extension(self):
         from gateway.platforms.base import cache_media_bytes
+
         result = cache_media_bytes(b"col1,col2\n1,2", filename="", mime_type="text/csv")
         assert result is not None
         assert result.kind == "document"
@@ -220,10 +238,16 @@ class TestCacheMediaBytes:
 
     def test_unsupported_document_returns_none(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"MZ", filename="malware.exe", mime_type="application/x-msdownload")
+
+        result = cache_media_bytes(
+            b"MZ", filename="malware.exe", mime_type="application/x-msdownload"
+        )
         assert result is None
 
     def test_invalid_image_returns_none(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"<html>not an image</html>", filename="x.png", mime_type="image/png")
+
+        result = cache_media_bytes(
+            b"<html>not an image</html>", filename="x.png", mime_type="image/png"
+        )
         assert result is None

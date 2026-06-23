@@ -225,7 +225,9 @@ def _remove_path(path: Path) -> bool:
     return False
 
 
-def uninstall_gui(clawk_home: "Path | None" = None, *, remove_userdata: bool = True) -> "list[Path]":
+def uninstall_gui(
+    clawk_home: "Path | None" = None, *, remove_userdata: bool = True
+) -> "list[Path]":
     """Remove the desktop GUI's artifacts, leaving the agent + user data intact.
 
     Removes:

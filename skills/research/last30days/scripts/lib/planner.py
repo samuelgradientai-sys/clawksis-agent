@@ -75,9 +75,18 @@ SOURCE_CAPABILITIES = {
     "perplexity": {"web", "reference", "analysis"},
 }
 DEFAULT_INTENT_CAPABILITIES = {
-    "comparison": {"discussion", "video", "web", "reference", "social", "link", "market"},
+    "comparison": {
+        "discussion",
+        "video",
+        "web",
+        "reference",
+        "social",
+        "link",
+        "market",
+    },
     "how_to": {"discussion", "video", "web", "reference", "link"},
 }
+
 
 def plan_query(
     *,
@@ -112,14 +121,29 @@ def plan_query(
     if provider and model:
         try:
             raw = provider.generate_json(model, prompt)
-            plan = _sanitize_plan(raw, topic, available_sources, requested_sources, depth)
+            plan = _sanitize_plan(
+                raw, topic, available_sources, requested_sources, depth
+            )
             if plan.subqueries:
                 return plan
-        except (ValueError, KeyError, json.JSONDecodeError, OSError, http.HTTPError) as exc:
+        except (
+            ValueError,
+            KeyError,
+            json.JSONDecodeError,
+            OSError,
+            http.HTTPError,
+        ) as exc:
             import sys
-            print(f"[Planner] LLM planning failed, using deterministic fallback: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+            print(
+                f"[Planner] LLM planning failed, using deterministic fallback: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
             return _fallback_plan(
-                topic, available_sources, requested_sources, depth,
+                topic,
+                available_sources,
+                requested_sources,
+                depth,
                 note=f"fallback-plan (LLM error: {type(exc).__name__})",
             )
     # No --plan was passed and no engine-internal provider is configured.
@@ -133,6 +157,7 @@ def plan_query(
     # Hermes Agent Use Cases failure mode.
     if not internal_subrun:
         import sys
+
         print(
             "[Planner] No --plan passed. If you are the reasoning model hosting "
             "this skill (Claude Code, Codex, Hermes, Gemini, or any agent runtime), "
@@ -211,8 +236,7 @@ def _sanitize_plan(
     requested = set(requested_sources or [])
     available = set(available_sources)
     eligible_sources = [
-        source for source in available_sources
-        if (not requested or source in requested)
+        source for source in available_sources if (not requested or source in requested)
     ]
     source_weights = {
         source: float(weight)
@@ -220,7 +244,11 @@ def _sanitize_plan(
         if source in available
     }
     if requested:
-        source_weights = {source: weight for source, weight in source_weights.items() if source in requested}
+        source_weights = {
+            source: weight
+            for source, weight in source_weights.items()
+            if source in requested
+        }
     if not source_weights:
         source_weights = _default_source_weights(_infer_intent(topic), eligible_sources)
     # Ensure all eligible sources are available for subqueries. The LLM may
@@ -235,10 +263,16 @@ def _sanitize_plan(
     source_weights = _normalize_weights(source_weights)
 
     subqueries: list[schema.SubQuery] = []
-    for index, subquery in enumerate((raw.get("subqueries") or [])[:_max_subqueries(intent_hint, topic)], start=1):
+    for index, subquery in enumerate(
+        (raw.get("subqueries") or [])[: _max_subqueries(intent_hint, topic)], start=1
+    ):
         if not isinstance(subquery, dict):
             continue
-        sources = [source for source in subquery.get("sources") or [] if source in source_weights]
+        sources = [
+            source
+            for source in subquery.get("sources") or []
+            if source in source_weights
+        ]
         if requested:
             sources = [source for source in sources if source in requested]
         if not sources:
@@ -262,7 +296,9 @@ def _sanitize_plan(
         return _fallback_plan(topic, available_sources, requested_sources, depth)
 
     intent = intent_hint
-    freshness_mode = str(raw.get("freshness_mode") or _default_freshness(intent)).strip()
+    freshness_mode = str(
+        raw.get("freshness_mode") or _default_freshness(intent)
+    ).strip()
     if intent == "how_to":
         freshness_mode = "evergreen_ok"
     cluster_mode = str(raw.get("cluster_mode") or _default_cluster_mode(intent)).strip()
@@ -284,11 +320,15 @@ def _sanitize_plan(
             )
         ),
         source_weights=source_weights,
-        notes=[str(note).strip() for note in raw.get("notes") or [] if str(note).strip()],
+        notes=[
+            str(note).strip() for note in raw.get("notes") or [] if str(note).strip()
+        ],
     )
 
 
-def _normalize_subquery_weights(subqueries: list[schema.SubQuery]) -> list[schema.SubQuery]:
+def _normalize_subquery_weights(
+    subqueries: list[schema.SubQuery],
+) -> list[schema.SubQuery]:
     total = sum(subquery.weight for subquery in subqueries) or 1.0
     return [
         schema.SubQuery(
@@ -304,10 +344,7 @@ def _normalize_subquery_weights(subqueries: list[schema.SubQuery]) -> list[schem
 
 def _normalize_weights(weights: dict[str, float]) -> dict[str, float]:
     total = sum(max(weight, 0.0) for weight in weights.values()) or 1.0
-    return {
-        source: max(weight, 0.0) / total
-        for source, weight in weights.items()
-    }
+    return {source: max(weight, 0.0) / total for source, weight in weights.items()}
 
 
 def _trim_subqueries_for_depth(
@@ -355,7 +392,9 @@ def _trim_subqueries_for_depth(
                     if source not in preferred_sources:
                         preferred_sources.append(source)
         else:
-            preferred_sources = [source for source in ranked_sources if source in subquery.sources][:limit]
+            preferred_sources = [
+                source for source in ranked_sources if source in subquery.sources
+            ][:limit]
             if len(preferred_sources) < limit:
                 for source in ranked_sources:
                     if source in preferred_sources:
@@ -389,13 +428,15 @@ def _fallback_plan(
     base_search = _keyword_query(topic, core)
     base_ranking = _ranking_query(topic, core)
 
-    subqueries = [schema.SubQuery(
-        label="primary",
-        search_query=base_search,
-        ranking_query=base_ranking,
-        sources=list(source_weights),
-        weight=1.0,
-    )]
+    subqueries = [
+        schema.SubQuery(
+            label="primary",
+            search_query=base_search,
+            ranking_query=base_ranking,
+            sources=list(source_weights),
+            weight=1.0,
+        )
+    ]
 
     if depth != "quick" and intent == "comparison":
         entities = _comparison_entities(topic)
@@ -416,7 +457,12 @@ def _fallback_plan(
                 label="odds",
                 search_query=f"{base_search} odds forecast",
                 ranking_query=f"What are the current odds, forecasts, or market signals about {topic}?",
-                sources=[source for source in source_weights if source in {"polymarket", "grounding", "x", "reddit"}] or list(source_weights),
+                sources=[
+                    source
+                    for source in source_weights
+                    if source in {"polymarket", "grounding", "x", "reddit"}
+                ]
+                or list(source_weights),
                 weight=0.7,
             )
         )
@@ -426,7 +472,12 @@ def _fallback_plan(
                 label="reaction",
                 search_query=f"{base_search} reaction update",
                 ranking_query=f"What new reactions or follow-up reporting from the last 30 days matter for {topic}?",
-                sources=[source for source in source_weights if source in {"x", "reddit", "grounding", "hackernews"}] or list(source_weights),
+                sources=[
+                    source
+                    for source in source_weights
+                    if source in {"x", "reddit", "grounding", "hackernews"}
+                ]
+                or list(source_weights),
                 weight=0.7,
             )
         )
@@ -437,8 +488,14 @@ def _fallback_plan(
     # the literal phrase. Fixes 2026-04-19 Hermes Agent Use Cases failure.
     # Excluded for comparison/prediction since those already have dedicated
     # fanout (entity-per-subquery / odds).
-    if depth != "quick" and intent not in {"comparison", "prediction"} and _has_intent_modifier(topic):
-        subqueries.extend(_intent_modifier_subqueries(topic, core, base_search, source_weights))
+    if (
+        depth != "quick"
+        and intent not in {"comparison", "prediction"}
+        and _has_intent_modifier(topic)
+    ):
+        subqueries.extend(
+            _intent_modifier_subqueries(topic, core, base_search, source_weights)
+        )
 
     return schema.QueryPlan(
         intent=intent,
@@ -447,7 +504,7 @@ def _fallback_plan(
         raw_topic=topic,
         subqueries=_normalize_subquery_weights(
             _trim_subqueries_for_depth(
-                subqueries[:_max_subqueries(intent, topic)],
+                subqueries[: _max_subqueries(intent, topic)],
                 intent,
                 depth,
                 list(source_weights),
@@ -464,23 +521,37 @@ def _infer_intent(topic: str) -> str:
     if re.search(r"\b(vs|versus|compare|compared to|difference between)\b", text):
         return "comparison"
     # Slash-separated proper nouns: "React/Vue/Svelte" (not URLs, not acronyms like CI/CD or I/O)
-    if not re.search(r"https?://", topic) and re.search(r"\b[A-Z][a-z]{2,}(?:/[A-Z][a-z]{2,})+\b", topic):
+    if not re.search(r"https?://", topic) and re.search(
+        r"\b[A-Z][a-z]{2,}(?:/[A-Z][a-z]{2,})+\b", topic
+    ):
         return "comparison"
-    if re.search(r"\b(odds|predict|prediction|forecast|chance|probability|will .* win)\b", text):
+    if re.search(
+        r"\b(odds|predict|prediction|forecast|chance|probability|will .* win)\b", text
+    ):
         return "prediction"
-    if re.search(r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text):
+    if re.search(
+        r"\b(how to|tutorial|guide|setup|step by step|deploy|install)\b", text
+    ):
         return "how_to"
-    if re.search(r"\b(what is|what are|who is|who acquired|when did|parameter count|release date)\b", text):
+    if re.search(
+        r"\b(what is|what are|who is|who acquired|when did|parameter count|release date)\b",
+        text,
+    ):
         return "factual"
     if re.search(r"\b(thoughts on|worth it|should i|opinion|review)\b", text):
         return "opinion"
-    if re.search(r"\b(latest|news|announced|just shipped|launched|released|update)\b", text):
+    if re.search(
+        r"\b(latest|news|announced|just shipped|launched|released|update)\b", text
+    ):
         return "breaking_news"
     if re.search(r"\b(pricing|feature|features|best .* for|top .* for)\b", text):
         return "product"
     if re.search(r"\b(explain|concept|protocol|architecture|what does)\b", text):
         return "concept"
-    if re.search(r"\b(tournament|championship|playoffs|march madness|world cup|olympics|super bowl|final four|ceremony|awards|keynote)\b", text):
+    if re.search(
+        r"\b(tournament|championship|playoffs|march madness|world cup|olympics|super bowl|final four|ceremony|awards|keynote)\b",
+        text,
+    ):
         return "breaking_news"
     # Recency signals take priority when nothing more specific matched.
     if re.search(r"\b(trending|this week|right now|today|this month)\b", text):
@@ -552,7 +623,8 @@ def _keyword_query(topic: str, core: str) -> str:
     # Only quote title-cased proper nouns (multi-word names). Hyphenated
     # compounds go unquoted so platform tokenizers can split and match.
     title_cased = [
-        term for term in compounds
+        term
+        for term in compounds
         if re.match(r"^(?:[A-Z][a-z]+\s+){1,}[A-Z][a-z]+$", term)
     ]
     quoted = " ".join(f'"{term}"' for term in title_cased[:2])
@@ -595,19 +667,32 @@ def _comparison_entities(topic: str) -> list[str]:
         for part in parts:
             if part and part not in deduped:
                 deduped.append(part)
-        return deduped[:_max_subqueries("comparison")]
+        return deduped[: _max_subqueries("comparison")]
     return []
 
 
 def _should_force_deterministic_plan(topic: str) -> bool:
-    return _infer_intent(topic) == "comparison" and len(_comparison_entities(topic)) >= 2
+    return (
+        _infer_intent(topic) == "comparison" and len(_comparison_entities(topic)) >= 2
+    )
 
 
 _INTENT_MODIFIER_PATTERNS = (
-    "use cases", "use case", "workflows", "workflow",
-    "examples", "example", "tutorial", "tutorials",
-    "review", "reviews", "comparison", "applications",
-    "in practice", "production use", "production",
+    "use cases",
+    "use case",
+    "workflows",
+    "workflow",
+    "examples",
+    "example",
+    "tutorial",
+    "tutorials",
+    "review",
+    "reviews",
+    "comparison",
+    "applications",
+    "in practice",
+    "production use",
+    "production",
     "how i use",
 )
 
@@ -731,7 +816,10 @@ def _how_to_sources(available_sources: list[str]) -> list[str]:
     # how_to-relevant capability (video, discussion, web, reference, link).
     how_to_caps = DEFAULT_INTENT_CAPABILITIES.get("how_to", set())
     for source in available_sources:
-        if source not in selected and SOURCE_CAPABILITIES.get(source, set()) & how_to_caps:
+        if (
+            source not in selected
+            and SOURCE_CAPABILITIES.get(source, set()) & how_to_caps
+        ):
             selected.add(source)
     if not selected:
         return list(available_sources)

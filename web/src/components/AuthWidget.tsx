@@ -90,9 +90,18 @@ export function AuthWidget({ className }: AuthWidgetProps) {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Only probe /api/auth/me in gated mode. In loopback the OAuth gate isn't
+  // engaged, so the endpoint 401s — the JS handles it, but the browser still
+  // logs a red "401" in the console. Skip the probe entirely (the widget
+  // renders nothing in loopback anyway).
+  const authRequired =
+    typeof window !== "undefined" && !!window.__CLAWK_AUTH_REQUIRED__;
+
 
 
   useEffect(() => {
+
+    if (!authRequired) return;
 
     let cancelled = false;
 
@@ -142,9 +151,12 @@ export function AuthWidget({ className }: AuthWidgetProps) {
 
     };
 
-  }, []);
+  }, [authRequired]);
 
 
+
+  // Loopback mode: never engaged the gate → render nothing (and never probed).
+  if (!authRequired) return null;
 
   if (hidden) return null;
 

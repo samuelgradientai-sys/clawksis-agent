@@ -61,7 +61,7 @@ class TestSafeModePluginDiscovery:
             mgr, "_discover_and_load_inner", lambda: called.append(True)
         )
         mgr.discover_and_load()
-        assert called == []          # inner sweep never ran
+        assert called == []  # inner sweep never ran
         assert mgr._discovered is True  # registry settled as clean-empty
         assert mgr._plugins == {}
 

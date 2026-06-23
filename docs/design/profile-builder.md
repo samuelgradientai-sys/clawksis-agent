@@ -94,9 +94,9 @@ class ProfileCreate(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     # NEW — all optional, all best-effort post-create (profile already exists)
-    mcp_servers: List[MCPServerCreate] = []      # synchronous, CLAWK_HOME override
-    builtin_skills: List[str] = []               # synchronous enable/seed
-    hub_skills: List[str] = []                   # async spawn, returns PIDs
+    mcp_servers: List[MCPServerCreate] = []  # synchronous, CLAWK_HOME override
+    builtin_skills: List[str] = []  # synchronous enable/seed
+    hub_skills: List[str] = []  # async spawn, returns PIDs
 ```
 
 The endpoint already does best-effort post-create steps (`seed_profile_skills`,

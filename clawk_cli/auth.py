@@ -1706,6 +1706,32 @@ def _store_provider_state(
         auth_store["active_provider"] = provider_id
 
 
+def mark_provider_active_if_unset(provider_id: str) -> None:
+    """Set ``active_provider`` to *provider_id* only when none is set yet.
+
+    Adding the FIRST credential for a provider should make it the active one
+    (the legacy singleton save path did this implicitly via
+    ``_save_provider_state``). Subsequent adds must leave the user's active
+    choice untouched. No-op on an empty id or when an active provider already
+    exists.
+    """
+
+    normalized = (provider_id or "").strip().lower()
+
+    if not normalized:
+        return
+
+    with _auth_store_lock():
+        auth_store = _load_auth_store()
+
+        current = str(auth_store.get("active_provider") or "").strip()
+
+        if not current:
+            auth_store["active_provider"] = normalized
+
+            _save_auth_store(auth_store)
+
+
 def is_known_auth_provider(provider_id: str) -> bool:
 
     normalized = (provider_id or "").strip().lower()
@@ -2361,7 +2387,11 @@ def resolve_provider(
 
         active = _active_provider_from_store(auth_store)
 
-        if active and active in PROVIDER_REGISTRY:
+        # ``nous`` is a dormant-but-supported provider intentionally kept OUT of
+        # PROVIDER_REGISTRY (so it doesn't surface in the model picker), so accept
+        # it explicitly here — a globally-authenticated Nous login must still
+        # resolve under ``auto``. Mirrors the auth-add special-case.
+        if active and (active in PROVIDER_REGISTRY or active == "nous"):
             status = get_auth_status(active)
 
             if status.get("logged_in"):
@@ -3844,12 +3874,39 @@ def _xai_start_callback_server(
     return server, thread, result, redirect_uri
 
 
+def _read_ready_stdin_line() -> Optional[str]:
+    """Return a stdin line if one is already available (non-blocking), else None.
+
+    Lets a user paste an authorization code while a loopback callback wait is
+    still running (xAI's consent page often shows the code in-page instead of
+    redirecting through 127.0.0.1). POSIX/tty only — returns None where stdin
+    can't be polled (Windows, non-tty, or no select support).
+    """
+
+    try:
+        import select
+
+        if not getattr(sys.stdin, "isatty", lambda: False)():
+            return None
+
+        rlist, _, _ = select.select([sys.stdin], [], [], 0)
+
+        if rlist:
+            return sys.stdin.readline()
+
+    except Exception:
+        return None
+
+    return None
+
+
 def _xai_wait_for_callback(
     server: HTTPServer,
     thread: threading.Thread,
     result: dict[str, Any],
     *,
     timeout_seconds: float = 180.0,
+    manual_paste_redirect_uri: Optional[str] = None,
 ) -> dict[str, Any]:
 
     deadline = time.monotonic() + max(5.0, timeout_seconds)
@@ -3858,6 +3915,21 @@ def _xai_wait_for_callback(
         while time.monotonic() < deadline:
             if result["code"] or result["error"]:
                 return result
+
+            # Accept an authorization code pasted on stdin while we wait for the
+            # loopback callback: xAI's consent page often renders the code
+            # in-page instead of redirecting, so a ready stdin line short-circuits
+            # the wait (PKCE still binds the exchange to this client).
+            if manual_paste_redirect_uri:
+                line = _read_ready_stdin_line()
+
+                if line and line.strip():
+                    parsed = _parse_pasted_callback(line)
+
+                    if parsed.get("code") or parsed.get("error"):
+                        parsed["_manual_paste"] = True
+
+                        return parsed
 
             time.sleep(0.1)
 
@@ -4857,6 +4929,7 @@ def _sync_codex_pool_entries(
     auth_store: Dict[str, Any],
     tokens: Dict[str, str],
     last_refresh: Optional[str],
+    prev_singleton_access_token: Optional[str] = None,
 ) -> None:
     """Mirror a fresh Codex re-auth into the credential_pool OAuth entries.
 
@@ -4958,6 +5031,18 @@ def _sync_codex_pool_entries(
         if source not in REFRESHABLE_SOURCES:
             continue
 
+        # A ``manual:device_code`` entry is only a true alias of the singleton
+        # when its stored access_token matches the PREVIOUS singleton token. A
+        # distinct token means an independent account added via
+        # ``clawk auth add openai-codex`` — a re-auth that targeted a different
+        # account must not clobber it (#39236). The singleton-seeded
+        # ``device_code`` entry is always the singleton and always refreshes.
+        if source == "manual:device_code" and (
+            prev_singleton_access_token is None
+            or entry.get("access_token") != prev_singleton_access_token
+        ):
+            continue
+
         entry["access_token"] = access_token
 
         if refresh_token:
@@ -4992,6 +5077,11 @@ def _save_codex_tokens(
 
         state = _load_provider_state(auth_store, "openai-codex") or {}
 
+        # Capture the PREVIOUS singleton access_token before overwriting it, so
+        # _sync_codex_pool_entries can tell true singleton-alias pool entries
+        # apart from independent accounts (#39236).
+        prev_singleton_access_token = (state.get("tokens") or {}).get("access_token")
+
         state["tokens"] = tokens
 
         state["last_refresh"] = last_refresh
@@ -5003,7 +5093,9 @@ def _save_codex_tokens(
 
         _save_provider_state(auth_store, "openai-codex", state)
 
-        _sync_codex_pool_entries(auth_store, tokens, last_refresh)
+        _sync_codex_pool_entries(
+            auth_store, tokens, last_refresh, prev_singleton_access_token
+        )
 
         _save_auth_store(auth_store)
 
@@ -5190,11 +5282,34 @@ def _refresh_codex_auth_tokens(
 
     """
 
-    refreshed = refresh_codex_oauth_pure(
-        str(tokens.get("access_token", "") or ""),
-        str(tokens.get("refresh_token", "") or ""),
-        timeout_seconds=timeout_seconds,
-    )
+    try:
+        refreshed = refresh_codex_oauth_pure(
+            str(tokens.get("access_token", "") or ""),
+            str(tokens.get("refresh_token", "") or ""),
+            timeout_seconds=timeout_seconds,
+        )
+
+    except AuthError as exc:
+        # A relogin-required failure (invalid_grant / refresh_token_reused) means
+        # our frozen refresh_token went stale because the Codex CLI — or another
+        # Clawksis process — rotated the single-use shared token. Self-heal by
+        # re-importing the canonical token from ~/.codex/auth.json and persisting
+        # it, instead of surfacing a hard 401. Transient failures (e.g. 429 quota,
+        # relogin_required=False) keep the stored token valid → propagate.
+        if not getattr(exc, "relogin_required", False):
+            raise
+
+        imported = _import_codex_cli_tokens()
+
+        if not imported or not imported.get("refresh_token"):
+            # No usable Codex CLI token (absent/expired) or a half-token with no
+            # refresh_token — persisting it would just break the next refresh.
+            # Let the original relogin-required error surface.
+            raise
+
+        _save_codex_tokens(imported, last_refresh=imported.get("last_refresh"))
+
+        return imported
 
     updated_tokens = dict(tokens)
 
@@ -5294,7 +5409,7 @@ def resolve_codex_runtime_credentials(
     try:
         data = _read_codex_tokens()
 
-    except AuthError:
+    except AuthError as exc:
         pool_token = _pool_codex_access_token()
 
         if pool_token:
@@ -5311,6 +5426,37 @@ def resolve_codex_runtime_credentials(
                 "last_refresh": None,
                 "auth_mode": "chatgpt",
             }
+
+        # Singleton lost ONLY its access_token (a refresh_token-only state) and
+        # the pool is empty. In that specific partial state, self-heal from the
+        # Codex CLI shared file (~/.codex/auth.json) when it holds a FULL token:
+        # import + persist it to the Clawksis store and use it, instead of
+        # surfacing a hard 401. A half-token (no refresh_token) must NOT mask the
+        # original error, and other failures (no provider at all →
+        # codex_auth_missing) are NOT silently healed from ~/.codex — they propagate.
+        if getattr(exc, "code", "") == "codex_auth_missing_access_token":
+            imported = _import_codex_cli_tokens()
+
+            if (
+                imported
+                and imported.get("access_token")
+                and imported.get("refresh_token")
+            ):
+                _save_codex_tokens(imported, last_refresh=imported.get("last_refresh"))
+
+                base_url = (
+                    os.getenv("CLAWK_CODEX_BASE_URL", "").strip().rstrip("/")
+                    or DEFAULT_CODEX_BASE_URL
+                )
+
+                return {
+                    "provider": "openai-codex",
+                    "base_url": base_url,
+                    "api_key": imported["access_token"],
+                    "source": "clawk-auth-store",
+                    "last_refresh": imported.get("last_refresh"),
+                    "auth_mode": "chatgpt",
+                }
 
         raise
 
@@ -9610,6 +9756,12 @@ def _xai_oauth_loopback_login(
 
     token_endpoint = discovery["token_endpoint"]
 
+    # True when the eventual callback comes from a manual paste — either the
+    # explicit --manual-paste path or the loopback-timeout fallback below. On
+    # that path a bare authorization-code paste yields state=None, and the local
+    # state-equality check is redundant (PKCE binds the exchange to this client).
+    bare_code_paste_ok = manual_paste
+
     if manual_paste:
         # No HTTP listener — synthesize a redirect_uri matching what
 
@@ -9730,6 +9882,8 @@ def _xai_oauth_loopback_login(
 
                 callback = _prompt_manual_callback_paste(redirect_uri)
 
+                bare_code_paste_ok = True
+
                 if callback.get("code") is None and callback.get("error") is None:
                     raise exc
 
@@ -9783,7 +9937,7 @@ def _xai_oauth_loopback_login(
 
     # See #26923 (AccursedGalaxy comment, 2026-05-20).
 
-    if callback_state is None and manual_paste:
+    if callback_state is None and bare_code_paste_ok:
         callback_state = state
 
     if callback_state != state:

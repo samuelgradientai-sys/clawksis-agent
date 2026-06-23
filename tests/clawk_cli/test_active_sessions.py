@@ -11,25 +11,47 @@ from clawk_cli import active_sessions
 
 def test_resolve_max_concurrent_sessions_values(caplog):
     assert active_sessions.resolve_max_concurrent_sessions({}) is None
-    assert active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": None}) is None
-    assert active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": 0}) is None
-    assert active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": -1}) is None
-    assert active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": "3"}) == 3
     assert (
-        active_sessions.resolve_max_concurrent_sessions(
-            {"gateway": {"max_concurrent_sessions": 4}}
-        )
+        active_sessions.resolve_max_concurrent_sessions({
+            "max_concurrent_sessions": None
+        })
+        is None
+    )
+    assert (
+        active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": 0})
+        is None
+    )
+    assert (
+        active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": -1})
+        is None
+    )
+    assert (
+        active_sessions.resolve_max_concurrent_sessions({
+            "max_concurrent_sessions": "3"
+        })
+        == 3
+    )
+    assert (
+        active_sessions.resolve_max_concurrent_sessions({
+            "gateway": {"max_concurrent_sessions": 4}
+        })
         == 4
     )
     assert (
-        active_sessions.resolve_max_concurrent_sessions(
-            {"max_concurrent_sessions": 2, "gateway": {"max_concurrent_sessions": 4}}
-        )
+        active_sessions.resolve_max_concurrent_sessions({
+            "max_concurrent_sessions": 2,
+            "gateway": {"max_concurrent_sessions": 4},
+        })
         == 2
     )
 
     caplog.set_level(logging.WARNING)
-    assert active_sessions.resolve_max_concurrent_sessions({"max_concurrent_sessions": "many"}) is None
+    assert (
+        active_sessions.resolve_max_concurrent_sessions({
+            "max_concurrent_sessions": "many"
+        })
+        is None
+    )
     assert any(
         "Ignoring invalid max_concurrent_sessions='many'" in record.message
         for record in caplog.records
@@ -107,9 +129,10 @@ def test_active_session_registry_prunes_dead_pids(tmp_path, monkeypatch):
 
     assert message is None
     assert lease is not None
-    assert [entry["session_id"] for entry in active_sessions.active_session_registry_snapshot()] == [
-        "session-1"
-    ]
+    assert [
+        entry["session_id"]
+        for entry in active_sessions.active_session_registry_snapshot()
+    ] == ["session-1"]
     lease.release()
 
 
@@ -169,9 +192,10 @@ def test_active_session_hard_exit_is_reclaimed(tmp_path, monkeypatch):
     assert child_pid > 0
     assert message is None
     assert lease is not None
-    assert [entry["session_id"] for entry in active_sessions.active_session_registry_snapshot()] == [
-        "next-session"
-    ]
+    assert [
+        entry["session_id"]
+        for entry in active_sessions.active_session_registry_snapshot()
+    ] == ["next-session"]
     lease.release()
 
 
@@ -190,13 +214,17 @@ def test_concurrent_acquire_claims_only_one_last_slot(tmp_path, monkeypatch):
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(_claim, range(8)))
 
-    leases = [lease for lease, message in results if lease is not None and message is None]
+    leases = [
+        lease for lease, message in results if lease is not None and message is None
+    ]
     blocked = [message for lease, message in results if lease is None and message]
 
     try:
         assert len(leases) == 1
         assert len(blocked) == 7
-        assert active_sessions.active_session_registry_snapshot()[0]["session_id"].startswith("session-")
+        assert active_sessions.active_session_registry_snapshot()[0][
+            "session_id"
+        ].startswith("session-")
     finally:
         for lease in leases:
             lease.release()
@@ -307,7 +335,8 @@ def test_pid_start_time_mismatch_prunes_reused_pid(tmp_path, monkeypatch):
 
     assert message is None
     assert lease is not None
-    assert [entry["session_id"] for entry in active_sessions.active_session_registry_snapshot()] == [
-        "new-session"
-    ]
+    assert [
+        entry["session_id"]
+        for entry in active_sessions.active_session_registry_snapshot()
+    ] == ["new-session"]
     lease.release()

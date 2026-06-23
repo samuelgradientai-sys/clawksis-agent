@@ -95,7 +95,12 @@ class TestWinPtyBridgeSpawn:
     def test_spawn_raises_on_missing_argv0(self, tmp_path):
         # pywinpty wraps CreateProcessW failures; surface as OSError / RuntimeError.
         bogus = str(tmp_path / "definitely-not-a-real-binary.exe")
-        with pytest.raises((FileNotFoundError, OSError, RuntimeError, PtyUnavailableError)):
+        with pytest.raises((
+            FileNotFoundError,
+            OSError,
+            RuntimeError,
+            PtyUnavailableError,
+        )):
             WinPtyBridge.spawn([bogus])
 
 
@@ -181,7 +186,7 @@ class TestWinPtyBridgeResize:
         )
         try:
             bridge.resize(cols=131072, rows=1)  # must not raise
-            bridge.resize(cols=0, rows=-5)      # nor this
+            bridge.resize(cols=0, rows=-5)  # nor this
             assert bridge.is_alive()
         finally:
             bridge.close()
@@ -230,17 +235,21 @@ class TestClampDimension:
 @windows_only
 class TestWinPtyBridgeClose:
     def test_close_is_idempotent(self):
-        bridge = WinPtyBridge.spawn(
-            [sys.executable, "-c", "import time; time.sleep(30)"]
-        )
+        bridge = WinPtyBridge.spawn([
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        ])
         bridge.close()
         bridge.close()  # must not raise
         assert not bridge.is_alive()
 
     def test_close_terminates_long_running_child(self):
-        bridge = WinPtyBridge.spawn(
-            [sys.executable, "-c", "import time; time.sleep(30)"]
-        )
+        bridge = WinPtyBridge.spawn([
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        ])
         pid = bridge.pid
         assert bridge.is_alive(), f"child pid {pid} not alive before close"
         bridge.close()

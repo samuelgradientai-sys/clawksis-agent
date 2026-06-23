@@ -34,7 +34,15 @@ from clawk_cli.secret_prompt import masked_secret_prompt
 
 
 # Providers that support OAuth login in addition to API keys.
-_OAUTH_CAPABLE_PROVIDERS = {"anthropic", "nous", "openai-codex", "xai-oauth", "qwen-oauth", "google-gemini-cli", "minimax-oauth"}
+_OAUTH_CAPABLE_PROVIDERS = {
+    "anthropic",
+    "nous",
+    "openai-codex",
+    "xai-oauth",
+    "qwen-oauth",
+    "google-gemini-cli",
+    "minimax-oauth",
+}
 
 
 def _get_custom_provider_names() -> list:
@@ -118,18 +126,46 @@ def _classify_exhausted_status(entry) -> tuple[str, bool]:
     reason = str(getattr(entry, "last_error_reason", "") or "").strip().lower()
     message = str(getattr(entry, "last_error_message", "") or "").strip().lower()
 
-    if code == 429 or any(token in reason for token in ("rate_limit", "usage_limit", "quota", "exhausted")) or any(
-        token in message for token in ("rate limit", "usage limit", "quota", "too many requests")
+    if (
+        code == 429
+        or any(
+            token in reason
+            for token in ("rate_limit", "usage_limit", "quota", "exhausted")
+        )
+        or any(
+            token in message
+            for token in ("rate limit", "usage limit", "quota", "too many requests")
+        )
     ):
         return "rate-limited", True
 
-    if code in {401, 403} or any(token in reason for token in ("invalid_token", "invalid_grant", "unauthorized", "forbidden", "auth")) or any(
-        token in message for token in ("unauthorized", "forbidden", "expired", "revoked", "invalid token", "authentication")
+    if (
+        code in {401, 403}
+        or any(
+            token in reason
+            for token in (
+                "invalid_token",
+                "invalid_grant",
+                "unauthorized",
+                "forbidden",
+                "auth",
+            )
+        )
+        or any(
+            token in message
+            for token in (
+                "unauthorized",
+                "forbidden",
+                "expired",
+                "revoked",
+                "invalid token",
+                "authentication",
+            )
+        )
     ):
         return "auth failed", False
 
     return "exhausted", True
-
 
 
 def _format_exhausted_status(entry) -> str:
@@ -163,7 +199,12 @@ def _format_exhausted_status(entry) -> str:
 
 def auth_add_command(args) -> None:
     provider = _normalize_provider(getattr(args, "provider", ""))
-    if provider not in PROVIDER_REGISTRY and provider != "openrouter" and not provider.startswith(CUSTOM_POOL_PREFIX):
+    if (
+        provider not in PROVIDER_REGISTRY
+        and provider != "openrouter"
+        and provider != "nous"
+        and not provider.startswith(CUSTOM_POOL_PREFIX)
+    ):
         raise SystemExit(f"Unknown provider: {provider}")
 
     requested_type = str(getattr(args, "auth_type", "") or "").strip().lower()
@@ -173,7 +214,11 @@ def auth_add_command(args) -> None:
         if provider.startswith(CUSTOM_POOL_PREFIX):
             requested_type = AUTH_TYPE_API_KEY
         else:
-            requested_type = AUTH_TYPE_OAUTH if provider in _OAUTH_CAPABLE_PROVIDERS else AUTH_TYPE_API_KEY
+            requested_type = (
+                AUTH_TYPE_OAUTH
+                if provider in _OAUTH_CAPABLE_PROVIDERS
+                else AUTH_TYPE_API_KEY
+            )
 
     pool = load_pool(provider)
 
@@ -188,6 +233,7 @@ def auth_add_command(args) -> None:
                 _load_auth_store,
                 unsuppress_credential_source,
             )
+
             suppressed = _load_auth_store().get("suppressed_sources", {})
             for src in list(suppressed.get(provider, []) or []):
                 unsuppress_credential_source(provider, src)
@@ -204,7 +250,10 @@ def auth_add_command(args) -> None:
         label = (getattr(args, "label", None) or "").strip()
         if not label:
             if sys.stdin.isatty():
-                label = input(f"Label (optional, default: {default_label}): ").strip() or default_label
+                label = (
+                    input(f"Label (optional, default: {default_label}): ").strip()
+                    or default_label
+                )
             else:
                 label = default_label
         entry = PooledCredential(
@@ -244,7 +293,9 @@ def auth_add_command(args) -> None:
             base_url=_provider_base_url(provider),
         )
         pool.add_entry(entry)
-        print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
+        print(
+            f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"'
+        )
         return
 
     if provider == "nous":
@@ -276,15 +327,24 @@ def auth_add_command(args) -> None:
                 )
                 if rehydrated is not None:
                     custom_label = (getattr(args, "label", None) or "").strip() or None
-                    entry = auth_mod.persist_nous_credentials(rehydrated, label=custom_label)
-                    shown_label = entry.label if entry is not None else label_from_token(
-                        rehydrated.get("access_token", ""), _oauth_default_label(provider, 1),
+                    entry = auth_mod.persist_nous_credentials(
+                        rehydrated, label=custom_label
+                    )
+                    shown_label = (
+                        entry.label
+                        if entry is not None
+                        else label_from_token(
+                            rehydrated.get("access_token", ""),
+                            _oauth_default_label(provider, 1),
+                        )
                     )
                     print(f'Imported {provider} OAuth credentials: "{shown_label}"')
                     return
                 # Rehydrate failed (expired refresh_token, portal down, etc.)
                 # — fall through to device-code flow.
-                print("Could not refresh shared credentials — falling back to device-code login.")
+                print(
+                    "Could not refresh shared credentials — falling back to device-code login."
+                )
 
         creds = auth_mod._nous_device_code_login(
             portal_base_url=getattr(args, "portal_url", None),
@@ -301,8 +361,13 @@ def auth_add_command(args) -> None:
         # doesn't overwrite it on every subsequent load_pool("nous").
         custom_label = (getattr(args, "label", None) or "").strip() or None
         entry = auth_mod.persist_nous_credentials(creds, label=custom_label)
-        shown_label = entry.label if entry is not None else label_from_token(
-            creds.get("access_token", ""), _oauth_default_label(provider, 1),
+        shown_label = (
+            entry.label
+            if entry is not None
+            else label_from_token(
+                creds.get("access_token", ""),
+                _oauth_default_label(provider, 1),
+            )
         )
         print(f'Saved {provider} OAuth device-code credentials: "{shown_label}"')
         return
@@ -341,7 +406,9 @@ def auth_add_command(args) -> None:
         # _save_provider_state). Subsequent adds leave the active provider as-is.
         if first_credential:
             auth_mod.mark_provider_active_if_unset(provider)
-        print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
+        print(
+            f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"'
+        )
         return
 
     if provider == "xai-oauth":
@@ -357,9 +424,16 @@ def auth_add_command(args) -> None:
             last_refresh=creds.get("last_refresh"),
         )
         pool = load_pool(provider)
-        entry = next((e for e in pool.entries() if getattr(e, "source", "") == "loopback_pkce"), None)
-        shown_label = entry.label if entry is not None else label_from_token(
-            creds["tokens"]["access_token"], _oauth_default_label(provider, 1)
+        entry = next(
+            (e for e in pool.entries() if getattr(e, "source", "") == "loopback_pkce"),
+            None,
+        )
+        shown_label = (
+            entry.label
+            if entry is not None
+            else label_from_token(
+                creds["tokens"]["access_token"], _oauth_default_label(provider, 1)
+            )
         )
         print(f'Saved {provider} OAuth credentials: "{shown_label}"')
         return
@@ -370,7 +444,8 @@ def auth_add_command(args) -> None:
         creds = run_gemini_oauth_login_pure()
         auth_mod._mark_google_gemini_cli_active(creds)
         label = (getattr(args, "label", None) or "").strip() or (
-            creds.get("email") or _oauth_default_label(provider, len(pool.entries()) + 1)
+            creds.get("email")
+            or _oauth_default_label(provider, len(pool.entries()) + 1)
         )
         entry = PooledCredential(
             provider=provider,
@@ -383,7 +458,9 @@ def auth_add_command(args) -> None:
             refresh_token=creds.get("refresh_token"),
         )
         pool.add_entry(entry)
-        print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
+        print(
+            f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"'
+        )
         return
 
     if provider == "qwen-oauth":
@@ -404,7 +481,9 @@ def auth_add_command(args) -> None:
             base_url=creds.get("base_url"),
         )
         pool.add_entry(entry)
-        print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
+        print(
+            f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"'
+        )
         return
 
     if provider == "minimax-oauth":
@@ -428,10 +507,14 @@ def auth_add_command(args) -> None:
             base_url=creds.get("inference_base_url"),
         )
         pool.add_entry(entry)
-        print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
+        print(
+            f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"'
+        )
         return
 
-    raise SystemExit(f"`clawk auth add {provider}` is not implemented for auth type {requested_type} yet.")
+    raise SystemExit(
+        f"`clawk auth add {provider}` is not implemented for auth type {requested_type} yet."
+    )
 
 
 def auth_list_command(args) -> None:
@@ -457,7 +540,9 @@ def auth_list_command(args) -> None:
                 marker = "← "
             status = _format_exhausted_status(entry)
             source = _display_source(entry.source)
-            print(f"  #{idx}  {entry.label:<20} {entry.auth_type:<7} {source}{status} {marker}".rstrip())
+            print(
+                f"  #{idx}  {entry.label:<20} {entry.auth_type:<7} {source}{status} {marker}".rstrip()
+            )
         print()
 
 
@@ -520,7 +605,14 @@ def auth_status_command(args) -> None:
         return
 
     print(f"{provider}: logged in")
-    for key in ("auth_type", "client_id", "redirect_uri", "scope", "expires_at", "api_base_url"):
+    for key in (
+        "auth_type",
+        "client_id",
+        "redirect_uri",
+        "scope",
+        "expires_at",
+        "api_base_url",
+    ):
         value = status.get(key)
         if value:
             print(f"  {key}: {value}")
@@ -554,7 +646,12 @@ def _interactive_auth() -> None:
 
     # Show AWS Bedrock credential status (not in the pool — uses boto3 chain)
     try:
-        from agent.bedrock_adapter import has_aws_credentials, resolve_aws_auth_env_var, resolve_bedrock_region
+        from agent.bedrock_adapter import (
+            has_aws_credentials,
+            resolve_aws_auth_env_var,
+            resolve_bedrock_region,
+        )
+
         if has_aws_credentials():
             auth_source = resolve_aws_auth_env_var() or "unknown"
             region = resolve_bedrock_region()
@@ -563,6 +660,7 @@ def _interactive_auth() -> None:
             print(f"  Region: {region}")
             try:
                 import boto3
+
                 sts = boto3.client("sts", region_name=region)
                 identity = sts.get_caller_identity()
                 arn = identity.get("Arn", "unknown")
@@ -576,6 +674,7 @@ def _interactive_auth() -> None:
     # Show Azure Foundry Entra ID status
     try:
         from clawk_cli.config import load_config
+
         _cfg = load_config()
         _model_cfg = _cfg.get("model") if isinstance(_cfg, dict) else None
         if isinstance(_model_cfg, dict):
@@ -588,28 +687,34 @@ def _interactive_auth() -> None:
                     describe_active_credential,
                     has_azure_identity_installed,
                 )
+
                 _base_url = str(_model_cfg.get("base_url") or "").strip()
                 _entra = _model_cfg.get("entra") or {}
                 if not isinstance(_entra, dict):
                     _entra = {}
                 _scope = (
-                    str(_entra.get("scope") or "").strip()
-                    or SCOPE_AI_AZURE_DEFAULT
+                    str(_entra.get("scope") or "").strip() or SCOPE_AI_AZURE_DEFAULT
                 )
                 print(f"azure-foundry (Microsoft Entra ID):")
                 print(f"  Endpoint: {_base_url or '(not configured)'}")
                 print(f"  Scope: {_scope}")
                 if not has_azure_identity_installed():
-                    print("  Status: ⚠ azure-identity not installed "
-                          "(pip install azure-identity)")
+                    print(
+                        "  Status: ⚠ azure-identity not installed "
+                        "(pip install azure-identity)"
+                    )
                 else:
                     _entra_cfg = EntraIdentityConfig(
                         scope=_scope,
                     )
-                    _info = describe_active_credential(config=_entra_cfg, timeout_seconds=10.0)
+                    _info = describe_active_credential(
+                        config=_entra_cfg, timeout_seconds=10.0
+                    )
                     _env_sources = _info.get("env_sources") or []
                     if _info.get("ok"):
-                        _tag = ", ".join(_env_sources) if _env_sources else "default chain"
+                        _tag = (
+                            ", ".join(_env_sources) if _env_sources else "default chain"
+                        )
                         print(f"  Status: ✓ token acquired ({_tag})")
                     else:
                         _err = _info.get("error") or "credential chain exhausted"
@@ -671,7 +776,12 @@ def _pick_provider(prompt: str = "Provider") -> str:
 
 def _interactive_add() -> None:
     provider = _pick_provider("Provider to add credential for")
-    if provider not in PROVIDER_REGISTRY and provider != "openrouter" and not provider.startswith(CUSTOM_POOL_PREFIX):
+    if (
+        provider not in PROVIDER_REGISTRY
+        and provider != "openrouter"
+        and provider != "nous"
+        and not provider.startswith(CUSTOM_POOL_PREFIX)
+    ):
         raise SystemExit(f"Unknown provider: {provider}")
 
     # For OAuth-capable providers, ask which type
@@ -698,11 +808,22 @@ def _interactive_add() -> None:
     if typed_label:
         label = typed_label
 
-    auth_add_command(SimpleNamespace(
-        provider=provider, auth_type=auth_type, label=label, api_key=None,
-        portal_url=None, inference_url=None, client_id=None, scope=None,
-        no_browser=False, timeout=None, insecure=False, ca_bundle=None,
-    ))
+    auth_add_command(
+        SimpleNamespace(
+            provider=provider,
+            auth_type=auth_type,
+            label=label,
+            api_key=None,
+            portal_url=None,
+            inference_url=None,
+            client_id=None,
+            scope=None,
+            no_browser=False,
+            timeout=None,
+            insecure=False,
+            ca_bundle=None,
+        )
+    )
 
 
 def _interactive_remove() -> None:
@@ -715,7 +836,9 @@ def _interactive_remove() -> None:
     # Show entries with indices
     for i, e in enumerate(pool.entries(), 1):
         exhausted = _format_exhausted_status(e)
-        print(f"  #{i}  {e.label:25s} {e.auth_type:10s} {e.source}{exhausted} [id:{e.id}]")
+        print(
+            f"  #{i}  {e.label:25s} {e.auth_type:10s} {e.source}{exhausted} [id:{e.id}]"
+        )
 
     try:
         raw = input("Remove #, id, or label (blank to cancel): ").strip()
@@ -736,7 +859,12 @@ def _interactive_reset() -> None:
 def _interactive_strategy() -> None:
     provider = _pick_provider("Provider to set strategy for")
     current = get_pool_strategy(provider)
-    strategies = [STRATEGY_FILL_FIRST, STRATEGY_ROUND_ROBIN, STRATEGY_LEAST_USED, STRATEGY_RANDOM]
+    strategies = [
+        STRATEGY_FILL_FIRST,
+        STRATEGY_ROUND_ROBIN,
+        STRATEGY_LEAST_USED,
+        STRATEGY_RANDOM,
+    ]
 
     print(f"\nCurrent strategy for {provider}: {current}")
     print()
@@ -765,6 +893,7 @@ def _interactive_strategy() -> None:
         return
 
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     pool_strategies = cfg.get("credential_pool_strategies") or {}
     if not isinstance(pool_strategies, dict):

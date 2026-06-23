@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "Nous Portal にログインしていません — `/model` を実行してサインインし、その後 `/credits` を実行してください。"
+
   approval_expired: "⚠️ 承認の有効期限が切れました（エージェントはもう待機していません）。エージェントに再試行を依頼してください。"
 
   draining:         "⏳ 再起動前に {count} 個のアクティブエージェントの終了を待っています..."

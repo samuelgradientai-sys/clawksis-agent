@@ -41,7 +41,11 @@ import time
 import uuid
 
 _IS_WINDOWS = platform.system() == "Windows"
-from tools.environments.local import _find_shell, _resolve_safe_cwd, _sanitize_subprocess_env
+from tools.environments.local import (
+    _find_shell,
+    _resolve_safe_cwd,
+    _sanitize_subprocess_env,
+)
 from clawk_cli._subprocess_compat import windows_hide_flags
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -55,9 +59,9 @@ logger = logging.getLogger(__name__)
 CHECKPOINT_PATH = get_clawk_home() / "processes.json"
 
 # Limits
-MAX_OUTPUT_CHARS = 200_000      # 200KB rolling output buffer
-FINISHED_TTL_SECONDS = 1800     # Keep finished processes for 30 minutes
-MAX_PROCESSES = 64              # Max concurrent tracked processes (LRU pruning)
+MAX_OUTPUT_CHARS = 200_000  # 200KB rolling output buffer
+FINISHED_TTL_SECONDS = 1800  # Keep finished processes for 30 minutes
+MAX_PROCESSES = 64  # Max concurrent tracked processes (LRU pruning)
 
 # Watch pattern rate limiting — PER SESSION.
 # Hard rule: at most ONE watch-match notification every WATCH_MIN_INTERVAL_SECONDS.
@@ -65,8 +69,10 @@ MAX_PROCESSES = 64              # Max concurrent tracked processes (LRU pruning)
 # After WATCH_STRIKE_LIMIT consecutive strike windows, watch_patterns for that
 # session is permanently disabled and the session falls back to notify_on_complete
 # semantics (one notification when the process actually exits).
-WATCH_MIN_INTERVAL_SECONDS = 15   # Minimum spacing between consecutive watch matches
-WATCH_STRIKE_LIMIT = 3            # Strikes in a row → disable watch + promote to notify_on_complete
+WATCH_MIN_INTERVAL_SECONDS = 15  # Minimum spacing between consecutive watch matches
+WATCH_STRIKE_LIMIT = (
+    3  # Strikes in a row → disable watch + promote to notify_on_complete
+)
 
 # Global circuit breaker — across all sessions. Secondary safety net so concurrent
 # siblings can't collectively flood the user even when each is under its own cap.
@@ -89,35 +95,42 @@ def format_uptime_short(seconds: int) -> str:
 @dataclass
 class ProcessSession:
     """A tracked background process with output buffering."""
-    id: str                                     # Unique session ID ("proc_xxxxxxxxxxxx")
-    command: str                                 # Original command string
-    task_id: str = ""                           # Task/sandbox isolation key
-    session_key: str = ""                       # Gateway session key (for reset protection)
-    pid: Optional[int] = None                   # OS process ID
+
+    id: str  # Unique session ID ("proc_xxxxxxxxxxxx")
+    command: str  # Original command string
+    task_id: str = ""  # Task/sandbox isolation key
+    session_key: str = ""  # Gateway session key (for reset protection)
+    pid: Optional[int] = None  # OS process ID
     process: Optional[subprocess.Popen] = None  # Popen handle (local only)
-    env_ref: Any = None                         # Reference to the environment object
-    cwd: Optional[str] = None                   # Working directory
-    started_at: float = 0.0                     # time.time() of spawn
-    exited: bool = False                        # Whether the process has finished
-    exit_code: Optional[int] = None             # Exit code (None if still running)
-    output_buffer: str = ""                     # Rolling output (last MAX_OUTPUT_CHARS)
+    env_ref: Any = None  # Reference to the environment object
+    cwd: Optional[str] = None  # Working directory
+    started_at: float = 0.0  # time.time() of spawn
+    exited: bool = False  # Whether the process has finished
+    exit_code: Optional[int] = None  # Exit code (None if still running)
+    output_buffer: str = ""  # Rolling output (last MAX_OUTPUT_CHARS)
     max_output_chars: int = MAX_OUTPUT_CHARS
-    detached: bool = False                      # True if recovered from crash (no pipe)
-    pid_scope: str = "host"                     # "host" for local/PTY PIDs, "sandbox" for env-local PIDs
+    detached: bool = False  # True if recovered from crash (no pipe)
+    pid_scope: str = "host"  # "host" for local/PTY PIDs, "sandbox" for env-local PIDs
     # Watcher/notification metadata (persisted for crash recovery)
     watcher_platform: str = ""
     watcher_chat_id: str = ""
     watcher_user_id: str = ""
     watcher_user_name: str = ""
     watcher_thread_id: str = ""
-    watcher_message_id: str = ""                # Triggering message id — reply anchor for topic routing
-    watcher_interval: int = 0                   # 0 = no watcher configured
-    notify_on_complete: bool = False             # Queue agent notification on exit
+    watcher_message_id: str = (
+        ""  # Triggering message id — reply anchor for topic routing
+    )
+    watcher_interval: int = 0  # 0 = no watcher configured
+    notify_on_complete: bool = False  # Queue agent notification on exit
     # Watch patterns — trigger agent notification when output matches any pattern
     watch_patterns: List[str] = field(default_factory=list)
-    _watch_hits: int = field(default=0, repr=False)          # total matches delivered
-    _watch_suppressed: int = field(default=0, repr=False)    # matches dropped by rate limit
-    _watch_disabled: bool = field(default=False, repr=False) # permanently killed after strike limit
+    _watch_hits: int = field(default=0, repr=False)  # total matches delivered
+    _watch_suppressed: int = field(
+        default=0, repr=False
+    )  # matches dropped by rate limit
+    _watch_disabled: bool = field(
+        default=False, repr=False
+    )  # permanently killed after strike limit
     # Per-session rate limit state: at most one match every WATCH_MIN_INTERVAL_SECONDS.
     # When an emission happens, _watch_cooldown_until is set to now + interval and
     # _watch_strike_candidate becomes True. The next match to arrive before that
@@ -129,7 +142,9 @@ class ProcessSession:
     _watch_cooldown_until: float = field(default=0.0, repr=False)
     _watch_strike_candidate: bool = field(default=False, repr=False)
     _watch_consecutive_strikes: int = field(default=0, repr=False)
-    _completion_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    _completion_event: threading.Event = field(
+        default_factory=threading.Event, repr=False
+    )
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _reader_thread: Optional[threading.Thread] = field(default=None, repr=False)
     _pty: Any = field(default=None, repr=False)  # ptyprocess handle (when use_pty=True)
@@ -166,6 +181,7 @@ class ProcessRegistry:
         # both land here, distinguished by "type" field.  CLI process_loop and
         # gateway drain this after each agent turn to auto-trigger new turns.
         import queue as _queue_mod
+
         self.completion_queue: _queue_mod.Queue = _queue_mod.Queue()
 
         # Track sessions whose completion was already consumed by the agent
@@ -185,7 +201,9 @@ class ProcessRegistry:
     def _clean_shell_noise(text: str) -> str:
         """Strip shell startup warnings from the beginning of output."""
         lines = text.split("\n")
-        while lines and any(noise in lines[0] for noise in ProcessRegistry._SHELL_NOISE_SUBSTRINGS):
+        while lines and any(
+            noise in lines[0] for noise in ProcessRegistry._SHELL_NOISE_SUBSTRINGS
+        ):
             lines.pop(0)
         return "\n".join(lines)
 
@@ -330,7 +348,10 @@ class ProcessRegistry:
         """
         with self._global_watch_lock:
             # Handle cooldown expiry first so we can emit the release summary.
-            if self._global_watch_tripped_until and now >= self._global_watch_tripped_until:
+            if (
+                self._global_watch_tripped_until
+                and now >= self._global_watch_tripped_until
+            ):
                 suppressed = self._global_watch_suppressed_during_trip
                 self._global_watch_tripped_until = 0.0
                 self._global_watch_suppressed_during_trip = 0
@@ -360,7 +381,10 @@ class ProcessRegistry:
                 release_msg = None
 
             # Still in cooldown — drop and count.
-            if self._global_watch_tripped_until and now < self._global_watch_tripped_until:
+            if (
+                self._global_watch_tripped_until
+                and now < self._global_watch_tripped_until
+            ):
                 self._global_watch_suppressed_during_trip += 1
                 admit = False
                 trip_now = None
@@ -372,7 +396,9 @@ class ProcessRegistry:
 
                 if self._global_watch_window_hits >= WATCH_GLOBAL_MAX_PER_WINDOW:
                     # Trip the breaker.
-                    self._global_watch_tripped_until = now + WATCH_GLOBAL_COOLDOWN_SECONDS
+                    self._global_watch_tripped_until = (
+                        now + WATCH_GLOBAL_COOLDOWN_SECONDS
+                    )
                     self._global_watch_suppressed_during_trip += 1
                     trip_now = now
                     admit = False
@@ -412,11 +438,19 @@ class ProcessRegistry:
         # ``os.kill(pid, 0)`` is NOT a no-op on Windows (bpo-14484) — use
         # the cross-platform existence check.
         from gateway.status import _pid_exists
+
         return _pid_exists(pid)
 
-    def _refresh_detached_session(self, session: Optional[ProcessSession]) -> Optional[ProcessSession]:
+    def _refresh_detached_session(
+        self, session: Optional[ProcessSession]
+    ) -> Optional[ProcessSession]:
         """Update recovered host-PID sessions when the underlying process has exited."""
-        if session is None or session.exited or not session.detached or session.pid_scope != "host":
+        if (
+            session is None
+            or session.exited
+            or not session.detached
+            or session.pid_scope != "host"
+        ):
             return session
 
         if self._is_host_pid_alive(session.pid):
@@ -483,6 +517,7 @@ class ProcessRegistry:
             return
 
         import psutil
+
         try:
             parent = psutil.Process(pid)
             for child in parent.children(recursive=True):
@@ -636,7 +671,9 @@ class ProcessRegistry:
                 if not _IS_WINDOWS:
                     try:
                         kill_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
-                        os.killpg(os.getpgid(proc.pid), kill_signal)  # windows-footgun: ok - guarded by _IS_WINDOWS above
+                        os.killpg(
+                            os.getpgid(proc.pid), kill_signal
+                        )  # windows-footgun: ok - guarded by _IS_WINDOWS above
                     except (ProcessLookupError, PermissionError, OSError):
                         proc.kill()
                 else:
@@ -763,7 +800,9 @@ class ProcessRegistry:
                 with session._lock:
                     session.output_buffer += chunk
                     if len(session.output_buffer) > session.max_output_chars:
-                        session.output_buffer = session.output_buffer[-session.max_output_chars:]
+                        session.output_buffer = session.output_buffer[
+                            -session.max_output_chars :
+                        ]
                 self._check_watch_patterns(session, chunk)
         except Exception as e:
             logger.debug("Process stdout reader ended: %s", e)
@@ -778,7 +817,12 @@ class ProcessRegistry:
             self._move_to_finished(session)
 
     def _env_poller_loop(
-        self, session: ProcessSession, env: Any, log_path: str, pid_path: str, exit_path: str
+        self,
+        session: ProcessSession,
+        env: Any,
+        log_path: str,
+        pid_path: str,
+        exit_path: str,
     ):
         """Background thread: poll a sandbox log file for non-local backends."""
         quoted_log_path = shlex.quote(log_path)
@@ -793,18 +837,24 @@ class ProcessRegistry:
                 new_output = result.get("output", "")
                 if new_output:
                     # Compute delta for watch pattern scanning
-                    delta = new_output[prev_output_len:] if len(new_output) > prev_output_len else ""
+                    delta = (
+                        new_output[prev_output_len:]
+                        if len(new_output) > prev_output_len
+                        else ""
+                    )
                     prev_output_len = len(new_output)
                     with session._lock:
                         session.output_buffer = new_output
                         if len(session.output_buffer) > session.max_output_chars:
-                            session.output_buffer = session.output_buffer[-session.max_output_chars:]
+                            session.output_buffer = session.output_buffer[
+                                -session.max_output_chars :
+                            ]
                     if delta:
                         self._check_watch_patterns(session, delta)
 
                 # Check if process is still running
                 check = env.execute(
-                    f"kill -0 \"$(cat {quoted_pid_path} 2>/dev/null)\" 2>/dev/null; echo $?",
+                    f'kill -0 "$(cat {quoted_pid_path} 2>/dev/null)" 2>/dev/null; echo $?',
                     timeout=5,
                 )
                 check_output = check.get("output", "").strip()
@@ -839,11 +889,17 @@ class ProcessRegistry:
                     chunk = pty.read(4096)
                     if chunk:
                         # ptyprocess returns bytes
-                        text = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
+                        text = (
+                            chunk
+                            if isinstance(chunk, str)
+                            else chunk.decode("utf-8", errors="replace")
+                        )
                         with session._lock:
                             session.output_buffer += text
                             if len(session.output_buffer) > session.max_output_chars:
-                                session.output_buffer = session.output_buffer[-session.max_output_chars:]
+                                session.output_buffer = session.output_buffer[
+                                    -session.max_output_chars :
+                                ]
                         self._check_watch_patterns(session, text)
                 except EOFError:
                     break
@@ -858,7 +914,7 @@ class ProcessRegistry:
         except Exception as e:
             logger.debug("PTY wait timed out or failed: %s", e)
         session.exited = True
-        session.exit_code = pty.exitstatus if hasattr(pty, 'exitstatus') else -1
+        session.exit_code = pty.exitstatus if hasattr(pty, "exitstatus") else -1
         self._move_to_finished(session)
 
     def _move_to_finished(self, session: ProcessSession):
@@ -879,7 +935,12 @@ class ProcessRegistry:
         # _move_to_finished(), producing duplicate [IMPORTANT: ...] messages.
         if was_running and session.notify_on_complete:
             from tools.ansi_strip import strip_ansi
-            output_tail = strip_ansi(session.output_buffer[-2000:]) if session.output_buffer else ""
+
+            output_tail = (
+                strip_ansi(session.output_buffer[-2000:])
+                if session.output_buffer
+                else ""
+            )
             self.completion_queue.put({
                 "type": "completion",
                 "session_id": session.id,
@@ -908,7 +969,9 @@ class ProcessRegistry:
             except Exception:
                 break
             _evt_sid = evt.get("session_id", "")
-            if evt.get("type") == "completion" and self.is_completion_consumed(_evt_sid):
+            if evt.get("type") == "completion" and self.is_completion_consumed(
+                _evt_sid
+            ):
                 continue
             text = format_process_notification(evt)
             if text:
@@ -962,13 +1025,18 @@ class ProcessRegistry:
         if stdout is not None and not _IS_WINDOWS:
             try:
                 import fcntl
+
                 fd = stdout.fileno()
                 flags = fcntl.fcntl(fd, fcntl.F_GETFL)
                 fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
                 try:
                     chunk = stdout.read()
                     if chunk:
-                        drained = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
+                        drained = (
+                            chunk
+                            if isinstance(chunk, str)
+                            else chunk.decode("utf-8", errors="replace")
+                        )
                 except (BlockingIOError, OSError, ValueError):
                     pass
                 finally:
@@ -983,13 +1051,16 @@ class ProcessRegistry:
             if drained:
                 session.output_buffer += drained
                 if len(session.output_buffer) > session.max_output_chars:
-                    session.output_buffer = session.output_buffer[-session.max_output_chars:]
+                    session.output_buffer = session.output_buffer[
+                        -session.max_output_chars :
+                    ]
             session.exited = True
             session.exit_code = rc
         logger.info(
             "Reconciled session %s: direct child exited with code %s but reader "
             "was still blocked (orphaned pipe). Flipped to exited.",
-            session.id, rc,
+            session.id,
+            rc,
         )
         self._move_to_finished(session)
 
@@ -1006,7 +1077,11 @@ class ProcessRegistry:
         self._reconcile_local_exit(session)
 
         with session._lock:
-            output_preview = strip_ansi(session.output_buffer[-1000:]) if session.output_buffer else ""
+            output_preview = (
+                strip_ansi(session.output_buffer[-1000:])
+                if session.output_buffer
+                else ""
+            )
 
         result = {
             "session_id": session.id,
@@ -1021,7 +1096,9 @@ class ProcessRegistry:
             self._completion_consumed.add(session_id)
         if session.detached:
             result["detached"] = True
-            result["note"] = "Process recovered after restart -- output history unavailable"
+            result["note"] = (
+                "Process recovered after restart -- output history unavailable"
+            )
         return result
 
     def read_log(self, session_id: str, offset: int = 0, limit: int = 200) -> dict:
@@ -1042,7 +1119,7 @@ class ProcessRegistry:
         if offset == 0 and limit > 0:
             selected = lines[-limit:]
         else:
-            selected = lines[offset:offset + limit]
+            selected = lines[offset : offset + limit]
 
         result = {
             "session_id": session.id,
@@ -1096,7 +1173,10 @@ class ProcessRegistry:
         while time.monotonic() < deadline:
             session = self._refresh_detached_session(session)
             if session is None:
-                return {"status": "not_found", "error": f"No process with ID {session_id}"}
+                return {
+                    "status": "not_found",
+                    "error": f"No process with ID {session_id}",
+                }
             # Reconcile against real child state — guards against orphaned-
             # pipe reader hangs where the reader is blocked but the direct
             # child has already exited (issue #17327).
@@ -1134,7 +1214,9 @@ class ProcessRegistry:
         if timeout_note:
             result["timeout_note"] = timeout_note
         else:
-            result["timeout_note"] = f"Waited {effective_timeout}s, process still running"
+            result["timeout_note"] = (
+                f"Waited {effective_timeout}s, process still running"
+            )
         return result
 
     def kill_process(self, session_id: str) -> dict:
@@ -1165,6 +1247,7 @@ class ProcessRegistry:
                         session.process.terminate()
                     else:
                         import psutil
+
                         try:
                             parent = psutil.Process(session.process.pid)
                             for child in parent.children(recursive=True):
@@ -1216,11 +1299,13 @@ class ProcessRegistry:
             return {"status": "already_exited", "error": "Process has already finished"}
 
         # PTY mode -- write through pty handle.
-        if hasattr(session, '_pty') and session._pty:
+        if hasattr(session, "_pty") and session._pty:
             try:
                 # pywinpty expects str on Windows; ptyprocess expects bytes on POSIX.
                 if _IS_WINDOWS:
-                    pty_data = data.decode("utf-8") if isinstance(data, bytes) else str(data)
+                    pty_data = (
+                        data.decode("utf-8") if isinstance(data, bytes) else str(data)
+                    )
                 else:
                     pty_data = data.encode("utf-8") if isinstance(data, str) else data
                 session._pty.write(pty_data)
@@ -1230,7 +1315,10 @@ class ProcessRegistry:
 
         # Popen mode -- write through stdin pipe
         if not session.process or not session.process.stdin:
-            return {"status": "error", "error": "Process stdin not available (non-local backend or stdin closed)"}
+            return {
+                "status": "error",
+                "error": "Process stdin not available (non-local backend or stdin closed)",
+            }
         try:
             session.process.stdin.write(data)
             session.process.stdin.flush()
@@ -1250,7 +1338,7 @@ class ProcessRegistry:
         if session.exited:
             return {"status": "already_exited", "error": "Process has already finished"}
 
-        if hasattr(session, '_pty') and session._pty:
+        if hasattr(session, "_pty") and session._pty:
             try:
                 session._pty.sendeof()
                 return {"status": "ok", "message": "EOF sent"}
@@ -1258,7 +1346,10 @@ class ProcessRegistry:
                 return {"status": "error", "error": str(e)}
 
         if not session.process or not session.process.stdin:
-            return {"status": "error", "error": "Process stdin not available (non-local backend or stdin closed)"}
+            return {
+                "status": "error",
+                "error": "Process stdin not available (non-local backend or stdin closed)",
+            }
         try:
             session.process.stdin.close()
             return {"status": "ok", "message": "stdin closed"}
@@ -1295,7 +1386,9 @@ class ProcessRegistry:
                 "command": s.command[:200],
                 "cwd": s.cwd,
                 "pid": s.pid,
-                "started_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(s.started_at)),
+                "started_at": time.strftime(
+                    "%Y-%m-%dT%H:%M:%S", time.localtime(s.started_at)
+                ),
                 "uptime_seconds": int(time.time() - s.started_at),
                 "status": "exited" if s.exited else "running",
                 "output_preview": s.output_buffer[-200:] if s.output_buffer else "",
@@ -1319,8 +1412,7 @@ class ProcessRegistry:
 
         with self._lock:
             return any(
-                s.task_id == task_id and not s.exited
-                for s in self._running.values()
+                s.task_id == task_id and not s.exited for s in self._running.values()
             )
 
     def has_active_for_session(self, session_key: str) -> bool:
@@ -1341,7 +1433,8 @@ class ProcessRegistry:
         """Kill all running processes, optionally filtered by task_id. Returns count killed."""
         with self._lock:
             targets = [
-                s for s in self._running.values()
+                s
+                for s in self._running.values()
                 if (task_id is None or s.task_id == task_id) and not s.exited
             ]
 
@@ -1359,7 +1452,8 @@ class ProcessRegistry:
         # First prune expired finished sessions
         now = time.time()
         expired = [
-            sid for sid, s in self._finished.items()
+            sid
+            for sid, s in self._finished.items()
             if (now - s.started_at) > FINISHED_TTL_SECONDS
         ]
         for sid in expired:
@@ -1369,7 +1463,9 @@ class ProcessRegistry:
         # If still over limit, remove oldest finished
         total = len(self._running) + len(self._finished)
         if total >= MAX_PROCESSES and self._finished:
-            oldest_id = min(self._finished, key=lambda sid: self._finished[sid].started_at)
+            oldest_id = min(
+                self._finished, key=lambda sid: self._finished[sid].started_at
+            )
             del self._finished[oldest_id]
             self._completion_consumed.discard(oldest_id)
 
@@ -1409,9 +1505,10 @@ class ProcessRegistry:
                             "notify_on_complete": s.notify_on_complete,
                             "watch_patterns": s.watch_patterns,
                         })
-            
+
             # Atomic write to avoid corruption on crash
             from utils import atomic_json_write
+
             atomic_json_write(CHECKPOINT_PATH, entries)
         except Exception as e:
             logger.debug("Failed to write checkpoint file: %s", e, exc_info=True)
@@ -1476,7 +1573,9 @@ class ProcessRegistry:
                 with self._lock:
                     self._running[session.id] = session
                 recovered += 1
-                logger.info("Recovered detached process: %s (pid=%d)", session.command[:60], pid)
+                logger.info(
+                    "Recovered detached process: %s (pid=%d)", session.command[:60], pid
+                )
 
                 # Re-enqueue watcher so gateway can resume notifications
                 if session.watcher_interval > 0:
@@ -1521,7 +1620,7 @@ def format_process_notification(evt: dict) -> "str | None":
         _sup = evt.get("suppressed", 0)
         text = (
             f"[IMPORTANT: Background process {_sid} matched "
-            f"watch pattern \"{_pat}\".\n"
+            f'watch pattern "{_pat}".\n'
             f"Command: {_cmd}\n"
             f"Matched output:\n{_out}"
         )
@@ -1559,34 +1658,43 @@ PROCESS_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["list", "poll", "log", "wait", "kill", "write", "submit", "close"],
-                "description": "Action to perform on background processes"
+                "enum": [
+                    "list",
+                    "poll",
+                    "log",
+                    "wait",
+                    "kill",
+                    "write",
+                    "submit",
+                    "close",
+                ],
+                "description": "Action to perform on background processes",
             },
             "session_id": {
                 "type": "string",
-                "description": "Process session ID (from terminal background output). Required for all actions except 'list'."
+                "description": "Process session ID (from terminal background output). Required for all actions except 'list'.",
             },
             "data": {
                 "type": "string",
-                "description": "Text to send to process stdin (for 'write' and 'submit' actions)"
+                "description": "Text to send to process stdin (for 'write' and 'submit' actions)",
             },
             "timeout": {
                 "type": "integer",
                 "description": "Max seconds to block for 'wait' action. Returns partial output on timeout.",
-                "minimum": 1
+                "minimum": 1,
             },
             "offset": {
                 "type": "integer",
-                "description": "Line offset for 'log' action (default: last 200 lines)"
+                "description": "Line offset for 'log' action (default: last 200 lines)",
             },
             "limit": {
                 "type": "integer",
                 "description": "Max lines to return for 'log' action",
-                "minimum": 1
-            }
+                "minimum": 1,
+            },
         },
-        "required": ["action"]
-    }
+        "required": ["action"],
+    },
 }
 
 
@@ -1594,29 +1702,55 @@ def _handle_process(args, **kw):
     task_id = kw.get("task_id")
     action = args.get("action", "")
     # Coerce to string — some models send session_id as an integer
-    session_id = str(args.get("session_id", "")) if args.get("session_id") is not None else ""
+    session_id = (
+        str(args.get("session_id", "")) if args.get("session_id") is not None else ""
+    )
 
     if action == "list":
-        return json.dumps({"processes": process_registry.list_sessions(task_id=task_id)}, ensure_ascii=False)
+        return json.dumps(
+            {"processes": process_registry.list_sessions(task_id=task_id)},
+            ensure_ascii=False,
+        )
     elif action in {"poll", "log", "wait", "kill", "write", "submit", "close"}:
         if not session_id:
             return tool_error(f"session_id is required for {action}")
         if action == "poll":
             return json.dumps(process_registry.poll(session_id), ensure_ascii=False)
         elif action == "log":
-            return json.dumps(process_registry.read_log(
-                session_id, offset=args.get("offset", 0), limit=args.get("limit", 200)), ensure_ascii=False)
+            return json.dumps(
+                process_registry.read_log(
+                    session_id,
+                    offset=args.get("offset", 0),
+                    limit=args.get("limit", 200),
+                ),
+                ensure_ascii=False,
+            )
         elif action == "wait":
-            return json.dumps(process_registry.wait(session_id, timeout=args.get("timeout")), ensure_ascii=False)
+            return json.dumps(
+                process_registry.wait(session_id, timeout=args.get("timeout")),
+                ensure_ascii=False,
+            )
         elif action == "kill":
-            return json.dumps(process_registry.kill_process(session_id), ensure_ascii=False)
+            return json.dumps(
+                process_registry.kill_process(session_id), ensure_ascii=False
+            )
         elif action == "write":
-            return json.dumps(process_registry.write_stdin(session_id, str(args.get("data", ""))), ensure_ascii=False)
+            return json.dumps(
+                process_registry.write_stdin(session_id, str(args.get("data", ""))),
+                ensure_ascii=False,
+            )
         elif action == "submit":
-            return json.dumps(process_registry.submit_stdin(session_id, str(args.get("data", ""))), ensure_ascii=False)
+            return json.dumps(
+                process_registry.submit_stdin(session_id, str(args.get("data", ""))),
+                ensure_ascii=False,
+            )
         elif action == "close":
-            return json.dumps(process_registry.close_stdin(session_id), ensure_ascii=False)
-    return tool_error(f"Unknown process action: {action}. Use: list, poll, log, wait, kill, write, submit, close")
+            return json.dumps(
+                process_registry.close_stdin(session_id), ensure_ascii=False
+            )
+    return tool_error(
+        f"Unknown process action: {action}. Use: list, poll, log, wait, kill, write, submit, close"
+    )
 
 
 registry.register(

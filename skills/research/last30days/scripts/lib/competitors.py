@@ -29,9 +29,7 @@ _BRAND_TOKEN = (
 )
 
 # A capitalized phrase of 1-4 brand tokens separated by whitespace.
-_CAPITALIZED_PHRASE = re.compile(
-    rf"\b{_BRAND_TOKEN}(?:\s+{_BRAND_TOKEN}){{0,3}}\b"
-)
+_CAPITALIZED_PHRASE = re.compile(rf"\b{_BRAND_TOKEN}(?:\s+{_BRAND_TOKEN}){{0,3}}\b")
 
 # Title-case fillers common in listicle SERPs. Kept flat — extraction
 # rejects a candidate whose entire tokens are stopwords, not candidates
@@ -40,23 +38,95 @@ _STOPWORD_TOKENS: frozenset[str] = frozenset(
     token.lower()
     for token in (
         # Listicle fillers
-        "Top", "Best", "Worst", "Popular", "Leading", "Similar",
-        "Alternatives", "Alternative", "Competitor", "Competitors",
-        "vs", "Vs", "Versus", "Review", "Reviews", "Comparison",
-        "Guide", "List", "Lists", "Full", "Complete", "Free", "Paid",
-        "Tools", "Tool", "Options", "Rivals", "Rival", "Similar",
-        "Pick", "Picks", "Ranking", "Ranked", "Recommended",
+        "Top",
+        "Best",
+        "Worst",
+        "Popular",
+        "Leading",
+        "Similar",
+        "Alternatives",
+        "Alternative",
+        "Competitor",
+        "Competitors",
+        "vs",
+        "Vs",
+        "Versus",
+        "Review",
+        "Reviews",
+        "Comparison",
+        "Guide",
+        "List",
+        "Lists",
+        "Full",
+        "Complete",
+        "Free",
+        "Paid",
+        "Tools",
+        "Tool",
+        "Options",
+        "Rivals",
+        "Rival",
+        "Similar",
+        "Pick",
+        "Picks",
+        "Ranking",
+        "Ranked",
+        "Recommended",
         # Grammar / time
-        "The", "A", "An", "Of", "In", "For", "To", "With", "On", "At",
-        "By", "From", "Is", "Are", "And", "Or", "But", "Than", "As",
-        "This", "That", "These", "Those", "Our", "Your", "Their",
-        "January", "February", "March", "April", "May", "June", "July",
-        "August", "September", "October", "November", "December",
+        "The",
+        "A",
+        "An",
+        "Of",
+        "In",
+        "For",
+        "To",
+        "With",
+        "On",
+        "At",
+        "By",
+        "From",
+        "Is",
+        "Are",
+        "And",
+        "Or",
+        "But",
+        "Than",
+        "As",
+        "This",
+        "That",
+        "These",
+        "Those",
+        "Our",
+        "Your",
+        "Their",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
         # Years likely to appear as standalone tokens
         *(str(year) for year in range(2018, 2031)),
         # Miscellaneous SERP noise
-        "AI", "Apps", "App", "Software", "Platform", "Service", "Startups",
-        "Companies", "Company", "Products", "Product", "Brands", "Brand",
+        "AI",
+        "Apps",
+        "App",
+        "Software",
+        "Platform",
+        "Service",
+        "Startups",
+        "Companies",
+        "Company",
+        "Products",
+        "Product",
+        "Brands",
+        "Brand",
     )
 )
 
@@ -95,7 +165,9 @@ def _normalize_candidate(candidate: str) -> str:
 
 
 def _extract_peer_entities(
-    items: list[dict], topic: str, limit: int,
+    items: list[dict],
+    topic: str,
+    limit: int,
 ) -> list[str]:
     """Score capitalized candidates across SERP items and return top `limit`.
 
@@ -175,8 +247,7 @@ def discover_competitors(
 
     with ThreadPoolExecutor(max_workers=len(queries)) as executor:
         futures = {
-            executor.submit(_search, label, q): label
-            for label, q in queries.items()
+            executor.submit(_search, label, q): label for label, q in queries.items()
         }
         for future in as_completed(futures):
             label = futures[future]
@@ -188,7 +259,9 @@ def discover_competitors(
                 _log(f"Search failed for {label}: {exc}")
 
     if not collected:
-        _log(f"No SERP results for {topic!r} across {searches_run}/{len(queries)} queries")
+        _log(
+            f"No SERP results for {topic!r} across {searches_run}/{len(queries)} queries"
+        )
         return []
 
     entities = _extract_peer_entities(collected, topic, limit=count)

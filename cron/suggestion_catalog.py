@@ -21,7 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-__all__ = ["CatalogEntry", "CATALOG", "seed_catalog_suggestions", "classify_items_script_path"]
+__all__ = [
+    "CatalogEntry",
+    "CATALOG",
+    "seed_catalog_suggestions",
+    "classify_items_script_path",
+]
 
 
 def classify_items_script_path() -> str:
@@ -33,7 +38,7 @@ def classify_items_script_path() -> str:
 class CatalogEntry:
     """A curated starter automation offered as a suggestion."""
 
-    key: str                 # stable dedup key (never re-offered once dismissed)
+    key: str  # stable dedup key (never re-offered once dismissed)
     title: str
     description: str
     job_spec: Dict[str, Any]  # kwargs for cron.jobs.create_job

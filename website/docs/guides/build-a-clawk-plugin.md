@@ -144,11 +144,22 @@ import math
 
 # Safe globals for expression evaluation — no file/network access
 _SAFE_MATH = {
-    "abs": abs, "round": round, "min": min, "max": max,
-    "pow": pow, "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-    "tan": math.tan, "log": math.log, "log2": math.log2, "log10": math.log10,
-    "floor": math.floor, "ceil": math.ceil,
-    "pi": math.pi, "e": math.e,
+    "abs": abs,
+    "round": round,
+    "min": min,
+    "max": max,
+    "pow": pow,
+    "sqrt": math.sqrt,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "log2": math.log2,
+    "log10": math.log10,
+    "floor": math.floor,
+    "ceil": math.ceil,
+    "pi": math.pi,
+    "e": math.e,
     "factorial": math.factorial,
 }
 
@@ -184,9 +195,9 @@ _TIME = {"s": 1, "ms": 0.001, "min": 60, "hr": 3600, "day": 86400}
 
 def _convert_temp(value, from_u, to_u):
     # Normalize to Celsius
-    c = {"F": (value - 32) * 5/9, "K": value - 273.15}.get(from_u, value)
+    c = {"F": (value - 32) * 5 / 9, "K": value - 273.15}.get(from_u, value)
     # Convert to target
-    return {"F": c * 9/5 + 32, "K": c + 273.15}.get(to_u, c)
+    return {"F": c * 9 / 5 + 32, "K": c + 273.15}.get(to_u, c)
 
 
 def unit_convert(args: dict, **kwargs) -> str:
@@ -200,19 +211,24 @@ def unit_convert(args: dict, **kwargs) -> str:
 
     try:
         # Temperature
-        if from_unit.upper() in {"C","F","K"} and to_unit.upper() in {"C","F","K"}:
+        if from_unit.upper() in {"C", "F", "K"} and to_unit.upper() in {"C", "F", "K"}:
             result = _convert_temp(float(value), from_unit.upper(), to_unit.upper())
-            return json.dumps({"input": f"{value} {from_unit}", "result": round(result, 4),
-                             "output": f"{round(result, 4)} {to_unit}"})
+            return json.dumps({
+                "input": f"{value} {from_unit}",
+                "result": round(result, 4),
+                "output": f"{round(result, 4)} {to_unit}",
+            })
 
         # Ratio-based conversions
         for table in (_LENGTH, _WEIGHT, _DATA, _TIME):
             lc = {k.lower(): v for k, v in table.items()}
             if from_unit.lower() in lc and to_unit.lower() in lc:
                 result = float(value) * lc[from_unit.lower()] / lc[to_unit.lower()]
-                return json.dumps({"input": f"{value} {from_unit}",
-                                 "result": round(result, 6),
-                                 "output": f"{round(result, 6)} {to_unit}"})
+                return json.dumps({
+                    "input": f"{value} {from_unit}",
+                    "result": round(result, 6),
+                    "output": f"{round(result, 6)} {to_unit}",
+                })
 
         return json.dumps({"error": f"Cannot convert {from_unit} → {to_unit}"})
     except Exception as e:
@@ -241,6 +257,7 @@ logger = logging.getLogger(__name__)
 # Track tool usage via hooks
 _call_log = []
 
+
 def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
     """Hook: runs after every tool call (not just ours)."""
     _call_log.append({"tool": tool_name, "session": task_id})
@@ -251,10 +268,18 @@ def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
 
 def register(ctx):
     """Wire schemas to handlers and register hooks."""
-    ctx.register_tool(name="calculate",    toolset="calculator",
-                      schema=schemas.CALCULATE,    handler=tools.calculate)
-    ctx.register_tool(name="unit_convert", toolset="calculator",
-                      schema=schemas.UNIT_CONVERT, handler=tools.unit_convert)
+    ctx.register_tool(
+        name="calculate",
+        toolset="calculator",
+        schema=schemas.CALCULATE,
+        handler=tools.calculate,
+    )
+    ctx.register_tool(
+        name="unit_convert",
+        toolset="calculator",
+        schema=schemas.UNIT_CONVERT,
+        handler=tools.unit_convert,
+    )
 
     # This hook fires for ALL tool calls, not just ours
     ctx.register_hook("post_tool_call", _on_post_tool_call)
@@ -276,6 +301,7 @@ def handle_scan(ctx, raw_args: str):
     """Implement /scan by invoking the terminal tool through the registry."""
     result = ctx.dispatch_tool("terminal", {"command": f"find . -name '{raw_args}'"})
     return result  # returned to the caller's chat UI
+
 
 def register(ctx):
     # Handlers receive a single raw_args string; close over ctx via a lambda.
@@ -398,6 +424,7 @@ Plugins can ship skill files that the agent loads via `skill_view("plugin:skill"
 ```python
 from pathlib import Path
 
+
 def register(ctx):
     skills_dir = Path(__file__).parent / "skills"
     for child in sorted(skills_dir.iterdir()):
@@ -409,8 +436,8 @@ def register(ctx):
 The agent can now load your skills with their namespaced name:
 
 ```python
-skill_view("my-plugin:my-workflow")   # → plugin's version
-skill_view("my-workflow")              # → built-in version (unchanged)
+skill_view("my-plugin:my-workflow")  # → plugin's version
+skill_view("my-workflow")  # → built-in version (unchanged)
 ```
 
 **Key properties:**
@@ -465,13 +492,15 @@ If your plugin wraps an SDK that not every user will have installed (a vendor SD
 # tools.py
 from tools.lazy_deps import ensure, FeatureUnavailable
 
+
 def my_tool_handler(args, **kwargs):
     try:
-        ensure("my-plugin.my-backend")   # key must be in LAZY_DEPS
+        ensure("my-plugin.my-backend")  # key must be in LAZY_DEPS
     except FeatureUnavailable as exc:
         return {"error": str(exc)}
 
-    import my_backend_sdk   # safe now
+    import my_backend_sdk  # safe now
+
     ...
 ```
 
@@ -495,11 +524,12 @@ Plugins often cache an expensive object — an SDK client, an HTTP session, a co
 ```python
 _client = None
 
+
 def get_client():
     global _client
     if _client is not None:
         return _client
-    _client = ExpensiveClient(...)   # ← TOCTOU race
+    _client = ExpensiveClient(...)  # ← TOCTOU race
     return _client
 ```
 
@@ -510,20 +540,24 @@ Don't hand-roll the lock. Use the helpers in `plugins/plugin_utils.py`:
 ```python
 from plugins.plugin_utils import lazy_singleton, SingletonSlot
 
+
 # Zero-arg accessor → decorate it:
 @lazy_singleton
 def get_client():
-    return ExpensiveClient(load_config())   # runs exactly once
+    return ExpensiveClient(load_config())  # runs exactly once
 
-client = get_client()    # safe across threads
-get_client.reset()       # drop the instance (tests / teardown)
+
+client = get_client()  # safe across threads
+get_client.reset()  # drop the instance (tests / teardown)
 
 
 # Accessor that takes a build argument → use a slot:
 _slot: SingletonSlot = SingletonSlot()
 
+
 def get_client(config=None):
     return _slot.get(lambda: ExpensiveClient(resolve(config)))
+
 
 def reset_client():
     _slot.reset()
@@ -557,11 +591,11 @@ default browser tool for a headed-Chrome CDP backend, or replace
 ```python
 def register(ctx):
     ctx.register_tool(
-        name="browser_navigate",             # same name as the built-in
-        toolset="plugin_my_browser",         # your own toolset namespace
+        name="browser_navigate",  # same name as the built-in
+        toolset="plugin_my_browser",  # your own toolset namespace
         schema={...},
         handler=my_custom_navigate,
-        override=True,                       # explicit opt-in
+        override=True,  # explicit opt-in
     )
 ```
 
@@ -610,7 +644,9 @@ This is the only hook whose return value matters. When a `pre_llm_call` callback
 
 ```python
 # Dict with context key
-return {"context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"}
+return {
+    "context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"
+}
 
 # Plain string (equivalent to the dict form above)
 return "Recalled memories:\n- User prefers dark mode"
@@ -638,13 +674,18 @@ import httpx
 
 MEMORY_API = "https://your-memory-api.example.com"
 
+
 def recall_context(session_id, user_message, is_first_turn, **kwargs):
     """Called before each LLM turn. Returns recalled memories."""
     try:
-        resp = httpx.post(f"{MEMORY_API}/recall", json={
-            "session_id": session_id,
-            "query": user_message,
-        }, timeout=3)
+        resp = httpx.post(
+            f"{MEMORY_API}/recall",
+            json={
+                "session_id": session_id,
+                "query": user_message,
+            },
+            timeout=3,
+        )
         memories = resp.json().get("results", [])
         if not memories:
             return None  # nothing to inject
@@ -654,6 +695,7 @@ def recall_context(session_id, user_message, is_first_turn, **kwargs):
         return {"context": text}
     except Exception:
         return None  # fail silently, don't break the agent
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", recall_context)
@@ -669,9 +711,11 @@ POLICY = """You MUST follow these content policies for this session:
 - Always warn before executing destructive operations
 - Refuse requests involving personal data extraction"""
 
+
 def inject_guardrails(**kwargs):
     """Injects policy text into every turn."""
     return {"context": POLICY}
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", inject_guardrails)
@@ -683,13 +727,21 @@ def register(ctx):
 """Analytics plugin — tracks turn metadata without injecting context."""
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def log_turn(session_id, user_message, model, is_first_turn, **kwargs):
     """Fires before each LLM call. Returns None — no context injected."""
-    logger.info("Turn: session=%s model=%s first=%s msg_len=%d",
-                session_id, model, is_first_turn, len(user_message or ""))
+    logger.info(
+        "Turn: session=%s model=%s first=%s msg_len=%d",
+        session_id,
+        model,
+        is_first_turn,
+        len(user_message or ""),
+    )
     # No return → no injection
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", log_turn)
@@ -714,12 +766,14 @@ def _my_command(args):
     else:
         print("Usage: clawk my-plugin <status|config>")
 
+
 def _setup_argparse(subparser):
     """Build the argparse tree for clawk my-plugin."""
     subs = subparser.add_subparsers(dest="my_command")
     subs.add_parser("status", help="Show plugin status")
     subs.add_parser("config", help="Show plugin config")
     subparser.set_defaults(func=_my_command)
+
 
 def register(ctx):
     ctx.register_tool(...)
@@ -747,6 +801,7 @@ def _handle_status(raw_args: str) -> str:
     if raw_args.strip() == "help":
         return "Usage: /mystatus [help|check]"
     return "Plugin status: all systems nominal"
+
 
 def register(ctx):
     ctx.register_command(
@@ -783,6 +838,7 @@ After registration, users can type `/mystatus` in any session. The command appea
 async def _handle_check(raw_args: str) -> str:
     result = await some_async_operation()
     return f"Check result: {result}"
+
 
 def register(ctx):
     ctx.register_command("check", handler=_handle_check, description="Run async check")
@@ -877,16 +933,18 @@ Drop a profile into `plugins/model-providers/<name>/`:
 from providers import register_provider
 from providers.base import ProviderProfile
 
-register_provider(ProviderProfile(
-    name="acme",
-    aliases=("acme-inference",),
-    display_name="Acme Inference",
-    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
-    base_url="https://api.acme.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="acme-small-fast",
-    fallback_models=("acme-large-v3", "acme-medium-v3"),
-))
+register_provider(
+    ProviderProfile(
+        name="acme",
+        aliases=("acme-inference",),
+        display_name="Acme Inference",
+        env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
+        base_url="https://api.acme.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="acme-small-fast",
+        fallback_models=("acme-large-v3", "acme-medium-v3"),
+    )
+)
 ```
 
 ```yaml
@@ -909,21 +967,27 @@ Drop an adapter into `plugins/platforms/<name>/`:
 # plugins/platforms/myplatform/adapter.py
 from gateway.platforms.base import BasePlatformAdapter
 
+
 class MyPlatformAdapter(BasePlatformAdapter):
     async def connect(self): ...
     async def send(self, chat_id, text): ...
     async def disconnect(self): ...
 
+
 def check_requirements():
     import os
+
     return bool(os.environ.get("MYPLATFORM_TOKEN"))
+
 
 def _env_enablement():
     import os
+
     tok = os.getenv("MYPLATFORM_TOKEN", "").strip()
     if not tok:
         return None
     return {"token": tok}
+
 
 def register(ctx):
     ctx.register_platform(
@@ -969,6 +1033,7 @@ Drop an implementation of `MemoryProvider` into `plugins/memory/<name>/`:
 # plugins/memory/my-memory/__init__.py
 from agent.memory_provider import MemoryProvider
 
+
 class MyMemoryProvider(MemoryProvider):
     @property
     def name(self) -> str:
@@ -976,20 +1041,21 @@ class MyMemoryProvider(MemoryProvider):
 
     def is_available(self) -> bool:
         import os
+
         return bool(os.environ.get("MY_MEMORY_API_KEY"))
 
     def initialize(self, session_id: str, **kwargs) -> None:
         self._session_id = session_id
 
-    def sync_turn(self, user_content, assistant_content, *,
-                  session_id="", messages=None) -> None:
-        ...
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id="", messages=None
+    ) -> None: ...
 
-    def prefetch(self, query, *, session_id="") -> str:
-        ...
+    def prefetch(self, query, *, session_id="") -> str: ...
 
     def get_tool_schemas(self) -> list[dict]:
-        return []   # required @abstractmethod — see full guide
+        return []  # required @abstractmethod — see full guide
+
 
 def register(ctx):
     ctx.register_memory_provider(MyMemoryProvider())
@@ -1005,6 +1071,7 @@ Memory providers are single-select — only one is active at a time, chosen via 
 # plugins/context_engine/my-engine/__init__.py
 from agent.context_engine import ContextEngine
 
+
 class MyContextEngine(ContextEngine):
     @property
     def name(self) -> str:
@@ -1013,6 +1080,7 @@ class MyContextEngine(ContextEngine):
     def update_from_response(self, usage) -> None: ...
     def should_compress(self, prompt_tokens: int = None) -> bool: ...
     def compress(self, messages, current_tokens=None, focus_topic=None) -> list: ...
+
 
 def register(ctx):
     ctx.register_context_engine(MyContextEngine())
@@ -1030,6 +1098,7 @@ Drop a provider into `plugins/image_gen/<name>/`:
 # plugins/image_gen/my-imggen/__init__.py
 from agent.image_gen_provider import ImageGenProvider
 
+
 class MyImageGenProvider(ImageGenProvider):
     @property
     def name(self) -> str:
@@ -1039,6 +1108,7 @@ class MyImageGenProvider(ImageGenProvider):
     def generate(self, prompt: str, aspect_ratio="landscape", **kwargs) -> dict:
         # returns success_response(...) / error_response(...)
         ...
+
 
 def register(ctx):
     ctx.register_image_gen_provider(MyImageGenProvider())
@@ -1212,6 +1282,7 @@ See the [Nix Setup guide](/getting-started/nix-setup#plugins) for complete docum
 def handler(args, **kwargs):
     return {"result": 42}
 
+
 # Right — returns a JSON string
 def handler(args, **kwargs):
     return json.dumps({"result": 42})
@@ -1220,12 +1291,11 @@ def handler(args, **kwargs):
 **Missing `**kwargs` in handler signature:**
 ```python
 # Wrong — will break if Clawksis passes extra context
-def handler(args):
-    ...
+def handler(args): ...
+
 
 # Right
-def handler(args, **kwargs):
-    ...
+def handler(args, **kwargs): ...
 ```
 
 **Handler raises exceptions:**
@@ -1234,6 +1304,7 @@ def handler(args, **kwargs):
 def handler(args, **kwargs):
     result = 1 / int(args["value"])  # ZeroDivisionError!
     return json.dumps({"result": result})
+
 
 # Right — catch and return error JSON
 def handler(args, **kwargs):

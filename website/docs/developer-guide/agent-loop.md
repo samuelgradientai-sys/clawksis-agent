@@ -30,9 +30,9 @@ response = agent.chat("Fix the bug in main.py")
 # Full interface — returns dict with messages, metadata, usage stats
 result = agent.run_conversation(
     user_message="Fix the bug in main.py",
-    system_message=None,           # auto-built if omitted
-    conversation_history=None,      # auto-loaded from session if omitted
-    task_id="task_abc123"
+    system_message=None,  # auto-built if omitted
+    conversation_history=None,  # auto-loaded from session if omitted
+    task_id="task_abc123",
 )
 ```
 

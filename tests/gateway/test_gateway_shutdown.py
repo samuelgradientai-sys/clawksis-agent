@@ -577,7 +577,9 @@ def _stopped_state_persisted(runner) -> bool:
 
 
 @pytest.mark.asyncio
-async def test_signal_initiated_shutdown_persists_running_not_stopped(tmp_path, monkeypatch):
+async def test_signal_initiated_shutdown_persists_running_not_stopped(
+    tmp_path, monkeypatch
+):
     """Unexpected SIGTERM (container restart / OOM / kill) must persist
     gateway_state=running — NOT stopped, and NOT leave the mid-shutdown
     'draining' marker — so container_boot auto-starts on next boot (#42675)."""
@@ -586,7 +588,10 @@ async def test_signal_initiated_shutdown_persists_running_not_stopped(tmp_path, 
     adapter.disconnect = AsyncMock()
     runner._signal_initiated_shutdown = True  # set by handler on unmarked signal
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     assert not _stopped_state_persisted(runner), (
@@ -608,7 +613,10 @@ async def test_operator_initiated_stop_persists_stopped(tmp_path, monkeypatch):
     adapter.disconnect = AsyncMock()
     runner._signal_initiated_shutdown = False  # planned stop classification
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     assert _stopped_state_persisted(runner), (
@@ -627,7 +635,10 @@ async def test_signal_initiated_restart_still_persists_stopped(tmp_path, monkeyp
     runner._signal_initiated_shutdown = True
     runner._launch_systemd_restart_shortcut = MagicMock()
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop(restart=True, service_restart=True)
 
     assert _stopped_state_persisted(runner), (

@@ -40,7 +40,7 @@ def generate_daily(since: str = None) -> dict:
     if not topics:
         return {
             "status": "no_topics",
-            "message": "No watchlist topics yet. Add one with: last30days watch add \"your topic\"",
+            "message": 'No watchlist topics yet. Add one with: last30days watch add "your topic"',
         }
 
     enabled = [t for t in topics if t["enabled"]]
@@ -123,7 +123,9 @@ def generate_daily(since: str = None) -> dict:
             "title": top_overall.get("source_title", ""),
             "topic": top_overall.get("_topic", ""),
             "engagement": top_overall.get("engagement_score", 0),
-        } if top_overall else None,
+        }
+        if top_overall
+        else None,
         "cost": {
             "daily": daily_cost,
             "budget": budget,
@@ -177,7 +179,9 @@ def generate_weekly() -> dict:
 
         # Trend calculation
         if last_engagement > 0:
-            engagement_change = ((this_engagement - last_engagement) / last_engagement) * 100
+            engagement_change = (
+                (this_engagement - last_engagement) / last_engagement
+            ) * 100
         else:
             engagement_change = 100 if this_engagement > 0 else 0
 

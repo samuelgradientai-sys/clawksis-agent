@@ -20,11 +20,18 @@ import pytest
 # Stub mautrix so gateway.platforms.matrix can be imported without the SDK.
 # ---------------------------------------------------------------------------
 
+
 def _stub_mautrix():
     stub = types.ModuleType("mautrix")
-    for sub in ("mautrix.types", "mautrix.client", "mautrix.client.api",
-                "mautrix.errors", "mautrix.crypto", "mautrix.util",
-                "mautrix.util.config"):
+    for sub in (
+        "mautrix.types",
+        "mautrix.client",
+        "mautrix.client.api",
+        "mautrix.errors",
+        "mautrix.crypto",
+        "mautrix.util",
+        "mautrix.util.config",
+    ):
         sys.modules.setdefault(sub, types.ModuleType(sub))
     sys.modules.setdefault("mautrix", stub)
     m = sys.modules["mautrix.types"]
@@ -70,6 +77,7 @@ from gateway.platforms.matrix import MatrixAdapter, _MatrixApprovalPrompt  # noq
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_adapter(allowed_user_ids=None):
     """Construct a MatrixAdapter with only the state needed by _on_reaction."""
@@ -120,6 +128,7 @@ def _run(adapter, event):
 # ---------------------------------------------------------------------------
 # Test class
 # ---------------------------------------------------------------------------
+
 
 class TestApprovalReactionFailClosed:
     """_on_reaction approval auth must be fail-closed (parity with Telegram)."""

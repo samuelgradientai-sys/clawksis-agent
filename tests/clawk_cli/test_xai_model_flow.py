@@ -56,11 +56,15 @@ def test_xai_model_flow_cancel_skips_reauth(monkeypatch):
     )
     monkeypatch.setattr(
         "clawk_cli.auth._login_xai_oauth",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not reauthenticate")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should not reauthenticate")
+        ),
     )
     monkeypatch.setattr(
         "clawk_cli.auth._prompt_model_selection",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not pick a model")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should not pick a model")
+        ),
     )
 
     main_mod._model_flow_xai_oauth({}, current_model="grok-build-0.1")

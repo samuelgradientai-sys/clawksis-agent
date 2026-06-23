@@ -31,19 +31,21 @@ from scrapling.fetchers import Fetcher, AsyncFetcher, StealthyFetcher, DynamicFe
 ```
 Then you use it right away without initializing like this, and it will use the default parser settings:
 ```python
-page = StealthyFetcher.fetch('https://example.com') 
+page = StealthyFetcher.fetch("https://example.com")
 ```
 If you want to configure the parser ([Selector class](parsing/main_classes.md#selector)) that will be used on the response before returning it for you, then do this first:
 ```python
 from scrapling.fetchers import Fetcher
+
 Fetcher.configure(adaptive=True, keep_comments=False, keep_cdata=False)  # and the rest
 ```
 or
 ```python
 from scrapling.fetchers import Fetcher
-Fetcher.adaptive=True
-Fetcher.keep_comments=False
-Fetcher.keep_cdata=False  # and the rest
+
+Fetcher.adaptive = True
+Fetcher.keep_comments = False
+Fetcher.keep_cdata = False  # and the rest
 ```
 Then, continue your code as usual.
 
@@ -60,18 +62,19 @@ If your use case requires a different configuration for each request/fetch, you 
 The `Response` object is the same as the [Selector](parsing/main_classes.md#selector) class, but it has additional details about the response, like response headers, status, cookies, etc., as shown below:
 ```python
 from scrapling.fetchers import Fetcher
-page = Fetcher.get('https://example.com')
 
-page.status          # HTTP status code
-page.reason          # Status message
-page.cookies         # Response cookies as a dictionary
-page.headers         # Response headers
-page.request_headers # Request headers
-page.history         # Response history of redirections, if any
-page.body            # Raw response body as bytes
-page.encoding        # Response encoding
-page.meta            # Response metadata dictionary (e.g., proxy used). Mainly helpful with the spiders system.
-page.captured_xhr    # List of captured XHR/fetch responses (when capture_xhr is enabled on a browser session)
+page = Fetcher.get("https://example.com")
+
+page.status  # HTTP status code
+page.reason  # Status message
+page.cookies  # Response cookies as a dictionary
+page.headers  # Response headers
+page.request_headers  # Request headers
+page.history  # Response history of redirections, if any
+page.body  # Raw response body as bytes
+page.encoding  # Response encoding
+page.meta  # Response metadata dictionary (e.g., proxy used). Mainly helpful with the spiders system.
+page.captured_xhr  # List of captured XHR/fetch responses (when capture_xhr is enabled on a browser session)
 ```
 All fetchers return the `Response` object.
 

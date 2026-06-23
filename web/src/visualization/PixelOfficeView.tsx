@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { CLAWK_BASE_PATH, fetchJSON } from "@/lib/api";
 
@@ -51,12 +52,16 @@ interface SessionRow {
 interface PixelOfficeViewProps {
   feed: GatewayFeed;
   provider: OfficeProvider;
+  /** Called with the session key when an agent is clicked inside the office,
+   *  so the host can select it in the Agent Inspector dock. */
+  onSelectAgent?: (sessionKey: string) => void;
 }
 
-export function PixelOfficeView({ feed, provider }: PixelOfficeViewProps) {
+export function PixelOfficeView({ feed, provider, onSelectAgent }: PixelOfficeViewProps) {
   const isPixelAgents = provider.protocol === "pixel-agents";
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
+  const navigate = useNavigate();
 
   // Post-or-queue transport: pixel messages sent before the iframe finishes its
   // asset/layout boot are buffered and flushed on the ready signal.
@@ -117,6 +122,16 @@ export function PixelOfficeView({ feed, provider }: PixelOfficeViewProps) {
           }).catch(() => {
             // Best-effort persistence; the in-iframe layout still applies.
           });
+        } else if (out.type === "openClaude") {
+          // pixel-agents' "+ Agent" button posts {type:'openClaude'} to spawn a
+          // VS Code Claude session — meaningless here. Repurpose it to jump to
+          // the Chat section so the user can talk with an agent.
+          navigate("/chat");
+        } else if (out.type === "focusAgent" && typeof out.id === "number") {
+          // Clicking an agent (sprite or overlay) posts focusAgent — translate
+          // the office character id back to a session and select it in the dock.
+          const key = bridge.sessionKeyForId(out.id);
+          if (key) onSelectAgent?.(key);
         }
         // Other outbound types (saveAgentSeats, settings) are session-local.
       }
@@ -124,7 +139,7 @@ export function PixelOfficeView({ feed, provider }: PixelOfficeViewProps) {
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [isPixelAgents]);
+  }, [isPixelAgents, navigate, bridge, onSelectAgent]);
 
   // Live events → bridge.
   useEffect(() => {

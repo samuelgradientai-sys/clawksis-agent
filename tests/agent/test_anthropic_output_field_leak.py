@@ -10,7 +10,9 @@ Fix: whitelist input-permitted fields per block type at three points —
 normalize_response capture, _sanitize_replay_block (ordered-blocks replay), and
 _convert_content_part_to_anthropic (content-list replay).
 """
+
 import sys, os
+
 sys.path.insert(0, os.path.expanduser("~/.clawksis/clawksis-agent"))
 
 import pytest
@@ -29,20 +31,31 @@ def _assert_clean(block):
     for k in FORBIDDEN:
         assert k not in block, f"forbidden field {k!r} survived: {block}"
     if "citations" in block:
-        assert isinstance(block["citations"], list) and block["citations"], \
+        assert isinstance(block["citations"], list) and block["citations"], (
             "citations must be a non-empty list if present (None/[] is input-invalid)"
+        )
 
 
 class TestSanitizeReplayBlock:
     def test_text_block_strips_parsed_output_and_null_citations(self):
-        poisoned = {"type": "text", "text": "hi", "parsed_output": None, "citations": None}
+        poisoned = {
+            "type": "text",
+            "text": "hi",
+            "parsed_output": None,
+            "citations": None,
+        }
         out = _sanitize_replay_block(poisoned)
         _assert_clean(out)
         assert out == {"type": "text", "text": "hi"}
 
     def test_tool_use_strips_caller(self):
-        poisoned = {"type": "tool_use", "id": "toolu_1", "name": "read_file",
-                    "input": {"path": "a"}, "caller": {"type": "agent"}}
+        poisoned = {
+            "type": "tool_use",
+            "id": "toolu_1",
+            "name": "read_file",
+            "input": {"path": "a"},
+            "caller": {"type": "agent"},
+        }
         out = _sanitize_replay_block(poisoned)
         _assert_clean(out)
         assert out["name"] == "read_file" and out["input"] == {"path": "a"}
@@ -64,7 +77,12 @@ class TestSanitizeReplayBlock:
 class TestContentPartConversion:
     def test_stored_text_block_with_parsed_output_cleaned(self):
         # The exact content.N.text.parsed_output failure shape.
-        part = {"type": "text", "text": "hello", "parsed_output": None, "citations": None}
+        part = {
+            "type": "text",
+            "text": "hello",
+            "parsed_output": None,
+            "citations": None,
+        }
         out = _convert_content_part_to_anthropic(part)
         _assert_clean(out)
 
@@ -75,9 +93,19 @@ class TestAssistantReplay:
             "role": "assistant",
             "anthropic_content_blocks": [
                 {"type": "thinking", "thinking": "plan", "signature": "s1"},
-                {"type": "text", "text": "doing it", "parsed_output": None, "citations": None},
-                {"type": "tool_use", "id": "toolu_1", "name": "read_file",
-                 "input": {"path": "a"}, "caller": {"type": "agent"}},
+                {
+                    "type": "text",
+                    "text": "doing it",
+                    "parsed_output": None,
+                    "citations": None,
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "read_file",
+                    "input": {"path": "a"},
+                    "caller": {"type": "agent"},
+                },
             ],
         }
         out = _convert_assistant_message(m)

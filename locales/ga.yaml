@@ -42,6 +42,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "Níl tú logáilte isteach i Nous Portal — rith `/model` chun logáil isteach, ansin `/credits`."
+
   approval_expired: "⚠️ Tá an cead imithe in éag (níl an gníomhaire ag fanacht níos mó). Iarr ar an ngníomhaire iarracht eile a dhéanamh."
 
   draining:         "⏳ Ag fanacht le {count} gníomhaire(í) gníomhach roimh atosú..."

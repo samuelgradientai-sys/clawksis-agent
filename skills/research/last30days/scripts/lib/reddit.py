@@ -14,12 +14,14 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait as futures_wait
 from typing import Any, Dict, List, Optional, Set
 
+
 def _first_of(*values, default=None):
     """Return first value that is not None."""
     for v in values:
         if v is not None:
             return v
     return default
+
 
 from . import dates, http, log
 
@@ -52,16 +54,48 @@ from .relevance import token_overlap_relevance
 
 # Reddit-specific noise words (preserves original smaller set)
 NOISE_WORDS = frozenset({
-    'best', 'top', 'good', 'great', 'awesome', 'killer',
-    'latest', 'new', 'news', 'update', 'updates',
-    'trending', 'hottest', 'popular',
-    'practices', 'features', 'tips',
-    'recommendations', 'advice',
-    'prompt', 'prompts', 'prompting',
-    'methods', 'strategies', 'approaches',
-    'how', 'to', 'the', 'a', 'an', 'for', 'with',
-    'of', 'in', 'on', 'is', 'are', 'what', 'which',
-    'guide', 'tutorial', 'using',
+    "best",
+    "top",
+    "good",
+    "great",
+    "awesome",
+    "killer",
+    "latest",
+    "new",
+    "news",
+    "update",
+    "updates",
+    "trending",
+    "hottest",
+    "popular",
+    "practices",
+    "features",
+    "tips",
+    "recommendations",
+    "advice",
+    "prompt",
+    "prompts",
+    "prompting",
+    "methods",
+    "strategies",
+    "approaches",
+    "how",
+    "to",
+    "the",
+    "a",
+    "an",
+    "for",
+    "with",
+    "of",
+    "in",
+    "on",
+    "is",
+    "are",
+    "what",
+    "which",
+    "guide",
+    "tutorial",
+    "using",
 })
 
 
@@ -92,7 +126,7 @@ def expand_reddit_queries(topic: str, depth: str) -> List[str]:
     queries = [core]
 
     # Broader variant: include more context from original topic
-    original_clean = topic.strip().rstrip('?!.')
+    original_clean = topic.strip().rstrip("?!.")
     if core.lower() != original_clean.lower() and len(original_clean.split()) <= 8:
         queries.append(original_clean)
 
@@ -123,7 +157,10 @@ def _infer_query_intent(topic: str) -> str:
     text = topic.lower().strip()
     if re.search(r"\b(vs|versus|compare|difference between)\b", text):
         return "comparison"
-    if re.search(r"\b(how to|tutorial|guide|setup|step by step|deploy|install|configuration|configure|troubleshoot|troubleshooting|error|errors|fix|debug)\b", text):
+    if re.search(
+        r"\b(how to|tutorial|guide|setup|step by step|deploy|install|configuration|configure|troubleshoot|troubleshooting|error|errors|fix|debug)\b",
+        text,
+    ):
         return "how_to"
     if re.search(r"\b(thoughts on|worth it|should i|opinion|review)\b", text):
         return "opinion"
@@ -137,9 +174,15 @@ def _infer_query_intent(topic: str) -> str:
 # Known utility/meta subreddits that match queries but aren't discussion subs.
 # These get a 0.3x penalty (not banned) in subreddit discovery scoring.
 UTILITY_SUBS = frozenset({
-    'namethatsong', 'findthatsong', 'tipofmytongue',
-    'whatisthissong', 'helpmefind', 'whatisthisthing',
-    'whatsthissong', 'findareddit', 'subredditdrama',
+    "namethatsong",
+    "findthatsong",
+    "tipofmytongue",
+    "whatisthissong",
+    "helpmefind",
+    "whatisthisthing",
+    "whatsthissong",
+    "findareddit",
+    "subredditdrama",
 })
 
 
@@ -183,7 +226,9 @@ def discover_subreddits(
             base *= 0.3
 
         # Bonus: post engagement (high-engagement posts = better sub)
-        ups = _first_of(post.get("ups"), post.get("score"), post.get("votes"), default=0)
+        ups = _first_of(
+            post.get("ups"), post.get("score"), post.get("votes"), default=0
+        )
         if ups and ups > 100:
             base += 0.5
 
@@ -252,7 +297,9 @@ def _total_engagement(item: Dict[str, Any]) -> int:
     return score + num_comments
 
 
-def _normalize_post(post: Dict[str, Any], idx: int, source_label: str = "global", query: str = "") -> Dict[str, Any]:
+def _normalize_post(
+    post: Dict[str, Any], idx: int, source_label: str = "global", query: str = ""
+) -> Dict[str, Any]:
     """Normalize a ScrapeCreators Reddit post to our internal format.
 
     Handles both the global-search schema (``votes``, ``created_at``,
@@ -482,13 +529,19 @@ def search_reddit(
         with ThreadPoolExecutor(max_workers=min(5, len(subreddits))) as executor:
             futures = {}
             for sub in subreddits:
-                futures[executor.submit(_subreddit_search, sub, core, token, "relevance", timeframe)] = sub
+                futures[
+                    executor.submit(
+                        _subreddit_search, sub, core, token, "relevance", timeframe
+                    )
+                ] = sub
             for future in as_completed(futures):
                 sub = futures[future]
                 sub_posts = future.result()
                 _log(f"  -> {len(sub_posts)} results from pre-resolved r/{sub}")
                 for j, post in enumerate(sub_posts):
-                    item = _normalize_post(post, len(all_items) + j + 1, f"r/{sub}", query=core)
+                    item = _normalize_post(
+                        post, len(all_items) + j + 1, f"r/{sub}", query=core
+                    )
                     all_items.append(item)
 
     # === Phase 2: Global Discovery ===
@@ -499,9 +552,15 @@ def search_reddit(
         for i, query in enumerate(queries[:max_global]):
             # Product/comparison queries: sort=top surfaces high-engagement posts
             # from relevant communities instead of keyword-matched noise.
-            sort = "top" if intent in ("product", "comparison") else ("relevance" if i == 0 else "top")
-            _log(f"Global search {i+1}/{max_global}: '{query}' (sort={sort})")
-            futures[executor.submit(_global_search, query, token, sort, timeframe)] = query
+            sort = (
+                "top"
+                if intent in ("product", "comparison")
+                else ("relevance" if i == 0 else "top")
+            )
+            _log(f"Global search {i + 1}/{max_global}: '{query}' (sort={sort})")
+            futures[executor.submit(_global_search, query, token, sort, timeframe)] = (
+                query
+            )
         for future in as_completed(futures):
             query = futures[future]
             posts = future.result()
@@ -515,7 +574,9 @@ def search_reddit(
 
     # === Phase 3: Subreddit Discovery + Targeted Search ===
     subreddit_budget = 0 if intent == "how_to" else config["subreddit_searches"]
-    discovered_subs = discover_subreddits(all_raw_posts, topic=topic, max_subs=subreddit_budget)
+    discovered_subs = discover_subreddits(
+        all_raw_posts, topic=topic, max_subs=subreddit_budget
+    )
     _log(f"Discovered subreddits: {discovered_subs}")
 
     subreddit_limit = subreddit_budget
@@ -524,13 +585,19 @@ def search_reddit(
             futures = {}
             for sub in discovered_subs[:subreddit_limit]:
                 _log(f"Subreddit search: r/{sub} for '{core}'")
-                futures[executor.submit(_subreddit_search, sub, core, token, "relevance", timeframe)] = sub
+                futures[
+                    executor.submit(
+                        _subreddit_search, sub, core, token, "relevance", timeframe
+                    )
+                ] = sub
             for future in as_completed(futures):
                 sub = futures[future]
                 sub_posts = future.result()
                 _log(f"  -> {len(sub_posts)} results from r/{sub}")
                 for j, post in enumerate(sub_posts):
-                    item = _normalize_post(post, len(all_items) + j + 1, f"r/{sub}", query=core)
+                    item = _normalize_post(
+                        post, len(all_items) + j + 1, f"r/{sub}", query=core
+                    )
                     all_items.append(item)
 
     # === Phase 4: Deduplicate ===
@@ -563,7 +630,7 @@ def search_reddit(
 
     # Re-index IDs
     for i, item in enumerate(all_items):
-        item["id"] = f"R{i+1}"
+        item["id"] = f"R{i + 1}"
 
     _log(f"Final: {len(all_items)} Reddit posts")
     return {"items": all_items}
@@ -645,12 +712,16 @@ def enrich_with_comments(
                     "url": comment_url,
                 })
 
-                if len(body) >= 30 and author not in ("[deleted]", "[removed]", "AutoModerator"):
+                if len(body) >= 30 and author not in (
+                    "[deleted]",
+                    "[removed]",
+                    "AutoModerator",
+                ):
                     insight = body[:150]
                     if len(body) > 150:
                         for i, char in enumerate(insight):
-                            if char in '.!?' and i > 50:
-                                insight = insight[:i+1]
+                            if char in ".!?" and i > 50:
+                                insight = insight[: i + 1]
                                 break
                         else:
                             insight = insight.rstrip() + "..."
@@ -662,7 +733,9 @@ def enrich_with_comments(
             enriched_count += 1
 
         if not_done:
-            _log(f"Enrichment budget hit ({budget_seconds}s): {enriched_count}/{len(futures)} posts enriched, {len(not_done)} skipped")
+            _log(
+                f"Enrichment budget hit ({budget_seconds}s): {enriched_count}/{len(futures)} posts enriched, {len(not_done)} skipped"
+            )
             for future in not_done:
                 future.cancel()
         else:
@@ -695,7 +768,9 @@ def search_and_enrich(
     Returns:
         Dict with 'items' list. Items include top_comments and comment_insights.
     """
-    result = search_reddit(topic, from_date, to_date, depth, token, subreddits=subreddits)
+    result = search_reddit(
+        topic, from_date, to_date, depth, token, subreddits=subreddits
+    )
     items = result.get("items", [])
 
     if items and token:

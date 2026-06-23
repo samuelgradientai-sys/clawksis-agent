@@ -99,21 +99,45 @@ DEFAULT_DIST_OWNED: Tuple[str, ...] = (
 # convention for user customizations.
 USER_OWNED_EXCLUDE: frozenset = frozenset({
     # Credentials & runtime secrets
-    "auth.json", ".env",
+    "auth.json",
+    ".env",
     # Databases & runtime state
-    "state.db", "state.db-shm", "state.db-wal",
-    "clawk_state.db", "response_store.db",
-    "response_store.db-shm", "response_store.db-wal",
-    "gateway.pid", "gateway_state.json", "processes.json",
-    "auth.lock", "active_profile", ".update_check",
-    "errors.log", ".clawk_history",
+    "state.db",
+    "state.db-shm",
+    "state.db-wal",
+    "clawk_state.db",
+    "response_store.db",
+    "response_store.db-shm",
+    "response_store.db-wal",
+    "gateway.pid",
+    "gateway_state.json",
+    "processes.json",
+    "auth.lock",
+    "active_profile",
+    ".update_check",
+    "errors.log",
+    ".clawk_history",
     # User data
-    "memories", "sessions", "logs", "plans", "workspace", "home",
-    "image_cache", "audio_cache", "document_cache",
-    "browser_screenshots", "checkpoints", "sandboxes",
-    "backups", "cache",
+    "memories",
+    "sessions",
+    "logs",
+    "plans",
+    "workspace",
+    "home",
+    "image_cache",
+    "audio_cache",
+    "document_cache",
+    "browser_screenshots",
+    "checkpoints",
+    "sandboxes",
+    "backups",
+    "cache",
     # Infrastructure
-    "clawksis-agent", ".worktrees", "profiles", "bin", "node_modules",
+    "clawksis-agent",
+    ".worktrees",
+    "profiles",
+    "bin",
+    "node_modules",
     # User customization namespace
     "local",
 })
@@ -198,7 +222,9 @@ class DistributionManifest:
         dist_owned_raw = data.get("distribution_owned") or []
         if dist_owned_raw and not isinstance(dist_owned_raw, list):
             raise DistributionError("distribution_owned must be a list")
-        distribution_owned = [str(p).strip().strip("/") for p in dist_owned_raw if str(p).strip()]
+        distribution_owned = [
+            str(p).strip().strip("/") for p in dist_owned_raw if str(p).strip()
+        ]
         return cls(
             name=name,
             version=str(data.get("version") or "0.1.0"),
@@ -246,7 +272,9 @@ def _load_yaml(text: str) -> Any:
     try:
         import yaml
     except ImportError as exc:  # pragma: no cover — pyyaml is a hard dep
-        raise DistributionError("PyYAML is required for distribution manifests") from exc
+        raise DistributionError(
+            "PyYAML is required for distribution manifests"
+        ) from exc
     return yaml.safe_load(text)
 
 
@@ -317,8 +345,8 @@ def check_clawk_requires(spec: str, current_version: str) -> None:
         "<=": cur <= tgt,
         "==": cur == tgt,
         "!=": cur != tgt,
-        ">":  cur > tgt,
-        "<":  cur < tgt,
+        ">": cur > tgt,
+        "<": cur < tgt,
     }[op]
     if not ok:
         raise DistributionError(
@@ -441,9 +469,7 @@ def _reject_distribution_symlinks(staged: Path) -> None:
             rel = entry.relative_to(staged)
         except ValueError:
             rel = entry
-        raise DistributionError(
-            f"Profile distributions cannot contain symlinks: {rel}"
-        )
+        raise DistributionError(f"Profile distributions cannot contain symlinks: {rel}")
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +480,7 @@ def _reject_distribution_symlinks(staged: Path) -> None:
 @dataclass
 class InstallPlan:
     """Summary of what an install will do, surfaced for user confirmation."""
+
     manifest: DistributionManifest
     staged_dir: Path
     provenance: str
@@ -479,9 +506,7 @@ def _count_skills(staged: Path) -> int:
     skills_dir = staged / "skills"
     if not skills_dir.is_dir():
         return 0
-    return sum(
-        1 for p in skills_dir.rglob("SKILL.md") if not is_excluded_skill_path(p)
-    )
+    return sum(1 for p in skills_dir.rglob("SKILL.md") if not is_excluded_skill_path(p))
 
 
 def plan_install(
@@ -565,7 +590,11 @@ def _copy_dist_payload(
         if name == ENV_TEMPLATE_FILENAME:
             shutil.copy2(entry, target / ENV_EXAMPLE_FILENAME)
             continue
-        if name == "config.yaml" and preserve_config and (target / "config.yaml").exists():
+        if (
+            name == "config.yaml"
+            and preserve_config
+            and (target / "config.yaml").exists()
+        ):
             # Leave user's config.yaml alone on update
             continue
 
@@ -598,8 +627,17 @@ def _copy_dist_payload(
 
 def _bootstrap_user_dirs(target: Path) -> None:
     """Create the bootstrap dirs a fresh profile expects."""
-    for d in ("memories", "sessions", "skills", "skins", "logs",
-              "plans", "workspace", "cron", "home"):
+    for d in (
+        "memories",
+        "sessions",
+        "skills",
+        "skins",
+        "logs",
+        "plans",
+        "workspace",
+        "cron",
+        "home",
+    ):
         (target / d).mkdir(parents=True, exist_ok=True)
 
 

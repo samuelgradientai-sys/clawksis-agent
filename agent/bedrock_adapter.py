@@ -1547,7 +1547,8 @@ def call_converse_stream(
             logger.info(
                 "bedrock: converse_stream denied by IAM on (region=%s, model=%s) — "
                 "falling back to non-streaming converse().",
-                region, model,
+                region,
+                model,
             )
             return normalize_converse_response(client.converse(**kwargs))
         if is_stale_connection_error(exc):

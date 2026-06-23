@@ -23,6 +23,7 @@ def _make_plugin_dir(parent: Path, name: str, manifest: dict) -> Path:
     d = parent / name
     d.mkdir(parents=True, exist_ok=True)
     import yaml
+
     (d / "plugin.yaml").write_text(yaml.dump(manifest), encoding="utf-8")
     (d / "__init__.py").write_text("def register(ctx): pass\n", encoding="utf-8")
     return d
@@ -44,9 +45,11 @@ class TestReadManifestInfo:
     def test_flat_plugin(self, tmp_path):
         from clawk_cli.plugins_cmd import _read_manifest_info
 
-        d = _make_plugin_dir(tmp_path, "my-plugin", {
-            "name": "my-plugin", "version": "1.0.0", "description": "test"
-        })
+        d = _make_plugin_dir(
+            tmp_path,
+            "my-plugin",
+            {"name": "my-plugin", "version": "1.0.0", "description": "test"},
+        )
         result = _read_manifest_info(d, "")
         assert result is not None
         name, version, description, key = result
@@ -58,9 +61,12 @@ class TestReadManifestInfo:
     def test_category_plugin(self, tmp_path):
         from clawk_cli.plugins_cmd import _read_manifest_info
 
-        d = _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "2.0.0", "description": "search"
-        })
+        d = _make_category_plugin(
+            tmp_path,
+            "web",
+            "tavily",
+            {"name": "web-tavily", "version": "2.0.0", "description": "search"},
+        )
         result = _read_manifest_info(d, "web")
         assert result is not None
         name, version, description, key = result
@@ -80,7 +86,10 @@ class TestReadManifestInfo:
         d = tmp_path / "my-plugin"
         d.mkdir()
         import yaml
-        (d / "plugin.yml").write_text(yaml.dump({"name": "my-plugin"}), encoding="utf-8")
+
+        (d / "plugin.yml").write_text(
+            yaml.dump({"name": "my-plugin"}), encoding="utf-8"
+        )
         result = _read_manifest_info(d, "")
         assert result is not None
         assert result[0] == "my-plugin"
@@ -94,12 +103,14 @@ class TestReadManifestInfo:
 class TestDiscoverAllPlugins:
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_flat_plugins_still_discovered(self, mock_user_dir, mock_bundled_dir, tmp_path):
+    def test_flat_plugins_still_discovered(
+        self, mock_user_dir, mock_bundled_dir, tmp_path
+    ):
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
-        _make_plugin_dir(tmp_path, "disk-cleanup", {
-            "name": "disk-cleanup", "version": "1.0.0"
-        })
+        _make_plugin_dir(
+            tmp_path, "disk-cleanup", {"name": "disk-cleanup", "version": "1.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -109,15 +120,20 @@ class TestDiscoverAllPlugins:
 
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_category_plugins_discovered(self, mock_user_dir, mock_bundled_dir, tmp_path):
+    def test_category_plugins_discovered(
+        self, mock_user_dir, mock_bundled_dir, tmp_path
+    ):
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0"
-        })
-        _make_category_plugin(tmp_path, "image_gen", "openai", {
-            "name": "image-gen-openai", "version": "2.0.0"
-        })
+        _make_category_plugin(
+            tmp_path, "web", "tavily", {"name": "web-tavily", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            tmp_path,
+            "image_gen",
+            "openai",
+            {"name": "image-gen-openai", "version": "2.0.0"},
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -131,15 +147,15 @@ class TestDiscoverAllPlugins:
     def test_mixed_flat_and_category(self, mock_user_dir, mock_bundled_dir, tmp_path):
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
-        _make_plugin_dir(tmp_path, "disk-cleanup", {
-            "name": "disk-cleanup", "version": "1.0.0"
-        })
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0"
-        })
-        _make_category_plugin(tmp_path, "web", "exa", {
-            "name": "web-exa", "version": "1.0.0"
-        })
+        _make_plugin_dir(
+            tmp_path, "disk-cleanup", {"name": "disk-cleanup", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            tmp_path, "web", "tavily", {"name": "web-tavily", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            tmp_path, "web", "exa", {"name": "web-exa", "version": "1.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -157,13 +173,14 @@ class TestDiscoverAllPlugins:
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
         # 2 levels: should be found
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0"
-        })
+        _make_category_plugin(
+            tmp_path, "web", "tavily", {"name": "web-tavily", "version": "1.0.0"}
+        )
         # 3 levels: should NOT be found
         deep = tmp_path / "a" / "b" / "c"
         deep.mkdir(parents=True)
         import yaml
+
         (deep / "plugin.yaml").write_text(
             yaml.dump({"name": "too-deep"}), encoding="utf-8"
         )
@@ -180,9 +197,12 @@ class TestDiscoverAllPlugins:
     def test_tuple_has_six_elements(self, mock_user_dir, mock_bundled_dir, tmp_path):
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0", "description": "search"
-        })
+        _make_category_plugin(
+            tmp_path,
+            "web",
+            "tavily",
+            {"name": "web-tavily", "version": "1.0.0", "description": "search"},
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -197,20 +217,22 @@ class TestDiscoverAllPlugins:
 
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_user_overrides_bundled_on_key_collision(self, mock_user_dir, mock_bundled_dir, tmp_path):
+    def test_user_overrides_bundled_on_key_collision(
+        self, mock_user_dir, mock_bundled_dir, tmp_path
+    ):
         """User plugin with same key as bundled should win."""
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
         # Simulate a bundled plugin
         bundled_dir = tmp_path / "bundled"
         bundled_dir.mkdir()
-        _make_plugin_dir(bundled_dir, "my-plugin", {
-            "name": "my-plugin", "version": "1.0.0"
-        })
+        _make_plugin_dir(
+            bundled_dir, "my-plugin", {"name": "my-plugin", "version": "1.0.0"}
+        )
         # User plugin with same key
-        _make_plugin_dir(tmp_path, "my-plugin", {
-            "name": "my-plugin", "version": "2.0.0"
-        })
+        _make_plugin_dir(
+            tmp_path, "my-plugin", {"name": "my-plugin", "version": "2.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = bundled_dir
 
@@ -230,31 +252,52 @@ class TestDiscoverAllPlugins:
 class TestPluginStatus:
     def test_name_in_enabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
+
         assert _plugin_status("my-plugin", {"my-plugin"}, set()) == "enabled"
 
     def test_key_in_enabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("web-tavily", {"web/tavily"}, set(), key="web/tavily") == "enabled"
+
+        assert (
+            _plugin_status("web-tavily", {"web/tavily"}, set(), key="web/tavily")
+            == "enabled"
+        )
 
     def test_name_in_disabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
+
         assert _plugin_status("my-plugin", set(), {"my-plugin"}) == "disabled"
 
     def test_key_in_disabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("web-tavily", set(), {"web/tavily"}, key="web/tavily") == "disabled"
+
+        assert (
+            _plugin_status("web-tavily", set(), {"web/tavily"}, key="web/tavily")
+            == "disabled"
+        )
 
     def test_neither_name_nor_key(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("unknown", {"other"}, set(), key="cat/unknown") == "not enabled"
+
+        assert (
+            _plugin_status("unknown", {"other"}, set(), key="cat/unknown")
+            == "not enabled"
+        )
 
     def test_disabled_takes_precedence_over_enabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
+
         assert _plugin_status("my-plugin", {"my-plugin"}, {"my-plugin"}) == "disabled"
 
     def test_key_disabled_takes_precedence(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("web-tavily", {"web/tavily"}, {"web/tavily"}, key="web/tavily") == "disabled"
+
+        assert (
+            _plugin_status(
+                "web-tavily", {"web/tavily"}, {"web/tavily"}, key="web/tavily"
+            )
+            == "disabled"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +311,14 @@ class TestFilterPluginEntries:
 
         entries = [
             ("web-tavily", "1.0.0", "search", "user", Path("/tmp"), "web/tavily"),
-            ("disk-cleanup", "1.0.0", "cleanup", "bundled", Path("/tmp"), "disk-cleanup"),
+            (
+                "disk-cleanup",
+                "1.0.0",
+                "cleanup",
+                "bundled",
+                Path("/tmp"),
+                "disk-cleanup",
+            ),
         ]
         args = MagicMock()
         args.no_bundled = False
@@ -283,7 +333,14 @@ class TestFilterPluginEntries:
         from clawk_cli.plugins_cmd import _filter_plugin_entries
 
         entries = [
-            ("disk-cleanup", "1.0.0", "cleanup", "bundled", Path("/tmp"), "disk-cleanup"),
+            (
+                "disk-cleanup",
+                "1.0.0",
+                "cleanup",
+                "bundled",
+                Path("/tmp"),
+                "disk-cleanup",
+            ),
         ]
         args = MagicMock()
         args.no_bundled = False
@@ -302,15 +359,22 @@ class TestFilterPluginEntries:
 class TestCmdListJson:
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_json_output_includes_category_plugins(self, mock_user_dir, mock_bundled_dir, tmp_path, capsys):
+    def test_json_output_includes_category_plugins(
+        self, mock_user_dir, mock_bundled_dir, tmp_path, capsys
+    ):
         from clawk_cli.plugins_cmd import cmd_list
 
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0", "description": "search"
-        })
-        _make_plugin_dir(tmp_path, "disk-cleanup", {
-            "name": "disk-cleanup", "version": "2.0.0", "description": "cleanup"
-        })
+        _make_category_plugin(
+            tmp_path,
+            "web",
+            "tavily",
+            {"name": "web-tavily", "version": "1.0.0", "description": "search"},
+        )
+        _make_plugin_dir(
+            tmp_path,
+            "disk-cleanup",
+            {"name": "disk-cleanup", "version": "2.0.0", "description": "cleanup"},
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -330,17 +394,21 @@ class TestCmdListJson:
 
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_json_status_uses_key(self, mock_user_dir, mock_bundled_dir, tmp_path, capsys):
+    def test_json_status_uses_key(
+        self, mock_user_dir, mock_bundled_dir, tmp_path, capsys
+    ):
         from clawk_cli.plugins_cmd import cmd_list
 
-        _make_category_plugin(tmp_path, "web", "tavily", {
-            "name": "web-tavily", "version": "1.0.0"
-        })
+        _make_category_plugin(
+            tmp_path, "web", "tavily", {"name": "web-tavily", "version": "1.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
         # Patch config to return web/tavily as enabled
-        with patch("clawk_cli.plugins_cmd._get_enabled_set", return_value={"web/tavily"}):
+        with patch(
+            "clawk_cli.plugins_cmd._get_enabled_set", return_value={"web/tavily"}
+        ):
             args = MagicMock()
             args.json = True
             args.plain = False

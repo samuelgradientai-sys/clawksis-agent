@@ -68,8 +68,18 @@ def _session_id_assignments_followed_by_save(source: str) -> list[tuple[int, boo
                 if self._is_session_id_assign(stmt):
                     results.append((stmt.lineno, self._block_has_save_after(body, i)))
                 for child in ast.iter_child_nodes(stmt):
-                    if isinstance(child, (ast.If, ast.For, ast.While, ast.With,
-                                          ast.Try, ast.AsyncWith, ast.AsyncFor)):
+                    if isinstance(
+                        child,
+                        (
+                            ast.If,
+                            ast.For,
+                            ast.While,
+                            ast.With,
+                            ast.Try,
+                            ast.AsyncWith,
+                            ast.AsyncFor,
+                        ),
+                    ):
                         self._walk_node(child)
 
         def _walk_node(self, node: ast.AST) -> None:
@@ -161,7 +171,10 @@ class TestCompressionSessionPropagation:
 
         # Inline the propagation logic exactly as it appears in gateway/run.py
         # (around line 9459). This is the behavior we are pinning.
-        if agent_result.get("session_id") and agent_result["session_id"] != session_entry.session_id:
+        if (
+            agent_result.get("session_id")
+            and agent_result["session_id"] != session_entry.session_id
+        ):
             session_entry.session_id = agent_result["session_id"]
             session_store._save()
 
@@ -169,9 +182,12 @@ class TestCompressionSessionPropagation:
             "session_entry.session_id was not updated to the compressed session id. "
             "The next turn would load the old transcript and re-trigger compression."
         )
-        session_store._save.assert_called_once_with(), (
-            "session_store._save() was not called after session_entry update. "
-            "The new session mapping would not survive a gateway restart."
+        (
+            session_store._save.assert_called_once_with(),
+            (
+                "session_store._save() was not called after session_entry update. "
+                "The new session mapping would not survive a gateway restart."
+            ),
         )
 
     def test_no_update_when_session_id_unchanged(self) -> None:
@@ -191,7 +207,10 @@ class TestCompressionSessionPropagation:
         # Normal turn: agent returns same session_id (or none at all)
         agent_result = {"response": "hello"}  # no "session_id" key
 
-        if agent_result.get("session_id") and agent_result["session_id"] != session_entry.session_id:
+        if (
+            agent_result.get("session_id")
+            and agent_result["session_id"] != session_entry.session_id
+        ):
             session_entry.session_id = agent_result["session_id"]
             session_store._save()
 
@@ -224,7 +243,10 @@ class TestCompressionSessionPropagation:
         session_entry.session_id = old_sid
         agent_result = {"session_id": new_sid}
 
-        if agent_result.get("session_id") and agent_result["session_id"] != session_entry.session_id:
+        if (
+            agent_result.get("session_id")
+            and agent_result["session_id"] != session_entry.session_id
+        ):
             session_entry.session_id = agent_result["session_id"]
 
         contextvar_sid = get_session_env("CLAWK_SESSION_ID", "")

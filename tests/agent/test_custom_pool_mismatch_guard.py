@@ -13,6 +13,7 @@ The fix accepts the pair only when the agent's current base_url resolves to
 the same pool key, preserving the guard's original purpose (#33088/#33163:
 never mutate the primary's pool while a fallback provider is active).
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -54,8 +55,7 @@ class TestCustomPoolMismatchGuard:
                 classified_reason=FailoverReason.rate_limit,
             )
         assert pool.current.called, (
-            "guard short-circuited: pool never touched despite matching "
-            "custom base_url"
+            "guard short-circuited: pool never touched despite matching custom base_url"
         )
 
     def test_unrelated_custom_pool_still_guarded(self):
@@ -81,7 +81,9 @@ class TestCustomPoolMismatchGuard:
         """Original #33088/#33163 contract: when a fallback provider is
         active (agent.provider != pool.provider, non-custom), the pool is
         never mutated."""
-        agent, pool = _agent("openai-codex", "https://chatgpt.com/backend-api", "custom:fireworks")
+        agent, pool = _agent(
+            "openai-codex", "https://chatgpt.com/backend-api", "custom:fireworks"
+        )
         recovered, _ = recover_with_credential_pool(
             agent,
             status_code=401,

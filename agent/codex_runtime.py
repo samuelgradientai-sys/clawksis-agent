@@ -90,7 +90,8 @@ def _record_codex_app_server_usage(agent, turn) -> dict[str, Any]:
             except Exception as exc:
                 logger.debug(
                     "Codex app-server api-call persistence failed (session=%s): %s",
-                    agent.session_id, exc,
+                    agent.session_id,
+                    exc,
                 )
         return {}
 
@@ -167,27 +168,32 @@ def _record_codex_app_server_usage(agent, turn) -> dict[str, Any]:
                 cache_write_tokens=canonical_usage.cache_write_tokens,
                 reasoning_tokens=canonical_usage.reasoning_tokens,
                 estimated_cost_usd=float(cost_result.amount_usd)
-                if cost_result.amount_usd is not None else None,
+                if cost_result.amount_usd is not None
+                else None,
                 cost_status=cost_result.status,
                 cost_source=cost_result.source,
                 billing_provider=agent.provider,
                 billing_base_url=agent.base_url,
                 billing_mode="subscription_included"
-                if cost_result.status == "included" else None,
+                if cost_result.status == "included"
+                else None,
                 model=agent.model,
                 api_call_count=1,
             )
         except Exception as exc:
             logger.debug(
                 "Codex app-server token persistence failed (session=%s, tokens=%d): %s",
-                agent.session_id, total_tokens, exc,
+                agent.session_id,
+                total_tokens,
+                exc,
             )
 
     return {
         **usage_dict,
         "last_prompt_tokens": prompt_tokens,
         "estimated_cost_usd": float(cost_result.amount_usd)
-        if cost_result.amount_usd is not None else None,
+        if cost_result.amount_usd is not None
+        else None,
         "cost_status": cost_result.status,
         "cost_source": cost_result.source,
     }

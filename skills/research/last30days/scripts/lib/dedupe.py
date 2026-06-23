@@ -6,32 +6,30 @@ import re
 
 from . import schema
 
-STOPWORDS = frozenset(
-    {
-        "the",
-        "a",
-        "an",
-        "to",
-        "for",
-        "how",
-        "is",
-        "in",
-        "of",
-        "on",
-        "and",
-        "with",
-        "from",
-        "by",
-        "at",
-        "this",
-        "that",
-        "it",
-        "what",
-        "are",
-        "do",
-        "can",
-    }
-)
+STOPWORDS = frozenset({
+    "the",
+    "a",
+    "an",
+    "to",
+    "for",
+    "how",
+    "is",
+    "in",
+    "of",
+    "on",
+    "and",
+    "with",
+    "from",
+    "by",
+    "at",
+    "this",
+    "that",
+    "it",
+    "what",
+    "are",
+    "do",
+    "can",
+})
 
 
 def normalize_text(text: str) -> str:
@@ -42,7 +40,7 @@ def normalize_text(text: str) -> str:
 def _ngrams_of_normalized(norm: str, n: int = 3) -> set[str]:
     if len(norm) < n:
         return {norm} if norm else set()
-    return {norm[index:index + n] for index in range(len(norm) - n + 1)}
+    return {norm[index : index + n] for index in range(len(norm) - n + 1)}
 
 
 def get_ngrams(text: str, n: int = 3) -> set[str]:
@@ -81,8 +79,7 @@ def hybrid_similarity(text_a: str, text_b: str) -> float:
 
 def _tokenize(normalized: str) -> frozenset[str]:
     return frozenset(
-        tok for tok in normalized.split()
-        if len(tok) > 1 and tok not in STOPWORDS
+        tok for tok in normalized.split() if len(tok) > 1 and tok not in STOPWORDS
     )
 
 
@@ -109,7 +106,9 @@ def item_text(item: schema.SourceItem) -> str:
     return " ".join(part for part in parts if part).strip()
 
 
-def dedupe_items(items: list[schema.SourceItem], threshold: float = 0.7) -> list[schema.SourceItem]:
+def dedupe_items(
+    items: list[schema.SourceItem], threshold: float = 0.7
+) -> list[schema.SourceItem]:
     """Remove near-duplicates while keeping earlier, better-scored items."""
     kept: list[schema.SourceItem] = []
     kept_prepared: list[_PreparedText] = []

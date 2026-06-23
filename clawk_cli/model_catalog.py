@@ -571,7 +571,9 @@ def seed_cache_from_checkout(project_root: "Path | str") -> bool:
         logger.debug("model catalog seed from checkout skipped (%s): %s", src, exc)
         return False
     if not _validate_manifest(data):
-        logger.debug("model catalog seed from checkout skipped: invalid manifest at %s", src)
+        logger.debug(
+            "model catalog seed from checkout skipped: invalid manifest at %s", src
+        )
         return False
     _write_disk_cache(data)
     reset_cache()  # drop the in-process copy so the next read picks up the seed

@@ -1,14 +1,26 @@
 /**
  * SessionSidebar — Panel izquierdo del modo Moderno con la lista de sesiones.
  *
- * Diseño Linear/Vercel:
- * - Ancho fijo 240px (siempre visible — opción A elegida en Fase 2.7)
- * - Header: botón "+ New chat" estilo violet (action principal)
- * - Lista: cada sesión con título + fecha relativa
- * - Sesión activa destacada con background violeta sutil
+ * Cada sesión muestra: título + fecha, y abajo-derecha el modelo + un ícono del
+ * origen (dashboard / telegram / cron / cli / …). Botón de borrar al pasar el
+ * mouse. La sesión que se está viendo queda resaltada (punto + ring violeta).
  */
 
-import { Plus, Loader2, MessageSquare } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  MessageSquare,
+  Trash2,
+  LayoutDashboard,
+  Terminal,
+  Send,
+  MessageCircle,
+  Hash,
+  Clock,
+  Webhook,
+  Globe,
+  type LucideIcon,
+} from "lucide-react";
 import { deriveTitle, type SessionSummary } from "./hooks/useSessions";
 
 interface SessionSidebarProps {
@@ -18,6 +30,33 @@ interface SessionSidebarProps {
   error: string | null;
   onSelectSession: (sessionId: string) => void;
   onNewChat: () => void;
+  onDeleteSession: (sessionId: string) => void;
+}
+
+/** Origen de la sesión → ícono + etiqueta + color (de dónde viene la charla). */
+const SOURCE_META: Record<
+  string,
+  { icon: LucideIcon; label: string; color: string }
+> = {
+  dashboard: { icon: LayoutDashboard, label: "Dashboard", color: "text-[#6C4FD6]" },
+  tui: { icon: Terminal, label: "Terminal", color: "text-primary" },
+  cli: { icon: Terminal, label: "CLI", color: "text-primary" },
+  telegram: { icon: Send, label: "Telegram", color: "text-[oklch(0.65_0.15_250)]" },
+  whatsapp: { icon: MessageCircle, label: "WhatsApp", color: "text-success" },
+  discord: { icon: Hash, label: "Discord", color: "text-[oklch(0.65_0.15_280)]" },
+  slack: { icon: Hash, label: "Slack", color: "text-[oklch(0.7_0.15_155)]" },
+  cron: { icon: Clock, label: "Cron", color: "text-warning" },
+  webhook: { icon: Webhook, label: "Webhook", color: "text-muted-foreground" },
+};
+
+function sourceMeta(source: string) {
+  return (
+    SOURCE_META[(source || "").toLowerCase()] ?? {
+      icon: Globe,
+      label: source || "—",
+      color: "text-muted-foreground",
+    }
+  );
 }
 
 function formatRelativeDate(unixSeconds: number): string {
@@ -63,29 +102,68 @@ function SessionItem({
   session,
   isActive,
   onClick,
+  onDelete,
 }: {
   session: SessionSummary;
   isActive: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   const title = deriveTitle(session);
   const dateLabel = formatRelativeDate(session.started_at);
+  const meta = sourceMeta(session.source);
+  const SourceIcon = meta.icon;
+  const model = session.model?.trim();
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={
-        "group flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left transition-colors " +
-        (isActive
-          ? "bg-[#6C4FD6]/15 text-foreground"
-          : "text-muted-foreground hover:bg-muted/30 hover:text-foreground")
-      }
-    >
-      <span className="truncate text-xs font-medium">{title}</span>
-      <span className="text-[10px] text-muted-foreground/80">{dateLabel}</span>
-    </button>
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        aria-current={isActive ? "true" : undefined}
+        className={
+          "flex w-full flex-col gap-0.5 rounded px-2 py-1.5 pr-7 text-left transition-colors " +
+          (isActive
+            ? "bg-[#6C4FD6]/20 text-foreground ring-1 ring-inset ring-[#6C4FD6]/50"
+            : "text-muted-foreground hover:bg-muted/30 hover:text-foreground")
+        }
+      >
+        <span className="flex items-center gap-1.5">
+          {isActive && (
+            <span className="size-1.5 shrink-0 rounded-full bg-[#6C4FD6]" />
+          )}
+          <span className="truncate text-xs font-medium">{title}</span>
+        </span>
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
+          <span className="shrink-0">{dateLabel}</span>
+          <span className="ml-auto flex min-w-0 items-center gap-1">
+            {model && (
+              <span className="max-w-[88px] truncate font-mono" title={model}>
+                {model}
+              </span>
+            )}
+            <SourceIcon
+              className={"size-3 shrink-0 " + meta.color}
+              aria-label={meta.label}
+            />
+          </span>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        aria-label={"Borrar " + title}
+        title="Borrar conversación"
+        className="absolute right-1 top-1.5 rounded p-1 text-muted-foreground/60 opacity-0 transition-opacity hover:bg-destructive/20 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <Trash2 className="size-3" />
+      </button>
+    </div>
   );
 }
 
@@ -96,6 +174,7 @@ export function SessionSidebar({
   error,
   onSelectSession,
   onNewChat,
+  onDeleteSession,
 }: SessionSidebarProps) {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col gap-2 border-r border-border bg-muted/10 p-2">
@@ -139,6 +218,7 @@ export function SessionSidebar({
             session={session}
             isActive={session.id === activeSessionId}
             onClick={() => onSelectSession(session.id)}
+            onDelete={() => onDeleteSession(session.id)}
           />
         ))}
       </div>

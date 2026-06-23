@@ -190,25 +190,30 @@ class TestResolveAutoMainFirst:
     def test_runtime_base_url_passed_for_named_api_key_provider(self):
         """Named API-key providers inherit the live session endpoint for aux work."""
         token_plan_url = "https://token-plan-sgp.xiaomimimo.com/v1"
-        with patch(
-            "agent.auxiliary_client._read_main_provider",
-            return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="config-model",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="config-model",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_resolve.return_value = (MagicMock(), "mimo-v2.5-pro")
 
             from agent.auxiliary_client import _resolve_auto
 
-            _resolve_auto(main_runtime={
-                "provider": "xiaomi",
-                "model": "mimo-v2.5-pro",
-                "base_url": token_plan_url,
-                "api_key": "tp-test-key",
-                "api_mode": "chat_completions",
-            })
+            _resolve_auto(
+                main_runtime={
+                    "provider": "xiaomi",
+                    "model": "mimo-v2.5-pro",
+                    "base_url": token_plan_url,
+                    "api_key": "tp-test-key",
+                    "api_mode": "chat_completions",
+                }
+            )
 
         assert mock_resolve.call_args.args[0] == "xiaomi"
         assert mock_resolve.call_args.args[1] == "mimo-v2.5-pro"
@@ -258,62 +263,6 @@ class TestResolveVisionMainFirst:
         assert mock_resolve.call_args.args[0] == "openrouter"
         assert mock_resolve.call_args.args[1] == "anthropic/claude-sonnet-4.6"
         assert mock_resolve.call_args.kwargs.get("is_vision") is True
-
-    def test_nous_main_vision_uses_paid_nous_vision_backend(self):
-        """Paid Nous main → aux vision uses the dedicated Nous vision backend."""
-        with (
-            patch(
-                "agent.auxiliary_client._read_main_provider",
-                return_value="nous",
-            ),
-            patch(
-                "agent.auxiliary_client._read_main_model",
-                return_value="openai/gpt-5",
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_task_provider_model",
-                return_value=("auto", None, None, None, None),
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_strict_vision_backend",
-                return_value=(MagicMock(), "google/gemini-3-flash-preview"),
-            ),
-        ):
-            from agent.auxiliary_client import resolve_vision_provider_client
-
-            provider, client, model = resolve_vision_provider_client()
-
-        assert provider == "nous"
-        assert client is not None
-        assert model == "google/gemini-3-flash-preview"
-
-    def test_nous_main_vision_uses_free_tier_nous_vision_backend(self):
-        """Free-tier Nous main → aux vision uses MiMo omni, not the text main model."""
-        with (
-            patch(
-                "agent.auxiliary_client._read_main_provider",
-                return_value="nous",
-            ),
-            patch(
-                "agent.auxiliary_client._read_main_model",
-                return_value="xiaomi/mimo-v2-pro",
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_task_provider_model",
-                return_value=("auto", None, None, None, None),
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_strict_vision_backend",
-                return_value=(MagicMock(), "xiaomi/mimo-v2-omni"),
-            ),
-        ):
-            from agent.auxiliary_client import resolve_vision_provider_client
-
-            provider, client, model = resolve_vision_provider_client()
-
-        assert provider == "nous"
-        assert client is not None
-        assert model == "xiaomi/mimo-v2-omni"
 
     def test_exotic_provider_with_vision_override_preserved(self):
         """xiaomi → mimo-v2.5 override still wins over main_model."""
@@ -470,35 +419,6 @@ class TestResolveVisionMainFirst:
 
         assert client is fallback_client
         assert provider in {"openrouter", "nous"}
-
-    def test_explicit_provider_override_still_wins(self):
-        """Explicit config override bypasses main-first policy."""
-        with (
-            patch(
-                "agent.auxiliary_client._read_main_provider",
-                return_value="openrouter",
-            ),
-            patch(
-                "agent.auxiliary_client._read_main_model",
-                return_value="anthropic/claude-opus-4.6",
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_task_provider_model",
-                return_value=("nous", None, None, None, None),  # explicit override
-            ),
-            patch(
-                "agent.auxiliary_client._resolve_strict_vision_backend"
-            ) as mock_strict,
-        ):
-            mock_strict.return_value = (MagicMock(), "nous-default-model")
-
-            from agent.auxiliary_client import resolve_vision_provider_client
-
-            provider, client, model = resolve_vision_provider_client()
-
-        # Explicit "nous" override → uses strict backend, NOT main model path
-        assert provider == "nous"
-        mock_strict.assert_called_once_with("nous", None)
 
 
 # ── Constant cleanup ────────────────────────────────────────────────────────

@@ -186,9 +186,9 @@ class TestApplyProfileOverrideClawkHomeGuard:
         """sudo elias ... should resolve `-p elias` under SUDO_USER, not root."""
         root_home = tmp_path / "root"
         user_home = tmp_path / "home" / "clawk"
-        profile_dir = user_home / ".clawk" / "profiles" / "elias"
+        profile_dir = user_home / ".clawksis" / "profiles" / "elias"
         profile_dir.mkdir(parents=True, exist_ok=True)
-        (root_home / ".clawk").mkdir(parents=True, exist_ok=True)
+        (root_home / ".clawksis").mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(Path, "home", lambda: root_home)
         monkeypatch.setenv("SUDO_USER", "clawk")

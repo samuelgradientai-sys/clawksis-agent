@@ -72,26 +72,58 @@ INTERACTIVE_CODING_PLATFORMS = {"cli", "tui", "acp", "desktop", ""}
 # Project-root signals that mark a directory as a code workspace even when it
 # isn't (yet) a git repo. Cheap filename checks — no parsing.
 _PROJECT_MARKERS = (
-    "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
-    "package.json", "tsconfig.json", "deno.json",
-    "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
-    "Gemfile", "composer.json", "mix.exs", "pubspec.yaml",
-    "CMakeLists.txt", "Makefile", "Dockerfile",
-    "AGENTS.md", "CLAUDE.md", ".cursorrules",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "requirements.txt",
+    "package.json",
+    "tsconfig.json",
+    "deno.json",
+    "Cargo.toml",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "Gemfile",
+    "composer.json",
+    "mix.exs",
+    "pubspec.yaml",
+    "CMakeLists.txt",
+    "Makefile",
+    "Dockerfile",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".cursorrules",
 )
 
 # Agent-instruction files surfaced separately from manifests in the snapshot.
 _CONTEXT_FILES = ("AGENTS.md", "CLAUDE.md", ".cursorrules")
 
 # Lockfile → package manager, checked in priority order.
-_PY_LOCKFILES = (("uv.lock", "uv"), ("poetry.lock", "poetry"), ("Pipfile.lock", "pipenv"))
+_PY_LOCKFILES = (
+    ("uv.lock", "uv"),
+    ("poetry.lock", "poetry"),
+    ("Pipfile.lock", "pipenv"),
+)
 _JS_LOCKFILES = (
-    ("pnpm-lock.yaml", "pnpm"), ("bun.lockb", "bun"), ("bun.lock", "bun"),
-    ("yarn.lock", "yarn"), ("package-lock.json", "npm"),
+    ("pnpm-lock.yaml", "pnpm"),
+    ("bun.lockb", "bun"),
+    ("bun.lock", "bun"),
+    ("yarn.lock", "yarn"),
+    ("package-lock.json", "npm"),
 )
 
 # package.json scripts / Makefile targets worth surfacing as verify commands.
-_VERIFY_TARGETS = ("test", "tests", "lint", "typecheck", "check", "build", "fmt", "format")
+_VERIFY_TARGETS = (
+    "test",
+    "tests",
+    "lint",
+    "typecheck",
+    "check",
+    "build",
+    "fmt",
+    "format",
+)
 _MAX_VERIFY_COMMANDS = 8
 _MAX_FACT_FILE_BYTES = 256 * 1024
 
@@ -121,9 +153,24 @@ _EDIT_FORMAT_GUIDANCE: dict[str, tuple[tuple[str, ...], str]] = {
         "single-file edits. It's the edit format you handle most reliably.",
     ),
     "replace": (
-        ("claude", "sonnet", "opus", "haiku",
-         "gemini", "gemma", "deepseek", "qwen", "kimi", "glm", "grok",
-         "clawk", "llama", "mistral", "devstral", "minimax"),
+        (
+            "claude",
+            "sonnet",
+            "opus",
+            "haiku",
+            "gemini",
+            "gemma",
+            "deepseek",
+            "qwen",
+            "kimi",
+            "glm",
+            "grok",
+            "hermes",
+            "llama",
+            "mistral",
+            "devstral",
+            "minimax",
+        ),
         "- Edit format: author new files with `write_file`; for edits to "
         "existing code prefer `patch` in `mode='replace'` — match a unique "
         "snippet and swap it. Reach for `mode='patch'` (V4A) only when an edit "
@@ -247,9 +294,23 @@ class ContextProfile:
 # full entries). Coding-adjacent categories (devops, github, mcp,
 # data-science, diagramming, research, security, …) are intentionally absent.
 _NON_CODING_SKILL_CATEGORIES = (
-    "apple", "communication", "cooking", "creative", "email", "finance",
-    "gaming", "gifs", "health", "media", "music", "note-taking",
-    "productivity", "shopping", "smart-home", "social-media", "travel",
+    "apple",
+    "communication",
+    "cooking",
+    "creative",
+    "email",
+    "finance",
+    "gaming",
+    "gifs",
+    "health",
+    "media",
+    "music",
+    "note-taking",
+    "productivity",
+    "shopping",
+    "smart-home",
+    "social-media",
+    "travel",
     "yuanbao",
 )
 
@@ -407,7 +468,9 @@ class RuntimeMode:
     def is_coding(self) -> bool:
         return self.profile.name == CODING_PROFILE.name
 
-    def toolset_selection(self, config: Optional[dict[str, Any]] = None) -> Optional[list[str]]:
+    def toolset_selection(
+        self, config: Optional[dict[str, Any]] = None
+    ) -> Optional[list[str]]:
         """Toolset list for this posture, or ``None`` to keep the platform default.
 
         Non-``None`` only under the opt-in ``focus`` mode. The default posture
@@ -611,7 +674,10 @@ def _parse_status(porcelain: str) -> tuple[dict[str, str], dict[str, int]]:
             branch["upstream"] = line.split(maxsplit=2)[-1]
         elif line.startswith("# branch.ab"):
             parts = line.split()
-            branch["ahead"], branch["behind"] = parts[2].lstrip("+"), parts[3].lstrip("-")
+            branch["ahead"], branch["behind"] = (
+                parts[2].lstrip("+"),
+                parts[3].lstrip("-"),
+            )
         elif line.startswith(("1 ", "2 ")):
             xy = line.split(maxsplit=2)[1]
             if xy[0] != ".":
@@ -645,7 +711,9 @@ def _project_facts(root: Path) -> list[str]:
     """
     facts: list[str] = []
 
-    manifests = [m for m in _PROJECT_MARKERS if m not in _CONTEXT_FILES and (root / m).is_file()]
+    manifests = [
+        m for m in _PROJECT_MARKERS if m not in _CONTEXT_FILES and (root / m).is_file()
+    ]
     package_managers = [
         pm for lock, pm in (*_PY_LOCKFILES, *_JS_LOCKFILES) if (root / lock).is_file()
     ]
@@ -660,17 +728,27 @@ def _project_facts(root: Path) -> list[str]:
         verify.append("scripts/run_tests.sh")
     if (root / "package.json").is_file():
         try:
-            scripts = json.loads(_read_small(root / "package.json") or "{}").get("scripts") or {}
+            scripts = (
+                json.loads(_read_small(root / "package.json") or "{}").get("scripts")
+                or {}
+            )
         except (json.JSONDecodeError, AttributeError):
             scripts = {}
-        js_pm = next((pm for lock, pm in _JS_LOCKFILES if (root / lock).is_file()), "npm")
-        verify.extend(f"{js_pm} run {name}" for name in _VERIFY_TARGETS if name in scripts)
-    if (root / "pytest.ini").is_file() or "[tool.pytest" in _read_small(root / "pyproject.toml"):
+        js_pm = next(
+            (pm for lock, pm in _JS_LOCKFILES if (root / lock).is_file()), "npm"
+        )
+        verify.extend(
+            f"{js_pm} run {name}" for name in _VERIFY_TARGETS if name in scripts
+        )
+    if (root / "pytest.ini").is_file() or "[tool.pytest" in _read_small(
+        root / "pyproject.toml"
+    ):
         verify.append("pytest")
     makefile = _read_small(root / "Makefile")
     if makefile:
         verify.extend(
-            f"make {name}" for name in _VERIFY_TARGETS
+            f"make {name}"
+            for name in _VERIFY_TARGETS
             if re.search(rf"^{re.escape(name)}\s*:", makefile, re.MULTILINE)
         )
     if verify:
@@ -697,11 +775,15 @@ def build_coding_workspace_block(cwd: Optional[str | Path] = None) -> str:
     if root is None:
         return ""
 
-    lines = ["Workspace (snapshot at session start — re-check with `git` before acting on it):"]
+    lines = [
+        "Workspace (snapshot at session start — re-check with `git` before acting on it):"
+    ]
     lines.append(f"- Root: {root}")
 
     if git_root is not None:
-        branch, counts = _parse_status(_git(root, "status", "--porcelain=2", "--branch"))
+        branch, counts = _parse_status(
+            _git(root, "status", "--porcelain=2", "--branch")
+        )
         head = branch.get("head", "")
         if head and head != "(detached)":
             line = f"- Branch: {head}"
@@ -719,14 +801,27 @@ def build_coding_workspace_block(cwd: Optional[str | Path] = None) -> str:
         # are shared state) but deliberately do NOT expose the primary tree path —
         # giving the model a second absolute path causes it to sometimes run commands
         # in the wrong directory.
-        git_dir, common_dir = _git(root, "rev-parse", "--git-dir"), _git(root, "rev-parse", "--git-common-dir")
-        if git_dir and common_dir and Path(git_dir).resolve() != Path(common_dir).resolve():
+        git_dir, common_dir = (
+            _git(root, "rev-parse", "--git-dir"),
+            _git(root, "rev-parse", "--git-common-dir"),
+        )
+        if (
+            git_dir
+            and common_dir
+            and Path(git_dir).resolve() != Path(common_dir).resolve()
+        ):
             lines.append("- Worktree: linked (git state shared with primary tree)")
 
-        dirty = [f"{n} {label}" for label, n in (
-            ("staged", counts["staged"]), ("modified", counts["modified"]),
-            ("untracked", counts["untracked"]), ("conflicts", counts["conflicts"]),
-        ) if n]
+        dirty = [
+            f"{n} {label}"
+            for label, n in (
+                ("staged", counts["staged"]),
+                ("modified", counts["modified"]),
+                ("untracked", counts["untracked"]),
+                ("conflicts", counts["conflicts"]),
+            )
+            if n
+        ]
         lines.append(f"- Status: {', '.join(dirty) if dirty else 'clean'}")
 
         recent = _git(root, "log", "-3", "--pretty=%h %s")

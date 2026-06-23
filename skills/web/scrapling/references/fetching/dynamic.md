@@ -20,13 +20,13 @@ Which are:
 
 ### 1. Vanilla Playwright
 ```python
-DynamicFetcher.fetch('https://example.com')
+DynamicFetcher.fetch("https://example.com")
 ```
 Using it in that manner will open a Chromium browser and load the page. There are optimizations for speed, and some stealth goes automatically under the hood, but other than that, there are no tricks or extra features unless you enable some; it's just a plain PlayWright API.
 
 ### 2. Real Chrome
 ```python
-DynamicFetcher.fetch('https://example.com', real_chrome=True)
+DynamicFetcher.fetch("https://example.com", real_chrome=True)
 ```
 If you have a Google Chrome browser installed, use this option. It's the same as the first option, but it will use the Google Chrome browser you installed on your device instead of Chromium. This will make your requests look more authentic, so they're less detectable for better results.
 
@@ -37,7 +37,7 @@ playwright install chrome
 
 ### 3. CDP Connection
 ```python
-DynamicFetcher.fetch('https://example.com', cdp_url='ws://localhost:9222')
+DynamicFetcher.fetch("https://example.com", cdp_url="ws://localhost:9222")
 ```
 Instead of launching a browser locally (Chromium/Google Chrome), you can connect to a remote browser through the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/).
 
@@ -100,27 +100,33 @@ In session classes, all these arguments can be set globally for the session. Sti
 
 ```python
 # Disable unnecessary resources
-page = DynamicFetcher.fetch('https://example.com', disable_resources=True)  # Blocks fonts, images, media, etc.
+page = DynamicFetcher.fetch(
+    "https://example.com", disable_resources=True
+)  # Blocks fonts, images, media, etc.
 ```
 
 ### Domain Blocking
 
 ```python
 # Block requests to specific domains (and their subdomains)
-page = DynamicFetcher.fetch('https://example.com', blocked_domains={"ads.example.com", "tracker.net"})
+page = DynamicFetcher.fetch(
+    "https://example.com", blocked_domains={"ads.example.com", "tracker.net"}
+)
 ```
 
 ### Network Control
 
 ```python
 # Wait for network idle (Consider fetch to be finished when there are no network connections for at least 500 ms)
-page = DynamicFetcher.fetch('https://example.com', network_idle=True)
+page = DynamicFetcher.fetch("https://example.com", network_idle=True)
 
 # Custom timeout (in milliseconds)
-page = DynamicFetcher.fetch('https://example.com', timeout=30000)  # 30 seconds
+page = DynamicFetcher.fetch("https://example.com", timeout=30000)  # 30 seconds
 
 # Proxy support (It can also be a dictionary with only the keys 'server', 'username', and 'password'.)
-page = DynamicFetcher.fetch('https://example.com', proxy='http://username:password@host:port')
+page = DynamicFetcher.fetch(
+    "https://example.com", proxy="http://username:password@host:port"
+)
 ```
 
 ### Proxy Rotation
@@ -137,11 +143,11 @@ rotator = ProxyRotator([
 
 # Use with session - rotates proxy automatically with each request
 with DynamicSession(proxy_rotator=rotator, headless=True) as session:
-    page1 = session.fetch('https://example1.com')
-    page2 = session.fetch('https://example2.com')
+    page1 = session.fetch("https://example1.com")
+    page2 = session.fetch("https://example2.com")
 
     # Override rotator for a specific request
-    page3 = session.fetch('https://example3.com', proxy='http://specific-proxy:8080')
+    page3 = session.fetch("https://example3.com", proxy="http://specific-proxy:8080")
 ```
 
 **Warning:** By default, all browser-based fetchers and sessions use a persistent browser context with a pool of tabs. However, since browsers can't set a proxy per tab, when you use a `ProxyRotator`, the fetcher will automatically open a separate context for each proxy, with one tab per context. Once the tab's job is done, both the tab and its context are closed.
@@ -149,9 +155,11 @@ with DynamicSession(proxy_rotator=rotator, headless=True) as session:
 ### Downloading Files
 
 ```python
-page = DynamicFetcher.fetch('https://raw.githubusercontent.com/D4Vinci/Scrapling/main/docs/assets/main_cover.png')
+page = DynamicFetcher.fetch(
+    "https://raw.githubusercontent.com/D4Vinci/Scrapling/main/docs/assets/main_cover.png"
+)
 
-with open(file='main_cover.png', mode='wb') as f:
+with open(file="main_cover.png", mode="wb") as f:
     f.write(page.body)
 ```
 
@@ -163,19 +171,25 @@ If you need to set up event listeners, routes, or scripts that must be registere
 ```python
 from playwright.sync_api import Page
 
+
 def capture_websockets(page: Page):
     page.on("websocket", lambda ws: print(f"WebSocket opened: {ws.url}"))
 
-page = DynamicFetcher.fetch('https://example.com', page_setup=capture_websockets)
+
+page = DynamicFetcher.fetch("https://example.com", page_setup=capture_websockets)
 ```
 Async version:
 ```python
 from playwright.async_api import Page
 
+
 async def capture_websockets(page: Page):
     page.on("websocket", lambda ws: print(f"WebSocket opened: {ws.url}"))
 
-page = await DynamicFetcher.async_fetch('https://example.com', page_setup=capture_websockets)
+
+page = await DynamicFetcher.async_fetch(
+    "https://example.com", page_setup=capture_websockets
+)
 ```
 
 You can combine it with `page_action` -- `page_setup` runs before navigation, `page_action` runs after.
@@ -189,23 +203,27 @@ In the example below, I used the pages' [mouse events](https://playwright.dev/py
 ```python
 from playwright.sync_api import Page
 
+
 def scroll_page(page: Page):
     page.mouse.wheel(10, 0)
     page.mouse.move(100, 400)
     page.mouse.up()
 
-page = DynamicFetcher.fetch('https://example.com', page_action=scroll_page)
+
+page = DynamicFetcher.fetch("https://example.com", page_action=scroll_page)
 ```
 Of course, if you use the async fetch version, the function must also be async.
 ```python
 from playwright.async_api import Page
 
-async def scroll_page(page: Page):
-   await page.mouse.wheel(10, 0)
-   await page.mouse.move(100, 400)
-   await page.mouse.up()
 
-page = await DynamicFetcher.async_fetch('https://example.com', page_action=scroll_page)
+async def scroll_page(page: Page):
+    await page.mouse.wheel(10, 0)
+    await page.mouse.move(100, 400)
+    await page.mouse.up()
+
+
+page = await DynamicFetcher.async_fetch("https://example.com", page_action=scroll_page)
 ```
 
 ### Wait Conditions
@@ -213,9 +231,7 @@ page = await DynamicFetcher.async_fetch('https://example.com', page_action=scrol
 ```python
 # Wait for the selector
 page = DynamicFetcher.fetch(
-    'https://example.com',
-    wait_selector='h1',
-    wait_selector_state='visible'
+    "https://example.com", wait_selector="h1", wait_selector_state="visible"
 )
 ```
 This is the last wait the fetcher will do before returning the response (if enabled). You pass a CSS selector to the `wait_selector` argument, and the fetcher will wait for the state you passed in the `wait_selector_state` argument to be fulfilled. If you didn't pass a state, the default would be `attached`, which means it will wait for the element to be present in the DOM.
@@ -236,8 +252,10 @@ Many SPAs load data through background API calls (XHR/fetch). You can capture th
 ```python
 from scrapling.fetchers import DynamicSession
 
-with DynamicSession(capture_xhr=r"https://api\.example\.com/.*", headless=True) as session:
-    page = session.fetch('https://example.com')
+with DynamicSession(
+    capture_xhr=r"https://api\.example\.com/.*", headless=True
+) as session:
+    page = session.fetch("https://example.com")
 
     # Access captured XHR responses
     for xhr in page.captured_xhr:
@@ -251,10 +269,10 @@ Each item in `captured_xhr` is a full `Response` object with the same properties
 
 ```python
 page = DynamicFetcher.fetch(
-    'https://example.com',
+    "https://example.com",
     google_search=True,
-    useragent='Mozilla/5.0...',  # Custom user agent
-    locale='en-US',  # Set browser locale
+    useragent="Mozilla/5.0...",  # Custom user agent
+    locale="en-US",  # Set browser locale
 )
 ```
 
@@ -262,22 +280,19 @@ page = DynamicFetcher.fetch(
 ```python
 from scrapling.fetchers import DynamicFetcher
 
+
 def scrape_dynamic_content():
     # Use Playwright for JavaScript content
     page = DynamicFetcher.fetch(
-        'https://example.com/dynamic',
-        network_idle=True,
-        wait_selector='.content'
+        "https://example.com/dynamic", network_idle=True, wait_selector=".content"
     )
-    
+
     # Extract dynamic content
-    content = page.css('.content')
-    
+    content = page.css(".content")
+
     return {
-        'title': content.css('h1::text').get(),
-        'items': [
-            item.text for item in content.css('.item')
-        ]
+        "title": content.css("h1::text").get(),
+        "items": [item.text for item in content.css(".item")],
     }
 ```
 
@@ -289,16 +304,12 @@ To keep the browser open until you make multiple requests with the same configur
 from scrapling.fetchers import DynamicSession
 
 # Create a session with default configuration
-with DynamicSession(
-    headless=True,
-    disable_resources=True,
-    real_chrome=True
-) as session:
+with DynamicSession(headless=True, disable_resources=True, real_chrome=True) as session:
     # Make multiple requests with the same browser instance
-    page1 = session.fetch('https://example1.com')
-    page2 = session.fetch('https://example2.com')
-    page3 = session.fetch('https://dynamic-site.com')
-    
+    page1 = session.fetch("https://example1.com")
+    page2 = session.fetch("https://example2.com")
+    page3 = session.fetch("https://dynamic-site.com")
+
     # All requests reuse the same tab on the same browser instance
 ```
 
@@ -308,17 +319,16 @@ with DynamicSession(
 import asyncio
 from scrapling.fetchers import AsyncDynamicSession
 
+
 async def scrape_multiple_sites():
     async with AsyncDynamicSession(
-        network_idle=True,
-        timeout=30000,
-        max_pages=3
+        network_idle=True, timeout=30000, max_pages=3
     ) as session:
         # Make async requests with shared browser configuration
         pages = await asyncio.gather(
-            session.fetch('https://spa-app1.com'),
-            session.fetch('https://spa-app2.com'),
-            session.fetch('https://dynamic-content.com')
+            session.fetch("https://spa-app1.com"),
+            session.fetch("https://spa-app2.com"),
+            session.fetch("https://dynamic-content.com"),
         )
         return pages
 ```

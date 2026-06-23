@@ -7,6 +7,7 @@ used to treat the leading ``27`` as ESC/cancel, which dumped the setup wizard's
 provider/model picker into its numbered "Select [1-N]" fallback the instant a
 user pressed up or down.
 """
+
 import sys
 
 import pytest

@@ -82,7 +82,9 @@ def _find_default_profile(profiles_dir: Path) -> Optional[Path]:
 
             # First pass: Install* section (Firefox >= 67 format, takes priority)
             for section in config.sections():
-                if section.startswith("Install") and config.has_option(section, "Default"):
+                if section.startswith("Install") and config.has_option(
+                    section, "Default"
+                ):
                     raw = config.get(section, "Default")
                     candidate = profiles_dir / raw
                     if candidate.is_dir():
@@ -90,7 +92,11 @@ def _find_default_profile(profiles_dir: Path) -> Optional[Path]:
 
             # Second pass: Profile section with Default=1
             for section in config.sections():
-                if section.startswith("Profile") and config.has_option(section, "Default") and config.get(section, "Default") == "1":
+                if (
+                    section.startswith("Profile")
+                    and config.has_option(section, "Default")
+                    and config.get(section, "Default") == "1"
+                ):
                     return _resolve_profile_path(profiles_dir, config, section)
 
             # Third pass: first Profile section that exists on disk
@@ -113,7 +119,10 @@ def _resolve_profile_path(
     if not config.has_option(section, "Path"):
         return None
     raw_path = config.get(section, "Path")
-    is_relative = config.has_option(section, "IsRelative") and config.get(section, "IsRelative") == "1"
+    is_relative = (
+        config.has_option(section, "IsRelative")
+        and config.get(section, "IsRelative") == "1"
+    )
     if is_relative:
         candidate = profiles_dir / raw_path
     else:
@@ -183,12 +192,15 @@ def _query_cookies_db(
         if tmp_fd is not None:
             try:
                 import os
+
                 os.close(tmp_fd)
             except OSError:
                 pass
 
 
-def _try_firefox_dir(profiles_dir: Path, domain: str, cookie_names: List[str]) -> Optional[Dict[str, str]]:
+def _try_firefox_dir(
+    profiles_dir: Path, domain: str, cookie_names: List[str]
+) -> Optional[Dict[str, str]]:
     """Try to extract cookies from a Firefox profiles directory."""
     profile_path = _find_default_profile(profiles_dir)
     if profile_path is None:
@@ -249,6 +261,7 @@ def extract_chrome_cookies(
         return None
     try:
         from .chrome_cookies import extract_chrome_cookies_macos
+
         return extract_chrome_cookies_macos(domain, cookie_names)
     except Exception as exc:
         logger.debug("Chrome cookie extraction failed: %s", exc)
@@ -272,6 +285,7 @@ def extract_brave_cookies(
         return None
     try:
         from .chrome_cookies import extract_brave_cookies_macos
+
         return extract_brave_cookies_macos(domain, cookie_names)
     except Exception as exc:
         logger.debug("Brave cookie extraction failed: %s", exc)
@@ -293,6 +307,7 @@ def extract_safari_cookies(
         return None
     try:
         from .safari_cookies import extract_safari_cookies_macos
+
         return extract_safari_cookies_macos(domain, cookie_names)
     except Exception as exc:
         logger.debug("Safari cookie extraction failed: %s", exc)

@@ -1009,15 +1009,23 @@ def test_do_browse_reports_live_per_source_progress():
     from tools.skills_hub import SkillMeta
 
     meta = SkillMeta(
-        name="demo", description="d", source="official",
-        identifier="official/demo", trust_level="builtin",
+        name="demo",
+        description="d",
+        source="official",
+        identifier="official/demo",
+        trust_level="builtin",
     )
 
     captured = {}
 
-    def fake_parallel(sources, query="", per_source_limits=None,
-                      source_filter="all", overall_timeout=30,
-                      on_source_done=None):
+    def fake_parallel(
+        sources,
+        query="",
+        per_source_limits=None,
+        source_filter="all",
+        overall_timeout=30,
+        on_source_done=None,
+    ):
         # Simulate two sources completing — the callback must be wired through.
         assert on_source_done is not None, "do_browse must pass on_source_done"
         on_source_done("official", 1)
@@ -1028,9 +1036,11 @@ def test_do_browse_reports_live_per_source_progress():
     sink = StringIO()
     console = Console(file=sink, force_terminal=False, color_system=None, width=120)
 
-    with patch("tools.skills_hub.create_source_router", return_value=[]), \
-         patch("tools.skills_hub.GitHubAuth"), \
-         patch("tools.skills_hub.parallel_search_sources", side_effect=fake_parallel):
+    with (
+        patch("tools.skills_hub.create_source_router", return_value=[]),
+        patch("tools.skills_hub.GitHubAuth"),
+        patch("tools.skills_hub.parallel_search_sources", side_effect=fake_parallel),
+    ):
         do_browse(page=1, page_size=20, console=console)
 
     assert captured.get("called"), "parallel_search_sources was not invoked"

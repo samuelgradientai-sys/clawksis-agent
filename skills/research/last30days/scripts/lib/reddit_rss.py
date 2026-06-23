@@ -122,6 +122,7 @@ def _parse_feed(xml_text: str, query: str = "") -> List[Dict[str, Any]]:
         if content_el is not None and content_el.text:
             # Strip the simplest HTML; renderer only needs an excerpt.
             import re as _re
+
             selftext = _re.sub(r"<[^>]+>", " ", content_el.text)
             selftext = _re.sub(r"\s+", " ", selftext).strip()[:500]
 
@@ -131,8 +132,8 @@ def _parse_feed(xml_text: str, query: str = "") -> List[Dict[str, Any]]:
             "id": "",  # assigned after dedup
             "title": title,
             "url": url,
-            "score": 0,            # backfilled by shreddit enrichment
-            "num_comments": 0,     # backfilled by shreddit enrichment
+            "score": 0,  # backfilled by shreddit enrichment
+            "num_comments": 0,  # backfilled by shreddit enrichment
             "subreddit": subreddit,
             "created_utc": _iso_to_epoch(updated),
             "author": author,
@@ -157,7 +158,7 @@ def _build_urls(query: str, depth: str, subreddits: Optional[List[str]]) -> List
     urls: List[str] = [
         f"https://www.reddit.com/search.rss?q={q}&sort=relevance&t=month"
     ]
-    for raw_sub in (subreddits or []):
+    for raw_sub in subreddits or []:
         sub = raw_sub.removeprefix("r/").strip()
         if not sub:
             continue

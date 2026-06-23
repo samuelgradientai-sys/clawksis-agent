@@ -36,11 +36,21 @@ def _make_desktop_tree(tmp_path: Path) -> Path:
     return root
 
 
-def _make_packaged_executable(root: Path, monkeypatch, platform: str = "darwin") -> Path:
+def _make_packaged_executable(
+    root: Path, monkeypatch, platform: str = "darwin"
+) -> Path:
     monkeypatch.setattr(cli_main.sys, "platform", platform)
     desktop_dir = root / "apps" / "desktop"
     if platform == "darwin":
-        exe = desktop_dir / "release" / "mac-arm64" / "Clawksis.app" / "Contents" / "MacOS" / "Clawksis"
+        exe = (
+            desktop_dir
+            / "release"
+            / "mac-arm64"
+            / "Clawksis.app"
+            / "Contents"
+            / "MacOS"
+            / "Clawksis"
+        )
     elif platform == "win32":
         exe = desktop_dir / "release" / "win-unpacked" / "Clawksis.exe"
     else:
@@ -60,17 +70,25 @@ def test_gui_installs_packages_and_launches_desktop_app(tmp_path, monkeypatch):
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
-         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
-         patch("clawk_cli.main._write_desktop_build_stamp"), \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch(
+            "clawk_cli.main._run_npm_install_deterministic", return_value=install_ok
+        ) as mock_install,
+        patch("clawk_cli.main._desktop_build_needed", return_value=True),
+        patch("clawk_cli.main._write_desktop_build_stamp"),
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch(
+            "clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]
+        ) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
-    mock_install.assert_called_once_with("/usr/bin/npm", root, capture_output=False, env=None)
+    mock_install.assert_called_once_with(
+        "/usr/bin/npm", root, capture_output=False, env=None
+    )
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "pack"]
     assert mock_run.call_args_list[0].kwargs["cwd"] == desktop_dir
     assert mock_run.call_args_list[1].args[0] == [str(packaged_exe)]
@@ -88,19 +106,23 @@ def test_gui_forwards_desktop_environment_overrides(tmp_path, monkeypatch):
 
     ok = subprocess.CompletedProcess([], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=ok), \
-         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
-         patch("clawk_cli.main._write_desktop_build_stamp"), \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main.subprocess.run", side_effect=[ok, ok]) as mock_run, \
-         pytest.raises(SystemExit):
-        cli_main.cmd_gui(_ns(
-            fake_boot=True,
-            ignore_existing=True,
-            clawk_root=str(clawk_root),
-            cwd=str(cwd),
-        ))
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch("clawk_cli.main._run_npm_install_deterministic", return_value=ok),
+        patch("clawk_cli.main._desktop_build_needed", return_value=True),
+        patch("clawk_cli.main._write_desktop_build_stamp"),
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch("clawk_cli.main.subprocess.run", side_effect=[ok, ok]) as mock_run,
+        pytest.raises(SystemExit),
+    ):
+        cli_main.cmd_gui(
+            _ns(
+                fake_boot=True,
+                ignore_existing=True,
+                clawk_root=str(clawk_root),
+                cwd=str(cwd),
+            )
+        )
 
     launch_env = mock_run.call_args_list[1].kwargs["env"]
     assert launch_env["CLAWK_DESKTOP_BOOT_FAKE"] == "1"
@@ -113,8 +135,10 @@ def test_gui_exits_when_npm_missing(tmp_path, monkeypatch, capsys):
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
 
-    with patch("clawk_cli.main.shutil.which", return_value=None), \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value=None),
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
@@ -133,7 +157,9 @@ def test_gui_skip_build_requires_existing_packaged_app(tmp_path, monkeypatch, ca
     assert "no packaged desktop app" in capsys.readouterr().out
 
 
-def test_gui_skip_build_launches_existing_packaged_app_without_npm(tmp_path, monkeypatch):
+def test_gui_skip_build_launches_existing_packaged_app_without_npm(
+    tmp_path, monkeypatch
+):
     root = _make_desktop_tree(tmp_path)
     desktop_dir = root / "apps" / "desktop"
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
@@ -141,10 +167,12 @@ def test_gui_skip_build_launches_existing_packaged_app_without_npm(tmp_path, mon
 
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value=None), \
-         patch("clawk_cli.main._run_npm_install_deterministic") as mock_install, \
-         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value=None),
+        patch("clawk_cli.main._run_npm_install_deterministic") as mock_install,
+        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
@@ -162,14 +190,26 @@ def test_gui_linux_configures_sandbox_before_launch(tmp_path, monkeypatch):
     sandbox.chmod(0o755)
     ok = subprocess.CompletedProcess([], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
-         patch("clawk_cli.main.subprocess.run", return_value=ok) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
+        patch("clawk_cli.main.subprocess.run", return_value=ok) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
-    assert mock_run.call_args_list[0].args[0] == ["/usr/bin/sudo", "chown", "root:root", str(sandbox)]
-    assert mock_run.call_args_list[1].args[0] == ["/usr/bin/sudo", "chmod", "4755", str(sandbox)]
+    assert mock_run.call_args_list[0].args[0] == [
+        "/usr/bin/sudo",
+        "chown",
+        "root:root",
+        str(sandbox),
+    ]
+    assert mock_run.call_args_list[1].args[0] == [
+        "/usr/bin/sudo",
+        "chmod",
+        "4755",
+        str(sandbox),
+    ]
     assert mock_run.call_args_list[2].args[0] == [str(packaged_exe)]
 
 
@@ -183,9 +223,11 @@ def test_gui_linux_rejects_symlink_sandbox(tmp_path, monkeypatch):
     sandbox = packaged_exe.parent / "chrome-sandbox"
     sandbox.symlink_to(target)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
-         patch("clawk_cli.main.subprocess.run") as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
+        patch("clawk_cli.main.subprocess.run") as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 1
@@ -205,15 +247,18 @@ def test_gui_linux_skips_fixup_when_already_configured(tmp_path, monkeypatch):
     # We can't actually chown to root in tests, so mock lstat to return
     # the expected values directly.
     import stat as stat_mod
+
     fake_stat = type("s", (), {"st_uid": 0, "st_mode": 0o4755 | stat_mod.S_IFREG})()
     sandbox_lstat_orig = type(sandbox).lstat
     monkeypatch.setattr(type(sandbox), "lstat", lambda self: fake_stat)
 
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
-         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
+        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
@@ -231,18 +276,28 @@ def test_gui_source_mode_uses_renderer_build_and_electron(tmp_path, monkeypatch)
     build_ok = subprocess.CompletedProcess(["npm", "run", "build"], 0)
     launch_ok = subprocess.CompletedProcess(["npm", "exec", "--", "electron", "."], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
-         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
-         patch("clawk_cli.main._write_desktop_build_stamp"), \
-         patch("clawk_cli.main.subprocess.run", side_effect=[build_ok, launch_ok]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
+        patch("clawk_cli.main._desktop_build_needed", return_value=True),
+        patch("clawk_cli.main._write_desktop_build_stamp"),
+        patch(
+            "clawk_cli.main.subprocess.run", side_effect=[build_ok, launch_ok]
+        ) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(source=True))
 
     assert exc.value.code == 0
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "build"]
     assert mock_run.call_args_list[0].kwargs["cwd"] == desktop_dir
-    assert mock_run.call_args_list[1].args[0] == ["/usr/bin/npm", "exec", "--", "electron", "."]
+    assert mock_run.call_args_list[1].args[0] == [
+        "/usr/bin/npm",
+        "exec",
+        "--",
+        "electron",
+        ".",
+    ]
     assert mock_run.call_args_list[1].kwargs["cwd"] == desktop_dir
 
 
@@ -270,11 +325,13 @@ def test_desktop_build_stamp_skips_build_when_up_to_date(tmp_path, monkeypatch):
 
     launch_ok = subprocess.CompletedProcess([], 0)
 
-    with patch("clawk_cli.main._desktop_build_needed", return_value=False), \
-         patch("clawk_cli.main._run_npm_install_deterministic") as mock_install, \
-         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main._desktop_build_needed", return_value=False),
+        patch("clawk_cli.main._run_npm_install_deterministic") as mock_install,
+        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
@@ -293,13 +350,19 @@ def test_desktop_force_build_overrides_stamp(tmp_path, monkeypatch):
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
-         patch("clawk_cli.main._desktop_build_needed", return_value=False), \
-         patch("clawk_cli.main._write_desktop_build_stamp") as mock_stamp, \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch(
+            "clawk_cli.main._run_npm_install_deterministic", return_value=install_ok
+        ) as mock_install,
+        patch("clawk_cli.main._desktop_build_needed", return_value=False),
+        patch("clawk_cli.main._write_desktop_build_stamp") as mock_stamp,
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch(
+            "clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]
+        ) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns(force_build=True))
 
     assert exc.value.code == 0
@@ -312,9 +375,11 @@ def test_desktop_force_build_overrides_stamp(tmp_path, monkeypatch):
 def test_compute_desktop_content_hash_stable(tmp_path, monkeypatch):
     """_compute_desktop_content_hash returns the same digest for identical trees."""
     root = _make_desktop_tree(tmp_path)
-    (root / "apps" / "desktop" / "main.js").write_text("console.log('hi')", encoding="utf-8")
+    (root / "apps" / "desktop" / "main.js").write_text(
+        "console.log('hi')", encoding="utf-8"
+    )
     (root / "package.json").write_text('{"name":"clawk"}', encoding="utf-8")
-    (root / "package-lock.json").write_text('{}', encoding="utf-8")
+    (root / "package-lock.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
 
     h1 = cli_main._compute_desktop_content_hash(root)
@@ -346,9 +411,12 @@ def test_desktop_build_needed_detects_missing_artifact(tmp_path, monkeypatch):
     # Write a stamp that matches current content
     cli_main._write_desktop_build_stamp(root, source_mode=False)
     # No packaged executable exists → build needed
-    assert cli_main._desktop_build_needed(
-        root / "apps" / "desktop", root, source_mode=False
-    ) is True
+    assert (
+        cli_main._desktop_build_needed(
+            root / "apps" / "desktop", root, source_mode=False
+        )
+        is True
+    )
 
 
 def test_desktop_build_stamp_round_trip(tmp_path, monkeypatch):
@@ -362,9 +430,12 @@ def test_desktop_build_stamp_round_trip(tmp_path, monkeypatch):
     # Write stamp
     cli_main._write_desktop_build_stamp(root, source_mode=False)
     # Build should NOT be needed
-    assert cli_main._desktop_build_needed(
-        root / "apps" / "desktop", root, source_mode=False
-    ) is False
+    assert (
+        cli_main._desktop_build_needed(
+            root / "apps" / "desktop", root, source_mode=False
+        )
+        is False
+    )
 
 
 def test_compute_desktop_content_hash_works_without_gitignore(tmp_path, monkeypatch):
@@ -389,7 +460,9 @@ def test_compute_desktop_content_hash_respects_gitignore(tmp_path, monkeypatch):
     """Files matched by .gitignore are excluded from the hash."""
     root = _make_desktop_tree(tmp_path)
     (root / "apps" / "desktop" / "main.js").write_text("hello", encoding="utf-8")
-    (root / "apps" / "desktop" / "secrets.env").write_text("API_KEY=xxx", encoding="utf-8")
+    (root / "apps" / "desktop" / "secrets.env").write_text(
+        "API_KEY=xxx", encoding="utf-8"
+    )
     (root / "package.json").write_text("{}", encoding="utf-8")
     (root / "package-lock.json").write_text("{}", encoding="utf-8")
     (root / ".gitignore").write_text("*.env\n", encoding="utf-8")
@@ -401,7 +474,9 @@ def test_compute_desktop_content_hash_respects_gitignore(tmp_path, monkeypatch):
     h1 = cli_main._compute_desktop_content_hash(root)
 
     # Change the .env file (ignored) — hash should NOT change
-    (root / "apps" / "desktop" / "secrets.env").write_text("API_KEY=yyy", encoding="utf-8")
+    (root / "apps" / "desktop" / "secrets.env").write_text(
+        "API_KEY=yyy", encoding="utf-8"
+    )
     cli_main._DESKTOP_STAMP_SPEC = None  # reset since gitignore hasn't changed
     h2 = cli_main._compute_desktop_content_hash(root)
     assert h1 == h2, "changing an ignored file should not change the hash"
@@ -424,7 +499,9 @@ def _write_zip(path: Path) -> None:
         zf.writestr("electron", "fake binary payload")
 
 
-def test_purge_electron_build_cache_clears_all_zips_and_unpacked_dir(tmp_path, monkeypatch):
+def test_purge_electron_build_cache_clears_all_zips_and_unpacked_dir(
+    tmp_path, monkeypatch
+):
     """Purge is unconditional: it removes every electron-*.zip (regardless of
     whether stdlib zipfile thinks it's corrupt) plus the half-written unpacked
     dir, because @electron/get's own SHASUM check on re-download is the real
@@ -479,14 +556,21 @@ def test_gui_retries_pack_once_after_purging_build_cache(tmp_path, monkeypatch):
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=True), \
-         patch("clawk_cli.main._write_desktop_build_stamp"), \
-         patch("clawk_cli.main._purge_electron_build_cache", return_value=[Path("/c/electron.zip")]) as mock_purge, \
-         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_ok, launch_ok]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=True),
+        patch("clawk_cli.main._write_desktop_build_stamp"),
+        patch(
+            "clawk_cli.main._purge_electron_build_cache",
+            return_value=[Path("/c/electron.zip")],
+        ) as mock_purge,
+        patch(
+            "clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_ok, launch_ok]
+        ) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
@@ -498,7 +582,9 @@ def test_gui_retries_pack_once_after_purging_build_cache(tmp_path, monkeypatch):
     assert mock_run.call_args_list[2].args[0] == [str(packaged_exe)]
 
 
-def test_gui_falls_back_to_mirror_when_purge_finds_nothing(tmp_path, monkeypatch, capsys):
+def test_gui_falls_back_to_mirror_when_purge_finds_nothing(
+    tmp_path, monkeypatch, capsys
+):
     """Purge clears nothing (not a cache problem) → fall back to an Electron
     mirror once before failing, so a GitHub-blocked download self-heals."""
     root = _make_desktop_tree(tmp_path)
@@ -509,12 +595,18 @@ def test_gui_falls_back_to_mirror_when_purge_finds_nothing(tmp_path, monkeypatch
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main._purge_electron_build_cache", return_value=[]) as mock_purge, \
-         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_fail]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch(
+            "clawk_cli.main._purge_electron_build_cache", return_value=[]
+        ) as mock_purge,
+        patch(
+            "clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_fail]
+        ) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
@@ -538,18 +630,25 @@ def test_gui_does_not_override_user_electron_mirror(tmp_path, monkeypatch, capsy
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
 
-    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
-         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("clawk_cli.main._purge_electron_build_cache", return_value=[]) as mock_purge, \
-         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail]) as mock_run, \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
+        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
+        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
+        patch(
+            "clawk_cli.main._purge_electron_build_cache", return_value=[]
+        ) as mock_purge,
+        patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail]) as mock_run,
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
     mock_purge.assert_called_once()
     assert mock_run.call_count == 1
-    assert mock_run.call_args_list[0].kwargs["env"]["ELECTRON_MIRROR"] == "https://mirror.example/electron/"
+    assert (
+        mock_run.call_args_list[0].kwargs["env"]["ELECTRON_MIRROR"]
+        == "https://mirror.example/electron/"
+    )
     assert "Desktop GUI build failed" in capsys.readouterr().out
 
 
@@ -608,8 +707,10 @@ def test_stop_desktop_build_lock_terminates_only_release_procs(tmp_path, monkeyp
         captured["waited"] = list(procs)
         return procs, []
 
-    with patch("psutil.process_iter", return_value=[locker, unrelated, selfish, no_exe]), \
-         patch("psutil.wait_procs", side_effect=_wait):
+    with (
+        patch("psutil.process_iter", return_value=[locker, unrelated, selfish, no_exe]),
+        patch("psutil.wait_procs", side_effect=_wait),
+    ):
         stopped = cli_main._stop_desktop_processes_locking_build(desktop_dir)
 
     assert stopped == [101]

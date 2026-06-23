@@ -59,9 +59,10 @@ def _unix_to_date(ts: int) -> str:
 def _strip_html(text: str) -> str:
     """Strip HTML tags and decode entities from HN comment text."""
     import re
+
     text = html.unescape(text)
-    text = re.sub(r'<p>', '\n', text)
-    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r"<p>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
     return text.strip()
 
 
@@ -91,7 +92,9 @@ def search_hackernews(
     # Hyphens and commas tokenize awkwardly in Algolia; flatten them so themed
     # queries like "ts-bun-node" or "claude, personal agents" become plain words.
     core_flat = _flatten_query_for_algolia(core)
-    _log(f"Searching for '{core_flat}' (raw: '{topic}', since {from_date}, count={count})")
+    _log(
+        f"Searching for '{core_flat}' (raw: '{topic}', since {from_date}, count={count})"
+    )
 
     # Use relevance-sorted search with minimum engagement filter.
     # NOTE: restrictSearchableAttributes=title omitted intentionally — it would
@@ -110,6 +113,7 @@ def search_hackernews(
         params["optionalWords"] = " ".join(tokens[1:])
 
     from urllib.parse import urlencode
+
     url = f"{ALGOLIA_SEARCH_URL}?{urlencode(params)}"
 
     try:
@@ -178,7 +182,9 @@ def _title_matches_query(title: str, query: str, author: str = "") -> bool:
     return False
 
 
-def parse_hackernews_response(response: Dict[str, Any], query: str = "") -> List[Dict[str, Any]]:
+def parse_hackernews_response(
+    response: Dict[str, Any], query: str = ""
+) -> List[Dict[str, Any]]:
     """Parse Algolia response into normalized item dicts.
 
     Args:
@@ -193,12 +199,15 @@ def parse_hackernews_response(response: Dict[str, Any], query: str = "") -> List
     if query:
         before = len(hits)
         hits = [
-            h for h in hits
+            h
+            for h in hits
             if _title_matches_query(h.get("title", ""), query, h.get("author", ""))
         ]
         dropped = before - len(hits)
         if dropped:
-            _log(f"Prefix filter removed {dropped}/{before} false-positive hits for '{query}'")
+            _log(
+                f"Prefix filter removed {dropped}/{before} false-positive hits for '{query}'"
+            )
     items = []
 
     for i, hit in enumerate(hits):
@@ -220,7 +229,9 @@ def parse_hackernews_response(response: Dict[str, Any], query: str = "") -> List
         engagement_boost = min(0.2, math.log1p(points) / 40)
         if query:
             content_score = token_overlap_relevance(query, hit.get("title", ""))
-            relevance = min(1.0, 0.6 * rank_score + 0.4 * content_score + engagement_boost)
+            relevance = min(
+                1.0, 0.6 * rank_score + 0.4 * content_score + engagement_boost
+            )
         else:
             relevance = min(1.0, rank_score * 0.7 + engagement_boost + 0.1)
 
@@ -263,10 +274,7 @@ def _fetch_item_comments(object_id: str, max_comments: int = 5) -> Dict[str, Any
     children = data.get("children", [])
 
     # Sort by points (highest first), filter to actual comments
-    real_comments = [
-        c for c in children
-        if c.get("text") and c.get("author")
-    ]
+    real_comments = [c for c in children if c.get("text") and c.get("author")]
     real_comments.sort(key=lambda c: c.get("points") or 0, reverse=True)
 
     comments = []
@@ -331,7 +339,9 @@ def enrich_top_stories(
                 items[idx]["top_comments"] = result["comments"]
                 items[idx]["comment_insights"] = result["comment_insights"]
             except (KeyError, TypeError, OSError) as exc:
-                _log(f"Comment enrichment failed for story {items[idx].get('id', '?')}: {type(exc).__name__}: {exc}")
+                _log(
+                    f"Comment enrichment failed for story {items[idx].get('id', '?')}: {type(exc).__name__}: {exc}"
+                )
                 items[idx]["top_comments"] = []
                 items[idx]["comment_insights"] = []
 

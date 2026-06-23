@@ -11,17 +11,18 @@ from .render import _skill_version
 # Check if we're in a real terminal (not captured by Claude Code)
 IS_TTY = sys.stderr.isatty()
 
+
 # ANSI color codes
 class Colors:
-    PURPLE = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    RESET = '\033[0m'
+    PURPLE = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
 
 
 BANNER = f"""{Colors.PURPLE}{Colors.BOLD}
@@ -145,7 +146,9 @@ SOURCE_COMPLETION_META = {
 }
 
 
-def _completion_sources(source_counts: dict[str, int], display_sources: list[str] | None) -> list[str]:
+def _completion_sources(
+    source_counts: dict[str, int], display_sources: list[str] | None
+) -> list[str]:
     requested = list(dict.fromkeys(display_sources or []))
     if not requested:
         requested = [source for source, count in source_counts.items() if count]
@@ -169,6 +172,7 @@ def _format_completion_part(source: str, count: int, tty: bool) -> str:
     if tty:
         return f"{color}{label}:{Colors.RESET} {count} {unit}"
     return f"{label}: {count} {unit}"
+
 
 def _build_nux_message(diag: dict = None) -> str:
     """Build conversational NUX message with dynamic source status."""
@@ -198,6 +202,7 @@ Some examples of what you can do:
 Just start with "last30" and talk to me like normal.
 """
 
+
 # Shorter promo for single missing key
 PROMO_SINGLE_KEY = {
     "reddit": "\n💡 Unlock TikTok and Instagram with SCRAPECREATORS_API_KEY - 100 free credits, no CC - scrapecreators.com\n",
@@ -223,14 +228,16 @@ To fix this:
 """
 
 # Spinner frames
-SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-DOTS_FRAMES = ['   ', '.  ', '.. ', '...']
+SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+DOTS_FRAMES = ["   ", ".  ", ".. ", "..."]
 
 
 class Spinner:
     """Animated spinner for long-running operations."""
 
-    def __init__(self, message: str = "Working", color: str = Colors.CYAN, quiet: bool = False):
+    def __init__(
+        self, message: str = "Working", color: str = Colors.CYAN, quiet: bool = False
+    ):
         self.message = message
         self.color = color
         self.running = False
@@ -293,7 +300,9 @@ class ProgressDisplay:
     def _show_banner(self):
         if IS_TTY:
             sys.stderr.write(MINI_BANNER + "\n")
-            sys.stderr.write(f"{Colors.DIM}Topic: {Colors.RESET}{Colors.BOLD}{self.topic}{Colors.RESET}\n\n")
+            sys.stderr.write(
+                f"{Colors.DIM}Topic: {Colors.RESET}{Colors.BOLD}{self.topic}{Colors.RESET}\n\n"
+            )
         else:
             # Simple text for non-TTY
             sys.stderr.write(f"/last30days · researching: {self.topic}\n")
@@ -301,28 +310,39 @@ class ProgressDisplay:
 
     def start_reddit(self):
         msg = random.choice(REDDIT_MESSAGES)
-        self.spinner = Spinner(f"{Colors.YELLOW}Reddit{Colors.RESET} {msg}", Colors.YELLOW)
+        self.spinner = Spinner(
+            f"{Colors.YELLOW}Reddit{Colors.RESET} {msg}", Colors.YELLOW
+        )
         self.spinner.start()
 
     def end_reddit(self, count: int):
         if self.spinner:
-            self.spinner.stop(f"{Colors.YELLOW}Reddit{Colors.RESET} Found {count} threads")
+            self.spinner.stop(
+                f"{Colors.YELLOW}Reddit{Colors.RESET} Found {count} threads"
+            )
 
     def start_reddit_enrich(self, current: int, total: int):
         if self.spinner:
             self.spinner.stop()
         msg = random.choice(ENRICHING_MESSAGES)
-        self.spinner = Spinner(f"{Colors.YELLOW}Reddit{Colors.RESET} [{current}/{total}] {msg}", Colors.YELLOW)
+        self.spinner = Spinner(
+            f"{Colors.YELLOW}Reddit{Colors.RESET} [{current}/{total}] {msg}",
+            Colors.YELLOW,
+        )
         self.spinner.start()
 
     def update_reddit_enrich(self, current: int, total: int):
         if self.spinner:
             msg = random.choice(ENRICHING_MESSAGES)
-            self.spinner.update(f"{Colors.YELLOW}Reddit{Colors.RESET} [{current}/{total}] {msg}")
+            self.spinner.update(
+                f"{Colors.YELLOW}Reddit{Colors.RESET} [{current}/{total}] {msg}"
+            )
 
     def end_reddit_enrich(self):
         if self.spinner:
-            self.spinner.stop(f"{Colors.YELLOW}Reddit{Colors.RESET} Enriched with engagement data")
+            self.spinner.stop(
+                f"{Colors.YELLOW}Reddit{Colors.RESET} Enriched with engagement data"
+            )
 
     def start_x(self):
         msg = random.choice(X_MESSAGES)
@@ -344,25 +364,35 @@ class ProgressDisplay:
 
     def start_tiktok(self):
         msg = random.choice(TIKTOK_MESSAGES)
-        self.spinner = Spinner(f"{Colors.PURPLE}TikTok{Colors.RESET} {msg}", Colors.PURPLE)
+        self.spinner = Spinner(
+            f"{Colors.PURPLE}TikTok{Colors.RESET} {msg}", Colors.PURPLE
+        )
         self.spinner.start()
 
     def end_tiktok(self, count: int):
         if self.spinner:
-            self.spinner.stop(f"{Colors.PURPLE}TikTok{Colors.RESET} Found {count} videos")
+            self.spinner.stop(
+                f"{Colors.PURPLE}TikTok{Colors.RESET} Found {count} videos"
+            )
 
     def start_instagram(self):
         msg = random.choice(INSTAGRAM_MESSAGES)
-        self.spinner = Spinner(f"{Colors.PURPLE}Instagram{Colors.RESET} {msg}", Colors.PURPLE)
+        self.spinner = Spinner(
+            f"{Colors.PURPLE}Instagram{Colors.RESET} {msg}", Colors.PURPLE
+        )
         self.spinner.start()
 
     def end_instagram(self, count: int):
         if self.spinner:
-            self.spinner.stop(f"{Colors.PURPLE}Instagram{Colors.RESET} Found {count} reels")
+            self.spinner.stop(
+                f"{Colors.PURPLE}Instagram{Colors.RESET} Found {count} reels"
+            )
 
     def start_hackernews(self):
         msg = random.choice(HN_MESSAGES)
-        self.spinner = Spinner(f"{Colors.YELLOW}HN{Colors.RESET} {msg}", Colors.YELLOW, quiet=True)
+        self.spinner = Spinner(
+            f"{Colors.YELLOW}HN{Colors.RESET} {msg}", Colors.YELLOW, quiet=True
+        )
         self.spinner.start()
 
     def end_hackernews(self, count: int):
@@ -371,16 +401,22 @@ class ProgressDisplay:
 
     def start_polymarket(self):
         msg = random.choice(POLYMARKET_MESSAGES)
-        self.spinner = Spinner(f"{Colors.GREEN}Polymarket{Colors.RESET} {msg}", Colors.GREEN, quiet=True)
+        self.spinner = Spinner(
+            f"{Colors.GREEN}Polymarket{Colors.RESET} {msg}", Colors.GREEN, quiet=True
+        )
         self.spinner.start()
 
     def end_polymarket(self, count: int):
         if self.spinner:
-            self.spinner.stop(f"{Colors.GREEN}Polymarket{Colors.RESET} Found {count} markets")
+            self.spinner.stop(
+                f"{Colors.GREEN}Polymarket{Colors.RESET} Found {count} markets"
+            )
 
     def start_processing(self):
         msg = random.choice(PROCESSING_MESSAGES)
-        self.spinner = Spinner(f"{Colors.PURPLE}Processing{Colors.RESET} {msg}", Colors.PURPLE)
+        self.spinner = Spinner(
+            f"{Colors.PURPLE}Processing{Colors.RESET} {msg}", Colors.PURPLE
+        )
         self.spinner.start()
 
     def end_processing(self):
@@ -412,7 +448,9 @@ class ProgressDisplay:
                 "polymarket": pm_count,
             }
             if display_sources is None:
-                display_sources = [source for source, count in source_counts.items() if count]
+                display_sources = [
+                    source for source, count in source_counts.items() if count
+                ]
                 if not display_sources:
                     display_sources = ["reddit", "x"]
 
@@ -422,12 +460,16 @@ class ProgressDisplay:
             for source in ordered_sources
         ]
         if IS_TTY:
-            sys.stderr.write(f"\n{Colors.GREEN}{Colors.BOLD}✓ Research complete{Colors.RESET} ")
+            sys.stderr.write(
+                f"\n{Colors.GREEN}{Colors.BOLD}✓ Research complete{Colors.RESET} "
+            )
             sys.stderr.write(f"{Colors.DIM}({elapsed:.1f}s){Colors.RESET}\n")
             sys.stderr.write("  " + "  ".join(parts))
             sys.stderr.write("\n\n")
         else:
-            sys.stderr.write(f"✓ Research complete ({elapsed:.1f}s) - {', '.join(parts)}\n")
+            sys.stderr.write(
+                f"✓ Research complete ({elapsed:.1f}s) - {', '.join(parts)}\n"
+            )
         sys.stderr.flush()
 
     def show_cached(self, age_hours: float = None):
@@ -435,7 +477,9 @@ class ProgressDisplay:
             age_str = f" ({age_hours:.1f}h old)"
         else:
             age_str = ""
-        sys.stderr.write(f"{Colors.GREEN}⚡{Colors.RESET} {Colors.DIM}Using cached results{age_str} - use --refresh for fresh data{Colors.RESET}\n\n")
+        sys.stderr.write(
+            f"{Colors.GREEN}⚡{Colors.RESET} {Colors.DIM}Using cached results{age_str} - use --refresh for fresh data{Colors.RESET}\n\n"
+        )
         sys.stderr.flush()
 
     def show_error(self, message: str):
@@ -451,15 +495,21 @@ class ProgressDisplay:
     def end_web_only(self):
         """End web-only spinner."""
         if self.spinner:
-            self.spinner.stop(f"{Colors.GREEN}Web{Colors.RESET} assistant will search the web")
+            self.spinner.stop(
+                f"{Colors.GREEN}Web{Colors.RESET} assistant will search the web"
+            )
 
     def show_web_only_complete(self):
         """Show completion for web-only mode."""
         elapsed = time.time() - self.start_time
         if IS_TTY:
-            sys.stderr.write(f"\n{Colors.GREEN}{Colors.BOLD}✓ Ready for web search{Colors.RESET} ")
+            sys.stderr.write(
+                f"\n{Colors.GREEN}{Colors.BOLD}✓ Ready for web search{Colors.RESET} "
+            )
             sys.stderr.write(f"{Colors.DIM}({elapsed:.1f}s){Colors.RESET}\n")
-            sys.stderr.write(f"  {Colors.GREEN}Web:{Colors.RESET} assistant will search blogs, docs & news\n\n")
+            sys.stderr.write(
+                f"  {Colors.GREEN}Web:{Colors.RESET} assistant will search blogs, docs & news\n\n"
+            )
         else:
             sys.stderr.write(f"✓ Ready for web search ({elapsed:.1f}s)\n")
         sys.stderr.flush()
@@ -510,52 +560,94 @@ def show_diagnostic_banner(diag: dict):
     lines = []
 
     if IS_TTY:
-        lines.append(f"{Colors.DIM}┌─────────────────────────────────────────────────────┐{Colors.RESET}")
+        lines.append(
+            f"{Colors.DIM}┌─────────────────────────────────────────────────────┐{Colors.RESET}"
+        )
         _header = f"/last30days v{_skill_version()} - Source Status"
-        lines.append(f"{Colors.DIM}│{Colors.RESET} {Colors.BOLD}{_header}{Colors.RESET}{' ' * (52 - len(_header))}{Colors.DIM}│{Colors.RESET}")
-        lines.append(f"{Colors.DIM}│{Colors.RESET}                                                     {Colors.DIM}│{Colors.RESET}")
+        lines.append(
+            f"{Colors.DIM}│{Colors.RESET} {Colors.BOLD}{_header}{Colors.RESET}{' ' * (52 - len(_header))}{Colors.DIM}│{Colors.RESET}"
+        )
+        lines.append(
+            f"{Colors.DIM}│{Colors.RESET}                                                     {Colors.DIM}│{Colors.RESET}"
+        )
 
         # Reddit
         if has_reddit and has_scrapecreators:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Reddit{Colors.RESET}    — full threads with comments          {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Reddit{Colors.RESET}    — full threads with comments          {Colors.DIM}│{Colors.RESET}"
+            )
         elif has_reddit:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Reddit{Colors.RESET}    — public threads (titles + scores)   {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Reddit{Colors.RESET}    — public threads (titles + scores)   {Colors.DIM}│{Colors.RESET}"
+            )
         else:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ Reddit{Colors.RESET}    — unavailable                         {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ Reddit{Colors.RESET}    — unavailable                         {Colors.DIM}│{Colors.RESET}"
+            )
 
         # X/Twitter
         if has_x:
             username = diag.get("bird_username", "")
-            label = f"Bird ({username})" if x_backend == "bird" and username else str(x_backend or "xai").upper()
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ X/Twitter{Colors.RESET} — {label}                          {Colors.DIM}│{Colors.RESET}")
+            label = (
+                f"Bird ({username})"
+                if x_backend == "bird" and username
+                else str(x_backend or "xai").upper()
+            )
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ X/Twitter{Colors.RESET} — {label}                          {Colors.DIM}│{Colors.RESET}"
+            )
         else:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ X/Twitter{Colors.RESET} — No X auth or fallback key        {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ X/Twitter{Colors.RESET} — No X auth or fallback key        {Colors.DIM}│{Colors.RESET}"
+            )
             if diag.get("bird_installed"):
-                lines.append(f"{Colors.DIM}│{Colors.RESET}     └─ Add AUTH_TOKEN/CT0 or XAI_API_KEY      {Colors.DIM}│{Colors.RESET}")
+                lines.append(
+                    f"{Colors.DIM}│{Colors.RESET}     └─ Add AUTH_TOKEN/CT0 or XAI_API_KEY      {Colors.DIM}│{Colors.RESET}"
+                )
             else:
-                lines.append(f"{Colors.DIM}│{Colors.RESET}     └─ Needs Node.js 22+ (Bird is bundled)           {Colors.DIM}│{Colors.RESET}")
+                lines.append(
+                    f"{Colors.DIM}│{Colors.RESET}     └─ Needs Node.js 22+ (Bird is bundled)           {Colors.DIM}│{Colors.RESET}"
+                )
 
         # YouTube
         if has_youtube:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ YouTube{Colors.RESET}   — yt-dlp found                      {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ YouTube{Colors.RESET}   — yt-dlp found                      {Colors.DIM}│{Colors.RESET}"
+            )
         else:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ YouTube{Colors.RESET}   — yt-dlp not installed                {Colors.DIM}│{Colors.RESET}")
-            lines.append(f"{Colors.DIM}│{Colors.RESET}     └─ Fix: brew install yt-dlp (free)                {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.RED}❌ YouTube{Colors.RESET}   — yt-dlp not installed                {Colors.DIM}│{Colors.RESET}"
+            )
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}     └─ Fix: brew install yt-dlp (free)                {Colors.DIM}│{Colors.RESET}"
+            )
 
         # Xiaohongshu (only show when configured)
         if has_xiaohongshu:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Xiaohongshu{Colors.RESET} — API connected + logged in         {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Xiaohongshu{Colors.RESET} — API connected + logged in         {Colors.DIM}│{Colors.RESET}"
+            )
 
         # Web
         if has_web:
             backend = native_web_backend or "native"
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Web{Colors.RESET}       — {backend} API                       {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.GREEN}✅ Web{Colors.RESET}       — {backend} API                       {Colors.DIM}│{Colors.RESET}"
+            )
         else:
-            lines.append(f"{Colors.DIM}│{Colors.RESET}  {Colors.YELLOW}⚡ Web{Colors.RESET}       — Add BRAVE_API_KEY or SERPER_API_KEY {Colors.DIM}│{Colors.RESET}")
+            lines.append(
+                f"{Colors.DIM}│{Colors.RESET}  {Colors.YELLOW}⚡ Web{Colors.RESET}       — Add BRAVE_API_KEY or SERPER_API_KEY {Colors.DIM}│{Colors.RESET}"
+            )
 
-        lines.append(f"{Colors.DIM}│{Colors.RESET}                                                     {Colors.DIM}│{Colors.RESET}")
-        lines.append(f"{Colors.DIM}│{Colors.RESET}  Config: {Colors.BOLD}~/.config/last30days/.env{Colors.RESET}                  {Colors.DIM}│{Colors.RESET}")
-        lines.append(f"{Colors.DIM}└─────────────────────────────────────────────────────┘{Colors.RESET}")
+        lines.append(
+            f"{Colors.DIM}│{Colors.RESET}                                                     {Colors.DIM}│{Colors.RESET}"
+        )
+        lines.append(
+            f"{Colors.DIM}│{Colors.RESET}  Config: {Colors.BOLD}~/.config/last30days/.env{Colors.RESET}                  {Colors.DIM}│{Colors.RESET}"
+        )
+        lines.append(
+            f"{Colors.DIM}└─────────────────────────────────────────────────────┘{Colors.RESET}"
+        )
     else:
         # Plain text for non-TTY (Claude Code / Codex)
         lines.append("┌─────────────────────────────────────────────────────┐")
@@ -590,7 +682,9 @@ def show_diagnostic_banner(diag: dict):
 
         if has_web:
             backend = native_web_backend or "native"
-            lines.append(f"│  ✅ Web       — {backend} API available{' ' * max(0, 13 - len(backend))}│")
+            lines.append(
+                f"│  ✅ Web       — {backend} API available{' ' * max(0, 13 - len(backend))}│"
+            )
         else:
             lines.append("│  ⚡ Web       — Add BRAVE_API_KEY or SERPER_API_KEY │")
 

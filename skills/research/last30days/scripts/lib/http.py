@@ -38,7 +38,13 @@ def _is_dns_failure(err: urllib.error.URLError) -> bool:
 
 class HTTPError(Exception):
     """HTTP request error with status code."""
-    def __init__(self, message: str, status_code: Optional[int] = None, body: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        body: Optional[str] = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
@@ -86,12 +92,12 @@ def request(
 
     data = None
     if json_data is not None:
-        data = json.dumps(json_data).encode('utf-8')
+        data = json.dumps(json_data).encode("utf-8")
         headers.setdefault("Content-Type", "application/json")
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
 
-    safe_url = re.sub(r'([?&])(key|api_key|token|secret)=[^&]*', r'\1\2=***', url)
+    safe_url = re.sub(r"([?&])(key|api_key|token|secret)=[^&]*", r"\1\2=***", url)
     log(f"{method} {safe_url}")
 
     last_error = None
@@ -105,7 +111,7 @@ def request(
     while attempt < effective_retries:
         try:
             with urllib.request.urlopen(req, timeout=timeout) as response:
-                body = response.read().decode('utf-8')
+                body = response.read().decode("utf-8")
                 log(f"Response: {response.status} ({len(body)} bytes)")
                 if raw:
                     return body
@@ -113,7 +119,7 @@ def request(
         except urllib.error.HTTPError as e:
             body = None
             try:
-                body = e.read().decode('utf-8')
+                body = e.read().decode("utf-8")
             except (OSError, UnicodeDecodeError):
                 pass
             log(f"HTTP Error {e.code}: {e.reason}")
@@ -137,17 +143,21 @@ def request(
             if attempt < retries - 1:
                 if e.code == 429:
                     # Respect Retry-After header, fall back to exponential backoff
-                    retry_after = e.headers.get("Retry-After") if hasattr(e, 'headers') else None
+                    retry_after = (
+                        e.headers.get("Retry-After") if hasattr(e, "headers") else None
+                    )
                     if retry_after:
                         try:
                             delay = float(retry_after)
                         except ValueError:
-                            delay = RETRY_DELAY * (2 ** attempt) + 1
+                            delay = RETRY_DELAY * (2**attempt) + 1
                     else:
-                        delay = RETRY_DELAY * (2 ** attempt) + 1  # 3s, 5s, 9s...
-                    log(f"Rate limited (429). Waiting {delay:.1f}s before retry {attempt + 2}/{retries}")
+                        delay = RETRY_DELAY * (2**attempt) + 1  # 3s, 5s, 9s...
+                    log(
+                        f"Rate limited (429). Waiting {delay:.1f}s before retry {attempt + 2}/{retries}"
+                    )
                 else:
-                    delay = RETRY_DELAY * (2 ** attempt)
+                    delay = RETRY_DELAY * (2**attempt)
                 time.sleep(delay)
             else:
                 # Caller's original retry budget exhausted; an earlier DNS
@@ -213,14 +223,26 @@ def get(url: str, headers: Optional[Dict[str, str]] = None, **kwargs) -> Dict[st
     return request("GET", url, headers=headers, **kwargs)
 
 
-def post(url: str, json_data: Dict[str, Any], headers: Optional[Dict[str, str]] = None, **kwargs) -> Dict[str, Any]:
+def post(
+    url: str,
+    json_data: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+    **kwargs,
+) -> Dict[str, Any]:
     """Make a POST request with JSON body."""
     return request("POST", url, headers=headers, json_data=json_data, **kwargs)
 
 
-def post_raw(url: str, json_data: Dict[str, Any], headers: Optional[Dict[str, str]] = None, **kwargs) -> str:
+def post_raw(
+    url: str,
+    json_data: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+    **kwargs,
+) -> str:
     """Make a POST request with JSON body and return raw text."""
-    return request("POST", url, headers=headers, json_data=json_data, raw=True, **kwargs)
+    return request(
+        "POST", url, headers=headers, json_data=json_data, raw=True, **kwargs
+    )
 
 
 BROWSER_USER_AGENT = (
@@ -278,7 +300,9 @@ def scrapecreators_headers(token: str) -> Dict[str, str]:
     }
 
 
-def get_reddit_json(path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MAX_RETRIES) -> Dict[str, Any]:
+def get_reddit_json(
+    path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MAX_RETRIES
+) -> Dict[str, Any]:
     """Fetch Reddit thread JSON.
 
     Args:
@@ -290,13 +314,13 @@ def get_reddit_json(path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MA
         Parsed JSON response
     """
     # Ensure path starts with /
-    if not path.startswith('/'):
-        path = '/' + path
+    if not path.startswith("/"):
+        path = "/" + path
 
     # Remove trailing slash and add .json
-    path = path.rstrip('/')
-    if not path.endswith('.json'):
-        path = path + '.json'
+    path = path.rstrip("/")
+    if not path.endswith(".json"):
+        path = path + ".json"
 
     url = f"https://www.reddit.com{path}?raw_json=1"
 

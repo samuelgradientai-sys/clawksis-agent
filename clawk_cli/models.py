@@ -77,12 +77,15 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     ("deepseek/deepseek-v4-flash", ""),
     # Qwen
     ("qwen/qwen3.7-max", ""),
+    ("qwen/qwen3.7-plus", ""),
     ("qwen/qwen3.6-35b-a3b", ""),
     # MoonshotAI
     ("moonshotai/kimi-k2.6", "recommended"),
+    ("moonshotai/kimi-k2.7-code", ""),
     # MiniMax
     ("minimax/minimax-m3", ""),
     # Z-AI
+    ("z-ai/glm-5.2", ""),
     ("z-ai/glm-5.1", ""),
     # Xiaomi
     ("xiaomi/mimo-v2.5-pro", ""),
@@ -100,8 +103,10 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     # Free tier
     ("openrouter/elephant-alpha", "free"),
     ("openrouter/owl-alpha", "free"),
+    ("poolside/laguna-m.1:free", "free"),
     ("tencent/hy3-preview:free", "free"),
     ("nvidia/nemotron-3-super-120b-a12b:free", "free"),
+    ("nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
     ("inclusionai/ring-2.6-1t:free", "free"),
 ]
 
@@ -385,6 +390,7 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "MiniMax-M2",
     ],
     "anthropic": [
+        "claude-fable-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-opus-4-6",
@@ -3092,7 +3098,24 @@ def provider_model_ids(
         live = _fetch_anthropic_models()
 
         if live:
-            return live
+            # Anthropic's /v1/models lags freshly-routed aliases (e.g.
+            # claude-fable-5), so merge the curated list in FRONT of the live
+            # catalog — curated first, live-only models appended, deduped —
+            # mirroring the OpenAI curated-merge philosophy. Returning live
+            # verbatim dropped curated aliases the API hadn't enumerated yet.
+            curated = _PROVIDER_MODELS.get("anthropic", [])
+
+            merged = list(curated)
+
+            seen = set(merged)
+
+            for model_id in live:
+                if model_id not in seen:
+                    merged.append(model_id)
+
+                    seen.add(model_id)
+
+            return merged
 
     if normalized == "ollama-cloud":
         live = fetch_ollama_cloud_models(force_refresh=force_refresh)

@@ -26,6 +26,7 @@ The central class you interact with. You subclass `Spider`, define your `start_u
 ```python
 from scrapling.spiders import Spider, Response, Request
 
+
 class MySpider(Spider):
     name = "my_spider"
     start_urls = ["https://example.com"]

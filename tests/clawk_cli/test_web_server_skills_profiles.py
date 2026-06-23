@@ -7,6 +7,7 @@ process. Before the ``profile`` parameter existed, toggling a skill after
 These tests pin the new behavior: reads and writes land in the REQUESTED
 profile's CLAWK_HOME, and the dashboard's own profile stays untouched.
 """
+
 import pytest
 import yaml
 

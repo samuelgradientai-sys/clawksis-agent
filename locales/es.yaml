@@ -34,6 +34,10 @@ approval:
 
 gateway:
 
+  credits:
+
+    not_logged_in: "No has iniciado sesión en Nous Portal — ejecuta `/model` para iniciar sesión y luego `/credits`."
+
   approval_expired: "⚠️ La aprobación ha caducado (el agente ya no está esperando). Pida al agente que lo intente de nuevo."
 
   draining:         "⏳ Esperando a que terminen {count} agente(s) activo(s) antes de reiniciar..."

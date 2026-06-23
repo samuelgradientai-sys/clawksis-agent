@@ -28,15 +28,15 @@ def test_anthropic_curated_alias_survives_when_live_omits_it():
 
     assert "claude-fable-5" in result
     # Curated order is preserved at the front.
-    assert result[:len(curated)] == list(curated)
+    assert result[: len(curated)] == list(curated)
 
 
 def test_anthropic_merge_dedupes_overlap_and_appends_live_only():
     """Models in both lists appear once; live-only models are appended."""
     live = [
-        "claude-opus-4-8",          # overlaps curated
-        "claude-sonnet-4-6",        # overlaps curated
-        "claude-future-9-99",       # live-only, not curated
+        "claude-opus-4-8",  # overlaps curated
+        "claude-sonnet-4-6",  # overlaps curated
+        "claude-future-9-99",  # live-only, not curated
     ]
     with patch.object(M, "_fetch_anthropic_models", return_value=live):
         result = M.provider_model_ids("anthropic")

@@ -9,6 +9,7 @@ prompt-only server could never stay connected.
 
 Ported from anomalyco/opencode#31271.
 """
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -122,6 +123,7 @@ class TestKeepaliveProbe:
             )
 
         import tools.mcp_tool as mcp_mod
+
         orig = mcp_mod.asyncio.wait
         mcp_mod.asyncio.wait = fake_wait
         try:

@@ -20,7 +20,6 @@ from run_agent import AIAgent
 
 
 class TestIsThinkingOnlyAssistant:
-
     def test_plain_assistant_reply_is_not_thinking_only(self):
         msg = {"role": "assistant", "content": "Hello there"}
         assert not AIAgent._is_thinking_only_assistant(msg)
@@ -30,7 +29,9 @@ class TestIsThinkingOnlyAssistant:
             "role": "assistant",
             "content": "",
             "reasoning": "let me use a tool",
-            "tool_calls": [{"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}
+            ],
         }
         assert not AIAgent._is_thinking_only_assistant(msg)
 
@@ -140,9 +141,11 @@ class TestIsThinkingOnlyAssistant:
         assert not AIAgent._is_thinking_only_assistant({"role": "user", "content": ""})
 
     def test_tool_message_never_thinking_only(self):
-        assert not AIAgent._is_thinking_only_assistant(
-            {"role": "tool", "content": "", "tool_call_id": "x"}
-        )
+        assert not AIAgent._is_thinking_only_assistant({
+            "role": "tool",
+            "content": "",
+            "tool_call_id": "x",
+        })
 
     def test_non_dict_returns_false(self):
         assert not AIAgent._is_thinking_only_assistant(None)
@@ -155,7 +158,6 @@ class TestIsThinkingOnlyAssistant:
 
 
 class TestDropThinkingOnlyAndMergeUsers:
-
     def test_empty_list_passthrough(self):
         assert AIAgent._drop_thinking_only_and_merge_users([]) == []
 
@@ -233,7 +235,12 @@ class TestDropThinkingOnlyAndMergeUsers:
         # it did somehow, the surrounding tool result stays put.
         msgs = [
             {"role": "user", "content": "u1"},
-            {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "ok"},
             {"role": "assistant", "content": "", "reasoning": "..."},
             {"role": "user", "content": "u2"},

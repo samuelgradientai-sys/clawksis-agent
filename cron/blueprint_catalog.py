@@ -65,7 +65,7 @@ class BlueprintSlot:
     type: str
     label: str
     default: Any = None
-    options: tuple = ()       # for type="enum": allowed values
+    options: tuple = ()  # for type="enum": allowed values
     optional: bool = False
     help: str = ""
     # When False, ``options`` are suggestions rather than a closed set —
@@ -95,7 +95,7 @@ class AutomationBlueprint:
     prompt_template: str
     slots: List[BlueprintSlot] = field(default_factory=list)
     deliver_default: str = "origin"
-    skills: tuple = ()        # skills the job loads before running
+    skills: tuple = ()  # skills the job loads before running
     tags: tuple = ()
 
 
@@ -104,13 +104,20 @@ class AutomationBlueprint:
 # ---------------------------------------------------------------------------
 
 _TIME = lambda default="08:00": BlueprintSlot(  # noqa: E731 - concise factory
-    name="time", type="time", label="What time?", default=default,
+    name="time",
+    type="time",
+    label="What time?",
+    default=default,
     help="24h local time, e.g. 08:00",
 )
 _DELIVER = BlueprintSlot(
-    name="deliver", type="enum", label="Where to deliver?",
-    default="origin", options=("origin", "local", "telegram", "discord", "email"),
-    optional=False, strict=False,
+    name="deliver",
+    type="enum",
+    label="Where to deliver?",
+    default="origin",
+    options=("origin", "local", "telegram", "discord", "email"),
+    optional=False,
+    strict=False,
     help="origin = the chat you set this up from (or your configured home "
     "channel when created from the dashboard); local = save only, no message; "
     "or any connected platform name",
@@ -150,12 +157,16 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="interval_min", type="enum", label="How often?",
-                default="30", options=("15", "30", "60"),
+                name="interval_min",
+                type="enum",
+                label="How often?",
+                default="30",
+                options=("15", "30", "60"),
                 help="minutes between checks",
             ),
             BlueprintSlot(
-                name="criteria", type="text",
+                name="criteria",
+                type="text",
                 label="Only notify me if the mail…",
                 default="needs a reply today, is from my manager or family, "
                 "or mentions a deadline",
@@ -179,7 +190,9 @@ CATALOG: List[AutomationBlueprint] = [
         slots=[
             _TIME("18:00"),
             BlueprintSlot(
-                name="day", type="enum", label="Which day?",
+                name="day",
+                type="enum",
+                label="Which day?",
                 default="sunday",
                 options=("sunday", "monday", "friday", "saturday"),
             ),
@@ -209,11 +222,17 @@ CATALOG: List[AutomationBlueprint] = [
         schedule_template="{minute} {hour} * * {dow}",
         prompt_template="Remind the user: {what}",
         slots=[
-            BlueprintSlot(name="what", type="text", label="Remind me to…",
-                       default="take a break and stretch"),
+            BlueprintSlot(
+                name="what",
+                type="text",
+                label="Remind me to…",
+                default="take a break and stretch",
+            ),
             _TIME("14:00"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="everyday",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
@@ -254,19 +273,26 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="topic", type="text", label="What topic?",
+                name="topic",
+                type="text",
+                label="What topic?",
                 default="AI and technology",
                 help="a subject, product, person, or search phrase",
             ),
             _TIME("18:00"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="weekdays",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
             BlueprintSlot(
-                name="count", type="enum", label="How many bullets?",
-                default="5", options=("3", "5", "8"),
+                name="count",
+                type="enum",
+                label="How many bullets?",
+                default="5",
+                options=("3", "5", "8"),
             ),
             _DELIVER,
         ],
@@ -286,12 +312,16 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="what", type="text", label="What's due?",
+                name="what",
+                type="text",
+                label="What's due?",
                 default="my streaming subscription renews soon",
             ),
             _TIME("10:00"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="everyday",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
@@ -313,12 +343,16 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="habit", type="text", label="Which habit?",
+                name="habit",
+                type="text",
+                label="Which habit?",
                 default="20 minutes of reading",
             ),
             _TIME("20:00"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="everyday",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
@@ -343,18 +377,27 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="interval_hours", type="enum", label="How often?",
-                default="1", options=("1", "2", "3"),
+                name="interval_hours",
+                type="enum",
+                label="How often?",
+                default="1",
+                options=("1", "2", "3"),
                 help="hours between nudges",
             ),
             BlueprintSlot(
-                name="start_hour", type="enum", label="Start hour",
-                default="9", options=("7", "8", "9", "10"),
+                name="start_hour",
+                type="enum",
+                label="Start hour",
+                default="9",
+                options=("7", "8", "9", "10"),
                 help="first hour of the active window (24h)",
             ),
             BlueprintSlot(
-                name="end_hour", type="enum", label="End hour",
-                default="17", options=("16", "17", "18", "19"),
+                name="end_hour",
+                type="enum",
+                label="End hour",
+                default="17",
+                options=("16", "17", "18", "19"),
                 help="last hour of the active window (24h)",
             ),
             _DELIVER,
@@ -376,23 +419,37 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="diet", type="enum", label="Diet?",
+                name="diet",
+                type="enum",
+                label="Diet?",
                 default="no restrictions",
-                options=("no restrictions", "vegetarian", "vegan",
-                         "high-protein", "low-carb"),
+                options=(
+                    "no restrictions",
+                    "vegetarian",
+                    "vegan",
+                    "high-protein",
+                    "low-carb",
+                ),
             ),
             BlueprintSlot(
-                name="meals", type="enum", label="Meals per day?",
+                name="meals",
+                type="enum",
+                label="Meals per day?",
                 default="dinner only",
                 options=("dinner only", "lunch and dinner", "all three"),
             ),
             BlueprintSlot(
-                name="effort", type="enum", label="Cooking effort?",
-                default="quick", options=("quick", "medium", "ambitious"),
+                name="effort",
+                type="enum",
+                label="Cooking effort?",
+                default="quick",
+                options=("quick", "medium", "ambitious"),
             ),
             _TIME("17:00"),
             BlueprintSlot(
-                name="day", type="enum", label="Which day?",
+                name="day",
+                type="enum",
+                label="Which day?",
                 default="sunday",
                 options=("sunday", "monday", "friday", "saturday"),
             ),
@@ -415,12 +472,16 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="topic", type="text", label="Learn about…",
+                name="topic",
+                type="text",
+                label="Learn about…",
                 default="Spanish vocabulary",
             ),
             _TIME("08:30"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="weekdays",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
@@ -444,7 +505,9 @@ CATALOG: List[AutomationBlueprint] = [
         slots=[
             _TIME("21:30"),
             BlueprintSlot(
-                name="recurrence", type="weekdays", label="Repeat on",
+                name="recurrence",
+                type="weekdays",
+                label="Repeat on",
                 default="everyday",
                 options=tuple(WEEKDAY_PRESETS.keys()),
             ),
@@ -466,10 +529,16 @@ CATALOG: List[AutomationBlueprint] = [
         ),
         slots=[
             BlueprintSlot(
-                name="flavor", type="enum", label="What kind?",
+                name="flavor",
+                type="enum",
+                label="What kind?",
                 default="on this day in history",
-                options=("on this day in history", "word of the day",
-                         "science fact", "quote of the day"),
+                options=(
+                    "on this day in history",
+                    "word of the day",
+                    "science fact",
+                    "quote of the day",
+                ),
             ),
             _TIME("07:30"),
             _DELIVER,
@@ -488,6 +557,7 @@ def get_blueprint(key: str) -> Optional[AutomationBlueprint]:
 # ---------------------------------------------------------------------------
 # Renderers
 # ---------------------------------------------------------------------------
+
 
 def blueprint_form_schema(blueprint: AutomationBlueprint) -> Dict[str, Any]:
     """Emit the JSON a form renderer (dashboard / GUI) needs for this blueprint."""
@@ -513,7 +583,9 @@ def blueprint_form_schema(blueprint: AutomationBlueprint) -> Dict[str, Any]:
     }
 
 
-def blueprint_slash_command(blueprint: AutomationBlueprint, values: Optional[Dict[str, Any]] = None) -> str:
+def blueprint_slash_command(
+    blueprint: AutomationBlueprint, values: Optional[Dict[str, Any]] = None
+) -> str:
     """Build the flattened ``/blueprint <key> slot=val …`` command string.
 
     Uses each slot's default when ``values`` is omitted, so the docs/dashboard
@@ -534,7 +606,9 @@ def blueprint_slash_command(blueprint: AutomationBlueprint, values: Optional[Dic
     return " ".join(parts)
 
 
-def blueprint_deeplink(blueprint: AutomationBlueprint, values: Optional[Dict[str, Any]] = None) -> str:
+def blueprint_deeplink(
+    blueprint: AutomationBlueprint, values: Optional[Dict[str, Any]] = None
+) -> str:
     """Build the ``clawk://blueprint/<key>?slot=val`` deep-link URL."""
     from urllib.parse import quote, urlencode
 
@@ -565,7 +639,9 @@ def _humanize_schedule(blueprint: AutomationBlueprint) -> str:
     if "* * 1-5" in sched:
         return f"weekdays at {when}" if when else "every weekday"
     if "{dow}" in sched:
-        day_slot = next((s for s in blueprint.slots if s.name in ("day", "recurrence")), None)
+        day_slot = next(
+            (s for s in blueprint.slots if s.name in ("day", "recurrence")), None
+        )
         scope = (day_slot.default if day_slot else "") or ""
         if scope and when:
             return f"{scope} at {when}"
@@ -595,8 +671,13 @@ def blueprint_catalog_entry(blueprint: AutomationBlueprint) -> Dict[str, Any]:
 
 _TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 _DAY_TO_DOW = {
-    "sunday": "0", "monday": "1", "tuesday": "2", "wednesday": "3",
-    "thursday": "4", "friday": "5", "saturday": "6",
+    "sunday": "0",
+    "monday": "1",
+    "tuesday": "2",
+    "wednesday": "3",
+    "thursday": "4",
+    "friday": "5",
+    "saturday": "6",
 }
 
 
@@ -642,7 +723,9 @@ def _resolve_schedule(blueprint: AutomationBlueprint, values: Dict[str, Any]) ->
     if "{interval_min}" in sched:
         iv = str(values.get("interval_min", "")).strip()
         if not iv.isdigit() or int(iv) <= 0:
-            raise BlueprintFillError(f"invalid interval {iv!r} — minutes as a positive integer")
+            raise BlueprintFillError(
+                f"invalid interval {iv!r} — minutes as a positive integer"
+            )
         repl["interval_min"] = iv
 
     # Any remaining {slot} placeholders are filled verbatim from validated
@@ -686,7 +769,12 @@ def fill_blueprint(
             if s.optional:
                 continue
             raise BlueprintFillError(f"missing required value: {s.name} ({s.label})")
-        if s.type == "enum" and s.strict and s.options and str(raw) not in {str(o) for o in s.options}:
+        if (
+            s.type == "enum"
+            and s.strict
+            and s.options
+            and str(raw) not in {str(o) for o in s.options}
+        ):
             raise BlueprintFillError(
                 f"{s.name}={raw!r} not allowed — one of {', '.join(map(str, s.options))}"
             )

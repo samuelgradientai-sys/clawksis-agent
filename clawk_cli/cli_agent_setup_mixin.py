@@ -49,8 +49,13 @@ class CLIAgentSetupMixin:
         # Primary provider auth failed — try fallback providers before giving up.
         if runtime is None and _primary_exc is not None:
             from clawk_cli.auth import AuthError
+
             if isinstance(_primary_exc, AuthError):
-                _fb_chain = self._fallback_model if isinstance(self._fallback_model, list) else []
+                _fb_chain = (
+                    self._fallback_model
+                    if isinstance(self._fallback_model, list)
+                    else []
+                )
                 for _fb in _fb_chain:
                     _fb_provider = (_fb.get("provider") or "").strip().lower()
                     _fb_model = (_fb.get("model") or "").strip()
@@ -60,9 +65,13 @@ class CLIAgentSetupMixin:
                         runtime = resolve_runtime_provider(requested=_fb_provider)
                         logger.warning(
                             "Primary provider auth failed (%s). Falling through to fallback: %s/%s",
-                            _primary_exc, _fb_provider, _fb_model,
+                            _primary_exc,
+                            _fb_provider,
+                            _fb_model,
                         )
-                        _cprint(f"⚠️  Primary auth failed — switching to fallback: {_fb_provider} / {_fb_model}")
+                        _cprint(
+                            f"⚠️  Primary auth failed — switching to fallback: {_fb_provider} / {_fb_model}"
+                        )
                         self.requested_provider = _fb_provider
                         self.model = _fb_model
                         _primary_exc = None
@@ -71,7 +80,11 @@ class CLIAgentSetupMixin:
                         continue
 
         if runtime is None:
-            message = format_runtime_provider_error(_primary_exc) if _primary_exc else "Provider resolution failed."
+            message = (
+                format_runtime_provider_error(_primary_exc)
+                if _primary_exc
+                else "Provider resolution failed."
+            )
             ChatConsole().print(f"[bold red]{message}[/]")
             return False
 
@@ -94,21 +107,30 @@ class CLIAgentSetupMixin:
             # no API key was found, use a placeholder so the OpenAI SDK
             # doesn't reject the request and local servers just ignore it.
             _source = runtime.get("source", "")
-            _has_custom_base = isinstance(base_url, str) and base_url and "openrouter.ai" not in base_url
+            _has_custom_base = (
+                isinstance(base_url, str)
+                and base_url
+                and "openrouter.ai" not in base_url
+            )
             if _has_custom_base:
                 api_key = "no-key-required"
                 logger.debug(
                     "No API key for custom endpoint %s (source=%s), "
                     "using placeholder — local servers typically ignore auth",
-                    base_url, _source,
+                    base_url,
+                    _source,
                 )
             else:
-                print("\n⚠️  Provider resolver returned an empty API key. "
-                      "Set OPENROUTER_API_KEY or run: clawk setup")
+                print(
+                    "\n⚠️  Provider resolver returned an empty API key. "
+                    "Set OPENROUTER_API_KEY or run: clawk setup"
+                )
                 return False
         if not isinstance(base_url, str) or not base_url:
-            print("\n⚠️  Provider resolver returned an empty base URL. "
-                  "Check your provider config or run: clawk setup")
+            print(
+                "\n⚠️  Provider resolver returned an empty base URL. "
+                "Check your provider config or run: clawk setup"
+            )
             return False
 
         credentials_changed = api_key != self.api_key or base_url != self.base_url
@@ -136,9 +158,10 @@ class CLIAgentSetupMixin:
         if runtime_model and isinstance(runtime_model, str):
             # Only use runtime model if: model is unset, or model equals provider name
             should_use_runtime_model = (
-                not self.model or  # No model configured yet
-                self.model == self.provider or  # Model is the provider slug
-                self.model == runtime.get("name")  # Model matches provider display name
+                not self.model  # No model configured yet
+                or self.model == self.provider  # Model is the provider slug
+                or self.model
+                == runtime.get("name")  # Model matches provider display name
             )
             if should_use_runtime_model:
                 self.model = runtime_model
@@ -149,12 +172,14 @@ class CLIAgentSetupMixin:
         if not self.model and resolved_provider:
             try:
                 from clawk_cli.models import get_default_model_for_provider
+
                 _default = get_default_model_for_provider(resolved_provider)
                 if _default:
                     self.model = _default
                     logger.info(
                         "No model configured — defaulting to %s for provider %s",
-                        _default, resolved_provider,
+                        _default,
+                        resolved_provider,
                     )
             except Exception:
                 pass
@@ -165,7 +190,9 @@ class CLIAgentSetupMixin:
 
         # AIAgent/OpenAI client holds auth at init time, so rebuild if key,
         # routing, or the effective model changed.
-        if (credentials_changed or routing_changed or model_changed) and self.agent is not None:
+        if (
+            credentials_changed or routing_changed or model_changed
+        ) and self.agent is not None:
             self.agent = None
             self._active_agent_route_signature = None
 
@@ -215,15 +242,31 @@ class CLIAgentSetupMixin:
         route["request_overrides"] = overrides
         return route
 
-    def _init_agent(self, *, model_override: str = None, runtime_override: dict = None, request_overrides: dict | None = None) -> bool:
+    def _init_agent(
+        self,
+        *,
+        model_override: str = None,
+        runtime_override: dict = None,
+        request_overrides: dict | None = None,
+    ) -> bool:
         """
         Initialize the agent on first use.
         When resuming a session, restores conversation history from SQLite.
-        
+
         Returns:
             bool: True if successful, False otherwise
         """
-        from cli import AIAgent, ChatConsole, _DIM, _RST, _accent_hex, _cprint, _prepare_deferred_agent_startup, logger
+        from cli import (
+            AIAgent,
+            ChatConsole,
+            _DIM,
+            _RST,
+            _accent_hex,
+            _cprint,
+            _prepare_deferred_agent_startup,
+            logger,
+        )
+
         if self.agent is not None:
             return True
 
@@ -242,10 +285,14 @@ class CLIAgentSetupMixin:
         if self._session_db is None:
             try:
                 from clawk_state import SessionDB
+
                 self._session_db = SessionDB()
             except Exception as e:
-                logger.warning("SQLite session store not available — session will NOT be indexed: %s", e)
-        
+                logger.warning(
+                    "SQLite session store not available — session will NOT be indexed: %s",
+                    e,
+                )
+
         # If resuming, validate the session exists and load its history.
         # _preload_resumed_session() may have already loaded it (called from
         # run() for immediate display).  In that case, conversation_history
@@ -267,13 +314,17 @@ class CLIAgentSetupMixin:
                     )
                 else:
                     _cprint(f"\033[1;31mSession not found: {self.session_id}{_RST}")
-                    _cprint(f"{_DIM}Use a session ID from a previous CLI run (clawk sessions list).{_RST}")
+                    _cprint(
+                        f"{_DIM}Use a session ID from a previous CLI run (clawk sessions list).{_RST}"
+                    )
                 return False
             # If the requested session is the (empty) head of a compression
             # chain, walk to the descendant that actually holds the messages.
             # See #15000 and SessionDB.resolve_resume_session_id.
             try:
-                resolved_id = self._session_db.resolve_resume_session_id(self.session_id)
+                resolved_id = self._session_db.resolve_resume_session_id(
+                    self.session_id
+                )
             except Exception:
                 resolved_id = self.session_id
             if resolved_id and resolved_id != self.session_id:
@@ -293,7 +344,7 @@ class CLIAgentSetupMixin:
                 msg_count = len([m for m in restored if m.get("role") == "user"])
                 title_part = ""
                 if session_meta.get("title"):
-                    title_part = f" \"{session_meta['title']}\""
+                    title_part = f' "{session_meta["title"]}"'
                 if _quiet_mode:
                     print(
                         f"↻ Resumed session {self.session_id}{title_part} "
@@ -328,7 +379,7 @@ class CLIAgentSetupMixin:
                 self._session_db._conn.commit()
             except Exception:
                 pass
-        
+
         try:
             runtime = runtime_override or {
                 "api_key": self.api_key,
@@ -356,7 +407,9 @@ class CLIAgentSetupMixin:
                 verbose_logging=self.verbose,
                 quiet_mode=not self.verbose,
                 tool_progress_mode=getattr(self, "tool_progress_mode", "all"),
-                ephemeral_system_prompt=self.system_prompt if self.system_prompt else None,
+                ephemeral_system_prompt=self.system_prompt
+                if self.system_prompt
+                else None,
                 prefill_messages=self.prefill_messages or None,
                 reasoning_config=self.reasoning_config,
                 service_tier=self.service_tier,
@@ -373,7 +426,6 @@ class CLIAgentSetupMixin:
                 session_db=self._session_db,
                 clarify_callback=self._clarify_callback,
                 reasoning_callback=self._current_reasoning_callback(),
-
                 fallback_model=self._fallback_model,
                 thinking_callback=self._on_thinking,
                 checkpoints_enabled=self.checkpoints_enabled,
@@ -384,10 +436,18 @@ class CLIAgentSetupMixin:
                 skip_context_files=self.ignore_rules,
                 skip_memory=self.ignore_rules,
                 tool_progress_callback=self._on_tool_progress,
-                tool_start_callback=self._on_tool_start if self._inline_diffs_enabled else None,
-                tool_complete_callback=self._on_tool_complete if self._inline_diffs_enabled else None,
-                stream_delta_callback=self._stream_delta if self.streaming_enabled else None,
-                tool_gen_callback=self._on_tool_gen_start if self.streaming_enabled else None,
+                tool_start_callback=self._on_tool_start
+                if self._inline_diffs_enabled
+                else None,
+                tool_complete_callback=self._on_tool_complete
+                if self._inline_diffs_enabled
+                else None,
+                stream_delta_callback=self._stream_delta
+                if self.streaming_enabled
+                else None,
+                tool_gen_callback=self._on_tool_gen_start
+                if self.streaming_enabled
+                else None,
                 notice_callback=self._on_notice,
                 notice_clear_callback=self._on_notice_clear,
             )
@@ -421,7 +481,9 @@ class CLIAgentSetupMixin:
                 try:
                     self.agent._ensure_db_session()
                     if self.agent._session_db_created:
-                        self._session_db.set_session_title(self.session_id, self._pending_title)
+                        self._session_db.set_session_title(
+                            self.session_id, self._pending_title
+                        )
                         _cprint(f"  Session title applied: {self._pending_title}")
                         self._pending_title = None
                     # else: row creation failed transiently — keep _pending_title for retry
@@ -445,14 +507,13 @@ class CLIAgentSetupMixin:
         already populated and skips the DB round-trip.
         """
         from cli import _accent_hex
+
         if not self._resumed or not self._session_db:
             return False
 
         session_meta = self._session_db.get_session(self.session_id)
         if not session_meta:
-            self._console_print(
-                f"[bold red]Session not found: {self.session_id}[/]"
-            )
+            self._console_print(f"[bold red]Session not found: {self.session_id}[/]")
             self._console_print(
                 "[dim]Use a session ID from a previous CLI run "
                 "(clawk sessions list).[/]"
@@ -502,8 +563,7 @@ class CLIAgentSetupMixin:
         # Re-open the session (clear ended_at so it's active again)
         try:
             self._session_db._conn.execute(
-                "UPDATE sessions SET ended_at = NULL, end_reason = NULL "
-                "WHERE id = ?",
+                "UPDATE sessions SET ended_at = NULL, end_reason = NULL WHERE id = ?",
                 (self.session_id,),
             )
             self._session_db._conn.commit()
@@ -520,7 +580,13 @@ class CLIAgentSetupMixin:
         last ``MAX_DISPLAY_EXCHANGES`` user/assistant exchanges and shows
         an indicator for earlier hidden messages.
         """
-        from cli import CLI_CONFIG, _record_output_history_entry, _strip_reasoning_tags, _suspend_output_history
+        from cli import (
+            CLI_CONFIG,
+            _record_output_history_entry,
+            _strip_reasoning_tags,
+            _suspend_output_history,
+        )
+
         if not self.conversation_history:
             return
 
@@ -538,8 +604,8 @@ class CLIAgentSetupMixin:
 
         # Collect displayable entries (skip system, tool-result messages)
         entries = []  # list of (role, display_text)
-        _last_asst_idx = None       # index of last assistant entry
-        _last_asst_full = None      # un-truncated display text for last assistant
+        _last_asst_idx = None  # index of last assistant entry
+        _last_asst_full = None  # un-truncated display text for last assistant
         for msg in self.conversation_history:
             role = msg.get("role", "")
             content = msg.get("content")
@@ -584,7 +650,11 @@ class CLIAgentSetupMixin:
                     names = []
                     for tc in tool_calls:
                         fn = tc.get("function", {})
-                        name = fn.get("name", "unknown") if isinstance(fn, dict) else "unknown"
+                        name = (
+                            fn.get("name", "unknown")
+                            if isinstance(fn, dict)
+                            else "unknown"
+                        )
                         if name not in names:
                             names.append(name)
                     names_str = ", ".join(names[:4])
@@ -627,6 +697,7 @@ class CLIAgentSetupMixin:
 
         try:
             from clawk_cli.skin_engine import get_active_skin
+
             _skin = get_active_skin()
             _history_text_c = _skin.get_color("banner_text", "#FFF8DC")
             _session_label_c = _skin.get_color("session_label", "#DAA520")
@@ -676,6 +747,8 @@ class CLIAgentSetupMixin:
             padding=(0, 1),
             style=_history_text_c,
         )
-        _record_output_history_entry(lambda: self._render_resume_history_panel_lines(panel))
+        _record_output_history_entry(
+            lambda: self._render_resume_history_panel_lines(panel)
+        )
         with _suspend_output_history():
             self._console_print(panel)

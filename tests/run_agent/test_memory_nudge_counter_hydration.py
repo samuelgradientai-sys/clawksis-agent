@@ -30,8 +30,12 @@ def _make_minimal_agent():
     """
 
 
-def _run_hydration(conversation_history, memory_nudge_interval=10,
-                   prior_turn_count=0, prior_turns_since_memory=0):
+def _run_hydration(
+    conversation_history,
+    memory_nudge_interval=10,
+    prior_turn_count=0,
+    prior_turns_since_memory=0,
+):
     """Replicate the hydration block from run_agent.py:11128-11150.
     Keeping this in sync with the production code is a one-line job; the
     block has no dependencies on anything except primitives + history.
@@ -86,10 +90,15 @@ def test_idempotent_when_counters_already_set():
     Without the `_user_turn_count == 0` guard, cached agents would lose
     their accumulated state every time they re-entered the function.
     """
-    history = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
+    history = [
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+    ]
     user_turn, since_mem = _run_hydration(
-        history, memory_nudge_interval=10,
-        prior_turn_count=15, prior_turns_since_memory=5,
+        history,
+        memory_nudge_interval=10,
+        prior_turn_count=15,
+        prior_turns_since_memory=5,
     )
     # Existing counters preserved (cache hit case)
     assert user_turn == 15
@@ -129,6 +138,7 @@ def test_production_code_contains_hydration_block():
     within the turn subsystem.
     """
     from pathlib import Path
+
     repo = Path(__file__).resolve().parents[2]
     turn_src = "".join(
         (repo / "agent" / name).read_text(encoding="utf-8")

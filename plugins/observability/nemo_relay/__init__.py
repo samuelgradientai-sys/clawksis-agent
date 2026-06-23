@@ -179,7 +179,10 @@ class _Runtime:
                 self.settings.atif_agent_name,
                 self.settings.atif_agent_version,
                 model_name=str(kwargs.get("model") or self.settings.atif_model_name),
-                extra={"source": "clawksis-agent", "plugin": "observability/nemo_relay"},
+                extra={
+                    "source": "clawksis-agent",
+                    "plugin": "observability/nemo_relay",
+                },
             )
             state.atif_subscriber_name = f"clawk.nemo_relay.atif.{session_id}"
             state.atif_exporter.register(state.atif_subscriber_name)
@@ -206,14 +209,21 @@ class _Runtime:
     def export_atif(self, state: _SessionState) -> None:
         if not self.settings.atif_enabled or state.atif_exporter is None:
             return
-        if state.is_embedded_subagent and self.settings.atif_subagent_export_mode != "all":
+        if (
+            state.is_embedded_subagent
+            and self.settings.atif_subagent_export_mode != "all"
+        ):
             return
         output_dir = self.settings.atif_output_directory
         if not output_dir:
             return
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        filename = self.settings.atif_filename_template.format(session_id=state.session_id)
-        Path(output_dir, filename).write_text(state.atif_exporter.export_json(), encoding="utf-8")
+        filename = self.settings.atif_filename_template.format(
+            session_id=state.session_id
+        )
+        Path(output_dir, filename).write_text(
+            state.atif_exporter.export_json(), encoding="utf-8"
+        )
 
     def close_session(self, kwargs: dict[str, Any]) -> None:
         session_id = _session_id(kwargs)
@@ -275,14 +285,15 @@ class _Runtime:
     def managed_llm_enabled(self) -> bool:
         return (
             self.settings.adaptive_enabled
-            and callable(getattr(getattr(self.nemo_relay, "llm", None), "execute", None))
+            and callable(
+                getattr(getattr(self.nemo_relay, "llm", None), "execute", None)
+            )
             and callable(getattr(self.nemo_relay, "LLMRequest", None))
         )
 
     def managed_tool_enabled(self) -> bool:
-        return (
-            self.settings.adaptive_enabled
-            and callable(getattr(getattr(self.nemo_relay, "tools", None), "execute", None))
+        return self.settings.adaptive_enabled and callable(
+            getattr(getattr(self.nemo_relay, "tools", None), "execute", None)
         )
 
     def _run_managed_with_downstream_preservation(
@@ -317,7 +328,9 @@ class _Runtime:
         try:
             managed_result = _resolve_awaitable(make_managed_execute(_impl))
         except Exception as exc:
-            if downstream_error is not None and _is_relay_wrapped_callback_error(exc, callback_error):
+            if downstream_error is not None and _is_relay_wrapped_callback_error(
+                exc, callback_error
+            ):
                 raise downstream_error
             raise
         return raw_response["value"] if raw_response["set"] else managed_result
@@ -341,14 +354,12 @@ class _Runtime:
                     request,
                     impl,
                     handle=state.handle,
-                    data=_jsonable(
-                        {
-                            "turn_id": kwargs.get("turn_id"),
-                            "api_request_id": kwargs.get("api_request_id"),
-                            "api_call_count": kwargs.get("api_call_count"),
-                            "mode": self.settings.adaptive_mode,
-                        }
-                    ),
+                    data=_jsonable({
+                        "turn_id": kwargs.get("turn_id"),
+                        "api_request_id": kwargs.get("api_request_id"),
+                        "api_call_count": kwargs.get("api_call_count"),
+                        "mode": self.settings.adaptive_mode,
+                    }),
                     metadata=_metadata(kwargs),
                     model_name=str(kwargs.get("model") or ""),
                 )
@@ -380,14 +391,12 @@ class _Runtime:
                     args,
                     impl,
                     handle=state.handle,
-                    data=_jsonable(
-                        {
-                            "turn_id": kwargs.get("turn_id"),
-                            "api_request_id": kwargs.get("api_request_id"),
-                            "tool_call_id": kwargs.get("tool_call_id"),
-                            "mode": self.settings.adaptive_mode,
-                        }
-                    ),
+                    data=_jsonable({
+                        "turn_id": kwargs.get("turn_id"),
+                        "api_request_id": kwargs.get("api_request_id"),
+                        "tool_call_id": kwargs.get("tool_call_id"),
+                        "mode": self.settings.adaptive_mode,
+                    }),
                     metadata=_metadata(kwargs),
                 )
                 if inspect.isawaitable(result):
@@ -430,7 +439,12 @@ def on_session_start(**kwargs: Any) -> None:
 def on_session_end(**kwargs: Any) -> None:
     runtime = _get_runtime()
     if runtime is not None:
-        _safe(lambda: (runtime.mark("clawk.session.end", kwargs), runtime.export_atif(runtime.ensure_session(kwargs))))
+        _safe(
+            lambda: (
+                runtime.mark("clawk.session.end", kwargs),
+                runtime.export_atif(runtime.ensure_session(kwargs)),
+            )
+        )
 
 
 def on_session_finalize(**kwargs: Any) -> None:
@@ -467,13 +481,18 @@ def on_pre_api_request(**kwargs: Any) -> None:
     def _record() -> None:
         state = runtime.ensure_session(kwargs)
         request_payload = kwargs.get("request")
-        request_body = request_payload.get("body") if isinstance(request_payload, dict) else {}
+        request_body = (
+            request_payload.get("body") if isinstance(request_payload, dict) else {}
+        )
         request = runtime.nemo_relay.LLMRequest({}, _jsonable(request_body))
         span = runtime.nemo_relay.llm.call(
             str(kwargs.get("provider") or "llm"),
             request,
             handle=state.handle,
-            data=_jsonable({"turn_id": kwargs.get("turn_id"), "api_request_id": kwargs.get("api_request_id")}),
+            data=_jsonable({
+                "turn_id": kwargs.get("turn_id"),
+                "api_request_id": kwargs.get("api_request_id"),
+            }),
             metadata=_metadata(kwargs),
             model_name=str(kwargs.get("model") or ""),
         )
@@ -498,7 +517,10 @@ def on_post_api_request(**kwargs: Any) -> None:
         runtime.nemo_relay.llm.call_end(
             span,
             _jsonable(kwargs.get("response") or {}),
-            data=_jsonable({"usage": kwargs.get("usage"), "finish_reason": kwargs.get("finish_reason")}),
+            data=_jsonable({
+                "usage": kwargs.get("usage"),
+                "finish_reason": kwargs.get("finish_reason"),
+            }),
             metadata=_metadata(kwargs),
         )
 
@@ -541,7 +563,10 @@ def on_pre_tool_call(**kwargs: Any) -> None:
             str(kwargs.get("tool_name") or "tool"),
             _jsonable(kwargs.get("args") or {}),
             handle=state.handle,
-            data=_jsonable({"turn_id": kwargs.get("turn_id"), "api_request_id": kwargs.get("api_request_id")}),
+            data=_jsonable({
+                "turn_id": kwargs.get("turn_id"),
+                "api_request_id": kwargs.get("api_request_id"),
+            }),
             metadata=_metadata(kwargs),
             tool_call_id=str(kwargs.get("tool_call_id") or ""),
         )
@@ -566,7 +591,10 @@ def on_post_tool_call(**kwargs: Any) -> None:
         runtime.nemo_relay.tools.call_end(
             span,
             _jsonable(kwargs.get("result")),
-            data=_jsonable({"status": kwargs.get("status"), "duration_ms": kwargs.get("duration_ms")}),
+            data=_jsonable({
+                "status": kwargs.get("status"),
+                "duration_ms": kwargs.get("duration_ms"),
+            }),
             metadata=_metadata(kwargs),
         )
 
@@ -635,7 +663,9 @@ def _get_runtime() -> Optional[_Runtime]:
         try:
             _RUNTIME = _Runtime(nemo_relay=nemo_runtime, settings=_load_settings())
         except Exception as exc:
-            logger.debug("NeMo Relay plugin disabled: init failed: %s", exc, exc_info=True)
+            logger.debug(
+                "NeMo Relay plugin disabled: init failed: %s", exc, exc_info=True
+            )
             _RUNTIME = _INIT_FAILED
             return None
         return _RUNTIME
@@ -656,7 +686,8 @@ def _load_settings() -> _Settings:
         atof_mode=_env("CLAWK_NEMO_RELAY_ATOF_MODE") or "append",
         atif_enabled=_env_bool("CLAWK_NEMO_RELAY_ATIF_ENABLED"),
         atif_output_directory=_env("CLAWK_NEMO_RELAY_ATIF_OUTPUT_DIRECTORY"),
-        atif_filename_template=_env("CLAWK_NEMO_RELAY_ATIF_FILENAME_TEMPLATE") or "clawk-atif-{session_id}.json",
+        atif_filename_template=_env("CLAWK_NEMO_RELAY_ATIF_FILENAME_TEMPLATE")
+        or "clawk-atif-{session_id}.json",
         atif_subagent_export_mode=_atif_subagent_export_mode(),
         atif_agent_name=_env("CLAWK_NEMO_RELAY_ATIF_AGENT_NAME") or "Clawksis",
         atif_agent_version=_env("CLAWK_NEMO_RELAY_ATIF_AGENT_VERSION") or "unknown",
@@ -741,7 +772,9 @@ def _child_session_id(kwargs: dict[str, Any]) -> str:
     return str(kwargs.get("child_session_id") or "")
 
 
-def _subagent_child_metadata(kwargs: dict[str, Any], parent_metadata: dict[str, Any]) -> dict[str, Any]:
+def _subagent_child_metadata(
+    kwargs: dict[str, Any], parent_metadata: dict[str, Any]
+) -> dict[str, Any]:
     child_session_id = _child_session_id(kwargs)
     metadata = {
         "session_id": child_session_id,
@@ -766,7 +799,10 @@ def _subagent_child_metadata(kwargs: dict[str, Any], parent_metadata: dict[str, 
 
 
 def _api_key(kwargs: dict[str, Any]) -> str:
-    return str(kwargs.get("api_request_id") or f"{_session_id(kwargs)}:{kwargs.get('api_call_count') or 'api'}")
+    return str(
+        kwargs.get("api_request_id")
+        or f"{_session_id(kwargs)}:{kwargs.get('api_call_count') or 'api'}"
+    )
 
 
 def _tool_key(kwargs: dict[str, Any]) -> str:
@@ -845,12 +881,16 @@ def _original_downstream_error(exc: Exception) -> BaseException:
     # Clawksis wraps downstream execution failures in a local/private exception
     # class, so detect the wrapper by shape instead of importing it here.
     original = getattr(exc, "original", None)
-    if exc.__class__.__name__ == "_DownstreamExecutionError" and isinstance(original, BaseException):
+    if exc.__class__.__name__ == "_DownstreamExecutionError" and isinstance(
+        original, BaseException
+    ):
         return original
     return exc
 
 
-def _is_relay_wrapped_callback_error(exc: Exception, callback_error: Exception | None) -> bool:
+def _is_relay_wrapped_callback_error(
+    exc: Exception, callback_error: Exception | None
+) -> bool:
     # NeMo Relay re-wraps a failing callback as ``RuntimeError("internal error:
     # <ClassName>: <message>")``. Match by prefix rather than exact equality so a
     # trailing traceback/suffix in a future Relay version doesn't silently defeat
@@ -891,13 +931,25 @@ def _llm_response_payload(response: Any) -> Any:
         if reasoning is not None:
             assistant_message["reasoning_content"] = _jsonable(reasoning)
     elif isinstance(payload, dict):
-        assistant_message["content"] = payload.get("content") or payload.get("output_text") or ""
+        assistant_message["content"] = (
+            payload.get("content") or payload.get("output_text") or ""
+        )
 
     return {
-        "model": _value(response, "model", payload.get("model") if isinstance(payload, dict) else None),
+        "model": _value(
+            response,
+            "model",
+            payload.get("model") if isinstance(payload, dict) else None,
+        ),
         "assistant_message": assistant_message,
         "finish_reason": finish_reason,
-        "usage": _jsonable(_value(response, "usage", payload.get("usage") if isinstance(payload, dict) else None)),
+        "usage": _jsonable(
+            _value(
+                response,
+                "usage",
+                payload.get("usage") if isinstance(payload, dict) else None,
+            )
+        ),
     }
 
 
@@ -907,16 +959,14 @@ def _tool_calls_payload(tool_calls: Any) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
     for call in tool_calls:
         function = _value(call, "function")
-        normalized.append(
-            {
-                "id": _value(call, "id"),
-                "type": _value(call, "type", "function") or "function",
-                "function": {
-                    "name": _value(function, "name"),
-                    "arguments": _value(function, "arguments"),
-                },
-            }
-        )
+        normalized.append({
+            "id": _value(call, "id"),
+            "type": _value(call, "type", "function") or "function",
+            "function": {
+                "name": _value(function, "name"),
+                "arguments": _value(function, "arguments"),
+            },
+        })
     return normalized
 
 

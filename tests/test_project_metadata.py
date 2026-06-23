@@ -128,7 +128,9 @@ def test_pyproject_aiohttp_pins_match_lazy_slack_pin():
         if "aiohttp" in (pins := _exact_pins(specs))
     }
 
-    assert pyproject_aiohttp_pins, "expected at least one pyproject extra to pin aiohttp"
+    assert pyproject_aiohttp_pins, (
+        "expected at least one pyproject extra to pin aiohttp"
+    )
     mismatches = {
         extra: pin
         for extra, pin in pyproject_aiohttp_pins.items()
@@ -175,7 +177,9 @@ def test_pyproject_pins_match_lazy_deps_pins():
             lazy_pins.setdefault(package, set()).add(version)
 
     shared = sorted(set(pyproject_pins) & set(lazy_pins))
-    assert shared, "expected at least one package pinned in both pyproject and LAZY_DEPS"
+    assert shared, (
+        "expected at least one package pinned in both pyproject and LAZY_DEPS"
+    )
 
     drift = {
         package: {

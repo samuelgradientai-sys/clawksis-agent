@@ -348,8 +348,11 @@ def test_gated_require_token_endpoint_accepts_cookie_session(gated_app):
     _complete_stub_login(gated_app)
     r = gated_app.post(
         "/api/dashboard/agent-plugins/install",
-        json={"identifier": "definitely not a valid identifier",
-              "force": False, "enable": False},
+        json={
+            "identifier": "definitely not a valid identifier",
+            "force": False,
+            "enable": False,
+        },
     )
     assert r.status_code != 401, (
         "A _require_token endpoint 401'd a cookie-authenticated request under "

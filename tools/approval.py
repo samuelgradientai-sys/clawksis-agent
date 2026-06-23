@@ -2418,7 +2418,6 @@ def check_execute_code_guard(code: str, env_type: str) -> dict:
     # consulted, so every execute_code call re-prompts the user (#39275).
 
     if is_approved(session_key, pattern_key):
-
         return {"approved": True, "message": None}
 
     # Smart mode: ask the aux LLM about the whole script. An APPROVE here only
@@ -2546,11 +2545,9 @@ def check_execute_code_guard(code: str, env_type: str) -> dict:
     # stick so the user is not re-prompted on every execute_code call (#39275).
 
     if choice == "session":
-
         approve_session(session_key, pattern_key)
 
     elif choice == "always":
-
         approve_session(session_key, pattern_key)
 
         approve_permanent(pattern_key)

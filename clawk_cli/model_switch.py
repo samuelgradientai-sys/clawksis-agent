@@ -2838,9 +2838,11 @@ def list_authenticated_providers(
                 _ollama_models = [m for m in _cookbook.ollama_models() if m]
 
                 if _ollama_models:
-                    _ollama_is_current = _norm_url(current_base_url) == _norm_url(
-                        _cookbook.OLLAMA_OPENAI_URL
-                    ) or str(current_provider or "").strip().lower() == "ollama"
+                    _ollama_is_current = (
+                        _norm_url(current_base_url)
+                        == _norm_url(_cookbook.OLLAMA_OPENAI_URL)
+                        or str(current_provider or "").strip().lower() == "ollama"
+                    )
 
                     results.append({
                         "slug": "ollama",

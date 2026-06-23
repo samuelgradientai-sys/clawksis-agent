@@ -163,6 +163,16 @@ export class PixelBridge {
     return this.agents.size;
   }
 
+  /** Reverse lookup: office character id → the session key it represents.
+   *  Lets the host translate an in-office click (which carries the numeric
+   *  character id) back to a session so the Agent Inspector can select it. */
+  sessionKeyForId(id: number): string | null {
+    for (const [key, entry] of this.agents) {
+      if (entry.id === id) return key;
+    }
+    return null;
+  }
+
   dispose(): void {
     for (const entry of this.agents.values()) {
       if (entry.idleTimer) clearTimeout(entry.idleTimer);

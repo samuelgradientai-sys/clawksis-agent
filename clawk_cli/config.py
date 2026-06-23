@@ -754,7 +754,9 @@ def recommended_update_command_for_method(method: str) -> str:
         return "brew upgrade clawksis-agent"
 
     if method == "docker":
-        return "git pull && docker compose build && docker compose up -d --force-recreate"
+        return (
+            "git pull && docker compose build && docker compose up -d --force-recreate"
+        )
 
     if method == "pip":
         if is_uv_tool_install():
@@ -847,6 +849,12 @@ Notes:
     in the container, typically bind-mounted from the host) and persist
 
     across image upgrades — re-pulling doesn't lose any state.
+
+  • Pin the image tag (e.g. ``clawksis-agent:v2026.6.5``) instead of relying
+
+    on ``:latest`` so rebuilds stay reproducible and don't silently drift
+
+    between versions.
 
   • Running a fork?  Build your own image with this repo's ``Dockerfile``
 
@@ -2722,6 +2730,12 @@ DEFAULT_CONFIG = {
     # never fires again.  Users can wipe the section to re-see all hints.
     "onboarding": {
         "seen": {},
+        # Structured profile-build path offered on the very first gateway
+        # message ever. "ask" (default) -> offer to build a user profile
+        # (opt-in, consent-gated; the agent asks before any lookup and never
+        # reads connected accounts silently). "off" -> plain intro only.
+        # The offer fires at most once (latched under onboarding.seen).
+        "profile_build": "ask",
     },
     # ``clawk update`` behaviour.
     "updates": {
@@ -2857,7 +2871,7 @@ DEFAULT_CONFIG = {
     "paste_collapse_threshold_fallback": 5,
     "paste_collapse_char_threshold": 2000,
     # Config schema version - bump this when adding new required fields
-    "_config_version": 26,
+    "_config_version": 29,
 }
 
 
@@ -5230,6 +5244,32 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 if entry.get("api_mode"):
                     new_entry["transport"] = entry["api_mode"]
 
+                # Carry over the remaining per-provider metadata so a v11
+                # custom_providers entry survives the keyed-schema migration
+                # without losing its auth env var, model map, or tuning knobs.
+                if entry.get("api_key_env"):
+                    new_entry["key_env"] = entry["api_key_env"]
+
+                models_val = entry.get("models")
+
+                if isinstance(models_val, dict):
+                    new_entry["models"] = models_val
+
+                elif isinstance(models_val, list):
+                    new_entry["models"] = {str(m): {} for m in models_val}
+
+                if entry.get("context_length") is not None:
+                    new_entry["context_length"] = entry["context_length"]
+
+                if entry.get("rate_limit_delay") is not None:
+                    new_entry["rate_limit_delay"] = entry["rate_limit_delay"]
+
+                if "discover_models" in entry:
+                    new_entry["discover_models"] = entry["discover_models"]
+
+                if entry.get("extra_body"):
+                    new_entry["extra_body"] = entry["extra_body"]
+
                 providers_dict[key] = new_entry
 
                 migrated_count += 1
@@ -5761,6 +5801,35 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print(
                     "  ✓ Lowered model_catalog.ttl_hours to 1 (hourly picker refresh)"
                 )
+
+    if current_ver < 29:
+        config = read_raw_config()
+
+        renamed = False
+
+        # 28→29: rename memory/skills ``write_mode`` → ``write_approval`` (bool).
+        # Only an explicit ``approve`` carried gating intent → True; ``on``/
+        # ``off`` (string or YAML-1.1 bool) and anything else → False. Only a
+        # persisted key is rewritten — never invented.
+        for section in ("memory", "skills"):
+            sec = config.get(section)
+
+            if isinstance(sec, dict) and "write_mode" in sec:
+                old = sec.pop("write_mode")
+
+                sec["write_approval"] = str(old).strip().lower() == "approve"
+
+                config[section] = sec
+
+                renamed = True
+
+        if renamed:
+            save_config(config)
+
+            results["config_added"].append("write_mode → write_approval")
+
+            if not quiet:
+                print("  ✓ Renamed write_mode → write_approval (boolean gate)")
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")
@@ -7185,7 +7254,11 @@ def save_env_value(key: str, value: str):
 
         raise
 
-    _secure_file(env_path)
+    # Only tighten brand-new files. An existing file's mode was already
+    # restored above and must be preserved (#31518) — re-securing would clobber
+    # an operator-chosen mode (e.g. 0640 on a Docker bind-mount).
+    if original_mode is None:
+        _secure_file(env_path)
 
     os.environ[key] = value
 
@@ -7270,7 +7343,10 @@ def remove_env_value(key: str) -> bool:
 
             raise
 
-        _secure_file(env_path)
+        # The existing file's mode was restored above and must be preserved
+        # (#31518) — only re-secure if we couldn't capture the original mode.
+        if original_mode is None:
+            _secure_file(env_path)
 
     os.environ.pop(key, None)
 

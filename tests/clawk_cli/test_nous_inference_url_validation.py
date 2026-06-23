@@ -172,6 +172,7 @@ class TestCallSiteWiring:
         assert refresh_count == 2, f"expected 2 refresh sites, found {refresh_count}"
         assert mint_count == 0, f"expected 0 mint sites, found {mint_count}"
 
+
 class TestEnvOverrideNotGated:
     """The documented dev/staging env-var override must keep working.
 

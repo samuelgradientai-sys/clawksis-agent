@@ -10,6 +10,7 @@ The `ProxyRotator` class manages a list of proxies and rotates through them auto
 from scrapling.spiders import Spider, Response
 from scrapling.fetchers import FetcherSession, ProxyRotator
 
+
 class MySpider(Spider):
     name = "my_spider"
     start_urls = ["https://example.com"]
@@ -48,6 +49,7 @@ rotator = ProxyRotator([
     {"server": "http://proxy2:8080"},
 ])
 
+
 # Then inside the spider
 def configure_sessions(self, manager):
     rotator = ProxyRotator(["http://proxy1:8080", "http://proxy2:8080"])
@@ -68,8 +70,8 @@ You can provide a custom strategy function to change this behavior, but it has t
 ```python
 from scrapling.core._types import ProxyType
 
-def my_strategy(proxies: list, current_index: int) -> tuple[ProxyType, int]:
-    ...
+
+def my_strategy(proxies: list, current_index: int) -> tuple[ProxyType, int]: ...
 ```
 
 It receives the list of proxies and the current index, and must return the chosen proxy and the next index.
@@ -82,9 +84,11 @@ Below are some examples of custom rotation strategies you can use.
 import random
 from scrapling.fetchers import ProxyRotator
 
+
 def random_strategy(proxies, current_index):
     idx = random.randint(0, len(proxies) - 1)
     return proxies[idx], idx
+
 
 rotator = ProxyRotator(
     ["http://proxy1:8080", "http://proxy2:8080", "http://proxy3:8080"],
@@ -97,11 +101,13 @@ rotator = ProxyRotator(
 ```python
 import random
 
+
 def weighted_strategy(proxies, current_index):
     # First proxy gets 60% of traffic, others split the rest
     weights = [60] + [40 // (len(proxies) - 1)] * (len(proxies) - 1)
     proxy = random.choices(proxies, weights=weights, k=1)[0]
     return proxy, current_index  # Index doesn't matter for weighted
+
 
 rotator = ProxyRotator(proxies, strategy=weighted_strategy)
 ```
@@ -182,10 +188,14 @@ class MySpider(Spider):
     max_blocked_retries = 5
 
     def configure_sessions(self, manager: SessionManager) -> None:
-        manager.add('requests', FetcherSession(impersonate=['chrome', 'firefox', 'safari']))
-        manager.add('stealth', AsyncStealthySession(block_webrtc=True), lazy=True)
+        manager.add(
+            "requests", FetcherSession(impersonate=["chrome", "firefox", "safari"])
+        )
+        manager.add("stealth", AsyncStealthySession(block_webrtc=True), lazy=True)
 
-    async def retry_blocked_request(self, request: Request, response: Response) -> Request:
+    async def retry_blocked_request(
+        self, request: Request, response: Response
+    ) -> Request:
         request.sid = "stealth"
         self.logger.info(f"Retrying blocked request: {request.url}")
         return request
@@ -204,12 +214,20 @@ from scrapling.spiders import Spider, SessionManager, Request, Response
 from scrapling.fetchers import FetcherSession, AsyncStealthySession, ProxyRotator
 
 
-cheap_proxies = ProxyRotator([ "http://proxy1:8080", "http://proxy2:8080"])
+cheap_proxies = ProxyRotator(["http://proxy1:8080", "http://proxy2:8080"])
 
 # A format acceptable by the browser
 expensive_proxies = ProxyRotator([
-    {"server": "http://residential_proxy1:8080", "username": "user", "password": "pass"},
-    {"server": "http://residential_proxy2:8080", "username": "user", "password": "pass"},
+    {
+        "server": "http://residential_proxy1:8080",
+        "username": "user",
+        "password": "pass",
+    },
+    {
+        "server": "http://residential_proxy2:8080",
+        "username": "user",
+        "password": "pass",
+    },
     {"server": "http://mobile_proxy1:8080", "username": "user", "password": "pass"},
     {"server": "http://mobile_proxy2:8080", "username": "user", "password": "pass"},
 ])
@@ -221,10 +239,21 @@ class MySpider(Spider):
     max_blocked_retries = 5
 
     def configure_sessions(self, manager: SessionManager) -> None:
-        manager.add('requests', FetcherSession(impersonate=['chrome', 'firefox', 'safari'], proxy_rotator=cheap_proxies))
-        manager.add('stealth', AsyncStealthySession(block_webrtc=True, proxy_rotator=expensive_proxies), lazy=True)
+        manager.add(
+            "requests",
+            FetcherSession(
+                impersonate=["chrome", "firefox", "safari"], proxy_rotator=cheap_proxies
+            ),
+        )
+        manager.add(
+            "stealth",
+            AsyncStealthySession(block_webrtc=True, proxy_rotator=expensive_proxies),
+            lazy=True,
+        )
 
-    async def retry_blocked_request(self, request: Request, response: Response) -> Request:
+    async def retry_blocked_request(
+        self, request: Request, response: Response
+    ) -> Request:
         request.sid = "stealth"
         self.logger.info(f"Retrying blocked request: {request.url}")
         return request
