@@ -10029,6 +10029,114 @@ async def toggle_skill(body: SkillToggle, profile: Optional[str] = None):
     return {"ok": True, "name": body.name, "enabled": body.enabled}
 
 
+class SkillCreate(BaseModel):
+    name: str
+
+    content: str
+
+    category: Optional[str] = None
+
+    profile: Optional[str] = None
+
+
+class SkillContentUpdate(BaseModel):
+    name: str
+
+    content: str
+
+    profile: Optional[str] = None
+
+
+def _clear_skills_prompt_cache() -> None:
+    """Best-effort: invalidate the skills system-prompt snapshot after a write.
+
+    Mirrors what ``skill_manage`` does so a dashboard-authored skill is picked
+    up by the next session without a manual cache reset.
+    """
+
+    try:
+        from agent.prompt_builder import clear_skills_system_prompt_cache
+
+        clear_skills_system_prompt_cache(clear_snapshot=True)
+
+    except Exception:
+        pass
+
+
+@app.get("/api/skills/content")
+async def get_skill_content(name: str, profile: Optional[str] = None):
+    """Return the raw SKILL.md text for a skill, for the dashboard editor."""
+
+    from tools.skill_manager_tool import _find_skill
+
+    with _profile_scope(profile):
+        found = _find_skill(name)
+
+        if not found:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+
+        skill_md = found["path"] / "SKILL.md"
+
+        if not skill_md.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Skill '{name}' has no SKILL.md."
+            )
+
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return {"name": name, "content": content, "path": str(skill_md)}
+
+
+@app.post("/api/skills")
+async def create_skill(body: SkillCreate):
+    """Create a new custom skill (SKILL.md) from the dashboard editor.
+
+    Calls the same validated write path as the agent's ``skill_manage``
+    tool (frontmatter validation, name/category validation, size limit,
+    optional security scan) — but bypasses the agent write-approval gate:
+    a write from the authenticated dashboard IS the user acting directly.
+    """
+
+    from tools.skill_manager_tool import _create_skill
+
+    with _profile_scope(body.profile):
+        result = _create_skill(body.name, body.content, body.category or None)
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to create skill.")
+        )
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
+@app.put("/api/skills/content")
+async def update_skill_content(body: SkillContentUpdate):
+    """Replace the SKILL.md of an existing skill (full rewrite) from the editor."""
+
+    from tools.skill_manager_tool import _edit_skill
+
+    with _profile_scope(body.profile):
+        result = _edit_skill(body.name, body.content)
+
+    if not result.get("success"):
+        err = result.get("error", "Failed to update skill.")
+
+        status = 404 if "not found" in str(err).lower() else 400
+
+        raise HTTPException(status_code=status, detail=err)
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
 @app.get("/api/tools/toolsets")
 async def get_toolsets(profile: Optional[str] = None):
 
