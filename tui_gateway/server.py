@@ -2278,6 +2278,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
         "branch": _git_branch_for_cwd(cwd),
         "personality": str(personality or ""),
         "running": bool((session or {}).get("running")),
+        "source": str((session or {}).get("source") or ""),
         "desktop_contract": DESKTOP_BACKEND_CONTRACT,
         "version": "",
         "release_date": "",
@@ -2687,6 +2688,9 @@ def _on_tool_progress(
         if _kwargs.get("parent_id"):
             payload["parent_id"] = str(_kwargs["parent_id"])
 
+        if _kwargs.get("child_session_id"):
+            payload["child_session_id"] = str(_kwargs["child_session_id"])
+
         if _kwargs.get("depth") is not None:
             payload["depth"] = int(_kwargs["depth"])
 
@@ -2753,6 +2757,124 @@ def _on_tool_progress(
             payload["text"] = str(preview)
 
         _emit(event_type, sid, payload)
+
+        _mirror_subagent_to_child(event_type, payload)
+
+
+# ── Child-session live mirror ────────────────────────────────────────
+# A delegated child is not a live gateway session — it runs synchronously
+# inside the parent's turn, and its activity reaches the gateway only as
+# relayed ``subagent.*`` events on the PARENT sid. When a UI opens the child's
+# own session (session.resume on ``child_session_id``, e.g. the desktop's
+# open-in-new-window), that window would otherwise sit silent until the run
+# persists. Translate the relayed events into the native stream events the
+# window already renders — emitted on the CHILD sid, routed to its transport
+# by write_json — so the window shows a real midstream turn.
+_child_mirrors: dict[str, dict] = {}
+
+_child_mirrors_lock = threading.Lock()
+
+# Stored child session ids with a delegation run currently in flight (refreshed
+# on every relayed subagent.* event, popped on subagent.complete). Lets a lazy
+# watch resume report running=true so the window shows a busy indicator even
+# while the child is silent inside a long tool call (no events for 25s+).
+_active_child_runs: dict[str, float] = {}
+
+# Staleness bound for the registry: entries refresh on every relayed event, so
+# anything this quiet means the completion event was lost (callback raised,
+# parent crashed) — don't let a leaked entry pin "running" forever.
+_CHILD_RUN_STALE_S = 3600.0
+
+
+def _child_run_active(child_key: str) -> bool:
+
+    ts = _active_child_runs.get(child_key)
+
+    return ts is not None and (time.time() - ts) < _CHILD_RUN_STALE_S
+
+
+def _mirror_subagent_to_child(event_type: str, payload: dict) -> None:
+
+    child_key = str(payload.get("child_session_id") or "")
+
+    if not child_key:
+        return
+
+    # Liveness registry first — it must be accurate even when no window is
+    # open, so a window opened mid-run can immediately know the child is busy.
+    if event_type == "subagent.complete":
+        _active_child_runs.pop(child_key, None)
+
+    else:
+        _active_child_runs[child_key] = time.time()
+
+    # Mirror only into a live watch session (keyed by session_key; its live sid
+    # differs from the stored id) that has NOT been upgraded to a full agent.
+    # No window / closed → nothing to mirror; an upgraded session owns a real
+    # native stream and mirroring on top would interleave two turns on one sid.
+    # Either way drop state so a reopened window starts a fresh synthetic turn.
+    live = _find_live_session_by_key(child_key)
+
+    if live is None or live[1].get("agent") is not None:
+        with _child_mirrors_lock:
+            _child_mirrors.pop(child_key, None)
+
+        return
+
+    csid = live[0]
+
+    with _child_mirrors_lock:
+        st = _child_mirrors.setdefault(
+            child_key, {"seq": 0, "open_tool": None, "started": False}
+        )
+
+        if not st["started"]:
+            st["started"] = True
+
+            _emit("message.start", csid)
+
+        if event_type == "subagent.thinking":
+            if text := str(payload.get("text") or ""):
+                _emit("reasoning.delta", csid, {"text": text})
+
+        elif event_type in {"subagent.start", "subagent.progress"}:
+            # Mirror branch-level progress lines so a just-opened child window
+            # shows immediate activity instead of waiting for the next tool or
+            # completion event. This matches the TUI /agents "live branch log"
+            # feel that users expect.
+            if text := str(payload.get("text") or ""):
+                _emit("message.delta", csid, {"text": f"{text}\n"})
+
+        elif event_type == "subagent.tool":
+            if st["open_tool"]:
+                _emit("tool.complete", csid, st["open_tool"])
+
+            st["seq"] += 1
+
+            tool = {
+                "name": str(payload.get("tool_name") or "tool"),
+                "tool_id": f"submirror:{child_key}:{st['seq']}",
+                "args": {},
+            }
+
+            if preview := str(
+                payload.get("tool_preview") or payload.get("text") or ""
+            ):
+                tool["preview"] = preview
+
+            st["open_tool"] = tool
+
+            _emit("tool.start", csid, tool)
+
+        elif event_type == "subagent.complete":
+            if st["open_tool"]:
+                _emit("tool.complete", csid, st["open_tool"])
+
+            summary = str(payload.get("summary") or payload.get("text") or "")
+
+            _emit("message.complete", csid, {"text": summary})
+
+            _child_mirrors.pop(child_key, None)
 
 
 def _agent_cbs(sid: str) -> dict:
@@ -3374,6 +3496,7 @@ def _init_session(sid: str, key: str, agent, history: list, cols: int = 80):
     _sessions[sid] = {
         "agent": agent,
         "session_key": key,
+        "source": "tui",
         "history": history,
         "history_lock": threading.Lock(),
         "history_version": 0,
@@ -4000,6 +4123,7 @@ def _(rid, params: dict) -> dict:
         "pending_title": title or None,
         "running": False,
         "session_key": key,
+        "source": str(params.get("source") or "tui"),
         "show_reasoning": _load_show_reasoning(),
         "slash_worker": None,
         "tool_progress_mode": _load_tool_progress_mode(),
@@ -4321,6 +4445,7 @@ def _(rid, params: dict) -> dict:
             _init_session(sid, target, agent, history, cols=cols)
 
             if sid in _sessions:
+                _sessions[sid]["source"] = str((found or {}).get("source") or "tui")
                 _sessions[sid]["display_history_prefix"] = display_history_prefix
 
         except Exception as e:
@@ -4769,6 +4894,103 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5007, str(e))
 
 
+
+def _usage_from_session_row(row: dict | None, base: dict | None = None) -> dict:
+    """Build a session.usage payload from the persisted sessions row.
+
+    The live agent counters reset when the dashboard process restarts. The DB row
+    is the durable source for historical token totals.
+    """
+    usage = dict(base or {})
+
+    if not row:
+        return usage
+
+    def n(name: str) -> int:
+        try:
+            return int(row.get(name) or 0)
+        except Exception:
+            return 0
+
+    input_tokens = n("input_tokens")
+    output_tokens = n("output_tokens")
+    cache_read = n("cache_read_tokens")
+    cache_write = n("cache_write_tokens")
+    reasoning = n("reasoning_tokens")
+    total = input_tokens + output_tokens + cache_read + cache_write + reasoning
+
+    if total <= 0:
+        return usage
+
+    usage.update(
+        {
+            "model": row.get("model") or usage.get("model"),
+            "provider": row.get("billing_provider") or usage.get("provider"),
+            "calls": n("api_call_count") or usage.get("calls", 0),
+            "input": input_tokens,
+            "output": output_tokens,
+            "cache_read": cache_read,
+            "cache_write": cache_write,
+            "reasoning": reasoning,
+            "total": total,
+            "cost_usd": (
+                row.get("actual_cost_usd")
+                if row.get("actual_cost_usd") is not None
+                else row.get("estimated_cost_usd")
+            ),
+            "cost_status": row.get("cost_status") or usage.get("cost_status"),
+            "context_used": total,
+        }
+    )
+
+    # Conserva context_max/context_percent del agente vivo si ya venían.
+    ctx_max = usage.get("context_max")
+    try:
+        ctx_max_n = int(ctx_max or 0)
+    except Exception:
+        ctx_max_n = 0
+
+    if ctx_max_n > 0:
+        usage["context_percent"] = min(100, round((total / ctx_max_n) * 100))
+
+    return usage
+
+
+def _session_usage_with_db_fallback(session: dict, params: dict | None = None) -> dict:
+    agent = session.get("agent")
+    live_usage = (
+        _get_usage(agent)
+        if agent is not None
+        else {"calls": 0, "input": 0, "output": 0, "total": 0}
+    )
+
+    try:
+        live_total = int(live_usage.get("total") or 0)
+    except Exception:
+        live_total = 0
+
+    # Si el agente vivo tiene uso real, ese es el dato más fresco.
+    if live_total > 0:
+        return live_usage
+
+    key = (
+        session.get("session_key")
+        or (params or {}).get("session_key")
+        or (params or {}).get("session_id")
+        or ""
+    )
+
+    db = _get_db()
+    if db is None or not key:
+        return live_usage
+
+    try:
+        row = db.get_session(str(key)) or None
+    except Exception:
+        row = None
+
+    return _usage_from_session_row(row, base=live_usage)
+
 @method("session.usage")
 def _(rid, params: dict) -> dict:
 
@@ -4777,16 +4999,7 @@ def _(rid, params: dict) -> dict:
     if err:
         return err
 
-    agent = session.get("agent")
-
-    return _ok(
-        rid,
-        (
-            _get_usage(agent)
-            if agent is not None
-            else {"calls": 0, "input": 0, "output": 0, "total": 0}
-        ),
-    )
+    return _ok(rid, _session_usage_with_db_fallback(session, params))
 
 
 @method("session.status")
@@ -5669,6 +5882,23 @@ def _(rid, params: dict) -> dict:
     if err:
         return err
 
+    session_key = str(session.get("session_key") or "")
+    session_source = str(session.get("source") or "").strip().lower()
+
+    # cron-chat-readonly-v1
+    # Las ejecuciones cron son sesiones automáticas. Se pueden ver desde el chat,
+    # pero no deben convertirse en conversaciones manuales dentro del mismo
+    # agente/historial porque eso puede mezclar contexto de scheduler, estados
+    # automáticos y turnos interactivos.
+    if session_source == "cron" or session_key.startswith("cron_"):
+        return _err(
+            rid,
+            4009,
+            "Esta es una ejecución automática de cron. Puedes revisar el resultado aquí, "
+            "pero para conversar sobre él abre una nueva conversación normal y cita/resume "
+            "lo que quieras analizar. Próximo paso recomendado: añadir botón 'Continuar como chat'.",
+        )
+
     # Re-bind to the current client transport for this request. This keeps
 
     # streaming events on the active websocket even if an earlier disconnect
@@ -5681,6 +5911,18 @@ def _(rid, params: dict) -> dict:
     with session["history_lock"]:
         if session.get("running"):
             return _err(rid, 4009, "session busy")
+
+        # A watch session's run lives in the PARENT turn, so its own running
+        # flag is False — without this, typing mid-run builds a second agent
+        # racing the in-flight child on the same stored session (interleaved
+        # transcript, stale fork). After the run completes, submitting is fine:
+        # the upgrade resumes the child's transcript as a normal conversation.
+        if session.get("lazy") and _child_run_active(
+            str(session.get("session_key") or "")
+        ):
+            return _err(
+                rid, 4009, "subagent still running — wait for it to finish"
+            )
 
         if truncate_user_ordinal is not None:
             try:

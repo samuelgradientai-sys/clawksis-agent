@@ -689,6 +689,9 @@ def load_cli_config() -> Dict[str, Any]:
             "busy_input_mode": "interrupt",
             "persistent_output": True,
             "persistent_output_max_lines": 200,
+            # Print a one-line summary of resolved modal prompts (approval /
+            # clarify) into scrollback so the decision survives the repaint.
+            "persist_prompts": True,
             "skin": "default",
         },
         "clarify": {
@@ -5342,7 +5345,22 @@ class ClawksisCLI:
         self._background_task_counter = 0
 
     def _invalidate(self, min_interval: float = 0.25) -> None:
-        """Throttled UI repaint — prevents terminal blinking on slow/SSH connections."""
+        """Throttled UI repaint for high-frequency background updates.
+
+        Use this for spinner frames, streaming token flushes, and other
+        repaints that can fire many times per second — the throttle prevents
+        terminal blinking on slow/SSH connections, and the resize-recovery
+        guard avoids stamping footer/status-bar chrome into scrollback while a
+        SIGWINCH reflow is in flight.
+
+        Do NOT use this for user-blocking modal prompts (approval / clarify /
+        sudo). Those are rare, one-shot, user-blocking events that must paint
+        immediately; route them through ``self._app.invalidate()`` directly, the
+        same way the modal key-binding handlers already do. Sending a modal's
+        entry paint through this throttle lets an unrelated background repaint
+        within the 250ms window — or an in-flight resize — silently drop it, so
+        the prompt never renders and times out unseen (#41098).
+        """
 
         if getattr(self, "_resize_recovery_pending", False):
             return
@@ -5357,6 +5375,27 @@ class ClawksisCLI:
             self._last_invalidate = now
 
             self._app.invalidate()
+
+    def _paint_now(self) -> None:
+        """Immediate, unthrottled repaint for user-blocking modal prompts.
+
+        Background-thread callbacks (approval / clarify / sudo) set their modal
+        state then call this to make the panel visible at once. It deliberately
+        bypasses the ``_invalidate`` throttle and resize-recovery guard — a
+        modal the user is actively waiting on must never be dropped — mirroring
+        the direct ``event.app.invalidate()`` the modal key-binding handlers
+        already use. See ``_invalidate`` for why the throttle must not gate
+        these paints (#41098).
+        """
+
+        app = getattr(self, "_app", None)
+
+        if app is not None:
+            try:
+                app.invalidate()
+
+            except Exception:
+                pass
 
     def _force_full_redraw(self) -> None:
         """Force a clean full-screen repaint of the prompt_toolkit UI.
@@ -10354,6 +10393,38 @@ class ClawksisCLI:
 
         except Exception:
             pass
+
+    def _discard_session_if_empty(self, session_id) -> bool:
+        """Prune *session_id* iff it never gained resumable content.
+
+        Wiring for the empty-session-hygiene port (gemini-cli#27770): on
+        ``/new`` and on exit we ask the DB to drop a just-ended row that has
+        no messages, no title, and no children. The in-memory transcript is
+        authoritative — if this CLI is still holding ``conversation_history``
+        (a turn that hasn't flushed, or whose flush failed), the row is NOT
+        empty even though the DB shows zero messages, so we refuse to prune.
+
+        Returns ``True`` only when a row was actually deleted. A missing DB,
+        a ``None`` session id, or any DB error is a safe no-op that returns
+        ``False``.
+        """
+
+        if not session_id:
+            return False
+
+        db = getattr(self, "_session_db", None)
+
+        if db is None:
+            return False
+
+        if getattr(self, "conversation_history", None):
+            return False
+
+        try:
+            return bool(db.delete_session_if_empty(session_id))
+
+        except Exception:
+            return False
 
     def new_session(self, silent=False, title=None):
         """Start a fresh session with a new session ID and cleared agent state."""
@@ -18490,6 +18561,33 @@ class ClawksisCLI:
         for line in reqs["details"].split("\n"):
             _cprint(f"    {line}")
 
+    def _persist_prompt_summary(
+        self, icon: str, label: str, detail: str, outcome: str
+    ) -> None:
+        """Print a one-line scrollback summary of a resolved modal prompt.
+
+        Modal panels (approval / clarify) live in the prompt_toolkit layout and
+        vanish on the next repaint, so the question and the decision leave no
+        trace in the terminal scrollback. When display.persist_prompts is on
+        (default), emit a dim single line after the prompt resolves so the
+        decision survives in chat history.
+        """
+
+        if not CLI_CONFIG.get("display", {}).get("persist_prompts", True):
+            return
+
+        detail = " ".join(detail.split())
+
+        if len(detail) > 120:
+            detail = detail[:119] + "…"
+
+        outcome = " ".join(outcome.split())
+
+        if len(outcome) > 120:
+            outcome = outcome[:119] + "…"
+
+        _cprint(f"\n{_DIM}{icon} {label}: {detail} → {outcome}{_RST}")
+
     def _clarify_callback(self, question, choices):
         """
 
@@ -18528,27 +18626,19 @@ class ClawksisCLI:
 
         self._clarify_freetext = is_open_ended
 
-        # Trigger prompt_toolkit repaint from this (non-main) thread
+        # Trigger an immediate prompt_toolkit repaint from this (non-main)
+        # thread. Modal prompts must paint at once and must not be gated by the
+        # _invalidate throttle / resize guard — see _paint_now / _invalidate (#41098).
 
-        self._invalidate()
+        self._paint_now()
 
-        # Poll for the user's response.  The countdown in the hint line
+        # Poll for the user's response. The countdown in the hint line updates
 
-        # updates on each invalidate — but frequent repaints cause visible
+        # on each repaint; refresh it once a second so the timer stays visible
 
-        # flicker in some terminals (Kitty, ghostty).  We only refresh the
+        # while we wait. Selection changes (↑/↓) trigger instant repaints via
 
-        # countdown every 5 s; selection changes (↑/↓) trigger instant
-
-        # Poll for the user's response.  The countdown in the hint line
-
-        # updates on each invalidate — but frequent repaints cause visible
-
-        # flicker in some terminals (Kitty, ghostty).  We only refresh the
-
-        # countdown every 5 s; selection changes (↑/↓) trigger instant
-
-        # repaints via the key bindings.
+        # the key bindings.
 
         _last_countdown_refresh = _time.monotonic()
 
@@ -18558,6 +18648,8 @@ class ClawksisCLI:
 
                 self._clarify_deadline = 0
 
+                self._persist_prompt_summary("?", "Clarify", question, str(result))
+
                 return result
 
             except queue.Empty:
@@ -18566,19 +18658,12 @@ class ClawksisCLI:
                 if remaining <= 0:
                     break
 
-                # Only repaint every 5 s for the countdown — avoids flicker
-
                 now = _time.monotonic()
 
-                if now - _last_countdown_refresh >= 5.0:
+                if now - _last_countdown_refresh >= 1.0:
                     _last_countdown_refresh = now
 
-                    self._invalidate()
-
-                if now - _last_countdown_refresh >= 5.0:
-                    _last_countdown_refresh = now
-
-                    self._invalidate()
+                    self._paint_now()
 
         # Timed out — tear down the UI and let the agent decide
 
@@ -18588,7 +18673,7 @@ class ClawksisCLI:
 
         self._clarify_deadline = 0
 
-        self._invalidate()
+        self._paint_now()
 
         _cprint(
             f"\n{_DIM}(clarify timed out after {timeout}s — agent will decide){_RST}"
@@ -18628,7 +18713,10 @@ class ClawksisCLI:
 
         self._sudo_deadline = _time.monotonic() + timeout
 
-        self._invalidate()
+        # Modal prompt — paint immediately, bypassing the throttle/resize guard
+        # so the prompt can't be dropped and time out unseen (#41098).
+
+        self._paint_now()
 
         while True:
             try:
@@ -18640,7 +18728,7 @@ class ClawksisCLI:
 
                 self._restore_modal_input_snapshot()
 
-                self._invalidate()
+                self._paint_now()
 
                 if result:
                     _cprint(f"\n{_DIM}  ✓ Password received (cached for session){_RST}")
@@ -18656,7 +18744,7 @@ class ClawksisCLI:
                 if remaining <= 0:
                     break
 
-                self._invalidate()
+                self._paint_now()
 
         self._sudo_state = None
 
@@ -18664,7 +18752,7 @@ class ClawksisCLI:
 
         self._restore_modal_input_snapshot()
 
-        self._invalidate()
+        self._paint_now()
 
         _cprint(f"\n{_DIM}  ⏱ Timeout — continuing without sudo{_RST}")
 
@@ -18718,7 +18806,13 @@ class ClawksisCLI:
 
             self._approval_deadline = _time.monotonic() + timeout
 
-            self._invalidate()
+            # Modal prompt — paint immediately, bypassing the throttle/resize
+            # guard. A throttled paint here can be silently dropped (250ms
+            # window collision or in-flight resize), leaving the panel unseen so
+            # the command is denied on timeout without the user ever seeing it
+            # (#41098). The countdown refreshes below paint the same way.
+
+            self._paint_now()
 
             _last_countdown_refresh = _time.monotonic()
 
@@ -18730,7 +18824,21 @@ class ClawksisCLI:
 
                     self._approval_deadline = 0
 
-                    self._invalidate()
+                    self._paint_now()
+
+                    _outcome_labels = {
+                        "once": "allowed once",
+                        "session": "allowed for session",
+                        "always": "added to allowlist",
+                        "deny": "denied",
+                    }
+
+                    self._persist_prompt_summary(
+                        "⚠",
+                        "Approval",
+                        command,
+                        _outcome_labels.get(result, str(result)),
+                    )
 
                     return result
 
@@ -18742,16 +18850,16 @@ class ClawksisCLI:
 
                     now = _time.monotonic()
 
-                    if now - _last_countdown_refresh >= 5.0:
+                    if now - _last_countdown_refresh >= 1.0:
                         _last_countdown_refresh = now
 
-                        self._invalidate()
+                        self._paint_now()
 
             self._approval_state = None
 
             self._approval_deadline = 0
 
-            self._invalidate()
+            self._paint_now()
 
             _cprint(f"\n{_DIM}  ⏱ Timeout — denying command{_RST}")
 
@@ -18931,9 +19039,7 @@ class ClawksisCLI:
 
         title = "⚠️  Dangerous Command"
 
-        cmd_display = (
-            command if show_full or len(command) <= 70 else command[:70] + "..."
-        )
+        cmd_display = command
 
         choice_labels = {
             "once": "Allow once",
@@ -18965,6 +19071,12 @@ class ClawksisCLI:
         # Pre-wrap the mandatory content — command + choices must always render.
 
         cmd_wrapped = _wrap_panel_text(cmd_display, inner_text_width)
+
+        if not show_full and "view" in choices and len(cmd_wrapped) > 4:
+            cmd_wrapped = cmd_wrapped[:3] + _wrap_panel_text(
+                "… (choose Show full command)",
+                inner_text_width,
+            )
 
         # (choice_index, wrapped_line) so we can re-apply selected styling below
 
@@ -19048,9 +19160,10 @@ class ClawksisCLI:
         if len(cmd_wrapped) > max_cmd_rows:
             keep = max(1, max_cmd_rows - 1) if max_cmd_rows > 1 else 1
 
-            cmd_wrapped = cmd_wrapped[:keep] + [
-                "… (command truncated — use /logs or /debug for full text)"
-            ]
+            cmd_wrapped = cmd_wrapped[:keep] + _wrap_panel_text(
+                "… (command truncated — use /logs or /debug for full text)",
+                inner_text_width,
+            )
 
         # Allocate any remaining rows to description. The extra -1 in full mode
 
@@ -19187,7 +19300,10 @@ class ClawksisCLI:
 
         self._secret_deadline = 0
 
-        self._invalidate()
+        # Modal teardown — paint directly so the secret panel clears at once and
+        # isn't held by the _invalidate throttle/resize guard (#41098).
+
+        self._paint_now()
 
     def _cancel_secret_capture(self) -> None:
 

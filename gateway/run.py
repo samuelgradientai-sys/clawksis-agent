@@ -10806,6 +10806,124 @@ class GatewayRunner:
 
         return str(policy or "").strip().lower()
 
+    def _adapter_group_policy(self, platform: Optional[Platform]) -> str:
+        """Best-effort read of an own-policy adapter's effective group policy.
+
+
+
+        Mirrors ``_adapter_dm_policy`` for group traffic. Prefers the live
+        adapter's resolved ``_group_policy`` (which folds in ``config.extra``
+        and the ``<PLATFORM>_GROUP_POLICY`` env var) and falls back to
+        ``config.extra`` for bare runners built without a live adapter.
+
+        """
+
+        if not platform:
+            return ""
+
+        adapters = getattr(self, "adapters", None) or {}
+
+        adapter = adapters.get(platform)
+
+        policy = (
+            getattr(adapter, "_group_policy", None) if adapter is not None else None
+        )
+
+        if policy is None:
+            config = getattr(self, "config", None)
+
+            platform_cfg = (
+                config.platforms.get(platform)
+                if config is not None and hasattr(config, "platforms")
+                else None
+            )
+
+            extra = getattr(platform_cfg, "extra", None) if platform_cfg else None
+
+            if isinstance(extra, dict):
+                policy = extra.get("group_policy")
+
+        return str(policy or "").strip().lower()
+
+    def _adapter_group_has_sender_restriction(
+        self, source: SessionSource
+    ) -> bool:
+        """Whether a per-group ``allow_from`` sender allowlist gates this chat.
+
+
+
+        Own-policy adapters support a ``groups.<chat_id>.allow_from`` (and a
+        ``groups.*.allow_from`` wildcard) sender allowlist that the adapter
+        already enforced at intake. The mere *presence* of such a restriction
+        for the source chat means the adapter applied an actual allowlist gate
+        (not the fail-open ``open`` default), so the gateway may trust it.
+
+        """
+
+        platform = source.platform
+
+        if not platform:
+            return False
+
+        config = getattr(self, "config", None)
+
+        platform_cfg = (
+            config.platforms.get(platform)
+            if config is not None and hasattr(config, "platforms")
+            else None
+        )
+
+        extra = getattr(platform_cfg, "extra", None) if platform_cfg else None
+
+        if not isinstance(extra, dict):
+            return False
+
+        groups = extra.get("groups")
+
+        if not isinstance(groups, dict):
+            return False
+
+        for key in (source.chat_id, "*"):
+            if key is None:
+                continue
+
+            group_cfg = groups.get(key)
+
+            if isinstance(group_cfg, dict) and group_cfg.get("allow_from"):
+                return True
+
+        return False
+
+    def _adapter_trusts_source(self, source: SessionSource) -> bool:
+        """Whether an own-policy adapter's gate authorizes *source*.
+
+
+
+        Trust is granted only when the adapter's effective policy for this
+        chat type is an actual ``allowlist`` restriction (or, for groups, a
+        per-group ``allow_from`` sender allowlist). A reaching message under
+        such a policy *was* allowlisted by the adapter at intake.
+
+        It is NOT granted for ``open`` (forwards everyone — fail-open, which
+        SECURITY.md §2.6 forbids without an explicit allow-all opt-in) or for
+        DM ``pairing`` (the adapter forwards the DM precisely so the gateway
+        can run its pairing handshake; the pairing-store check above already
+        returned False for this sender).
+
+        """
+
+        if not self._adapter_enforces_own_access_policy(source.platform):
+            return False
+
+        if source.chat_type in {"group", "forum"}:
+            if self._adapter_group_policy(source.platform) == "allowlist":
+                return True
+
+            return self._adapter_group_has_sender_restriction(source)
+
+        # DM (and any non-group chat type).
+        return self._adapter_dm_policy(source.platform) == "allowlist"
+
     def _is_user_authorized(self, source: SessionSource) -> bool:
         """
 
@@ -11018,38 +11136,38 @@ class GatewayRunner:
 
             # allow_from / group_allow_from) already gated this message at
 
-            # intake — it would not have reached the gateway otherwise — so
+            # intake. Honor that decision instead of falling through to the
 
-            # honor that decision instead of falling through to the
+            # env-only default-deny below ONLY when the adapter's effective
 
-            # env-only default-deny below, which would silently break
+            # policy for this chat type is an actual ``allowlist`` restriction
 
-            # `dm_policy: open` and config-only allowlists. (#34515)
+            # (or a per-group ``allow_from`` sender allowlist). A reaching
 
-            if self._adapter_enforces_own_access_policy(source.platform):
-                # Exception: `dm_policy: pairing` does NOT authorize at intake.
+            # message under such a policy *was* allowlisted for this sender.
 
-                # The adapter forwards the DM precisely so the gateway can run
+            #
 
-                # its pairing handshake (issue a code, consult the pairing
+            # The adapters' default ``open`` policy forwards *every* sender, so
 
-                # store). The pairing-store approval check above already ran and
+            # trusting it would admit the whole external network with no
 
-                # returned False for this sender, so blanket-trusting the
+            # operator allowlist — the fail-open SECURITY.md §2.6 forbids for
 
-                # adapter here would silently turn pairing mode into open
+            # network-exposed adapters. ``open`` access requires an explicit
 
-                # access. Fall through to default-deny so the unpaired sender is
+            # ``{PLATFORM}_ALLOW_ALL_USERS`` / ``GATEWAY_ALLOW_ALL_USERS``
 
-                # offered a pairing code instead. (Pairing is DM-only; group
+            # opt-in. ``dm_policy: pairing`` is likewise not trusted: the
 
-                # traffic keeps the adapter-trust path.)
+            # adapter forwards the DM precisely so the gateway can run its
 
-                if not (
-                    source.chat_type == "dm"
-                    and self._adapter_dm_policy(source.platform) == "pairing"
-                ):
-                    return True
+            # pairing handshake, and the pairing-store check above already
+
+            # returned False for this sender. (#34515)
+
+            if self._adapter_trusts_source(source):
+                return True
 
             # No allowlists configured -- check global allow-all flag
 

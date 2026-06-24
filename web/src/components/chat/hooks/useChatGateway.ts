@@ -43,7 +43,6 @@ export interface SessionInfo {
   modelProvider: string | null;
   tokensUsed: number;
   tokensMax: number;
-  /** Título en vivo de la conversación, emitido por el gateway en session.info. */
   title: string | null;
 }
 
@@ -154,7 +153,6 @@ export function useChatGateway(): UseChatGatewayResult {
             (payload.model_provider as string) ?? prev.modelProvider,
           tokensUsed: (payload.tokens_used as number) ?? prev.tokensUsed,
           tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
-          title: ((payload.title as string) || null) ?? prev.title,
         }));
         break;
 
@@ -600,8 +598,6 @@ export function useChatGateway(): UseChatGatewayResult {
       setErrorMessage(null);
       // Mostrar ya el header/asociación de la sesión; el composer queda
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
-      // Limpiamos title también para evitar que quede pegado el de la sesión previa
-      // hasta que llegue session.info de la nueva.
       setSession((prev) => ({
         ...prev,
         sessionId: targetId,
@@ -609,7 +605,6 @@ export function useChatGateway(): UseChatGatewayResult {
         modelProvider: null,
         tokensUsed: 0,
         tokensMax: 0,
-        title: null,
       }));
 
       // new-chat-assume-live

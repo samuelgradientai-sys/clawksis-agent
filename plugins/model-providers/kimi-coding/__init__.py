@@ -19,14 +19,20 @@ class KimiProfile(ProviderProfile):
     def build_api_kwargs_extras(
         self, *, reasoning_config: dict | None = None, **context
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Kimi uses extra_body.thinking + top-level reasoning_effort."""
+        """Kimi uses extra_body.thinking XOR top-level reasoning_effort.
+
+        Moonshot's /v1 endpoint rejects requests that carry both
+        ``extra_body.thinking`` and a top-level ``reasoning_effort`` ("cannot
+        specify both 'thinking' and 'reasoning_effort'"). So we emit at most
+        one knob: an explicit, recognized effort sends ``reasoning_effort``
+        alone; every other case falls back to the ``thinking`` toggle alone.
+        """
         extra_body = {}
         top_level = {}
 
         if not reasoning_config or not isinstance(reasoning_config, dict):
-            # No config → thinking enabled, default effort
+            # No config → thinking enabled, let the server pick the depth.
             extra_body["thinking"] = {"type": "enabled"}
-            top_level["reasoning_effort"] = "medium"
             return extra_body, top_level
 
         enabled = reasoning_config.get("enabled", True)
@@ -34,13 +40,13 @@ class KimiProfile(ProviderProfile):
             extra_body["thinking"] = {"type": "disabled"}
             return extra_body, top_level
 
-        # Enabled
-        extra_body["thinking"] = {"type": "enabled"}
+        # Enabled: an explicit recognized effort wins and is sent on its own;
+        # otherwise drop to the thinking toggle so we never pair both.
         effort = (reasoning_config.get("effort") or "").strip().lower()
         if effort in {"low", "medium", "high"}:
             top_level["reasoning_effort"] = effort
         else:
-            top_level["reasoning_effort"] = "medium"
+            extra_body["thinking"] = {"type": "enabled"}
 
         return extra_body, top_level
 
