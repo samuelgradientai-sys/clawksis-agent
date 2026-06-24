@@ -88,7 +88,7 @@ interface UseChatGatewayResult {
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
   readyForRpc: boolean;
   /** Cambiar a otra sesión: muestra el historial al instante y resume en 2do plano. */
-  switchSession: (targetId: string) => Promise<void>;
+  switchSession: (targetId: string, options?: { assumeLive?: boolean }) => Promise<void>;
   /** true mientras se resume una sesión (el agente se está construyendo). */
   resuming: boolean;
   /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
@@ -591,7 +591,7 @@ export function useChatGateway(): UseChatGatewayResult {
 
   const switchSeqRef = useRef(0);
   const switchSession = useCallback(
-    async (targetId: string): Promise<void> => {
+    async (targetId: string, options?: { assumeLive?: boolean }): Promise<void> => {
       if (!targetId) return;
       const mySeq = ++switchSeqRef.current;
       setMessages([]);
@@ -611,6 +611,15 @@ export function useChatGateway(): UseChatGatewayResult {
         tokensMax: 0,
         title: null,
       }));
+
+      // new-chat-assume-live
+      // session.create ya devuelve una sesión viva. Para una conversación nueva
+      // NO hacemos session.resume porque puede fallar con "session not found".
+      // El resume se reserva para sesiones históricas del sidebar.
+      if (options?.assumeLive) {
+        setResuming(false);
+        return;
+      }
 
       // 1) Historial al INSTANTE: lee del DB por HTTP (no construye el agente),
       //    así la conversación aparece sin esperar el build lento del resume.
@@ -662,16 +671,77 @@ export function useChatGateway(): UseChatGatewayResult {
         if (mySeq !== switchSeqRef.current) return;
         // Tokens por conversación + modelo de la sesión resumida.
         const info = resumeResult?.info ?? {};
+
+        // tokens-hydrate-on-switch-v2
+        // Al cambiar de conversación, rehidratamos el contador del header.
+        // Importante: NO cambiamos sessionId visual aquí; sessionId debe seguir
+        // siendo liveSid para que prompt.submit/slash.exec no fallen.
+        const infoForTokens = info as Record<string, unknown>;
+
+        let restoredTokensUsed =
+          Number(
+            infoForTokens.tokens_used ??
+              infoForTokens.total_tokens ??
+              infoForTokens.total ??
+              0,
+          ) || 0;
+
+        let restoredTokensMax =
+          Number(
+            infoForTokens.tokens_max ??
+              infoForTokens.context_max ??
+              0,
+          ) || 0;
+
+        const tryReadUsageSnapshot = async (sid: string) => {
+          try {
+            const usage = (await sendRpc("session.usage", {
+              session_id: sid,
+            })) as Record<string, unknown> | null;
+
+            return {
+              ok: true,
+              total:
+                Number(
+                  usage?.total ??
+                    usage?.total_tokens ??
+                    usage?.tokens_used ??
+                    0,
+                ) || 0,
+              max:
+                Number(
+                  usage?.context_max ??
+                    usage?.tokens_max ??
+                    0,
+                ) || 0,
+            };
+          } catch (usageErr) {
+            console.warn(
+              "[useChatGateway] session.usage failed during token restore",
+              sid,
+              usageErr,
+            );
+            return { ok: false, total: 0, max: 0 };
+          }
+        };
+
+        // Para métricas persistidas puede servir targetId; para sesión viva puede
+        // servir liveSid. Probamos ambos, sin romper el switch si usage falla.
+        for (const sid of Array.from(new Set([targetId, liveSid])).filter(Boolean)) {
+          const usage = await tryReadUsageSnapshot(sid);
+          if (usage.ok && (usage.total > 0 || usage.max > 0)) {
+            restoredTokensUsed = usage.total;
+            restoredTokensMax = usage.max;
+            break;
+          }
+        }
         setSession((prev) => ({
           ...prev,
-          // Mantener targetId como sessionId visible para que el sidebar pueda
-          // resaltar la conversación seleccionada. liveSid puede diferir del
-          // ID listado en el historial y romper el match visual.
-          sessionId: targetId,
+          sessionId: liveSid,
           model: (info.model as string) ?? null,
           modelProvider: (info.model_provider as string) ?? null,
-          tokensUsed: 0,
-          tokensMax: 0,
+          tokensUsed: restoredTokensUsed,
+          tokensMax: restoredTokensMax,
           // El backend devuelve title en info — si no llega, prev.title queda null
           // del paso inmediato anterior, lo cual está bien.
           title: ((info.title as string) || null) ?? prev.title,
