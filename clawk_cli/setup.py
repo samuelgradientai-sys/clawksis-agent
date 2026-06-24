@@ -2432,6 +2432,53 @@ def setup_agent_settings(config: dict):
 # =============================================================================
 
 
+def _profile_name_from_clawk_home(home) -> Optional[str]:
+    """Return the profile name when CLAWK_HOME points at a named profile dir.
+
+    Profile homes live under ``<root>/profiles/<name>`` on every OS. Inspect the
+    path *parts* so Windows-style separators are handled correctly even when the
+    value is a ``PureWindowsPath``. Returns None for the default (non-profile)
+    home so the managed-bot setup falls back to the global account.
+    """
+
+    parts = getattr(home, "parts", ())
+
+    if "profiles" in parts:
+        idx = parts.index("profiles")
+
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+
+    return None
+
+
+def _setup_telegram_auto_result():
+    """Run the automatic managed-bot Telegram setup, scoped to the active
+    profile when CLAWK_HOME is a named profile.
+
+    Returns the :class:`TelegramBotSetupResult` (or None on failure/timeout).
+    """
+
+    from clawk_cli.telegram_managed_bot import auto_setup_telegram_bot_result
+
+    profile_name = _profile_name_from_clawk_home(get_clawk_home())
+
+    return auto_setup_telegram_bot_result(profile_name=profile_name)
+
+
+def _setup_telegram_auto() -> Optional[str]:
+    """Run the automatic managed-bot Telegram setup and persist the token."""
+
+    result = _setup_telegram_auto_result()
+
+    if not result:
+        return None
+
+    save_env_value("TELEGRAM_BOT_TOKEN", result.token)
+
+    return result.token
+
+
 def _setup_telegram():
     """Configure Telegram bot credentials and allowlist."""
 
