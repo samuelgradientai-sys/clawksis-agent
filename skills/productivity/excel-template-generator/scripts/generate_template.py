@@ -5,6 +5,7 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -357,9 +358,11 @@ def main() -> int:
     wb.save(output)
     validate_generated_file(output)
 
+    download_url = "/artifacts/download?path=" + quote(str(output), safe="")
     print(f"OK: archivo generado: {output}")
     print(f"template={args.template}")
     print("macros=none")
+    print(f"download_url={download_url}")
     return 0
 
 
