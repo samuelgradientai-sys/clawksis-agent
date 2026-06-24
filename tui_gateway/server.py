@@ -2687,6 +2687,9 @@ def _on_tool_progress(
         if _kwargs.get("parent_id"):
             payload["parent_id"] = str(_kwargs["parent_id"])
 
+        if _kwargs.get("child_session_id"):
+            payload["child_session_id"] = str(_kwargs["child_session_id"])
+
         if _kwargs.get("depth") is not None:
             payload["depth"] = int(_kwargs["depth"])
 
@@ -2753,6 +2756,124 @@ def _on_tool_progress(
             payload["text"] = str(preview)
 
         _emit(event_type, sid, payload)
+
+        _mirror_subagent_to_child(event_type, payload)
+
+
+# ── Child-session live mirror ────────────────────────────────────────
+# A delegated child is not a live gateway session — it runs synchronously
+# inside the parent's turn, and its activity reaches the gateway only as
+# relayed ``subagent.*`` events on the PARENT sid. When a UI opens the child's
+# own session (session.resume on ``child_session_id``, e.g. the desktop's
+# open-in-new-window), that window would otherwise sit silent until the run
+# persists. Translate the relayed events into the native stream events the
+# window already renders — emitted on the CHILD sid, routed to its transport
+# by write_json — so the window shows a real midstream turn.
+_child_mirrors: dict[str, dict] = {}
+
+_child_mirrors_lock = threading.Lock()
+
+# Stored child session ids with a delegation run currently in flight (refreshed
+# on every relayed subagent.* event, popped on subagent.complete). Lets a lazy
+# watch resume report running=true so the window shows a busy indicator even
+# while the child is silent inside a long tool call (no events for 25s+).
+_active_child_runs: dict[str, float] = {}
+
+# Staleness bound for the registry: entries refresh on every relayed event, so
+# anything this quiet means the completion event was lost (callback raised,
+# parent crashed) — don't let a leaked entry pin "running" forever.
+_CHILD_RUN_STALE_S = 3600.0
+
+
+def _child_run_active(child_key: str) -> bool:
+
+    ts = _active_child_runs.get(child_key)
+
+    return ts is not None and (time.time() - ts) < _CHILD_RUN_STALE_S
+
+
+def _mirror_subagent_to_child(event_type: str, payload: dict) -> None:
+
+    child_key = str(payload.get("child_session_id") or "")
+
+    if not child_key:
+        return
+
+    # Liveness registry first — it must be accurate even when no window is
+    # open, so a window opened mid-run can immediately know the child is busy.
+    if event_type == "subagent.complete":
+        _active_child_runs.pop(child_key, None)
+
+    else:
+        _active_child_runs[child_key] = time.time()
+
+    # Mirror only into a live watch session (keyed by session_key; its live sid
+    # differs from the stored id) that has NOT been upgraded to a full agent.
+    # No window / closed → nothing to mirror; an upgraded session owns a real
+    # native stream and mirroring on top would interleave two turns on one sid.
+    # Either way drop state so a reopened window starts a fresh synthetic turn.
+    live = _find_live_session_by_key(child_key)
+
+    if live is None or live[1].get("agent") is not None:
+        with _child_mirrors_lock:
+            _child_mirrors.pop(child_key, None)
+
+        return
+
+    csid = live[0]
+
+    with _child_mirrors_lock:
+        st = _child_mirrors.setdefault(
+            child_key, {"seq": 0, "open_tool": None, "started": False}
+        )
+
+        if not st["started"]:
+            st["started"] = True
+
+            _emit("message.start", csid)
+
+        if event_type == "subagent.thinking":
+            if text := str(payload.get("text") or ""):
+                _emit("reasoning.delta", csid, {"text": text})
+
+        elif event_type in {"subagent.start", "subagent.progress"}:
+            # Mirror branch-level progress lines so a just-opened child window
+            # shows immediate activity instead of waiting for the next tool or
+            # completion event. This matches the TUI /agents "live branch log"
+            # feel that users expect.
+            if text := str(payload.get("text") or ""):
+                _emit("message.delta", csid, {"text": f"{text}\n"})
+
+        elif event_type == "subagent.tool":
+            if st["open_tool"]:
+                _emit("tool.complete", csid, st["open_tool"])
+
+            st["seq"] += 1
+
+            tool = {
+                "name": str(payload.get("tool_name") or "tool"),
+                "tool_id": f"submirror:{child_key}:{st['seq']}",
+                "args": {},
+            }
+
+            if preview := str(
+                payload.get("tool_preview") or payload.get("text") or ""
+            ):
+                tool["preview"] = preview
+
+            st["open_tool"] = tool
+
+            _emit("tool.start", csid, tool)
+
+        elif event_type == "subagent.complete":
+            if st["open_tool"]:
+                _emit("tool.complete", csid, st["open_tool"])
+
+            summary = str(payload.get("summary") or payload.get("text") or "")
+
+            _emit("message.complete", csid, {"text": summary})
+
+            _child_mirrors.pop(child_key, None)
 
 
 def _agent_cbs(sid: str) -> dict:
@@ -5681,6 +5802,18 @@ def _(rid, params: dict) -> dict:
     with session["history_lock"]:
         if session.get("running"):
             return _err(rid, 4009, "session busy")
+
+        # A watch session's run lives in the PARENT turn, so its own running
+        # flag is False — without this, typing mid-run builds a second agent
+        # racing the in-flight child on the same stored session (interleaved
+        # transcript, stale fork). After the run completes, submitting is fine:
+        # the upgrade resumes the child's transcript as a normal conversation.
+        if session.get("lazy") and _child_run_active(
+            str(session.get("session_key") or "")
+        ):
+            return _err(
+                rid, 4009, "subagent still running — wait for it to finish"
+            )
 
         if truncate_user_ordinal is not None:
             try:

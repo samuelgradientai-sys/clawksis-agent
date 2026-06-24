@@ -10880,6 +10880,7 @@ def _run_npm_install_deterministic(
     *,
     extra_args: tuple[str, ...] = (),
     capture_output: bool = True,
+    env: Optional[dict] = None,
 ) -> subprocess.CompletedProcess:
     """Run a deterministic npm install that does not mutate ``package-lock.json``.
 
@@ -10904,7 +10905,11 @@ def _run_npm_install_deterministic(
     # Those scripts self-skip when a CI env var is set — see
     # node_modules/unicode-animations/scripts/postinstall.cjs (exits early on
     # CI / CONTINUOUS_INTEGRATION / GITHUB_ACTIONS).
-    npm_env = {**os.environ, "CI": "1"}
+    #
+    # An explicit *env* (e.g. carrying an ELECTRON_MIRROR override) takes
+    # precedence over the inherited process environment so the npm child sees
+    # exactly the same overrides the packaged build will use.
+    npm_env = {**os.environ, **(env or {}), "CI": "1"}
 
     lockfile = cwd / "package-lock.json"
 
@@ -11424,6 +11429,13 @@ def _desktop_packaged_executable(desktop_dir: Path) -> Optional[Path]:
     return max(existing, key=lambda p: p.stat().st_mtime)
 
 
+# Public Electron release mirror used as a last-resort fallback when the
+# default GitHub-hosted download is blocked/throttled (a common cause of an
+# otherwise-unexplained packaged-build failure). @electron/get honours
+# ELECTRON_MIRROR; the npmmirror CDN tracks upstream releases 1:1.
+_DEFAULT_ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+
+
 def _electron_download_cache_dirs() -> list[Path]:
     """Return the per-user Electron download cache directories for this OS.
 
@@ -11710,6 +11722,109 @@ def _desktop_linux_sandbox_fixup(packaged_executable: Path) -> bool:
     return True
 
 
+def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
+    """Terminate running packaged-desktop processes that lock the build output.
+
+    On Windows a running ``Clawksis.exe`` (or any process whose executable
+    lives under ``apps/desktop/release/``) holds an exclusive file lock on the
+    unpacked binary, so ``npm run pack`` fails to overwrite it. POSIX lets you
+    unlink a running binary, so this is a no-op off Windows.
+
+    Only processes whose executable resolves to a path *inside* the desktop
+    ``release`` tree are touched — never our own PID, never an unrelated
+    ``Clawksis.exe`` somewhere else on disk. Returns the PIDs that were
+    signalled. Best-effort: never raises (missing psutil / enumeration errors
+    yield an empty list).
+    """
+
+    if sys.platform != "win32":
+        return []
+
+    release_dir = desktop_dir / "release"
+
+    if not release_dir.is_dir():
+        return []
+
+    try:
+        import psutil
+
+    except Exception:
+        return []
+
+    try:
+        release_norm = str(release_dir.resolve()).lower()
+
+    except OSError:
+        release_norm = str(release_dir).lower()
+
+    own_pid = os.getpid()
+
+    victims = []
+
+    try:
+        proc_iter = psutil.process_iter(["pid", "exe"])
+
+    except Exception:
+        return []
+
+    for proc in proc_iter:
+        try:
+            info = proc.info
+
+        except Exception:
+            continue
+
+        pid = info.get("pid")
+
+        exe = info.get("exe")
+
+        if not exe or pid == own_pid:
+            continue
+
+        try:
+            exe_norm = str(Path(exe).resolve()).lower()
+
+        except (OSError, ValueError):
+            exe_norm = str(exe).lower()
+
+        if exe_norm == release_norm or exe_norm.startswith(release_norm + os.sep):
+            victims.append(proc)
+
+    if not victims:
+        return []
+
+    for proc in victims:
+        try:
+            proc.terminate()
+
+        except Exception:
+            pass
+
+    try:
+        _gone, alive = psutil.wait_procs(victims, timeout=5)
+
+    except Exception:
+        alive = []
+
+    for proc in alive:
+        try:
+            proc.kill()
+
+        except Exception:
+            pass
+
+    stopped = []
+
+    for proc in victims:
+        try:
+            stopped.append(int(proc.pid))
+
+        except Exception:
+            continue
+
+    return stopped
+
+
 def cmd_gui(args: argparse.Namespace):
     """Build and launch the native Electron desktop GUI."""
 
@@ -11837,7 +11952,7 @@ def cmd_gui(args: argparse.Namespace):
             print("→ Installing desktop workspace dependencies...")
 
             install_result = _run_npm_install_deterministic(
-                npm, PROJECT_ROOT, capture_output=False
+                npm, PROJECT_ROOT, capture_output=False, env=None
             )
 
             if install_result.returncode != 0:
@@ -11898,6 +12013,29 @@ def cmd_gui(args: argparse.Namespace):
                         [npm, "run", build_script],
                         cwd=desktop_dir,
                         env=env,
+                        check=False,
+                    )
+
+                elif not env.get("ELECTRON_MIRROR"):
+                    # Purge cleared nothing → not a corrupt-cache problem. The
+                    # most common remaining cause is a blocked/throttled GitHub
+                    # release download (@electron/get pulls the distribution zip
+                    # from github.com by default). Retry once against a public
+                    # Electron mirror so a GitHub-blocked download self-heals.
+                    # Only do this when the user hasn't pinned their own
+                    # ELECTRON_MIRROR — their choice wins and we never override it.
+                    mirror_env = dict(env)
+
+                    mirror_env["ELECTRON_MIRROR"] = _DEFAULT_ELECTRON_MIRROR
+
+                    print(
+                        f"  ⚠ Desktop build failed; retrying once via Electron mirror {_DEFAULT_ELECTRON_MIRROR} ..."
+                    )
+
+                    build_result = subprocess.run(
+                        [npm, "run", build_script],
+                        cwd=desktop_dir,
+                        env=mirror_env,
                         check=False,
                     )
 

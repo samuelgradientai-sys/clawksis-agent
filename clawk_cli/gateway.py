@@ -3582,6 +3582,42 @@ def _normalize_service_definition(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.strip().splitlines())
 
 
+# Directives that newer clawk units emit but that older systemd versions
+# silently drop when they are not supported.  Comparing raw text would then
+# perpetually flag the installed unit as stale, so strip these before the
+# staleness comparison.
+_OPTIONAL_SYSTEMD_DIRECTIVES = (
+    "RestartMaxDelaySec",
+    "RestartSteps",
+)
+
+
+def _strip_optional_systemd_directives(text: str) -> str:
+    """Remove optional systemd directives that older systemd silently drops.
+
+    Only assignment lines (``Directive=...``) are removed; comments that
+    merely mention the directive name are preserved.
+    """
+
+    kept: list[str] = []
+
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if any(
+            stripped.startswith(directive + "=")
+            for directive in _OPTIONAL_SYSTEMD_DIRECTIVES
+        ):
+            continue
+        kept.append(line)
+
+    result = "\n".join(kept)
+
+    if text.endswith("\n") and result:
+        result += "\n"
+
+    return result
+
+
 def _normalize_launchd_plist_for_comparison(text: str) -> str:
     """Normalize launchd plist text for staleness checks.
 
@@ -3622,9 +3658,14 @@ def systemd_unit_is_current(system: bool = False) -> bool:
 
     expected = generate_systemd_unit(system=system, run_as_user=expected_user)
 
-    return _normalize_service_definition(installed) == _normalize_service_definition(
-        expected
+    norm_installed = _normalize_service_definition(
+        _strip_optional_systemd_directives(installed)
     )
+    norm_expected = _normalize_service_definition(
+        _strip_optional_systemd_directives(expected)
+    )
+
+    return norm_installed == norm_expected
 
 
 def refresh_systemd_unit_if_needed(system: bool = False) -> bool:

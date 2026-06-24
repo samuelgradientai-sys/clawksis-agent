@@ -7781,6 +7781,25 @@ class DiscordAdapter(BasePlatformAdapter):
 # ---------------------------------------------------------------------------
 
 
+def _component_allow_all_enabled() -> bool:
+    """Whether open access to component buttons was explicitly opted into.
+
+    Mirrors the slash/on_message gates: ``DISCORD_ALLOW_ALL_USERS`` (the
+    per-platform opt-in) or ``GATEWAY_ALLOW_ALL_USERS`` (the gateway-wide
+    opt-in) must be truthy for an unconfigured deployment to allow any
+    user to click a component button. Absent these, the component surface
+    fails closed.
+    """
+
+    truthy = {"true", "1", "yes", "on"}
+
+    for env_name in ("DISCORD_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS"):
+        if os.getenv(env_name, "").strip().lower() in truthy:
+            return True
+
+    return False
+
+
 def _component_check_auth(
     interaction,
     allowed_user_ids: Optional[set],
@@ -7832,16 +7851,30 @@ def _component_check_auth(
 
     """
 
-    user_set = allowed_user_ids or set()
+    user_set = set(allowed_user_ids or set())
 
-    role_set = allowed_role_ids or set()
+    role_set = set(allowed_role_ids or set())
+
+    # Fold the gateway-wide user allowlist into the per-view user set so a
+    # ``GATEWAY_ALLOWED_USERS`` policy authorizes component clicks even when
+    # the view was constructed without explicit ``allowed_user_ids``.
+    global_allowlist = os.getenv("GATEWAY_ALLOWED_USERS", "").strip()
+
+    if global_allowlist:
+        user_set |= {
+            entry.strip() for entry in global_allowlist.split(",") if entry.strip()
+        }
 
     has_users = bool(user_set)
 
     has_roles = bool(role_set)
 
     if not has_users and not has_roles:
-        return True
+        # No allowlist policy is configured. Fail closed unless an operator
+        # has explicitly opted into open access via an allow-all env var.
+        # This mirrors the slash/on_message gates so role-only deployments
+        # (and unconfigured ones) cannot leave the component surface open.
+        return _component_allow_all_enabled()
 
     user = getattr(interaction, "user", None)
 
@@ -7854,6 +7887,10 @@ def _component_check_auth(
 
         except AttributeError:
             uid = ""
+
+        # Explicit wildcard entry authorizes any user.
+        if "*" in user_set:
+            return True
 
         if uid and uid in user_set:
             return True
