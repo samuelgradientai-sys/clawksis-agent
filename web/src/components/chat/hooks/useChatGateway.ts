@@ -43,6 +43,8 @@ export interface SessionInfo {
   modelProvider: string | null;
   tokensUsed: number;
   tokensMax: number;
+  /** Título en vivo de la conversación, emitido por el gateway en session.info. */
+  title: string | null;
 }
 
 interface JsonRpcRequest {
@@ -102,6 +104,7 @@ export function useChatGateway(): UseChatGatewayResult {
     modelProvider: null,
     tokensUsed: 0,
     tokensMax: 0,
+    title: null,
   });
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -151,6 +154,7 @@ export function useChatGateway(): UseChatGatewayResult {
             (payload.model_provider as string) ?? prev.modelProvider,
           tokensUsed: (payload.tokens_used as number) ?? prev.tokensUsed,
           tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
+          title: ((payload.title as string) || null) ?? prev.title,
         }));
         break;
 
@@ -596,6 +600,8 @@ export function useChatGateway(): UseChatGatewayResult {
       setErrorMessage(null);
       // Mostrar ya el header/asociación de la sesión; el composer queda
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
+      // Limpiamos title también para evitar que quede pegado el de la sesión previa
+      // hasta que llegue session.info de la nueva.
       setSession((prev) => ({
         ...prev,
         sessionId: targetId,
@@ -603,6 +609,7 @@ export function useChatGateway(): UseChatGatewayResult {
         modelProvider: null,
         tokensUsed: 0,
         tokensMax: 0,
+        title: null,
       }));
 
       // 1) Historial al INSTANTE: lee del DB por HTTP (no construye el agente),
@@ -657,11 +664,17 @@ export function useChatGateway(): UseChatGatewayResult {
         const info = resumeResult?.info ?? {};
         setSession((prev) => ({
           ...prev,
-          sessionId: liveSid,
+          // Mantener targetId como sessionId visible para que el sidebar pueda
+          // resaltar la conversación seleccionada. liveSid puede diferir del
+          // ID listado en el historial y romper el match visual.
+          sessionId: targetId,
           model: (info.model as string) ?? null,
           modelProvider: (info.model_provider as string) ?? null,
           tokensUsed: 0,
           tokensMax: 0,
+          // El backend devuelve title en info — si no llega, prev.title queda null
+          // del paso inmediato anterior, lo cual está bien.
+          title: ((info.title as string) || null) ?? prev.title,
         }));
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);

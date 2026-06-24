@@ -125,7 +125,7 @@ function SessionItem({
         className={
           "flex w-full flex-col gap-0.5 rounded px-2 py-1.5 pr-7 text-left transition-colors " +
           (isActive
-            ? "bg-[#6C4FD6]/20 text-foreground ring-1 ring-inset ring-[#6C4FD6]/50"
+            ? "bg-[#6C4FD6]/30 text-foreground ring-2 ring-inset ring-[#6C4FD6] shadow-sm"
             : "text-muted-foreground hover:bg-muted/30 hover:text-foreground")
         }
       >
