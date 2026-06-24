@@ -9069,9 +9069,11 @@ async def prune_checkpoints():
 class SkillInstallRequest(BaseModel):
     identifier: str
 
+    profile: Optional[str] = None
+
 
 @app.post("/api/skills/hub/install")
-async def install_skill_hub(body: SkillInstallRequest):
+async def install_skill_hub(body: SkillInstallRequest, profile: Optional[str] = None):
 
     identifier = (body.identifier or "").strip()
 
@@ -9079,7 +9081,14 @@ async def install_skill_hub(body: SkillInstallRequest):
         raise HTTPException(status_code=400, detail="identifier is required")
 
     try:
-        proc = _spawn_clawk_action(["skills", "install", identifier], "skills-install")
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["skills", "install", identifier, "--yes"],
+            "skills-install",
+        )
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("Failed to spawn skills install")
@@ -9966,19 +9975,22 @@ class SkillToggle(BaseModel):
 
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/skills")
-async def get_skills():
+async def get_skills(profile: Optional[str] = None):
 
     from tools.skills_tool import _find_all_skills
 
     from clawk_cli.skills_config import get_disabled_skills
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    skills = _find_all_skills(skip_disabled=True)
+        skills = _find_all_skills(skip_disabled=True)
 
     for s in skills:
         s["enabled"] = s["name"] not in disabled
@@ -9987,27 +9999,28 @@ async def get_skills():
 
 
 @app.put("/api/skills/toggle")
-async def toggle_skill(body: SkillToggle):
+async def toggle_skill(body: SkillToggle, profile: Optional[str] = None):
 
     from clawk_cli.skills_config import get_disabled_skills, save_disabled_skills
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    if body.enabled:
-        disabled.discard(body.name)
+        if body.enabled:
+            disabled.discard(body.name)
 
-    else:
-        disabled.add(body.name)
+        else:
+            disabled.add(body.name)
 
-    save_disabled_skills(config, disabled)
+        save_disabled_skills(config, disabled)
 
     return {"ok": True, "name": body.name, "enabled": body.enabled}
 
 
 @app.get("/api/tools/toolsets")
-async def get_toolsets():
+async def get_toolsets(profile: Optional[str] = None):
 
     from clawk_cli.tools_config import (
         _get_effective_configurable_toolsets,
@@ -10018,13 +10031,14 @@ async def get_toolsets():
 
     from toolsets import resolve_toolset
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    enabled_toolsets = _get_platform_tools(
-        config,
-        "cli",
-        include_default_mcp_servers=False,
-    )
+        enabled_toolsets = _get_platform_tools(
+            config,
+            "cli",
+            include_default_mcp_servers=False,
+        )
 
     result = []
 
@@ -10053,9 +10067,11 @@ async def get_toolsets():
 class ToolsetToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/tools/toolsets/{name}")
-async def toggle_toolset(name: str, body: ToolsetToggle):
+async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] = None):
     """Enable/disable a configurable toolset for the desktop (cli) platform.
 
 
@@ -10064,7 +10080,7 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
 
     helper the CLI ``clawk tools`` picker uses, so the GUI and CLI stay in
 
-    lockstep. Returns 400 for unknown toolset keys.
+    lockstep. Returns 400 for unknown toolset keys, 404 for unknown profile.
 
     """
 
@@ -10079,17 +10095,20 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
     if name not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    enabled = set(_get_platform_tools(config, "cli", include_default_mcp_servers=False))
+        enabled = set(
+            _get_platform_tools(config, "cli", include_default_mcp_servers=False)
+        )
 
-    if body.enabled:
-        enabled.add(name)
+        if body.enabled:
+            enabled.add(name)
 
-    else:
-        enabled.discard(name)
+        else:
+            enabled.discard(name)
 
-    _save_platform_tools(config, "cli", enabled)
+        _save_platform_tools(config, "cli", enabled)
 
     return {"ok": True, "name": name, "enabled": body.enabled}
 
