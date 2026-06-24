@@ -626,7 +626,21 @@ def _print_setup_summary(config: dict, clawk_home):
             missing_browser_hint = "CAMOFOX_URL"
 
         elif browser_provider == "Local browser":
-            missing_browser_hint = "npm install -g agent-browser"
+            # Distinguish the two local failure modes: the agent-browser CLI
+            # missing entirely vs. present-but-without-a-Chromium-engine. The
+            # latter is the common case (npm install but never ran the browser
+            # download), and the right fix is to fetch the engine, not reinstall
+            # the CLI. Mirrors tools.browser_tool.check_browser_requirements.
+            from clawk_cli.nous_subscription import (
+                _has_agent_browser,
+                _local_browser_runtime_ready,
+            )
+
+            if _has_agent_browser() and not _local_browser_runtime_ready():
+                missing_browser_hint = "agent-browser install --with-deps"
+
+            else:
+                missing_browser_hint = "npm install -g agent-browser"
 
         tool_status.append(("Browser Automation", False, missing_browser_hint))
 

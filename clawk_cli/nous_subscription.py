@@ -211,6 +211,31 @@ def _has_agent_browser() -> bool:
     return bool(agent_browser_bin or local_bin.exists())
 
 
+def _local_browser_runtime_ready() -> bool:
+    """Whether the *local* browser engine can actually launch.
+
+    Having the ``agent-browser`` CLI on PATH is necessary but not sufficient:
+    the default Chrome engine needs a Chromium build on disk (the Lightpanda
+    text engine does not). Mirror the runtime gate in
+    ``tools.browser_tool.check_browser_requirements`` so the setup summary does
+    not advertise a local browser that would hang on first use. Cloud providers
+    host their own Chromium, so this gate is applied only to local mode.
+    """
+
+    try:
+        from tools.browser_tool import (
+            _chromium_installed,
+            _using_lightpanda_engine,
+        )
+
+        return bool(_using_lightpanda_engine() or _chromium_installed())
+
+    except Exception:
+        # If the probe can't be imported, stay permissive — the runtime check
+        # still guards actual execution.
+        return True
+
+
 def _browser_label(current_provider: str) -> str:
 
     mapping = {
@@ -244,6 +269,7 @@ def _resolve_browser_feature_state(
     browser_provider: str,
     browser_provider_explicit: bool,
     browser_local_available: bool,
+    local_runtime_ready: bool,
     direct_camofox: bool,
     direct_browserbase: bool,
     direct_browser_use: bool,
@@ -293,7 +319,7 @@ def _resolve_browser_feature_state(
 
         current_provider = "local"
 
-        available = bool(browser_local_available)
+        available = bool(browser_local_available and local_runtime_ready)
 
         active = bool(browser_tool_enabled and available)
 
@@ -320,7 +346,7 @@ def _resolve_browser_feature_state(
 
         return "browserbase", available, active, False
 
-    available = bool(browser_local_available)
+    available = bool(browser_local_available and local_runtime_ready)
 
     active = bool(browser_tool_enabled and available)
 
@@ -622,6 +648,8 @@ def get_nous_subscription_features(
 
     browser_local_available = _has_agent_browser()
 
+    local_runtime_ready = _local_browser_runtime_ready()
+
     (
         browser_current_provider,
         browser_available,
@@ -632,6 +660,7 @@ def get_nous_subscription_features(
         browser_provider=browser_provider,
         browser_provider_explicit=browser_provider_explicit,
         browser_local_available=browser_local_available,
+        local_runtime_ready=local_runtime_ready,
         direct_camofox=direct_camofox,
         direct_browserbase=direct_browserbase,
         direct_browser_use=direct_browser_use,
