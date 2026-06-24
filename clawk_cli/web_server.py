@@ -18,7 +18,7 @@ Usage:
 
 """
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 
 import asyncio
@@ -836,6 +836,7 @@ CONFIG_SCHEMA = _ordered_schema
 
 class ConfigUpdate(BaseModel):
     config: dict
+    profile: Optional[str] = None
 
 
 class EnvVarUpdate(BaseModel):
@@ -843,9 +844,13 @@ class EnvVarUpdate(BaseModel):
 
     value: str
 
+    profile: Optional[str] = None
+
 
 class EnvVarDelete(BaseModel):
     key: str
+
+    profile: Optional[str] = None
 
 
 class EnvVarReveal(BaseModel):
@@ -926,6 +931,14 @@ class ModelAssignment(BaseModel):
     # the path that actually wires a local endpoint into resolution.
 
     base_url: str = ""
+
+    # Accepted (and ignored by this inline handler) so the GUI's expensive-model
+    # confirmation round-trip doesn't 422; the model write itself is unaffected.
+    confirm_expensive_model: bool = False
+
+    # When set, scope the config write to this profile's CLAWK_HOME instead of
+    # the dashboard process's own profile (machine-level profile switcher).
+    profile: Optional[str] = None
 
 
 def _apply_main_model_assignment(
@@ -1670,6 +1683,7 @@ _ACTION_LOG_FILES: Dict[str, str] = {
     "prompt-size": "action-prompt-size.log",
     "dump": "action-dump.log",
     "config-migrate": "action-config-migrate.log",
+    "tools-post-setup": "action-tools-post-setup.log",
 }
 
 
@@ -2628,9 +2642,10 @@ def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/config")
-async def get_config():
+async def get_config(profile: Optional[str] = None):
 
-    config = _normalize_config_for_web(load_config())
+    with _profile_scope(profile):
+        config = _normalize_config_for_web(load_config())
 
     # Strip internal keys that the frontend shouldn't see or send back
 
@@ -2660,7 +2675,7 @@ _EMPTY_MODEL_INFO: dict = {
 
 
 @app.get("/api/model/info")
-def get_model_info():
+def get_model_info(profile: Optional[str] = None):
     """Return resolved model metadata for the currently configured model.
 
 
@@ -2674,7 +2689,8 @@ def get_model_info():
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         model_cfg = cfg.get("model", "")
 
@@ -2758,6 +2774,11 @@ def get_model_info():
             "capabilities": caps,
         }
 
+    except HTTPException:
+        # Unknown/invalid profile → propagate the 404 instead of masking it
+        # as a silently-empty "no model set" payload.
+        raise
+
     except Exception:
         _log.exception("GET /api/model/info failed")
 
@@ -2795,7 +2816,7 @@ _AUX_TASK_SLOTS: Tuple[str, ...] = (
 
 
 @app.get("/api/model/options")
-def get_model_options():
+def get_model_options(profile: Optional[str] = None):
     """Return authenticated providers + their curated model lists.
 
 
@@ -2808,14 +2829,26 @@ def get_model_options():
 
     can share the same types.
 
+
+
+    ``profile`` scopes the picker context (current model/provider, custom
+
+    providers from config, per-profile .env auth state) so the Models page
+
+    reads the SAME profile /api/model/set writes.
+
     """
 
     try:
         from clawk_cli.inventory import build_models_payload, load_picker_context
 
-        return build_models_payload(
-            load_picker_context(), max_models=50, pricing=True, capabilities=True
-        )
+        with _profile_scope(profile):
+            return build_models_payload(
+                load_picker_context(), max_models=50, pricing=True, capabilities=True
+            )
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("GET /api/model/options failed")
@@ -2929,7 +2962,7 @@ def get_recommended_default_model(provider: str = ""):
 
 
 @app.get("/api/model/auxiliary")
-def get_auxiliary_models():
+def get_auxiliary_models(profile: Optional[str] = None):
     """Return current auxiliary task assignments.
 
 
@@ -2950,10 +2983,17 @@ def get_auxiliary_models():
 
       }
 
+    ``profile`` scopes the read — without it, the Models page would show the
+
+    dashboard profile's auxiliary pins while /api/model/set wrote the selected
+
+    profile's (read/write asymmetry).
+
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         aux_cfg = cfg.get("auxiliary", {})
 
@@ -2987,6 +3027,9 @@ def get_auxiliary_models():
 
         return {"tasks": tasks, "main": main}
 
+    except HTTPException:
+        raise
+
     except Exception:
         _log.exception("GET /api/model/auxiliary failed")
 
@@ -2994,7 +3037,7 @@ def get_auxiliary_models():
 
 
 @app.post("/api/model/set")
-async def set_model_assignment(body: ModelAssignment):
+async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = None):
     """Assign a model to the main slot or an auxiliary task slot.
 
 
@@ -3004,6 +3047,12 @@ async def set_model_assignment(body: ModelAssignment):
     The currently running chat PTY (if any) is not affected; use the
 
     ``/model`` slash command inside a chat to hot-swap that specific session.
+
+
+
+    ``profile`` scopes the config write to the selected profile's CLAWK_HOME
+
+    so the machine-level profile switcher targets the same profile its reads do.
 
     """
 
@@ -3021,6 +3070,22 @@ async def set_model_assignment(body: ModelAssignment):
         raise HTTPException(
             status_code=400, detail="scope must be 'main' or 'auxiliary'"
         )
+
+    # Scope load_config/save_config to the requested profile via the
+    # context-local CLAWK_HOME override (same mechanism as _write_profile_model).
+    # Resolved BEFORE the try so an unknown profile surfaces a clean 404 rather
+    # than a 500. The body runs synchronously (no await), so the contextvar
+    # override stays valid for its entire duration.
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    _profile_token = None
+
+    _requested_profile = (body.profile or profile or "").strip()
+
+    if _requested_profile and _requested_profile.lower() != "current":
+        _profile_dir = _resolve_profile_dir(_requested_profile)
+
+        _profile_token = set_clawk_home_override(str(_profile_dir))
 
     try:
         cfg = load_config()
@@ -3165,6 +3230,10 @@ async def set_model_assignment(body: ModelAssignment):
 
         raise HTTPException(status_code=500, detail="Failed to save model assignment")
 
+    finally:
+        if _profile_token is not None:
+            reset_clawk_home_override(_profile_token)
+
 
 def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
     """Reverse _normalize_config_for_web before saving.
@@ -3250,12 +3319,16 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.put("/api/config")
-async def update_config(body: ConfigUpdate):
+async def update_config(body: ConfigUpdate, profile: Optional[str] = None):
 
     try:
-        save_config(_denormalize_config_from_web(body.config))
+        with _profile_scope(body.profile or profile):
+            save_config(_denormalize_config_from_web(body.config))
 
         return {"ok": True}
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("PUT /api/config failed")
@@ -3264,9 +3337,10 @@ async def update_config(body: ConfigUpdate):
 
 
 @app.get("/api/env")
-async def get_env_vars():
+async def get_env_vars(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
     channel_keys = _channel_managed_env_keys()
 
@@ -3294,12 +3368,16 @@ async def get_env_vars():
 
 
 @app.put("/api/env")
-async def set_env_var(body: EnvVarUpdate):
+async def set_env_var(body: EnvVarUpdate, profile: Optional[str] = None):
 
     try:
-        save_env_value(body.key, body.value)
+        with _profile_scope(body.profile or profile):
+            save_env_value(body.key, body.value)
 
         return {"ok": True, "key": body.key}
+
+    except HTTPException:
+        raise
 
     except ValueError as exc:
         # save_env_value raises ValueError for invalid names and for keys
@@ -3487,10 +3565,11 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
 
 
 @app.delete("/api/env")
-async def remove_env_var(body: EnvVarDelete):
+async def remove_env_var(body: EnvVarDelete, profile: Optional[str] = None):
 
     try:
-        removed = remove_env_value(body.key)
+        with _profile_scope(body.profile or profile):
+            removed = remove_env_value(body.key)
 
         if not removed:
             raise HTTPException(status_code=404, detail=f"{body.key} not found in .env")
@@ -7533,6 +7612,8 @@ class MCPServerCreate(BaseModel):
 
     auth: Optional[str] = None
 
+    profile: Optional[str] = None
+
 
 def _coerce_mapping(value: Any) -> Dict[str, Any]:
     """Best-effort coerce a config value into a dict.
@@ -7616,11 +7697,12 @@ def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/mcp/servers")
-async def list_mcp_servers():
+async def list_mcp_servers(profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     return {
         "servers": [
@@ -7630,7 +7712,7 @@ async def list_mcp_servers():
 
 
 @app.post("/api/mcp/servers")
-async def add_mcp_server(body: MCPServerCreate):
+async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers, _save_mcp_server
 
@@ -7639,7 +7721,10 @@ async def add_mcp_server(body: MCPServerCreate):
     if not name:
         raise HTTPException(status_code=400, detail="Server name is required")
 
-    if name in _get_mcp_servers():
+    with _profile_scope(body.profile or profile):
+        existing = _get_mcp_servers()
+
+    if name in existing:
         raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
 
     if not body.url and not body.command:
@@ -7666,7 +7751,11 @@ async def add_mcp_server(body: MCPServerCreate):
         server_config["auth"] = body.auth
 
     try:
-        _save_mcp_server(name, server_config)
+        with _profile_scope(body.profile or profile):
+            _save_mcp_server(name, server_config)
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("POST /api/mcp/servers failed")
@@ -7677,33 +7766,49 @@ async def add_mcp_server(body: MCPServerCreate):
 
 
 @app.delete("/api/mcp/servers/{name}")
-async def remove_mcp_server(name: str):
+async def remove_mcp_server(name: str, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _remove_mcp_server
 
-    if not _remove_mcp_server(name):
+    with _profile_scope(profile):
+        removed = _remove_mcp_server(name)
+
+    if not removed:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
     return {"ok": True}
 
 
 @app.post("/api/mcp/servers/{name}/test")
-async def test_mcp_server(name: str):
+async def test_mcp_server(name: str, profile: Optional[str] = None):
     """Connect to the server, list its tools, disconnect.  Returns tool list."""
 
     from clawk_cli.mcp_config import _get_mcp_servers, _probe_single_server
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     if name not in servers:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+
+    def _probe_scoped():
+        # Re-enter the scope INSIDE the worker thread so call-time resolution
+
+        # during the probe (env-placeholder expansion reading the profile's
+
+        # .env) sees the selected profile, matching the config the server was
+
+        # saved into.
+
+        with _profile_scope(profile):
+            return _probe_single_server(name, servers[name])
 
     try:
         # Probe blocks on a dedicated MCP event loop — run in a thread so the
 
         # FastAPI event loop is never blocked.
 
-        tools = await asyncio.to_thread(_probe_single_server, name, servers[name])
+        tools = await asyncio.to_thread(_probe_scoped)
 
     except Exception as exc:
         return {
@@ -7721,9 +7826,13 @@ async def test_mcp_server(name: str):
 class MCPEnabledToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/mcp/servers/{name}/enabled")
-async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
+async def set_mcp_server_enabled(
+    name: str, body: MCPEnabledToggle, profile: Optional[str] = None
+):
     """Enable or disable an MCP server (takes effect on next session/gateway).
 
 
@@ -7736,25 +7845,26 @@ async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
 
     """
 
-    cfg = load_config()
+    with _profile_scope(body.profile or profile):
+        cfg = load_config()
 
-    servers = cfg.get("mcp_servers")
+        servers = cfg.get("mcp_servers")
 
-    if not isinstance(servers, dict) or name not in servers:
-        raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+        if not isinstance(servers, dict) or name not in servers:
+            raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
-    if not isinstance(servers[name], dict):
-        raise HTTPException(status_code=400, detail="Malformed server config")
+        if not isinstance(servers[name], dict):
+            raise HTTPException(status_code=400, detail="Malformed server config")
 
-    servers[name]["enabled"] = bool(body.enabled)
+        servers[name]["enabled"] = bool(body.enabled)
 
-    save_config(cfg)
+        save_config(cfg)
 
     return {"ok": True, "name": name, "enabled": bool(body.enabled)}
 
 
 @app.get("/api/mcp/catalog")
-async def list_mcp_catalog():
+async def list_mcp_catalog(profile: Optional[str] = None):
     """Browse the Nous-approved MCP catalog (the optional-mcps/ manifests).
 
 
@@ -7763,7 +7873,11 @@ async def list_mcp_catalog():
 
     can show install / enabled state inline.  This is the same catalog
 
-    `clawk mcp catalog` / `clawk mcp install` read.
+    `clawk mcp catalog` / `clawk mcp install` read.  ``profile`` scopes the
+
+    installed/enabled annotations (the catalog itself is repo-shipped and
+
+    identical for every profile).
 
     """
 
@@ -7778,24 +7892,29 @@ async def list_mcp_catalog():
     entries = []
 
     try:
-        for entry in mcp_catalog.list_catalog():
-            auth = entry.auth
+        with _profile_scope(profile):
+            for entry in mcp_catalog.list_catalog():
+                auth = entry.auth
 
-            entries.append({
-                "name": entry.name,
-                "description": entry.description,
-                "source": entry.source,
-                "transport": entry.transport.type,
-                "auth_type": getattr(auth, "type", "none"),
-                # Env vars the user must supply (names + prompts only, never values).
-                "required_env": [
-                    {"name": e.name, "prompt": e.prompt, "required": e.required}
-                    for e in getattr(auth, "env", []) or []
-                ],
-                "needs_install": entry.install is not None,
-                "installed": mcp_catalog.is_installed(entry.name),
-                "enabled": mcp_catalog.is_enabled(entry.name),
-            })
+                entries.append({
+                    "name": entry.name,
+                    "description": entry.description,
+                    "source": entry.source,
+                    "transport": entry.transport.type,
+                    "auth_type": getattr(auth, "type", "none"),
+                    # Env vars the user must supply (names + prompts only, never values).
+                    "required_env": [
+                        {"name": e.name, "prompt": e.prompt, "required": e.required}
+                        for e in getattr(auth, "env", []) or []
+                    ],
+                    "needs_install": entry.install is not None,
+                    "installed": mcp_catalog.is_installed(entry.name),
+                    "enabled": mcp_catalog.is_enabled(entry.name),
+                })
+
+    except HTTPException:
+        # Unknown/invalid profile → 404, not a silently-empty catalog.
+        raise
 
     except Exception:
         _log.exception("list_mcp_catalog failed")
@@ -9251,6 +9370,123 @@ def _resolve_profile_dir(name: str) -> Path:
     return profiles_mod.get_profile_dir(name)
 
 
+def _profile_cli_args(profile: Optional[str]) -> List[str]:
+    """Return ``["-p", <name>]`` for a validated non-default profile.
+
+    Hub install/uninstall/update and tools post-setup run in a fresh ``clawk``
+    subprocess; ``-p`` in the child's argv is the only mechanism that reaches
+    import-time-bound globals like ``skills_hub.SKILLS_DIR``. Empty/"current"/
+    "default" means the dashboard's own profile (no args, legacy behavior).
+    Raises HTTPException(404) for an unknown profile.
+    """
+
+    requested = (profile or "").strip()
+
+    if not requested or requested.lower() in {"current", "default"}:
+        return []
+
+    from clawk_cli import profiles as profiles_mod
+
+    _resolve_profile_dir(requested)
+
+    return ["-p", profiles_mod.normalize_profile_name(requested)]
+
+
+_SKILLS_PROFILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _profile_scope(profile: Optional[str]):
+    """Scope config + skill-directory resolution to ``profile`` for one request.
+
+    Two seams must be redirected for skills/toolsets endpoints:
+
+    1. ``load_config``/``save_config`` resolve ``get_clawk_home()`` at call
+       time — the context-local override from ``set_clawk_home_override``
+       reaches them (same pattern as ``_write_profile_model``).
+    2. ``tools.skills_tool`` and ``tools.skill_manager_tool`` bind
+       ``SKILLS_DIR`` at import time, so the override CANNOT reach them.
+       Temporarily retarget both under a lock and restore them
+       immediately after.
+
+    ``profile`` of None/""/"current" means "the dashboard's own profile" —
+    config resolution is untouched, but the skill-module globals are still
+    retargeted to the *current* ``get_clawk_home()`` so writes land in the
+    live home even when the import-time binding is stale (e.g. the process
+    imported the modules before a CLAWK_HOME override, or under test
+    isolation).
+    """
+    requested = (profile or "").strip()
+
+    from clawk_constants import (
+        get_clawk_home,
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+    from tools import skills_tool as _skills_tool
+    from tools import skill_manager_tool as _skill_mgr
+
+    token = None
+    if not requested or requested.lower() == "current":
+        profile_dir = get_clawk_home()
+    else:
+        profile_dir = _resolve_profile_dir(requested)
+        token = set_clawk_home_override(str(profile_dir))
+
+    with _SKILLS_PROFILE_LOCK:
+        old_home = _skills_tool.CLAWK_HOME
+        old_skills_dir = _skills_tool.SKILLS_DIR
+        old_mgr_home = _skill_mgr.CLAWK_HOME
+        old_mgr_skills_dir = _skill_mgr.SKILLS_DIR
+        _skills_tool.CLAWK_HOME = profile_dir
+        _skills_tool.SKILLS_DIR = profile_dir / "skills"
+        _skill_mgr.CLAWK_HOME = profile_dir
+        _skill_mgr.SKILLS_DIR = profile_dir / "skills"
+        try:
+            yield profile_dir if token is not None else None
+        finally:
+            _skills_tool.CLAWK_HOME = old_home
+            _skills_tool.SKILLS_DIR = old_skills_dir
+            _skill_mgr.CLAWK_HOME = old_mgr_home
+            _skill_mgr.SKILLS_DIR = old_mgr_skills_dir
+            if token is not None:
+                reset_clawk_home_override(token)
+
+
+@contextmanager
+def _config_profile_scope(profile: Optional[str]):
+    """Await-safe, config-only profile scope for handlers that ``await``.
+
+    Unlike ``_profile_scope`` this touches ONLY the context-local
+    ``set_clawk_home_override`` contextvar — it does NOT swap the
+    process-global ``skills_tool``/``skill_manager`` module attributes.
+    Those globals are shared across all event-loop tasks, so holding them
+    across an ``await`` lets a concurrent skills request restore THIS
+    request's profile dir on its ``finally`` (cross-contamination). The
+    contextvar override is task-local and survives an ``await`` cleanly,
+    which is all endpoints that resolve ``get_clawk_home()`` at call time
+    (config, env, gateway status) actually need.
+
+    None/""/"current" means the dashboard's own profile — no override.
+    """
+    requested = (profile or "").strip()
+    if not requested or requested.lower() == "current":
+        yield None
+        return
+
+    from clawk_constants import (
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+
+    profile_dir = _resolve_profile_dir(requested)
+    token = set_clawk_home_override(str(profile_dir))
+    try:
+        yield profile_dir
+    finally:
+        reset_clawk_home_override(token)
+
+
 def _profile_setup_command(name: str) -> str:
     """Return the shell command used to configure a profile in the CLI."""
 
@@ -9987,6 +10223,79 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
     return {"ok": True, "name": name, "provider": body.provider}
 
 
+class ToolsetPostSetup(BaseModel):
+    key: str
+
+    profile: Optional[str] = None
+
+
+@app.post("/api/tools/toolsets/{name}/post-setup")
+async def run_toolset_post_setup(
+    name: str, body: ToolsetPostSetup, profile: Optional[str] = None
+):
+    """Spawn a provider's post-setup install hook as a background action.
+
+
+
+    Post-setup hooks (npm install for browser/Camofox, pip install for
+
+    KittenTTS/Piper/ddgs, cua-driver fetch, etc.) are long-running and
+
+    text-output, so this follows the spawn-action pattern: it launches
+
+    ``clawk tools post-setup <key>`` and the frontend tails the log via
+
+    ``GET /api/actions/tools-post-setup/status``. The ``key`` is validated
+
+    against the declared post-setup allowlist before spawning. Returns 400
+
+    for unknown toolset or post-setup key.
+
+
+
+    ``profile`` spawns the hook as ``clawk -p <profile> tools post-setup`` so
+
+    hooks that read config or write per-profile state see the same CLAWK_HOME
+
+    the rest of the drawer's writes targeted.
+
+    """
+
+    from clawk_cli.tools_config import (
+        _get_effective_configurable_toolsets,
+        valid_post_setup_keys,
+    )
+
+    valid_ts = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
+
+    if name not in valid_ts:
+        raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
+
+    if body.key not in valid_post_setup_keys():
+        raise HTTPException(
+            status_code=400, detail=f"Unknown post-setup key: {body.key}"
+        )
+
+    try:
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["tools", "post-setup", body.key],
+            "tools-post-setup",
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        _log.exception("Failed to spawn tools post-setup")
+
+        raise HTTPException(
+            status_code=500, detail=f"Failed to run post-setup: {exc}"
+        )
+
+    return {"ok": True, "pid": proc.pid, "name": "tools-post-setup", "key": body.key}
+
+
 # ---------------------------------------------------------------------------
 
 # Raw YAML config endpoint
@@ -9997,20 +10306,29 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
 class RawConfigUpdate(BaseModel):
     yaml_text: str
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/config/raw")
-async def get_config_raw():
+async def get_config_raw(profile: Optional[str] = None):
+    """Raw config.yaml text plus its resolved path.
 
-    path = get_config_path()
+    ``path`` is resolved inside ``_profile_scope`` so the Config page header
+    shows the file the switched profile actually reads/writes, not the
+    dashboard process's own profile.
+    """
+
+    with _profile_scope(profile):
+        path = get_config_path()
 
     if not path.exists():
-        return {"yaml": ""}
+        return {"yaml": "", "path": str(path)}
 
-    return {"yaml": path.read_text(encoding="utf-8")}
+    return {"yaml": path.read_text(encoding="utf-8"), "path": str(path)}
 
 
 @app.put("/api/config/raw")
-async def update_config_raw(body: RawConfigUpdate):
+async def update_config_raw(body: RawConfigUpdate, profile: Optional[str] = None):
 
     try:
         parsed = yaml.safe_load(body.yaml_text)
@@ -10018,7 +10336,8 @@ async def update_config_raw(body: RawConfigUpdate):
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="YAML must be a mapping")
 
-        save_config(parsed)
+        with _profile_scope(body.profile or profile):
+            save_config(parsed)
 
         return {"ok": True}
 
@@ -10721,6 +11040,7 @@ def _ws_auth_ok(ws: "WebSocket") -> bool:
 def _resolve_chat_argv(
     resume: Optional[str] = None,
     sidecar_url: Optional[str] = None,
+    profile: Optional[str] = None,
 ) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve the argv + cwd + env for the chat PTY.
 
@@ -10762,6 +11082,17 @@ def _resolve_chat_argv(
 
     from clawk_cli.main import PROJECT_ROOT, _make_tui_argv
 
+    # Resolve the requested profile BEFORE building argv so an unknown profile
+    # surfaces a clean 404 (the endpoint propagates it). A scoped chat points
+    # CLAWK_HOME at the profile dir so every spawned process (TUI + the
+    # tui_gateway.entry it launches) binds that profile's config/skills/state.
+    profile_dir: Optional[Path] = None
+
+    requested_profile = (profile or "").strip()
+
+    if requested_profile and requested_profile.lower() != "current":
+        profile_dir = _resolve_profile_dir(requested_profile)
+
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
 
     env = os.environ.copy()
@@ -10784,6 +11115,9 @@ def _resolve_chat_argv(
 
     env.setdefault("CLAWK_TUI_INLINE", "1")
 
+    if profile_dir is not None:
+        env["CLAWK_HOME"] = str(profile_dir)
+
     if resume:
         latest_resume, _latest_path = _session_latest_descendant(resume)
 
@@ -10795,8 +11129,13 @@ def _resolve_chat_argv(
     if sidecar_url:
         env["CLAWK_TUI_SIDECAR_URL"] = sidecar_url
 
-    if gateway_ws_url := _build_gateway_ws_url():
-        env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
+    # Profile-scoped chats must NOT attach to the dashboard's in-memory gateway —
+    # it runs under the dashboard's own profile. Without the attach URL,
+    # gatewayClient spawns its own ``tui_gateway.entry``, which inherits the
+    # profile CLAWK_HOME set above.
+    if profile_dir is None:
+        if gateway_ws_url := _build_gateway_ws_url():
+            env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
 
     return list(argv), str(cwd) if cwd else None, env
 
