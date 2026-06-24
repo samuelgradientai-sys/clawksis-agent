@@ -55,7 +55,7 @@ interface ChatHeaderProps {
   tokensUsed: number;
   tokensMax: number;
   /** Título de la conversación que se está viendo. */
-  title?: string | null;
+  title?: string;
   /** Click handler para abrir el popover de uso de tokens */
   onTokensClick?: () => void;
   /** Ref del botón de tokens para anclar el popover */
@@ -825,6 +825,41 @@ function EmptyState() {
   );
 }
 
+
+type SidebarActivityOverride = {
+  started_at?: number;
+  preview?: string;
+  message_count?: number;
+  model?: string;
+  model_provider?: string;
+  title?: string;
+};
+
+const SIDEBAR_ACTIVITY_CACHE_KEY = "clawksis.chat.sidebarActivityOverrides.v1";
+
+function readSidebarActivityOverrides(): Record<string, SidebarActivityOverride> {
+  try {
+    if (typeof window === "undefined") return {};
+    const raw = window.localStorage.getItem(SIDEBAR_ACTIVITY_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSidebarActivityOverrides(
+  value: Record<string, SidebarActivityOverride>,
+): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_ACTIVITY_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    // No bloquear el chat si localStorage está lleno o deshabilitado.
+  }
+}
+
 export default function ChatModern() {
   const {
     status,
@@ -861,6 +896,7 @@ export default function ChatModern() {
 
   const tokensButtonRef = useRef<HTMLButtonElement>(null);
   const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
+  const didAutoOpenSidebarTopRef = useRef(false);
   // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
   const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
 
@@ -870,14 +906,46 @@ export default function ChatModern() {
     Array<(typeof sessions)[number]>
   >([]);
 
-  // sidebarSessions incluye una fila optimista para conversaciones recién creadas.
-  // Así "+ Nueva conversación" aparece en el sidebar sin esperar recarga.
-  const sidebarSessions = [
-    ...optimisticSessions.filter(
-      (opt) => !sessions.some((real) => real.id === opt.id),
-    ),
-    ...sessions,
-  ];
+  // sidebar-recency-override-v1
+  // Actividad local reciente: mueve conversaciones viejas arriba inmediatamente
+  // al enviar un mensaje, incluso antes de que session.list persista/ordene.
+  const [sidebarActivityOverrides, setSidebarActivityOverrides] = useState<
+    Record<string, SidebarActivityOverride>
+  >(() => readSidebarActivityOverrides());
+
+  // sidebarSessions incluye filas optimistas y actividad local reciente.
+  // Así "+ Nueva conversación" aparece sin esperar recarga y una conversación
+  // vieja sube arriba inmediatamente al enviar un mensaje.
+  const sidebarSessionMap = new Map<string, (typeof sessions)[number]>();
+
+  for (const real of sessions) {
+    const rawOverride = sidebarActivityOverrides[real.id] ?? {};
+    const { title, model, model_provider, ...safeOverride } = rawOverride;
+
+    sidebarSessionMap.set(real.id, {
+      ...real,
+      ...safeOverride,
+      ...(typeof title === "string" ? { title } : {}),
+      ...(typeof model === "string" ? { model } : {}),
+      ...(typeof model_provider === "string" ? { model_provider } : {}),
+    });
+  }
+
+  for (const optimistic of optimisticSessions) {
+    const existing = sidebarSessionMap.get(optimistic.id);
+    sidebarSessionMap.set(optimistic.id, {
+      ...(existing ?? optimistic),
+      ...optimistic,
+    });
+  }
+
+  const sidebarSessions = Array.from(sidebarSessionMap.values()).sort(
+    (a, b) => (b.started_at || 0) - (a.started_at || 0),
+  );
+
+  useEffect(() => {
+    writeSidebarActivityOverrides(sidebarActivityOverrides);
+  }, [sidebarActivityOverrides]);
 
   const sessionIdExistsInSidebar =
     !!session.sessionId && sidebarSessions.some((s) => s.id === session.sessionId);
@@ -887,10 +955,32 @@ export default function ChatModern() {
   // ID visual para resaltar y consultar métricas persistidas.
   // session.sessionId sigue siendo el ID operativo vivo para backend.
   const sidebarActiveSessionId =
-    visualActiveSessionId ??
-    (sessionIdExistsInSidebar
-      ? session.sessionId
-      : newestListedSessionId ?? session.sessionId);
+    visualActiveSessionId ?? (sessionIdExistsInSidebar ? session.sessionId : null);
+
+  // sidebar-auto-open-top-on-boot-v1
+  // Si localStorage reordenó el sidebar por actividad reciente, abrimos esa
+  // conversación de verdad. Esto evita que el header/sidebar muestren una sesión
+  // mientras el body todavía pertenece a otra sesión viva del gateway.
+  useEffect(() => {
+    if (didAutoOpenSidebarTopRef.current) return;
+    if (!readyForRpc || sessionsLoading || resuming || busy) return;
+    if (!newestListedSessionId) return;
+
+    didAutoOpenSidebarTopRef.current = true;
+    setVisualActiveSessionId(newestListedSessionId);
+
+    if (newestListedSessionId !== session.sessionId) {
+      void switchSession(newestListedSessionId);
+    }
+  }, [
+    readyForRpc,
+    sessionsLoading,
+    resuming,
+    busy,
+    newestListedSessionId,
+    session.sessionId,
+    switchSession,
+  ]);
 
   useEffect(() => {
     if (
@@ -973,6 +1063,29 @@ export default function ChatModern() {
     void switchSession(targetId);
   };
 
+  const handleSend = (text: string) => {
+    const trimmed = text.trim();
+    const activeId = sidebarActiveSessionId ?? session.sessionId;
+
+    if (activeId && trimmed) {
+      const current = sidebarSessions.find((s) => s.id === activeId);
+
+      setSidebarActivityOverrides((prev) => ({
+        ...prev,
+        [activeId]: {
+          started_at: Date.now() / 1000,
+          preview: trimmed,
+          message_count: Math.max((current?.message_count ?? 0) + 1, 1),
+          model: session.model ?? current?.model,
+        },
+      }));
+
+      setVisualActiveSessionId(activeId);
+    }
+
+    sendMessage(text);
+  };
+
   const handleNewChat = async () => {
     const newId = await createSession();
     if (newId) {
@@ -1013,6 +1126,12 @@ export default function ChatModern() {
         }
       else await handleNewChat();
     }
+    setSidebarActivityOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     await deleteSession(id);
   };
 
@@ -1093,7 +1212,7 @@ export default function ChatModern() {
             sessionId={session.sessionId}
             tokensUsed={headerTokensUsed}
             tokensMax={headerTokensMax}
-            title={activeTitle}
+            title={activeTitle ?? undefined}
             onTokensClick={handleTokensClick}
             tokensRef={tokensButtonRef}
           />
@@ -1161,7 +1280,7 @@ export default function ChatModern() {
           busy={busy}
           disabled={composerDisabled}
           resuming={resuming}
-          onSend={sendMessage}
+          onSend={handleSend}
           onInterrupt={interrupt}
           sendRpc={sendRpc}
           ready={readyForRpc}
