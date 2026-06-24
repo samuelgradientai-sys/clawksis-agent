@@ -864,6 +864,8 @@ class MessagingPlatformUpdate(BaseModel):
 
     clear_env: List[str] = []
 
+    profile: Optional[str] = None
+
 
 class AudioTranscriptionRequest(BaseModel):
     data_url: str
@@ -4365,22 +4367,29 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
 
 
 @app.get("/api/messaging/platforms")
-async def get_messaging_platforms():
+async def get_messaging_platforms(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    # Profile-scoped so the dashboard's global profile switcher shows the
+    # TARGET profile's channel credentials/state, not the root install's.
+    # Inside _profile_scope, load_env()/read_runtime_status() resolve against
+    # the requested profile's CLAWK_HOME.
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
-    runtime = read_runtime_status()
+        runtime = read_runtime_status()
 
-    return {
-        "platforms": [
-            _messaging_platform_payload(entry, env_on_disk, runtime)
-            for entry in _messaging_platform_catalog()
-        ]
-    }
+        return {
+            "platforms": [
+                _messaging_platform_payload(entry, env_on_disk, runtime)
+                for entry in _messaging_platform_catalog()
+            ]
+        }
 
 
 @app.put("/api/messaging/platforms/{platform_id}")
-async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpdate):
+async def update_messaging_platform(
+    platform_id: str, body: MessagingPlatformUpdate, profile: Optional[str] = None
+):
 
     entry = _catalog_lookup(platform_id)
 
@@ -4392,29 +4401,30 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
     allowed_env = set(entry["env_vars"])
 
     try:
-        for key in body.clear_env:
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+        with _profile_scope(body.profile or profile):
+            for key in body.clear_env:
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            remove_env_value(key)
+                remove_env_value(key)
 
-        for key, value in body.env.items():
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+            for key, value in body.env.items():
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            trimmed = value.strip()
+                trimmed = value.strip()
 
-            if trimmed:
-                save_env_value(key, trimmed)
+                if trimmed:
+                    save_env_value(key, trimmed)
 
-        if body.enabled is not None:
-            _write_platform_enabled(platform_id, body.enabled)
+            if body.enabled is not None:
+                _write_platform_enabled(platform_id, body.enabled)
 
         return {"ok": True, "platform": platform_id}
 
