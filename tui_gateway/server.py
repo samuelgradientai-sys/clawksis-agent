@@ -2278,6 +2278,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
         "branch": _git_branch_for_cwd(cwd),
         "personality": str(personality or ""),
         "running": bool((session or {}).get("running")),
+        "source": str((session or {}).get("source") or ""),
         "desktop_contract": DESKTOP_BACKEND_CONTRACT,
         "version": "",
         "release_date": "",
@@ -3495,6 +3496,7 @@ def _init_session(sid: str, key: str, agent, history: list, cols: int = 80):
     _sessions[sid] = {
         "agent": agent,
         "session_key": key,
+        "source": "tui",
         "history": history,
         "history_lock": threading.Lock(),
         "history_version": 0,
@@ -4121,6 +4123,7 @@ def _(rid, params: dict) -> dict:
         "pending_title": title or None,
         "running": False,
         "session_key": key,
+        "source": str(params.get("source") or "tui"),
         "show_reasoning": _load_show_reasoning(),
         "slash_worker": None,
         "tool_progress_mode": _load_tool_progress_mode(),
@@ -4442,6 +4445,7 @@ def _(rid, params: dict) -> dict:
             _init_session(sid, target, agent, history, cols=cols)
 
             if sid in _sessions:
+                _sessions[sid]["source"] = str((found or {}).get("source") or "tui")
                 _sessions[sid]["display_history_prefix"] = display_history_prefix
 
         except Exception as e:
@@ -5877,6 +5881,23 @@ def _(rid, params: dict) -> dict:
 
     if err:
         return err
+
+    session_key = str(session.get("session_key") or "")
+    session_source = str(session.get("source") or "").strip().lower()
+
+    # cron-chat-readonly-v1
+    # Las ejecuciones cron son sesiones automáticas. Se pueden ver desde el chat,
+    # pero no deben convertirse en conversaciones manuales dentro del mismo
+    # agente/historial porque eso puede mezclar contexto de scheduler, estados
+    # automáticos y turnos interactivos.
+    if session_source == "cron" or session_key.startswith("cron_"):
+        return _err(
+            rid,
+            4009,
+            "Esta es una ejecución automática de cron. Puedes revisar el resultado aquí, "
+            "pero para conversar sobre él abre una nueva conversación normal y cita/resume "
+            "lo que quieras analizar. Próximo paso recomendado: añadir botón 'Continuar como chat'.",
+        )
 
     # Re-bind to the current client transport for this request. This keeps
 
