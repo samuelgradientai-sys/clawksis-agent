@@ -433,90 +433,28 @@ def test_codex_setup_uses_runtime_access_token_for_live_model_list(
     assert reloaded["model"]["provider"] == "openai-codex"
 
 
-def test_modal_setup_can_use_nous_subscription_without_modal_creds(
-    tmp_path, monkeypatch, capsys
-):
-    monkeypatch.setattr("clawk_cli.setup.managed_nous_tools_enabled", lambda: True)
+def test_modal_setup_persists_direct_mode(tmp_path, monkeypatch):
+    """Modal is BYOK-only now: selecting it always persists direct mode.
+
+    The managed / Nous-subscription billing path was removed (the fork bills
+    nothing for inference — see commit "barrido de menciones Nous inertes"), so
+    there is no "Select how Modal execution should be billed:" prompt anymore.
+    """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
+    # Pretend the modal SDK is importable so the install path is skipped.
+    monkeypatch.setitem(sys.modules, "modal", types.ModuleType("modal"))
     config = load_config()
 
     def fake_prompt_choice(question, choices, default=0):
         if question == "Select terminal backend:":
-            return 2
-        if question == "Select how Modal execution should be billed:":
-            return 0
+            return 2  # Modal
         raise AssertionError(f"Unexpected prompt_choice call: {question}")
 
-    def fake_prompt(message, *args, **kwargs):
-        assert "Modal Token" not in message
-        raise AssertionError(f"Unexpected prompt call: {message}")
-
     monkeypatch.setattr("clawk_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("clawk_cli.setup.prompt", fake_prompt)
-    monkeypatch.setattr(
-        "clawk_cli.setup._prompt_container_resources", lambda config: None
-    )
-    monkeypatch.setattr(
-        "clawk_cli.setup.get_nous_subscription_features",
-        lambda config: type("Features", (), {"nous_auth_present": True})(),
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "tools.managed_tool_gateway",
-        types.SimpleNamespace(
-            is_managed_tool_gateway_ready=lambda vendor: vendor == "modal",
-            resolve_managed_tool_gateway=lambda vendor: None,
-        ),
-    )
-
-    from clawk_cli.setup import setup_terminal_backend
-
-    setup_terminal_backend(config)
-
-    out = capsys.readouterr().out
-    assert config["terminal"]["backend"] == "modal"
-    assert config["terminal"]["modal_mode"] == "managed"
-    assert "bill to your subscription" in out
-
-
-def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr("clawk_cli.setup.managed_nous_tools_enabled", lambda: True)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
-    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
-    config = load_config()
-
-    def fake_prompt_choice(question, choices, default=0):
-        if question == "Select terminal backend:":
-            return 2
-        if question == "Select how Modal execution should be billed:":
-            return 1
-        raise AssertionError(f"Unexpected prompt_choice call: {question}")
-
-    prompt_values = iter(["token-id", "token-secret", ""])
-
-    monkeypatch.setattr("clawk_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr(
-        "clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_values)
-    )
-    monkeypatch.setattr(
-        "clawk_cli.setup._prompt_container_resources", lambda config: None
-    )
-    monkeypatch.setattr(
-        "clawk_cli.setup.get_nous_subscription_features",
-        lambda config: type("Features", (), {"nous_auth_present": True})(),
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "tools.managed_tool_gateway",
-        types.SimpleNamespace(
-            is_managed_tool_gateway_ready=lambda vendor: vendor == "modal",
-            resolve_managed_tool_gateway=lambda vendor: None,
-        ),
-    )
-    monkeypatch.setitem(sys.modules, "swe_rex", object())
+    monkeypatch.setattr("clawk_cli.setup.get_env_value", lambda key: "")
+    monkeypatch.setattr("clawk_cli.setup.prompt", lambda *a, **k: "")
+    monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *a, **k: False)
+    monkeypatch.setattr("clawk_cli.setup.save_env_value", lambda *a, **k: None)
 
     from clawk_cli.setup import setup_terminal_backend
 
@@ -524,6 +462,43 @@ def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(
 
     assert config["terminal"]["backend"] == "modal"
     assert config["terminal"]["modal_mode"] == "direct"
+
+
+def test_modal_setup_saves_byok_tokens(tmp_path, monkeypatch):
+    """The Modal BYOK flow prompts for and saves the user's own Modal token."""
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
+    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
+    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    # Pretend the modal SDK is importable so the install path is skipped.
+    monkeypatch.setitem(sys.modules, "modal", types.ModuleType("modal"))
+    config = load_config()
+    saved = {}
+
+    def fake_prompt_choice(question, choices, default=0):
+        if question == "Select terminal backend:":
+            return 2  # Modal
+        raise AssertionError(f"Unexpected prompt_choice call: {question}")
+
+    prompt_values = iter(["token-id", "token-secret"])
+
+    monkeypatch.setattr("clawk_cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("clawk_cli.setup.get_env_value", lambda key: "")
+    monkeypatch.setattr(
+        "clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_values)
+    )
+    monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *a, **k: False)
+    monkeypatch.setattr(
+        "clawk_cli.setup.save_env_value", lambda k, v: saved.update({k: v})
+    )
+
+    from clawk_cli.setup import setup_terminal_backend
+
+    setup_terminal_backend(config)
+
+    assert config["terminal"]["backend"] == "modal"
+    assert config["terminal"]["modal_mode"] == "direct"
+    assert saved.get("MODAL_TOKEN_ID") == "token-id"
+    assert saved.get("MODAL_TOKEN_SECRET") == "token-secret"
 
 
 def test_setup_slack_saves_home_channel(monkeypatch):
