@@ -2315,6 +2315,13 @@ def _get_platform_tools(
         if ts_def.get("includes"):
             continue
 
+        # Posture toolsets (e.g. ``coding``) are selected per-session by
+        # agent/coding_context.py, never baked into per-platform tool config —
+        # recovering them here would leak the coding posture into every
+        # platform's default toolset list. See toolsets.py ``"posture": True``.
+        if ts_def.get("posture"):
+            continue
+
         ts_tools = set(resolve_toolset(ts_key))
 
         if not ts_tools or not ts_tools.issubset(platform_tool_universe):
