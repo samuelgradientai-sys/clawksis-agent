@@ -3022,6 +3022,12 @@ class GatewayRunner:
 
     _draining: bool = False
 
+    # Set True by the signal handler for an UNMARKED signal (container restart /
+    # OOM / kill) — as opposed to a planned `clawk gateway stop`. Gates whether
+    # stop() persists "stopped" (planned) or keeps "running" so container_boot
+    # auto-starts on the next boot (#42675).
+    _signal_initiated_shutdown: bool = False
+
     _restart_requested: bool = False
 
     _restart_task_started: bool = False
@@ -10787,7 +10793,16 @@ class GatewayRunner:
 
             self._draining = False
 
-            self._update_runtime_status("stopped", self._exit_reason)
+            if self._signal_initiated_shutdown and not self._restart_requested:
+                # Unexpected signal (container restart / OOM / kill, not a
+                # planned `clawk gateway stop`): keep the persisted state as
+                # "running" so container_boot auto-starts on the next boot.
+                # Persisting "stopped" (or leaving the "draining" marker) would
+                # suppress that revival (#42675).
+                self._update_runtime_status("running")
+
+            else:
+                self._update_runtime_status("stopped", self._exit_reason)
 
             logger.info("Gateway stopped (total teardown %.2fs)", _phase_elapsed())
 
