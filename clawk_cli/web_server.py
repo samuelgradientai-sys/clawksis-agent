@@ -14890,10 +14890,36 @@ def start_server(
 
     # we flip proxy_headers on for that mode.
 
-    uvicorn.run(
+    config = uvicorn.Config(
         app,
         host=host,
         port=port,
         log_level="warning",
         proxy_headers=bool(app.state.auth_required),
+        # WS keepalive pings so half-open connections (reverse-proxy 524, dropped
+        # tunnels) surface as WebSocketDisconnect into the reaping path instead
+        # of lingering as silent ghosts (#32377). uvicorn.run() doesn't let us
+        # set these cleanly, so drive uvicorn.Server directly.
+        ws_ping_interval=20.0,
+        ws_ping_timeout=20.0,
     )
+
+    server = uvicorn.Server(config)
+
+    async def _serve() -> None:
+        if not config.loaded:
+            config.load()
+
+        server.lifespan = config.lifespan_class(config)
+
+        await server.startup()
+
+        if server.should_exit:
+            return
+
+        await server.main_loop()
+
+        await server.shutdown()
+
+    with server.capture_signals():
+        asyncio.run(_serve())
