@@ -27165,6 +27165,19 @@ class GatewayRunner:
 
         repeat_count = [0]  # How many times the same message repeated
 
+        # Markdown-capable platforms render terminal commands as bare fenced
+        # code blocks (no language tag — Slack mrkdwn would print "bash" as a
+        # literal first line). Back-to-back command tools collapse under a
+        # single header (see ``last_codeblock_tool``); a different tool resets
+        # it so the next command gets a fresh header. (#42634)
+        _cb_adapter = self.adapters.get(source.platform)
+
+        _cb_supports_code_blocks = bool(
+            getattr(_cb_adapter, "supports_code_blocks", False)
+        )
+
+        last_codeblock_tool = [None]  # tool_name of the last code-block emission
+
         # Auto-cleanup of temporary progress bubbles (Telegram + any adapter
 
         # that implements ``delete_message``). When enabled via
@@ -27303,6 +27316,52 @@ class GatewayRunner:
             from agent.display import get_tool_emoji
 
             emoji = get_tool_emoji(tool_name, default="⚙️", args=args)
+
+            # Markdown-capable gateways render a command tool (terminal) as a
+            # bare fenced code block instead of a truncated quoted preview.
+            # Verbose keeps the full command; non-verbose collapses to the first
+            # line capped at tool_preview_length so a long/multi-line command
+            # doesn't render as a huge block (#42634).
+            _command = (
+                args.get("command") if isinstance(args, dict) else None
+            ) or None
+
+            if _cb_supports_code_blocks and _command:
+                from agent.display import get_tool_preview_max_len
+
+                if progress_mode == "verbose":
+                    _body = _command
+                else:
+                    _pl = get_tool_preview_max_len()
+
+                    _cap = _pl if _pl > 0 else 40
+
+                    _body = _command.splitlines()[0] if _command else ""
+
+                    if len(_body) > _cap:
+                        _body = _body[: _cap - 1] + "…"
+
+                _code_block = f"```\n{_body}\n```"
+
+                if last_codeblock_tool[0] == tool_name:
+                    # Consecutive command tool — append the block under the
+                    # existing header instead of repeating the tool name.
+                    progress_queue.put(("__append_codeblock__", _code_block))
+
+                else:
+                    progress_queue.put(f"{emoji} {tool_name}\n{_code_block}")
+
+                last_codeblock_tool[0] = tool_name
+
+                last_progress_msg[0] = None
+
+                repeat_count[0] = 0
+
+                return
+
+            # A non-command tool breaks any running command-block streak so the
+            # next command tool starts a fresh header.
+            last_codeblock_tool[0] = None
 
             # Verbose mode: show detailed arguments, respects tool_preview_length
 
@@ -27676,6 +27735,27 @@ class GatewayRunner:
 
                     elif (
                         isinstance(raw, tuple)
+                        and len(raw) == 2
+                        and raw[0] == "__append_codeblock__"
+                    ):
+                        # Consecutive command tool — append its fenced block to
+                        # the current header line rather than emitting a new one.
+                        _, _code_block = raw
+
+                        if progress_lines:
+                            progress_lines[-1] = (
+                                f"{progress_lines[-1]}\n{_code_block}"
+                            )
+
+                            msg = progress_lines[-1]
+
+                        else:
+                            msg = _code_block
+
+                            progress_lines.append(msg)
+
+                    elif (
+                        isinstance(raw, tuple)
                         and len(raw) >= 1
                         and raw[0] == "__reset__"
                     ):
@@ -27900,6 +27980,23 @@ class GatewayRunner:
                                 last_progress_msg[0] = None
 
                                 repeat_count[0] = 0
+
+                            elif (
+                                isinstance(raw, tuple)
+                                and len(raw) == 2
+                                and raw[0] == "__append_codeblock__"
+                            ):
+                                _, _code_block = raw
+
+                                if progress_lines:
+                                    progress_lines[-1] = (
+                                        f"{progress_lines[-1]}\n{_code_block}"
+                                    )
+
+                                else:
+                                    progress_lines.append(_code_block)
+
+                                await _roll_progress_overflow_if_needed()
 
                             else:
                                 progress_lines.append(raw)
