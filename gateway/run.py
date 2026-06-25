@@ -1281,10 +1281,27 @@ def _collect_auto_append_media_tags(
 
 
 def _ensure_ssl_certs() -> None:
-    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python."""
+    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python.
 
-    if "SSL_CERT_FILE" in os.environ:
-        return  # user already configured it
+    Windows startup paths (Desktop, Scheduled Tasks, installer children) can
+    occasionally inherit a stale SSL_CERT_FILE. Returning just because the
+    variable is present makes every later httpx/OpenAI client construction fail
+    with FileNotFoundError from ssl.load_verify_locations(). Treat a missing
+    path as unset and fall back to certifi instead.
+    """
+
+    configured_cert = os.environ.get("SSL_CERT_FILE")
+
+    if configured_cert:
+        if os.path.exists(configured_cert):
+            return  # user already configured it to a real file
+
+        logging.getLogger(__name__).warning(
+            "Ignoring stale SSL_CERT_FILE=%r because the path does not exist",
+            configured_cert,
+        )
+
+        os.environ.pop("SSL_CERT_FILE", None)
 
     import ssl
 
@@ -2168,6 +2185,12 @@ def _build_media_placeholder(event) -> str:
         elif mtype.startswith("audio/"):
             parts.append(f"[User sent audio: {url}]")
 
+        elif (
+            mtype.startswith("video/")
+            or getattr(event, "message_type", None) == MessageType.VIDEO
+        ):
+            parts.append(f"[User sent a video: {url}]")
+
         else:
             parts.append(f"[User sent a file: {url}]")
 
@@ -2617,6 +2640,82 @@ def _resolve_gateway_model(config: dict | None = None) -> str:
         return model_cfg.get("default") or model_cfg.get("model") or ""
 
     return ""
+
+
+def _ensure_windows_gateway_venv_imports() -> None:
+    """Make detached Windows gateway runs see the Clawksis venv packages.
+
+    Some Windows restart paths run the gateway under uv's base ``pythonw.exe``
+    to avoid the venv launcher respawning a visible console interpreter.  That
+    mode can import the source tree via cwd/PYTHONPATH but still miss optional
+    packages installed only in ``venv/Lib/site-packages`` (notably the MCP SDK).
+    Patch the live process before MCP discovery so tool injection does not
+    depend on every launcher preserving PYTHONPATH perfectly.
+    """
+
+    import site
+
+    if sys.platform != "win32":
+        return
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    candidates: list[Path] = []
+
+    if os.environ.get("VIRTUAL_ENV"):
+        candidates.append(Path(os.environ["VIRTUAL_ENV"]))
+
+    candidates.append(project_root / "venv")
+
+    seen: set[str] = set()
+
+    for venv_dir in candidates:
+        try:
+            resolved_venv = venv_dir.resolve()
+
+        except OSError:
+            resolved_venv = venv_dir
+
+        venv_key = str(resolved_venv).lower()
+
+        if venv_key in seen:
+            continue
+
+        seen.add(venv_key)
+
+        site_packages = resolved_venv / "Lib" / "site-packages"
+
+        if not site_packages.exists():
+            continue
+
+        project_entry = str(project_root)
+
+        site_entry = str(site_packages)
+
+        if project_entry not in sys.path:
+            sys.path.insert(0, project_entry)
+
+        # addsitepackages() semantics matter here: pywin32, used by the MCP
+        # SDK on Windows, relies on .pth processing to expose pywintypes.
+        site.addsitedir(site_entry)
+
+        if site_entry in sys.path:
+            sys.path.remove(site_entry)
+
+        insert_at = 1 if sys.path and sys.path[0] == project_entry else 0
+
+        sys.path.insert(insert_at, site_entry)
+
+        os.environ["VIRTUAL_ENV"] = str(resolved_venv)
+
+        pythonpath = [project_entry, site_entry]
+
+        if os.environ.get("PYTHONPATH"):
+            pythonpath.append(os.environ["PYTHONPATH"])
+
+        os.environ["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(pythonpath))
+
+        return
 
 
 def _resolve_clawk_bin() -> Optional[list[str]]:
@@ -4172,6 +4271,34 @@ class GatewayRunner:
 
         return None
 
+    def _normalize_source_for_session_key(
+        self,
+        source: SessionSource,
+    ) -> SessionSource:
+        """Apply Telegram DM topic recovery to a source for session-key purposes.
+
+        ``_handle_message_with_agent`` rewrites ``source.thread_id`` via
+        ``_recover_telegram_topic_thread_id`` *before* deriving the session
+        key for a normal message turn (a lobby/stripped reply gets pinned to
+        the user's last-active topic).  Session-scoped command handlers like
+        ``/model`` and ``/reasoning`` derive their override key from the raw
+        inbound ``event.source``, which skips that recovery — so the override
+        is stored under a different key than the next message turn reads,
+        and the override is silently dropped on Telegram forum topics and
+        after compression session splits (#30479).
+
+        Returns a recovery-normalized copy when a rewrite applies, otherwise
+        the original source unchanged.  Always derive the override storage key
+        from the result so storage and read use an identical key.
+        """
+        try:
+            recovered = self._recover_telegram_topic_thread_id(source)
+        except Exception:
+            return source
+        if recovered is None:
+            return source
+        return dataclasses.replace(source, thread_id=recovered)
+
     def _resolve_session_agent_runtime(
         self,
         *,
@@ -5133,23 +5260,37 @@ class GatewayRunner:
 
     @staticmethod
     def _load_busy_text_mode() -> str:
-        """Load normal busy TEXT follow-up behavior from config/env."""
+        """Resolve normal busy TEXT follow-up behavior.
 
-        mode = os.getenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", "").strip().lower()
+        ``busy_input_mode`` is the single source of truth (default
+        ``interrupt``). The legacy ``busy_text_mode`` knob is honored only
+        when a user explicitly set it, so existing queue setups keep
+        working; new installs follow ``busy_input_mode``. Returns one of
+        ``interrupt`` | ``queue``.
+        """
 
-        if not mode:
+        # Legacy explicit override wins for backward compat.
+        legacy = os.getenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", "").strip().lower()
+
+        if not legacy:
             cfg = _load_gateway_runtime_config()
 
-            mode = (
+            legacy = (
                 str(cfg_get(cfg, "display", "busy_text_mode", default="") or "")
                 .strip()
                 .lower()
             )
 
-        if mode == "interrupt":
+        if legacy == "interrupt":
             return "interrupt"
 
-        return "queue"
+        if legacy == "queue":
+            return "queue"
+
+        # No explicit legacy knob → follow busy_input_mode.
+        input_mode = GatewayRunner._load_busy_input_mode()
+
+        return "queue" if input_mode == "queue" else "interrupt"
 
     @staticmethod
     def _load_restart_drain_timeout() -> float:
@@ -6455,10 +6596,36 @@ class GatewayRunner:
                 """
             ).strip()
 
+            watcher_env = os.environ.copy()
+
+            # This watcher is intentionally outside the running gateway. If it
+            # inherits the gateway marker, `clawk gateway restart` refuses to
+            # run as a self-restart loop guard and the gateway stays stopped.
+            watcher_env.pop("_CLAWK_GATEWAY", None)
+
+            project_root = Path(__file__).resolve().parent.parent
+
+            venv_dir = Path(watcher_env.get("VIRTUAL_ENV") or project_root / "venv")
+
+            site_packages = venv_dir / "Lib" / "site-packages"
+
+            if site_packages.exists():
+                watcher_env["VIRTUAL_ENV"] = str(venv_dir)
+
+                pythonpath = [str(project_root), str(site_packages)]
+
+                if watcher_env.get("PYTHONPATH"):
+                    pythonpath.append(watcher_env["PYTHONPATH"])
+
+                watcher_env["PYTHONPATH"] = os.pathsep.join(
+                    dict.fromkeys(pythonpath)
+                )
+
             subprocess.Popen(
                 [sys.executable, "-c", watcher, str(current_pid), *cmd_argv],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 **windows_detach_popen_kwargs(),
             )
 
@@ -6471,6 +6638,15 @@ class GatewayRunner:
             f"{cmd} gateway restart"
         )
 
+        # Same marker scrub as the Windows watcher above: this watcher runs
+        # `clawk gateway restart` from outside the gateway, but it inherits
+        # _CLAWK_GATEWAY=1 from us, and the CLI's self-restart loop guard
+        # refuses to run when that marker is set — silently (DEVNULL), so the
+        # gateway stops and never comes back.
+        watcher_env = os.environ.copy()
+
+        watcher_env.pop("_CLAWK_GATEWAY", None)
+
         setsid_bin = shutil.which("setsid")
 
         if setsid_bin:
@@ -6478,6 +6654,7 @@ class GatewayRunner:
                 [setsid_bin, "bash", "-lc", shell_cmd],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 start_new_session=True,
             )
 
@@ -6486,6 +6663,7 @@ class GatewayRunner:
                 ["bash", "-lc", shell_cmd],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 start_new_session=True,
             )
 
@@ -11723,6 +11901,13 @@ class GatewayRunner:
 
         check_ids = {user_id}
 
+        # Some platforms (e.g. SimpleX) surface only the contact's display name
+        # in their UI, so operators naturally put that in {PLATFORM}_ALLOWED_USERS
+        # even though the adapter sets user_id to a stable numeric contactId.
+        # Match the display name too so both forms authorize.
+        if getattr(source, "user_name", None):
+            check_ids.add(source.user_name)
+
         if "@" in user_id:
             check_ids.add(user_id.split("@")[0])
 
@@ -13205,6 +13390,9 @@ class GatewayRunner:
         if canonical == "verbose":
             return await self._handle_verbose_command(event)
 
+        if canonical == "version":
+            return await self._handle_version_command(event)
+
         if canonical == "footer":
             return await self._handle_footer_command(event)
 
@@ -13782,6 +13970,8 @@ class GatewayRunner:
 
         audio_file_paths: list[str] = []
 
+        video_paths: list[str] = []
+
         if event.media_urls:
             image_paths = []
 
@@ -13809,6 +13999,12 @@ class GatewayRunner:
                     not in {MessageType.AUDIO, MessageType.DOCUMENT}
                 ):
                     audio_paths.append(path)
+
+                if (
+                    mtype.startswith("video/")
+                    or event.message_type == MessageType.VIDEO
+                ):
+                    video_paths.append(path)
 
             if image_paths:
                 # Decide routing: native (attach pixels) vs text (vision_analyze
@@ -13849,7 +14045,7 @@ class GatewayRunner:
                     )
 
             if audio_paths:
-                message_text = await self._enrich_message_with_transcription(
+                message_text, _voice_transcripts = await self._enrich_message_with_transcription(
                     message_text,
                     audio_paths,
                 )
@@ -13911,7 +14107,39 @@ class GatewayRunner:
                 _note = (
                     f"[The user sent an audio file attachment: '{_display}'. "
                     f"It is saved at: {_agent_path}. "
-                    f"Ask the user what they'd like you to do with it, or pass the path to a transcription or media tool.]"
+                    f"Its content is not inlined here. If the user's request involves "
+                    f"what the audio contains, transcribe or process it yourself — for "
+                    f"example by passing the path to a transcription or media tool — "
+                    f"instead of asking the user to describe it. Only ask what to do "
+                    f"with it if their intent is genuinely unclear.]"
+                )
+
+                message_text = f"{_note}\n\n{message_text}"
+
+        if video_paths:
+            from tools.credential_files import (
+                to_agent_visible_cache_path as _to_agent_path,
+            )
+
+            for _vpath in video_paths:
+                _basename = os.path.basename(_vpath)
+
+                _parts = _basename.split("_", 2)
+
+                _display = _parts[2] if len(_parts) >= 3 else _basename
+
+                _display = re.sub(r"[^\w.\- ]", "_", _display)
+
+                _agent_path = _to_agent_path(_vpath)
+
+                _note = (
+                    f"[The user sent a video attachment: '{_display}'. "
+                    f"It is saved at: {_agent_path}. "
+                    f"Its content is not inlined here. If the user's request involves "
+                    f"what the video contains, inspect or process it yourself — for "
+                    f"example by passing the path to a video analysis or media tool — "
+                    f"instead of asking the user to describe it. Only ask what to do "
+                    f"with it if their intent is genuinely unclear.]"
                 )
 
                 message_text = f"{_note}\n\n{message_text}"
@@ -17973,6 +18201,71 @@ class GatewayRunner:
         if not result.success:
             return t("gateway.model.error_prefix", error=result.error_message)
 
+        # Expensive-model confirmation gate (typed ``/model <name>`` path).
+        # The pickers (Telegram/Discord keyboards, TUI, dashboard) already
+        # confirm via their own UI; the typed text command previously bypassed
+        # the guard entirely. On a cost warning, ask for confirmation and apply
+        # the switch only when the user approves — re-entering this handler with
+        # a per-session bypass so the apply logic below runs exactly once.
+
+        _cost_bypass = getattr(self, "_model_cost_gate_bypass", None)
+
+        if not (_cost_bypass and session_key in _cost_bypass):
+            _cost_warning = None
+
+            try:
+                from clawk_cli.model_cost_guard import expensive_model_warning
+
+                _cost_warning = await asyncio.to_thread(
+                    expensive_model_warning,
+                    result.new_model,
+                    provider=result.target_provider,
+                    base_url=result.base_url or current_base_url or "",
+                    api_key=result.api_key or current_api_key or "",
+                    model_info=result.model_info,
+                )
+
+            except Exception:
+                _cost_warning = None
+
+            if _cost_warning is not None:
+
+                async def _on_cost_confirm(choice: str) -> str:
+                    if choice == "cancel":
+                        return (
+                            f"🟡 Model switch cancelled. Current model unchanged "
+                            f"({current_model or 'unknown'})."
+                        )
+
+                    # "once"/"always" both proceed — there is no persistent
+                    # opt-out for the cost guard (each expensive switch should
+                    # be an explicit decision). Re-run apply with the gate
+                    # bypassed for this session.
+                    _bypass = getattr(self, "_model_cost_gate_bypass", None) or set()
+
+                    self._model_cost_gate_bypass = _bypass | {session_key}
+
+                    try:
+                        return await self._handle_model_command(event)
+
+                    finally:
+                        try:
+                            self._model_cost_gate_bypass.discard(session_key)
+
+                        except Exception:
+                            pass
+
+                return await self._request_slash_confirm(
+                    event=event,
+                    command="model",
+                    title="Expensive Model Warning",
+                    message=(
+                        f"⚠️ **Expensive Model Warning**\n\n{_cost_warning.message}\n\n"
+                        f"_Reply `approve` to switch or `cancel` to keep the current model._"
+                    ),
+                    handler=_on_cost_confirm,
+                )
+
         # If there's a cached agent, update it in-place
 
         cached_entry = None
@@ -20462,6 +20755,13 @@ class GatewayRunner:
 
             return EphemeralReply(t("gateway.yolo.enabled"))
 
+    async def _handle_version_command(self, event: MessageEvent) -> str:
+        """Handle /version — show the running Clawksis version."""
+
+        from clawk_cli.banner import format_banner_version_label
+
+        return format_banner_version_label()
+
     async def _handle_verbose_command(self, event: MessageEvent) -> str:
         """Handle /verbose command — cycle tool progress display mode.
 
@@ -22266,9 +22566,14 @@ class GatewayRunner:
         account_lines: list[str] = []
 
         if provider:
+            # Resolve through the gateway.slash_commands module so the account
+            # fetch/render share the single canonical home for slash-command
+            # helpers (and stay patchable from one place in tests).
+            from gateway import slash_commands as _sc
+
             try:
                 account_snapshot = await asyncio.to_thread(
-                    fetch_account_usage,
+                    _sc.fetch_account_usage,
                     provider,
                     base_url=base_url,
                     api_key=api_key,
@@ -22278,7 +22583,7 @@ class GatewayRunner:
                 account_snapshot = None
 
             if account_snapshot:
-                account_lines = render_account_usage_lines(
+                account_lines = _sc.render_account_usage_lines(
                     account_snapshot, markdown=True
                 )
 
@@ -23568,15 +23873,16 @@ class GatewayRunner:
 
     # programmatic interfaces that should not trigger system updates.
 
+    # DISCORD, MATTERMOST, and HOMEASSISTANT are plugin-migrated and are NOT
+    # listed here — they pass the /update gate via the platform registry's
+    # ``allow_update_command=True`` flag (the fallback below), so the hardcoded
+    # set stays limited to the still-builtin platforms.
     _UPDATE_ALLOWED_PLATFORMS = frozenset({
         Platform.TELEGRAM,
-        Platform.DISCORD,
         Platform.SLACK,
         Platform.WHATSAPP,
         Platform.SIGNAL,
-        Platform.MATTERMOST,
         Platform.MATRIX,
-        Platform.HOMEASSISTANT,
         Platform.EMAIL,
         Platform.SMS,
         Platform.DINGTALK,
@@ -23704,7 +24010,14 @@ class GatewayRunner:
         if is_managed():
             return f"✗ {format_managed_message('update Clawksis')}"
 
-        project_root = Path(__file__).parent.parent.resolve()
+        # Resolve the repo root from the slash-command module's location (the
+        # canonical home for this handler). gateway/slash_commands.py and
+        # gateway/run.py share the same parent, so ``parent.parent`` is the
+        # project root either way; sourcing it from slash_commands keeps the
+        # git-repo detection consistent across the decomposed handler.
+        import gateway.slash_commands as _slash_commands_mod
+
+        project_root = Path(_slash_commands_mod.__file__).parent.parent.resolve()
 
         git_dir = project_root / ".git"
 
@@ -24843,7 +25156,7 @@ class GatewayRunner:
         self,
         user_text: str,
         audio_paths: List[str],
-    ) -> str:
+    ) -> tuple[str, List[str]]:
         """
 
         Auto-transcribe user voice/audio messages using the configured STT provider
@@ -24883,23 +25196,25 @@ class GatewayRunner:
                     notes.append(f"[The user sent a voice message: {abs_path}]")
 
             if not notes:
-                return user_text
+                return user_text, []
 
             prefix = "\n\n".join(notes)
 
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, []
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", []
 
-            return prefix
+            return prefix, []
 
         from tools.transcription_tools import transcribe_audio
 
         enriched_parts = []
+
+        successful_transcripts: List[str] = []
 
         for path in audio_paths:
             try:
@@ -24909,6 +25224,8 @@ class GatewayRunner:
 
                 if result["success"]:
                     transcript = result["transcript"]
+
+                    successful_transcripts.append(transcript)
 
                     enriched_parts.append(
                         f"[The user sent a voice message~ "
@@ -24963,14 +25280,14 @@ class GatewayRunner:
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, successful_transcripts
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", successful_transcripts
 
-            return prefix
+            return prefix, successful_transcripts
 
-        return user_text
+        return user_text, successful_transcripts
 
     def _build_process_event_source(self, evt: dict):
         """Resolve the canonical source for a synthetic background-process event.
@@ -26848,6 +27165,19 @@ class GatewayRunner:
 
         repeat_count = [0]  # How many times the same message repeated
 
+        # Markdown-capable platforms render terminal commands as bare fenced
+        # code blocks (no language tag — Slack mrkdwn would print "bash" as a
+        # literal first line). Back-to-back command tools collapse under a
+        # single header (see ``last_codeblock_tool``); a different tool resets
+        # it so the next command gets a fresh header. (#42634)
+        _cb_adapter = self.adapters.get(source.platform)
+
+        _cb_supports_code_blocks = bool(
+            getattr(_cb_adapter, "supports_code_blocks", False)
+        )
+
+        last_codeblock_tool = [None]  # tool_name of the last code-block emission
+
         # Auto-cleanup of temporary progress bubbles (Telegram + any adapter
 
         # that implements ``delete_message``). When enabled via
@@ -26986,6 +27316,52 @@ class GatewayRunner:
             from agent.display import get_tool_emoji
 
             emoji = get_tool_emoji(tool_name, default="⚙️", args=args)
+
+            # Markdown-capable gateways render a command tool (terminal) as a
+            # bare fenced code block instead of a truncated quoted preview.
+            # Verbose keeps the full command; non-verbose collapses to the first
+            # line capped at tool_preview_length so a long/multi-line command
+            # doesn't render as a huge block (#42634).
+            _command = (
+                args.get("command") if isinstance(args, dict) else None
+            ) or None
+
+            if _cb_supports_code_blocks and _command:
+                from agent.display import get_tool_preview_max_len
+
+                if progress_mode == "verbose":
+                    _body = _command
+                else:
+                    _pl = get_tool_preview_max_len()
+
+                    _cap = _pl if _pl > 0 else 40
+
+                    _body = _command.splitlines()[0] if _command else ""
+
+                    if len(_body) > _cap:
+                        _body = _body[: _cap - 1] + "…"
+
+                _code_block = f"```\n{_body}\n```"
+
+                if last_codeblock_tool[0] == tool_name:
+                    # Consecutive command tool — append the block under the
+                    # existing header instead of repeating the tool name.
+                    progress_queue.put(("__append_codeblock__", _code_block))
+
+                else:
+                    progress_queue.put(f"{emoji} {tool_name}\n{_code_block}")
+
+                last_codeblock_tool[0] = tool_name
+
+                last_progress_msg[0] = None
+
+                repeat_count[0] = 0
+
+                return
+
+            # A non-command tool breaks any running command-block streak so the
+            # next command tool starts a fresh header.
+            last_codeblock_tool[0] = None
 
             # Verbose mode: show detailed arguments, respects tool_preview_length
 
@@ -27359,6 +27735,27 @@ class GatewayRunner:
 
                     elif (
                         isinstance(raw, tuple)
+                        and len(raw) == 2
+                        and raw[0] == "__append_codeblock__"
+                    ):
+                        # Consecutive command tool — append its fenced block to
+                        # the current header line rather than emitting a new one.
+                        _, _code_block = raw
+
+                        if progress_lines:
+                            progress_lines[-1] = (
+                                f"{progress_lines[-1]}\n{_code_block}"
+                            )
+
+                            msg = progress_lines[-1]
+
+                        else:
+                            msg = _code_block
+
+                            progress_lines.append(msg)
+
+                    elif (
+                        isinstance(raw, tuple)
                         and len(raw) >= 1
                         and raw[0] == "__reset__"
                     ):
@@ -27583,6 +27980,23 @@ class GatewayRunner:
                                 last_progress_msg[0] = None
 
                                 repeat_count[0] = 0
+
+                            elif (
+                                isinstance(raw, tuple)
+                                and len(raw) == 2
+                                and raw[0] == "__append_codeblock__"
+                            ):
+                                _, _code_block = raw
+
+                                if progress_lines:
+                                    progress_lines[-1] = (
+                                        f"{progress_lines[-1]}\n{_code_block}"
+                                    )
+
+                                else:
+                                    progress_lines.append(_code_block)
+
+                                await _roll_progress_overflow_if_needed()
 
                             else:
                                 progress_lines.append(raw)
@@ -30645,13 +31059,52 @@ async def start_gateway(
                     existing_pid,
                 )
 
+                _force_exited = False
+
                 try:
                     terminate_pid(existing_pid, force=True)
 
-                    time.sleep(0.5)
+                except ProcessLookupError:
+                    _force_exited = True
 
-                except (ProcessLookupError, PermissionError, OSError):
+                except (PermissionError, OSError):
                     pass
+
+                # Confirm the force-kill actually reaped the process before we
+
+                # clear its PID file / scoped locks. SIGKILL can fail to take
+
+                # (uninterruptible sleep, zombie-reaping parent); if we blindly
+
+                # clear the metadata and start a fresh instance we end up with
+
+                # two live gateways fighting over the same token (#19471).
+
+                if not _force_exited:
+                    for _ in range(20):
+                        if not _pid_exists(existing_pid):
+                            _force_exited = True
+
+                            break
+
+                        time.sleep(0.25)
+
+                if not _force_exited:
+                    logger.error(
+                        "Old gateway (PID %d) still appears alive after SIGKILL; "
+                        "aborting replacement to avoid a duplicate gateway.",
+                        existing_pid,
+                    )
+
+                    try:
+                        from gateway.status import clear_takeover_marker
+
+                        clear_takeover_marker()
+
+                    except Exception:
+                        pass
+
+                    return False
 
             remove_pid_file()
 
