@@ -349,6 +349,11 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # First-time setup shells out to `npm install -g` for the coding
+            # CLIs and seeds a welcome cron — stub both so the test stays
+            # deterministic and never blocks on a real subprocess.
+            patch.object(setup_mod, "_install_coding_clis"),
+            patch.object(setup_mod, "_seed_welcome_checkin"),
         ):
             setup_mod.run_setup_wizard(args)
 

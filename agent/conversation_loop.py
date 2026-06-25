@@ -1618,7 +1618,17 @@ def run_conversation(
 
         # UI transcript and session persistence.
 
-        api_messages = agent._drop_thinking_only_and_merge_users(api_messages)
+        # In codex_responses mode, encrypted ``codex_reasoning_items`` are
+        # replayed to the Responses API on purpose (cross-turn coherence).
+        # They are NOT Anthropic-style thinking blocks, so a turn carrying
+        # only reasoning items must survive — dropping it here would strip
+        # the replay before the request and defeat the
+        # ``invalid_encrypted_content`` recovery contract (which only
+        # disables replay AFTER the provider rejects it).
+        api_messages = agent._drop_thinking_only_and_merge_users(
+            api_messages,
+            drop_codex_reasoning_items=agent.api_mode != "codex_responses",
+        )
 
         # Normalize message whitespace and tool-call JSON for consistent
 

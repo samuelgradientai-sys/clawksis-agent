@@ -181,6 +181,20 @@ def _validate_image_url(url: str) -> bool:
     return True
 
 
+async def _validate_image_url_async(url: str) -> bool:
+    """Async wrapper around :func:`_validate_image_url`.
+
+    URL validation performs DNS resolution and SSRF checks (via
+    ``is_safe_url``) which are blocking. Running them through
+    ``asyncio.to_thread`` keeps that work off the event loop so the async
+    vision dispatch path doesn't stall the loop (issue #2104).
+    """
+
+    import asyncio
+
+    return await asyncio.to_thread(_validate_image_url, url)
+
+
 def _detect_image_mime_type(image_path: Path) -> Optional[str]:
     """Return a MIME type when the file looks like a supported image."""
 
@@ -1138,7 +1152,7 @@ async def _vision_analyze_native(
 
             should_cleanup = False
 
-        elif _validate_image_url(image_url):
+        elif await _validate_image_url_async(image_url):
             blocked = check_website_access(image_url)
 
             if blocked:
@@ -1370,7 +1384,7 @@ async def vision_analyze_tool(
 
             should_cleanup = False  # Don't delete cached/local files
 
-        elif _validate_image_url(image_url):
+        elif await _validate_image_url_async(image_url):
             # Remote URL -- download to a temporary location
 
             blocked = check_website_access(image_url)
@@ -2066,7 +2080,7 @@ async def video_analyze_tool(
 
             should_cleanup = False
 
-        elif _validate_image_url(video_url):
+        elif await _validate_image_url_async(video_url):
             blocked = check_website_access(video_url)
 
             if blocked:

@@ -27642,6 +27642,47 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
             if not final_response:
                 error_msg = f"⚠️ {result['error']}" if result.get("error") else ""
 
+                # A failed turn can still have split the session during mid-run
+                # context compression (the agent created a new session_id before
+                # the API call ultimately failed).  Sync the session store and
+                # Telegram topic binding so the NEXT message loads the compressed
+                # transcript instead of the stale pre-compression session — the
+                # same recovery the success path does below, but on the failure
+                # early-return.  Without this the new compressed session is
+                # orphaned on every failed compression turn.
+                _failed_session_split = False
+
+                _failed_effective_session_id = session_id
+
+                if (
+                    _agent
+                    and session_key
+                    and hasattr(_agent, "session_id")
+                    and _agent.session_id != session_id
+                ):
+                    _failed_session_split = True
+
+                    _failed_effective_session_id = _agent.session_id
+
+                    logger.info(
+                        "Session split detected on failed turn: %s → %s (compression)",
+                        session_id,
+                        _agent.session_id,
+                    )
+
+                    entry = self.session_store._entries.get(session_key)
+
+                    if entry:
+                        entry.session_id = _agent.session_id
+
+                        self.session_store._save()
+
+                        self._sync_telegram_topic_binding(
+                            source,
+                            entry,
+                            reason="agent-run-compression",
+                        )
+
                 return {
                     "final_response": error_msg,
                     "messages": result.get("messages", []),
@@ -27654,12 +27695,15 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
                     "error": result.get("error"),
                     "compression_exhausted": result.get("compression_exhausted", False),
                     "tools": tools_holder[0] or [],
-                    "history_offset": len(agent_history),
+                    "history_offset": 0
+                    if _failed_session_split
+                    else len(agent_history),
                     "last_prompt_tokens": _last_prompt_toks,
                     "input_tokens": _input_toks,
                     "output_tokens": _output_toks,
                     "model": _resolved_model,
                     "context_length": _context_length,
+                    "session_id": _failed_effective_session_id,
                 }
 
             # Scan tool results for MEDIA:<path> tags that need to be delivered

@@ -21,20 +21,21 @@ class KimiProfile(ProviderProfile):
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Kimi uses extra_body.thinking + top-level reasoning_effort.
 
-        Mirroring Kimi CLI: reasoning mode is activated via
-        ``extra_body.thinking`` while the depth is conveyed through a
-        top-level ``reasoning_effort``. When reasoning is enabled we emit
-        both (an explicit recognized effort wins, otherwise we default to
-        ``medium``); when disabled we send only ``thinking={"type":
-        "disabled"}`` and omit ``reasoning_effort`` entirely.
+        Moonshot's OpenAI-compat endpoint treats ``extra_body.thinking`` and
+        a top-level ``reasoning_effort`` as mutually exclusive, so we emit at
+        most one of them — never both. A recognized effort
+        (``low|medium|high``) already turns reasoning on, so it is sent on its
+        own; otherwise we fall back to the ``extra_body.thinking`` binary
+        toggle. When reasoning is disabled we send only
+        ``thinking={"type": "disabled"}`` and omit ``reasoning_effort``.
+        Mirrors the OpenCodeGoProfile kimi-k2 branch.
         """
         extra_body = {}
         top_level = {}
 
         if not reasoning_config or not isinstance(reasoning_config, dict):
-            # No config → thinking enabled, default effort.
+            # No config → thinking on via the binary toggle only.
             extra_body["thinking"] = {"type": "enabled"}
-            top_level["reasoning_effort"] = "medium"
             return extra_body, top_level
 
         enabled = reasoning_config.get("enabled", True)
@@ -42,13 +43,14 @@ class KimiProfile(ProviderProfile):
             extra_body["thinking"] = {"type": "disabled"}
             return extra_body, top_level
 
-        # Enabled: thinking on, effort from config (default medium).
-        extra_body["thinking"] = {"type": "enabled"}
+        # Enabled: a recognized effort wins (top-level only); any unknown or
+        # strong effort (e.g. ``xhigh``/``max``) is not in Moonshot's
+        # low|medium|high set, so drop to the thinking toggle instead.
         effort = (reasoning_config.get("effort") or "").strip().lower()
         if effort in {"low", "medium", "high"}:
             top_level["reasoning_effort"] = effort
         else:
-            top_level["reasoning_effort"] = "medium"
+            extra_body["thinking"] = {"type": "enabled"}
 
         return extra_body, top_level
 

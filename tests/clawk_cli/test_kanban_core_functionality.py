@@ -5913,7 +5913,7 @@ def test_gateway_dispatcher_retries_corrupt_board_after_quarantine(
 
         filename = code.co_filename if code is not None else ""
 
-        if filename.endswith("gateway/run.py"):
+        if filename.endswith("kanban_watchers.py"):
             return next(time_values, 1301.0)
 
         return real_monotonic()

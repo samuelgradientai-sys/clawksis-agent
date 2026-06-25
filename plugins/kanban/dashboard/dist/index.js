@@ -7492,9 +7492,7 @@
         h(Select, Object.assign({
 
           value: newParent,
-
           className: "h-7 text-xs flex-1",
-
         }, selectChangeHandler(setNewParent)),
 
           h(SelectOption, { value: "" }, tx(t, "addParent", "— add parent —")),
@@ -7568,9 +7566,7 @@
         h(Select, Object.assign({
 
           value: newChild,
-
           className: "h-7 text-xs flex-1",
-
         }, selectChangeHandler(setNewChild)),
 
           h(SelectOption, { value: "" }, tx(t, "addChild", "— add child —")),
