@@ -87,8 +87,6 @@ from clawk_cli.config import get_clawk_home, get_config_path, read_raw_config
 
 from clawk_constants import OPENROUTER_BASE_URL, secure_parent_dir
 
-from agent.credential_persistence import sanitize_borrowed_credential_payload
-
 from utils import atomic_replace, atomic_yaml_write, is_truthy_value
 
 
@@ -1852,6 +1850,10 @@ def write_credential_pool(provider_id: str, entries: List[Dict[str, Any]]) -> Pa
     ``PooledCredential.to_dict()`` already did the same work upstream.
 
     """
+
+    # Imported lazily so importing clawk_cli.auth doesn't hard-require the
+    # agent package (test harnesses stub `agent` with an empty __path__).
+    from agent.credential_persistence import sanitize_borrowed_credential_payload
 
     with _auth_store_lock():
         auth_store = _load_auth_store()

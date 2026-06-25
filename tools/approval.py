@@ -879,6 +879,14 @@ def _normalize_command_for_detection(command: str) -> str:
 
     command = unicodedata.normalize("NFKC", command)
 
+    # Strip shell backslash-escapes: r\m → rm. Prevents \-injection bypass.
+
+    command = re.sub(r"\\([^\n])", r"\1", command)
+
+    # Strip empty-string literals that split tokens: r''m → rm, r""m → rm.
+
+    command = re.sub(r"''|\"\"", "", command)
+
     # Fold the current user's resolved absolute home path into ~/ at detection
 
     # time so static user-sensitive patterns catch /home/alice/.bashrc the same
