@@ -389,6 +389,10 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g` (Codex / Claude
+            # Code / OpenCode); on Linux CI that blocks on the network and trips
+            # the 30s timeout. Stub it like the first-time-setup test above.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 
