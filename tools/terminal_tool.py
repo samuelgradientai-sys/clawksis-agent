@@ -1554,10 +1554,16 @@ def register_task_env_overrides(task_id: str, overrides: Dict[str, Any]):
     new_cwd = overrides.get("cwd")
 
     if isinstance(new_cwd, str) and new_cwd.strip():
+        # A cwd-only override collapses to the shared "default" container, but
+        # RL/benchmark tasks (and tests) key the live env directly under their
+        # own task_id. Mirror ``get_active_env``'s dual lookup so the sync hits
+        # whichever key actually holds the cached env.
         container_id = _resolve_container_task_id(task_id)
 
         with _env_lock:
-            env = _active_environments.get(container_id)
+            env = _active_environments.get(container_id) or _active_environments.get(
+                task_id
+            )
 
         if env is not None and getattr(env, "cwd", None) is not None:
             env.cwd = new_cwd
@@ -2854,7 +2860,15 @@ def terminal_tool(
 
         # before falling back to global env var config
 
-        overrides = _task_env_overrides.get(effective_task_id, {})
+        # Cwd-only overrides collapse to the shared "default" container, yet the
+        # override (and any live env) is registered under the raw task_id by the
+        # ACP adapter / RL benchmarks. Look under the resolved key first, then
+        # fall back to the raw task_id so a registered cwd is still honoured.
+        overrides = (
+            _task_env_overrides.get(effective_task_id)
+            or _task_env_overrides.get(task_id)
+            or {}
+        )
 
         # Select image based on env type, with per-task override support
 
@@ -2925,11 +2939,24 @@ def terminal_tool(
 
         # instead of each creating their own (wasting Modal resources).
 
-        with _env_lock:
-            if effective_task_id in _active_environments:
-                _last_activity[effective_task_id] = time.time()
+        # Cwd-only overrides collapse to "default", but RL/benchmark tasks (and
+        # tests) may key the live env directly under the raw task_id. Resolve to
+        # whichever key holds the cached env, mirroring ``get_active_env``.
+        env_lookup_id = (
+            effective_task_id
+            if effective_task_id in _active_environments
+            else (
+                task_id
+                if task_id and task_id in _active_environments
+                else effective_task_id
+            )
+        )
 
-                env = _active_environments[effective_task_id]
+        with _env_lock:
+            if env_lookup_id in _active_environments:
+                _last_activity[env_lookup_id] = time.time()
+
+                env = _active_environments[env_lookup_id]
 
                 needs_creation = False
 
@@ -3692,7 +3719,12 @@ def check_terminal_requirements() -> bool:
 
                 return False
 
-            result = subprocess.run([docker, "version"], capture_output=True, timeout=5)
+            result = subprocess.run(
+                [docker, "version"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=5,
+            )
 
             return result.returncode == 0
 

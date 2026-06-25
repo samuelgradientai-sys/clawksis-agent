@@ -160,7 +160,13 @@ class SSHEnvironment(BaseEnvironment):
         cmd.append("echo 'SSH connection established'")
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
 
             if result.returncode != 0:
                 error_msg = result.stderr.strip() or result.stdout.strip()
@@ -178,7 +184,13 @@ class SSHEnvironment(BaseEnvironment):
 
             cmd.append("echo $HOME")
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
             home = result.stdout.strip()
 
@@ -212,7 +224,13 @@ class SSHEnvironment(BaseEnvironment):
 
         cmd.append(quoted_mkdir_command(dirs))
 
-        subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
     # _get_sync_files provided via iter_sync_files in FileSyncManager init
 
@@ -225,7 +243,13 @@ class SSHEnvironment(BaseEnvironment):
 
         mkdir_cmd.append(f"mkdir -p {shlex.quote(parent)}")
 
-        subprocess.run(mkdir_cmd, capture_output=True, text=True, timeout=10)
+        subprocess.run(
+            mkdir_cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
         scp_cmd = ["scp", "-o", f"ControlPath={self.control_socket}"]
 
@@ -237,7 +261,13 @@ class SSHEnvironment(BaseEnvironment):
 
         scp_cmd.extend([host_path, f"{self.user}@{self.host}:{remote_path}"])
 
-        result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            scp_cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
         if result.returncode != 0:
             raise RuntimeError(f"scp failed: {result.stderr.strip()}")
@@ -275,7 +305,13 @@ class SSHEnvironment(BaseEnvironment):
 
             cmd.append(quoted_mkdir_command(parents))
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
 
             if result.returncode != 0:
                 raise RuntimeError(f"remote mkdir failed: {result.stderr.strip()}")
@@ -410,7 +446,13 @@ class SSHEnvironment(BaseEnvironment):
 
         cmd.append(quoted_rm_command(remote_paths))
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
         if result.returncode != 0:
             raise RuntimeError(f"remote rm failed: {result.stderr.strip()}")
@@ -464,7 +506,12 @@ class SSHEnvironment(BaseEnvironment):
                     f"{self.user}@{self.host}",
                 ]
 
-                subprocess.run(cmd, capture_output=True, timeout=5)
+                subprocess.run(
+                    cmd,
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    timeout=5,
+                )
 
             except (OSError, subprocess.SubprocessError):
                 pass

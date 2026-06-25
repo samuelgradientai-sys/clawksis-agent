@@ -156,6 +156,13 @@ dependencies = [
 
   "pathspec==1.1.1",
 
+  # Version parsing/comparison used on production paths: Hindsight version
+  # compare (plugins/memory/hindsight/__init__.py), lazy-install version
+  # constraints (tools/lazy_deps.py) and requirement parsing
+  # (clawk_cli/main.py). Declared core so it installs everywhere (incl. the
+  # slim Docker image) instead of arriving only transitively. See #40503.
+  "packaging==26.0",
+
   "fastapi>=0.104.0,<1",
 
   "uvicorn[standard]>=0.24.0,<1",
@@ -514,6 +521,19 @@ py-modules = ["run_agent", "model_tools", "toolsets", "batch_runner", "trajector
 
 locales = ["locales/*.yaml"]
 
+# Optional MCP catalog manifests. optional-mcps/ is a bare data directory (no
+# __init__.py), so it is neither a package (packages.find) nor package-data.
+# clawk_cli/mcp_catalog.py resolves the catalog via get_optional_mcps_dir() and
+# iterates optional-mcps/<name>/, so each entry needs its OWN data-files target
+# (data-files flattens every glob into its single target dir; a shared glob
+# would collapse all manifests into one folder and lose the per-MCP layout).
+# MANIFEST.in `graft optional-mcps` ships them in the sdist.
+"optional-mcps/linear" = ["optional-mcps/linear/manifest.yaml"]
+
+"optional-mcps/linkedin" = ["optional-mcps/linkedin/manifest.yaml"]
+
+"optional-mcps/n8n" = ["optional-mcps/n8n/manifest.yaml"]
+
 
 
 [tool.setuptools.package-data]
@@ -561,7 +581,7 @@ plugins = [
 
 [tool.setuptools.packages.find]
 
-include = ["agent", "agent.*", "tools", "tools.*", "clawk_cli", "clawk_cli.*", "gateway", "gateway.*", "tui_gateway", "tui_gateway.*", "cron", "acp_adapter", "plugins", "plugins.*", "providers", "providers.*"]
+include = ["agent", "agent.*", "tools", "tools.*", "clawk_cli", "clawk_cli.*", "gateway", "gateway.*", "tui_gateway", "tui_gateway.*", "cron", "cron.*", "acp_adapter", "plugins", "plugins.*", "providers", "providers.*"]
 
 
 
