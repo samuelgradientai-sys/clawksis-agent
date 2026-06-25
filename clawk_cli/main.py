@@ -13914,7 +13914,193 @@ def _clawk_exe_shims(scripts_dir: Path) -> list[Path]:
     return [
         scripts_dir / "clawk.exe",
         scripts_dir / "clawk-gateway.exe",
+        # Legacy pre-rebrand shims: a user who upgraded from Hermes may still
+        # have a running hermes.exe / hermes-gateway.exe holding the same venv
+        # file locks, which would break the Windows quarantine rename. Detect
+        # (and, if present, quarantine) them too. Non-existent entries are
+        # skipped by every caller, so listing them unconditionally is safe.
+        scripts_dir / "hermes.exe",
+        scripts_dir / "hermes-gateway.exe",
     ]
+
+
+def _wait_for_windows_update_gateway_exit(pids, *, timeout: float) -> set:
+    """Wait up to ``timeout`` seconds for the given gateway PIDs to exit.
+
+    Returns the set of PIDs still alive after the deadline (best-effort; an
+    empty set means every gateway exited cleanly). Used while pausing Windows
+    gateways for an update so the venv's locked ``.exe`` shims can be replaced.
+    """
+
+    remaining = {int(p) for p in pids}
+
+    if not remaining:
+        return set()
+
+    try:
+        import psutil
+
+    except Exception:
+        return remaining
+
+    deadline = _time.monotonic() + max(float(timeout), 0.0)
+
+    while remaining and _time.monotonic() < deadline:
+        for pid in list(remaining):
+            try:
+                if not psutil.pid_exists(pid):
+                    remaining.discard(pid)
+
+            except Exception:
+                remaining.discard(pid)
+
+        if remaining:
+            _time.sleep(0.1)
+
+    return remaining
+
+
+def _pause_windows_gateways_for_update() -> dict:
+    """Stop running gateways before a Windows update so the locked ``.exe``
+    shims can be quarantined, recording enough state to relaunch them after.
+
+    Profile-mapped gateways get a planted planned-stop marker (so they exit
+    cleanly and can be relaunched detached afterwards). Gateways with no
+    resolvable profile are force-terminated — there is nothing to relaunch them
+    against. Returns a resume token for
+    :func:`_resume_windows_gateways_after_update`.
+    """
+
+    token = {"resume_needed": False, "profiles": {}, "unmapped_pids": []}
+
+    if not _is_windows():
+        return token
+
+    try:
+        from clawk_cli.gateway import (
+            find_gateway_pids,
+            find_profile_gateway_processes,
+            _get_restart_drain_timeout,
+        )
+
+    except Exception:
+        return token
+
+    try:
+        all_pids = [int(p) for p in find_gateway_pids(all_profiles=True)]
+
+    except Exception:
+        all_pids = []
+
+    if not all_pids:
+        return token
+
+    try:
+        profile_procs = list(find_profile_gateway_processes())
+
+    except Exception:
+        profile_procs = []
+
+    from gateway.status import write_planned_stop_marker
+
+    profiles: dict = {}
+
+    mapped_pids: set = set()
+
+    for proc in profile_procs:
+        pid = getattr(proc, "pid", None)
+
+        if pid is None or int(pid) not in all_pids:
+            continue
+
+        pid = int(pid)
+
+        profiles[proc.profile] = pid
+
+        mapped_pids.add(pid)
+
+        try:
+            write_planned_stop_marker(pid, home=getattr(proc, "path", None))
+
+        except Exception:
+            pass
+
+    unmapped_pids = [p for p in all_pids if p not in mapped_pids]
+
+    # Give the profile gateways a chance to exit cleanly after the marker.
+    if profiles:
+        try:
+            drain_timeout = _get_restart_drain_timeout()
+
+        except Exception:
+            drain_timeout = 5.0
+
+        _wait_for_windows_update_gateway_exit(
+            list(profiles.values()), timeout=drain_timeout
+        )
+
+    # Unmapped gateways have no profile to relaunch them — force them down.
+    if unmapped_pids:
+        from gateway.status import terminate_pid
+
+        for pid in unmapped_pids:
+            try:
+                terminate_pid(pid, force=True)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = bool(profiles)
+
+    token["profiles"] = profiles
+
+    token["unmapped_pids"] = unmapped_pids
+
+    if profiles:
+        print(f"  Paused gateway profile(s): {', '.join(profiles)}")
+
+    if unmapped_pids:
+        print(
+            f"  Terminated {len(unmapped_pids)} gateway process(es) "
+            "without profile mapping: " + ", ".join(str(p) for p in unmapped_pids)
+        )
+
+    return token
+
+
+def _resume_windows_gateways_after_update(token: dict) -> None:
+    """Relaunch the profile gateways paused by
+    :func:`_pause_windows_gateways_for_update`.
+
+    Idempotent: clears the token's ``resume_needed`` flag so a repeat call is a
+    no-op. Unmapped (force-killed) gateways are intentionally not relaunched.
+    """
+
+    if not token or not token.get("resume_needed"):
+        return
+
+    profiles = token.get("profiles") or {}
+
+    if profiles:
+        try:
+            from clawk_cli.gateway import launch_detached_profile_gateway_restart
+
+        except Exception:
+            launch_detached_profile_gateway_restart = None
+
+        print("  Restarting Windows gateway profile(s): " + ", ".join(profiles))
+
+        for profile, old_pid in profiles.items():
+            if launch_detached_profile_gateway_restart is None:
+                continue
+
+            try:
+                launch_detached_profile_gateway_restart(profile, old_pid)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = False
 
 
 def _detect_concurrent_clawk_instances(
