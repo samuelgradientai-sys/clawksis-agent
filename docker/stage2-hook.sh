@@ -525,6 +525,19 @@ fi
 
 
 
+# Always reset ownership of $CLAWK_HOME/cron to clawk on every boot.
+# Cron job files can land owned by root when crons are created via
+# `docker exec <container> clawk …` (root unless `-u` is passed), which
+# then breaks the supervised clawk runtime that reads/writes them.
+# Idempotent; skipped on rootless containers where chown would fail.
+if [ -d "$CLAWK_HOME/cron" ]; then
+
+    chown -R clawk:clawk "$CLAWK_HOME/cron" 2>/dev/null || true
+
+fi
+
+
+
 # Reset ownership of clawk-owned top-level state files on every boot.
 
 # The targeted data-volume chown above only covers clawk-owned

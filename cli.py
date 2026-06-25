@@ -4455,9 +4455,9 @@ def _build_compact_banner() -> str:
     dim_color = _skin.get_color("banner_dim", "#4A3496") if _skin else "#4A3496"
 
     if skin_name == "default":
-        line1 = "★ CLAWKSIS - AI Agent Framework"
+        line1 = "⚕ NOUS HERMES - AI Agent Framework"
 
-        tiny_line = "★ CLAWKSIS"
+        tiny_line = "⚕ NOUS HERMES"
 
     else:
         agent_name = (

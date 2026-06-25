@@ -2399,6 +2399,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     _get_bedrock_runtime_client,
                     invalidate_runtime_client,
                     is_stale_connection_error,
+                    is_streaming_access_denied_error,
+                    normalize_converse_response,
                     stream_converse_with_callbacks,
                 )
 
@@ -2412,6 +2414,20 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     raw_response = client.converse_stream(**api_kwargs)
 
                 except Exception as _bedrock_exc:
+                    # IAM allows bedrock:InvokeModel but not
+                    # InvokeModelWithResponseStream — permanent for this
+                    # session.  Fall back to the non-streaming converse() path
+                    # inline and disable streaming for the rest of the session.
+
+                    if is_streaming_access_denied_error(_bedrock_exc):
+                        agent._disable_streaming = True
+
+                        result["response"] = normalize_converse_response(
+                            client.converse(**api_kwargs)
+                        )
+
+                        return
+
                     # Evict the cached client on stale-connection failures
 
                     # so the outer retry loop builds a fresh client/pool.

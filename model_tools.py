@@ -54,6 +54,8 @@ import threading
 
 import time
 
+from collections import OrderedDict
+
 from typing import Dict, Any, List, Optional, Tuple
 
 
@@ -418,7 +420,14 @@ _LEGACY_TOOLSET_MAP = {
 
 # daemon start/stop, env var changes, etc.) on a 30 s horizon.
 
-_tool_defs_cache: Dict[tuple, List[Dict[str, Any]]] = {}
+# Bound on the number of memoized get_tool_definitions() results. A long-lived
+# Gateway varies cache keys (enabled/disabled toolsets, kanban task flag, config
+# fingerprint) over its lifetime; without a cap the cache grows unbounded
+# (#19251). When the cap is reached we evict the oldest entry (FIFO) rather than
+# clearing everything, so hot keys stay warm.
+_TOOL_DEFS_CACHE_MAX = 64
+
+_tool_defs_cache: "OrderedDict[tuple, List[Dict[str, Any]]]" = OrderedDict()
 
 
 def _clear_tool_defs_cache() -> None:
@@ -549,6 +558,18 @@ def get_tool_definitions(
         # (DeepSeek, Xiaomi MiMo, Moonshot Kimi) reject the request with
 
         # HTTP 400. Mirrors the cache-hit path above. (issue #17335)
+
+        # Evict the oldest entry once we hit the cap so the cache stays bounded
+
+        # over a long-lived Gateway's lifetime (#19251), rather than clearing
+
+        # everything or growing without limit.
+
+        if (
+            cache_key not in _tool_defs_cache
+            and len(_tool_defs_cache) >= _TOOL_DEFS_CACHE_MAX
+        ):
+            _tool_defs_cache.popitem(last=False)
 
         _tool_defs_cache[cache_key] = result
 
@@ -1652,6 +1673,38 @@ def handle_function_call(
                 "error": f"{function_name} must be handled by the agent loop"
             })
 
+        # Apply tool_request middleware (unless the caller already ran it and
+        # passed the resulting trace).  The agent loop applies request
+        # middleware itself and forwards skip_tool_request_middleware=True plus
+        # tool_request_middleware_trace so the rewrite is not double-applied;
+        # direct callers (gateway, tests, bridge) rely on this path to rewrite
+        # args before hooks, guardrails, and execution observe them.
+        middleware_trace: List[Dict[str, Any]] = list(
+            tool_request_middleware_trace or []
+        )
+
+        if not skip_tool_request_middleware:
+            try:
+                from clawk_cli.middleware import apply_tool_request_middleware
+
+                _request_result = apply_tool_request_middleware(
+                    function_name,
+                    function_args,
+                    task_id=task_id or "",
+                    session_id=session_id or "",
+                    tool_call_id=tool_call_id or "",
+                    turn_id=turn_id or "",
+                    api_request_id=api_request_id or "",
+                )
+
+                if isinstance(_request_result.payload, dict):
+                    function_args = _request_result.payload
+
+                middleware_trace = list(_request_result.trace)
+
+            except Exception as _mw_err:
+                logger.debug("tool_request middleware error: %s", _mw_err)
+
         # Check plugin hooks for a block directive (unless caller already
 
         # checked — e.g. run_agent._invoke_tool passes skip=True to
@@ -1686,6 +1739,7 @@ def handle_function_call(
                     tool_call_id=tool_call_id or "",
                     turn_id=turn_id or "",
                     api_request_id=api_request_id or "",
+                    middleware_trace=middleware_trace,
                 )
 
             except Exception as _hook_err:
@@ -1706,6 +1760,7 @@ def handle_function_call(
                     status="blocked",
                     error_type="plugin_block",
                     error_message=block_message,
+                    middleware_trace=middleware_trace,
                 )
 
                 return result
@@ -1809,6 +1864,7 @@ def handle_function_call(
                         function_name,
                         next_args,
                         task_id=task_id,
+                        session_id=session_id,
                         enabled_tools=sandbox_enabled,
                     )
 
@@ -1820,10 +1876,31 @@ def handle_function_call(
                         function_name,
                         next_args,
                         task_id=task_id,
+                        session_id=session_id,
                         user_task=user_task,
                     )
 
-            result = _dispatch(function_args)
+            # Run the actual dispatch through tool_execution middleware so
+            # plugins can wrap the call (retries, timeouts, arg rewriting at
+            # exec time).  With no execution middleware registered this is a
+            # straight passthrough to _dispatch.
+            try:
+                from clawk_cli.middleware import run_tool_execution_middleware
+
+                result = run_tool_execution_middleware(
+                    function_name,
+                    function_args,
+                    _dispatch,
+                    original_args=function_args,
+                    task_id=task_id or "",
+                    session_id=session_id or "",
+                    tool_call_id=tool_call_id or "",
+                    turn_id=turn_id or "",
+                    api_request_id=api_request_id or "",
+                )
+
+            except ImportError:
+                result = _dispatch(function_args)
 
         finally:
             if (
@@ -1859,6 +1936,7 @@ def handle_function_call(
             turn_id=turn_id,
             api_request_id=api_request_id,
             duration_ms=duration_ms,
+            middleware_trace=middleware_trace,
         )
 
         # Generic tool-result canonicalization seam: plugins receive the

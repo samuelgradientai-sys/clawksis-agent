@@ -1184,6 +1184,20 @@ show_manual_install_hint() {
 clone_repo() {
     log_info "Installing to $INSTALL_DIR..."
 
+    # #40998: a previous clone that died before its first commit leaves
+    # $INSTALL_DIR/.git present but with no resolvable HEAD. `git rev-parse
+    # --is-inside-work-tree` and `git status` both still succeed there, so the
+    # update path below would treat it as a valid checkout -- but `git stash`/
+    # `git checkout` abort with "You do not have the initial commit yet". Treat a
+    # commit-less checkout as broken and move it aside so a fresh clone proceeds.
+    # Never delete it: the partial download is preserved in a .broken-* backup.
+    if [ -d "$INSTALL_DIR/.git" ] && ! git -C "$INSTALL_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
+        _broken_backup="${INSTALL_DIR}.broken-$(date +%Y%m%d%H%M%S)-$$"
+        log_warn "Found an interrupted previous install at $INSTALL_DIR (no initial commit)."
+        log_warn "Moving it aside to $_broken_backup and starting a fresh clone."
+        mv "$INSTALL_DIR" "$_broken_backup"
+    fi
+
     if [ -d "$INSTALL_DIR" ]; then
         if [ -d "$INSTALL_DIR/.git" ]; then
             log_info "Existing installation found, updating..."

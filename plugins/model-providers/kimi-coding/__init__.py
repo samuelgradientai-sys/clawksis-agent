@@ -19,20 +19,22 @@ class KimiProfile(ProviderProfile):
     def build_api_kwargs_extras(
         self, *, reasoning_config: dict | None = None, **context
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Kimi uses extra_body.thinking XOR top-level reasoning_effort.
+        """Kimi uses extra_body.thinking + top-level reasoning_effort.
 
-        Moonshot's /v1 endpoint rejects requests that carry both
-        ``extra_body.thinking`` and a top-level ``reasoning_effort`` ("cannot
-        specify both 'thinking' and 'reasoning_effort'"). So we emit at most
-        one knob: an explicit, recognized effort sends ``reasoning_effort``
-        alone; every other case falls back to the ``thinking`` toggle alone.
+        Mirroring Kimi CLI: reasoning mode is activated via
+        ``extra_body.thinking`` while the depth is conveyed through a
+        top-level ``reasoning_effort``. When reasoning is enabled we emit
+        both (an explicit recognized effort wins, otherwise we default to
+        ``medium``); when disabled we send only ``thinking={"type":
+        "disabled"}`` and omit ``reasoning_effort`` entirely.
         """
         extra_body = {}
         top_level = {}
 
         if not reasoning_config or not isinstance(reasoning_config, dict):
-            # No config → thinking enabled, let the server pick the depth.
+            # No config → thinking enabled, default effort.
             extra_body["thinking"] = {"type": "enabled"}
+            top_level["reasoning_effort"] = "medium"
             return extra_body, top_level
 
         enabled = reasoning_config.get("enabled", True)
@@ -40,13 +42,13 @@ class KimiProfile(ProviderProfile):
             extra_body["thinking"] = {"type": "disabled"}
             return extra_body, top_level
 
-        # Enabled: an explicit recognized effort wins and is sent on its own;
-        # otherwise drop to the thinking toggle so we never pair both.
+        # Enabled: thinking on, effort from config (default medium).
+        extra_body["thinking"] = {"type": "enabled"}
         effort = (reasoning_config.get("effort") or "").strip().lower()
         if effort in {"low", "medium", "high"}:
             top_level["reasoning_effort"] = effort
         else:
-            extra_body["thinking"] = {"type": "enabled"}
+            top_level["reasoning_effort"] = "medium"
 
         return extra_body, top_level
 
