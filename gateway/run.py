@@ -18201,6 +18201,71 @@ class GatewayRunner:
         if not result.success:
             return t("gateway.model.error_prefix", error=result.error_message)
 
+        # Expensive-model confirmation gate (typed ``/model <name>`` path).
+        # The pickers (Telegram/Discord keyboards, TUI, dashboard) already
+        # confirm via their own UI; the typed text command previously bypassed
+        # the guard entirely. On a cost warning, ask for confirmation and apply
+        # the switch only when the user approves — re-entering this handler with
+        # a per-session bypass so the apply logic below runs exactly once.
+
+        _cost_bypass = getattr(self, "_model_cost_gate_bypass", None)
+
+        if not (_cost_bypass and session_key in _cost_bypass):
+            _cost_warning = None
+
+            try:
+                from clawk_cli.model_cost_guard import expensive_model_warning
+
+                _cost_warning = await asyncio.to_thread(
+                    expensive_model_warning,
+                    result.new_model,
+                    provider=result.target_provider,
+                    base_url=result.base_url or current_base_url or "",
+                    api_key=result.api_key or current_api_key or "",
+                    model_info=result.model_info,
+                )
+
+            except Exception:
+                _cost_warning = None
+
+            if _cost_warning is not None:
+
+                async def _on_cost_confirm(choice: str) -> str:
+                    if choice == "cancel":
+                        return (
+                            f"🟡 Model switch cancelled. Current model unchanged "
+                            f"({current_model or 'unknown'})."
+                        )
+
+                    # "once"/"always" both proceed — there is no persistent
+                    # opt-out for the cost guard (each expensive switch should
+                    # be an explicit decision). Re-run apply with the gate
+                    # bypassed for this session.
+                    _bypass = getattr(self, "_model_cost_gate_bypass", None) or set()
+
+                    self._model_cost_gate_bypass = _bypass | {session_key}
+
+                    try:
+                        return await self._handle_model_command(event)
+
+                    finally:
+                        try:
+                            self._model_cost_gate_bypass.discard(session_key)
+
+                        except Exception:
+                            pass
+
+                return await self._request_slash_confirm(
+                    event=event,
+                    command="model",
+                    title="Expensive Model Warning",
+                    message=(
+                        f"⚠️ **Expensive Model Warning**\n\n{_cost_warning.message}\n\n"
+                        f"_Reply `approve` to switch or `cancel` to keep the current model._"
+                    ),
+                    handler=_on_cost_confirm,
+                )
+
         # If there's a cached agent, update it in-place
 
         cached_entry = None
