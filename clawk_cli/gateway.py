@@ -941,7 +941,10 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
     # host platform and is a no-op on POSIX (just ``start_new_session=True``).
 
-    from clawk_cli._subprocess_compat import windows_detach_popen_kwargs
+    from clawk_cli._subprocess_compat import (
+        windows_detach_flags_without_breakaway,
+        windows_detach_popen_kwargs,
+    )
 
     watcher = textwrap.dedent(
         """
@@ -1000,9 +1003,17 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
             _CREATE_NO_WINDOW = 0x08000000
 
+            # CREATE_BREAKAWAY_FROM_JOB — escape any job object the watcher
+
+            # inherited so the respawned gateway isn't reaped when the parent
+
+            # job is torn down (Windows Terminal wraps children in a job).
+
+            _CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
             _popen_kwargs["creationflags"] = (
 
-                _CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS | _CREATE_NO_WINDOW
+                _CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS | _CREATE_NO_WINDOW | _CREATE_BREAKAWAY_FROM_JOB
 
             )
 
@@ -1010,7 +1021,23 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
             _popen_kwargs["start_new_session"] = True
 
-        subprocess.Popen(cmd, **_popen_kwargs)
+        try:
+
+            subprocess.Popen(cmd, **_popen_kwargs)
+
+        except OSError:
+
+            # Breakaway denied by a restrictive parent job object surfaces as
+
+            # ERROR_ACCESS_DENIED → OSError. Retry without the breakaway bit
+
+            # rather than leaving the gateway un-respawned.
+
+            if sys.platform == "win32":
+
+                _popen_kwargs["creationflags"] &= ~_CREATE_BREAKAWAY_FROM_JOB
+
+            subprocess.Popen(cmd, **_popen_kwargs)
 
         """
     ).strip()
@@ -1020,18 +1047,33 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
         # closing the user's terminal doesn't kill the watcher.
 
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                watcher,
-                str(old_pid),
-                *_gateway_run_args_for_profile(profile),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **windows_detach_popen_kwargs(),
-        )
+        _watcher_argv = [
+            sys.executable,
+            "-c",
+            watcher,
+            str(old_pid),
+            *_gateway_run_args_for_profile(profile),
+        ]
+
+        try:
+            subprocess.Popen(
+                _watcher_argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **windows_detach_popen_kwargs(),
+            )
+
+        except OSError:
+            # Breakaway denied by the parent job object (restrictive Windows
+            # Terminal / container / kiosk-mode shells) surfaces as
+            # ERROR_ACCESS_DENIED → OSError. Retry the watcher launch without
+            # the breakaway bit instead of giving up on the respawn.
+            subprocess.Popen(
+                _watcher_argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=windows_detach_flags_without_breakaway(),
+            )
 
     except OSError:
         return False
