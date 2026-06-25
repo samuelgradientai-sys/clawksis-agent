@@ -1154,6 +1154,11 @@ def _last_transcript_timestamp(history: Optional[List[Dict[str, Any]]]) -> Any:
 
 _AUTO_APPEND_MEDIA_TOOL_NAMES = {"text_to_speech", "text_to_speech_tool"}
 
+# Producer tools whose JSON result carries a local image path (no MEDIA: tag).
+# Their path is auto-appended so delivery doesn't depend on the model restating
+# it; remote URLs and failed generations are filtered out at extraction time.
+_AUTO_APPEND_IMAGE_TOOL_NAMES = {"image_generate"}
+
 
 # Extension-anchored MEDIA: matcher for tool results. Mirrors the dispatch-site
 
@@ -1251,10 +1256,42 @@ def _collect_auto_append_media_tags(
 
         call_id = str(msg.get("tool_call_id") or msg.get("call_id") or "")
 
-        if tool_name_by_call_id.get(call_id) not in _AUTO_APPEND_MEDIA_TOOL_NAMES:
-            continue
+        tool_name = tool_name_by_call_id.get(call_id)
 
         content = str(msg.get("content") or "")
+
+        # image_generate returns a JSON payload with a local path (no MEDIA: tag).
+        # Parse it and auto-append the first *local* path (host-deliverable path
+        # preferred over the sandbox path); skip failed generations and remote
+        # URLs, which aren't local files we can attach.
+        if tool_name in _AUTO_APPEND_IMAGE_TOOL_NAMES:
+            try:
+                payload = json.loads(content)
+
+            except (ValueError, TypeError):
+                payload = None
+
+            if isinstance(payload, dict) and payload.get("success"):
+                img_path = next(
+                    (
+                        str(p).strip()
+                        for p in (
+                            payload.get("host_image"),
+                            payload.get("image"),
+                            payload.get("agent_visible_image"),
+                        )
+                        if isinstance(p, str) and p.strip() and "://" not in p
+                    ),
+                    None,
+                )
+
+                if img_path and img_path not in history_media_paths:
+                    media_tags.append(f"MEDIA:{img_path}")
+
+            continue
+
+        if tool_name not in _AUTO_APPEND_MEDIA_TOOL_NAMES:
+            continue
 
         if "MEDIA:" not in content:
             continue
