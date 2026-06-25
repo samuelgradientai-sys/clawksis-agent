@@ -1859,6 +1859,19 @@ DEFAULT_CONFIG = {
             "timeout": 600,
             "extra_body": {},
         },
+        # Monitor — urgency classifier for cron monitors. Used by
+        # ``cron/scripts/classify_items.py`` (task="monitor") to score
+        # polled items (mail, feeds, etc.) and surface only the urgent
+        # ones. "auto" = use main chat model; route to a cheap/fast model
+        # (e.g. gemini-flash, haiku) for high-frequency polling.
+        "monitor": {
+            "provider": "auto",
+            "model": "",
+            "base_url": "",
+            "api_key": "",
+            "timeout": 120,
+            "extra_body": {},
+        },
     },
     "display": {
         "compact": False,

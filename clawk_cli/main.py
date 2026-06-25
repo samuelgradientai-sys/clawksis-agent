@@ -4362,6 +4362,20 @@ def select_provider_and_model(args=None):
         else:
             ordered.append((key, label, members))
 
+    # The active provider may be a recognized-but-unlisted provider whose code
+    # still ships (e.g. "nous", hidden from the default BYOK picker). It won't
+    # match any canonical row or group member above, so surface it explicitly
+    # as the pre-selected entry — otherwise the picker would silently drop the
+    # user's configured provider and dispatch to the wrong flow.
+    if active and not any(
+        active == key or active in members for key, _label, members in ordered
+    ):
+        active_extra_label = provider_labels.get(active, active)
+
+        ordered.insert(0, (active, f"{active_extra_label}  ← currently active", []))
+
+        default_idx = 0
+
     for key, provider_info in _custom_provider_map.items():
         name = provider_info["name"]
 

@@ -867,6 +867,109 @@ def _uses_telegram_observed_group_context(channel_prompt: Optional[str]) -> bool
     )
 
 
+# Persisted auto-continue notes are prepended to a live user message and then
+# stored verbatim in the transcript.  On replay they must not be re-fed to the
+# model as standing instructions: the interruption they described is long over.
+# Strip the leading ``[System note: ...]\n\n`` envelope and keep only the real
+# user text.  Only auto-continue notes are matched here (the marker text below);
+# other ``[System note: ...]`` injections are never persisted as user turns.
+_AUTO_CONTINUE_NOTE_PREFIX = "[System note:"
+
+_AUTO_CONTINUE_NOTE_MARKERS = (
+    "previous turn was interrupted",
+    "interrupted turn",
+    "pending tool outputs",
+)
+
+
+def _strip_persisted_auto_continue_note(content: Any) -> Any:
+    """Drop a leading persisted auto-continue ``[System note: ...]`` envelope.
+
+    Returns the original ``content`` untouched unless it is a string that opens
+    with an auto-continue system note followed by ``]\\n\\n`` and the real user
+    message.  Non-auto-continue ``[System note: ...]`` text is left intact.
+    """
+
+    if not isinstance(content, str):
+        return content
+
+    if not content.startswith(_AUTO_CONTINUE_NOTE_PREFIX):
+        return content
+
+    delimiter = "]\n\n"
+
+    delim_index = content.find(delimiter)
+
+    if delim_index == -1:
+        return content
+
+    note = content[: delim_index + 1]
+
+    if not any(marker in note for marker in _AUTO_CONTINUE_NOTE_MARKERS):
+        return content
+
+    return content[delim_index + len(delimiter) :]
+
+
+def _is_interrupted_tool_result(msg: Dict[str, Any]) -> bool:
+    """Return True for a tool result that records an interrupted command.
+
+    Interrupted in-flight tool loops leave a trailing tool result the agent
+    never processed (exit code 130 / ``[Command interrupted]``).  Replaying it
+    makes the model resume stale work, so the interrupted tail is dropped.
+    """
+
+    if msg.get("role") != "tool":
+        return False
+
+    content = msg.get("content")
+
+    if not isinstance(content, str):
+        return False
+
+    if "[Command interrupted]" in content:
+        return True
+
+    try:
+        parsed = json.loads(content)
+
+    except (ValueError, TypeError):
+        return False
+
+    return isinstance(parsed, dict) and parsed.get("exit_code") == 130
+
+
+def _drop_interrupted_tool_tail(
+    agent_history: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Remove a trailing interrupted assistant→tool block from replay history.
+
+    The tail shape is an assistant message bearing ``tool_calls`` followed by
+    one or more ``role == "tool"`` results.  When any of those trailing results
+    is an interruption marker, the whole block (assistant + its tool results) is
+    dropped so the next turn does not replay unfinished work.
+    """
+
+    if not agent_history or agent_history[-1].get("role") != "tool":
+        return agent_history
+
+    cut = len(agent_history)
+
+    while cut > 0 and agent_history[cut - 1].get("role") == "tool":
+        cut -= 1
+
+    # ``cut`` now points at the assistant turn that issued the tool calls.
+    if cut <= 0 or "tool_calls" not in agent_history[cut - 1]:
+        return agent_history
+
+    tail = agent_history[cut:]
+
+    if any(_is_interrupted_tool_result(m) for m in tail):
+        return agent_history[: cut - 1]
+
+    return agent_history
+
+
 def _build_gateway_agent_history(
     history: List[Dict[str, Any]],
     *,
@@ -946,6 +1049,11 @@ def _build_gateway_agent_history(
         elif content:
             # Simple text message - just need role and content.
 
+            if role == "user":
+                # Strip persisted auto-continue notes so a long-resolved
+                # interruption isn't replayed as a standing instruction.
+                content = _strip_persisted_auto_continue_note(content)
+
             if msg.get("mirror"):
                 mirror_src = msg.get("mirror_source", "another session")
 
@@ -954,6 +1062,10 @@ def _build_gateway_agent_history(
             entry = _build_replay_entry(role, content, msg)
 
             agent_history.append(entry)
+
+    # Drop an interrupted in-flight tool tail so the next turn doesn't resume
+    # stale work the agent never got to process.
+    agent_history = _drop_interrupted_tool_tail(agent_history)
 
     observed_context = "\n".join(observed_group_context).strip() or None
 
@@ -2897,6 +3009,12 @@ class GatewayRunner:
     _busy_input_mode: str = "interrupt"
 
     _busy_text_mode: str = "interrupt"
+
+    # Upper bound on queued busy-mode follow-ups retained per session
+    # (head slot + overflow).  Beyond this, additional follow-ups are
+    # dropped with a warning so a runaway sender can't grow the queue
+    # without bound.
+    _BUSY_QUEUE_MAX_PENDING: int = 50
 
     _restart_drain_timeout: float = DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
 
@@ -5235,13 +5353,59 @@ class GatewayRunner:
     def _queue_or_replace_pending_event(
         self, session_key: str, event: MessageEvent
     ) -> None:
+        """Queue a busy-mode follow-up for a session.
+
+        Text follow-ups use FIFO semantics (issue #28503): the head slot
+        keeps the first event and later ones land in the overflow chain in
+        arrival order, so rapid sends each get their own turn instead of
+        silently overwriting one another.  Photo/media bursts keep their
+        album-merge semantics — they collapse into the head slot.  A
+        per-session cap bounds the retained queue.
+        """
 
         adapter = self.adapters.get(event.source.platform)
 
         if not adapter:
             return
 
-        merge_pending_message_event(adapter._pending_messages, session_key, event)
+        pending_slot = getattr(adapter, "_pending_messages", None)
+
+        if pending_slot is None:
+            return
+
+        existing = pending_slot.get(session_key)
+
+        incoming_has_media = bool(
+            getattr(event, "media_urls", None)
+        ) or event.message_type == MessageType.PHOTO
+
+        existing_has_media = existing is not None and (
+            bool(getattr(existing, "media_urls", None))
+            or getattr(existing, "message_type", None) == MessageType.PHOTO
+        )
+
+        # Photo/album bursts (or any media-bearing turn merging into a
+        # media head) keep the existing collapse-into-head-slot behavior.
+        if incoming_has_media or existing_has_media:
+            merge_pending_message_event(
+                pending_slot, session_key, event, merge_text=True
+            )
+
+            return
+
+        # Text follow-ups: enforce the per-session cap, then FIFO-enqueue.
+        if self._queue_depth(session_key, adapter=adapter) >= (
+            self._BUSY_QUEUE_MAX_PENDING
+        ):
+            logger.warning(
+                "Busy queue cap (%d) reached for session %s — dropping follow-up",
+                self._BUSY_QUEUE_MAX_PENDING,
+                session_key,
+            )
+
+            return
+
+        self._enqueue_fifo(session_key, event, adapter)
 
     async def _handle_active_session_busy_message(
         self, event: MessageEvent, session_key: str
@@ -12671,6 +12835,10 @@ class GatewayRunner:
                 and _telegram_followup_grace > 0
                 and _started_at
                 and (time.time() - _started_at) <= _telegram_followup_grace
+                # Queue mode owns its own FIFO semantics below — rapid
+                # follow-ups must be queued as distinct turns, not merged
+                # into a single pending event.
+                and self._busy_input_mode != "queue"
             ):
                 logger.debug(
                     "Telegram follow-up arrived %.2fs after run start for %s — queueing without interrupt",
@@ -15354,7 +15522,22 @@ class GatewayRunner:
                     session_entry.session_id,
                 )
 
-                self.session_store.reset_session(session_key)
+                reset_entry = self.session_store.reset_session(session_key)
+
+                # Re-point the Telegram topic binding at the fresh, parentless
+                # session.  Otherwise the (chat_id, thread_id) -> bloated-child
+                # binding survives the reset and the next inbound message's
+                # binding-heal walk re-anchors the freshly-reset lane back onto
+                # the oversized compressed transcript, re-firing the loop.
+                # (#35809)
+                if reset_entry is not None:
+                    session_entry = reset_entry
+
+                    self._sync_telegram_topic_binding(
+                        source,
+                        reset_entry,
+                        reason="compression-exhausted-auto-reset",
+                    )
 
                 self._evict_cached_agent(session_key)
 
@@ -15421,9 +15604,17 @@ class GatewayRunner:
                 if event.message_id:
                     _user_entry["message_id"] = str(event.message_id)
 
+                # The agent already persisted messages to SQLite via
+                # _flush_messages_to_session_db() when it has its own
+                # SessionDB reference, so skip the DB write here to prevent
+                # the duplicate-write bug (#42039).
+
+                agent_persisted = self._session_db is not None
+
                 self.session_store.append_to_transcript(
                     session_entry.session_id,
                     _user_entry,
+                    skip_db=agent_persisted,
                 )
 
             else:
@@ -15436,6 +15627,13 @@ class GatewayRunner:
                 )
 
                 # If no new messages found (edge case), fall back to simple user/assistant
+
+                # The agent already persisted messages to SQLite via
+                # _flush_messages_to_session_db() when it has its own
+                # SessionDB reference, so skip the DB write here to prevent
+                # the duplicate-write bug (#42039).
+
+                agent_persisted = self._session_db is not None
 
                 if not new_messages:
                     _user_entry = {
@@ -15450,12 +15648,14 @@ class GatewayRunner:
                     self.session_store.append_to_transcript(
                         session_entry.session_id,
                         _user_entry,
+                        skip_db=agent_persisted,
                     )
 
                     if response:
                         self.session_store.append_to_transcript(
                             session_entry.session_id,
                             {"role": "assistant", "content": response, "timestamp": ts},
+                            skip_db=agent_persisted,
                         )
 
                 else:
@@ -19306,14 +19506,18 @@ class GatewayRunner:
             if not tts_text:
                 return
 
-            # Use .mp3 extension so edge-tts conversion to opus works correctly.
+            # Telegram renders OGG/Opus as a native voice bubble, so request
+            # an .ogg file there. Other platforms keep the .mp3 default. The
+            # TTS tool may still convert further — use file_path from result.
 
-            # The TTS tool may convert to .ogg — use file_path from result.
+            audio_ext = (
+                ".ogg" if event.source.platform == Platform.TELEGRAM else ".mp3"
+            )
 
             audio_path = os.path.join(
                 tempfile.gettempdir(),
                 "clawk_voice",
-                f"tts_reply_{_uuid.uuid4().hex[:12]}.mp3",
+                f"tts_reply_{_uuid.uuid4().hex[:12]}{audio_ext}",
             )
 
             os.makedirs(os.path.dirname(audio_path), exist_ok=True)
@@ -25222,7 +25426,9 @@ class GatewayRunner:
         "honcho.user_peer_aliases",
     )
 
-    _HONCHO_CACHE_BUSTING_MEMO: dict[tuple[str, int | None], dict[str, Any]] = {}
+    _HONCHO_CACHE_BUSTING_MEMO: dict[
+        tuple[str, int | None, int | None], dict[str, Any]
+    ] = {}
 
     @classmethod
     def _empty_honcho_cache_busting_config(cls) -> dict[str, Any]:
@@ -25242,12 +25448,21 @@ class GatewayRunner:
             path = resolve_config_path()
 
             try:
-                mtime_ns = path.stat().st_mtime_ns
+                st = path.stat()
+
+                mtime_ns = st.st_mtime_ns
+
+                size = st.st_size
 
             except OSError:
                 mtime_ns = None
 
-            memo_key = (str(path), mtime_ns)
+                size = None
+
+            # Include size in the memo key: on filesystems with coarse mtime
+            # resolution (e.g. NTFS) two rapid edits can share st_mtime_ns, so
+            # mtime alone would miss a change that altered the file's length.
+            memo_key = (str(path), mtime_ns, size)
 
             cached = cls._HONCHO_CACHE_BUSTING_MEMO.get(memo_key)
 
@@ -25726,6 +25941,57 @@ class GatewayRunner:
             with _lock:
                 self._agent_cache.pop(session_key, None)
 
+    def _refresh_agent_cache_message_count(
+        self, session_key: str, session_id: str | None
+    ) -> None:
+        """Re-baseline the cached agent's transcript-count snapshot (#45966).
+
+        The cross-process coherence guard stores the session's
+        ``message_count`` next to the cached agent (as the 3rd tuple slot) and
+        rebuilds the agent when the live on-disk count diverges from that
+        snapshot.  This process's OWN turn grows the count, so without a
+        post-turn re-baseline the next same-process turn would always see a
+        mismatch and needlessly rebuild — destroying per-conversation prompt
+        caching.  Refreshing the snapshot to the now-current value leaves the
+        guard armed against external (different-process) writes only.
+
+        Fail-safe: never raises.  No-ops when there's no session DB, no
+        session_id, the entry is a legacy 2-tuple, or the cached agent is the
+        pending-construction sentinel.
+        """
+
+        session_db = getattr(self, "_session_db", None)
+
+        if session_db is None or not session_id:
+            return
+
+        try:
+            row = session_db.get_session(session_id)
+
+            live = row.get("message_count", 0) if row else None
+
+        except Exception:
+            return
+
+        if live is None:
+            return
+
+        _lock = getattr(self, "_agent_cache_lock", None)
+
+        if _lock is None:
+            return
+
+        with _lock:
+            cached = self._agent_cache.get(session_key)
+
+            if not cached or len(cached) < 3:
+                return  # legacy 2-tuple opts out of the guard
+
+            if cached[0] is _AGENT_PENDING_SENTINEL:
+                return  # agent still under construction — leave snapshot
+
+            self._agent_cache[session_key] = (cached[0], cached[1], live)
+
     @staticmethod
     def _init_cached_agent_for_turn(agent: Any, interrupt_depth: int) -> None:
         """Reset per-turn state on a cached agent before a new turn starts.
@@ -25756,6 +26022,11 @@ class GatewayRunner:
             agent._last_activity_ts = time.time()
 
             agent._last_activity_desc = "starting new turn (cached)"
+
+            # Reset the session-DB flush cursor so a fresh turn re-flushes
+            # from index 0; a stale cursor from the previous turn would skip
+            # persisting this turn's messages (#44327).
+            agent._last_flushed_db_idx = 0
 
         agent._api_call_count = 0
 

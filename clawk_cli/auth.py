@@ -294,6 +294,20 @@ class ProviderConfig:
 
 
 PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
+    # Nous Portal is no longer offered in the BYOK picker (see
+    # CANONICAL_PROVIDERS), but the provider code path remains available so
+    # an explicitly-configured ``model.provider: nous`` still works. Keep the
+    # dormant registry entry so _model_flow_nous / _login_nous can resolve
+    # their ProviderConfig without a KeyError.
+    "nous": ProviderConfig(
+        id="nous",
+        name="Nous Portal",
+        auth_type="oauth_device_code",
+        portal_base_url=DEFAULT_NOUS_PORTAL_URL,
+        inference_base_url=DEFAULT_NOUS_INFERENCE_URL,
+        client_id=DEFAULT_NOUS_CLIENT_ID,
+        scope=DEFAULT_NOUS_SCOPE,
+    ),
     "openai-codex": ProviderConfig(
         id="openai-codex",
         name="OpenAI Codex",

@@ -5575,11 +5575,19 @@ class ClawksisCLI:
 
 
 
-        Instead we just reset prompt_toolkit's renderer cache so the next
+        Instead we delegate entirely to ``original_on_resize`` — prompt_toolkit's
 
-        incremental redraw starts from a clean slate, then let
+        built-in ``Application._on_resize`` — which begins with
 
-        ``original_on_resize`` recalculate layout for the new size.
+        ``renderer.erase(leave_alternate_screen=False)``.  That erase relies on
+
+        the renderer's cached cursor position to move back to the live prompt
+
+        origin before erasing downward.  We must NOT reset the renderer (or
+
+        invalidate) first: doing so discards that cached cursor position and
+
+        leaves stale prompt glyphs in scrollback after a narrow resize.
 
 
 
@@ -5600,18 +5608,6 @@ class ClawksisCLI:
         """
 
         self._status_bar_suppressed_after_resize = True
-
-        try:
-            app.renderer.reset(leave_alternate_screen=False)
-
-        except Exception:
-            pass
-
-        try:
-            app.invalidate()
-
-        except Exception:
-            pass
 
         original_on_resize()
 
@@ -11915,47 +11911,41 @@ class ClawksisCLI:
 
 
 
-        **Platform note (Windows dead-lock — issue #30768):**
+        **Platform note (native-Windows dead-lock — issues #30768, #33961):**
 
-        The queue-based modal relies on prompt_toolkit key bindings receiving
+        The modal is safe on every platform — including native Windows — when it
 
-        keyboard events and calling ``_submit_slash_confirm_response``.  On
+        is marshaled onto the app's event loop.  When invoked off the main thread
 
-        Windows (PowerShell / Windows Terminal) the prompt_toolkit input
+        (e.g. the ``process_loop`` daemon thread) we schedule the modal snapshot /
 
-        channel can become unresponsive when the modal is entered from the
+        restore work on ``self._app.loop`` via ``call_soon_threadsafe`` and keep
 
-        ``process_loop`` daemon thread, causing a dead-lock: the user sees the
-
-        confirmation panel but keystrokes never reach the key bindings and the
-
-        ``response_queue.get()`` blocks until the 120-second timeout expires.
+        the queue-based response path, so prompt_toolkit's key bindings drive it.
 
 
 
-        To avoid this, we fall back to ``_prompt_text_input`` (a simple
+        The raw ``input()``-based ``_prompt_text_input`` fallback is kept ONLY for
 
-        ``input()``-based prompt) when any of these conditions hold:
+        the cases where it is actually safe:
 
 
-
-        * ``sys.platform == "win32"`` — native Windows console (ConPTY /
-
-          win32_input) does not support the modal reliably.
 
         * ``self._app`` is not set — unit tests / non-interactive contexts.
 
+        * No running event loop / main-thread call where nothing else owns stdin.
 
 
-        On non-Windows platforms the modal itself is still safe from the
 
-        ``process_loop`` daemon thread as long as the main-thread event loop
+        It is NEVER used off the main thread on native Windows: a bare ``input()``
 
-        owns the prompt_toolkit buffer mutations.  When we are off the main
+        there blocks forever against the console prompt_toolkit already owns,
 
-        thread, schedule the modal snapshot / restore work on ``self._app.loop``
+        which is the #33961 dead-lock.  In that degraded case (no app loop, or a
 
-        via ``call_soon_threadsafe`` and keep the queue-based response path.
+        ``call_soon_threadsafe`` scheduling failure) we clean-cancel with ``None``
+
+        instead of routing to raw ``input()``.
 
         """
 
@@ -11973,19 +11963,6 @@ class ClawksisCLI:
         if not getattr(self, "_app", None):
             return self._prompt_text_input("Choice [1/2/3]: ")
 
-        # On Windows the prompt_toolkit input channel can deadlock when the
-
-        # modal is entered from the process_loop daemon thread — keystrokes
-
-        # never reach the key bindings, so response_queue.get() blocks for
-
-        # the full timeout (issue #30768).  Fall back to the simpler
-
-        # stdin-based prompt which works reliably on Windows.
-
-        if sys.platform == "win32":
-            return self._prompt_text_input("Choice [1/2/3]: ")
-
         try:
             app_loop = self._app.loop
 
@@ -11994,8 +11971,22 @@ class ClawksisCLI:
 
         in_main_thread = threading.current_thread() is threading.main_thread()
 
-        if not in_main_thread and app_loop is None:
+        # The raw stdin prompt fights prompt_toolkit's active stdin ownership.
+        # On native Windows (issue #33961) a bare input() on a non-main thread
+        # blocks forever against the console the app already owns, so the
+        # process_loop daemon thread deadlocks.  Only fall back to stdin when it
+        # is actually safe; off the main thread on win32 we must clean-cancel
+        # (return None) instead, never call input().
+
+        def _stdin_fallback() -> str | None:
+
+            if sys.platform == "win32" and not in_main_thread:
+                return None
+
             return self._prompt_text_input("Choice [1/2/3]: ")
+
+        if not in_main_thread and app_loop is None:
+            return _stdin_fallback()
 
         response_queue = queue.Queue()
 
@@ -12051,7 +12042,7 @@ class ClawksisCLI:
             return ready.wait(timeout=5)
 
         if not _run_on_app_loop(_setup_modal):
-            return self._prompt_text_input("Choice [1/2/3]: ")
+            return _stdin_fallback()
 
         _last_countdown_refresh = _time.monotonic()
 
@@ -14355,6 +14346,11 @@ class ClawksisCLI:
         elif canonical == "update":
             if self._handle_update_command():
                 return False
+
+        elif canonical == "version":
+            from clawk_cli.main import _print_version_info
+
+            _print_version_info(check_updates=True)
 
         elif canonical == "paste":
             self._handle_paste_command()

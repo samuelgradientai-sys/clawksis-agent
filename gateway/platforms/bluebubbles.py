@@ -83,8 +83,8 @@ MAX_TEXT_LENGTH = 4000
 # words so `require_mention: true` is a one-line enablement path.
 
 DEFAULT_MENTION_PATTERNS = [
-    r"(?<![\w@])@?clawk\s+agent\b[,:\-]?",
-    r"(?<![\w@])@?clawk\b[,:\-]?",
+    r"(?<![\w@])@?clawksis\s+agent\b[,:\-]?",
+    r"(?<![\w@])@?clawksis\b[,:\-]?",
 ]
 
 
