@@ -120,9 +120,9 @@ def test_install_sh_clears_unmerged_index_before_checkout(tmp_path: Path) -> Non
     )
     # ... so the checkout that previously aborted ("you need to resolve your
     # current index first") now succeeds.
-    assert (
-        _git(repo, "checkout", start, check=False).returncode == 0
-    ), "checkout should succeed once the unmerged index is cleared"
+    assert _git(repo, "checkout", start, check=False).returncode == 0, (
+        "checkout should succeed once the unmerged index is cleared"
+    )
 
 
 def test_install_ps1_clears_unmerged_index_before_checkout() -> None:
@@ -135,9 +135,7 @@ def test_install_ps1_clears_unmerged_index_before_checkout() -> None:
     )
     idx_reset = text.index("reset --hard HEAD")
     idx_checkout = text.index("checkout $Branch", idx_reset)
-    assert idx_reset < idx_checkout, (
-        "the hard reset must run before `git checkout`"
-    )
+    assert idx_reset < idx_checkout, "the hard reset must run before `git checkout`"
 
 
 def test_install_sh_clears_unmerged_index_before_checkout_source_order() -> None:

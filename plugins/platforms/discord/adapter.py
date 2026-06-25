@@ -916,11 +916,7 @@ async def _wait_for_ready_or_bot_exit(
 
     # The bot task finished before ready — surface a startup crash so connect()
     # treats it as a failure instead of a (never-arriving) success.
-    if (
-        bot_task is not None
-        and bot_task in done
-        and not ready_event.is_set()
-    ):
+    if bot_task is not None and bot_task in done and not ready_event.is_set():
         exc = bot_task.exception()
 
         if exc is not None:
@@ -1577,6 +1573,7 @@ class DiscordAdapter(BasePlatformAdapter):
             loop = None
         if loop is not None:
             loop.create_task(self._notify_fatal_error())
+
     async def _cancel_bot_task(self) -> None:
         """Cancel and clear the background bot task, awaiting its teardown.
 
@@ -3348,7 +3345,9 @@ class DiscordAdapter(BasePlatformAdapter):
 
         return guild_id in getattr(self, "_voice_mixers", {})
 
-    async def play_ack_in_voice(self, guild_id: int, phrase: Optional[str] = None) -> bool:
+    async def play_ack_in_voice(
+        self, guild_id: int, phrase: Optional[str] = None
+    ) -> bool:
         """Speak a short verbal acknowledgement through the guild's voice mixer.
 
         Used to fill the silence before a long tool call so the channel doesn't
@@ -9017,9 +9016,7 @@ def _define_discord_view_classes() -> None:
 
                 return
 
-            await self._perform_model_switch(
-                interaction, self._pending_expensive_model
-            )
+            await self._perform_model_switch(interaction, self._pending_expensive_model)
 
         async def _on_back(self, interaction: discord.Interaction):
 

@@ -197,7 +197,9 @@ def build_turn_context(
         if prior_user_turns > 0:
             agent._user_turn_count = prior_user_turns
             if agent._memory_nudge_interval > 0 and agent._turns_since_memory == 0:
-                agent._turns_since_memory = prior_user_turns % agent._memory_nudge_interval
+                agent._turns_since_memory = (
+                    prior_user_turns % agent._memory_nudge_interval
+                )
 
     # Track user turns for memory flush and periodic nudge logic.
     agent._user_turn_count += 1

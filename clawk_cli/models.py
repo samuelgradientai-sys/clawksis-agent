@@ -3264,9 +3264,7 @@ def provider_model_ids(
             # Versioned Anthropic-compatible proxies (``…/anthropic/v1``) speak
             # the Messages API and reject ``Authorization: Bearer`` — probe them
             # with the native ``x-api-key`` auth so the catalog resolves.
-            api_mode = (
-                "anthropic_messages" if "/anthropic/" in base_url else None
-            )
+            api_mode = "anthropic_messages" if "/anthropic/" in base_url else None
 
             live = fetch_api_models(api_key, base_url, api_mode=api_mode)
 

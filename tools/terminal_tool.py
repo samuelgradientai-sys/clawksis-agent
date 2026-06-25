@@ -1262,11 +1262,7 @@ def _transform_sudo_command(command: str | None) -> tuple[str | None, str | None
         env_var_enabled("CLAWK_INTERACTIVE") or has_sudo_prompt_callback
     )
 
-    if (
-        not has_configured_password
-        and not sudo_password
-        and should_prompt_for_sudo
-    ):
+    if not has_configured_password and not sudo_password and should_prompt_for_sudo:
         sudo_password = _prompt_for_sudo_password(timeout_seconds=45)
 
         if sudo_password:

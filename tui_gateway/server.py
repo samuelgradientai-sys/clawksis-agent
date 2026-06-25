@@ -1773,9 +1773,7 @@ def _runtime_model_config(agent, existing: dict | None = None) -> dict:
                 provider = find_custom_provider_identity(base_url) or provider
 
             except Exception:
-                logger.debug(
-                    "custom provider identity lookup failed", exc_info=True
-                )
+                logger.debug("custom provider identity lookup failed", exc_info=True)
 
         config["provider"] = provider
 
@@ -3194,9 +3192,7 @@ def _mirror_subagent_to_child(event_type: str, payload: dict) -> None:
                 "args": {},
             }
 
-            if preview := str(
-                payload.get("tool_preview") or payload.get("text") or ""
-            ):
+            if preview := str(payload.get("tool_preview") or payload.get("text") or ""):
                 tool["preview"] = preview
 
             st["open_tool"] = tool
@@ -5507,7 +5503,6 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5007, str(e))
 
 
-
 def _usage_from_session_row(row: dict | None, base: dict | None = None) -> dict:
     """Build a session.usage payload from the persisted sessions row.
 
@@ -5535,26 +5530,24 @@ def _usage_from_session_row(row: dict | None, base: dict | None = None) -> dict:
     if total <= 0:
         return usage
 
-    usage.update(
-        {
-            "model": row.get("model") or usage.get("model"),
-            "provider": row.get("billing_provider") or usage.get("provider"),
-            "calls": n("api_call_count") or usage.get("calls", 0),
-            "input": input_tokens,
-            "output": output_tokens,
-            "cache_read": cache_read,
-            "cache_write": cache_write,
-            "reasoning": reasoning,
-            "total": total,
-            "cost_usd": (
-                row.get("actual_cost_usd")
-                if row.get("actual_cost_usd") is not None
-                else row.get("estimated_cost_usd")
-            ),
-            "cost_status": row.get("cost_status") or usage.get("cost_status"),
-            "context_used": total,
-        }
-    )
+    usage.update({
+        "model": row.get("model") or usage.get("model"),
+        "provider": row.get("billing_provider") or usage.get("provider"),
+        "calls": n("api_call_count") or usage.get("calls", 0),
+        "input": input_tokens,
+        "output": output_tokens,
+        "cache_read": cache_read,
+        "cache_write": cache_write,
+        "reasoning": reasoning,
+        "total": total,
+        "cost_usd": (
+            row.get("actual_cost_usd")
+            if row.get("actual_cost_usd") is not None
+            else row.get("estimated_cost_usd")
+        ),
+        "cost_status": row.get("cost_status") or usage.get("cost_status"),
+        "context_used": total,
+    })
 
     # Conserva context_max/context_percent del agente vivo si ya venían.
     ctx_max = usage.get("context_max")
@@ -5603,6 +5596,7 @@ def _session_usage_with_db_fallback(session: dict, params: dict | None = None) -
         row = None
 
     return _usage_from_session_row(row, base=live_usage)
+
 
 @method("session.usage")
 def _(rid, params: dict) -> dict:
@@ -6533,9 +6527,7 @@ def _(rid, params: dict) -> dict:
         if session.get("lazy") and _child_run_active(
             str(session.get("session_key") or "")
         ):
-            return _err(
-                rid, 4009, "subagent still running — wait for it to finish"
-            )
+            return _err(rid, 4009, "subagent still running — wait for it to finish")
 
         if truncate_user_ordinal is not None:
             try:

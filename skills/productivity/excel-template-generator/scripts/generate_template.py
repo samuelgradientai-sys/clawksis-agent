@@ -15,7 +15,10 @@ try:
 except Exception as exc:
     print("ERROR: falta openpyxl.", file=sys.stderr)
     print("Instala con:", file=sys.stderr)
-    print('/opt/clawksis-agent/.venv/bin/python -m pip install "openpyxl==3.1.5"', file=sys.stderr)
+    print(
+        '/opt/clawksis-agent/.venv/bin/python -m pip install "openpyxl==3.1.5"',
+        file=sys.stderr,
+    )
     print(f"Detalle: {exc!r}", file=sys.stderr)
     raise SystemExit(2)
 
@@ -57,7 +60,9 @@ def style_sheet(ws) -> None:
     for cell in ws[1]:
         cell.fill = PatternFill("solid", fgColor=HEADER_FILL)
         cell.font = Font(color="FFFFFF", bold=True)
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True
+        )
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
@@ -83,7 +88,9 @@ def create_info_sheet(wb: Workbook, business_name: str, template: str) -> None:
     ws["A2"] = f"Tipo: {template}"
     ws["A3"] = f"Generada: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     ws["A5"] = "Uso"
-    ws["B5"] = "Completa las filas editables. Las columnas con fórmulas se calculan automáticamente."
+    ws["B5"] = (
+        "Completa las filas editables. Las columnas con fórmulas se calculan automáticamente."
+    )
     ws["A6"] = "Seguridad"
     ws["B6"] = "Este archivo no contiene macros ni conexiones externas."
     ws["A7"] = "Recomendación"
@@ -104,7 +111,14 @@ def create_lists_sheet(wb: Workbook) -> None:
     data = {
         "A": ["Categorías", "Lentes", "Monturas", "Accesorios", "Servicios", "Otro"],
         "B": ["Estados", "Activo", "Inactivo", "Agotado", "Pendiente", "Cerrado"],
-        "C": ["Métodos de pago", "Efectivo", "Transferencia", "Tarjeta", "Crédito", "Otro"],
+        "C": [
+            "Métodos de pago",
+            "Efectivo",
+            "Transferencia",
+            "Tarjeta",
+            "Crédito",
+            "Otro",
+        ],
         "D": ["Canales", "Tienda", "WhatsApp", "Telegram", "Referido", "Otro"],
         "E": ["Prioridades", "Baja", "Media", "Alta", "Crítica"],
     }
@@ -146,20 +160,36 @@ def inventory_template(wb: Workbook, rows: int) -> None:
 
     style_sheet(ws)
     add_table(ws, "InventarioTable", f"A1:M{rows + 1}")
-    set_widths(ws, {
-        "A": 16, "B": 28, "C": 18, "D": 22, "E": 14, "F": 14,
-        "G": 18, "H": 18, "I": 16, "J": 12, "K": 20, "L": 14, "M": 30
-    })
+    set_widths(
+        ws,
+        {
+            "A": 16,
+            "B": 28,
+            "C": 18,
+            "D": 22,
+            "E": 14,
+            "F": 14,
+            "G": 18,
+            "H": 18,
+            "I": 16,
+            "J": 12,
+            "K": 20,
+            "L": 14,
+            "M": 30,
+        },
+    )
 
     for col in ["G", "H", "I", "K"]:
         for row in ws[f"{col}2:{col}{rows + 1}"]:
-            row[0].number_format = '$ #,##0'
+            row[0].number_format = "$ #,##0"
 
     for row in ws[f"J2:J{rows + 1}"]:
         row[0].number_format = "0.00%"
 
     dv_cat = DataValidation(type="list", formula1="=Listas!$A$2:$A$6", allow_blank=True)
-    dv_status = DataValidation(type="list", formula1='"Stock bajo,OK,Agotado,Inactivo"', allow_blank=True)
+    dv_status = DataValidation(
+        type="list", formula1='"Stock bajo,OK,Agotado,Inactivo"', allow_blank=True
+    )
 
     ws.add_data_validation(dv_cat)
     ws.add_data_validation(dv_status)
@@ -168,7 +198,9 @@ def inventory_template(wb: Workbook, rows: int) -> None:
 
     ws.conditional_formatting.add(
         f"L2:L{rows + 1}",
-        FormulaRule(formula=['L2="Stock bajo"'], fill=PatternFill("solid", fgColor=LOW_FILL)),
+        FormulaRule(
+            formula=['L2="Stock bajo"'], fill=PatternFill("solid", fgColor=LOW_FILL)
+        ),
     )
 
 
@@ -196,21 +228,38 @@ def sales_template(wb: Workbook, rows: int) -> None:
 
     style_sheet(ws)
     add_table(ws, "VentasTable", f"A1:L{rows + 1}")
-    set_widths(ws, {
-        "A": 14, "B": 16, "C": 26, "D": 28, "E": 12, "F": 18,
-        "G": 18, "H": 16, "I": 18, "J": 16, "K": 14, "L": 30
-    })
+    set_widths(
+        ws,
+        {
+            "A": 14,
+            "B": 16,
+            "C": 26,
+            "D": 28,
+            "E": 12,
+            "F": 18,
+            "G": 18,
+            "H": 16,
+            "I": 18,
+            "J": 16,
+            "K": 14,
+            "L": 30,
+        },
+    )
 
     for col in ["F", "G", "H"]:
         for row in ws[f"{col}2:{col}{rows + 1}"]:
-            row[0].number_format = '$ #,##0'
+            row[0].number_format = "$ #,##0"
 
     for row in ws[f"A2:A{rows + 1}"]:
         row[0].number_format = "yyyy-mm-dd"
 
     dv_pay = DataValidation(type="list", formula1="=Listas!$C$2:$C$6", allow_blank=True)
-    dv_channel = DataValidation(type="list", formula1="=Listas!$D$2:$D$6", allow_blank=True)
-    dv_status = DataValidation(type="list", formula1='"Pendiente,Pagada,Anulada,Devuelta"', allow_blank=True)
+    dv_channel = DataValidation(
+        type="list", formula1="=Listas!$D$2:$D$6", allow_blank=True
+    )
+    dv_status = DataValidation(
+        type="list", formula1='"Pendiente,Pagada,Anulada,Devuelta"', allow_blank=True
+    )
 
     ws.add_data_validation(dv_pay)
     ws.add_data_validation(dv_channel)
@@ -246,20 +295,40 @@ def postventa_template(wb: Workbook, rows: int) -> None:
 
     style_sheet(ws)
     add_table(ws, "PostventaTable", f"A1:M{rows + 1}")
-    set_widths(ws, {
-        "A": 14, "B": 26, "C": 16, "D": 26, "E": 20, "F": 16,
-        "G": 14, "H": 18, "I": 18, "J": 30, "K": 16, "L": 14, "M": 34
-    })
+    set_widths(
+        ws,
+        {
+            "A": 14,
+            "B": 26,
+            "C": 16,
+            "D": 26,
+            "E": 20,
+            "F": 16,
+            "G": 14,
+            "H": 18,
+            "I": 18,
+            "J": 30,
+            "K": 16,
+            "L": 14,
+            "M": 34,
+        },
+    )
 
     for row in ws[f"I2:I{rows + 1}"]:
-        row[0].number_format = '$ #,##0'
+        row[0].number_format = "$ #,##0"
 
     for col in ["A", "K"]:
         for row in ws[f"{col}2:{col}{rows + 1}"]:
             row[0].number_format = "yyyy-mm-dd"
 
-    dv_state = DataValidation(type="list", formula1='"Abierto,En proceso,Esperando cliente,Cerrado,Cancelado"', allow_blank=True)
-    dv_prio = DataValidation(type="list", formula1="=Listas!$E$2:$E$5", allow_blank=True)
+    dv_state = DataValidation(
+        type="list",
+        formula1='"Abierto,En proceso,Esperando cliente,Cerrado,Cancelado"',
+        allow_blank=True,
+    )
+    dv_prio = DataValidation(
+        type="list", formula1="=Listas!$E$2:$E$5", allow_blank=True
+    )
 
     ws.add_data_validation(dv_state)
     ws.add_data_validation(dv_prio)
@@ -269,7 +338,9 @@ def postventa_template(wb: Workbook, rows: int) -> None:
 
     ws.conditional_formatting.add(
         f"G2:G{rows + 1}",
-        FormulaRule(formula=['G2="Crítica"'], fill=PatternFill("solid", fgColor=LOW_FILL)),
+        FormulaRule(
+            formula=['G2="Crítica"'], fill=PatternFill("solid", fgColor=LOW_FILL)
+        ),
     )
 
 
@@ -281,21 +352,24 @@ def create_summary(wb: Workbook, template: str, rows: int) -> None:
 
     if template == "inventory":
         items = [
-            ("Total unidades", f'=SUM(Inventario!E2:E{rows + 1})'),
-            ("Valor inventario COP", f'=SUM(Inventario!K2:K{rows + 1})'),
-            ("Productos con stock bajo", f'=COUNTIF(Inventario!L2:L{rows + 1},"Stock bajo")'),
+            ("Total unidades", f"=SUM(Inventario!E2:E{rows + 1})"),
+            ("Valor inventario COP", f"=SUM(Inventario!K2:K{rows + 1})"),
+            (
+                "Productos con stock bajo",
+                f'=COUNTIF(Inventario!L2:L{rows + 1},"Stock bajo")',
+            ),
         ]
     elif template == "sales":
         items = [
-            ("Ventas registradas", f'=COUNTA(Ventas!B2:B{rows + 1})'),
-            ("Unidades vendidas", f'=SUM(Ventas!E2:E{rows + 1})'),
-            ("Total vendido COP", f'=SUM(Ventas!H2:H{rows + 1})'),
+            ("Ventas registradas", f"=COUNTA(Ventas!B2:B{rows + 1})"),
+            ("Unidades vendidas", f"=SUM(Ventas!E2:E{rows + 1})"),
+            ("Total vendido COP", f"=SUM(Ventas!H2:H{rows + 1})"),
         ]
     else:
         items = [
             ("Casos abiertos", f'=COUNTIF(Postventa!F2:F{rows + 1},"Abierto")'),
             ("Casos en proceso", f'=COUNTIF(Postventa!F2:F{rows + 1},"En proceso")'),
-            ("Costos adicionales COP", f'=SUM(Postventa!I2:I{rows + 1})'),
+            ("Costos adicionales COP", f"=SUM(Postventa!I2:I{rows + 1})"),
         ]
 
     ws.append(["Métrica", "Valor"])
@@ -306,7 +380,7 @@ def create_summary(wb: Workbook, template: str, rows: int) -> None:
     set_widths(ws, {"A": 32, "B": 24})
 
     for cell in ws["B"]:
-        cell.number_format = '$ #,##0'
+        cell.number_format = "$ #,##0"
 
 
 def build_workbook(template: str, business_name: str, rows: int) -> Workbook:
@@ -337,8 +411,12 @@ def validate_generated_file(path: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate safe Excel .xlsx templates for Clawksis operations.")
-    parser.add_argument("--template", choices=["inventory", "sales", "postventa"], required=True)
+    parser = argparse.ArgumentParser(
+        description="Generate safe Excel .xlsx templates for Clawksis operations."
+    )
+    parser.add_argument(
+        "--template", choices=["inventory", "sales", "postventa"], required=True
+    )
     parser.add_argument("--business-name", default="Clawksis")
     parser.add_argument("--rows", type=int, default=200)
     parser.add_argument("--output", default=None)
@@ -351,7 +429,9 @@ def main() -> int:
     output = safe_output_path(args.output, args.template)
 
     if output.exists() and not args.overwrite:
-        raise SystemExit(f"ERROR: el archivo ya existe. Usa --overwrite si confirmas sobrescribir: {output}")
+        raise SystemExit(
+            f"ERROR: el archivo ya existe. Usa --overwrite si confirmas sobrescribir: {output}"
+        )
 
     wb = build_workbook(args.template, args.business_name, args.rows)
     wb.save(output)

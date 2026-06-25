@@ -5562,9 +5562,10 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
 
         existing = pending_slot.get(session_key)
 
-        incoming_has_media = bool(
-            getattr(event, "media_urls", None)
-        ) or event.message_type == MessageType.PHOTO
+        incoming_has_media = (
+            bool(getattr(event, "media_urls", None))
+            or event.message_type == MessageType.PHOTO
+        )
 
         existing_has_media = existing is not None and (
             bool(getattr(existing, "media_urls", None))
@@ -6663,9 +6664,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
                 if watcher_env.get("PYTHONPATH"):
                     pythonpath.append(watcher_env["PYTHONPATH"])
 
-                watcher_env["PYTHONPATH"] = os.pathsep.join(
-                    dict.fromkeys(pythonpath)
-                )
+                watcher_env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(pythonpath))
 
             subprocess.Popen(
                 [sys.executable, "-c", watcher, str(current_pid), *cmd_argv],
@@ -6948,9 +6947,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
 
             source = getattr(event, "source", None)
 
-            adapter = (
-                self.adapters.get(source.platform) if source is not None else None
-            )
+            adapter = self.adapters.get(source.platform) if source is not None else None
 
             if adapter is None:
                 logger.debug(
@@ -9918,9 +9915,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
 
         return str(policy or "").strip().lower()
 
-    def _adapter_group_has_sender_restriction(
-        self, source: SessionSource
-    ) -> bool:
+    def _adapter_group_has_sender_restriction(self, source: SessionSource) -> bool:
         """Whether a per-group ``allow_from`` sender allowlist gates this chat.
 
 
@@ -12514,7 +12509,10 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
                     )
 
             if audio_paths:
-                message_text, _voice_transcripts = await self._enrich_message_with_transcription(
+                (
+                    message_text,
+                    _voice_transcripts,
+                ) = await self._enrich_message_with_transcription(
                     message_text,
                     audio_paths,
                 )
@@ -15428,7 +15426,6 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
             lines.append(t("gateway.status.queued", count=queue_depth))
 
         if source.platform == Platform.MATRIX:
-
             adapter = self.adapters.get(Platform.MATRIX)
 
             scope = getattr(
@@ -18281,9 +18278,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
             # an .ogg file there. Other platforms keep the .mp3 default. The
             # TTS tool may still convert further — use file_path from result.
 
-            audio_ext = (
-                ".ogg" if event.source.platform == Platform.TELEGRAM else ".mp3"
-            )
+            audio_ext = ".ogg" if event.source.platform == Platform.TELEGRAM else ".mp3"
 
             audio_path = os.path.join(
                 tempfile.gettempdir(),
@@ -25800,9 +25795,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
             # Verbose keeps the full command; non-verbose collapses to the first
             # line capped at tool_preview_length so a long/multi-line command
             # doesn't render as a huge block (#42634).
-            _command = (
-                args.get("command") if isinstance(args, dict) else None
-            ) or None
+            _command = (args.get("command") if isinstance(args, dict) else None) or None
 
             if _cb_supports_code_blocks and _command:
                 from agent.display import get_tool_preview_max_len
@@ -26221,9 +26214,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
                         _, _code_block = raw
 
                         if progress_lines:
-                            progress_lines[-1] = (
-                                f"{progress_lines[-1]}\n{_code_block}"
-                            )
+                            progress_lines[-1] = f"{progress_lines[-1]}\n{_code_block}"
 
                             msg = progress_lines[-1]
 

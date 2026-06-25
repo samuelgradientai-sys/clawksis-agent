@@ -14702,9 +14702,7 @@ def _write_update_incomplete_marker() -> None:
     """Drop a breadcrumb so an update killed mid-install can self-heal later."""
 
     try:
-        _update_marker_path().write_text(
-            f"started={_time.time()}\npid={os.getpid()}\n"
-        )
+        _update_marker_path().write_text(f"started={_time.time()}\npid={os.getpid()}\n")
 
     except OSError:
         pass
@@ -14820,9 +14818,11 @@ def _recover_from_interrupted_install() -> None:
             )
 
         else:
-            _install_python_dependencies_with_optional_fallback(
-                [sys.executable, "-m", "pip"]
-            )
+            _install_python_dependencies_with_optional_fallback([
+                sys.executable,
+                "-m",
+                "pip",
+            ])
 
         _clear_update_incomplete_marker()
 

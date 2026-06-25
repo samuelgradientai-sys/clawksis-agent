@@ -7969,7 +7969,7 @@ def terminal_config_env_var_for_key(key: str) -> str | None:
     bridge.
     """
 
-    sub = key[len("terminal."):] if key.startswith("terminal.") else key
+    sub = key[len("terminal.") :] if key.startswith("terminal.") else key
 
     return TERMINAL_CONFIG_ENV_MAP.get(sub)
 

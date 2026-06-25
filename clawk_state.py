@@ -3122,9 +3122,7 @@ class SessionDB:
         """
 
         with self._lock:
-            cursor = self._conn.execute(
-                query, (prefix, prefix_hi, limit, offset)
-            )
+            cursor = self._conn.execute(query, (prefix, prefix_hi, limit, offset))
 
             rows = cursor.fetchall()
 
@@ -5402,9 +5400,7 @@ class SessionDB:
             for row in delegate_rows:
                 child_id = row["id"]
 
-                conn.execute(
-                    "DELETE FROM messages WHERE session_id = ?", (child_id,)
-                )
+                conn.execute("DELETE FROM messages WHERE session_id = ?", (child_id,))
 
                 conn.execute("DELETE FROM sessions WHERE id = ?", (child_id,))
 

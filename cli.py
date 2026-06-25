@@ -12670,9 +12670,7 @@ class ClawksisCLI:
                     ).start()
 
                 else:
-                    self._confirm_and_apply_model_switch_result(
-                        result, persist_global
-                    )
+                    self._confirm_and_apply_model_switch_result(result, persist_global)
 
                 return
 

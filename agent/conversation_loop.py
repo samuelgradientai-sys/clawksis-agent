@@ -769,7 +769,9 @@ def run_conversation(
 
                 # whose session happened to land just past a multiple of N).
 
-                agent._turns_since_memory = prior_user_turns % agent._memory_nudge_interval
+                agent._turns_since_memory = (
+                    prior_user_turns % agent._memory_nudge_interval
+                )
 
     # Prefill messages (few-shot priming) are injected at API-call time only,
 

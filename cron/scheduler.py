@@ -776,13 +776,11 @@ def cron_delivery_targets() -> list:
         if not env_var:
             continue
 
-        targets.append(
-            {
-                "id": name,
-                "home_env_var": env_var,
-                "home_target_set": bool(_get_home_target_chat_id(name)),
-            }
-        )
+        targets.append({
+            "id": name,
+            "home_env_var": env_var,
+            "home_target_set": bool(_get_home_target_chat_id(name)),
+        })
 
     return targets
 

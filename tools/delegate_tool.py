@@ -3418,7 +3418,9 @@ def delegate_task(
 
 
 def _resolve_child_credential_pool(
-    effective_provider: Optional[str], parent_agent, child_base_url: Optional[str] = None
+    effective_provider: Optional[str],
+    parent_agent,
+    child_base_url: Optional[str] = None,
 ):
     """Resolve a credential pool for the child agent.
 

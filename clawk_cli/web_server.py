@@ -4647,9 +4647,7 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
     try:
         from clawk_cli.auth import PROVIDER_REGISTRY
 
-        env_var_order = (
-            PROVIDER_REGISTRY["anthropic"].api_key_env_vars or env_var_order
-        )
+        env_var_order = PROVIDER_REGISTRY["anthropic"].api_key_env_vars or env_var_order
 
     except (ImportError, KeyError):
         pass
@@ -10586,9 +10584,7 @@ async def run_toolset_post_setup(
     except Exception as exc:
         _log.exception("Failed to spawn tools post-setup")
 
-        raise HTTPException(
-            status_code=500, detail=f"Failed to run post-setup: {exc}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to run post-setup: {exc}")
 
     return {"ok": True, "pid": proc.pid, "name": "tools-post-setup", "key": body.key}
 
@@ -11194,7 +11190,9 @@ async def get_media(path: str):
         raise HTTPException(status_code=413, detail="File too large")
 
     encoded = base64.b64encode(target.read_bytes()).decode("ascii")
-    return {"data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"}
+    return {
+        "data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"
+    }
 
 
 def _canonical_path(path: Path, *, require_exists: bool = False) -> Path:
@@ -11214,9 +11212,13 @@ def _ensure_managed_root(raw_path: str | Path) -> Path:
         root.mkdir(parents=True, exist_ok=True)
         resolved = root.resolve()
     except (OSError, RuntimeError) as exc:
-        raise HTTPException(status_code=500, detail=f"Managed files root is unavailable: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Managed files root is unavailable: {exc}"
+        )
     if not resolved.is_dir():
-        raise HTTPException(status_code=500, detail="Managed files root is not a directory")
+        raise HTTPException(
+            status_code=500, detail="Managed files root is not a directory"
+        )
     return resolved
 
 
@@ -11291,11 +11293,19 @@ def _dashboard_local_update_managed_externally() -> bool:
     return True
 
 
-def _managed_files_policy(request: Request, *, create_root: bool = True) -> ManagedFilesPolicy:
+def _managed_files_policy(
+    request: Request, *, create_root: bool = True
+) -> ManagedFilesPolicy:
     raw_forced_root = os.environ.get(_MANAGED_FILES_ROOT_ENV, "").strip()
     if raw_forced_root:
-        root = _ensure_managed_root(raw_forced_root) if create_root else _canonical_path(Path(raw_forced_root))
-        return ManagedFilesPolicy(default_path=root, locked_root=root, can_change_path=False)
+        root = (
+            _ensure_managed_root(raw_forced_root)
+            if create_root
+            else _canonical_path(Path(raw_forced_root))
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
 
     # Remote/OAuth access does not imply a hosted container. Users can expose a
     # local dashboard through the auth gate (for example a macOS launchd install)
@@ -11303,8 +11313,14 @@ def _managed_files_policy(request: Request, *, create_root: bool = True) -> Mana
     # to /opt/data only when the installation's Clawksis root is actually /opt/data
     # (the container/hosted layout) or when CLAWK_DASHBOARD_FILES_ROOT is set.
     if _default_clawk_root_is_opt_data():
-        root = _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT) if create_root else _HOSTED_MANAGED_FILES_ROOT
-        return ManagedFilesPolicy(default_path=root, locked_root=root, can_change_path=False)
+        root = (
+            _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT)
+            if create_root
+            else _HOSTED_MANAGED_FILES_ROOT
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
 
     home = _canonical_path(Path.home())
     return ManagedFilesPolicy(default_path=home, locked_root=None, can_change_path=True)
@@ -11362,7 +11378,9 @@ def _managed_file_entry(policy: ManagedFilesPolicy, target: Path) -> Dict[str, A
         resolved = target.resolve()
     except (OSError, RuntimeError):
         raise HTTPException(status_code=400, detail="Invalid path")
-    if policy.locked_root is not None and not _path_is_under(policy.locked_root, resolved):
+    if policy.locked_root is not None and not _path_is_under(
+        policy.locked_root, resolved
+    ):
         raise HTTPException(status_code=403, detail="Path outside managed files root")
 
     try:
@@ -11371,7 +11389,11 @@ def _managed_file_entry(policy: ManagedFilesPolicy, target: Path) -> Dict[str, A
         raise HTTPException(status_code=500, detail=f"Could not stat path: {exc}")
 
     is_dir = resolved.is_dir()
-    mime_type = None if is_dir else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    mime_type = (
+        None
+        if is_dir
+        else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    )
     return {
         "name": target.name or resolved.name or str(resolved),
         "path": str(resolved),
@@ -11389,11 +11411,15 @@ def _decode_data_url(data_url: str) -> tuple[bytes, str]:
     header, encoded = text.split(",", 1)
     mime_type = header[5:].split(";", 1)[0] or "application/octet-stream"
     if ";base64" not in header:
-        raise HTTPException(status_code=400, detail="Upload payload must be base64 encoded")
+        raise HTTPException(
+            status_code=400, detail="Upload payload must be base64 encoded"
+        )
     try:
         data = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
-        raise HTTPException(status_code=400, detail="Upload payload is not valid base64")
+        raise HTTPException(
+            status_code=400, detail="Upload payload is not valid base64"
+        )
     if len(data) > _MANAGED_FILE_MAX_BYTES:
         raise HTTPException(status_code=413, detail="File is too large")
     return data, mime_type
@@ -11496,9 +11522,13 @@ async def download_managed_file(request: Request, path: str):
 
 @app.post("/api/files/upload")
 async def upload_managed_file(payload: ManagedFileUpload, request: Request):
-    policy, target, display_path = _resolve_managed_path(payload.path, request, for_write=True)
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
     if target.exists() and target.is_dir():
-        raise HTTPException(status_code=409, detail="A directory already exists at that path")
+        raise HTTPException(
+            status_code=409, detail="A directory already exists at that path"
+        )
     if target.exists() and not payload.overwrite:
         raise HTTPException(status_code=409, detail="File already exists")
 
@@ -11537,16 +11567,22 @@ _UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 @app.post("/api/files/mkdir")
 async def create_managed_directory(payload: ManagedDirectoryCreate, request: Request):
-    policy, target, display_path = _resolve_managed_path(payload.path, request, for_write=True)
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
     if target.exists() and not target.is_dir():
-        raise HTTPException(status_code=409, detail="A file already exists at that path")
+        raise HTTPException(
+            status_code=409, detail="A file already exists at that path"
+        )
 
     try:
         target.mkdir(parents=True, exist_ok=True)
     except PermissionError:
         raise HTTPException(status_code=403, detail="Directory is not writable")
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Could not create directory: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Could not create directory: {exc}"
+        )
 
     return {
         "ok": True,
@@ -11560,7 +11596,9 @@ async def create_managed_directory(payload: ManagedDirectoryCreate, request: Req
 async def delete_managed_file(payload: ManagedFileDelete, request: Request):
     policy, target, display_path = _resolve_managed_path(payload.path, request)
     if policy.locked_root is not None and target == policy.locked_root:
-        raise HTTPException(status_code=400, detail="Cannot delete the managed files root")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the managed files root"
+        )
     if target.parent == target:
         raise HTTPException(status_code=400, detail="Cannot delete the filesystem root")
     if not target.exists():
@@ -11576,7 +11614,9 @@ async def delete_managed_file(payload: ManagedFileDelete, request: Request):
             target.unlink()
     except OSError as exc:
         status_code = 409 if target.is_dir() and not payload.recursive else 500
-        raise HTTPException(status_code=status_code, detail=f"Could not delete path: {exc}")
+        raise HTTPException(
+            status_code=status_code, detail=f"Could not delete path: {exc}"
+        )
 
     return {"ok": True, "path": display_path, **_managed_response_meta(policy)}
 
@@ -11595,7 +11635,13 @@ async def fs_list(path: str):
                     "path": str(target / entry.name),
                     "isDirectory": entry.is_dir(follow_symlinks=False),
                 })
-        entries.sort(key=lambda item: (not item["isDirectory"], item["name"].lower(), item["name"]))
+        entries.sort(
+            key=lambda item: (
+                not item["isDirectory"],
+                item["name"].lower(),
+                item["name"],
+            )
+        )
         return {"entries": entries}
     except FileNotFoundError:
         return {"entries": [], "error": "ENOENT"}
@@ -11671,7 +11717,10 @@ async def fs_default_cwd():
 
 if sys.platform.startswith("win"):
     try:
-        from clawk_cli.win_pty_bridge import WinPtyBridge as PtyBridge, PtyUnavailableError
+        from clawk_cli.win_pty_bridge import (
+            WinPtyBridge as PtyBridge,
+            PtyUnavailableError,
+        )
 
         _PTY_BRIDGE_AVAILABLE = True
 
