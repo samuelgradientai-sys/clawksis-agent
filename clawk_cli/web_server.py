@@ -708,6 +708,10 @@ _CATEGORY_MERGE: Dict[str, str] = {
     # with the other messaging-platform config (discord) so it isn't an
     # orphan tab of one field.
     "telegram": "discord",
+    # `onboarding.profile_build` is the only schema-surfaced onboarding field
+    # (`onboarding.seen` is an internal latch dict, not a user setting), so fold
+    # it into the agent tab rather than leave a single-field "onboarding" tab.
+    "onboarding": "agent",
 }
 
 
