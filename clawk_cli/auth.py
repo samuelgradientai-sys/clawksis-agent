@@ -2419,6 +2419,22 @@ def resolve_provider(
     ):
         return "openrouter"
 
+    # A credential added via `clawk auth add openrouter` lives in the credential
+    # pool, not as an OPENROUTER_API_KEY env var. Auto-detection must consult the
+    # pool too — otherwise such a credential is invisible and requests go out with
+    # no Authorization header (OpenRouter "401: Missing Authentication header").
+    # See issue #42130.
+    try:
+        from agent.credential_pool import load_pool
+
+        _or_pool = load_pool("openrouter")
+
+        if _or_pool and _or_pool.has_credentials():
+            return "openrouter"
+
+    except Exception as e:
+        logger.debug("Could not consult OpenRouter credential pool: %s", e)
+
     # Auto-detect API-key providers by checking their env vars
 
     for pid, pconfig in PROVIDER_REGISTRY.items():

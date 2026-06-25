@@ -1454,7 +1454,7 @@ def test_get_platform_tools_recovers_non_configurable_toolsets_from_composite():
 
     """
 
-    from toolsets import TOOLSETS
+    from toolsets import TOOLSETS, resolve_toolset
 
     from clawk_cli.tools_config import PLATFORMS
 
@@ -1468,15 +1468,19 @@ def test_get_platform_tools_recovers_non_configurable_toolsets_from_composite():
         "includes": [],
     }
 
+    # Build the composite from the *full* web + terminal toolsets (resolved
+    # live) so the subset-recovery check stays correct as those toolsets evolve
+    # — e.g. the web toolset gained ``scrape`` (Scrapling). A real platform
+    # composite always contains every tool of an included toolset, so a
+    # hand-picked subset like ["web_search", "web_extract"] would no longer
+    # recover the "web" toolset once it gained a third tool.
     fake_toolsets["clawk-_test_platform"] = {
         "description": "test composite",
-        "tools": [
-            "web_search",
-            "web_extract",
-            "terminal",
-            "process",
-            "_test_special_tool",
-        ],
+        "tools": sorted(
+            set(resolve_toolset("web"))
+            | set(resolve_toolset("terminal"))
+            | {"_test_special_tool"}
+        ),
         "includes": [],
     }
 

@@ -848,8 +848,53 @@ def _get_named_custom_provider(requested_provider: str) -> Optional[Dict[str, An
 
     requested_norm = _normalize_custom_provider_name(requested_provider or "")
 
-    if not requested_norm or requested_norm == "custom":
+    if not requested_norm:
         return None
+
+    # Bare ``provider="custom"`` normally falls through to the generic custom
+    # runtime, but when the user declares a *literal* ``providers.custom`` entry
+    # (e.g. a cliproxy gateway with its own api/api_key), resolve that named entry
+    # directly instead of short-circuiting to None — otherwise it falls through to
+    # the global default. Regression: cron jobs stored with ``provider: "custom"``
+    # failing with ``auth_unavailable: providers=codex``.
+    if requested_norm == "custom":
+        providers = load_config().get("providers")
+
+        entry = providers.get("custom") if isinstance(providers, dict) else None
+
+        if not isinstance(entry, dict):
+            return None
+
+        base_url = entry.get("api") or entry.get("url") or entry.get("base_url") or ""
+
+        if not base_url:
+            return None
+
+        key_env = str(entry.get("key_env", "") or "").strip()
+
+        resolved_api_key = os.getenv(key_env, "").strip() if key_env else ""
+
+        if not resolved_api_key:
+            resolved_api_key = str(entry.get("api_key", "") or "").strip()
+
+        result = {
+            "name": entry.get("name", "custom"),
+            "base_url": base_url.strip(),
+            "api_key": resolved_api_key,
+            "model": entry.get("default_model", ""),
+        }
+
+        extra_body = entry.get("extra_body")
+
+        if isinstance(extra_body, dict):
+            result["extra_body"] = dict(extra_body)
+
+        api_mode = _parse_api_mode(entry.get("api_mode") or entry.get("transport"))
+
+        if api_mode:
+            result["api_mode"] = api_mode
+
+        return result
 
     # Raw names should only map to custom providers when they are not already
 

@@ -2801,6 +2801,60 @@ def _resolve_tui_heap_mb(default_mb: int = 8192) -> int:
     return max(1536, sized) if limit_mb > 2048 else sized
 
 
+def _apply_terminal_backend_env(env: dict) -> None:
+    """Seed a subprocess env with the persisted terminal backend config.
+
+    config.yaml is the source of truth, but ``terminal_tool`` (and the Node TUI)
+    read the backend selection from ``TERMINAL_*`` env vars. A fresh
+    ``clawk --tui`` may run with an empty/stale shell env, so fill these from
+    config.yaml. An explicit env value already present wins (env-first, matching
+    ``status``/``doctor``), so deliberate shell overrides are respected.
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        terminal = load_config().get("terminal")
+
+    except Exception:
+        return
+
+    if not isinstance(terminal, dict):
+        return
+
+    import json
+
+    # config.yaml terminal.<key> -> TERMINAL_<ENV>. Scalars are stringified;
+    # list/dict values are JSON-encoded so the Node side can parse them.
+    _key_map = {
+        "backend": "TERMINAL_ENV",
+        "modal_mode": "TERMINAL_MODAL_MODE",
+        "docker_image": "TERMINAL_DOCKER_IMAGE",
+        "singularity_image": "TERMINAL_SINGULARITY_IMAGE",
+        "modal_image": "TERMINAL_MODAL_IMAGE",
+        "daytona_image": "TERMINAL_DAYTONA_IMAGE",
+        "docker_extra_args": "TERMINAL_DOCKER_EXTRA_ARGS",
+        "docker_env": "TERMINAL_DOCKER_ENV",
+        "timeout": "TERMINAL_TIMEOUT",
+        "sandbox_dir": "TERMINAL_SANDBOX_DIR",
+    }
+
+    for cfg_key, env_key in _key_map.items():
+        if env.get(env_key):
+            continue  # explicit env override wins
+
+        value = terminal.get(cfg_key)
+
+        if value is None:
+            continue
+
+        if isinstance(value, (list, dict)):
+            env[env_key] = json.dumps(value)
+
+        else:
+            env[env_key] = str(value)
+
+
 def _launch_tui(
     resume_session_id: Optional[str] = None,
     tui_dev: bool = False,
@@ -2843,6 +2897,10 @@ def _launch_tui(
     env.setdefault("CLAWK_CWD", os.getcwd())
 
     env.setdefault("NODE_ENV", "development" if tui_dev else "production")
+
+    # Seed the terminal backend selection from config.yaml so the TUI honors a
+    # configured Docker/SSH/Modal backend even when the shell env is empty.
+    _apply_terminal_backend_env(env)
 
     wt_info = None
 
@@ -13870,7 +13928,193 @@ def _clawk_exe_shims(scripts_dir: Path) -> list[Path]:
     return [
         scripts_dir / "clawk.exe",
         scripts_dir / "clawk-gateway.exe",
+        # Legacy pre-rebrand shims: a user who upgraded from Hermes may still
+        # have a running hermes.exe / hermes-gateway.exe holding the same venv
+        # file locks, which would break the Windows quarantine rename. Detect
+        # (and, if present, quarantine) them too. Non-existent entries are
+        # skipped by every caller, so listing them unconditionally is safe.
+        scripts_dir / "hermes.exe",
+        scripts_dir / "hermes-gateway.exe",
     ]
+
+
+def _wait_for_windows_update_gateway_exit(pids, *, timeout: float) -> set:
+    """Wait up to ``timeout`` seconds for the given gateway PIDs to exit.
+
+    Returns the set of PIDs still alive after the deadline (best-effort; an
+    empty set means every gateway exited cleanly). Used while pausing Windows
+    gateways for an update so the venv's locked ``.exe`` shims can be replaced.
+    """
+
+    remaining = {int(p) for p in pids}
+
+    if not remaining:
+        return set()
+
+    try:
+        import psutil
+
+    except Exception:
+        return remaining
+
+    deadline = _time.monotonic() + max(float(timeout), 0.0)
+
+    while remaining and _time.monotonic() < deadline:
+        for pid in list(remaining):
+            try:
+                if not psutil.pid_exists(pid):
+                    remaining.discard(pid)
+
+            except Exception:
+                remaining.discard(pid)
+
+        if remaining:
+            _time.sleep(0.1)
+
+    return remaining
+
+
+def _pause_windows_gateways_for_update() -> dict:
+    """Stop running gateways before a Windows update so the locked ``.exe``
+    shims can be quarantined, recording enough state to relaunch them after.
+
+    Profile-mapped gateways get a planted planned-stop marker (so they exit
+    cleanly and can be relaunched detached afterwards). Gateways with no
+    resolvable profile are force-terminated — there is nothing to relaunch them
+    against. Returns a resume token for
+    :func:`_resume_windows_gateways_after_update`.
+    """
+
+    token = {"resume_needed": False, "profiles": {}, "unmapped_pids": []}
+
+    if not _is_windows():
+        return token
+
+    try:
+        from clawk_cli.gateway import (
+            find_gateway_pids,
+            find_profile_gateway_processes,
+            _get_restart_drain_timeout,
+        )
+
+    except Exception:
+        return token
+
+    try:
+        all_pids = [int(p) for p in find_gateway_pids(all_profiles=True)]
+
+    except Exception:
+        all_pids = []
+
+    if not all_pids:
+        return token
+
+    try:
+        profile_procs = list(find_profile_gateway_processes())
+
+    except Exception:
+        profile_procs = []
+
+    from gateway.status import write_planned_stop_marker
+
+    profiles: dict = {}
+
+    mapped_pids: set = set()
+
+    for proc in profile_procs:
+        pid = getattr(proc, "pid", None)
+
+        if pid is None or int(pid) not in all_pids:
+            continue
+
+        pid = int(pid)
+
+        profiles[proc.profile] = pid
+
+        mapped_pids.add(pid)
+
+        try:
+            write_planned_stop_marker(pid, home=getattr(proc, "path", None))
+
+        except Exception:
+            pass
+
+    unmapped_pids = [p for p in all_pids if p not in mapped_pids]
+
+    # Give the profile gateways a chance to exit cleanly after the marker.
+    if profiles:
+        try:
+            drain_timeout = _get_restart_drain_timeout()
+
+        except Exception:
+            drain_timeout = 5.0
+
+        _wait_for_windows_update_gateway_exit(
+            list(profiles.values()), timeout=drain_timeout
+        )
+
+    # Unmapped gateways have no profile to relaunch them — force them down.
+    if unmapped_pids:
+        from gateway.status import terminate_pid
+
+        for pid in unmapped_pids:
+            try:
+                terminate_pid(pid, force=True)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = bool(profiles)
+
+    token["profiles"] = profiles
+
+    token["unmapped_pids"] = unmapped_pids
+
+    if profiles:
+        print(f"  Paused gateway profile(s): {', '.join(profiles)}")
+
+    if unmapped_pids:
+        print(
+            f"  Terminated {len(unmapped_pids)} gateway process(es) "
+            "without profile mapping: " + ", ".join(str(p) for p in unmapped_pids)
+        )
+
+    return token
+
+
+def _resume_windows_gateways_after_update(token: dict) -> None:
+    """Relaunch the profile gateways paused by
+    :func:`_pause_windows_gateways_for_update`.
+
+    Idempotent: clears the token's ``resume_needed`` flag so a repeat call is a
+    no-op. Unmapped (force-killed) gateways are intentionally not relaunched.
+    """
+
+    if not token or not token.get("resume_needed"):
+        return
+
+    profiles = token.get("profiles") or {}
+
+    if profiles:
+        try:
+            from clawk_cli.gateway import launch_detached_profile_gateway_restart
+
+        except Exception:
+            launch_detached_profile_gateway_restart = None
+
+        print("  Restarting Windows gateway profile(s): " + ", ".join(profiles))
+
+        for profile, old_pid in profiles.items():
+            if launch_detached_profile_gateway_restart is None:
+                continue
+
+            try:
+                launch_detached_profile_gateway_restart(profile, old_pid)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = False
 
 
 def _detect_concurrent_clawk_instances(
@@ -14470,6 +14714,157 @@ def _refresh_active_lazy_features() -> None:
         print("  `clawk update` once the upstream issue is resolved.")
 
 
+def _update_marker_path() -> Path:
+    """Path of the ``.update-incomplete`` breadcrumb in the source checkout."""
+
+    return PROJECT_ROOT / ".update-incomplete"
+
+
+def _write_update_incomplete_marker() -> None:
+    """Drop a breadcrumb so an update killed mid-install can self-heal later."""
+
+    try:
+        _update_marker_path().write_text(
+            f"started={_time.time()}\npid={os.getpid()}\n"
+        )
+
+    except OSError:
+        pass
+
+
+def _clear_update_incomplete_marker() -> None:
+    """Remove the interrupted-install breadcrumb. No-op when absent."""
+
+    try:
+        _update_marker_path().unlink(missing_ok=True)
+
+    except OSError:
+        pass
+
+
+def _recover_from_interrupted_install() -> None:
+    """Finish a dependency install that a previous ``clawk update`` left half-done.
+
+    A ``clawk update`` killed mid-install (Ctrl-C, terminal close, WSL OOM)
+    leaves a ``.update-incomplete`` breadcrumb and a possibly half-built venv.
+    On the next launch we finish the dep install so the user isn't stranded.
+
+    Best-effort and never raises: on any failure the marker is preserved so the
+    next launch retries. A short-lived ``.update-incomplete.lock`` serialises
+    concurrent launches — a fresh lock means another launch is already
+    recovering (skip); a stale one (>1h) is from a crashed holder (break it, but
+    still skip this launch). All output goes to stderr so ACP's JSON-RPC stdout
+    stays clean.
+    """
+
+    marker = _update_marker_path()
+
+    if not marker.exists():
+        return
+
+    # Only source-tree installs can re-run the dep install. A stray marker on a
+    # PyPI/Docker install isn't ours to act on — just clear it.
+    if not (PROJECT_ROOT / "pyproject.toml").exists():
+        _clear_update_incomplete_marker()
+
+        return
+
+    lock = marker.with_name(".update-incomplete.lock")
+
+    if lock.exists():
+        try:
+            age = _time.time() - lock.stat().st_mtime
+
+        except OSError:
+            age = 0.0
+
+        # Stale lock from a crashed holder — break it so a later launch can
+        # recover. This launch still skips (the break + recover never race in
+        # the same pass).
+        if age > 3600:
+            try:
+                lock.unlink()
+
+            except OSError:
+                pass
+
+        return
+
+    try:
+        lock.write_text(f"{os.getpid()}\n")
+
+    except OSError:
+        pass
+
+    print(
+        "→ Clawksis was interrupted mid-install; finishing dependency setup now...",
+        file=sys.stderr,
+    )
+
+    try:
+        # ensurepip unconditionally first: a half-built venv may have lost pip,
+        # which the fallback install path relies on.
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "ensurepip", "--upgrade", "--default-pip"],
+                cwd=str(PROJECT_ROOT),
+            )
+
+        except Exception:
+            pass
+
+        from clawk_cli.managed_uv import ensure_uv
+
+        try:
+            uv_result = ensure_uv()
+
+        except Exception:
+            uv_result = None
+
+        uv_bin = None
+
+        if isinstance(uv_result, (list, tuple)):
+            uv_bin = uv_result[0] if uv_result else None
+
+        elif isinstance(uv_result, str):
+            uv_bin = uv_result
+
+        if uv_bin:
+            uv_env = {**os.environ, "VIRTUAL_ENV": str(PROJECT_ROOT / "venv")}
+
+            if _is_termux_env(uv_env):
+                uv_env.pop("PYTHONPATH", None)
+
+                uv_env.pop("PYTHONHOME", None)
+
+            _install_python_dependencies_with_optional_fallback(
+                [uv_bin, "pip"], env=uv_env
+            )
+
+        else:
+            _install_python_dependencies_with_optional_fallback(
+                [sys.executable, "-m", "pip"]
+            )
+
+        _clear_update_incomplete_marker()
+
+        print("✓ Clawksis dependencies recovered.", file=sys.stderr)
+
+    except Exception as exc:
+        # Keep the marker so the next launch retries; never abort startup.
+        print(
+            f"⚠ Clawksis dependency recovery failed ({exc}); will retry next launch.",
+            file=sys.stderr,
+        )
+
+    finally:
+        try:
+            lock.unlink(missing_ok=True)
+
+        except OSError:
+            pass
+
+
 def _install_python_dependencies_with_optional_fallback(
     install_cmd_prefix: list[str],
     *,
@@ -14757,10 +15152,25 @@ def _verify_core_dependencies_installed(
 
     repair_args = ["install", "--reinstall", "-e", "."]
 
+    # On Windows, the editable ``--reinstall`` rewrites the entry-point .exe
+    # shims, which pip can't overwrite while ``clawk.exe`` is running.
+    # Quarantine the live shims first (and restore them if the install fails) —
+    # mirrors the primary install path; without it the shim is left missing and
+    # ``clawk`` drops off PATH.
+    repair_scripts_dir = _venv_scripts_dir() if _is_windows() else None
+
+    repair_moved: list[tuple[Path, Path]] = []
+
+    if repair_scripts_dir is not None:
+        repair_moved = _quarantine_running_clawk_exe(repair_scripts_dir)
+
     try:
         _run_install_with_heartbeat(install_cmd_prefix + repair_args, env=env)
 
     except subprocess.CalledProcessError as e:
+        if repair_scripts_dir is not None:
+            _restore_quarantined_exes(repair_moved)
+
         logger.warning("dep verification: repair install failed: %s", e)
 
         print("  ⚠ Repair install failed; check `clawk update` output above.")
