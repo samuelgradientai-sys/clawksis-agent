@@ -1281,10 +1281,27 @@ def _collect_auto_append_media_tags(
 
 
 def _ensure_ssl_certs() -> None:
-    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python."""
+    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python.
 
-    if "SSL_CERT_FILE" in os.environ:
-        return  # user already configured it
+    Windows startup paths (Desktop, Scheduled Tasks, installer children) can
+    occasionally inherit a stale SSL_CERT_FILE. Returning just because the
+    variable is present makes every later httpx/OpenAI client construction fail
+    with FileNotFoundError from ssl.load_verify_locations(). Treat a missing
+    path as unset and fall back to certifi instead.
+    """
+
+    configured_cert = os.environ.get("SSL_CERT_FILE")
+
+    if configured_cert:
+        if os.path.exists(configured_cert):
+            return  # user already configured it to a real file
+
+        logging.getLogger(__name__).warning(
+            "Ignoring stale SSL_CERT_FILE=%r because the path does not exist",
+            configured_cert,
+        )
+
+        os.environ.pop("SSL_CERT_FILE", None)
 
     import ssl
 
