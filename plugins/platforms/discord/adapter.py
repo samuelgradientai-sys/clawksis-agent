@@ -876,6 +876,53 @@ def _read_dm_role_auth_guild() -> Optional[int]:
     return guild_id if guild_id > 0 else None
 
 
+async def _wait_for_ready_or_bot_exit(
+    ready_event: "asyncio.Event",
+    bot_task: "Optional[asyncio.Task]",
+    timeout: float,
+) -> None:
+    """Block until the Discord client signals ready, the bot task exits, or
+    ``timeout`` elapses.
+
+    Racing the ready event against the bot task means a login that fails during
+    the WebSocket handshake (bad token, intents error) surfaces immediately
+    instead of stalling for the full timeout. Raises ``asyncio.TimeoutError``
+    when neither completes in time; re-raises the bot task's exception when it
+    dies before becoming ready.
+    """
+
+    ready_wait = asyncio.ensure_future(ready_event.wait())
+
+    waiters: set = {ready_wait}
+
+    if bot_task is not None:
+        waiters.add(bot_task)
+
+    try:
+        done, _pending = await asyncio.wait(
+            waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
+
+    finally:
+        if not ready_wait.done():
+            ready_wait.cancel()
+
+    if not done:
+        raise asyncio.TimeoutError()
+
+    # The bot task finished before ready — surface a startup crash so connect()
+    # treats it as a failure instead of a (never-arriving) success.
+    if (
+        bot_task is not None
+        and bot_task in done
+        and not ready_event.is_set()
+    ):
+        exc = bot_task.exception()
+
+        if exc is not None:
+            raise exc
+
+
 class DiscordAdapter(BasePlatformAdapter):
     """
 
@@ -1433,9 +1480,9 @@ class DiscordAdapter(BasePlatformAdapter):
 
             self._bot_task = asyncio.create_task(self._client.start(self.config.token))
 
-            # Wait for ready
+            # Wait for ready (or an early bot-task crash)
 
-            await asyncio.wait_for(self._ready_event.wait(), timeout=30)
+            await _wait_for_ready_or_bot_exit(self._ready_event, self._bot_task, 30)
 
             self._running = True
 
@@ -1448,6 +1495,11 @@ class DiscordAdapter(BasePlatformAdapter):
                 exc_info=True,
             )
 
+            # Cancel the orphaned bot task so a slow handshake can't complete
+            # later and leave a zombie client firing on_message (duplicate
+            # threads on the next reconnect).
+            await self._cancel_bot_task()
+
             self._release_platform_lock()
 
             return False
@@ -1457,9 +1509,36 @@ class DiscordAdapter(BasePlatformAdapter):
                 "[%s] Failed to connect to Discord: %s", self.name, e, exc_info=True
             )
 
+            await self._cancel_bot_task()
+
             self._release_platform_lock()
 
             return False
+
+    async def _cancel_bot_task(self) -> None:
+        """Cancel and clear the background bot task, awaiting its teardown.
+
+        Safe to call when no task is running. Always leaves ``_bot_task`` None so
+        a timed-out / discarded adapter never leaves a live Discord client behind.
+        """
+
+        task = self._bot_task
+
+        self._bot_task = None
+
+        if task is None or task.done():
+            return
+
+        task.cancel()
+
+        try:
+            await task
+
+        except asyncio.CancelledError:
+            pass
+
+        except Exception:  # pragma: no cover - defensive teardown
+            pass
 
     async def disconnect(self) -> None:
         """Disconnect from Discord."""
@@ -1492,6 +1571,11 @@ class DiscordAdapter(BasePlatformAdapter):
 
             except asyncio.CancelledError:
                 pass
+
+        # Cancel any still-running bot task (e.g. a connect() that timed out and
+        # left a zombie client mid-handshake). _dispose_unused_adapter relies on
+        # disconnect() to fully tear these down.
+        await self._cancel_bot_task()
 
         self._running = False
 
