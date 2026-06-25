@@ -4172,6 +4172,34 @@ class GatewayRunner:
 
         return None
 
+    def _normalize_source_for_session_key(
+        self,
+        source: SessionSource,
+    ) -> SessionSource:
+        """Apply Telegram DM topic recovery to a source for session-key purposes.
+
+        ``_handle_message_with_agent`` rewrites ``source.thread_id`` via
+        ``_recover_telegram_topic_thread_id`` *before* deriving the session
+        key for a normal message turn (a lobby/stripped reply gets pinned to
+        the user's last-active topic).  Session-scoped command handlers like
+        ``/model`` and ``/reasoning`` derive their override key from the raw
+        inbound ``event.source``, which skips that recovery — so the override
+        is stored under a different key than the next message turn reads,
+        and the override is silently dropped on Telegram forum topics and
+        after compression session splits (#30479).
+
+        Returns a recovery-normalized copy when a rewrite applies, otherwise
+        the original source unchanged.  Always derive the override storage key
+        from the result so storage and read use an identical key.
+        """
+        try:
+            recovered = self._recover_telegram_topic_thread_id(source)
+        except Exception:
+            return source
+        if recovered is None:
+            return source
+        return dataclasses.replace(source, thread_id=recovered)
+
     def _resolve_session_agent_runtime(
         self,
         *,
@@ -13849,7 +13877,7 @@ class GatewayRunner:
                     )
 
             if audio_paths:
-                message_text = await self._enrich_message_with_transcription(
+                message_text, _voice_transcripts = await self._enrich_message_with_transcription(
                     message_text,
                     audio_paths,
                 )
@@ -24843,7 +24871,7 @@ class GatewayRunner:
         self,
         user_text: str,
         audio_paths: List[str],
-    ) -> str:
+    ) -> tuple[str, List[str]]:
         """
 
         Auto-transcribe user voice/audio messages using the configured STT provider
@@ -24883,23 +24911,25 @@ class GatewayRunner:
                     notes.append(f"[The user sent a voice message: {abs_path}]")
 
             if not notes:
-                return user_text
+                return user_text, []
 
             prefix = "\n\n".join(notes)
 
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, []
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", []
 
-            return prefix
+            return prefix, []
 
         from tools.transcription_tools import transcribe_audio
 
         enriched_parts = []
+
+        successful_transcripts: List[str] = []
 
         for path in audio_paths:
             try:
@@ -24909,6 +24939,8 @@ class GatewayRunner:
 
                 if result["success"]:
                     transcript = result["transcript"]
+
+                    successful_transcripts.append(transcript)
 
                     enriched_parts.append(
                         f"[The user sent a voice message~ "
@@ -24963,14 +24995,14 @@ class GatewayRunner:
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, successful_transcripts
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", successful_transcripts
 
-            return prefix
+            return prefix, successful_transcripts
 
-        return user_text
+        return user_text, successful_transcripts
 
     def _build_process_event_source(self, evt: dict):
         """Resolve the canonical source for a synthetic background-process event.
