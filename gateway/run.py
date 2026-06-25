@@ -11757,6 +11757,13 @@ class GatewayRunner:
 
         check_ids = {user_id}
 
+        # Some platforms (e.g. SimpleX) surface only the contact's display name
+        # in their UI, so operators naturally put that in {PLATFORM}_ALLOWED_USERS
+        # even though the adapter sets user_id to a stable numeric contactId.
+        # Match the display name too so both forms authorize.
+        if getattr(source, "user_name", None):
+            check_ids.add(source.user_name)
+
         if "@" in user_id:
             check_ids.add(user_id.split("@")[0])
 
