@@ -1489,6 +1489,22 @@ def _load_service_tier() -> str | None:
     return None
 
 
+def _load_provider_routing() -> dict:
+    """OpenRouter provider-routing prefs from config.yaml (``provider_routing``).
+
+    Parity with the messaging gateway (``gateway/run.py::_load_provider_routing``)
+    and the classic CLI: without this the desktop/TUI backend builds agents with
+    no routing prefs, so OpenRouter falls back to its default (effectively random)
+    provider selection even when the user configured ``provider_routing``.
+    """
+
+    try:
+        return _load_cfg().get("provider_routing", {}) or {}
+
+    except Exception:
+        return {}
+
+
 # Billing buckets that are NOT routable providers on their own: restoring one
 # of these as a resumed session's provider override makes the rebuild fail with
 # "No LLM provider configured" (``custom`` in particular is the bare class for
@@ -1997,34 +2013,40 @@ def _apply_model_switch(sid: str, session: dict, raw_input: str) -> dict:
 
         _emit("session.info", sid, _session_info(agent, session))
 
-    os.environ["CLAWK_MODEL"] = result.new_model
+    # Record the switch as a PER-SESSION override so a later rebuild of THIS
 
-    os.environ["CLAWK_INFERENCE_MODEL"] = result.new_model
+    # session (e.g. /new, or resume) re-derives the user's chosen
 
-    # Keep the process-level provider env vars in sync with the user's
-
-    # explicit choice so any ambient re-resolution (credential pool refresh,
-
-    # compressor rebuild, aux clients) and startup re-resolution on /new
-
-    # both pick up the new provider instead of the original one persisted
-
-    # in config or env.
+    # model/provider instead of falling back to global config.
 
     #
 
-    # CLAWK_TUI_PROVIDER is the canonical "explicit-this-process" carrier
+    # We deliberately do NOT write process-global env vars (CLAWK_MODEL /
 
-    # consumed by _resolve_startup_runtime() — set it unconditionally on
+    # CLAWK_INFERENCE_MODEL / CLAWK_TUI_PROVIDER / CLAWK_INFERENCE_PROVIDER)
 
-    # /model so /new can't fall through to static-catalog detection and
+    # here. The desktop backend hosts every same-profile session in ONE
 
-    # pick a coincidentally-matching native provider (fixes #16857).
+    # process, so mutating os.environ on a /model switch leaked the new
 
-    if result.target_provider:
-        os.environ["CLAWK_INFERENCE_PROVIDER"] = result.target_provider
+    # model/provider into every OTHER live session's next agent rebuild —
 
-        os.environ["CLAWK_TUI_PROVIDER"] = result.target_provider
+    # switching the model in one session silently changed it in the others
+
+    # (cross-session contamination). agent.switch_model() above already
+
+    # mutated the right agent in place; the override dict makes that choice
+
+    # survive a rebuild without touching shared process state.
+
+    if isinstance(session, dict):
+        session["model_override"] = {
+            "model": result.new_model,
+            "provider": result.target_provider,
+            "base_url": result.base_url,
+            "api_key": result.api_key,
+            "api_mode": result.api_mode,
+        }
 
     if persist_global:
         _persist_model_switch(result)
@@ -3703,6 +3725,8 @@ def _make_agent(
             target_model=model or None,
         )
 
+    _pr = _load_provider_routing()
+
     return AIAgent(
         model=model,
         max_iterations=_cfg_max_turns(cfg, 90),
@@ -3722,6 +3746,15 @@ def _make_agent(
         reasoning_config=_load_reasoning_config(),
         service_tier=_load_service_tier(),
         enabled_toolsets=_load_enabled_toolsets(),
+        # OpenRouter provider-routing prefs (config.yaml `provider_routing`).
+        # Mirrors the messaging gateway + CLI so the desktop/TUI honors the same
+        # routing instead of letting OpenRouter pick providers at random.
+        providers_allowed=_pr.get("only"),
+        providers_ignored=_pr.get("ignore"),
+        providers_order=_pr.get("order"),
+        provider_sort=_pr.get("sort"),
+        provider_require_parameters=_pr.get("require_parameters", False),
+        provider_data_collection=_pr.get("data_collection"),
         platform="tui",
         session_id=session_id or key,
         session_db=_get_db(),
