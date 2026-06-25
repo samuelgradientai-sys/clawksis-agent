@@ -844,6 +844,22 @@ def _try_resolve_from_custom_pool(
         return None
 
 
+def has_named_custom_provider(name: str) -> bool:
+    """Whether a named custom-provider entry resolves for *name*.
+
+    Thin predicate over :func:`_get_named_custom_provider` so callers (e.g. the
+    cron model-override pinning) can ask "does bare ``custom`` / ``custom:<slug>``
+    map to a real ``providers`` / ``custom_providers`` entry?" without doing the
+    full runtime resolution. Returns False on any error.
+    """
+
+    try:
+        return _get_named_custom_provider(name) is not None
+
+    except Exception:
+        return False
+
+
 def _get_named_custom_provider(requested_provider: str) -> Optional[Dict[str, Any]]:
 
     requested_norm = _normalize_custom_provider_name(requested_provider or "")
