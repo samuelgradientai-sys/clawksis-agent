@@ -463,6 +463,102 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
             pass
 
 
+# Grace window (seconds) before a WS session detached by a dropped socket is
+# reaped. A quick reconnect / session.resume repoints the transport and cancels
+# the pending reap. 0 disables the Timer (immediate-only; used by tests).
+_WS_ORPHAN_REAP_GRACE_S: float = 90.0
+
+
+class _DetachedWSTransport:
+    """Null transport for a WS session whose socket dropped but may reconnect.
+
+    Swallows writes so a detached session's emits don't crash into a closed
+    socket (or fall through to desktop stdout). Replaced by a live transport on
+    the next session.resume / reconnect.
+    """
+
+    closed = True
+
+    def write(self, *_args, **_kwargs) -> bool:
+        return False
+
+    def close(self) -> None:
+        pass
+
+
+_detached_ws_transport = _DetachedWSTransport()
+
+
+def _schedule_ws_orphan_reap(session_name: str) -> None:
+    """Reap a still-detached WS session after the grace window.
+
+    A reconnect that repoints ``transport`` away from the detached sentinel
+    cancels the effect (the reap re-checks before finalizing). Grace <= 0
+    short-circuits the Timer so callers (and tests) leave no lingering thread.
+    """
+
+    grace = _WS_ORPHAN_REAP_GRACE_S
+
+    if not grace or grace <= 0:
+        return
+
+    def _reap() -> None:
+        session = _sessions.get(session_name)
+
+        if session is None:
+            return
+
+        if session.get("transport") is not _detached_ws_transport:
+            return  # reconnected — leave it alone
+
+        _finalize_session(session, end_reason="ws_orphan_reap")
+
+        _sessions.pop(session_name, None)
+
+    timer = threading.Timer(grace, _reap)
+
+    timer.daemon = True
+
+    timer.start()
+
+
+def _close_sessions_for_transport(
+    transport: Any, end_reason: str = "ws_disconnect"
+) -> tuple[int, int]:
+    """Tear down sessions owned by a just-closed WS transport.
+
+    Sessions flagged ``close_on_disconnect`` (sidecar / one-shot) are reaped
+    immediately — finalized (which closes the slash worker, #38095) and dropped.
+    The rest are *detached*: their transport is repointed to the drop sentinel
+    so later emits no-op, and a grace-windowed orphan reap is scheduled (a quick
+    reconnect cancels it). Returns ``(reaped, detached)`` counts.
+    """
+
+    reaped = 0
+
+    detached = 0
+
+    for name, session in list(_sessions.items()):
+        if session.get("transport") is not transport:
+            continue
+
+        if session.get("close_on_disconnect"):
+            _finalize_session(session, end_reason=end_reason)
+
+            _sessions.pop(name, None)
+
+            reaped += 1
+
+        else:
+            session["transport"] = _detached_ws_transport
+
+            _schedule_ws_orphan_reap(name)
+
+            detached += 1
+
+    return reaped, detached
+
+
 def _shutdown_sessions() -> None:
 
     for session in list(_sessions.values()):

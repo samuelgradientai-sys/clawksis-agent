@@ -2288,6 +2288,11 @@ def check_all_command_guards(
                 "pattern_key": primary_key,
                 "pattern_keys": all_keys,
                 "description": combined_desc,
+                # Withhold the permanent "Always allow" option when a tirith
+                # content-security warning is present: broad permanent
+                # allowlisting of, e.g., a shortened-URL fetch is too risky.
+                # Plain dangerous-pattern approvals still offer it.
+                "allow_permanent": not has_tirith,
             }
 
             decision = _await_gateway_decision(

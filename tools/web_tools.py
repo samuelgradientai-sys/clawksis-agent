@@ -174,7 +174,11 @@ from tools.tool_backend_helpers import (  # noqa: F401
     prefers_gateway,
 )
 
-from tools.url_safety import is_safe_url
+from tools.url_safety import (
+    async_is_safe_url,
+    is_safe_url,
+    normalize_url_for_request,
+)
 
 import sys
 
@@ -1523,16 +1527,23 @@ async def web_extract_tool(
         ssrf_blocked: List[Dict[str, Any]] = []
 
         for url in urls:
-            if not is_safe_url(url):
+            # Normalize first (IDNA host + percent-encode non-ASCII path/query)
+            # so the SSRF check and the backend both see a canonical ASCII URL —
+            # otherwise an international URL like ``wttr.in/Köln`` reaches the
+            # provider unescaped. Use the async SSRF probe so DNS resolution
+            # doesn't block the event loop.
+            normalized = normalize_url_for_request(url)
+
+            if not await async_is_safe_url(normalized):
                 ssrf_blocked.append({
-                    "url": url,
+                    "url": normalized,
                     "title": "",
                     "content": "",
                     "error": "Blocked: URL targets a private or internal network address",
                 })
 
             else:
-                safe_urls.append(url)
+                safe_urls.append(normalized)
 
         # Dispatch only safe URLs to the configured backend
 
