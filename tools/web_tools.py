@@ -175,7 +175,6 @@ from tools.tool_backend_helpers import (  # noqa: F401
 )
 
 from tools.url_safety import (
-    async_is_safe_url,
     is_safe_url,
     normalize_url_for_request,
 )
@@ -1534,7 +1533,11 @@ async def web_extract_tool(
             # doesn't block the event loop.
             normalized = normalize_url_for_request(url)
 
-            if not await async_is_safe_url(normalized):
+            # Run the (DNS-resolving, blocking) SSRF probe off the event loop via
+            # the module-level ``is_safe_url`` so callers/tests can monkeypatch
+            # ``web_tools.is_safe_url`` and the website-policy gate downstream
+            # still runs.
+            if not await asyncio.to_thread(is_safe_url, normalized):
                 ssrf_blocked.append({
                     "url": normalized,
                     "title": "",
