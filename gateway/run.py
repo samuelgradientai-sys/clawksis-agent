@@ -13246,6 +13246,9 @@ class GatewayRunner:
         if canonical == "verbose":
             return await self._handle_verbose_command(event)
 
+        if canonical == "version":
+            return await self._handle_version_command(event)
+
         if canonical == "footer":
             return await self._handle_footer_command(event)
 
@@ -20542,6 +20545,13 @@ class GatewayRunner:
             enable_session_yolo(session_key)
 
             return EphemeralReply(t("gateway.yolo.enabled"))
+
+    async def _handle_version_command(self, event: MessageEvent) -> str:
+        """Handle /version — show the running Clawksis version."""
+
+        from clawk_cli.banner import format_banner_version_label
+
+        return format_banner_version_label()
 
     async def _handle_verbose_command(self, event: MessageEvent) -> str:
         """Handle /verbose command — cycle tool progress display mode.
