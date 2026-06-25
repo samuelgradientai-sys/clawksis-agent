@@ -2188,6 +2188,20 @@ def _apply_model_switch(sid: str, session: dict, raw_input: str) -> dict:
             "api_mode": result.api_mode,
         }
 
+    # Besides the per-session override above, surface the explicit choice on the
+    # process env so ambient re-resolution (credential-pool refresh, aux clients,
+    # /new startup via _resolve_startup_runtime) picks up the new provider instead
+    # of the one persisted in config/env (fixes #16857). CLAWK_TUI_PROVIDER is the
+    # canonical explicit-this-process carrier.
+    os.environ["CLAWK_MODEL"] = result.new_model
+
+    os.environ["CLAWK_INFERENCE_MODEL"] = result.new_model
+
+    if result.target_provider:
+        os.environ["CLAWK_INFERENCE_PROVIDER"] = result.target_provider
+
+        os.environ["CLAWK_TUI_PROVIDER"] = result.target_provider
+
     if persist_global:
         _persist_model_switch(result)
 
