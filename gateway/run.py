@@ -30889,13 +30889,52 @@ async def start_gateway(
                     existing_pid,
                 )
 
+                _force_exited = False
+
                 try:
                     terminate_pid(existing_pid, force=True)
 
-                    time.sleep(0.5)
+                except ProcessLookupError:
+                    _force_exited = True
 
-                except (ProcessLookupError, PermissionError, OSError):
+                except (PermissionError, OSError):
                     pass
+
+                # Confirm the force-kill actually reaped the process before we
+
+                # clear its PID file / scoped locks. SIGKILL can fail to take
+
+                # (uninterruptible sleep, zombie-reaping parent); if we blindly
+
+                # clear the metadata and start a fresh instance we end up with
+
+                # two live gateways fighting over the same token (#19471).
+
+                if not _force_exited:
+                    for _ in range(20):
+                        if not _pid_exists(existing_pid):
+                            _force_exited = True
+
+                            break
+
+                        time.sleep(0.25)
+
+                if not _force_exited:
+                    logger.error(
+                        "Old gateway (PID %d) still appears alive after SIGKILL; "
+                        "aborting replacement to avoid a duplicate gateway.",
+                        existing_pid,
+                    )
+
+                    try:
+                        from gateway.status import clear_takeover_marker
+
+                        clear_takeover_marker()
+
+                    except Exception:
+                        pass
+
+                    return False
 
             remove_pid_file()
 
