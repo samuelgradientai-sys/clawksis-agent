@@ -1296,6 +1296,16 @@ def _cleanup_all_browsers(*args, **kwargs):
 
 _cleanup_done = False
 
+# Session ids whose ``on_session_finalize`` hook has already been emitted by the
+
+# single-query finalize path. The atexit-registered ``_run_cleanup`` consults
+
+# this so the one-shot ``-q`` flow doesn't re-emit the finalize hook a second
+
+# time when atexit later runs cleanup for the same session.
+
+_single_query_finalize_attempted_session_ids: set = set()
+
 # Weak reference to the active AIAgent for memory provider shutdown at exit
 
 _active_agent_ref = None
@@ -1380,8 +1390,14 @@ def _prepare_deferred_agent_startup() -> None:
         )
 
 
-def _run_cleanup():
-    """Run resource cleanup exactly once."""
+def _run_cleanup(notify_session_finalize: bool = True):
+    """Run resource cleanup exactly once.
+
+    ``notify_session_finalize`` gates the ``on_session_finalize`` hook below.
+    The single-query ``-q`` path emits that hook itself (via
+    ``_notify_single_query_session_finalize``) BEFORE running cleanup, then calls
+    this with ``notify_session_finalize=False`` so the hook isn't fired twice.
+    """
 
     global _cleanup_done
 
@@ -1438,18 +1454,31 @@ def _run_cleanup():
 
     # session boundary — NOT per-turn inside run_conversation().
 
-    try:
-        from clawk_cli.plugins import invoke_hook as _invoke_hook
+    # Skip when the caller already emitted ``on_session_finalize`` (the
 
-        _invoke_hook(
-            "on_session_finalize",
-            session_id=_active_agent_ref.session_id if _active_agent_ref else None,
-            platform="cli",
-            reason="shutdown",
-        )
+    # single-query ``-q`` path) or when there is no active agent / the session
 
-    except Exception:
-        pass
+    # was already finalized — so the hook fires exactly once per session.
+
+    _finalize_session_id = _active_agent_ref.session_id if _active_agent_ref else None
+
+    if (
+        notify_session_finalize
+        and _active_agent_ref is not None
+        and _finalize_session_id not in _single_query_finalize_attempted_session_ids
+    ):
+        try:
+            from clawk_cli.plugins import invoke_hook as _invoke_hook
+
+            _invoke_hook(
+                "on_session_finalize",
+                session_id=_finalize_session_id,
+                platform="cli",
+                reason="shutdown",
+            )
+
+        except Exception:
+            pass
 
     try:
         if _active_agent_ref and hasattr(_active_agent_ref, "shutdown_memory_provider"):
@@ -1475,6 +1504,56 @@ def _run_cleanup():
 
     except Exception:
         pass
+
+
+def _notify_single_query_session_finalize(cli) -> None:
+    """Emit the ``on_session_finalize`` hook for a one-shot ``-q`` run.
+
+    Uses the live agent's session id / platform (not the CLI's pre-agent
+    placeholder) so memory providers see the real session. The id is recorded
+    in ``_single_query_finalize_attempted_session_ids`` so the atexit-driven
+    ``_run_cleanup`` doesn't fire the hook a second time for the same session.
+    """
+
+    agent = getattr(cli, "agent", None)
+
+    session_id = getattr(agent, "session_id", None) if agent is not None else None
+
+    platform = getattr(agent, "platform", None) if agent is not None else None
+
+    if session_id:
+        _single_query_finalize_attempted_session_ids.add(session_id)
+
+    from clawk_cli.plugins import invoke_hook as _invoke_hook
+
+    _invoke_hook(
+        "on_session_finalize",
+        session_id=session_id,
+        platform=platform or "cli",
+        reason="shutdown",
+    )
+
+
+def _finalize_single_query(cli) -> None:
+    """Finalize a single-query (``-q``) run.
+
+    Emits the session-finalize hook (best-effort — a failing hook must not
+    block teardown), runs the shared resource cleanup with the finalize hook
+    suppressed (already emitted above), and always releases the active-session
+    slot afterwards even if cleanup raises.
+    """
+
+    try:
+        _notify_single_query_session_finalize(cli)
+
+    except Exception:
+        logger.debug("single-query session finalize hook failed", exc_info=True)
+
+    try:
+        _run_cleanup(notify_session_finalize=False)
+
+    finally:
+        cli._release_active_session()
 
 
 def _emit_interrupted_session_end(cli, *, reason: str = "keyboard_interrupt") -> None:
@@ -25548,73 +25627,87 @@ def main(
 
                 logger.debug("kanban image-ref extraction failed: %s", _exc)
 
-        if quiet:
-            # Quiet mode: suppress banner, spinner, tool previews.
+        try:
+            if quiet:
+                # Quiet mode: suppress banner, spinner, tool previews.
 
-            # Only print the final response and parseable session info.
+                # Only print the final response and parseable session info.
 
-            cli.tool_progress_mode = "off"
+                if not cli._claim_active_session("cli", stderr=True):
+                    sys.exit(1)
 
-            if cli._ensure_runtime_credentials():
-                effective_query: Any = query
+                cli.tool_progress_mode = "off"
 
-                if single_query_images or single_query_image_urls:
-                    # Honour the same image-routing decision used by the
+                if cli._ensure_runtime_credentials():
+                    effective_query: Any = query
 
-                    # interactive path. With a vision-capable model (incl.
+                    if single_query_images or single_query_image_urls:
+                        # Honour the same image-routing decision used by the
 
-                    # custom-provider models declared via
+                        # interactive path. With a vision-capable model (incl.
 
-                    # `model.supports_vision: true`), attach images natively
+                        # custom-provider models declared via
 
-                    # as image_url content parts. Otherwise fall back to the
+                        # `model.supports_vision: true`), attach images natively
 
-                    # text-pipeline (vision_analyze pre-description).
+                        # as image_url content parts. Otherwise fall back to the
 
-                    _img_mode = "text"
+                        # text-pipeline (vision_analyze pre-description).
 
-                    _build_parts = None
-
-                    try:
-                        from agent.image_routing import (
-                            build_native_content_parts as _build_parts,  # noqa: F811
-                        )
-
-                        from agent.image_routing import decide_image_input_mode
-
-                        from clawk_cli.config import load_config
-
-                        _img_mode = decide_image_input_mode(
-                            (cli.provider or "").strip(),
-                            (cli.model or "").strip(),
-                            load_config(),
-                        )
-
-                    except Exception:
                         _img_mode = "text"
 
-                    if _img_mode == "native" and _build_parts is not None:
+                        _build_parts = None
+
                         try:
-                            _parts, _skipped = _build_parts(
-                                query if isinstance(query, str) else "",
-                                [str(p) for p in single_query_images],
-                                image_urls=list(single_query_image_urls) or None,
+                            from agent.image_routing import (
+                                build_native_content_parts as _build_parts,  # noqa: F811
                             )
 
-                            if any(p.get("type") == "image_url" for p in _parts):
-                                effective_query = _parts
+                            from agent.image_routing import decide_image_input_mode
 
-                            else:
-                                # All images unreadable — text fallback.
+                            from clawk_cli.config import load_config
 
-                                # ``_preprocess_images_with_vision`` only knows
+                            _img_mode = decide_image_input_mode(
+                                (cli.provider or "").strip(),
+                                (cli.model or "").strip(),
+                                load_config(),
+                            )
 
-                                # about local files; URLs would be lost there,
+                        except Exception:
+                            _img_mode = "text"
 
-                                # so keep the original query text intact when
+                        if _img_mode == "native" and _build_parts is not None:
+                            try:
+                                _parts, _skipped = _build_parts(
+                                    query if isinstance(query, str) else "",
+                                    [str(p) for p in single_query_images],
+                                    image_urls=list(single_query_image_urls) or None,
+                                )
 
-                                # only URLs were supplied.
+                                if any(p.get("type") == "image_url" for p in _parts):
+                                    effective_query = _parts
 
+                                else:
+                                    # All images unreadable — text fallback.
+
+                                    # ``_preprocess_images_with_vision`` only knows
+
+                                    # about local files; URLs would be lost there,
+
+                                    # so keep the original query text intact when
+
+                                    # only URLs were supplied.
+
+                                    if single_query_images:
+                                        effective_query = (
+                                            cli._preprocess_images_with_vision(
+                                                query,
+                                                single_query_images,
+                                                announce=False,
+                                            )
+                                        )
+
+                            except Exception:
                                 if single_query_images:
                                     effective_query = (
                                         cli._preprocess_images_with_vision(
@@ -25624,211 +25717,219 @@ def main(
                                         )
                                     )
 
-                        except Exception:
-                            if single_query_images:
-                                effective_query = cli._preprocess_images_with_vision(
-                                    query,
-                                    single_query_images,
-                                    announce=False,
-                                )
+                        elif single_query_images:
+                            effective_query = cli._preprocess_images_with_vision(
+                                query,
+                                single_query_images,
+                                announce=False,
+                            )
 
-                    elif single_query_images:
-                        effective_query = cli._preprocess_images_with_vision(
-                            query,
-                            single_query_images,
-                            announce=False,
+                    turn_route = cli._resolve_turn_agent_config(effective_query)
+
+                    if turn_route["signature"] != cli._active_agent_route_signature:
+                        cli.agent = None
+
+                    if cli._init_agent(
+                        model_override=turn_route["model"],
+                        runtime_override=turn_route["runtime"],
+                        request_overrides=turn_route.get("request_overrides"),
+                    ):
+                        cli.agent.quiet_mode = True
+
+                        cli.agent.suppress_status_output = True
+
+                        # Suppress streaming display callbacks so stdout stays
+
+                        # machine-readable (no styled "Clawksis" box, no tool-gen
+
+                        # status lines).  The response is printed once below.
+
+                        cli.agent.stream_delta_callback = None
+
+                        cli.agent.tool_gen_callback = None
+
+                        try:
+                            result = cli.agent.run_conversation(
+                                user_message=effective_query,
+                                conversation_history=cli.conversation_history,
+                            )
+
+                        except KeyboardInterrupt:
+                            _emit_interrupted_session_end(
+                                cli, reason="keyboard_interrupt"
+                            )
+
+                            print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+
+                            sys.exit(130)
+
+                        # Sync session_id if mid-run compression created a
+
+                        # continuation session. The exit line below reports
+
+                        # session_id to stderr for automation wrappers; without
+
+                        # this sync it would point at the ended parent.
+
+                        if (
+                            getattr(cli.agent, "session_id", None)
+                            and cli.agent.session_id != cli.session_id
+                        ):
+                            cli.session_id = cli.agent.session_id
+
+                        response = (
+                            result.get("final_response", "")
+                            if isinstance(result, dict)
+                            else str(result)
                         )
 
-                turn_route = cli._resolve_turn_agent_config(effective_query)
+                        # Surface backend errors that produced no visible output
 
-                if turn_route["signature"] != cli._active_agent_route_signature:
-                    cli.agent = None
+                        # (e.g. invalid model slug → provider 4xx). Mirrors the
 
-                if cli._init_agent(
-                    model_override=turn_route["model"],
-                    runtime_override=turn_route["runtime"],
-                    request_overrides=turn_route.get("request_overrides"),
-                ):
-                    cli.agent.quiet_mode = True
+                        # interactive CLI path. Write to stderr so piped stdout
 
-                    cli.agent.suppress_status_output = True
+                        # stays clean for automation wrappers.
 
-                    # Suppress streaming display callbacks so stdout stays
+                        if (
+                            not response
+                            and isinstance(result, dict)
+                            and result.get("error")
+                            and (result.get("failed") or result.get("partial"))
+                        ):
+                            print(f"Error: {result['error']}", file=sys.stderr)
 
-                    # machine-readable (no styled "Clawksis" box, no tool-gen
+                        elif response:
+                            print(response)
 
-                    # status lines).  The response is printed once below.
+                        # Kanban goal-loop mode: a worker spawned for a
 
-                    cli.agent.stream_delta_callback = None
+                        # goal_mode card keeps working in THIS session until an
 
-                    cli.agent.tool_gen_callback = None
+                        # auxiliary judge agrees the card is done, the worker
 
-                    try:
-                        result = cli.agent.run_conversation(
-                            user_message=effective_query,
-                            conversation_history=cli.conversation_history,
-                        )
+                        # terminates the task itself, or the turn budget runs
 
-                    except KeyboardInterrupt:
-                        _emit_interrupted_session_end(cli, reason="keyboard_interrupt")
+                        # out (→ sticky block). Gated on the env vars the
+
+                        # dispatcher sets in `_default_spawn`; a no-op for every
+
+                        # normal worker and every non-kanban `-q` run.
+
+                        if os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1":
+                            try:
+                                _run_kanban_goal_loop_q(cli, response)
+
+                            except Exception as _goal_exc:
+                                logger.debug("kanban goal loop failed: %s", _goal_exc)
+
+                        # Session ID goes to stderr so piped stdout is clean.
 
                         print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
 
-                        sys.exit(130)
+                        # Ensure proper exit code for automation wrappers.
 
-                    # Sync session_id if mid-run compression created a
+                        #
 
-                    # continuation session. The exit line below reports
+                        # Kanban workers get a special case: when the run failed
 
-                    # session_id to stderr for automation wrappers; without
+                        # purely because the provider rate-limited / exhausted
 
-                    # this sync it would point at the ended parent.
+                        # quota (not because the task itself is broken), exit with
 
-                    if (
-                        getattr(cli.agent, "session_id", None)
-                        and cli.agent.session_id != cli.session_id
-                    ):
-                        cli.session_id = cli.agent.session_id
+                        # the EX_TEMPFAIL sentinel instead of the generic 1. The
 
-                    response = (
-                        result.get("final_response", "")
-                        if isinstance(result, dict)
-                        else str(result)
-                    )
+                        # dispatcher's reap classifier maps that code to a
 
-                    # Surface backend errors that produced no visible output
+                        # ``rate_limited`` exit and releases the task back to
 
-                    # (e.g. invalid model slug → provider 4xx). Mirrors the
+                        # ``ready`` WITHOUT incrementing the failure counter, so a
 
-                    # interactive CLI path. Write to stderr so piped stdout
+                        # 5-hour quota window can't trip the circuit breaker and
 
-                    # stays clean for automation wrappers.
+                        # permanently block the card. Non-kanban runs keep the
 
-                    if (
-                        not response
-                        and isinstance(result, dict)
-                        and result.get("error")
-                        and (result.get("failed") or result.get("partial"))
-                    ):
-                        print(f"Error: {result['error']}", file=sys.stderr)
+                        # plain 0/1 contract automation wrappers expect.
 
-                    elif response:
-                        print(response)
+                        _exit_code = 0
 
-                    # Kanban goal-loop mode: a worker spawned for a
+                        if isinstance(result, dict) and result.get("failed"):
+                            _exit_code = 1
 
-                    # goal_mode card keeps working in THIS session until an
+                            if os.environ.get("CLAWK_KANBAN_TASK") and result.get(
+                                "failure_reason"
+                            ) in ("rate_limit", "billing"):
+                                try:
+                                    from clawk_cli.kanban_db import (
+                                        KANBAN_RATE_LIMIT_EXIT_CODE as _RL_CODE,
+                                    )
 
-                    # auxiliary judge agrees the card is done, the worker
+                                    _exit_code = _RL_CODE
 
-                    # terminates the task itself, or the turn budget runs
+                                except Exception:
+                                    _exit_code = 1
 
-                    # out (→ sticky block). Gated on the env vars the
+                        sys.exit(_exit_code)
 
-                    # dispatcher sets in `_default_spawn`; a no-op for every
+                # Exit with error code if credentials or agent init fails
 
-                    # normal worker and every non-kanban `-q` run.
+                sys.exit(1)
 
-                    if os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1":
-                        try:
-                            _run_kanban_goal_loop_q(cli, response)
+            else:
+                # Single-query mode (`clawk chat -q "…"`): skip the welcome
 
-                        except Exception as _goal_exc:
-                            logger.debug("kanban goal loop failed: %s", _goal_exc)
+                # banner. Building the banner takes ~420 ms on cold start —
 
-                    # Session ID goes to stderr so piped stdout is clean.
+                # ~200 ms of that is the version-update check, the rest is
 
-                    print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+                # toolset / skill enumeration and Rich panel rendering. None
 
-                    # Ensure proper exit code for automation wrappers.
+                # of that is useful for a one-shot query: the user already
 
-                    #
+                # picked the prompt, doesn't need a toolset reference, and
 
-                    # Kanban workers get a special case: when the run failed
+                # gets the session ID + resume hint from
 
-                    # purely because the provider rate-limited / exhausted
+                # ``_print_exit_summary()`` after the response prints.
 
-                    # quota (not because the task itself is broken), exit with
+                #
 
-                    # the EX_TEMPFAIL sentinel instead of the generic 1. The
+                # The fully-quiet ``-Q`` / ``--quiet`` machine-readable path
 
-                    # dispatcher's reap classifier maps that code to a
+                # above was already banner-free; this brings the human-
 
-                    # ``rate_limited`` exit and releases the task back to
+                # facing single-query path in line so all non-interactive
 
-                    # ``ready`` WITHOUT incrementing the failure counter, so a
+                # invocations are fast.
 
-                    # 5-hour quota window can't trip the circuit breaker and
+                if not cli._claim_active_session("cli", stderr=False):
+                    sys.exit(1)
 
-                    # permanently block the card. Non-kanban runs keep the
+                _query_label = query or (
+                    "[image attached]" if single_query_images else ""
+                )
 
-                    # plain 0/1 contract automation wrappers expect.
+                if _query_label:
+                    cli.console.print(f"[bold blue]Query:[/] {_query_label}")
 
-                    _exit_code = 0
+                # Surface security advisories before the agent runs — short
 
-                    if isinstance(result, dict) and result.get("failed"):
-                        _exit_code = 1
+                # banner, doesn't depend on the welcome banner being shown.
 
-                        if os.environ.get("CLAWK_KANBAN_TASK") and result.get(
-                            "failure_reason"
-                        ) in ("rate_limit", "billing"):
-                            try:
-                                from clawk_cli.kanban_db import (
-                                    KANBAN_RATE_LIMIT_EXIT_CODE as _RL_CODE,
-                                )
+                cli._show_security_advisories()
 
-                                _exit_code = _RL_CODE
+                cli.chat(query, images=single_query_images or None)
 
-                            except Exception:
-                                _exit_code = 1
+                cli._print_exit_summary()
 
-                    sys.exit(_exit_code)
+        finally:
+            # Always finalize the one-shot session: emit on_session_finalize,
 
-            # Exit with error code if credentials or agent init fails
+            # run resource cleanup, and release the active-session slot — on
 
-            sys.exit(1)
+            # every exit path (success, ``sys.exit``, or interrupt).
 
-        else:
-            # Single-query mode (`clawk chat -q "…"`): skip the welcome
-
-            # banner. Building the banner takes ~420 ms on cold start —
-
-            # ~200 ms of that is the version-update check, the rest is
-
-            # toolset / skill enumeration and Rich panel rendering. None
-
-            # of that is useful for a one-shot query: the user already
-
-            # picked the prompt, doesn't need a toolset reference, and
-
-            # gets the session ID + resume hint from
-
-            # ``_print_exit_summary()`` after the response prints.
-
-            #
-
-            # The fully-quiet ``-Q`` / ``--quiet`` machine-readable path
-
-            # above was already banner-free; this brings the human-
-
-            # facing single-query path in line so all non-interactive
-
-            # invocations are fast.
-
-            _query_label = query or ("[image attached]" if single_query_images else "")
-
-            if _query_label:
-                cli.console.print(f"[bold blue]Query:[/] {_query_label}")
-
-            # Surface security advisories before the agent runs — short
-
-            # banner, doesn't depend on the welcome banner being shown.
-
-            cli._show_security_advisories()
-
-            cli.chat(query, images=single_query_images or None)
-
-            cli._print_exit_summary()
+            _finalize_single_query(cli)
 
         return
 

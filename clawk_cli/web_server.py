@@ -12621,7 +12621,7 @@ def _discover_dashboard_plugins() -> list:
     # ``clawk_cli/plugins.py`` and the documented user contract.
 
     if env_var_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
-        search_dirs.append((Path.cwd() / ".clawk" / "plugins", "project"))
+        search_dirs.append((Path.cwd() / ".clawksis" / "plugins", "project"))
 
     for plugins_root, source in search_dirs:
         if not plugins_root.is_dir():

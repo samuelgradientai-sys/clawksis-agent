@@ -97,7 +97,6 @@ as_clawk() { [ "$(id -u)" = 0 ] || { "$@"; return; }; s6-setuidgid clawk "$@"; }
 # clawk UID are both unaffected.
 
 cur_uid="$(id -u)"
-
 if [ "$cur_uid" != 0 ] && [ "$cur_uid" != "$(id -u clawk)" ]; then
 
     cat >&2 <<EOF

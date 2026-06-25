@@ -7907,6 +7907,60 @@ def edit_config():
     subprocess.run([editor, str(config_path)])
 
 
+# Canonical mapping of writable ``terminal.*`` config sub-keys → the
+# ``TERMINAL_*`` environment variables that terminal_tool actually reads.
+#
+# This is the single source of truth for the ``clawk config set terminal.X``
+# → ``.env`` bridge.  cli.py (env_mappings) and gateway/run.py
+# (_terminal_env_map) maintain equivalent maps for their own startup paths;
+# tests/tools/test_terminal_config_env_sync.py asserts all three agree so a
+# config.yaml setting can't silently work in one entry point but not another.
+#
+# Keys are the terminal sub-key WITHOUT the ``terminal.`` prefix (e.g.
+# ``docker_run_as_host_user``).  ``cwd`` is intentionally listed but is NOT
+# persisted to .env by set_config_value — the CLI resolves it at runtime and
+# the gateway bridges it itself; writing a stale value would poison child
+# processes (see the ``key != "terminal.cwd"`` guard below).
+TERMINAL_CONFIG_ENV_MAP = {
+    "backend": "TERMINAL_ENV",
+    "cwd": "TERMINAL_CWD",
+    "timeout": "TERMINAL_TIMEOUT",
+    "lifetime_seconds": "TERMINAL_LIFETIME_SECONDS",
+    "modal_mode": "TERMINAL_MODAL_MODE",
+    "docker_image": "TERMINAL_DOCKER_IMAGE",
+    "docker_forward_env": "TERMINAL_DOCKER_FORWARD_ENV",
+    "singularity_image": "TERMINAL_SINGULARITY_IMAGE",
+    "modal_image": "TERMINAL_MODAL_IMAGE",
+    "daytona_image": "TERMINAL_DAYTONA_IMAGE",
+    "container_cpu": "TERMINAL_CONTAINER_CPU",
+    "container_memory": "TERMINAL_CONTAINER_MEMORY",
+    "container_disk": "TERMINAL_CONTAINER_DISK",
+    "container_persistent": "TERMINAL_CONTAINER_PERSISTENT",
+    "docker_volumes": "TERMINAL_DOCKER_VOLUMES",
+    "docker_env": "TERMINAL_DOCKER_ENV",
+    "docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
+    "docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
+    "docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
+    "docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",
+    "sandbox_dir": "TERMINAL_SANDBOX_DIR",
+    "persistent_shell": "TERMINAL_PERSISTENT_SHELL",
+}
+
+
+def terminal_config_env_var_for_key(key: str) -> str | None:
+    """Return the ``TERMINAL_*`` env var that bridges ``terminal.<sub>``.
+
+    ``key`` may be either the full dotted config key (``terminal.docker_env``)
+    or the bare terminal sub-key (``docker_env``).  Returns ``None`` for keys
+    that are not part of the terminal config namespace or have no env-var
+    bridge.
+    """
+
+    sub = key[len("terminal."):] if key.startswith("terminal.") else key
+
+    return TERMINAL_CONFIG_ENV_MAP.get(sub)
+
+
 def set_config_value(key: str, value: str):
     """Set a configuration value."""
 
@@ -8012,32 +8066,21 @@ def set_config_value(key: str, value: str):
 
     # config.yaml is authoritative, but terminal_tool only reads TERMINAL_ENV etc.
 
-    _config_to_env_sync = {
-        "terminal.backend": "TERMINAL_ENV",
-        "terminal.modal_mode": "TERMINAL_MODAL_MODE",
-        "terminal.docker_image": "TERMINAL_DOCKER_IMAGE",
-        "terminal.singularity_image": "TERMINAL_SINGULARITY_IMAGE",
-        "terminal.modal_image": "TERMINAL_MODAL_IMAGE",
-        "terminal.daytona_image": "TERMINAL_DAYTONA_IMAGE",
-        "terminal.docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
-        "terminal.docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
-        "terminal.docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
-        "terminal.docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",
-        "terminal.docker_env": "TERMINAL_DOCKER_ENV",
-        # terminal.cwd intentionally excluded — CLI resolves at runtime,
-        # gateway bridges it in gateway/run.py. Persisting to .env causes
-        # stale values to poison child processes.
-        "terminal.timeout": "TERMINAL_TIMEOUT",
-        "terminal.sandbox_dir": "TERMINAL_SANDBOX_DIR",
-        "terminal.persistent_shell": "TERMINAL_PERSISTENT_SHELL",
-        "terminal.container_cpu": "TERMINAL_CONTAINER_CPU",
-        "terminal.container_memory": "TERMINAL_CONTAINER_MEMORY",
-        "terminal.container_disk": "TERMINAL_CONTAINER_DISK",
-        "terminal.container_persistent": "TERMINAL_CONTAINER_PERSISTENT",
-    }
+    # Bridge through the canonical TERMINAL_CONFIG_ENV_MAP (the single source of
 
-    if key in _config_to_env_sync:
-        save_env_value(_config_to_env_sync[key], str(value))
+    # truth that cli.py / gateway/run.py mirror) rather than a separate literal.
+
+    # terminal.cwd is intentionally excluded — the CLI resolves it at runtime and
+
+    # the gateway bridges it in gateway/run.py; persisting it to .env causes
+
+    # stale values to poison child processes.
+
+    if key != "terminal.cwd":
+        _env_var = terminal_config_env_var_for_key(key)
+
+        if _env_var is not None:
+            save_env_value(_env_var, str(value))
 
     print(f"✓ Set {key} = {value} in {config_path}")
 

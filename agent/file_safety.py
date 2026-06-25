@@ -126,17 +126,17 @@ def is_write_denied(path: str) -> bool:
         if resolved.startswith(prefix):
             return True
 
-    # Clawksis control-plane files: block both the ACTIVE profile's view
+    # Clawksis control-plane files (auth.json, config.yaml,
 
-    # (clawk_home) AND the global root view. Without the root pass, a
+    # webhook_subscriptions.json) are intentionally LEFT WRITABLE: the
 
-    # profile-mode session leaves <root>/auth.json + <root>/config.yaml
+    # control plane self-configures by writing them. Only the OAuth/token
 
-    # writable — letting a prompt-injected write_file overwrite the global
+    # credential stores below (mcp-tokens/, pairing/) stay write-denied,
 
-    # files that every profile inherits from (same shape as #15981).
+    # under both the ACTIVE profile's view (clawk_home) AND the global
 
-    control_file_names = ("auth.json", "config.yaml", "webhook_subscriptions.json")
+    # root view so a profile-mode session can't reach the shared copies.
 
     mcp_tokens_dir_name = "mcp-tokens"
 
@@ -153,14 +153,6 @@ def is_write_denied(path: str) -> bool:
             continue
 
     for base_real in clawk_dirs:
-        for name in control_file_names:
-            try:
-                if resolved == os.path.realpath(os.path.join(base_real, name)):
-                    return True
-
-            except Exception:
-                continue
-
         try:
             mcp_real = os.path.realpath(os.path.join(base_real, mcp_tokens_dir_name))
 

@@ -398,6 +398,32 @@ def _get_model_config() -> Dict[str, Any]:
     return {}
 
 
+def _lift_max_output_tokens(src: Dict[str, Any], out: Dict[str, Any]) -> None:
+    """Copy a max-output-token cap from ``src`` into ``out`` when valid (#20741).
+
+    Accepts the canonical ``max_output_tokens`` key and the ``max_tokens``
+    alias (canonical wins when both are present). Only a strictly positive
+    ``int`` is lifted — zero, negatives, ``bool``, strings and missing keys
+    are ignored so a malformed config can never inject a spurious cap.
+    """
+
+    for key in ("max_output_tokens", "max_tokens"):
+        if key not in src:
+            continue
+
+        value = src.get(key)
+
+        if isinstance(value, bool) or not isinstance(value, int):
+            continue
+
+        if value <= 0:
+            continue
+
+        out["max_output_tokens"] = value
+
+        return
+
+
 def _provider_supports_explicit_api_mode(
     provider: Optional[str], configured_provider: Optional[str] = None
 ) -> bool:

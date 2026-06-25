@@ -1489,6 +1489,167 @@ def _load_service_tier() -> str | None:
     return None
 
 
+# Billing buckets that are NOT routable providers on their own: restoring one
+# of these as a resumed session's provider override makes the rebuild fail with
+# "No LLM provider configured" (``custom`` in particular is the bare class for
+# any named ``providers:`` / ``custom_providers:`` entry).
+_BARE_BILLING_PROVIDERS = {"auto", "openrouter", "custom"}
+
+
+def _stored_session_runtime_overrides(row: dict | None) -> dict:
+    """Return runtime fields persisted with a stored session.
+
+    ``session.resume`` is a session-scoped operation: reopening an older chat
+    must restore the model/provider/reasoning state that chat actually used,
+    not whatever global model the user most recently selected in another chat.
+    The durable session row stores the model directly, the billing provider in
+    ``billing_provider``, and richer runtime knobs in JSON ``model_config``.
+    """
+
+    if not row:
+        return {}
+
+    raw_config = row.get("model_config")
+
+    model_config: dict = {}
+
+    if isinstance(raw_config, dict):
+        model_config = raw_config
+
+    elif isinstance(raw_config, str) and raw_config.strip():
+        try:
+            parsed = json.loads(raw_config)
+
+            if isinstance(parsed, dict):
+                model_config = parsed
+
+        except Exception:
+            logger.debug("failed to parse stored session model_config", exc_info=True)
+
+    overrides: dict = {}
+
+    model = str(row.get("model") or model_config.get("model") or "").strip()
+
+    # ``billing_provider`` is only the billing bucket — for a custom endpoint it
+    # is the bare class ``"custom"``, which agent_init treats as non-routable, so
+    # restoring it as the provider override makes ``session.resume`` fail with
+    # "No LLM provider configured". Only restore an explicit provider; otherwise
+    # leave it unset so resume falls back to the configured default, matching the
+    # working CLI path.
+    explicit_provider = str(model_config.get("provider") or "").strip()
+
+    billing_provider = str(
+        model_config.get("billing_provider") or row.get("billing_provider") or ""
+    ).strip()
+
+    provider = explicit_provider
+
+    if not provider and billing_provider.lower() not in _BARE_BILLING_PROVIDERS:
+        provider = billing_provider
+
+    base_url = str(model_config.get("base_url") or "").strip()
+
+    api_mode = str(model_config.get("api_mode") or "").strip()
+
+    reasoning_config = model_config.get("reasoning_config")
+
+    service_tier = str(model_config.get("service_tier") or "").strip()
+
+    if model:
+        # Use the same dict-shaped override that live /model switches use so a
+        # DB-restored session can preserve custom endpoint metadata across both
+        # initial resume and later rebuilds (/new). Deliberately do not persist
+        # or restore raw api_key here; endpoint credentials should continue to
+        # come from config/env/provider resolution rather than the session DB.
+        overrides["model_override"] = {
+            "model": model,
+            "provider": provider or None,
+            "base_url": base_url or None,
+            "api_mode": api_mode or None,
+        }
+
+    if provider:
+        overrides["provider_override"] = provider
+
+    if isinstance(reasoning_config, dict):
+        overrides["reasoning_config_override"] = reasoning_config
+
+    if service_tier:
+        overrides["service_tier_override"] = service_tier
+
+    return overrides
+
+
+def _runtime_model_config(agent, existing: dict | None = None) -> dict:
+    """Snapshot the live agent's runtime model state for session persistence.
+
+    For any named ``providers:`` / ``custom_providers:`` entry the agent's
+    RESOLVED ``provider`` is the literal string ``"custom"``, which loses the
+    entry identity (the api_key is deliberately never persisted). Recover the
+    canonical ``custom:<name>`` menu key from the endpoint URL so a later
+    resume/rebuild can re-resolve the entry's credentials.
+    """
+
+    config = dict(existing or {})
+
+    model = str(getattr(agent, "model", "") or "").strip()
+
+    provider = str(getattr(agent, "provider", "") or "").strip()
+
+    base_url = str(getattr(agent, "base_url", "") or "").strip()
+
+    api_mode = str(getattr(agent, "api_mode", "") or "").strip()
+
+    reasoning_config = getattr(agent, "reasoning_config", None)
+
+    service_tier = getattr(agent, "service_tier", None)
+
+    if model:
+        config["model"] = model
+
+    if provider:
+        if provider == "custom" and base_url:
+            try:
+                from clawk_cli.runtime_provider import (
+                    find_custom_provider_identity,
+                )
+
+                provider = find_custom_provider_identity(base_url) or provider
+
+            except Exception:
+                logger.debug(
+                    "custom provider identity lookup failed", exc_info=True
+                )
+
+        config["provider"] = provider
+
+    if base_url:
+        config["base_url"] = base_url
+
+    else:
+        config.pop("base_url", None)
+
+    if api_mode:
+        config["api_mode"] = api_mode
+
+    else:
+        config.pop("api_mode", None)
+
+    if isinstance(reasoning_config, dict):
+        config["reasoning_config"] = reasoning_config
+
+    else:
+        config.pop("reasoning_config", None)
+
+    if service_tier:
+        config["service_tier"] = service_tier
+
+    else:
+        config.pop("service_tier", None)
+
+    return config
+
+
 def _load_show_reasoning() -> bool:
 
     return bool((_load_cfg().get("display") or {}).get("show_reasoning", False))
@@ -2905,6 +3066,21 @@ def _agent_cbs(sid: str) -> dict:
         "clarify_callback": lambda q, c: _block(
             "clarify.request", sid, {"question": q, "choices": c}
         ),
+        "notice_callback": lambda notice: _emit(
+            "notification.show",
+            sid,
+            {
+                "text": notice.text,
+                "level": notice.level,
+                "kind": notice.kind,
+                "ttl_ms": notice.ttl_ms,
+                "key": notice.key,
+                "id": notice.id,
+            },
+        ),
+        "notice_clear_callback": lambda key: _emit(
+            "notification.clear", sid, {"key": key}
+        ),
     }
 
 
@@ -3401,7 +3577,13 @@ def _reset_session_agent(sid: str, session: dict) -> dict:
     return info
 
 
-def _make_agent(sid: str, key: str, session_id: str | None = None):
+def _make_agent(
+    sid: str,
+    key: str,
+    session_id: str | None = None,
+    model_override: dict | str | None = None,
+    provider_override: str | None = None,
+):
 
     from run_agent import AIAgent
 
@@ -3451,12 +3633,75 @@ def _make_agent(sid: str, key: str, session_id: str | None = None):
                 part for part in (system_prompt, skills_prompt) if part
             ).strip()
 
-    model, requested_provider = _resolve_startup_runtime()
+    # Prefer a per-session model override (set by a prior in-session /model
+    # switch) over global config/env resolution. Resume-time stored sessions may
+    # also pass scalar model/provider/runtime knobs from the persisted DB row.
+    if isinstance(model_override, dict) and model_override.get("model"):
+        model = str(model_override.get("model") or "")
 
-    runtime = resolve_runtime_provider(
-        requested=requested_provider,
-        target_model=model or None,
-    )
+        requested_provider = model_override.get("provider") or provider_override or None
+
+        override_base_url = model_override.get("base_url")
+
+        override_api_key = model_override.get("api_key")
+
+        override_api_mode = model_override.get("api_mode")
+
+        resolve_kwargs = {}
+
+        if (
+            override_base_url
+            and str(requested_provider or "").strip().lower() == "custom"
+        ):
+            # Session rows persisted before the custom-provider identity fix
+            # (see _runtime_model_config) stored the resolved provider
+            # "custom", which _get_named_custom_provider cannot match back to
+            # a named ``providers:`` / ``custom_providers:`` entry — the
+            # rebuild then either raised auth_unavailable or silently
+            # resolved placeholder credentials against the patched-back
+            # base_url. Recover the entry identity from the persisted
+            # base_url; failing that, hand the base_url to the direct-alias
+            # branch so pool/env credentials can still be resolved for it.
+            from clawk_cli.runtime_provider import find_custom_provider_identity
+
+            recovered = find_custom_provider_identity(override_base_url)
+
+            if recovered:
+                requested_provider = recovered
+
+            resolve_kwargs["explicit_base_url"] = override_base_url
+
+        runtime = resolve_runtime_provider(
+            requested=requested_provider,
+            target_model=model or None,
+            **resolve_kwargs,
+        )
+
+        # The switch already resolved concrete credentials/endpoint; honor them
+        # so a custom/named endpoint survives the rebuild even if global
+        # resolution would pick a different one.
+        if override_base_url:
+            runtime["base_url"] = override_base_url
+
+        if override_api_key:
+            runtime["api_key"] = override_api_key
+
+        if override_api_mode:
+            runtime["api_mode"] = override_api_mode
+
+    else:
+        model, requested_provider = _resolve_startup_runtime()
+
+        if isinstance(model_override, str) and model_override:
+            model = model_override
+
+        if provider_override:
+            requested_provider = provider_override
+
+        runtime = resolve_runtime_provider(
+            requested=requested_provider,
+            target_model=model or None,
+        )
 
     return AIAgent(
         model=model,

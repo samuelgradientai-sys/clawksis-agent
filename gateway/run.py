@@ -1788,6 +1788,87 @@ logger = logging.getLogger(__name__)
 _AGENT_PENDING_SENTINEL = object()
 
 
+def _resolve_runtime_max_tokens() -> int | None:
+    """Resolve the output-token cap for gateway-created AIAgent instances (#20741).
+
+    Precedence (highest first):
+
+        CLAWK_MAX_TOKENS env  >  model.max_tokens  >  selected provider's
+        max_output_tokens  >  None
+
+    ``model.max_tokens`` was historically dropped before reaching the
+    gateway-spawned agent, so providers without a hardcoded default
+    (OpenRouter free models, Ollama Cloud, custom OpenAI-compatible
+    endpoints) truncated long generations with ``finish_reason="length"``.
+    """
+
+    from clawk_cli.runtime_provider import _lift_max_output_tokens
+
+    # 1. Internal env override (highest priority).
+    env_raw = (os.getenv("CLAWK_MAX_TOKENS") or "").strip()
+
+    if env_raw:
+        try:
+            env_val = int(env_raw)
+
+        except ValueError:
+            env_val = 0
+
+        if env_val > 0:
+            return env_val
+
+    try:
+        from clawk_cli.config import load_config
+
+        cfg = load_config() or {}
+
+    except Exception:
+        return None
+
+    lifted: dict = {}
+
+    # 2. Documented global cap: model.max_tokens.
+    model_cfg = cfg.get("model")
+
+    if isinstance(model_cfg, dict):
+        _lift_max_output_tokens(model_cfg, lifted)
+
+        if "max_output_tokens" in lifted:
+            return lifted["max_output_tokens"]
+
+        # 3. Per-provider fallback: the selected provider's max_output_tokens.
+        provider_name = str(model_cfg.get("provider") or "").strip()
+
+        if provider_name:
+            providers = cfg.get("providers")
+
+            if isinstance(providers, dict):
+                entry = providers.get(provider_name)
+
+                if isinstance(entry, dict):
+                    _lift_max_output_tokens(entry, lifted)
+
+                    if "max_output_tokens" in lifted:
+                        return lifted["max_output_tokens"]
+
+            custom_list = cfg.get("custom_providers")
+
+            if isinstance(custom_list, list):
+                for entry in custom_list:
+                    if not isinstance(entry, dict):
+                        continue
+
+                    if str(entry.get("name") or "").strip() == provider_name:
+                        _lift_max_output_tokens(entry, lifted)
+
+                        if "max_output_tokens" in lifted:
+                            return lifted["max_output_tokens"]
+
+                        break
+
+    return None
+
+
 def _resolve_runtime_agent_kwargs() -> dict:
     """Resolve provider credentials for gateway-created AIAgent instances.
 
@@ -1860,6 +1941,7 @@ def _resolve_runtime_agent_kwargs() -> dict:
         "command": runtime.get("command"),
         "args": list(runtime.get("args") or []),
         "credential_pool": runtime.get("credential_pool"),
+        "max_tokens": _resolve_runtime_max_tokens(),
     }
 
 
@@ -1925,6 +2007,7 @@ def _try_resolve_fallback_provider() -> dict | None:
                     "args": list(runtime.get("args") or []),
                     "credential_pool": runtime.get("credential_pool"),
                     "model": entry.get("model"),
+                    "max_tokens": _resolve_runtime_max_tokens(),
                 }
 
             except Exception as fb_exc:
@@ -2837,6 +2920,8 @@ class GatewayRunner:
 
     _session_reasoning_overrides: Dict[str, Dict[str, Any]] = {}
 
+    _startup_restore_in_progress: bool = False
+
     def __init__(self, config: Optional[GatewayConfig] = None):
 
         global _gateway_runner_ref
@@ -2968,6 +3053,20 @@ class GatewayRunner:
         ] = {}  # last busy-ack timestamp per session (debounce)
 
         self._session_run_generation: Dict[str, int] = {}
+
+        # Startup restore gate: while restart-interrupted sessions are being
+
+        # auto-resumed, real inbound messages are queued instead of competing
+
+        # with the synthetic resume turns for the same session.  The queued
+
+        # events drain only after all startup resume tasks have finished.
+
+        self._startup_restore_in_progress = False
+
+        self._startup_restore_queue: List[MessageEvent] = []
+
+        self._startup_restore_tasks: List[asyncio.Task] = []
 
         # LRU cache of live SessionSources keyed by session_key. Used by
 
@@ -6373,6 +6472,150 @@ class GatewayRunner:
         "restart_interrupted",
     })
 
+    async def _run_startup_resume_event(
+        self,
+        adapter: "BasePlatformAdapter",
+        event: MessageEvent,
+        session_key: str,
+    ) -> None:
+        """Dispatch one synthetic startup resume and wait for its agent turn.
+
+
+
+        ``BasePlatformAdapter.handle_message()`` returns after it installs the
+
+        adapter-level guard and spawns the background processing task.  Startup
+
+        restore needs a stronger boundary: inbound messages must stay queued
+
+        until the resumed agent turn itself has finished, otherwise a user
+
+        message can race the restore turn immediately after ``handle_message``
+
+        returns.
+
+        """
+
+        try:
+            await adapter.handle_message(event)
+
+            session_tasks = getattr(adapter, "_session_tasks", {})
+
+            task = (
+                session_tasks.get(session_key)
+                if isinstance(session_tasks, dict)
+                else None
+            )
+
+            if task is not None:
+                await asyncio.shield(task)
+
+        finally:
+            # _schedule_resume_pending_sessions pre-claims the runner slot
+
+            # before spawning this task.  If adapter.handle_message raises
+
+            # before _handle_message takes ownership, release that pre-claim;
+
+            # otherwise the real run's normal cleanup owns the slot.
+
+            if self._running_agents.get(session_key) is _AGENT_PENDING_SENTINEL:
+                self._release_running_agent_state(session_key)
+
+    def _queue_startup_restore_event(self, event: MessageEvent) -> None:
+        queue = getattr(self, "_startup_restore_queue", None)
+
+        if queue is None:
+            queue = []
+
+            self._startup_restore_queue = queue
+
+        queue.append(event)
+
+        try:
+            source = event.source
+
+            logger.info(
+                "Queued inbound message during gateway startup restore: "
+                "platform=%s chat=%s",
+                source.platform.value if source and source.platform else "unknown",
+                source.chat_id if source else "unknown",
+            )
+
+        except Exception:
+            pass
+
+    async def _drain_startup_restore_queue(self) -> int:
+        """Replay inbound messages queued while startup auto-resume ran."""
+
+        drained = 0
+
+        queue = getattr(self, "_startup_restore_queue", None)
+
+        if queue is None:
+            return 0
+
+        while queue:
+            event = queue.pop(0)
+
+            source = getattr(event, "source", None)
+
+            adapter = (
+                self.adapters.get(source.platform) if source is not None else None
+            )
+
+            if adapter is None:
+                logger.debug(
+                    "Dropping startup-restore queued message: "
+                    "adapter unavailable for %s",
+                    getattr(getattr(source, "platform", None), "value", None),
+                )
+
+                continue
+
+            # Mark this replay so _handle_message does not queue it again while
+
+            # the restore gate remains closed for any fresh inbound arrivals.
+
+            try:
+                setattr(event, "_hermes_startup_restore_replay", True)
+
+            except Exception:
+                pass
+
+            await adapter.handle_message(event)
+
+            drained += 1
+
+        return drained
+
+    async def _finish_startup_restore(self) -> None:
+        """Wait for startup auto-resume, then release and drain inbound queue."""
+
+        tasks = list(getattr(self, "_startup_restore_tasks", []) or [])
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.debug(
+                        "startup auto-resume task failed",
+                        exc_info=(type(result), result, result.__traceback__),
+                    )
+
+        self._startup_restore_tasks = []
+
+        drained = await self._drain_startup_restore_queue()
+
+        self._startup_restore_in_progress = False
+
+        if drained:
+            logger.info(
+                "Drained %d inbound message(s) queued during startup restore",
+                drained,
+            )
+
     def _schedule_resume_pending_sessions(self, platform=None) -> int:
         """Auto-continue fresh restart-interrupted sessions after startup.
 
@@ -6469,6 +6712,20 @@ class GatewayRunner:
 
                 continue
 
+            # Claim the session slot *before* spawning the task so that an
+
+            # inbound message arriving between task creation and the task's
+
+            # first await (where _process_message_background sets the real
+
+            # sentinel) sees the slot as occupied and queues behind it
+
+            # instead of spinning up a duplicate AIAgent (#45456).
+
+            self._running_agents[entry.session_key] = _AGENT_PENDING_SENTINEL
+
+            self._running_agents_ts[entry.session_key] = time.time()
+
             # Empty-text internal event — the _is_resume_pending branch in
 
             # _handle_message_with_agent prepends the proper reason-aware
@@ -6482,11 +6739,23 @@ class GatewayRunner:
                 internal=True,
             )
 
-            task = asyncio.create_task(adapter.handle_message(event))
+            task = asyncio.create_task(
+                self._run_startup_resume_event(adapter, event, entry.session_key)
+            )
 
             self._background_tasks.add(task)
 
             task.add_done_callback(self._background_tasks.discard)
+
+            if getattr(self, "_startup_restore_in_progress", False):
+                tasks = getattr(self, "_startup_restore_tasks", None)
+
+                if tasks is None:
+                    tasks = []
+
+                    self._startup_restore_tasks = tasks
+
+                tasks.append(task)
 
             scheduled += 1
 
@@ -6878,6 +7147,22 @@ class GatewayRunner:
         except Exception as e:
             logger.debug("Stuck-loop detection failed: %s", e)
 
+        # Serialize startup restore against inbound dispatch.  Platform
+
+        # adapters can begin receiving messages as soon as they connect, but
+
+        # restart-interrupted sessions are not auto-resumed until all startup
+
+        # wiring below completes.  Queue inbound messages until the resume
+
+        # pass runs and every synthetic resume turn has finished.
+
+        self._startup_restore_in_progress = True
+
+        self._startup_restore_queue = []
+
+        self._startup_restore_tasks = []
+
         connected_count = 0
 
         enabled_platform_count = 0
@@ -7050,6 +7335,8 @@ class GatewayRunner:
 
                 self._request_clean_exit(reason)
 
+                self._startup_restore_in_progress = False
+
                 return True
 
             if enabled_platform_count > 0:
@@ -7217,6 +7504,8 @@ class GatewayRunner:
         # visible for manual recovery on the next user message.
 
         self._schedule_resume_pending_sessions()
+
+        await self._finish_startup_restore()
 
         # Drain any recovered process watchers (from crash recovery checkpoint)
 
@@ -11476,6 +11765,15 @@ class GatewayRunner:
         """
 
         source = event.source
+
+        if (
+            getattr(self, "_startup_restore_in_progress", False)
+            and not getattr(event, "internal", False)
+            and not getattr(event, "_hermes_startup_restore_replay", False)
+        ):
+            self._queue_startup_restore_event(event)
+
+            return None
 
         # Internal events (e.g. background-process completion notifications)
 
@@ -16223,12 +16521,88 @@ class GatewayRunner:
         if queue_depth:
             lines.append(t("gateway.status.queued", count=queue_depth))
 
+        if source.platform == Platform.MATRIX:
+
+            adapter = self.adapters.get(Platform.MATRIX)
+
+            scope = getattr(
+                adapter,
+                "_matrix_session_scope",
+                os.getenv("MATRIX_SESSION_SCOPE", "auto"),
+            )
+
+            thread = source.thread_id or "none"
+
+            lines.extend([
+                "",
+                t("gateway.status.matrix_scope_header"),
+                t(
+                    "gateway.status.matrix_scope_room",
+                    room=source.chat_name or source.chat_id,
+                ),
+                t("gateway.status.matrix_scope_room_id", room_id=source.chat_id),
+                t("gateway.status.matrix_scope_thread", thread_id=thread),
+                t("gateway.status.matrix_scope_mode", scope=scope),
+                t(
+                    "gateway.status.matrix_scope_key",
+                    session_key=self._redact_matrix_session_key(session_key),
+                ),
+            ])
+
         lines.extend([
             "",
             t("gateway.status.platforms", platforms=", ".join(connected_platforms)),
         ])
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _redact_matrix_session_key(session_key: str) -> str:
+        """Return a stable Matrix session-key fingerprint for shared room status."""
+
+        import hashlib
+
+        text = str(session_key or "")
+
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+        return f"sha256:{digest}"
+
+    def _gateway_session_origin_for_id(
+        self, session_id: str
+    ) -> Optional[SessionSource]:
+        """Best-effort origin lookup for gateway session IDs."""
+
+        lookup = getattr(type(self.session_store), "lookup_by_session_id", None)
+
+        if callable(lookup):
+            entry = lookup(self.session_store, session_id)
+
+            return getattr(entry, "origin", None) if entry is not None else None
+
+        # Test doubles and older stores may not expose the public lookup helper.
+
+        # Keep the Matrix resume guard fail-closed if no origin can be resolved.
+
+        entries = getattr(self.session_store, "_entries", {}) or {}
+
+        for entry in entries.values():
+            if getattr(entry, "session_id", None) == session_id:
+                return getattr(entry, "origin", None)
+
+        return None
+
+    @staticmethod
+    def _same_matrix_room(
+        current: SessionSource, origin: Optional[SessionSource]
+    ) -> bool:
+
+        return (
+            origin is not None
+            and origin.platform == Platform.MATRIX
+            and current.platform == Platform.MATRIX
+            and origin.chat_id == current.chat_id
+        )
 
     async def _handle_agents_command(self, event: MessageEvent) -> str:
         """Handle /agents command - list active agents and running tasks."""
@@ -21216,7 +21590,19 @@ class GatewayRunner:
 
         session_key = self._session_key_for_source(source)
 
-        name = event.get_command_args().strip()
+        raw_args = event.get_command_args().strip()
+
+        try:
+            parts = shlex.split(raw_args)
+
+        except ValueError as exc:
+            return t("gateway.resume.parse_error", error=exc)
+
+        allow_all = "--all" in parts
+
+        allow_cross_room = "--cross-room" in parts
+
+        name = " ".join(p for p in parts if p not in {"--all", "--cross-room"}).strip()
 
         # Strip common outer brackets/quotes users may type literally from the
 
@@ -21244,13 +21630,37 @@ class GatewayRunner:
             try:
                 titled = _list_titled_sessions()
 
+                if source.platform == Platform.MATRIX and not allow_all:
+                    scoped = []
+
+                    for s in titled:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if self._same_matrix_room(source, origin):
+                            scoped.append(s)
+
+                    titled = scoped
+
                 if not titled:
+                    if source.platform == Platform.MATRIX and not allow_all:
+                        return t("gateway.resume.matrix_no_named_sessions")
+
                     return t("gateway.resume.no_named_sessions")
 
                 lines = [t("gateway.resume.list_header")]
 
                 for idx, s in enumerate(titled[:10], start=1):
                     title = s["title"]
+
+                    if source.platform == Platform.MATRIX and allow_all:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if origin:
+                            title = f"{title} — {origin.chat_name or origin.chat_id}"
 
                     preview = s.get("preview", "")[:40]
 
@@ -21283,6 +21693,19 @@ class GatewayRunner:
         if name.isdigit():
             try:
                 titled = _list_titled_sessions()
+
+                if source.platform == Platform.MATRIX and not allow_all:
+                    scoped = []
+
+                    for s in titled:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if self._same_matrix_room(source, origin):
+                            scoped.append(s)
+
+                    titled = scoped
 
             except Exception as e:
                 logger.debug("Failed to list titled sessions for numeric resume: %s", e)
@@ -21328,6 +21751,22 @@ class GatewayRunner:
                 "Failed to resolve resume continuation for %s: %s", target_id, e
             )
 
+        if source.platform == Platform.MATRIX:
+            target_origin = self._gateway_session_origin_for_id(target_id)
+
+            if (
+                not self._same_matrix_room(source, target_origin)
+                and not allow_cross_room
+            ):
+                if target_origin is None:
+                    return t("gateway.resume.matrix_blocked_no_origin", name=name)
+
+                return t(
+                    "gateway.resume.matrix_blocked_other_room",
+                    room=target_origin.chat_name or target_origin.chat_id,
+                    name=name,
+                )
+
         # Check if already on that session
 
         current_entry = self.session_store.get_or_create_session(source)
@@ -21371,6 +21810,20 @@ class GatewayRunner:
         msg_count = (
             len([m for m in history if m.get("role") == "user"]) if history else 0
         )
+
+        if source.platform == Platform.MATRIX and allow_cross_room:
+            msg_part = (
+                f" ({msg_count} message{'s' if msg_count != 1 else ''})"
+                if msg_count
+                else ""
+            )
+
+            return t(
+                "gateway.resume.matrix_cross_room_success",
+                title=title,
+                room=source.chat_name or source.chat_id,
+                msg_part=msg_part,
+            )
 
         if not msg_count:
             return t("gateway.resume.resumed_no_count", title=title)

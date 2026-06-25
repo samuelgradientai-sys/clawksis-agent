@@ -244,6 +244,7 @@ _HOME_TARGET_ENV_VARS = {
     "bluebubbles": "BLUEBUBBLES_HOME_CHANNEL",
     "qqbot": "QQBOT_HOME_CHANNEL",
     "whatsapp": "WHATSAPP_HOME_CHANNEL",
+    "whatsapp_cloud": "WHATSAPP_CLOUD_HOME_CHANNEL",
 }
 
 
@@ -735,6 +736,55 @@ def _iter_home_target_platforms():
 
     except Exception:
         pass
+
+
+def cron_delivery_targets() -> list:
+    """List configured + cron-deliverable platforms for the dashboard dropdown.
+
+    For every platform the gateway reports as connected that also exposes a
+    cron home channel (built-in via ``_HOME_TARGET_ENV_VARS`` or a plugin via
+    the platform registry), return a descriptor:
+
+        {"id": <platform>, "home_env_var": <ENV>, "home_target_set": <bool>}
+
+    ``home_target_set`` reflects whether the home channel env var is actually
+    populated, so the UI can flag platforms that are connected but not yet
+    pointed at a delivery target. Platforms whose gateway isn't configured are
+    never included. Returns ``[]`` if the gateway config can't be loaded.
+    """
+
+    try:
+        from gateway.config import load_gateway_config
+
+        gateway_config = load_gateway_config()
+
+        connected = gateway_config.get_connected_platforms()
+
+    except Exception:
+        return []
+
+    targets = []
+
+    for platform in connected:
+        name = getattr(platform, "value", platform)
+
+        if not isinstance(name, str):
+            name = str(name)
+
+        env_var = _resolve_home_env_var(name)
+
+        if not env_var:
+            continue
+
+        targets.append(
+            {
+                "id": name,
+                "home_env_var": env_var,
+                "home_target_set": bool(_get_home_target_chat_id(name)),
+            }
+        )
+
+    return targets
 
 
 def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[dict]:
@@ -2446,6 +2496,25 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     origin = _resolve_origin(job)
 
     _cron_session_id = f"cron_{job_id}_{_clawk_now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Title the session from the job itself (name → short prompt → id) so the
+    # sidebar/history row reads sensibly. Without this, the row label defaults
+    # to the cron session's first message — the injected "[IMPORTANT: …]" hint
+    # — which is noise. ``job_name`` already encodes the name→prompt→id
+    # fallback. Truncate to stay within the title length limit and never let a
+    # titling failure abort the job.
+    if _session_db is not None:
+        try:
+            _cron_session_title = (job_name or "")[:80].strip() or job_id
+
+            _session_db.set_session_title(_cron_session_id, _cron_session_title)
+
+        except Exception as _title_exc:
+            logger.debug(
+                "Job '%s': could not set cron session title: %s",
+                job_id,
+                _title_exc,
+            )
 
     logger.info("Running job '%s' (ID: %s)", job_name, job_id)
 
