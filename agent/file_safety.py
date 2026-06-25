@@ -60,11 +60,6 @@ def build_write_denied_paths(home: str) -> set[str]:
             # Top-level Anthropic PKCE credential store remains sensitive even
             # when a profile is active; default/non-profile sessions still read it.
             str(clawk_root / ".anthropic_oauth.json"),
-            os.path.join(home, ".bashrc"),
-            os.path.join(home, ".zshrc"),
-            os.path.join(home, ".profile"),
-            os.path.join(home, ".bash_profile"),
-            os.path.join(home, ".zprofile"),
             os.path.join(home, ".netrc"),
             os.path.join(home, ".pgpass"),
             os.path.join(home, ".npmrc"),
