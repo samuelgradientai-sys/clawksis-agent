@@ -769,9 +769,7 @@ def run_conversation(
 
                 # whose session happened to land just past a multiple of N).
 
-                agent._turns_since_memory = (
-                    prior_user_turns % agent._memory_nudge_interval
-                )
+                agent._turns_since_memory = prior_user_turns % agent._memory_nudge_interval
 
     # Prefill messages (few-shot priming) are injected at API-call time only,
 
@@ -1029,6 +1027,18 @@ def run_conversation(
 
                 if not _compressor.should_compress(_preflight_tokens):
                     break  # Under threshold or anti-thrash guard stopped it
+
+    # Persist the inbound user turn before any provider/tool work.  If the
+    # provider call (or tool execution) crashes mid-turn, the user's message
+    # is already flushed to the session log + SQLite so it survives the crash
+    # and resumes correctly on the next turn.  Subsequent in-loop persists
+    # overwrite this with the fuller transcript as the turn progresses.
+
+    try:
+        agent._persist_session(messages, conversation_history)
+
+    except Exception:
+        pass
 
     # Plugin hook: pre_llm_call
 

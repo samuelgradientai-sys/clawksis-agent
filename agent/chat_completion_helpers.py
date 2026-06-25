@@ -2919,6 +2919,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
 
         has_truncated_tool_args = False
 
+        incomplete_tool_names: list = []
+
         if tool_calls_acc:
             mock_tool_calls = []
 
@@ -2934,6 +2936,15 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                         json.loads(arguments)
 
                     except json.JSONDecodeError:
+                        # Args arrived but don't parse as-is — the stream
+                        # almost certainly dropped mid tool-call generation.
+                        # Record the tool name so a clean stream-end (no
+                        # finish_reason) can be routed through the
+                        # partial-stream stub instead of a misleading
+                        # 'output length limit' truncation.
+
+                        incomplete_tool_names.append(tool_name)
+
                         # Attempt repair before flagging as truncated.
 
                         # Models like GLM-5.1 via Ollama produce trailing
@@ -2972,12 +2983,75 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     )
                 )
 
+        full_reasoning = "".join(reasoning_parts) or None
+
+        # Clean stream-end mid tool-call: the upstream closed the SSE stream
+        # WITHOUT an exception, WITHOUT a finish_reason, and WITHOUT [DONE],
+        # but a tool call had arrived with incomplete (non-parsing) args —
+        # observed live on NVIDIA Nemotron Ultra via the dedicated endpoint,
+        # which silently drops during large tool-arg generation.  Route this
+        # through the partial-stream stub (PARTIAL_STREAM_STUB_ID) so the loop
+        # reports an honest mid-tool-call drop and asks the model to chunk its
+        # output, instead of stamping it finish_reason='length' which produces
+        # the misleading "output length limit" truncation message.  A
+        # provider-reported finish_reason (e.g. 'length') is a genuine cap and
+        # keeps the existing stream-<uuid> path.
+        if finish_reason is None and incomplete_tool_names:
+            _partial_text = (full_content or "").strip() or None
+
+            _names = list(incomplete_tool_names)
+
+            _name_str = ", ".join(_names[:3])
+
+            if len(_names) > 3:
+                _name_str += f", +{len(_names) - 3} more"
+
+            _warn = (
+                f"\n\n⚠ Stream stalled mid tool-call "
+                f"({_name_str}); the action was not executed. "
+                f"Ask me to retry if you want to continue."
+            )
+
+            _partial_text = (_partial_text or "") + _warn
+
+            try:
+                agent._fire_stream_delta(_warn)
+
+            except Exception:
+                pass
+
+            logger.warning(
+                "Clean stream-end mid tool-call (no finish_reason) for %s; "
+                "returning partial-stream stub so the loop continues with "
+                "chunking guidance instead of a false output-length cap.",
+                _names,
+            )
+
+            _stub_msg = SimpleNamespace(
+                role=role,
+                content=_partial_text,
+                tool_calls=None,
+                reasoning_content=full_reasoning,
+            )
+
+            return SimpleNamespace(
+                id=PARTIAL_STREAM_STUB_ID,
+                model=model_name or getattr(agent, "model", "unknown"),
+                choices=[
+                    SimpleNamespace(
+                        index=0,
+                        message=_stub_msg,
+                        finish_reason=FINISH_REASON_LENGTH,
+                    )
+                ],
+                usage=usage_obj,
+                _dropped_tool_names=_names or None,
+            )
+
         effective_finish_reason = finish_reason or "stop"
 
         if has_truncated_tool_args:
             effective_finish_reason = "length"
-
-        full_reasoning = "".join(reasoning_parts) or None
 
         mock_message = SimpleNamespace(
             role=role,

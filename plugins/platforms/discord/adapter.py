@@ -971,6 +971,8 @@ class DiscordAdapter(BasePlatformAdapter):
 
         self._on_voice_disconnect: Optional[Callable] = None  # set by run.py
 
+        self._voice_mode_getter: Optional[Callable] = None  # set by run.py
+
         # Track threads where the bot has participated so follow-up messages
 
         # in those threads don't require @mention.  Persisted to disk so the
@@ -986,6 +988,10 @@ class DiscordAdapter(BasePlatformAdapter):
         self._typing_tasks: Dict[str, asyncio.Task] = {}
 
         self._bot_task: Optional[asyncio.Task] = None
+
+        # True while disconnect() is intentionally tearing the client down, so a
+        # bot-task completion during shutdown is not misread as a runtime crash.
+        self._disconnecting = False
 
         self._post_connect_task: Optional[asyncio.Task] = None
 
@@ -1433,6 +1439,13 @@ class DiscordAdapter(BasePlatformAdapter):
 
             self._bot_task = asyncio.create_task(self._client.start(self.config.token))
 
+            # If the discord.py websocket task exits after we go live (e.g. a
+            # runtime ClientOSError/ConnectionResetError tearing the connection
+            # down), surface it as a retryable fatal error so the gateway
+            # supervisor can replace this dead adapter instead of staying
+            # split-brained (active in systemd, silent on Discord).
+            self._bot_task.add_done_callback(self._handle_bot_task_done)
+
             # Wait for ready
 
             await asyncio.wait_for(self._ready_event.wait(), timeout=30)
@@ -1461,8 +1474,58 @@ class DiscordAdapter(BasePlatformAdapter):
 
             return False
 
+    def _handle_bot_task_done(self, task: asyncio.Task) -> None:
+        """Done-callback for the background discord.py client task.
+
+        A post-ready exit of the websocket task means Discord stopped
+        responding even though this adapter is still ``_running``. Mark it as
+        a retryable fatal platform error and notify the gateway supervisor so
+        the reconnect watcher can replace the dead adapter. Completions during
+        an intentional ``disconnect()`` are ignored.
+        """
+
+        # Intentional shutdown: nothing to recover from.
+        if self._disconnecting:
+            return
+
+        # Cancellation is an orderly teardown, not a crash.
+        if task.cancelled():
+            return
+
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+
+        message = (
+            f"Discord gateway task exited: {exc}"
+            if exc is not None
+            else "Discord gateway task exited unexpectedly"
+        )
+
+        logger.error("[%s] %s", self.name, message, exc_info=exc)
+
+        self._set_fatal_error(
+            "discord_gateway_task_exited",
+            message,
+            retryable=True,
+        )
+
+        # _notify_fatal_error is async but this is a sync done-callback, so
+        # schedule the supervisor notification on the running loop.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            loop.create_task(self._notify_fatal_error())
+
     async def disconnect(self) -> None:
         """Disconnect from Discord."""
+
+        # Mark intentional teardown so the bot-task done callback does not
+        # mistake the resulting completion for a runtime crash.
+        self._disconnecting = True
 
         # Clean up all active voice connections before closing the client
 
@@ -3205,6 +3268,20 @@ class DiscordAdapter(BasePlatformAdapter):
             return
 
         text_ch_id = self._voice_text_channels.get(guild_id)
+
+        # Voice-off is a deliberate text-only mode, not idle neglect.  If the
+        # runner exposes a voice-mode getter and it reports "off" for this
+        # channel, leave the connection alone — disconnecting (and spamming an
+        # "inactivity timeout" notice) would fight the user's explicit choice.
+        voice_mode_getter = getattr(self, "_voice_mode_getter", None)
+
+        if voice_mode_getter and text_ch_id:
+            try:
+                if voice_mode_getter(str(text_ch_id)) == "off":
+                    return
+
+            except Exception:
+                pass
 
         await self.leave_voice_channel(guild_id)
 

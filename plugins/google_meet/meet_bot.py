@@ -843,11 +843,17 @@ def _looks_like_human_speaker(speaker: str, bot_guest_name: str) -> bool:
     Conservative: unknown / blank speakers (common when caption scraping
     falls back to raw text) do NOT trigger barge-in, because we can't tell
     whether it was a human or us.
+
+    We also treat any speaker carrying our own brand token (``clawk`` /
+    ``clawksis``) as the bot, because Meet may attribute our captions to a
+    variant of the configured guest name (e.g. "Clawk Agent").
     """
     if not speaker or not speaker.strip():
         return False
     spk = speaker.strip().lower()
     if spk in {"unknown", "you", bot_guest_name.strip().lower()}:
+        return False
+    if "clawk" in spk:
         return False
     return True
 

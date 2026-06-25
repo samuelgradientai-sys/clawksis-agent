@@ -93,8 +93,8 @@ _SIDECAR_DIR = Path(__file__).parent / "sidecar"
 # behavior and defaults as the BlueBubbles iMessage channel so the two
 # iMessage adapters gate group chats identically.
 _DEFAULT_MENTION_PATTERNS = [
-    r"(?<![\w@])@?clawk\s+agent\b[,:\-]?",
-    r"(?<![\w@])@?clawk\b[,:\-]?",
+    r"(?<![\w@])@?clawksis\s+agent\b[,:\-]?",
+    r"(?<![\w@])@?clawksis\b[,:\-]?",
 ]
 
 
