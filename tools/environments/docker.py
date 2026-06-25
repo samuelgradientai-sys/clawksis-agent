@@ -728,6 +728,7 @@ def _ensure_docker_available() -> None:
             capture_output=True,
             text=True,
             timeout=5,
+            stdin=subprocess.DEVNULL,
         )
 
     except FileNotFoundError:
