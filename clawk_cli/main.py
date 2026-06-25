@@ -15138,10 +15138,25 @@ def _verify_core_dependencies_installed(
 
     repair_args = ["install", "--reinstall", "-e", "."]
 
+    # On Windows, the editable ``--reinstall`` rewrites the entry-point .exe
+    # shims, which pip can't overwrite while ``clawk.exe`` is running.
+    # Quarantine the live shims first (and restore them if the install fails) —
+    # mirrors the primary install path; without it the shim is left missing and
+    # ``clawk`` drops off PATH.
+    repair_scripts_dir = _venv_scripts_dir() if _is_windows() else None
+
+    repair_moved: list[tuple[Path, Path]] = []
+
+    if repair_scripts_dir is not None:
+        repair_moved = _quarantine_running_clawk_exe(repair_scripts_dir)
+
     try:
         _run_install_with_heartbeat(install_cmd_prefix + repair_args, env=env)
 
     except subprocess.CalledProcessError as e:
+        if repair_scripts_dir is not None:
+            _restore_quarantined_exes(repair_moved)
+
         logger.warning("dep verification: repair install failed: %s", e)
 
         print("  ⚠ Repair install failed; check `clawk update` output above.")
