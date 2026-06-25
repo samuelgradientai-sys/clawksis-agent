@@ -988,6 +988,11 @@ from datetime import datetime
 
 from clawk_cli import __version__, __release_date__
 
+# Re-imported from the extracted model-setup-flows module so existing call sites
+# and test monkeypatches that target ``clawk_cli.main._prompt_auth_credentials_choice``
+# keep resolving against main.py's namespace (god-file decomposition Phase 2).
+from clawk_cli.model_setup_flows import _prompt_auth_credentials_choice
+
 logger = logging.getLogger(__name__)
 
 
@@ -5841,21 +5846,11 @@ def _model_flow_xai_oauth(_config, current_model="", *, args=None):
 
         print()
 
-        print("    1. Use existing credentials")
+        choice = _prompt_auth_credentials_choice(
+            "xAI Grok OAuth (SuperGrok / Premium+) credentials:"
+        )
 
-        print("    2. Reauthenticate (new OAuth login)")
-
-        print("    3. Cancel")
-
-        print()
-
-        try:
-            choice = input("  Choice [1/2/3]: ").strip()
-
-        except (KeyboardInterrupt, EOFError):
-            choice = "1"
-
-        if choice == "2":
+        if choice == "reauth":
             print("Starting a fresh xAI OAuth login...")
 
             print()
@@ -5891,7 +5886,7 @@ def _model_flow_xai_oauth(_config, current_model="", *, args=None):
 
                 return
 
-        elif choice == "3":
+        elif choice == "cancel":
             return
 
     else:
@@ -11143,10 +11138,10 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
     # surrounding _quiet_step spinner proves liveness, and on failure the
     # captured tail is surfaced below exactly like the streamed path.
 
-    def _run_build():
+    def _run_build(script: str = "build"):
         if quiet:
             return subprocess.run(
-                [npm, "run", "build"],
+                [npm, "run", script],
                 cwd=web_dir,
                 capture_output=True,
                 text=True,
@@ -11155,45 +11150,28 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
                 env={**os.environ, "CI": "1"},
             )
 
-        return _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+        return _run_with_idle_timeout([npm, "run", script], cwd=web_dir)
 
     r2 = _run_build()
 
     if r2.returncode != 0:
-        # Retry once after a short delay — covers boot-time races on Windows
-
+        # Single typecheck-resilient retry after a short delay. `npm run build`
+        # is `tsc -b && vite build`, so a TypeScript error anywhere aborts the
+        # build before Vite ever runs — even when the app itself bundles fine (a
+        # stale or mid-sync checkout where the chronically-red `tsc -b` is the
+        # only blocker). The delay also covers boot-time races on Windows
         # (antivirus scanning Node.js binaries, npm cache not ready, transient
-
-        # I/O when launched via Scheduled Task at logon). See issue #23817.
+        # I/O when launched via Scheduled Task at logon). Retry as a Vite-only
+        # build (esbuild transpile, no typecheck) so the dashboard can still
+        # come up instead of hard-failing. `npm run build` stays the primary
+        # path so dev/CI keep their typecheck gate; a genuinely broken bundle
+        # still fails this Vite step too. See issue #23817.
 
         _time.sleep(3)
 
-        r2 = _run_build()
-
-    if r2.returncode != 0:
-        # Typecheck-resilient fallback. `npm run build` is `tsc -b && vite
-        # build`, so a TypeScript error anywhere aborts the build before Vite
-        # ever runs — even when the app itself bundles and runs fine (a stale
-        # or mid-sync checkout where the chronically-red `tsc -b` is the only
-        # blocker). Fall back to a Vite-only build (esbuild transpile, no
-        # typecheck) so the dashboard can still come up instead of hard-
-        # failing and sending the user chasing TS errors. `npm run build`
-        # stays the primary path so dev/CI keep their typecheck gate; a
-        # genuinely broken bundle still fails this Vite step too.
-
         _say("  ⚠ build failed (likely tsc) — retrying Vite-only (skipping typecheck)")
 
-        r3 = _run_with_idle_timeout([npm, "run", "build:vite"], cwd=web_dir)
-
-        if r3.returncode == 0:
-            _say("  ✓ Web UI built (typecheck skipped)")
-
-            return True
-
-        # Vite-only failed too: the real blocker is a bundler error, so prefer
-        # r3's output for diagnostics below.
-        if (r3.stdout or "") or (r3.stderr or ""):
-            r2 = r3
+        r2 = _run_build("build:vite")
 
     if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
