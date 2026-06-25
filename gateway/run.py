@@ -22357,9 +22357,14 @@ class GatewayRunner:
         account_lines: list[str] = []
 
         if provider:
+            # Resolve through the gateway.slash_commands module so the account
+            # fetch/render share the single canonical home for slash-command
+            # helpers (and stay patchable from one place in tests).
+            from gateway import slash_commands as _sc
+
             try:
                 account_snapshot = await asyncio.to_thread(
-                    fetch_account_usage,
+                    _sc.fetch_account_usage,
                     provider,
                     base_url=base_url,
                     api_key=api_key,
@@ -22369,7 +22374,7 @@ class GatewayRunner:
                 account_snapshot = None
 
             if account_snapshot:
-                account_lines = render_account_usage_lines(
+                account_lines = _sc.render_account_usage_lines(
                     account_snapshot, markdown=True
                 )
 
