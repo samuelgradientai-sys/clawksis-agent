@@ -275,6 +275,39 @@ sys.stdout = sys.stderr
 _stdio_transport = StdioTransport(lambda: _real_stdout, _stdout_lock)
 
 
+class _DropTransport:
+    """Drop sink for detached websocket sessions.
+
+    Desktop embeds the gateway in-process and captures stdout into logs, so a
+    detached session must NOT fall through to stdio while it waits for resume
+    or reap — stale JSON-RPC frames go nowhere instead.
+    """
+
+    def write(self, obj: dict) -> bool:
+        return False
+
+    def close(self) -> None:
+        return None
+
+
+# Detached websocket sessions use a drop sink instead of stdio so a session
+# left without a live client is recognizable (and reapable) rather than
+# silently emitting to the embedded host's captured stdout.
+_detached_ws_transport = _DropTransport()
+
+
+# Last-resort idle TTL for sessions whose transport went dead without a clean
+# disconnect. Hours-scale because last_active freezes during long turns and on
+# passive viewing — running/pending/starting/live-transport are hard exemptions.
+try:
+    _SESSION_TTL_S = float(os.environ.get("CLAWK_TUI_SESSION_TTL_S") or 6 * 3600)
+
+except (TypeError, ValueError):
+    _SESSION_TTL_S = float(6 * 3600)
+
+_SESSION_TTL_S = max(0.0, _SESSION_TTL_S)
+
+
 class _SlashWorker:
     """Persistent ClawksisCLI subprocess for slash commands."""
 
@@ -4661,6 +4694,127 @@ def _(rid, params: dict) -> dict:
 
             return _ok(rid, payload)
 
+    # Lazy/watch resume: register the live session WITHOUT building an agent.
+    # Used by the desktop's subagent windows — the child runs inside the
+    # parent's turn, so its window only needs the stored history plus a
+    # transport for the child-mirror's live events. Skipping _make_agent here
+    # keeps the window cheap while the backend is busy running the delegation.
+    # A later prompt.submit upgrades it (resume_session_id keeps the upgrade on
+    # the stored conversation).
+    if is_truthy_value(params.get("lazy", False)):
+        try:
+            db.reopen_session(target)
+
+            # The child's OWN conversation only (no include_ancestors): a watch
+            # window opened on a subagent must show the subagent's branch, not
+            # the parent's prompt.
+            history = db.get_messages_as_conversation(target)
+
+        except Exception as e:
+            return _err(rid, 5000, f"resume failed: {e}")
+
+        messages = _history_to_messages(history)
+
+        cwd = os.getenv("TERMINAL_CWD", os.getcwd())
+
+        now = time.time()
+
+        # A delegated child mid-run emits no native session events of its own —
+        # report its liveness from the relay registry so the window paints a
+        # busy indicator instead of a dead idle transcript.
+        child_running = _child_run_active(target)
+
+        source = str(params.get("source") or "tui").strip() or "tui"
+
+        sid = uuid.uuid4().hex[:8]
+
+        with _session_resume_lock:
+            live = _find_live_session_by_key(target)
+
+            if live is not None:
+                other_sid, other_session = live
+
+                payload = _live_session_payload(
+                    other_sid,
+                    other_session,
+                    cols=cols,
+                    touch=True,
+                    transport=current_transport() or _stdio_transport,
+                )
+
+                payload["resumed"] = target
+
+                if other_session.get("agent") is None and _child_run_active(target):
+                    payload["running"] = True
+
+                    payload["status"] = "streaming"
+
+                return _ok(rid, payload)
+
+            _sessions[sid] = {
+                "agent": None,
+                "agent_error": None,
+                "agent_ready": threading.Event(),
+                "attached_images": [],
+                "close_on_disconnect": is_truthy_value(
+                    params.get("close_on_disconnect", False)
+                ),
+                "cols": cols,
+                "created_at": now,
+                "display_history_prefix": [],
+                "edit_snapshots": {},
+                "explicit_cwd": False,
+                "history": history,
+                "history_lock": threading.Lock(),
+                "history_version": 0,
+                "image_counter": 0,
+                "cwd": cwd,
+                "inflight_turn": None,
+                "last_active": now,
+                "lazy": True,
+                "pending_title": None,
+                "resume_session_id": target,
+                "running": False,
+                "session_key": target,
+                "show_reasoning": _load_show_reasoning(),
+                "source": source,
+                "slash_worker": None,
+                "tool_progress_mode": _load_tool_progress_mode(),
+                "tool_started_at": {},
+                "transport": current_transport() or _stdio_transport,
+            }
+
+            try:
+                _register_session_cwd(_sessions[sid])
+
+            except Exception:
+                pass
+
+        return _ok(
+            rid,
+            {
+                "session_id": sid,
+                "resumed": target,
+                "message_count": len(messages),
+                "messages": messages,
+                "info": {
+                    "cwd": cwd,
+                    "branch": _git_branch_for_cwd(cwd),
+                    "model": _resolve_model(),
+                    "tools": {},
+                    "skills": {},
+                    "lazy": True,
+                    "desktop_contract": DESKTOP_BACKEND_CONTRACT,
+                    "profile_name": _current_profile_name(),
+                },
+                "inflight": None,
+                "running": child_running,
+                "session_key": target,
+                "started_at": now,
+                "status": "streaming" if child_running else "idle",
+            },
+        )
+
     # Build the agent OUTSIDE the lock — _make_agent can block for seconds
 
     # (MCP discovery, prompt/skill build, AIAgent construction). Holding
@@ -4818,13 +4972,64 @@ def _session_live_status(sid: str, session: dict) -> str:
 
     ready = session.get("agent_ready")
 
-    if ready is not None and not ready.is_set():
+    # Lazy watch sessions (subagent spectator windows) never start a build, so
+    # their forever-unset agent_ready must not report a never-ending "starting".
+    if ready is not None and not ready.is_set() and not session.get("lazy"):
         return "starting"
 
     if session.get("running"):
         return "working"
 
     return "idle"
+
+
+def _ws_session_is_orphaned(session: dict | None) -> bool:
+    """True if a WS session has no live transport and no in-flight turn.
+
+    After a disconnected client is detached the session is pointed at
+    ``_detached_ws_transport``. A session left on that transport (and not
+    mid-turn) is genuinely orphaned and safe to reap.
+    """
+
+    if not session or session.get("_finalized"):
+        return False
+
+    if session.get("running"):
+        return False
+
+    return session.get("transport") is _detached_ws_transport
+
+
+def _transport_is_dead(transport) -> bool:
+    # _detached_ws_transport is the post-disconnect drop sentinel; a session
+    # parked on it has no live client. _stdio_transport is the REAL transport
+    # for a standalone `clawk --tui`, so it must NOT count as dead here.
+    if transport is _detached_ws_transport:
+        return True
+
+    return getattr(transport, "_closed", None) is True
+
+
+def _session_is_evictable(sid: str, session: dict, now: float) -> bool:
+
+    if session.get("running") or _session_pending_kind(sid):
+        return False
+
+    ready = session.get("agent_ready")
+
+    # Lazy watch sessions never start a build, so their forever-unset
+    # agent_ready must not make them immortal.
+    if ready is not None and not ready.is_set() and not session.get("lazy"):
+        return False
+
+    if not _transport_is_dead(session.get("transport")):
+        return False
+
+    last_active = float(session.get("last_active") or 0.0)
+
+    created_at = float(session.get("created_at") or 0.0)
+
+    return (now - last_active) > _SESSION_TTL_S and (now - created_at) > _SESSION_TTL_S
 
 
 def _message_preview(history: list) -> str:
@@ -5015,9 +5220,18 @@ def _(rid, params: dict) -> dict:
     if err:
         return err
 
+    # Rebind the (possibly orphaned) session to the CURRENT transport so a
+    # reconnect+activate reattaches it before the WS-orphan reaper fires —
+    # otherwise the session stays parked on the detached drop sentinel and is
+    # torn down out from under the just-reconnected client.
     return _ok(
         rid,
-        _live_session_payload(sid, session, touch=True),
+        _live_session_payload(
+            sid,
+            session,
+            touch=True,
+            transport=current_transport() or _stdio_transport,
+        ),
     )
 
 
