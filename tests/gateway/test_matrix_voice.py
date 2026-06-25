@@ -118,6 +118,11 @@ class TestMatrixVoiceMessageDetection:
         self.adapter._user_id = "@bot:example.org"
         self.adapter._startup_ts = 0.0
         self.adapter._dm_rooms = {}
+        # Voice/audio messages can't carry an @mention, so require_mention would
+        # drop them in a non-DM room before the media handler runs. These tests
+        # cover the media handler (voice detection / caching / fallback), so
+        # disable mention gating to exercise it directly.
+        self.adapter._require_mention = False
         self.adapter._message_handler = AsyncMock()
         # Mock _mxc_to_http to return a fake HTTP URL
         self.adapter._mxc_to_http = lambda url: (
@@ -235,6 +240,9 @@ class TestMatrixVoiceCacheFallback:
         self.adapter._user_id = "@bot:example.org"
         self.adapter._startup_ts = 0.0
         self.adapter._dm_rooms = {}
+        # See TestMatrixVoiceMessageDetection.setup_method: media can't @mention,
+        # so disable mention gating to reach the media handler under test.
+        self.adapter._require_mention = False
         self.adapter._message_handler = AsyncMock()
         self.adapter._mxc_to_http = lambda url: (
             f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
