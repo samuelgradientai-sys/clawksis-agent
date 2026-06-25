@@ -35,6 +35,8 @@ import {
   type ToolCall,
 } from "./hooks/useChatGateway";
 import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
+import { useTokenUsage } from "./hooks/useTokenUsage";
+import { TokenUsagePopover } from "./TokenUsagePopover";
 import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
@@ -53,7 +55,11 @@ interface ChatHeaderProps {
   tokensUsed: number;
   tokensMax: number;
   /** Título de la conversación que se está viendo. */
-  title?: string | null;
+  title?: string;
+  /** Click handler para abrir el popover de uso de tokens */
+  onTokensClick?: () => void;
+  /** Ref del botón de tokens para anclar el popover */
+  tokensRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 function ChatHeader({
@@ -64,6 +70,8 @@ function ChatHeader({
   tokensUsed,
   tokensMax,
   title,
+  onTokensClick,
+  tokensRef,
 }: ChatHeaderProps) {
   const statusColor =
     status === "connected"
@@ -96,12 +104,19 @@ function ChatHeader({
         )}
       </div>
 
-      <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground">
+      <button
+        type="button"
+        ref={tokensRef}
+        onClick={onTokensClick}
+        disabled={!onTokensClick}
+        className="hidden md:flex items-center gap-3 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+        aria-label="Ver desglose de uso de tokens"
+      >
         <span>Session</span>
         <span className="font-mono text-foreground/80">{shortSession}</span>
         <span>·</span>
         <span>{tokensLabel}</span>
-      </div>
+      </button>
     </div>
   );
 }
@@ -810,6 +825,41 @@ function EmptyState() {
   );
 }
 
+
+type SidebarActivityOverride = {
+  started_at?: number;
+  preview?: string;
+  message_count?: number;
+  model?: string;
+  model_provider?: string;
+  title?: string;
+};
+
+const SIDEBAR_ACTIVITY_CACHE_KEY = "clawksis.chat.sidebarActivityOverrides.v1";
+
+function readSidebarActivityOverrides(): Record<string, SidebarActivityOverride> {
+  try {
+    if (typeof window === "undefined") return {};
+    const raw = window.localStorage.getItem(SIDEBAR_ACTIVITY_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSidebarActivityOverrides(
+  value: Record<string, SidebarActivityOverride>,
+): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_ACTIVITY_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    // No bloquear el chat si localStorage está lleno o deshabilitado.
+  }
+}
+
 export default function ChatModern() {
   const {
     status,
@@ -833,7 +883,154 @@ export default function ChatModern() {
     error: sessionsError,
     createSession,
     deleteSession,
+    refresh: refreshSessions,
   } = useSessions(sendRpc, readyForRpc);
+
+  const {
+    sessionUsage,
+    usageByModel,
+    loading: tokenUsageLoading,
+    error: tokenUsageError,
+    refresh: refreshTokenUsage,
+  } = useTokenUsage(sendRpc, readyForRpc);
+
+  const tokensButtonRef = useRef<HTMLButtonElement>(null);
+  const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
+  const didAutoOpenSidebarTopRef = useRef(false);
+  // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
+  const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
+
+  // optimistic-new-chat-sidebar-v1
+  // Conversaciones creadas localmente que aún no aparecen en session.list.
+  const [optimisticSessions, setOptimisticSessions] = useState<
+    Array<(typeof sessions)[number]>
+  >([]);
+
+  // sidebar-recency-override-v1
+  // Actividad local reciente: mueve conversaciones viejas arriba inmediatamente
+  // al enviar un mensaje, incluso antes de que session.list persista/ordene.
+  const [sidebarActivityOverrides, setSidebarActivityOverrides] = useState<
+    Record<string, SidebarActivityOverride>
+  >(() => readSidebarActivityOverrides());
+
+  // sidebarSessions incluye filas optimistas y actividad local reciente.
+  // Así "+ Nueva conversación" aparece sin esperar recarga y una conversación
+  // vieja sube arriba inmediatamente al enviar un mensaje.
+  const sidebarSessionMap = new Map<string, (typeof sessions)[number]>();
+
+  for (const real of sessions) {
+    const rawOverride = sidebarActivityOverrides[real.id] ?? {};
+    const { title, model, model_provider, ...safeOverride } = rawOverride;
+
+    sidebarSessionMap.set(real.id, {
+      ...real,
+      ...safeOverride,
+      ...(typeof title === "string" ? { title } : {}),
+      ...(typeof model === "string" ? { model } : {}),
+      ...(typeof model_provider === "string" ? { model_provider } : {}),
+    });
+  }
+
+  for (const optimistic of optimisticSessions) {
+    const existing = sidebarSessionMap.get(optimistic.id);
+    sidebarSessionMap.set(optimistic.id, {
+      ...(existing ?? optimistic),
+      ...optimistic,
+    });
+  }
+
+  const sidebarSessions = Array.from(sidebarSessionMap.values()).sort(
+    (a, b) => (b.started_at || 0) - (a.started_at || 0),
+  );
+
+  useEffect(() => {
+    writeSidebarActivityOverrides(sidebarActivityOverrides);
+  }, [sidebarActivityOverrides]);
+
+  const sessionIdExistsInSidebar =
+    !!session.sessionId && sidebarSessions.some((s) => s.id === session.sessionId);
+
+  const newestListedSessionId = sidebarSessions[0]?.id ?? null;
+
+  // ID visual para resaltar y consultar métricas persistidas.
+  // session.sessionId sigue siendo el ID operativo vivo para backend.
+  const sidebarActiveSessionId =
+    visualActiveSessionId ?? (sessionIdExistsInSidebar ? session.sessionId : null);
+
+  // sidebar-auto-open-top-on-boot-v1
+  // Si localStorage reordenó el sidebar por actividad reciente, abrimos esa
+  // conversación de verdad. Esto evita que el header/sidebar muestren una sesión
+  // mientras el body todavía pertenece a otra sesión viva del gateway.
+  useEffect(() => {
+    if (didAutoOpenSidebarTopRef.current) return;
+    if (!readyForRpc || sessionsLoading || resuming || busy) return;
+    if (!newestListedSessionId) return;
+
+    didAutoOpenSidebarTopRef.current = true;
+    setVisualActiveSessionId(newestListedSessionId);
+
+    if (newestListedSessionId !== session.sessionId) {
+      void switchSession(newestListedSessionId);
+    }
+  }, [
+    readyForRpc,
+    sessionsLoading,
+    resuming,
+    busy,
+    newestListedSessionId,
+    session.sessionId,
+    switchSession,
+  ]);
+
+  useEffect(() => {
+    if (
+      !visualActiveSessionId &&
+      session.sessionId &&
+      sessions.some((s) => s.id === session.sessionId)
+    ) {
+      setVisualActiveSessionId(session.sessionId);
+    }
+  }, [visualActiveSessionId, session.sessionId, sessions]);
+
+  useEffect(() => {
+    if (optimisticSessions.length === 0) return;
+    setOptimisticSessions((prev) =>
+      prev.filter((opt) => !sessions.some((real) => real.id === opt.id)),
+    );
+  }, [sessions, optimisticSessions.length]);
+
+
+  // tokens-refresh-on-active-session-v1
+  // Rehidrata el contador del header al recargar la página o cambiar de sesión.
+  useEffect(() => {
+    if (!readyForRpc || !sidebarActiveSessionId) return;
+    void refreshTokenUsage(sidebarActiveSessionId);
+  }, [readyForRpc, sidebarActiveSessionId, refreshTokenUsage]);
+
+  // tokens-refresh-after-message-v1
+  // Después de una respuesta, session.usage puede tardar un poco en persistir.
+  // Refrescamos para que conversaciones nuevas no se queden en 0 tokens.
+  useEffect(() => {
+    if (!readyForRpc || busy || !sidebarActiveSessionId || messages.length === 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void refreshTokenUsage(sidebarActiveSessionId);
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [readyForRpc, busy, messages.length, sidebarActiveSessionId, refreshTokenUsage]);
+
+
+
+  const handleTokensClick = () => {
+    const willOpen = !tokensPopoverOpen;
+    setTokensPopoverOpen(willOpen);
+    if (willOpen) {
+      void refreshTokenUsage(sidebarActiveSessionId ?? session.sessionId);
+    }
+  };
 
   const {
     citations,
@@ -861,14 +1058,59 @@ export default function ChatModern() {
     status !== "connected" || !session.sessionId || resuming;
 
   const handleSelectSession = (targetId: string) => {
-    if (targetId === session.sessionId) return;
+    if (targetId === sidebarActiveSessionId) return;
+    setVisualActiveSessionId(targetId);
     void switchSession(targetId);
+  };
+
+  const handleSend = (text: string) => {
+    const trimmed = text.trim();
+    const activeId = sidebarActiveSessionId ?? session.sessionId;
+
+    if (activeId && trimmed) {
+      const current = sidebarSessions.find((s) => s.id === activeId);
+
+      setSidebarActivityOverrides((prev) => ({
+        ...prev,
+        [activeId]: {
+          started_at: Date.now() / 1000,
+          preview: trimmed,
+          message_count: Math.max((current?.message_count ?? 0) + 1, 1),
+          model: session.model ?? current?.model,
+        },
+      }));
+
+      setVisualActiveSessionId(activeId);
+    }
+
+    sendMessage(text);
   };
 
   const handleNewChat = async () => {
     const newId = await createSession();
     if (newId) {
-      await switchSession(newId);
+      setVisualActiveSessionId(newId);
+      setOptimisticSessions((prev) => [
+        {
+          id: newId,
+          title: "Nueva conversación",
+          preview: "",
+          source: "dashboard",
+          started_at: Date.now() / 1000,
+          message_count: 0,
+          model: session.model,
+          model_provider: session.modelProvider,
+        } as (typeof sessions)[number],
+        ...prev.filter((s) => s.id !== newId),
+      ]);
+      await switchSession(newId, { assumeLive: true });
+      void refreshSessions();
+      window.setTimeout(() => {
+        void refreshSessions();
+      }, 800);
+      window.setTimeout(() => {
+        void refreshSessions();
+      }, 2000);
     }
   };
 
@@ -876,17 +1118,68 @@ export default function ChatModern() {
     if (!window.confirm("¿Borrar esta conversación? No se puede deshacer.")) return;
     // Si es la conversación activa, el gateway rechaza borrarla mientras está
     // viva. Soltamos la sesión (cambiando a otra / nueva) ANTES de borrarla.
-    if (id === session.sessionId) {
+    if (id === sidebarActiveSessionId) {
       const fallback = sessions.find((s) => s.id !== id);
-      if (fallback) await switchSession(fallback.id);
+      if (fallback) {
+          setVisualActiveSessionId(fallback.id);
+          await switchSession(fallback.id);
+        }
       else await handleNewChat();
     }
+    setSidebarActivityOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     await deleteSession(id);
   };
 
   // Título de la conversación que se está viendo (para el header).
-  const activeSession = sessions.find((s) => s.id === session.sessionId);
-  const activeTitle = activeSession ? deriveTitle(activeSession) : null;
+  // Priorizamos session.title del gateway (en vivo, llega con session.info),
+  // luego deriveTitle del listado (que tiene el title de la DB), y finalmente
+  // null → el header muestra "Nueva conversación" como placeholder.
+  const activeSession = sidebarSessions.find((s) => s.id === sidebarActiveSessionId);
+  const headerTokensUsed =
+    sessionUsage && sessionUsage.total > 0
+      ? sessionUsage.total
+      : session.tokensUsed;
+
+  const headerTokensMax =
+    sessionUsage && sessionUsage.context_max && sessionUsage.context_max > 0
+      ? sessionUsage.context_max
+      : session.tokensMax;
+
+  // popover-token-fallback-v1
+  // El header puede tener tokens restaurados aunque session.usage no tenga
+  // desglose persistido. En ese caso mostramos al menos el total en el popover.
+  const popoverSessionUsage =
+    sessionUsage ??
+    (headerTokensUsed > 0
+      ? {
+          model: session.model,
+          provider: session.modelProvider,
+          calls: 0,
+          input: 0,
+          output: 0,
+          cache_read: 0,
+          cache_write: 0,
+          reasoning: 0,
+          total: headerTokensUsed,
+          cost_usd: null,
+          cost_status: null,
+          context_used: headerTokensUsed,
+          context_max: headerTokensMax > 0 ? headerTokensMax : null,
+          context_percent:
+            headerTokensMax > 0
+              ? Math.min(100, Math.round((headerTokensUsed / headerTokensMax) * 100))
+              : null,
+          compressions: 0,
+        }
+      : null);
+  const activeTitle =
+    session.title ??
+    (activeSession ? deriveTitle(activeSession) : null);
 
   // Si el último turno fue un slash command, no ofrecer "Regenerar" (re-correría
   // el comando y session.undo borraría el turno real previo).
@@ -901,8 +1194,8 @@ export default function ChatModern() {
   return (
     <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
       <SessionSidebar
-        sessions={sessions}
-        activeSessionId={session.sessionId}
+        sessions={sidebarSessions}
+        activeSessionId={sidebarActiveSessionId}
         loading={sessionsLoading}
         error={sessionsError}
         onSelectSession={handleSelectSession}
@@ -911,15 +1204,28 @@ export default function ChatModern() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <ChatHeader
-          status={status}
-          model={session.model}
-          modelProvider={session.modelProvider}
-          sessionId={session.sessionId}
-          tokensUsed={session.tokensUsed}
-          tokensMax={session.tokensMax}
-          title={activeTitle}
-        />
+        <div className="relative">
+          <ChatHeader
+            status={status}
+            model={session.model}
+            modelProvider={session.modelProvider}
+            sessionId={session.sessionId}
+            tokensUsed={headerTokensUsed}
+            tokensMax={headerTokensMax}
+            title={activeTitle ?? undefined}
+            onTokensClick={handleTokensClick}
+            tokensRef={tokensButtonRef}
+          />
+          <TokenUsagePopover
+            open={tokensPopoverOpen}
+            onClose={() => setTokensPopoverOpen(false)}
+            loading={tokenUsageLoading}
+            error={tokenUsageError}
+            sessionUsage={popoverSessionUsage}
+            usageByModel={usageByModel}
+            anchorRef={tokensButtonRef}
+          />
+        </div>
 
         <ConnectionBanner status={status} errorMessage={errorMessage} />
 
@@ -974,7 +1280,7 @@ export default function ChatModern() {
           busy={busy}
           disabled={composerDisabled}
           resuming={resuming}
-          onSend={sendMessage}
+          onSend={handleSend}
           onInterrupt={interrupt}
           sendRpc={sendRpc}
           ready={readyForRpc}

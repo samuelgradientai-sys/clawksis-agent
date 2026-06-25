@@ -2278,6 +2278,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
         "branch": _git_branch_for_cwd(cwd),
         "personality": str(personality or ""),
         "running": bool((session or {}).get("running")),
+        "source": str((session or {}).get("source") or ""),
         "desktop_contract": DESKTOP_BACKEND_CONTRACT,
         "version": "",
         "release_date": "",
@@ -3495,6 +3496,7 @@ def _init_session(sid: str, key: str, agent, history: list, cols: int = 80):
     _sessions[sid] = {
         "agent": agent,
         "session_key": key,
+        "source": "tui",
         "history": history,
         "history_lock": threading.Lock(),
         "history_version": 0,
@@ -4121,6 +4123,7 @@ def _(rid, params: dict) -> dict:
         "pending_title": title or None,
         "running": False,
         "session_key": key,
+        "source": str(params.get("source") or "tui"),
         "show_reasoning": _load_show_reasoning(),
         "slash_worker": None,
         "tool_progress_mode": _load_tool_progress_mode(),
@@ -4442,6 +4445,7 @@ def _(rid, params: dict) -> dict:
             _init_session(sid, target, agent, history, cols=cols)
 
             if sid in _sessions:
+                _sessions[sid]["source"] = str((found or {}).get("source") or "tui")
                 _sessions[sid]["display_history_prefix"] = display_history_prefix
 
         except Exception as e:
@@ -4890,6 +4894,103 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5007, str(e))
 
 
+
+def _usage_from_session_row(row: dict | None, base: dict | None = None) -> dict:
+    """Build a session.usage payload from the persisted sessions row.
+
+    The live agent counters reset when the dashboard process restarts. The DB row
+    is the durable source for historical token totals.
+    """
+    usage = dict(base or {})
+
+    if not row:
+        return usage
+
+    def n(name: str) -> int:
+        try:
+            return int(row.get(name) or 0)
+        except Exception:
+            return 0
+
+    input_tokens = n("input_tokens")
+    output_tokens = n("output_tokens")
+    cache_read = n("cache_read_tokens")
+    cache_write = n("cache_write_tokens")
+    reasoning = n("reasoning_tokens")
+    total = input_tokens + output_tokens + cache_read + cache_write + reasoning
+
+    if total <= 0:
+        return usage
+
+    usage.update(
+        {
+            "model": row.get("model") or usage.get("model"),
+            "provider": row.get("billing_provider") or usage.get("provider"),
+            "calls": n("api_call_count") or usage.get("calls", 0),
+            "input": input_tokens,
+            "output": output_tokens,
+            "cache_read": cache_read,
+            "cache_write": cache_write,
+            "reasoning": reasoning,
+            "total": total,
+            "cost_usd": (
+                row.get("actual_cost_usd")
+                if row.get("actual_cost_usd") is not None
+                else row.get("estimated_cost_usd")
+            ),
+            "cost_status": row.get("cost_status") or usage.get("cost_status"),
+            "context_used": total,
+        }
+    )
+
+    # Conserva context_max/context_percent del agente vivo si ya venían.
+    ctx_max = usage.get("context_max")
+    try:
+        ctx_max_n = int(ctx_max or 0)
+    except Exception:
+        ctx_max_n = 0
+
+    if ctx_max_n > 0:
+        usage["context_percent"] = min(100, round((total / ctx_max_n) * 100))
+
+    return usage
+
+
+def _session_usage_with_db_fallback(session: dict, params: dict | None = None) -> dict:
+    agent = session.get("agent")
+    live_usage = (
+        _get_usage(agent)
+        if agent is not None
+        else {"calls": 0, "input": 0, "output": 0, "total": 0}
+    )
+
+    try:
+        live_total = int(live_usage.get("total") or 0)
+    except Exception:
+        live_total = 0
+
+    # Si el agente vivo tiene uso real, ese es el dato más fresco.
+    if live_total > 0:
+        return live_usage
+
+    key = (
+        session.get("session_key")
+        or (params or {}).get("session_key")
+        or (params or {}).get("session_id")
+        or ""
+    )
+
+    db = _get_db()
+    if db is None or not key:
+        return live_usage
+
+    try:
+        row = db.get_session(str(key)) or None
+    except Exception:
+        row = None
+
+    return _usage_from_session_row(row, base=live_usage)
+
 @method("session.usage")
 def _(rid, params: dict) -> dict:
 
@@ -4898,16 +4999,7 @@ def _(rid, params: dict) -> dict:
     if err:
         return err
 
-    agent = session.get("agent")
-
-    return _ok(
-        rid,
-        (
-            _get_usage(agent)
-            if agent is not None
-            else {"calls": 0, "input": 0, "output": 0, "total": 0}
-        ),
-    )
+    return _ok(rid, _session_usage_with_db_fallback(session, params))
 
 
 @method("session.status")
@@ -5789,6 +5881,23 @@ def _(rid, params: dict) -> dict:
 
     if err:
         return err
+
+    session_key = str(session.get("session_key") or "")
+    session_source = str(session.get("source") or "").strip().lower()
+
+    # cron-chat-readonly-v1
+    # Las ejecuciones cron son sesiones automáticas. Se pueden ver desde el chat,
+    # pero no deben convertirse en conversaciones manuales dentro del mismo
+    # agente/historial porque eso puede mezclar contexto de scheduler, estados
+    # automáticos y turnos interactivos.
+    if session_source == "cron" or session_key.startswith("cron_"):
+        return _err(
+            rid,
+            4009,
+            "Esta es una ejecución automática de cron. Puedes revisar el resultado aquí, "
+            "pero para conversar sobre él abre una nueva conversación normal y cita/resume "
+            "lo que quieras analizar. Próximo paso recomendado: añadir botón 'Continuar como chat'.",
+        )
 
     # Re-bind to the current client transport for this request. This keeps
 
