@@ -14700,6 +14700,157 @@ def _refresh_active_lazy_features() -> None:
         print("  `clawk update` once the upstream issue is resolved.")
 
 
+def _update_marker_path() -> Path:
+    """Path of the ``.update-incomplete`` breadcrumb in the source checkout."""
+
+    return PROJECT_ROOT / ".update-incomplete"
+
+
+def _write_update_incomplete_marker() -> None:
+    """Drop a breadcrumb so an update killed mid-install can self-heal later."""
+
+    try:
+        _update_marker_path().write_text(
+            f"started={_time.time()}\npid={os.getpid()}\n"
+        )
+
+    except OSError:
+        pass
+
+
+def _clear_update_incomplete_marker() -> None:
+    """Remove the interrupted-install breadcrumb. No-op when absent."""
+
+    try:
+        _update_marker_path().unlink(missing_ok=True)
+
+    except OSError:
+        pass
+
+
+def _recover_from_interrupted_install() -> None:
+    """Finish a dependency install that a previous ``clawk update`` left half-done.
+
+    A ``clawk update`` killed mid-install (Ctrl-C, terminal close, WSL OOM)
+    leaves a ``.update-incomplete`` breadcrumb and a possibly half-built venv.
+    On the next launch we finish the dep install so the user isn't stranded.
+
+    Best-effort and never raises: on any failure the marker is preserved so the
+    next launch retries. A short-lived ``.update-incomplete.lock`` serialises
+    concurrent launches — a fresh lock means another launch is already
+    recovering (skip); a stale one (>1h) is from a crashed holder (break it, but
+    still skip this launch). All output goes to stderr so ACP's JSON-RPC stdout
+    stays clean.
+    """
+
+    marker = _update_marker_path()
+
+    if not marker.exists():
+        return
+
+    # Only source-tree installs can re-run the dep install. A stray marker on a
+    # PyPI/Docker install isn't ours to act on — just clear it.
+    if not (PROJECT_ROOT / "pyproject.toml").exists():
+        _clear_update_incomplete_marker()
+
+        return
+
+    lock = marker.with_name(".update-incomplete.lock")
+
+    if lock.exists():
+        try:
+            age = _time.time() - lock.stat().st_mtime
+
+        except OSError:
+            age = 0.0
+
+        # Stale lock from a crashed holder — break it so a later launch can
+        # recover. This launch still skips (the break + recover never race in
+        # the same pass).
+        if age > 3600:
+            try:
+                lock.unlink()
+
+            except OSError:
+                pass
+
+        return
+
+    try:
+        lock.write_text(f"{os.getpid()}\n")
+
+    except OSError:
+        pass
+
+    print(
+        "→ Clawksis was interrupted mid-install; finishing dependency setup now...",
+        file=sys.stderr,
+    )
+
+    try:
+        # ensurepip unconditionally first: a half-built venv may have lost pip,
+        # which the fallback install path relies on.
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "ensurepip", "--upgrade", "--default-pip"],
+                cwd=str(PROJECT_ROOT),
+            )
+
+        except Exception:
+            pass
+
+        from clawk_cli.managed_uv import ensure_uv
+
+        try:
+            uv_result = ensure_uv()
+
+        except Exception:
+            uv_result = None
+
+        uv_bin = None
+
+        if isinstance(uv_result, (list, tuple)):
+            uv_bin = uv_result[0] if uv_result else None
+
+        elif isinstance(uv_result, str):
+            uv_bin = uv_result
+
+        if uv_bin:
+            uv_env = {**os.environ, "VIRTUAL_ENV": str(PROJECT_ROOT / "venv")}
+
+            if _is_termux_env(uv_env):
+                uv_env.pop("PYTHONPATH", None)
+
+                uv_env.pop("PYTHONHOME", None)
+
+            _install_python_dependencies_with_optional_fallback(
+                [uv_bin, "pip"], env=uv_env
+            )
+
+        else:
+            _install_python_dependencies_with_optional_fallback(
+                [sys.executable, "-m", "pip"]
+            )
+
+        _clear_update_incomplete_marker()
+
+        print("✓ Clawksis dependencies recovered.", file=sys.stderr)
+
+    except Exception as exc:
+        # Keep the marker so the next launch retries; never abort startup.
+        print(
+            f"⚠ Clawksis dependency recovery failed ({exc}); will retry next launch.",
+            file=sys.stderr,
+        )
+
+    finally:
+        try:
+            lock.unlink(missing_ok=True)
+
+        except OSError:
+            pass
+
+
 def _install_python_dependencies_with_optional_fallback(
     install_cmd_prefix: list[str],
     *,
