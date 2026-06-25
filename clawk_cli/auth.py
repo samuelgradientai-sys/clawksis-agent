@@ -7493,9 +7493,7 @@ def refresh_nous_oauth_pure(
 
             state["scope"] = refreshed.get("scope") or state.get("scope")
 
-            refreshed_url = _validate_nous_inference_url_from_network(
-                refreshed.get("inference_base_url")
-            )
+            refreshed_url = _validate_nous_inference_url_from_network(refreshed.get("inference_base_url"))  # fmt: skip  # noqa: E501
 
             if refreshed_url:
                 state["inference_base_url"] = refreshed_url
@@ -7897,9 +7895,7 @@ def resolve_nous_runtime_credentials(
 
                         state["scope"] = refreshed.get("scope") or state.get("scope")
 
-                        refreshed_url = _validate_nous_inference_url_from_network(
-                            refreshed.get("inference_base_url")
-                        )
+                        refreshed_url = _validate_nous_inference_url_from_network(refreshed.get("inference_base_url"))  # fmt: skip  # noqa: E501
 
                         if refreshed_url:
                             inference_base_url = refreshed_url
