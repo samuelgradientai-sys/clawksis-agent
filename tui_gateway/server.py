@@ -567,10 +567,21 @@ def _status_update(sid: str, kind: str, text: str | None = None):
     if not body:
         return
 
+    out_kind = kind if text is not None else "status"
+
+    # Auto-compaction reaches us as a generic "lifecycle" status. Re-tag it so
+    # drivers (desktop app) can show an explicit "Summarizing…" indicator —
+    # otherwise a mid-turn compaction looks like the transcript reset itself.
+    if out_kind == "lifecycle":
+        from agent.conversation_compression import COMPACTION_STATUS_MARKER
+
+        if COMPACTION_STATUS_MARKER in body:
+            out_kind = "compacting"
+
     _emit(
         "status.update",
         sid,
-        {"kind": kind if text is not None else "status", "text": body},
+        {"kind": out_kind, "text": body},
     )
 
 
