@@ -2968,12 +2968,11 @@ class FeishuAdapter(BasePlatformAdapter):
 
         operator = getattr(event, "operator", None)
         open_id = str(getattr(operator, "open_id", "") or "")
-        sender_id = SimpleNamespace(
-            open_id=open_id, user_id=str(getattr(operator, "user_id", "") or "")
-        )
-        if not self._allow_group_message(
-            sender_id, state.get("chat_id", ""), is_bot=False
-        ):
+        # Interactive prompts (the bot asking "should I update?") use the looser
+        # operator gate, not the group-message allowlist used for exec approvals:
+        # they fail OPEN when no allowlist is configured so a default deployment
+        # can still answer. The chat-match check below still scopes the click.
+        if not self._is_interactive_operator_authorized(open_id):
             logger.warning(
                 "[Feishu] Unauthorized update prompt click by %s",
                 open_id or "<unknown>",

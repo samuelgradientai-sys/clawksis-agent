@@ -397,6 +397,7 @@ class PlatformConfig:
 DEFAULT_STREAMING_EDIT_INTERVAL: float = 0.8
 DEFAULT_STREAMING_BUFFER_THRESHOLD: int = 24
 DEFAULT_STREAMING_CURSOR: str = " ▉"
+DEFAULT_STREAMING_FRESH_FINAL_AFTER_SECONDS: float = 60.0
 
 
 @dataclass
@@ -429,9 +430,9 @@ class StreamingConfig:
     # if the original preview has been visible for at least this many
     # seconds, so the platform's visible timestamp reflects completion
     # time instead of the preview creation time.  Currently applied to
-    # Telegram only (other platforms ignore the setting).  Default 0 disables
-    # the fresh-message replacement path; set >0 to opt in.
-    fresh_final_after_seconds: float = 0.0
+    # Telegram only (other platforms ignore the setting).  Set to 0 to disable
+    # the fresh-message replacement path.
+    fresh_final_after_seconds: float = DEFAULT_STREAMING_FRESH_FINAL_AFTER_SECONDS
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -460,7 +461,8 @@ class StreamingConfig:
             ),
             cursor=data.get("cursor", DEFAULT_STREAMING_CURSOR),
             fresh_final_after_seconds=_coerce_float(
-                data.get("fresh_final_after_seconds"), 0.0
+                data.get("fresh_final_after_seconds"),
+                DEFAULT_STREAMING_FRESH_FINAL_AFTER_SECONDS,
             ),
         )
 
