@@ -2801,6 +2801,60 @@ def _resolve_tui_heap_mb(default_mb: int = 8192) -> int:
     return max(1536, sized) if limit_mb > 2048 else sized
 
 
+def _apply_terminal_backend_env(env: dict) -> None:
+    """Seed a subprocess env with the persisted terminal backend config.
+
+    config.yaml is the source of truth, but ``terminal_tool`` (and the Node TUI)
+    read the backend selection from ``TERMINAL_*`` env vars. A fresh
+    ``clawk --tui`` may run with an empty/stale shell env, so fill these from
+    config.yaml. An explicit env value already present wins (env-first, matching
+    ``status``/``doctor``), so deliberate shell overrides are respected.
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        terminal = load_config().get("terminal")
+
+    except Exception:
+        return
+
+    if not isinstance(terminal, dict):
+        return
+
+    import json
+
+    # config.yaml terminal.<key> -> TERMINAL_<ENV>. Scalars are stringified;
+    # list/dict values are JSON-encoded so the Node side can parse them.
+    _key_map = {
+        "backend": "TERMINAL_ENV",
+        "modal_mode": "TERMINAL_MODAL_MODE",
+        "docker_image": "TERMINAL_DOCKER_IMAGE",
+        "singularity_image": "TERMINAL_SINGULARITY_IMAGE",
+        "modal_image": "TERMINAL_MODAL_IMAGE",
+        "daytona_image": "TERMINAL_DAYTONA_IMAGE",
+        "docker_extra_args": "TERMINAL_DOCKER_EXTRA_ARGS",
+        "docker_env": "TERMINAL_DOCKER_ENV",
+        "timeout": "TERMINAL_TIMEOUT",
+        "sandbox_dir": "TERMINAL_SANDBOX_DIR",
+    }
+
+    for cfg_key, env_key in _key_map.items():
+        if env.get(env_key):
+            continue  # explicit env override wins
+
+        value = terminal.get(cfg_key)
+
+        if value is None:
+            continue
+
+        if isinstance(value, (list, dict)):
+            env[env_key] = json.dumps(value)
+
+        else:
+            env[env_key] = str(value)
+
+
 def _launch_tui(
     resume_session_id: Optional[str] = None,
     tui_dev: bool = False,
@@ -2843,6 +2897,10 @@ def _launch_tui(
     env.setdefault("CLAWK_CWD", os.getcwd())
 
     env.setdefault("NODE_ENV", "development" if tui_dev else "production")
+
+    # Seed the terminal backend selection from config.yaml so the TUI honors a
+    # configured Docker/SSH/Modal backend even when the shell env is empty.
+    _apply_terminal_backend_env(env)
 
     wt_info = None
 
