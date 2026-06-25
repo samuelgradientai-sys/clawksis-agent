@@ -1254,10 +1254,18 @@ def _transform_sudo_command(command: str | None) -> tuple[str | None, str | None
     if not has_configured_password and not sudo_password and _sudo_nopasswd_works():
         return command, None
 
+    # A registered sudo password callback (set by the CLI) is itself an
+    # interactive UI, so prompt through it even when CLAWK_INTERACTIVE is unset.
+    has_sudo_prompt_callback = _get_sudo_password_callback() is not None
+
+    should_prompt_for_sudo = (
+        env_var_enabled("CLAWK_INTERACTIVE") or has_sudo_prompt_callback
+    )
+
     if (
         not has_configured_password
         and not sudo_password
-        and env_var_enabled("CLAWK_INTERACTIVE")
+        and should_prompt_for_sudo
     ):
         sudo_password = _prompt_for_sudo_password(timeout_seconds=45)
 
@@ -1297,7 +1305,7 @@ import sys
 
 # Tool description for LLM
 
-TERMINAL_TOOL_DESCRIPTION = """Execute shell commands on a Linux environment. Filesystem usually persists between calls.
+TERMINAL_TOOL_DESCRIPTION = """Execute shell commands on a Linux environment. Filesystem, current working directory, and exported environment variables persist between calls.
 
 
 
@@ -1312,6 +1320,8 @@ Do NOT use sed/awk to edit files — use patch instead.
 Do NOT use echo/cat heredoc to create files — use write_file instead.
 
 Reserve terminal for: builds, installs, git, processes, scripts, network, package managers, and anything that needs a shell.
+
+Because exported environment state persists, activate a virtualenv or export setup variables once per session; do not re-source the same environment before every command unless a command proves the shell state was reset.
 
 
 
@@ -1653,6 +1663,39 @@ def _get_env_config() -> Dict[str, Any]:
         "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "false"
     ).lower() in {"true", "1", "yes"}
 
+    docker_backend = env_type == "docker"
+
+    # Docker/container-only env vars may be bridged from config.yaml even when
+    # the active backend is local/ssh.  Do not parse their JSON payloads until
+    # a backend that can consume them is selected; a stale or invalid Docker
+    # value should not make local terminal/execute_code unusable.
+
+    if docker_backend:
+        docker_forward_env = _parse_env_var(
+            "TERMINAL_DOCKER_FORWARD_ENV", "[]", json.loads, "valid JSON"
+        )
+
+        docker_volumes = _parse_env_var(
+            "TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON"
+        )
+
+        docker_env = _parse_env_var(
+            "TERMINAL_DOCKER_ENV", "{}", json.loads, "valid JSON"
+        )
+
+        docker_extra_args = _parse_env_var(
+            "TERMINAL_DOCKER_EXTRA_ARGS", "[]", json.loads, "valid JSON"
+        )
+
+    else:
+        docker_forward_env = []
+
+        docker_volumes = []
+
+        docker_env = {}
+
+        docker_extra_args = []
+
     # Default cwd: local uses the host's current directory, ssh uses the
 
     # remote home, and everything else starts in the backend's default
@@ -1721,9 +1764,7 @@ def _get_env_config() -> Dict[str, Any]:
         "env_type": env_type,
         "modal_mode": coerce_modal_mode(os.getenv("TERMINAL_MODAL_MODE", "auto")),
         "docker_image": os.getenv("TERMINAL_DOCKER_IMAGE", default_image),
-        "docker_forward_env": _parse_env_var(
-            "TERMINAL_DOCKER_FORWARD_ENV", "[]", json.loads, "valid JSON"
-        ),
+        "docker_forward_env": docker_forward_env,
         "singularity_image": os.getenv(
             "TERMINAL_SINGULARITY_IMAGE", f"docker://{default_image}"
         ),
@@ -1762,19 +1803,13 @@ def _get_env_config() -> Dict[str, Any]:
             "TERMINAL_CONTAINER_PERSISTENT", "true"
         ).lower()
         in {"true", "1", "yes"},
-        "docker_volumes": _parse_env_var(
-            "TERMINAL_DOCKER_VOLUMES", "[]", json.loads, "valid JSON"
-        ),
-        "docker_env": _parse_env_var(
-            "TERMINAL_DOCKER_ENV", "{}", json.loads, "valid JSON"
-        ),
+        "docker_volumes": docker_volumes,
+        "docker_env": docker_env,
         "docker_run_as_host_user": os.getenv(
             "TERMINAL_DOCKER_RUN_AS_HOST_USER", "false"
         ).lower()
         in {"true", "1", "yes"},
-        "docker_extra_args": _parse_env_var(
-            "TERMINAL_DOCKER_EXTRA_ARGS", "[]", json.loads, "valid JSON"
-        ),
+        "docker_extra_args": docker_extra_args,
         # Cross-process container reuse (issue #20561).  The docs claim
         # "ONE long-lived container shared across sessions" — this toggle
         # makes that real by probing for a labeled container at startup and
