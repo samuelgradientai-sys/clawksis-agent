@@ -174,7 +174,7 @@ from tools.tool_backend_helpers import (  # noqa: F401
     prefers_gateway,
 )
 
-from tools.url_safety import is_safe_url
+from tools.url_safety import async_is_safe_url, is_safe_url
 
 import sys
 
@@ -1523,7 +1523,7 @@ async def web_extract_tool(
         ssrf_blocked: List[Dict[str, Any]] = []
 
         for url in urls:
-            if not is_safe_url(url):
+            if not await async_is_safe_url(url):
                 ssrf_blocked.append({
                     "url": url,
                     "title": "",
