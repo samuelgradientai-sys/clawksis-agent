@@ -23873,15 +23873,16 @@ class GatewayRunner:
 
     # programmatic interfaces that should not trigger system updates.
 
+    # DISCORD, MATTERMOST, and HOMEASSISTANT are plugin-migrated and are NOT
+    # listed here — they pass the /update gate via the platform registry's
+    # ``allow_update_command=True`` flag (the fallback below), so the hardcoded
+    # set stays limited to the still-builtin platforms.
     _UPDATE_ALLOWED_PLATFORMS = frozenset({
         Platform.TELEGRAM,
-        Platform.DISCORD,
         Platform.SLACK,
         Platform.WHATSAPP,
         Platform.SIGNAL,
-        Platform.MATTERMOST,
         Platform.MATRIX,
-        Platform.HOMEASSISTANT,
         Platform.EMAIL,
         Platform.SMS,
         Platform.DINGTALK,
@@ -24009,7 +24010,14 @@ class GatewayRunner:
         if is_managed():
             return f"✗ {format_managed_message('update Clawksis')}"
 
-        project_root = Path(__file__).parent.parent.resolve()
+        # Resolve the repo root from the slash-command module's location (the
+        # canonical home for this handler). gateway/slash_commands.py and
+        # gateway/run.py share the same parent, so ``parent.parent`` is the
+        # project root either way; sourcing it from slash_commands keeps the
+        # git-repo detection consistent across the decomposed handler.
+        import gateway.slash_commands as _slash_commands_mod
+
+        project_root = Path(_slash_commands_mod.__file__).parent.parent.resolve()
 
         git_dir = project_root / ".git"
 
