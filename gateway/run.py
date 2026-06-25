@@ -12018,6 +12018,33 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
 
             return None
 
+        # ── Active-session cap ────────────────────────────────────────
+
+        # Refuse a NEW session with a clean message when the gateway is already
+
+        # at ``max_concurrent_sessions``, so a busy box isn't overwhelmed.
+
+        # Existing active sessions returned earlier via busy handling, and
+
+        # read-only commands (/status, …) returned before reaching here — only a
+
+        # fresh agent-starting turn (including a resolved skill command) lands
+
+        # here, so this is the single choke point that must be gated.
+
+        _max_sessions = getattr(self.config, "max_concurrent_sessions", None)
+
+        if (
+            _max_sessions
+            and _quick_key not in self._running_agents
+            and len(self._running_agents) >= _max_sessions
+        ):
+            return (
+                f"Clawksis is at the active session limit "
+                f"({len(self._running_agents)}/{_max_sessions}). "
+                "Try again when another session finishes."
+            )
+
         # ── Claim this session before any await ───────────────────────
 
         # Between here and _run_agent registering the real AIAgent, there
