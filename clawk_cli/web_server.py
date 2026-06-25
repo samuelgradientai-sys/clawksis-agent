@@ -4612,33 +4612,37 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
             "has_refresh_token": bool(clawk_creds.get("refreshToken")),
         }
 
-    cc_creds = None
+    # Claude Code's ``~/.claude/.credentials.json`` is deliberately NOT read
+    # here — it has its own dedicated catalog entry (``claude-code`` →
+    # ``_claude_code_only_status``). Reporting it under the API-key entry would
+    # double-count the token and shadow a real ANTHROPIC_API_KEY.
+    env_var_order: tuple = (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    )
 
-    if read_claude_code_credentials:
-        try:
-            cc_creds = read_claude_code_credentials()
+    try:
+        from clawk_cli.auth import PROVIDER_REGISTRY
 
-        except Exception:
-            cc_creds = None
+        env_var_order = (
+            PROVIDER_REGISTRY["anthropic"].api_key_env_vars or env_var_order
+        )
 
-    if cc_creds and cc_creds.get("accessToken"):
-        return {
-            "logged_in": True,
-            "source": "claude_code",
-            "source_label": "Claude Code (~/.claude/.credentials.json)",
-            "token_preview": _truncate_token(cc_creds.get("accessToken")),
-            "expires_at": cc_creds.get("expiresAt"),
-            "has_refresh_token": bool(cc_creds.get("refreshToken")),
-        }
+    except (ImportError, KeyError):
+        pass
 
-    env_token = os.getenv("ANTHROPIC_TOKEN") or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    for var in env_var_order:
+        value = os.getenv(var)
 
-    if env_token:
+        if not value:
+            continue
+
         return {
             "logged_in": True,
             "source": "env_var",
-            "source_label": "ANTHROPIC_TOKEN environment variable",
-            "token_preview": _truncate_token(env_token),
+            "source_label": f"{var} environment variable",
+            "token_preview": _truncate_token(value),
             "expires_at": None,
             "has_refresh_token": False,
         }
@@ -4854,6 +4858,27 @@ def _resolve_provider_status(provider_id: str, status_fn) -> Dict[str, Any]:
     return {"logged_in": False}
 
 
+def _oauth_provider_disconnect_hint(
+    provider: Dict[str, Any], status: Dict[str, Any]
+) -> Optional[str]:
+    """Return the manual disconnect path when the API cannot clear this provider.
+
+    External providers store their credentials outside Clawksis (another CLI
+    owns them), so the disconnect API must refuse — we never silently delete
+    files another tool owns. Env/.env-backed API keys are removed from the Keys
+    page, not the OAuth Accounts tab. ``None`` means the provider IS safely
+    disconnectable via the API.
+    """
+
+    if provider.get("flow") == "external":
+        return "Managed by that provider's CLI; remove it there."
+
+    if status.get("source") == "env_var":
+        return "Remove the API key from Settings → Keys instead."
+
+    return None
+
+
 @app.get("/api/providers/oauth")
 async def list_oauth_providers():
     """Enumerate every OAuth-capable LLM provider with current status.
@@ -4893,12 +4918,16 @@ async def list_oauth_providers():
     for p in _OAUTH_PROVIDER_CATALOG:
         status = _resolve_provider_status(p["id"], p.get("status_fn"))
 
+        disconnect_hint = _oauth_provider_disconnect_hint(p, status)
+
         providers.append({
             "id": p["id"],
             "name": p["name"],
             "flow": p["flow"],
             "cli_command": p["cli_command"],
             "docs_url": p["docs_url"],
+            "disconnect_hint": disconnect_hint,
+            "disconnectable": disconnect_hint is None,
             "status": status,
         })
 
@@ -4911,13 +4940,40 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
 
     _require_token(request)
 
-    valid_ids = {p["id"] for p in _OAUTH_PROVIDER_CATALOG}
+    catalog_by_id = {p["id"]: p for p in _OAUTH_PROVIDER_CATALOG}
 
-    if provider_id not in valid_ids:
+    provider = catalog_by_id.get(provider_id)
+
+    if provider is None:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown provider: {provider_id}. "
-            f"Available: {', '.join(sorted(valid_ids))}",
+            f"Available: {', '.join(sorted(catalog_by_id))}",
+        )
+
+    # Fail closed BEFORE touching any credential store: external providers are
+    # owned by another CLI and env/.env-backed keys belong to the Keys page —
+    # neither may be cleared via this endpoint. Checked against both the
+    # static metadata and the live status so an env-sourced key can't slip
+    # through as a silent no-op "disconnect".
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, {})
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
+        )
+
+    status = _resolve_provider_status(provider_id, provider.get("status_fn"))
+
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, status)
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
         )
 
     # Anthropic and claude-code clear the same Clawksis-managed PKCE file
