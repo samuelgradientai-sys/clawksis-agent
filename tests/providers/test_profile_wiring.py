@@ -110,7 +110,11 @@ class TestKimiProfileParity:
             reasoning_config=rc,
         )
 
-        assert profile["extra_body"]["thinking"] == legacy["extra_body"]["thinking"]
+        # XOR: a recognized effort is sent on its own (top-level reasoning_effort),
+        # with no thinking toggle — both paths agree (parity).
+        assert profile.get("extra_body", {}).get("thinking") == legacy.get(
+            "extra_body", {}
+        ).get("thinking")
 
         assert profile["reasoning_effort"] == legacy["reasoning_effort"] == "high"
 
@@ -162,7 +166,17 @@ class TestKimiProfileParity:
             reasoning_config=rc,
         )
 
-        assert profile["reasoning_effort"] == legacy["reasoning_effort"] == "medium"
+        # XOR: enabled with no recognized effort → thinking toggle only, no
+        # reasoning_effort — both paths agree (parity).
+        assert "reasoning_effort" not in profile
+
+        assert "reasoning_effort" not in legacy
+
+        assert (
+            profile["extra_body"]["thinking"]
+            == legacy["extra_body"]["thinking"]
+            == {"type": "enabled"}
+        )
 
 
 class TestOpenRouterProfileParity:

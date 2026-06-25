@@ -74,7 +74,7 @@ class TestNvidiaParity:
 
 
 class TestKimiParity:
-    """Kimi: OMIT temperature, max_tokens=32000, thinking + reasoning_effort."""
+    """Kimi: OMIT temperature, max_tokens=32000, thinking XOR reasoning_effort."""
 
     def test_temperature_omitted(self, transport):
 
@@ -110,7 +110,11 @@ class TestKimiParity:
             reasoning_config={"enabled": True, "effort": "high"},
         )
 
-        assert kw["extra_body"]["thinking"] == {"type": "enabled"}
+        # XOR: a recognized effort enables reasoning via the top-level
+        # reasoning_effort alone; the thinking toggle is omitted.
+        assert kw.get("reasoning_effort") == "high"
+
+        assert "thinking" not in kw.get("extra_body", {})
 
     def test_thinking_disabled(self, transport):
 
@@ -149,7 +153,11 @@ class TestKimiParity:
             reasoning_config={"enabled": True},
         )
 
-        assert kw.get("reasoning_effort") == "medium"
+        # XOR: enabled with no recognized effort → thinking toggle only, no
+        # top-level reasoning_effort (Moonshot treats the two as exclusive).
+        assert kw.get("reasoning_effort") is None
+
+        assert kw["extra_body"]["thinking"] == {"type": "enabled"}
 
 
 class TestOpenRouterParity:

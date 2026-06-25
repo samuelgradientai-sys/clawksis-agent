@@ -102,6 +102,11 @@ def _build_subprocess_env() -> dict[str, str]:
     env = os.environ.copy()
     home = _resolve_home_dir()
     env["HOME"] = home
+    # ACP child processes (the Copilot CLI) need the *real* user HOME to find
+    # their own auth/config, so opt this subprocess into "auto" home mode (host
+    # keeps the real HOME) rather than the global "profile" isolation default.
+    # apply_subprocess_home_env still records CLAWK_REAL_HOME for downstream use.
+    env.setdefault("TERMINAL_HOME_MODE", "auto")
     from clawk_constants import apply_subprocess_home_env
 
     apply_subprocess_home_env(env)
