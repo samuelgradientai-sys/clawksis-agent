@@ -2539,7 +2539,7 @@ def test_config_set_model_waits_for_lazy_agent_before_switch(monkeypatch):
 
         agent_ready.set()
 
-    def fake_apply(sid, target, raw):
+    def fake_apply(sid, target, raw, **kwargs):
 
         calls.append(("apply", sid, target.get("agent"), raw))
 
@@ -2573,7 +2573,7 @@ def test_config_set_model_uses_live_switch_path(monkeypatch):
 
     seen = {}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["args"] = (sid, session["session_key"], raw)
 
@@ -4290,7 +4290,7 @@ def test_config_set_model_rejects_while_running(monkeypatch):
 
     seen = {"called": False}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["called"] = True
 
@@ -4331,7 +4331,7 @@ def test_config_set_model_allowed_when_idle(monkeypatch):
 
     seen = {"called": False}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["called"] = True
 
@@ -4371,7 +4371,7 @@ def test_mirror_slash_side_effects_rejects_mutating_commands_while_running(monke
 
     applied = {"model": False, "compress": False}
 
-    def _fake_apply_model(sid, session, arg):
+    def _fake_apply_model(sid, session, arg, **kwargs):
 
         applied["model"] = True
 
@@ -4419,7 +4419,7 @@ def test_mirror_slash_side_effects_allowed_when_idle(monkeypatch):
 
     applied = {"model": False}
 
-    def _fake_apply_model(sid, session, arg):
+    def _fake_apply_model(sid, session, arg, **kwargs):
 
         applied["model"] = True
 

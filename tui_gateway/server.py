@@ -2052,7 +2052,9 @@ def _persist_model_switch(result) -> None:
     save_config(cfg)
 
 
-def _apply_model_switch(sid: str, session: dict, raw_input: str) -> dict:
+def _apply_model_switch(
+    sid: str, session: dict, raw_input: str, *, sync_process_env: bool = False
+) -> dict:
 
     from clawk_cli.model_switch import parse_model_flags, switch_model
 
@@ -2186,19 +2188,21 @@ def _apply_model_switch(sid: str, session: dict, raw_input: str) -> dict:
             "api_mode": result.api_mode,
         }
 
-    # Besides the per-session override above, surface the explicit choice on the
-    # process env so ambient re-resolution (credential-pool refresh, aux clients,
-    # /new startup via _resolve_startup_runtime) picks up the new provider instead
-    # of the one persisted in config/env (fixes #16857). CLAWK_TUI_PROVIDER is the
-    # canonical explicit-this-process carrier.
-    os.environ["CLAWK_MODEL"] = result.new_model
+    if sync_process_env:
+        # config.set model is an install-wide change, so sync the process env
+        # too: ambient re-resolution (credential-pool refresh, aux clients, /new
+        # startup via _resolve_startup_runtime) then picks up the new provider
+        # (#16857). A per-session /model switch passes sync_process_env=False so
+        # it never leaks the choice into other sessions sharing this process
+        # (desktop backend).
+        os.environ["CLAWK_MODEL"] = result.new_model
 
-    os.environ["CLAWK_INFERENCE_MODEL"] = result.new_model
+        os.environ["CLAWK_INFERENCE_MODEL"] = result.new_model
 
-    if result.target_provider:
-        os.environ["CLAWK_INFERENCE_PROVIDER"] = result.target_provider
+        if result.target_provider:
+            os.environ["CLAWK_INFERENCE_PROVIDER"] = result.target_provider
 
-        os.environ["CLAWK_TUI_PROVIDER"] = result.target_provider
+            os.environ["CLAWK_TUI_PROVIDER"] = result.target_provider
 
     if persist_global:
         _persist_model_switch(result)
@@ -7926,11 +7930,16 @@ def _(rid, params: dict) -> dict:
                         return _err(rid, 5032, "agent initialization failed")
 
                 result = _apply_model_switch(
-                    params.get("session_id", ""), session, value
+                    params.get("session_id", ""),
+                    session,
+                    value,
+                    sync_process_env=True,
                 )
 
             else:
-                result = _apply_model_switch("", {"agent": None}, value)
+                result = _apply_model_switch(
+                    "", {"agent": None}, value, sync_process_env=True
+                )
 
             return _ok(
                 rid,

@@ -229,6 +229,11 @@ def _local_browser_runnable() -> bool:
     return bool(browser_tool._chromium_installed())
 
 
+# Backward-compatible alias: clawk_cli/setup.py (and other callers from the
+# parallel rename) import the runtime-readiness probe under this name.
+_local_browser_runtime_ready = _local_browser_runnable
+
+
 def _browser_label(current_provider: str) -> str:
 
     mapping = {
