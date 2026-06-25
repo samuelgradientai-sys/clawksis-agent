@@ -1543,34 +1543,74 @@ def parse_available_output_tokens_from_error(error_msg: str) -> Optional[int]:
 
     error_lower = error_msg.lower()
 
-    # Must look like an output-cap error, not a prompt-length error.
+    # --- Format 1: Anthropic "max_tokens … = available_tokens: N" ---
 
-    is_output_cap_error = "max_tokens" in error_lower and (
+    is_anthropic_cap = "max_tokens" in error_lower and (
         "available_tokens" in error_lower or "available tokens" in error_lower
     )
 
-    if not is_output_cap_error:
+    if is_anthropic_cap:
+        patterns = [
+            r"available_tokens[:\s]+(\d+)",
+            r"available\s+tokens[:\s]+(\d+)",
+            # fallback: last number after "=" in expressions like "200000 - 190000 = 10000"
+            r"=\s*(\d+)\s*$",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, error_lower)
+
+            if match:
+                tokens = int(match.group(1))
+
+                if tokens >= 1:
+                    return tokens
+
         return None
 
-    # Extract the available_tokens figure.
+    # The remaining formats report the window as "maximum context length is N".
 
-    # Anthropic format: "… = available_tokens: 10000"
+    ctx_match = re.search(r"maximum context length is\s+(\d+)\s+tokens", error_lower)
 
-    patterns = [
-        r"available_tokens[:\s]+(\d+)",
-        r"available\s+tokens[:\s]+(\d+)",
-        # fallback: last number after "=" in expressions like "200000 - 190000 = 10000"
-        r"=\s*(\d+)\s*$",
-    ]
+    if not ctx_match:
+        return None
 
-    for pattern in patterns:
-        match = re.search(pattern, error_lower)
+    ctx = int(ctx_match.group(1))
 
-        if match:
-            tokens = int(match.group(1))
+    # --- Format 2: OpenRouter/Nous breakdown ---
 
-            if tokens >= 1:
-                return tokens
+    # "(150000 of text input, 40000 of tool input, 5000 in the output)" — the
+    # available output is the window minus the (text + tool) input it reports.
+
+    text_match = re.search(r"(\d+)\s+of\s+text\s+input", error_lower)
+
+    if text_match:
+        text_tokens = int(text_match.group(1))
+
+        tool_match = re.search(r"(\d+)\s+of\s+tool\s+input", error_lower)
+
+        tool_tokens = int(tool_match.group(1)) if tool_match else 0
+
+        available = ctx - text_tokens - tool_tokens
+
+        return available if available >= 1 else None
+
+    # --- Format 3: char-based (LM Studio / llama.cpp) ---
+
+    # "you requested N output tokens and your prompt contains M characters" —
+    # estimate input at ~3 chars/token (ceil) and leave the rest for output.
+
+    if "characters" in error_lower and "output token" in error_lower:
+        chars_match = re.search(r"(\d+)\s+characters", error_lower)
+
+        if chars_match:
+            chars = int(chars_match.group(1))
+
+            est_input_tokens = (chars + 2) // 3  # ceil(chars / 3)
+
+            available = ctx - est_input_tokens
+
+            return available if available >= 1 else None
 
     return None
 
