@@ -6055,6 +6055,52 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
         else:
             print("  Set later with: clawk config set <key> <value>")
 
+    # ── Always: disable exfiltration-shaped MCP servers ─────────────────
+
+    # Fail-closed audit of any existing ``mcp_servers`` entries so a config
+    # written before the #45620 hardening (or hand-edited) can't keep a
+    # shell-with-network-egress server enabled.
+
+    try:
+        from clawk_cli.mcp_security import validate_mcp_server_entry
+
+        config = load_config()
+
+        servers = config.get("mcp_servers")
+
+        if isinstance(servers, dict):
+            changed = False
+
+            for srv_name, srv_cfg in servers.items():
+                if not isinstance(srv_cfg, dict):
+                    continue
+
+                if not validate_mcp_server_entry(srv_name, srv_cfg):
+                    continue
+
+                if srv_cfg.get("enabled") is False:
+                    continue
+
+                srv_cfg["enabled"] = False
+
+                changed = True
+
+                results["warnings"].append(
+                    f"Disabled suspicious MCP server '{srv_name}'"
+                )
+
+                if not quiet:
+                    print(
+                        f"  ⚠ Disabled suspicious MCP server '{srv_name}' "
+                        "(shell + network egress)"
+                    )
+
+            if changed:
+                save_config(config)
+
+    except Exception:
+        pass  # best-effort; never block migration on the security audit
+
     return results
 
 

@@ -7665,13 +7665,29 @@ async def add_mcp_server(body: MCPServerCreate):
     if body.auth:
         server_config["auth"] = body.auth
 
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, server_config)
+
+    if issues:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected: {issues[0]}",
+        )
+
     try:
-        _save_mcp_server(name, server_config)
+        saved = _save_mcp_server(name, server_config)
 
     except Exception as exc:
         _log.exception("POST /api/mcp/servers failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if saved is False:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected by security policy",
+        )
 
     return _mcp_server_summary(name, server_config)
 
@@ -9291,6 +9307,72 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
 
     finally:
         reset_clawk_home_override(token)
+
+
+def _write_profile_mcp_servers(
+    profile_dir: Path, servers: "List[MCPServerCreate]"
+) -> int:
+    """Write MCP server entries into a specific profile's config.yaml.
+
+    Exfiltration-shaped entries (shell interpreter + network egress, #45620)
+    are skipped fail-closed and never reach the profile config. Returns the
+    number of servers actually written.
+
+    Scopes ``load_config``/``save_config`` to ``profile_dir`` via the
+    context-local CLAWK_HOME override so the write lands in the target
+    profile rather than the dashboard process's active profile.
+    """
+
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    written = 0
+
+    token = set_clawk_home_override(str(profile_dir))
+
+    try:
+        cfg = load_config()
+
+        mcp_servers = cfg.setdefault("mcp_servers", {})
+
+        for srv in servers:
+            server_config: Dict[str, Any] = {}
+
+            if srv.url:
+                server_config["url"] = srv.url.strip()
+
+            if srv.command:
+                server_config["command"] = srv.command.strip()
+
+                if srv.args:
+                    server_config["args"] = list(srv.args)
+
+            if srv.env:
+                server_config["env"] = dict(srv.env)
+
+            if srv.auth:
+                server_config["auth"] = srv.auth
+
+            if validate_mcp_server_entry(srv.name, server_config):
+                _log.warning(
+                    "Skipping suspicious MCP server '%s' for profile %s",
+                    srv.name,
+                    profile_dir,
+                )
+
+                continue
+
+            mcp_servers[srv.name] = server_config
+
+            written += 1
+
+        save_config(cfg)
+
+    finally:
+        reset_clawk_home_override(token)
+
+    return written
 
 
 @app.get("/api/profiles")

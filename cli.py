@@ -12259,6 +12259,64 @@ class ClawksisCLI:
 
         self._invalidate(min_interval=0.0)
 
+    def _confirm_expensive_model_switch(self, result) -> bool:
+        """Ask for explicit confirmation before applying costly model switches."""
+
+        if not getattr(result, "success", False):
+            return True
+
+        try:
+            from clawk_cli.model_cost_guard import expensive_model_warning
+
+            warning = expensive_model_warning(
+                result.new_model,
+                provider=result.target_provider,
+                base_url=result.base_url or self.base_url or "",
+                api_key=result.api_key or self.api_key or "",
+                model_info=result.model_info,
+            )
+
+        except Exception:
+            warning = None
+
+        if warning is None:
+            return True
+
+        choices = [
+            (
+                "once",
+                "Switch anyway",
+                "Use this model for the current Clawksis session.",
+            ),
+            ("cancel", "Cancel", "Keep the current model."),
+        ]
+
+        raw = self._prompt_text_input_modal(
+            title="!!! Expensive Model Warning !!!",
+            detail=warning.message,
+            choices=choices,
+            timeout=120,
+        )
+
+        choice = self._normalize_slash_confirm_choice(raw, choices)
+
+        return choice == "once"
+
+    def _confirm_and_apply_model_switch_result(
+        self, result, persist_global: bool
+    ) -> None:
+
+        try:
+            if result.success and not self._confirm_expensive_model_switch(result):
+                _cprint("  Model switch cancelled.")
+
+                return
+
+            self._apply_model_switch_result(result, persist_global)
+
+        except Exception as exc:
+            _cprint(f"  ✗ Model selection failed: {exc}")
+
     def _close_model_picker(self) -> None:
 
         self._model_picker_state = None
@@ -12534,7 +12592,17 @@ class ClawksisCLI:
 
                 self._close_model_picker()
 
-                self._apply_model_switch_result(result, persist_global)
+                if getattr(self, "_app", None):
+                    threading.Thread(
+                        target=self._confirm_and_apply_model_switch_result,
+                        args=(result, persist_global),
+                        daemon=True,
+                    ).start()
+
+                else:
+                    self._confirm_and_apply_model_switch_result(
+                        result, persist_global
+                    )
 
                 return
 
@@ -12677,6 +12745,11 @@ class ClawksisCLI:
 
         if not result.success:
             _cprint(f"  ✗ {result.error_message}")
+
+            return
+
+        if not self._confirm_expensive_model_switch(result):
+            _cprint("  Model switch cancelled.")
 
             return
 

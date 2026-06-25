@@ -211,6 +211,24 @@ def _has_agent_browser() -> bool:
     return bool(agent_browser_bin or local_bin.exists())
 
 
+def _local_browser_runnable() -> bool:
+    """Whether a local (non-cloud) browser can actually run.
+
+    Mirrors ``tools.browser_tool.check_browser_requirements`` for local mode:
+    the agent-browser CLI alone is not enough — local Chrome mode needs a
+    Chromium build on disk, while Lightpanda provides text navigation without
+    one. Reuses the runtime probes (lazy import) so the setup/status surface
+    never advertises a local browser the first real call would fail to launch.
+    """
+
+    from tools import browser_tool
+
+    if browser_tool._using_lightpanda_engine():
+        return True
+
+    return bool(browser_tool._chromium_installed())
+
+
 def _browser_label(current_provider: str) -> str:
 
     mapping = {
@@ -293,7 +311,7 @@ def _resolve_browser_feature_state(
 
         current_provider = "local"
 
-        available = bool(browser_local_available)
+        available = bool(browser_local_available and _local_browser_runnable())
 
         active = bool(browser_tool_enabled and available)
 
@@ -320,7 +338,7 @@ def _resolve_browser_feature_state(
 
         return "browserbase", available, active, False
 
-    available = bool(browser_local_available)
+    available = bool(browser_local_available and _local_browser_runnable())
 
     active = bool(browser_tool_enabled and available)
 

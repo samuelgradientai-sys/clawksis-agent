@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-06-22T00:00:00Z",
+  "updated_at": "2026-06-24T05:04:16Z",
   "metadata": {
     "source": "clawksis-agent repo",
     "docs": "https://github.com/samuelgradientai-sys/clawksis-agent"
@@ -19,6 +19,10 @@
         {
           "id": "anthropic/claude-opus-4.8-fast",
           "description": "2x price, higher output speed"
+        },
+        {
+          "id": "anthropic/claude-opus-4.6",
+          "description": ""
         },
         {
           "id": "anthropic/claude-sonnet-4.6",
