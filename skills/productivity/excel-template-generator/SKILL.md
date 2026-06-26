@@ -43,6 +43,19 @@ Requiere openpyxl instalado en el entorno de Clawksis:
 - sales: ventas diarias con cliente, producto, cantidad, precio, descuento, total, método de pago, canal y estado.
 - postventa: seguimiento postventa con cliente, caso, estado, prioridad, responsable, costo adicional y próxima acción.
 
+## Enlace descargable en dashboard
+
+Cuando el script imprima una línea como:
+
+download_url=/artifacts/download?path=...
+
+incluye en la respuesta final un link Markdown así:
+
+[Descargar archivo](/artifacts/download?path=...)
+
+No digas que no tienes herramienta send_file si el usuario está usando el dashboard web de Clawksis. En dashboard, usa el link de descarga local generado por el backend.
+
+
 ## Uso
 
 El script vive en:

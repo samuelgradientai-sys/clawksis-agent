@@ -602,6 +602,123 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+
+# ---------------------------------------------------------------------------
+# Local artifact downloads — artifact-download-v1
+# ---------------------------------------------------------------------------
+#
+# This route intentionally lives outside /api because direct Markdown links in
+# the chat cannot attach the X-Clawksis-Session-Token header. Security is kept
+# by strict local-only access and a narrow export-directory allowlist.
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_ALLOWED_SUFFIXES = {
+    ".xlsx",
+    ".csv",
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".md",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".zip",
+}
+
+_ARTIFACT_BLOCKED_NAMES = {
+    ".env",
+    "env",
+    "id_rsa",
+    "id_ed25519",
+    "authorized_keys",
+    "known_hosts",
+    "config.yaml",
+    "auth.json",
+    "credentials.json",
+    "token.json",
+}
+
+
+def _artifact_allowed_root() -> "Path":
+    from pathlib import Path
+
+    return (Path.home() / "clawksis_exports").resolve()
+
+
+def _artifact_is_loopback_request(request: "Request") -> bool:
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", "") if client else ""
+    host = str(host or "").strip().lower()
+
+    return (
+        host == "localhost"
+        or host == "::1"
+        or host.startswith("127.")
+    )
+
+
+def _artifact_is_within_root(candidate: "Path", root: "Path") -> bool:
+    try:
+        candidate.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+@app.get("/artifacts/download")
+async def download_local_artifact(path: str, request: Request):
+    """Download a generated local artifact from the Clawksis exports directory.
+
+    Security model:
+    - direct chat links work without custom headers;
+    - only loopback / SSH-tunnel access is allowed;
+    - only files under ~/clawksis_exports are allowed;
+    - symlinks are resolved before the allowlist check;
+    - only safe export file extensions are allowed.
+    """
+
+    from pathlib import Path
+    from urllib.parse import unquote
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Artifact downloads are only available from local or SSH-tunnel dashboard access.",
+        )
+
+    raw_path = unquote(str(path or "")).strip()
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="Missing artifact path.")
+
+    root = _artifact_allowed_root()
+    candidate = Path(raw_path).expanduser().resolve(strict=False)
+
+    if not _artifact_is_within_root(candidate, root):
+        raise HTTPException(status_code=403, detail="Artifact path is outside the allowed exports directory.")
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Artifact path is not a file.")
+
+    if candidate.suffix.lower() not in _ARTIFACT_ALLOWED_SUFFIXES:
+        raise HTTPException(status_code=400, detail="Artifact file type is not allowed.")
+
+    parts_lower = {part.lower() for part in candidate.parts}
+    if parts_lower & _ARTIFACT_BLOCKED_NAMES:
+        raise HTTPException(status_code=403, detail="Sensitive file names are not downloadable.")
+
+    return FileResponse(
+        str(candidate),
+        filename=candidate.name,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+
 # ---------------------------------------------------------------------------
 
 # Config schema — auto-generated from DEFAULT_CONFIG
