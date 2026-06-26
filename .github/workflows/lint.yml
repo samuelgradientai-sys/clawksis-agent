@@ -19,7 +19,7 @@ jobs:
     name: ruff check (blocking)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       # Install ruff as a standalone tool so the blocking check below can be
       # invoked directly (no ``uv run`` prefix). The dev-group ruff is not on
