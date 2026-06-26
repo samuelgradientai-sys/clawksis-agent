@@ -35,6 +35,19 @@ from clawk_cli import main as clawk_main
 
 
 @pytest.fixture(autouse=True)
+def _no_update_sleep(monkeypatch):
+    """Skip cmd_update's long (~3s) post-restart graceful-shutdown sleep so the
+    suite stays under the CI per-file wall-clock cap, while preserving short
+    sleeps that tests use to simulate slow installs (heartbeat timing)."""
+    _real_sleep = clawk_main._time.sleep
+    monkeypatch.setattr(
+        clawk_main._time,
+        "sleep",
+        lambda secs=0, *a, **k: None if (secs or 0) >= 2 else _real_sleep(secs),
+    )
+
+
+@pytest.fixture(autouse=True)
 def _patch_managed_uv(request):
     """Make managed_uv helpers follow shutil.which mocking in tests."""
 

@@ -12,7 +12,24 @@ import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from clawk_cli.main import cmd_update
+
+
+@pytest.fixture(autouse=True)
+def _no_update_sleep(monkeypatch):
+    """Skip cmd_update's long (~3s) post-restart graceful-shutdown sleep so the
+    suite stays under the CI per-file wall-clock cap, while preserving short
+    sleeps that tests use to simulate slow installs (heartbeat timing)."""
+    import clawk_cli.main as _m
+
+    _real_sleep = _m._time.sleep
+    monkeypatch.setattr(
+        _m._time,
+        "sleep",
+        lambda secs=0, *a, **k: None if (secs or 0) >= 2 else _real_sleep(secs),
+    )
 
 
 def _make_run_side_effect(branch="main", verify_ok=True, commit_count="1", dirty=False):

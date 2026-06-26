@@ -13,6 +13,22 @@ import pytest
 from clawk_cli.main import cmd_update, PROJECT_ROOT
 
 
+@pytest.fixture(autouse=True)
+def _no_update_sleep(monkeypatch):
+    """Skip cmd_update's long (~3s) post-restart graceful-shutdown sleep so the
+    suite stays under the CI per-file wall-clock cap (25 tests x 3s ~= 75s),
+    while preserving short sleeps that some tests use to simulate slow installs
+    (heartbeat timing)."""
+    import clawk_cli.main as _m
+
+    _real_sleep = _m._time.sleep
+    monkeypatch.setattr(
+        _m._time,
+        "sleep",
+        lambda secs=0, *a, **k: None if (secs or 0) >= 2 else _real_sleep(secs),
+    )
+
+
 def _make_run_side_effect(branch="main", verify_ok=True, commit_count="0"):
     """Build a side_effect function for subprocess.run that simulates git commands."""
 
