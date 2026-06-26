@@ -429,6 +429,9 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g`; stub it so the
+            # wizard doesn't block on the network under the 30s CI timeout.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 
@@ -898,6 +901,9 @@ class TestSetupWizardSkipsConfiguredSections:
             patch.object(setup_mod, "setup_tools") as mock_tools,
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g`; stub it so the
+            # wizard doesn't block on the network under the 30s CI timeout.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 
