@@ -18,7 +18,7 @@ Usage:
 
 """
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 
 import asyncio
@@ -53,7 +53,13 @@ import time
 
 import urllib.parse
 
+import mimetypes
+
+import shutil
+
 import urllib.request
+
+from dataclasses import dataclass
 
 from pathlib import Path
 
@@ -96,7 +102,16 @@ from utils import env_var_enabled
 
 
 try:
-    from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+    from fastapi import (
+        FastAPI,
+        File,
+        Form,
+        HTTPException,
+        Request,
+        UploadFile,
+        WebSocket,
+        WebSocketDisconnect,
+    )
 
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -120,8 +135,11 @@ except ImportError:
 
         from fastapi import (
             FastAPI,
+            File,
+            Form,
             HTTPException,
             Request,
+            UploadFile,
             WebSocket,
             WebSocketDisconnect,
         )
@@ -708,6 +726,10 @@ _CATEGORY_MERGE: Dict[str, str] = {
     # with the other messaging-platform config (discord) so it isn't an
     # orphan tab of one field.
     "telegram": "discord",
+    # `onboarding.profile_build` is the only schema-surfaced onboarding field
+    # (`onboarding.seen` is an internal latch dict, not a user setting), so fold
+    # it into the agent tab rather than leave a single-field "onboarding" tab.
+    "onboarding": "agent",
 }
 
 
@@ -836,6 +858,7 @@ CONFIG_SCHEMA = _ordered_schema
 
 class ConfigUpdate(BaseModel):
     config: dict
+    profile: Optional[str] = None
 
 
 class EnvVarUpdate(BaseModel):
@@ -843,9 +866,13 @@ class EnvVarUpdate(BaseModel):
 
     value: str
 
+    profile: Optional[str] = None
+
 
 class EnvVarDelete(BaseModel):
     key: str
+
+    profile: Optional[str] = None
 
 
 class EnvVarReveal(BaseModel):
@@ -858,6 +885,8 @@ class MessagingPlatformUpdate(BaseModel):
     env: Dict[str, str] = {}
 
     clear_env: List[str] = []
+
+    profile: Optional[str] = None
 
 
 class AudioTranscriptionRequest(BaseModel):
@@ -926,6 +955,14 @@ class ModelAssignment(BaseModel):
     # the path that actually wires a local endpoint into resolution.
 
     base_url: str = ""
+
+    # Accepted (and ignored by this inline handler) so the GUI's expensive-model
+    # confirmation round-trip doesn't 422; the model write itself is unaffected.
+    confirm_expensive_model: bool = False
+
+    # When set, scope the config write to this profile's CLAWK_HOME instead of
+    # the dashboard process's own profile (machine-level profile switcher).
+    profile: Optional[str] = None
 
 
 def _apply_main_model_assignment(
@@ -1670,6 +1707,7 @@ _ACTION_LOG_FILES: Dict[str, str] = {
     "prompt-size": "action-prompt-size.log",
     "dump": "action-dump.log",
     "config-migrate": "action-config-migrate.log",
+    "tools-post-setup": "action-tools-post-setup.log",
 }
 
 
@@ -2628,9 +2666,10 @@ def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/config")
-async def get_config():
+async def get_config(profile: Optional[str] = None):
 
-    config = _normalize_config_for_web(load_config())
+    with _profile_scope(profile):
+        config = _normalize_config_for_web(load_config())
 
     # Strip internal keys that the frontend shouldn't see or send back
 
@@ -2660,7 +2699,7 @@ _EMPTY_MODEL_INFO: dict = {
 
 
 @app.get("/api/model/info")
-def get_model_info():
+def get_model_info(profile: Optional[str] = None):
     """Return resolved model metadata for the currently configured model.
 
 
@@ -2674,7 +2713,8 @@ def get_model_info():
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         model_cfg = cfg.get("model", "")
 
@@ -2758,6 +2798,11 @@ def get_model_info():
             "capabilities": caps,
         }
 
+    except HTTPException:
+        # Unknown/invalid profile → propagate the 404 instead of masking it
+        # as a silently-empty "no model set" payload.
+        raise
+
     except Exception:
         _log.exception("GET /api/model/info failed")
 
@@ -2795,7 +2840,7 @@ _AUX_TASK_SLOTS: Tuple[str, ...] = (
 
 
 @app.get("/api/model/options")
-def get_model_options():
+def get_model_options(profile: Optional[str] = None):
     """Return authenticated providers + their curated model lists.
 
 
@@ -2808,14 +2853,26 @@ def get_model_options():
 
     can share the same types.
 
+
+
+    ``profile`` scopes the picker context (current model/provider, custom
+
+    providers from config, per-profile .env auth state) so the Models page
+
+    reads the SAME profile /api/model/set writes.
+
     """
 
     try:
         from clawk_cli.inventory import build_models_payload, load_picker_context
 
-        return build_models_payload(
-            load_picker_context(), max_models=50, pricing=True, capabilities=True
-        )
+        with _profile_scope(profile):
+            return build_models_payload(
+                load_picker_context(), max_models=50, pricing=True, capabilities=True
+            )
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("GET /api/model/options failed")
@@ -2929,7 +2986,7 @@ def get_recommended_default_model(provider: str = ""):
 
 
 @app.get("/api/model/auxiliary")
-def get_auxiliary_models():
+def get_auxiliary_models(profile: Optional[str] = None):
     """Return current auxiliary task assignments.
 
 
@@ -2950,10 +3007,17 @@ def get_auxiliary_models():
 
       }
 
+    ``profile`` scopes the read — without it, the Models page would show the
+
+    dashboard profile's auxiliary pins while /api/model/set wrote the selected
+
+    profile's (read/write asymmetry).
+
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         aux_cfg = cfg.get("auxiliary", {})
 
@@ -2987,6 +3051,9 @@ def get_auxiliary_models():
 
         return {"tasks": tasks, "main": main}
 
+    except HTTPException:
+        raise
+
     except Exception:
         _log.exception("GET /api/model/auxiliary failed")
 
@@ -2994,7 +3061,7 @@ def get_auxiliary_models():
 
 
 @app.post("/api/model/set")
-async def set_model_assignment(body: ModelAssignment):
+async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = None):
     """Assign a model to the main slot or an auxiliary task slot.
 
 
@@ -3004,6 +3071,12 @@ async def set_model_assignment(body: ModelAssignment):
     The currently running chat PTY (if any) is not affected; use the
 
     ``/model`` slash command inside a chat to hot-swap that specific session.
+
+
+
+    ``profile`` scopes the config write to the selected profile's CLAWK_HOME
+
+    so the machine-level profile switcher targets the same profile its reads do.
 
     """
 
@@ -3021,6 +3094,22 @@ async def set_model_assignment(body: ModelAssignment):
         raise HTTPException(
             status_code=400, detail="scope must be 'main' or 'auxiliary'"
         )
+
+    # Scope load_config/save_config to the requested profile via the
+    # context-local CLAWK_HOME override (same mechanism as _write_profile_model).
+    # Resolved BEFORE the try so an unknown profile surfaces a clean 404 rather
+    # than a 500. The body runs synchronously (no await), so the contextvar
+    # override stays valid for its entire duration.
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    _profile_token = None
+
+    _requested_profile = (body.profile or profile or "").strip()
+
+    if _requested_profile and _requested_profile.lower() != "current":
+        _profile_dir = _resolve_profile_dir(_requested_profile)
+
+        _profile_token = set_clawk_home_override(str(_profile_dir))
 
     try:
         cfg = load_config()
@@ -3165,6 +3254,10 @@ async def set_model_assignment(body: ModelAssignment):
 
         raise HTTPException(status_code=500, detail="Failed to save model assignment")
 
+    finally:
+        if _profile_token is not None:
+            reset_clawk_home_override(_profile_token)
+
 
 def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
     """Reverse _normalize_config_for_web before saving.
@@ -3250,12 +3343,16 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.put("/api/config")
-async def update_config(body: ConfigUpdate):
+async def update_config(body: ConfigUpdate, profile: Optional[str] = None):
 
     try:
-        save_config(_denormalize_config_from_web(body.config))
+        with _profile_scope(body.profile or profile):
+            save_config(_denormalize_config_from_web(body.config))
 
         return {"ok": True}
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("PUT /api/config failed")
@@ -3264,9 +3361,10 @@ async def update_config(body: ConfigUpdate):
 
 
 @app.get("/api/env")
-async def get_env_vars():
+async def get_env_vars(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
     channel_keys = _channel_managed_env_keys()
 
@@ -3294,12 +3392,16 @@ async def get_env_vars():
 
 
 @app.put("/api/env")
-async def set_env_var(body: EnvVarUpdate):
+async def set_env_var(body: EnvVarUpdate, profile: Optional[str] = None):
 
     try:
-        save_env_value(body.key, body.value)
+        with _profile_scope(body.profile or profile):
+            save_env_value(body.key, body.value)
 
         return {"ok": True, "key": body.key}
+
+    except HTTPException:
+        raise
 
     except ValueError as exc:
         # save_env_value raises ValueError for invalid names and for keys
@@ -3487,10 +3589,11 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
 
 
 @app.delete("/api/env")
-async def remove_env_var(body: EnvVarDelete):
+async def remove_env_var(body: EnvVarDelete, profile: Optional[str] = None):
 
     try:
-        removed = remove_env_value(body.key)
+        with _profile_scope(body.profile or profile):
+            removed = remove_env_value(body.key)
 
         if not removed:
             raise HTTPException(status_code=404, detail=f"{body.key} not found in .env")
@@ -4286,22 +4389,29 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
 
 
 @app.get("/api/messaging/platforms")
-async def get_messaging_platforms():
+async def get_messaging_platforms(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    # Profile-scoped so the dashboard's global profile switcher shows the
+    # TARGET profile's channel credentials/state, not the root install's.
+    # Inside _profile_scope, load_env()/read_runtime_status() resolve against
+    # the requested profile's CLAWK_HOME.
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
-    runtime = read_runtime_status()
+        runtime = read_runtime_status()
 
-    return {
-        "platforms": [
-            _messaging_platform_payload(entry, env_on_disk, runtime)
-            for entry in _messaging_platform_catalog()
-        ]
-    }
+        return {
+            "platforms": [
+                _messaging_platform_payload(entry, env_on_disk, runtime)
+                for entry in _messaging_platform_catalog()
+            ]
+        }
 
 
 @app.put("/api/messaging/platforms/{platform_id}")
-async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpdate):
+async def update_messaging_platform(
+    platform_id: str, body: MessagingPlatformUpdate, profile: Optional[str] = None
+):
 
     entry = _catalog_lookup(platform_id)
 
@@ -4313,29 +4423,30 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
     allowed_env = set(entry["env_vars"])
 
     try:
-        for key in body.clear_env:
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+        with _profile_scope(body.profile or profile):
+            for key in body.clear_env:
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            remove_env_value(key)
+                remove_env_value(key)
 
-        for key, value in body.env.items():
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+            for key, value in body.env.items():
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            trimmed = value.strip()
+                trimmed = value.strip()
 
-            if trimmed:
-                save_env_value(key, trimmed)
+                if trimmed:
+                    save_env_value(key, trimmed)
 
-        if body.enabled is not None:
-            _write_platform_enabled(platform_id, body.enabled)
+            if body.enabled is not None:
+                _write_platform_enabled(platform_id, body.enabled)
 
         return {"ok": True, "platform": platform_id}
 
@@ -4523,33 +4634,35 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
             "has_refresh_token": bool(clawk_creds.get("refreshToken")),
         }
 
-    cc_creds = None
+    # Claude Code's ``~/.claude/.credentials.json`` is deliberately NOT read
+    # here — it has its own dedicated catalog entry (``claude-code`` →
+    # ``_claude_code_only_status``). Reporting it under the API-key entry would
+    # double-count the token and shadow a real ANTHROPIC_API_KEY.
+    env_var_order: tuple = (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    )
 
-    if read_claude_code_credentials:
-        try:
-            cc_creds = read_claude_code_credentials()
+    try:
+        from clawk_cli.auth import PROVIDER_REGISTRY
 
-        except Exception:
-            cc_creds = None
+        env_var_order = PROVIDER_REGISTRY["anthropic"].api_key_env_vars or env_var_order
 
-    if cc_creds and cc_creds.get("accessToken"):
-        return {
-            "logged_in": True,
-            "source": "claude_code",
-            "source_label": "Claude Code (~/.claude/.credentials.json)",
-            "token_preview": _truncate_token(cc_creds.get("accessToken")),
-            "expires_at": cc_creds.get("expiresAt"),
-            "has_refresh_token": bool(cc_creds.get("refreshToken")),
-        }
+    except (ImportError, KeyError):
+        pass
 
-    env_token = os.getenv("ANTHROPIC_TOKEN") or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    for var in env_var_order:
+        value = os.getenv(var)
 
-    if env_token:
+        if not value:
+            continue
+
         return {
             "logged_in": True,
             "source": "env_var",
-            "source_label": "ANTHROPIC_TOKEN environment variable",
-            "token_preview": _truncate_token(env_token),
+            "source_label": f"{var} environment variable",
+            "token_preview": _truncate_token(value),
             "expires_at": None,
             "has_refresh_token": False,
         }
@@ -4765,6 +4878,27 @@ def _resolve_provider_status(provider_id: str, status_fn) -> Dict[str, Any]:
     return {"logged_in": False}
 
 
+def _oauth_provider_disconnect_hint(
+    provider: Dict[str, Any], status: Dict[str, Any]
+) -> Optional[str]:
+    """Return the manual disconnect path when the API cannot clear this provider.
+
+    External providers store their credentials outside Clawksis (another CLI
+    owns them), so the disconnect API must refuse — we never silently delete
+    files another tool owns. Env/.env-backed API keys are removed from the Keys
+    page, not the OAuth Accounts tab. ``None`` means the provider IS safely
+    disconnectable via the API.
+    """
+
+    if provider.get("flow") == "external":
+        return "Managed by that provider's CLI; remove it there."
+
+    if status.get("source") == "env_var":
+        return "Remove the API key from Settings → Keys instead."
+
+    return None
+
+
 @app.get("/api/providers/oauth")
 async def list_oauth_providers():
     """Enumerate every OAuth-capable LLM provider with current status.
@@ -4804,12 +4938,16 @@ async def list_oauth_providers():
     for p in _OAUTH_PROVIDER_CATALOG:
         status = _resolve_provider_status(p["id"], p.get("status_fn"))
 
+        disconnect_hint = _oauth_provider_disconnect_hint(p, status)
+
         providers.append({
             "id": p["id"],
             "name": p["name"],
             "flow": p["flow"],
             "cli_command": p["cli_command"],
             "docs_url": p["docs_url"],
+            "disconnect_hint": disconnect_hint,
+            "disconnectable": disconnect_hint is None,
             "status": status,
         })
 
@@ -4822,13 +4960,40 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
 
     _require_token(request)
 
-    valid_ids = {p["id"] for p in _OAUTH_PROVIDER_CATALOG}
+    catalog_by_id = {p["id"]: p for p in _OAUTH_PROVIDER_CATALOG}
 
-    if provider_id not in valid_ids:
+    provider = catalog_by_id.get(provider_id)
+
+    if provider is None:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown provider: {provider_id}. "
-            f"Available: {', '.join(sorted(valid_ids))}",
+            f"Available: {', '.join(sorted(catalog_by_id))}",
+        )
+
+    # Fail closed BEFORE touching any credential store: external providers are
+    # owned by another CLI and env/.env-backed keys belong to the Keys page —
+    # neither may be cleared via this endpoint. Checked against both the
+    # static metadata and the live status so an env-sourced key can't slip
+    # through as a silent no-op "disconnect".
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, {})
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
+        )
+
+    status = _resolve_provider_status(provider_id, provider.get("status_fn"))
+
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, status)
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
         )
 
     # Anthropic and claude-code clear the same Clawksis-managed PKCE file
@@ -7533,6 +7698,8 @@ class MCPServerCreate(BaseModel):
 
     auth: Optional[str] = None
 
+    profile: Optional[str] = None
+
 
 def _coerce_mapping(value: Any) -> Dict[str, Any]:
     """Best-effort coerce a config value into a dict.
@@ -7616,11 +7783,12 @@ def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/mcp/servers")
-async def list_mcp_servers():
+async def list_mcp_servers(profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     return {
         "servers": [
@@ -7630,7 +7798,7 @@ async def list_mcp_servers():
 
 
 @app.post("/api/mcp/servers")
-async def add_mcp_server(body: MCPServerCreate):
+async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers, _save_mcp_server
 
@@ -7639,7 +7807,10 @@ async def add_mcp_server(body: MCPServerCreate):
     if not name:
         raise HTTPException(status_code=400, detail="Server name is required")
 
-    if name in _get_mcp_servers():
+    with _profile_scope(body.profile or profile):
+        existing = _get_mcp_servers()
+
+    if name in existing:
         raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
 
     if not body.url and not body.command:
@@ -7665,45 +7836,81 @@ async def add_mcp_server(body: MCPServerCreate):
     if body.auth:
         server_config["auth"] = body.auth
 
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, server_config)
+
+    if issues:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected: {issues[0]}",
+        )
+
     try:
-        _save_mcp_server(name, server_config)
+        with _profile_scope(body.profile or profile):
+            saved = _save_mcp_server(name, server_config)
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("POST /api/mcp/servers failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    if saved is False:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected by security policy",
+        )
+
     return _mcp_server_summary(name, server_config)
 
 
 @app.delete("/api/mcp/servers/{name}")
-async def remove_mcp_server(name: str):
+async def remove_mcp_server(name: str, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _remove_mcp_server
 
-    if not _remove_mcp_server(name):
+    with _profile_scope(profile):
+        removed = _remove_mcp_server(name)
+
+    if not removed:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
     return {"ok": True}
 
 
 @app.post("/api/mcp/servers/{name}/test")
-async def test_mcp_server(name: str):
+async def test_mcp_server(name: str, profile: Optional[str] = None):
     """Connect to the server, list its tools, disconnect.  Returns tool list."""
 
     from clawk_cli.mcp_config import _get_mcp_servers, _probe_single_server
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     if name not in servers:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+
+    def _probe_scoped():
+        # Re-enter the scope INSIDE the worker thread so call-time resolution
+
+        # during the probe (env-placeholder expansion reading the profile's
+
+        # .env) sees the selected profile, matching the config the server was
+
+        # saved into.
+
+        with _profile_scope(profile):
+            return _probe_single_server(name, servers[name])
 
     try:
         # Probe blocks on a dedicated MCP event loop — run in a thread so the
 
         # FastAPI event loop is never blocked.
 
-        tools = await asyncio.to_thread(_probe_single_server, name, servers[name])
+        tools = await asyncio.to_thread(_probe_scoped)
 
     except Exception as exc:
         return {
@@ -7721,9 +7928,13 @@ async def test_mcp_server(name: str):
 class MCPEnabledToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/mcp/servers/{name}/enabled")
-async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
+async def set_mcp_server_enabled(
+    name: str, body: MCPEnabledToggle, profile: Optional[str] = None
+):
     """Enable or disable an MCP server (takes effect on next session/gateway).
 
 
@@ -7736,25 +7947,26 @@ async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
 
     """
 
-    cfg = load_config()
+    with _profile_scope(body.profile or profile):
+        cfg = load_config()
 
-    servers = cfg.get("mcp_servers")
+        servers = cfg.get("mcp_servers")
 
-    if not isinstance(servers, dict) or name not in servers:
-        raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+        if not isinstance(servers, dict) or name not in servers:
+            raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
-    if not isinstance(servers[name], dict):
-        raise HTTPException(status_code=400, detail="Malformed server config")
+        if not isinstance(servers[name], dict):
+            raise HTTPException(status_code=400, detail="Malformed server config")
 
-    servers[name]["enabled"] = bool(body.enabled)
+        servers[name]["enabled"] = bool(body.enabled)
 
-    save_config(cfg)
+        save_config(cfg)
 
     return {"ok": True, "name": name, "enabled": bool(body.enabled)}
 
 
 @app.get("/api/mcp/catalog")
-async def list_mcp_catalog():
+async def list_mcp_catalog(profile: Optional[str] = None):
     """Browse the Nous-approved MCP catalog (the optional-mcps/ manifests).
 
 
@@ -7763,7 +7975,11 @@ async def list_mcp_catalog():
 
     can show install / enabled state inline.  This is the same catalog
 
-    `clawk mcp catalog` / `clawk mcp install` read.
+    `clawk mcp catalog` / `clawk mcp install` read.  ``profile`` scopes the
+
+    installed/enabled annotations (the catalog itself is repo-shipped and
+
+    identical for every profile).
 
     """
 
@@ -7778,24 +7994,29 @@ async def list_mcp_catalog():
     entries = []
 
     try:
-        for entry in mcp_catalog.list_catalog():
-            auth = entry.auth
+        with _profile_scope(profile):
+            for entry in mcp_catalog.list_catalog():
+                auth = entry.auth
 
-            entries.append({
-                "name": entry.name,
-                "description": entry.description,
-                "source": entry.source,
-                "transport": entry.transport.type,
-                "auth_type": getattr(auth, "type", "none"),
-                # Env vars the user must supply (names + prompts only, never values).
-                "required_env": [
-                    {"name": e.name, "prompt": e.prompt, "required": e.required}
-                    for e in getattr(auth, "env", []) or []
-                ],
-                "needs_install": entry.install is not None,
-                "installed": mcp_catalog.is_installed(entry.name),
-                "enabled": mcp_catalog.is_enabled(entry.name),
-            })
+                entries.append({
+                    "name": entry.name,
+                    "description": entry.description,
+                    "source": entry.source,
+                    "transport": entry.transport.type,
+                    "auth_type": getattr(auth, "type", "none"),
+                    # Env vars the user must supply (names + prompts only, never values).
+                    "required_env": [
+                        {"name": e.name, "prompt": e.prompt, "required": e.required}
+                        for e in getattr(auth, "env", []) or []
+                    ],
+                    "needs_install": entry.install is not None,
+                    "installed": mcp_catalog.is_installed(entry.name),
+                    "enabled": mcp_catalog.is_enabled(entry.name),
+                })
+
+    except HTTPException:
+        # Unknown/invalid profile → 404, not a silently-empty catalog.
+        raise
 
     except Exception:
         _log.exception("list_mcp_catalog failed")
@@ -8950,9 +9171,11 @@ async def prune_checkpoints():
 class SkillInstallRequest(BaseModel):
     identifier: str
 
+    profile: Optional[str] = None
+
 
 @app.post("/api/skills/hub/install")
-async def install_skill_hub(body: SkillInstallRequest):
+async def install_skill_hub(body: SkillInstallRequest, profile: Optional[str] = None):
 
     identifier = (body.identifier or "").strip()
 
@@ -8960,7 +9183,14 @@ async def install_skill_hub(body: SkillInstallRequest):
         raise HTTPException(status_code=400, detail="identifier is required")
 
     try:
-        proc = _spawn_clawk_action(["skills", "install", identifier], "skills-install")
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["skills", "install", identifier, "--yes"],
+            "skills-install",
+        )
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("Failed to spawn skills install")
@@ -9251,6 +9481,123 @@ def _resolve_profile_dir(name: str) -> Path:
     return profiles_mod.get_profile_dir(name)
 
 
+def _profile_cli_args(profile: Optional[str]) -> List[str]:
+    """Return ``["-p", <name>]`` for a validated non-default profile.
+
+    Hub install/uninstall/update and tools post-setup run in a fresh ``clawk``
+    subprocess; ``-p`` in the child's argv is the only mechanism that reaches
+    import-time-bound globals like ``skills_hub.SKILLS_DIR``. Empty/"current"/
+    "default" means the dashboard's own profile (no args, legacy behavior).
+    Raises HTTPException(404) for an unknown profile.
+    """
+
+    requested = (profile or "").strip()
+
+    if not requested or requested.lower() in {"current", "default"}:
+        return []
+
+    from clawk_cli import profiles as profiles_mod
+
+    _resolve_profile_dir(requested)
+
+    return ["-p", profiles_mod.normalize_profile_name(requested)]
+
+
+_SKILLS_PROFILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _profile_scope(profile: Optional[str]):
+    """Scope config + skill-directory resolution to ``profile`` for one request.
+
+    Two seams must be redirected for skills/toolsets endpoints:
+
+    1. ``load_config``/``save_config`` resolve ``get_clawk_home()`` at call
+       time — the context-local override from ``set_clawk_home_override``
+       reaches them (same pattern as ``_write_profile_model``).
+    2. ``tools.skills_tool`` and ``tools.skill_manager_tool`` bind
+       ``SKILLS_DIR`` at import time, so the override CANNOT reach them.
+       Temporarily retarget both under a lock and restore them
+       immediately after.
+
+    ``profile`` of None/""/"current" means "the dashboard's own profile" —
+    config resolution is untouched, but the skill-module globals are still
+    retargeted to the *current* ``get_clawk_home()`` so writes land in the
+    live home even when the import-time binding is stale (e.g. the process
+    imported the modules before a CLAWK_HOME override, or under test
+    isolation).
+    """
+    requested = (profile or "").strip()
+
+    from clawk_constants import (
+        get_clawk_home,
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+    from tools import skills_tool as _skills_tool
+    from tools import skill_manager_tool as _skill_mgr
+
+    token = None
+    if not requested or requested.lower() == "current":
+        profile_dir = get_clawk_home()
+    else:
+        profile_dir = _resolve_profile_dir(requested)
+        token = set_clawk_home_override(str(profile_dir))
+
+    with _SKILLS_PROFILE_LOCK:
+        old_home = _skills_tool.CLAWK_HOME
+        old_skills_dir = _skills_tool.SKILLS_DIR
+        old_mgr_home = _skill_mgr.CLAWK_HOME
+        old_mgr_skills_dir = _skill_mgr.SKILLS_DIR
+        _skills_tool.CLAWK_HOME = profile_dir
+        _skills_tool.SKILLS_DIR = profile_dir / "skills"
+        _skill_mgr.CLAWK_HOME = profile_dir
+        _skill_mgr.SKILLS_DIR = profile_dir / "skills"
+        try:
+            yield profile_dir if token is not None else None
+        finally:
+            _skills_tool.CLAWK_HOME = old_home
+            _skills_tool.SKILLS_DIR = old_skills_dir
+            _skill_mgr.CLAWK_HOME = old_mgr_home
+            _skill_mgr.SKILLS_DIR = old_mgr_skills_dir
+            if token is not None:
+                reset_clawk_home_override(token)
+
+
+@contextmanager
+def _config_profile_scope(profile: Optional[str]):
+    """Await-safe, config-only profile scope for handlers that ``await``.
+
+    Unlike ``_profile_scope`` this touches ONLY the context-local
+    ``set_clawk_home_override`` contextvar — it does NOT swap the
+    process-global ``skills_tool``/``skill_manager`` module attributes.
+    Those globals are shared across all event-loop tasks, so holding them
+    across an ``await`` lets a concurrent skills request restore THIS
+    request's profile dir on its ``finally`` (cross-contamination). The
+    contextvar override is task-local and survives an ``await`` cleanly,
+    which is all endpoints that resolve ``get_clawk_home()`` at call time
+    (config, env, gateway status) actually need.
+
+    None/""/"current" means the dashboard's own profile — no override.
+    """
+    requested = (profile or "").strip()
+    if not requested or requested.lower() == "current":
+        yield None
+        return
+
+    from clawk_constants import (
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+
+    profile_dir = _resolve_profile_dir(requested)
+    token = set_clawk_home_override(str(profile_dir))
+    try:
+        yield profile_dir
+    finally:
+        reset_clawk_home_override(token)
+
+
 def _profile_setup_command(name: str) -> str:
     """Return the shell command used to configure a profile in the CLI."""
 
@@ -9291,6 +9638,72 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
 
     finally:
         reset_clawk_home_override(token)
+
+
+def _write_profile_mcp_servers(
+    profile_dir: Path, servers: "List[MCPServerCreate]"
+) -> int:
+    """Write MCP server entries into a specific profile's config.yaml.
+
+    Exfiltration-shaped entries (shell interpreter + network egress, #45620)
+    are skipped fail-closed and never reach the profile config. Returns the
+    number of servers actually written.
+
+    Scopes ``load_config``/``save_config`` to ``profile_dir`` via the
+    context-local CLAWK_HOME override so the write lands in the target
+    profile rather than the dashboard process's active profile.
+    """
+
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    written = 0
+
+    token = set_clawk_home_override(str(profile_dir))
+
+    try:
+        cfg = load_config()
+
+        mcp_servers = cfg.setdefault("mcp_servers", {})
+
+        for srv in servers:
+            server_config: Dict[str, Any] = {}
+
+            if srv.url:
+                server_config["url"] = srv.url.strip()
+
+            if srv.command:
+                server_config["command"] = srv.command.strip()
+
+                if srv.args:
+                    server_config["args"] = list(srv.args)
+
+            if srv.env:
+                server_config["env"] = dict(srv.env)
+
+            if srv.auth:
+                server_config["auth"] = srv.auth
+
+            if validate_mcp_server_entry(srv.name, server_config):
+                _log.warning(
+                    "Skipping suspicious MCP server '%s' for profile %s",
+                    srv.name,
+                    profile_dir,
+                )
+
+                continue
+
+            mcp_servers[srv.name] = server_config
+
+            written += 1
+
+        save_config(cfg)
+
+    finally:
+        reset_clawk_home_override(token)
+
+    return written
 
 
 @app.get("/api/profiles")
@@ -9730,19 +10143,22 @@ class SkillToggle(BaseModel):
 
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/skills")
-async def get_skills():
+async def get_skills(profile: Optional[str] = None):
 
     from tools.skills_tool import _find_all_skills
 
     from clawk_cli.skills_config import get_disabled_skills
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    skills = _find_all_skills(skip_disabled=True)
+        skills = _find_all_skills(skip_disabled=True)
 
     for s in skills:
         s["enabled"] = s["name"] not in disabled
@@ -9751,27 +10167,136 @@ async def get_skills():
 
 
 @app.put("/api/skills/toggle")
-async def toggle_skill(body: SkillToggle):
+async def toggle_skill(body: SkillToggle, profile: Optional[str] = None):
 
     from clawk_cli.skills_config import get_disabled_skills, save_disabled_skills
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    if body.enabled:
-        disabled.discard(body.name)
+        if body.enabled:
+            disabled.discard(body.name)
 
-    else:
-        disabled.add(body.name)
+        else:
+            disabled.add(body.name)
 
-    save_disabled_skills(config, disabled)
+        save_disabled_skills(config, disabled)
 
     return {"ok": True, "name": body.name, "enabled": body.enabled}
 
 
+class SkillCreate(BaseModel):
+    name: str
+
+    content: str
+
+    category: Optional[str] = None
+
+    profile: Optional[str] = None
+
+
+class SkillContentUpdate(BaseModel):
+    name: str
+
+    content: str
+
+    profile: Optional[str] = None
+
+
+def _clear_skills_prompt_cache() -> None:
+    """Best-effort: invalidate the skills system-prompt snapshot after a write.
+
+    Mirrors what ``skill_manage`` does so a dashboard-authored skill is picked
+    up by the next session without a manual cache reset.
+    """
+
+    try:
+        from agent.prompt_builder import clear_skills_system_prompt_cache
+
+        clear_skills_system_prompt_cache(clear_snapshot=True)
+
+    except Exception:
+        pass
+
+
+@app.get("/api/skills/content")
+async def get_skill_content(name: str, profile: Optional[str] = None):
+    """Return the raw SKILL.md text for a skill, for the dashboard editor."""
+
+    from tools.skill_manager_tool import _find_skill
+
+    with _profile_scope(profile):
+        found = _find_skill(name)
+
+        if not found:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+
+        skill_md = found["path"] / "SKILL.md"
+
+        if not skill_md.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Skill '{name}' has no SKILL.md."
+            )
+
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return {"name": name, "content": content, "path": str(skill_md)}
+
+
+@app.post("/api/skills")
+async def create_skill(body: SkillCreate):
+    """Create a new custom skill (SKILL.md) from the dashboard editor.
+
+    Calls the same validated write path as the agent's ``skill_manage``
+    tool (frontmatter validation, name/category validation, size limit,
+    optional security scan) — but bypasses the agent write-approval gate:
+    a write from the authenticated dashboard IS the user acting directly.
+    """
+
+    from tools.skill_manager_tool import _create_skill
+
+    with _profile_scope(body.profile):
+        result = _create_skill(body.name, body.content, body.category or None)
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to create skill.")
+        )
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
+@app.put("/api/skills/content")
+async def update_skill_content(body: SkillContentUpdate):
+    """Replace the SKILL.md of an existing skill (full rewrite) from the editor."""
+
+    from tools.skill_manager_tool import _edit_skill
+
+    with _profile_scope(body.profile):
+        result = _edit_skill(body.name, body.content)
+
+    if not result.get("success"):
+        err = result.get("error", "Failed to update skill.")
+
+        status = 404 if "not found" in str(err).lower() else 400
+
+        raise HTTPException(status_code=status, detail=err)
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
 @app.get("/api/tools/toolsets")
-async def get_toolsets():
+async def get_toolsets(profile: Optional[str] = None):
 
     from clawk_cli.tools_config import (
         _get_effective_configurable_toolsets,
@@ -9782,13 +10307,14 @@ async def get_toolsets():
 
     from toolsets import resolve_toolset
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    enabled_toolsets = _get_platform_tools(
-        config,
-        "cli",
-        include_default_mcp_servers=False,
-    )
+        enabled_toolsets = _get_platform_tools(
+            config,
+            "cli",
+            include_default_mcp_servers=False,
+        )
 
     result = []
 
@@ -9817,9 +10343,11 @@ async def get_toolsets():
 class ToolsetToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/tools/toolsets/{name}")
-async def toggle_toolset(name: str, body: ToolsetToggle):
+async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] = None):
     """Enable/disable a configurable toolset for the desktop (cli) platform.
 
 
@@ -9828,7 +10356,7 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
 
     helper the CLI ``clawk tools`` picker uses, so the GUI and CLI stay in
 
-    lockstep. Returns 400 for unknown toolset keys.
+    lockstep. Returns 400 for unknown toolset keys, 404 for unknown profile.
 
     """
 
@@ -9843,17 +10371,20 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
     if name not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    enabled = set(_get_platform_tools(config, "cli", include_default_mcp_servers=False))
+        enabled = set(
+            _get_platform_tools(config, "cli", include_default_mcp_servers=False)
+        )
 
-    if body.enabled:
-        enabled.add(name)
+        if body.enabled:
+            enabled.add(name)
 
-    else:
-        enabled.discard(name)
+        else:
+            enabled.discard(name)
 
-    _save_platform_tools(config, "cli", enabled)
+        _save_platform_tools(config, "cli", enabled)
 
     return {"ok": True, "name": name, "enabled": body.enabled}
 
@@ -9987,6 +10518,77 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
     return {"ok": True, "name": name, "provider": body.provider}
 
 
+class ToolsetPostSetup(BaseModel):
+    key: str
+
+    profile: Optional[str] = None
+
+
+@app.post("/api/tools/toolsets/{name}/post-setup")
+async def run_toolset_post_setup(
+    name: str, body: ToolsetPostSetup, profile: Optional[str] = None
+):
+    """Spawn a provider's post-setup install hook as a background action.
+
+
+
+    Post-setup hooks (npm install for browser/Camofox, pip install for
+
+    KittenTTS/Piper/ddgs, cua-driver fetch, etc.) are long-running and
+
+    text-output, so this follows the spawn-action pattern: it launches
+
+    ``clawk tools post-setup <key>`` and the frontend tails the log via
+
+    ``GET /api/actions/tools-post-setup/status``. The ``key`` is validated
+
+    against the declared post-setup allowlist before spawning. Returns 400
+
+    for unknown toolset or post-setup key.
+
+
+
+    ``profile`` spawns the hook as ``clawk -p <profile> tools post-setup`` so
+
+    hooks that read config or write per-profile state see the same CLAWK_HOME
+
+    the rest of the drawer's writes targeted.
+
+    """
+
+    from clawk_cli.tools_config import (
+        _get_effective_configurable_toolsets,
+        valid_post_setup_keys,
+    )
+
+    valid_ts = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
+
+    if name not in valid_ts:
+        raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
+
+    if body.key not in valid_post_setup_keys():
+        raise HTTPException(
+            status_code=400, detail=f"Unknown post-setup key: {body.key}"
+        )
+
+    try:
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["tools", "post-setup", body.key],
+            "tools-post-setup",
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        _log.exception("Failed to spawn tools post-setup")
+
+        raise HTTPException(status_code=500, detail=f"Failed to run post-setup: {exc}")
+
+    return {"ok": True, "pid": proc.pid, "name": "tools-post-setup", "key": body.key}
+
+
 # ---------------------------------------------------------------------------
 
 # Raw YAML config endpoint
@@ -9997,20 +10599,29 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
 class RawConfigUpdate(BaseModel):
     yaml_text: str
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/config/raw")
-async def get_config_raw():
+async def get_config_raw(profile: Optional[str] = None):
+    """Raw config.yaml text plus its resolved path.
 
-    path = get_config_path()
+    ``path`` is resolved inside ``_profile_scope`` so the Config page header
+    shows the file the switched profile actually reads/writes, not the
+    dashboard process's own profile.
+    """
+
+    with _profile_scope(profile):
+        path = get_config_path()
 
     if not path.exists():
-        return {"yaml": ""}
+        return {"yaml": "", "path": str(path)}
 
-    return {"yaml": path.read_text(encoding="utf-8")}
+    return {"yaml": path.read_text(encoding="utf-8"), "path": str(path)}
 
 
 @app.put("/api/config/raw")
-async def update_config_raw(body: RawConfigUpdate):
+async def update_config_raw(body: RawConfigUpdate, profile: Optional[str] = None):
 
     try:
         parsed = yaml.safe_load(body.yaml_text)
@@ -10018,7 +10629,8 @@ async def update_config_raw(body: RawConfigUpdate):
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="YAML must be a mapping")
 
-        save_config(parsed)
+        with _profile_scope(body.profile or profile):
+            save_config(parsed)
 
         return {"ok": True}
 
@@ -10328,28 +10940,815 @@ async def get_models_analytics(days: int = 30):
 import re
 
 
-# PTY bridge is POSIX-only (depends on fcntl/termios/ptyprocess).  On native
+class ManagedFileUpload(BaseModel):
+    path: str
+    data_url: str
+    overwrite: bool = True
 
-# Windows the import raises; catch and leave PtyBridge=None so the rest of
 
-# the dashboard (sessions, jobs, metrics, config editor) still loads and the
+class ManagedDirectoryCreate(BaseModel):
+    path: str
 
-# /api/pty endpoint cleanly refuses with a WSL-suggested message.
 
-try:
-    from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
+class ManagedFileDelete(BaseModel):
+    path: str
+    recursive: bool = False
 
-    _PTY_BRIDGE_AVAILABLE = True
 
-except ImportError as _pty_import_err:  # pragma: no cover - Windows-only path
-    PtyBridge = None  # type: ignore[assignment]
+_MEDIA_MAX_BYTES = 25 * 1024 * 1024
+_MANAGED_FILES_ROOT_ENV = "CLAWK_DASHBOARD_FILES_ROOT"
+_MANAGED_FILE_MAX_BYTES = 100 * 1024 * 1024
+_HOSTED_MANAGED_FILES_ROOT = Path("/opt/data")
 
-    _PTY_BRIDGE_AVAILABLE = False
 
-    class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
-        """Stub on platforms where pty_bridge can't be imported."""
+@dataclass(frozen=True)
+class ManagedFilesPolicy:
+    default_path: Path
+    locked_root: Path | None
+    can_change_path: bool
 
+
+_FS_READDIR_HIDDEN = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".cache",
+    ".next",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+}
+_FS_DATA_URL_MAX_BYTES = 16 * 1024 * 1024
+_FS_TEXT_SOURCE_MAX_BYTES = 64 * 1024 * 1024
+_FS_TEXT_PREVIEW_MAX_BYTES = 512 * 1024
+_FS_PREVIEW_LANGUAGE_BY_EXT = {
+    ".c": "c",
+    ".conf": "ini",
+    ".cpp": "cpp",
+    ".css": "css",
+    ".csv": "csv",
+    ".go": "go",
+    ".graphql": "graphql",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".html": "html",
+    ".java": "java",
+    ".js": "javascript",
+    ".json": "json",
+    ".jsx": "jsx",
+    ".kt": "kotlin",
+    ".lua": "lua",
+    ".md": "markdown",
+    ".mjs": "javascript",
+    ".py": "python",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".sh": "shell",
+    ".sql": "sql",
+    ".svg": "xml",
+    ".toml": "toml",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".txt": "text",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".zsh": "shell",
+}
+_FS_MIME_TYPES = {
+    ".avi": "video/x-msvideo",
+    ".bmp": "image/bmp",
+    ".flac": "audio/flac",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".m4a": "audio/mp4",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg; codecs=opus",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
+    ".webp": "image/webp",
+}
+
+
+def _fs_path(raw_path: str) -> Path:
+    raw = str(raw_path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Path is required")
+    if "\0" in raw:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    try:
+        if raw.lower().startswith("file:"):
+            parsed = urllib.parse.urlparse(raw)
+            if parsed.netloc and parsed.netloc not in {"", "localhost"}:
+                raise ValueError
+            raw = urllib.request.url2pathname(parsed.path)
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        return candidate.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+
+def _fs_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in _FS_MIME_TYPES:
+        return _FS_MIME_TYPES[suffix]
+    guessed, _ = mimetypes.guess_type(str(path))
+    return guessed or "application/octet-stream"
+
+
+def _fs_looks_binary(data: bytes) -> bool:
+    if not data:
+        return False
+    if b"\0" in data:
+        return True
+    suspicious = sum(1 for byte in data if byte < 32 and byte not in {9, 10, 13})
+    return suspicious / len(data) > 0.12
+
+
+def _fs_regular_file(path: Path) -> tuple[Path, os.stat_result]:
+    target = _fs_path(str(path))
+    try:
+        st = target.stat()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except NotADirectoryError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid path")
+    if stat.S_ISDIR(st.st_mode):
+        raise HTTPException(status_code=400, detail="Path points to a directory")
+    if not stat.S_ISREG(st.st_mode):
+        raise HTTPException(status_code=400, detail="Only regular files can be read")
+    return target, st
+
+
+def _fs_find_git_root(start: Path) -> str | None:
+    directory = start
+    for _ in range(50):
+        try:
+            if (directory / ".git").exists():
+                return str(directory)
+        except OSError:
+            return None
+        parent = directory.parent
+        if parent == directory:
+            return None
+        directory = parent
+    return None
+
+
+def _fs_default_cwd() -> str:
+    cfg_terminal = load_config().get("terminal") or {}
+    raw = str(cfg_terminal.get("cwd") or os.environ.get("TERMINAL_CWD") or "").strip()
+    if raw and raw not in {".", "auto", "cwd"}:
+        try:
+            candidate = Path(raw).expanduser().resolve(strict=False)
+            if candidate.is_dir():
+                return str(candidate)
+        except (OSError, RuntimeError):
+            pass
+    return str(Path.cwd())
+
+
+def _fs_git_branch(cwd: str) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _media_serve_roots() -> list[Path]:
+    """Directories ``GET /api/media`` is allowed to read from.
+
+    Confined to where the agent and attach pipeline actually write media on the
+    gateway host — its images dir and cache subtree. This stops an authenticated
+    client from reading image-extension files anywhere on disk (e.g. a renamed
+    key or a screenshot outside the cache) merely because the suffix passes the
+    allowlist.
+    """
+    home = get_clawk_home()
+    roots = [home / "images", home / "screenshots", home / "cache"]
+    out: list[Path] = []
+    for root in roots:
+        try:
+            out.append(root.resolve())
+        except (OSError, RuntimeError):
+            continue
+    return out
+
+
+@app.get("/api/media")
+async def get_media(path: str):
+    """Return a gateway-local image file as a base64 data URL.
+
+    Lets remote clients (the desktop app over the network, or the web dashboard
+    in a browser) display images the agent wrote to *this* machine's filesystem
+    — they can't read the gateway's local disk directly.
+
+    Auth-gated by the session token like every other /api route. Restricted to
+    an image-extension allowlist, a size cap, AND the gateway's own media roots
+    (resolved, symlink-safe) so it can't be used to read arbitrary files.
+    """
+    try:
+        target = Path(path).expanduser().resolve()
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    if target.suffix.lower() not in _MEDIA_CONTENT_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported media type")
+
+    roots = _media_serve_roots()
+    if not any(target == root or root in target.parents for root in roots):
+        raise HTTPException(status_code=403, detail="Path outside media roots")
+
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.stat().st_size > _MEDIA_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+
+    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    return {
+        "data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"
+    }
+
+
+def _canonical_path(path: Path, *, require_exists: bool = False) -> Path:
+    try:
+        return path.expanduser().resolve(strict=require_exists)
+    except FileNotFoundError:
+        if require_exists:
+            raise HTTPException(status_code=404, detail="Path not found")
+        raise
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+
+def _ensure_managed_root(raw_path: str | Path) -> Path:
+    root = Path(raw_path).expanduser()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        resolved = root.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Managed files root is unavailable: {exc}"
+        )
+    if not resolved.is_dir():
+        raise HTTPException(
+            status_code=500, detail="Managed files root is not a directory"
+        )
+    return resolved
+
+
+def _path_is_under(root: Path, target: Path) -> bool:
+    return target == root or root in target.parents
+
+
+def _path_text(raw_path: str | None) -> str:
+    text = str(raw_path or "").strip()
+    if "\x00" in text:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return text
+
+
+def _local_dashboard_request(request: Request) -> bool:
+    if getattr(request.app.state, "auth_required", False):
+        return False
+    host = (request.url.hostname or "").lower()
+    client_host = (request.client.host if request.client else "").lower()
+    local_hosts = {"", "localhost", "127.0.0.1", "::1", "testserver", "testclient"}
+    return host in local_hosts or client_host in local_hosts
+
+
+def _default_clawk_root_is_opt_data() -> bool:
+    raw = os.environ.get("CLAWK_HOME", "").strip()
+    if not raw:
+        return False
+    try:
+        from clawk_constants import get_default_clawk_root
+
+        root = get_default_clawk_root().expanduser().resolve(strict=False)
+    except (OSError, RuntimeError):
+        root = Path(raw).expanduser().resolve(strict=False)
+    return root == _HOSTED_MANAGED_FILES_ROOT
+
+
+def _dashboard_local_update_managed_externally() -> bool:
+    """Return true when the dashboard should not offer ``clawk update``.
+
+    Containerized dashboards are updated by the outer launcher/image, not by an
+    in-browser local update action. Keep this dashboard capability separate
+    from install-method detection: manual git/pip installs inside containers can
+    still behave like their actual install method in the CLI.
+
+    However, when the install method is ``git`` (a bind-mounted checkout inside
+    a container — e.g. the clawk-webui image sharing the Clawksis source tree),
+    the dashboard's ``clawk update`` button is the correct update path and
+    should not be suppressed. Other containerized install methods remain
+    externally managed unless their apply path is proven safe inside the
+    running container filesystem.
+    """
+    if _default_clawk_root_is_opt_data():
+        return True
+    try:
+        from clawk_constants import is_container
+
+        if not is_container():
+            return False
+    except Exception:
+        return False
+    # We are inside a container, but the install may still be self-managed.
+    # If the install method is git, the dashboard update button works against
+    # the mounted checkout and should be offered. Keep pip blocked inside
+    # containers: its apply path mutates the running container filesystem and
+    # is not the bind-mounted checkout case this gate is meant to recover.
+    try:
+        method = detect_install_method(PROJECT_ROOT)
+        if method == "git":
+            return False
+    except Exception:
         pass
+    return True
+
+
+def _managed_files_policy(
+    request: Request, *, create_root: bool = True
+) -> ManagedFilesPolicy:
+    raw_forced_root = os.environ.get(_MANAGED_FILES_ROOT_ENV, "").strip()
+    if raw_forced_root:
+        root = (
+            _ensure_managed_root(raw_forced_root)
+            if create_root
+            else _canonical_path(Path(raw_forced_root))
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
+
+    # Remote/OAuth access does not imply a hosted container. Users can expose a
+    # local dashboard through the auth gate (for example a macOS launchd install)
+    # and still expect the Files page to browse their local home directory. Lock
+    # to /opt/data only when the installation's Clawksis root is actually /opt/data
+    # (the container/hosted layout) or when CLAWK_DASHBOARD_FILES_ROOT is set.
+    if _default_clawk_root_is_opt_data():
+        root = (
+            _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT)
+            if create_root
+            else _HOSTED_MANAGED_FILES_ROOT
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
+
+    home = _canonical_path(Path.home())
+    return ManagedFilesPolicy(default_path=home, locked_root=None, can_change_path=True)
+
+
+def _resolve_managed_path(
+    raw_path: str | None,
+    request: Request,
+    *,
+    for_write: bool = False,
+) -> tuple[ManagedFilesPolicy, Path, str]:
+    policy = _managed_files_policy(request)
+    text = _path_text(raw_path)
+    root = policy.locked_root
+
+    if root is not None and (not text or text in {".", "/"}):
+        candidate = root
+    elif not text:
+        candidate = policy.default_path
+    else:
+        candidate = Path(text).expanduser()
+        if root is not None and not candidate.is_absolute():
+            if any(part == ".." for part in candidate.parts):
+                raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+            candidate = root / candidate
+        elif not candidate.is_absolute():
+            raise HTTPException(status_code=400, detail="Path must be absolute")
+
+    if ".." in candidate.parts:
+        raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+
+    if for_write and not candidate.exists():
+        parent = _canonical_path(candidate.parent)
+        resolved = parent / candidate.name
+    else:
+        resolved = _canonical_path(candidate, require_exists=not for_write)
+
+    if root is not None and not _path_is_under(root, resolved):
+        raise HTTPException(status_code=403, detail="Path outside managed files root")
+
+    return policy, resolved, str(resolved)
+
+
+def _managed_response_meta(policy: ManagedFilesPolicy) -> Dict[str, Any]:
+    locked_root = str(policy.locked_root) if policy.locked_root is not None else None
+    return {
+        "root": locked_root,
+        "locked_root": locked_root,
+        "can_change_path": policy.can_change_path,
+    }
+
+
+def _managed_file_entry(policy: ManagedFilesPolicy, target: Path) -> Dict[str, Any]:
+    try:
+        resolved = target.resolve()
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if policy.locked_root is not None and not _path_is_under(
+        policy.locked_root, resolved
+    ):
+        raise HTTPException(status_code=403, detail="Path outside managed files root")
+
+    try:
+        st = resolved.stat()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat path: {exc}")
+
+    is_dir = resolved.is_dir()
+    mime_type = (
+        None
+        if is_dir
+        else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    )
+    return {
+        "name": target.name or resolved.name or str(resolved),
+        "path": str(resolved),
+        "is_directory": is_dir,
+        "size": None if is_dir else st.st_size,
+        "mtime": st.st_mtime,
+        "mime_type": mime_type,
+    }
+
+
+def _decode_data_url(data_url: str) -> tuple[bytes, str]:
+    text = (data_url or "").strip()
+    if not text.startswith("data:") or "," not in text:
+        raise HTTPException(status_code=400, detail="Upload payload must be a data URL")
+    header, encoded = text.split(",", 1)
+    mime_type = header[5:].split(";", 1)[0] or "application/octet-stream"
+    if ";base64" not in header:
+        raise HTTPException(
+            status_code=400, detail="Upload payload must be base64 encoded"
+        )
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(
+            status_code=400, detail="Upload payload is not valid base64"
+        )
+    if len(data) > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+    return data, mime_type
+
+
+@app.get("/api/files")
+async def list_managed_files(request: Request, path: Optional[str] = None):
+    policy, target, display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+
+    try:
+        entries = [_managed_file_entry(policy, child) for child in target.iterdir()]
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Directory is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read directory: {exc}")
+
+    entries.sort(key=lambda item: (not item["is_directory"], str(item["name"]).lower()))
+    locked_root = policy.locked_root
+    parent = None
+    if target.parent != target and (locked_root is None or target != locked_root):
+        parent = str(target.parent)
+    return {
+        "path": display_path,
+        "parent": parent,
+        "entries": entries,
+        **_managed_response_meta(policy),
+    }
+
+
+@app.get("/api/files/read")
+async def read_managed_file(request: Request, path: str):
+    policy, target, display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    try:
+        size = target.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {exc}")
+    if size > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+
+    mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    try:
+        encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read file: {exc}")
+
+    return {
+        "name": target.name,
+        "path": display_path,
+        "size": size,
+        "mime_type": mime_type,
+        "data_url": f"data:{mime_type};base64,{encoded}",
+        **_managed_response_meta(policy),
+    }
+
+
+@app.get("/api/files/download")
+async def download_managed_file(request: Request, path: str):
+    """Stream a managed file as an attachment download.
+
+    Remote clients (desktop app, browser dashboard) open agent-written files
+    that live on *this* gateway's disk, not theirs. Auth-gated like every other
+    managed-files route — ``auth_middleware`` additionally accepts the session
+    token as a ``?token=`` query param here so a shell/browser-opened download
+    (which can't set the session header) still authenticates. See ``/api/pty``
+    for the same query-token precedent.
+    """
+    policy, target, _display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    try:
+        size = target.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {exc}")
+    if size > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+
+    mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+
+    return FileResponse(
+        path=str(target),
+        media_type=mime_type,
+        filename=target.name,
+        content_disposition_type="attachment",
+    )
+
+
+@app.post("/api/files/upload")
+async def upload_managed_file(payload: ManagedFileUpload, request: Request):
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
+    if target.exists() and target.is_dir():
+        raise HTTPException(
+            status_code=409, detail="A directory already exists at that path"
+        )
+    if target.exists() and not payload.overwrite:
+        raise HTTPException(status_code=409, detail="File already exists")
+
+    data, _mime_type = _decode_data_url(payload.data_url)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not writable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not write file: {exc}")
+
+    return {
+        "ok": True,
+        "entry": _managed_file_entry(policy, target),
+        "path": display_path,
+        **_managed_response_meta(policy),
+    }
+
+
+# Stream uploads to disk in fixed-size chunks. The legacy JSON endpoint above
+# buffers the whole file as a base64 data URL in a JSON body, which (a) inflates
+# the payload ~33%, (b) holds the entire file (plus its decoded copy) in memory,
+# and (c) reliably trips upstream proxy body-size/timeout limits with a 502 on
+# large backup archives (NS-501). This multipart endpoint reads the request body
+# in 1 MiB chunks straight to a temp file, enforces the size cap as it goes, and
+# atomically renames into place — constant memory, no base64 inflation.
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+# NOTE: the multipart streaming upload endpoint (/api/files/upload-stream)
+# is intentionally omitted here — it requires the optional ``python-multipart``
+# dependency, which is not part of the base install. The dashboard uploads via
+# the base64 JSON path (/api/files/upload) instead.
+
+
+@app.post("/api/files/mkdir")
+async def create_managed_directory(payload: ManagedDirectoryCreate, request: Request):
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
+    if target.exists() and not target.is_dir():
+        raise HTTPException(
+            status_code=409, detail="A file already exists at that path"
+        )
+
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Directory is not writable")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Could not create directory: {exc}"
+        )
+
+    return {
+        "ok": True,
+        "entry": _managed_file_entry(policy, target),
+        "path": display_path,
+        **_managed_response_meta(policy),
+    }
+
+
+@app.delete("/api/files")
+async def delete_managed_file(payload: ManagedFileDelete, request: Request):
+    policy, target, display_path = _resolve_managed_path(payload.path, request)
+    if policy.locked_root is not None and target == policy.locked_root:
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the managed files root"
+        )
+    if target.parent == target:
+        raise HTTPException(status_code=400, detail="Cannot delete the filesystem root")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+
+    try:
+        if target.is_dir():
+            if payload.recursive:
+                shutil.rmtree(target)
+            else:
+                target.rmdir()
+        else:
+            target.unlink()
+    except OSError as exc:
+        status_code = 409 if target.is_dir() and not payload.recursive else 500
+        raise HTTPException(
+            status_code=status_code, detail=f"Could not delete path: {exc}"
+        )
+
+    return {"ok": True, "path": display_path, **_managed_response_meta(policy)}
+
+
+@app.get("/api/fs/list")
+async def fs_list(path: str):
+    target = _fs_path(path)
+    try:
+        entries = []
+        with os.scandir(target) as scan:
+            for entry in scan:
+                if entry.name in _FS_READDIR_HIDDEN:
+                    continue
+                entries.append({
+                    "name": entry.name,
+                    "path": str(target / entry.name),
+                    "isDirectory": entry.is_dir(follow_symlinks=False),
+                })
+        entries.sort(
+            key=lambda item: (
+                not item["isDirectory"],
+                item["name"].lower(),
+                item["name"],
+            )
+        )
+        return {"entries": entries}
+    except FileNotFoundError:
+        return {"entries": [], "error": "ENOENT"}
+    except NotADirectoryError:
+        return {"entries": [], "error": "ENOTDIR"}
+    except PermissionError:
+        return {"entries": [], "error": "EACCES"}
+    except OSError as exc:
+        return {"entries": [], "error": getattr(exc, "strerror", None) or "read-error"}
+
+
+@app.get("/api/fs/read-text")
+async def fs_read_text(path: str):
+    target, st = _fs_regular_file(_fs_path(path))
+    if st.st_size > _FS_TEXT_SOURCE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    bytes_to_read = min(st.st_size, _FS_TEXT_PREVIEW_MAX_BYTES)
+    try:
+        with target.open("rb") as handle:
+            data = handle.read(bytes_to_read)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "File read failed")
+    return {
+        "binary": _fs_looks_binary(data[:4096]),
+        "byteSize": st.st_size,
+        "language": _FS_PREVIEW_LANGUAGE_BY_EXT.get(target.suffix.lower(), "text"),
+        "mimeType": _fs_mime_type(target),
+        "path": str(target),
+        "text": data.decode("utf-8", errors="replace"),
+        "truncated": st.st_size > _FS_TEXT_PREVIEW_MAX_BYTES,
+    }
+
+
+@app.get("/api/fs/read-data-url")
+async def fs_read_data_url(path: str):
+    target, st = _fs_regular_file(_fs_path(path))
+    if st.st_size > _FS_DATA_URL_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    try:
+        encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "File read failed")
+    return {"dataUrl": f"data:{_fs_mime_type(target)};base64,{encoded}"}
+
+
+@app.get("/api/fs/git-root")
+async def fs_git_root(path: str):
+    target = _fs_path(path)
+    try:
+        st = target.stat()
+        start = target if stat.S_ISDIR(st.st_mode) else target.parent
+    except OSError:
+        start = target
+    return {"root": _fs_find_git_root(start)}
+
+
+@app.get("/api/fs/default-cwd")
+async def fs_default_cwd():
+    cwd = _fs_default_cwd()
+    return {"cwd": cwd, "branch": _fs_git_branch(cwd)}
+
+
+# PTY bridge is platform-branched at import time: native Windows uses the
+# ConPTY backend (win_pty_bridge / pywinpty), POSIX uses the fcntl/termios one
+# (pty_bridge / ptyprocess).  Either native dependency may be missing, so each
+# branch catches ImportError and leaves PtyBridge=None so the rest of the
+# dashboard (sessions, jobs, metrics, config editor) still loads and the
+# /api/pty endpoint cleanly refuses with a platform-appropriate message.
+
+if sys.platform.startswith("win"):
+    try:
+        from clawk_cli.win_pty_bridge import (
+            WinPtyBridge as PtyBridge,
+            PtyUnavailableError,
+        )
+
+        _PTY_BRIDGE_AVAILABLE = True
+
+    except ImportError:  # pragma: no cover - pywinpty missing
+        PtyBridge = None  # type: ignore[assignment]
+
+        _PTY_BRIDGE_AVAILABLE = False
+
+        class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
+            """Stub when win_pty_bridge cannot be imported."""
+
+            pass
+
+else:
+    try:
+        from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
+
+        _PTY_BRIDGE_AVAILABLE = True
+
+    except ImportError:  # pragma: no cover - dev env without ptyprocess
+        PtyBridge = None  # type: ignore[assignment]
+
+        _PTY_BRIDGE_AVAILABLE = False
+
+        class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
+            """Stub on platforms where pty_bridge can't be imported."""
+
+            pass
 
 
 _RESIZE_RE = re.compile(rb"\x1b\[RESIZE:(\d+);(\d+)\]")
@@ -10721,6 +12120,7 @@ def _ws_auth_ok(ws: "WebSocket") -> bool:
 def _resolve_chat_argv(
     resume: Optional[str] = None,
     sidecar_url: Optional[str] = None,
+    profile: Optional[str] = None,
 ) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve the argv + cwd + env for the chat PTY.
 
@@ -10762,6 +12162,17 @@ def _resolve_chat_argv(
 
     from clawk_cli.main import PROJECT_ROOT, _make_tui_argv
 
+    # Resolve the requested profile BEFORE building argv so an unknown profile
+    # surfaces a clean 404 (the endpoint propagates it). A scoped chat points
+    # CLAWK_HOME at the profile dir so every spawned process (TUI + the
+    # tui_gateway.entry it launches) binds that profile's config/skills/state.
+    profile_dir: Optional[Path] = None
+
+    requested_profile = (profile or "").strip()
+
+    if requested_profile and requested_profile.lower() != "current":
+        profile_dir = _resolve_profile_dir(requested_profile)
+
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
 
     env = os.environ.copy()
@@ -10784,6 +12195,9 @@ def _resolve_chat_argv(
 
     env.setdefault("CLAWK_TUI_INLINE", "1")
 
+    if profile_dir is not None:
+        env["CLAWK_HOME"] = str(profile_dir)
+
     if resume:
         latest_resume, _latest_path = _session_latest_descendant(resume)
 
@@ -10795,8 +12209,13 @@ def _resolve_chat_argv(
     if sidecar_url:
         env["CLAWK_TUI_SIDECAR_URL"] = sidecar_url
 
-    if gateway_ws_url := _build_gateway_ws_url():
-        env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
+    # Profile-scoped chats must NOT attach to the dashboard's in-memory gateway —
+    # it runs under the dashboard's own profile. Without the attach URL,
+    # gatewayClient spawns its own ``tui_gateway.entry``, which inherits the
+    # profile CLAWK_HOME set above.
+    if profile_dir is None:
+        if gateway_ws_url := _build_gateway_ws_url():
+            env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
 
     return list(argv), str(cwd) if cwd else None, env
 
@@ -12539,7 +13958,7 @@ def _discover_dashboard_plugins() -> list:
     # ``clawk_cli/plugins.py`` and the documented user contract.
 
     if env_var_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
-        search_dirs.append((Path.cwd() / ".clawk" / "plugins", "project"))
+        search_dirs.append((Path.cwd() / ".clawksis" / "plugins", "project"))
 
     for plugins_root, source in search_dirs:
         if not plugins_root.is_dir():
@@ -13520,10 +14939,36 @@ def start_server(
 
     # we flip proxy_headers on for that mode.
 
-    uvicorn.run(
+    config = uvicorn.Config(
         app,
         host=host,
         port=port,
         log_level="warning",
         proxy_headers=bool(app.state.auth_required),
+        # WS keepalive pings so half-open connections (reverse-proxy 524, dropped
+        # tunnels) surface as WebSocketDisconnect into the reaping path instead
+        # of lingering as silent ghosts (#32377). uvicorn.run() doesn't let us
+        # set these cleanly, so drive uvicorn.Server directly.
+        ws_ping_interval=20.0,
+        ws_ping_timeout=20.0,
     )
+
+    server = uvicorn.Server(config)
+
+    async def _serve() -> None:
+        if not config.loaded:
+            config.load()
+
+        server.lifespan = config.lifespan_class(config)
+
+        await server.startup()
+
+        if server.should_exit:
+            return
+
+        await server.main_loop()
+
+        await server.shutdown()
+
+    with server.capture_signals():
+        asyncio.run(_serve())

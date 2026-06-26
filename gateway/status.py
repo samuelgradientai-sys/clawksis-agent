@@ -1333,7 +1333,7 @@ def clear_takeover_marker() -> None:
         pass
 
 
-def write_planned_stop_marker(target_pid: int) -> bool:
+def write_planned_stop_marker(target_pid: int, *, home: Optional[Path] = None) -> bool:
     """Record that ``target_pid`` is being stopped intentionally.
 
 
@@ -1343,6 +1343,13 @@ def write_planned_stop_marker(target_pid: int) -> bool:
     revive it. Service stop commands send the same SIGTERM, so the CLI writes
 
     this short-lived marker first to let the target process exit cleanly.
+
+
+
+    ``home`` overrides where the marker is written. The default (None) targets
+    the global CLAWK_HOME; pass a profile's home directory to plant the marker
+    for a specific profile gateway (so it consumes the marker via its own
+    CLAWK_HOME), e.g. when pausing every profile during ``clawk update``.
 
     """
 
@@ -1356,7 +1363,13 @@ def write_planned_stop_marker(target_pid: int) -> bool:
             "written_at": _utc_now_iso(),
         }
 
-        _write_json_file(_get_planned_stop_marker_path(), record)
+        path = (
+            home / _PLANNED_STOP_MARKER_FILENAME
+            if home is not None
+            else _get_planned_stop_marker_path()
+        )
+
+        _write_json_file(path, record)
 
         return True
 

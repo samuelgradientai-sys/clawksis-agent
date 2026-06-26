@@ -879,6 +879,14 @@ def _normalize_command_for_detection(command: str) -> str:
 
     command = unicodedata.normalize("NFKC", command)
 
+    # Strip shell backslash-escapes: r\m → rm. Prevents \-injection bypass.
+
+    command = re.sub(r"\\([^\n])", r"\1", command)
+
+    # Strip empty-string literals that split tokens: r''m → rm, r""m → rm.
+
+    command = re.sub(r"''|\"\"", "", command)
+
     # Fold the current user's resolved absolute home path into ~/ at detection
 
     # time so static user-sensitive patterns catch /home/alice/.bashrc the same
@@ -2288,6 +2296,11 @@ def check_all_command_guards(
                 "pattern_key": primary_key,
                 "pattern_keys": all_keys,
                 "description": combined_desc,
+                # Withhold the permanent "Always allow" option when a tirith
+                # content-security warning is present: broad permanent
+                # allowlisting of, e.g., a shortened-URL fetch is too risky.
+                # Plain dangerous-pattern approvals still offer it.
+                "allow_permanent": not has_tirith,
             }
 
             decision = _await_gateway_decision(

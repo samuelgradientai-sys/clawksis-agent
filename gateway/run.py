@@ -867,6 +867,109 @@ def _uses_telegram_observed_group_context(channel_prompt: Optional[str]) -> bool
     )
 
 
+# Persisted auto-continue notes are prepended to a live user message and then
+# stored verbatim in the transcript.  On replay they must not be re-fed to the
+# model as standing instructions: the interruption they described is long over.
+# Strip the leading ``[System note: ...]\n\n`` envelope and keep only the real
+# user text.  Only auto-continue notes are matched here (the marker text below);
+# other ``[System note: ...]`` injections are never persisted as user turns.
+_AUTO_CONTINUE_NOTE_PREFIX = "[System note:"
+
+_AUTO_CONTINUE_NOTE_MARKERS = (
+    "previous turn was interrupted",
+    "interrupted turn",
+    "pending tool outputs",
+)
+
+
+def _strip_persisted_auto_continue_note(content: Any) -> Any:
+    """Drop a leading persisted auto-continue ``[System note: ...]`` envelope.
+
+    Returns the original ``content`` untouched unless it is a string that opens
+    with an auto-continue system note followed by ``]\\n\\n`` and the real user
+    message.  Non-auto-continue ``[System note: ...]`` text is left intact.
+    """
+
+    if not isinstance(content, str):
+        return content
+
+    if not content.startswith(_AUTO_CONTINUE_NOTE_PREFIX):
+        return content
+
+    delimiter = "]\n\n"
+
+    delim_index = content.find(delimiter)
+
+    if delim_index == -1:
+        return content
+
+    note = content[: delim_index + 1]
+
+    if not any(marker in note for marker in _AUTO_CONTINUE_NOTE_MARKERS):
+        return content
+
+    return content[delim_index + len(delimiter) :]
+
+
+def _is_interrupted_tool_result(msg: Dict[str, Any]) -> bool:
+    """Return True for a tool result that records an interrupted command.
+
+    Interrupted in-flight tool loops leave a trailing tool result the agent
+    never processed (exit code 130 / ``[Command interrupted]``).  Replaying it
+    makes the model resume stale work, so the interrupted tail is dropped.
+    """
+
+    if msg.get("role") != "tool":
+        return False
+
+    content = msg.get("content")
+
+    if not isinstance(content, str):
+        return False
+
+    if "[Command interrupted]" in content:
+        return True
+
+    try:
+        parsed = json.loads(content)
+
+    except (ValueError, TypeError):
+        return False
+
+    return isinstance(parsed, dict) and parsed.get("exit_code") == 130
+
+
+def _drop_interrupted_tool_tail(
+    agent_history: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Remove a trailing interrupted assistant→tool block from replay history.
+
+    The tail shape is an assistant message bearing ``tool_calls`` followed by
+    one or more ``role == "tool"`` results.  When any of those trailing results
+    is an interruption marker, the whole block (assistant + its tool results) is
+    dropped so the next turn does not replay unfinished work.
+    """
+
+    if not agent_history or agent_history[-1].get("role") != "tool":
+        return agent_history
+
+    cut = len(agent_history)
+
+    while cut > 0 and agent_history[cut - 1].get("role") == "tool":
+        cut -= 1
+
+    # ``cut`` now points at the assistant turn that issued the tool calls.
+    if cut <= 0 or "tool_calls" not in agent_history[cut - 1]:
+        return agent_history
+
+    tail = agent_history[cut:]
+
+    if any(_is_interrupted_tool_result(m) for m in tail):
+        return agent_history[: cut - 1]
+
+    return agent_history
+
+
 def _build_gateway_agent_history(
     history: List[Dict[str, Any]],
     *,
@@ -946,6 +1049,11 @@ def _build_gateway_agent_history(
         elif content:
             # Simple text message - just need role and content.
 
+            if role == "user":
+                # Strip persisted auto-continue notes so a long-resolved
+                # interruption isn't replayed as a standing instruction.
+                content = _strip_persisted_auto_continue_note(content)
+
             if msg.get("mirror"):
                 mirror_src = msg.get("mirror_source", "another session")
 
@@ -954,6 +1062,10 @@ def _build_gateway_agent_history(
             entry = _build_replay_entry(role, content, msg)
 
             agent_history.append(entry)
+
+    # Drop an interrupted in-flight tool tail so the next turn doesn't resume
+    # stale work the agent never got to process.
+    agent_history = _drop_interrupted_tool_tail(agent_history)
 
     observed_context = "\n".join(observed_group_context).strip() or None
 
@@ -1041,6 +1153,11 @@ def _last_transcript_timestamp(history: Optional[List[Dict[str, Any]]]) -> Any:
 # from the final gateway reply.
 
 _AUTO_APPEND_MEDIA_TOOL_NAMES = {"text_to_speech", "text_to_speech_tool"}
+
+# Producer tools whose JSON result carries a local image path (no MEDIA: tag).
+# Their path is auto-appended so delivery doesn't depend on the model restating
+# it; remote URLs and failed generations are filtered out at extraction time.
+_AUTO_APPEND_IMAGE_TOOL_NAMES = {"image_generate"}
 
 
 # Extension-anchored MEDIA: matcher for tool results. Mirrors the dispatch-site
@@ -1139,10 +1256,42 @@ def _collect_auto_append_media_tags(
 
         call_id = str(msg.get("tool_call_id") or msg.get("call_id") or "")
 
-        if tool_name_by_call_id.get(call_id) not in _AUTO_APPEND_MEDIA_TOOL_NAMES:
-            continue
+        tool_name = tool_name_by_call_id.get(call_id)
 
         content = str(msg.get("content") or "")
+
+        # image_generate returns a JSON payload with a local path (no MEDIA: tag).
+        # Parse it and auto-append the first *local* path (host-deliverable path
+        # preferred over the sandbox path); skip failed generations and remote
+        # URLs, which aren't local files we can attach.
+        if tool_name in _AUTO_APPEND_IMAGE_TOOL_NAMES:
+            try:
+                payload = json.loads(content)
+
+            except (ValueError, TypeError):
+                payload = None
+
+            if isinstance(payload, dict) and payload.get("success"):
+                img_path = next(
+                    (
+                        str(p).strip()
+                        for p in (
+                            payload.get("host_image"),
+                            payload.get("image"),
+                            payload.get("agent_visible_image"),
+                        )
+                        if isinstance(p, str) and p.strip() and "://" not in p
+                    ),
+                    None,
+                )
+
+                if img_path and img_path not in history_media_paths:
+                    media_tags.append(f"MEDIA:{img_path}")
+
+            continue
+
+        if tool_name not in _AUTO_APPEND_MEDIA_TOOL_NAMES:
+            continue
 
         if "MEDIA:" not in content:
             continue
@@ -1169,10 +1318,27 @@ def _collect_auto_append_media_tags(
 
 
 def _ensure_ssl_certs() -> None:
-    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python."""
+    """Set SSL_CERT_FILE if the system doesn't expose CA certs to Python.
 
-    if "SSL_CERT_FILE" in os.environ:
-        return  # user already configured it
+    Windows startup paths (Desktop, Scheduled Tasks, installer children) can
+    occasionally inherit a stale SSL_CERT_FILE. Returning just because the
+    variable is present makes every later httpx/OpenAI client construction fail
+    with FileNotFoundError from ssl.load_verify_locations(). Treat a missing
+    path as unset and fall back to certifi instead.
+    """
+
+    configured_cert = os.environ.get("SSL_CERT_FILE")
+
+    if configured_cert:
+        if os.path.exists(configured_cert):
+            return  # user already configured it to a real file
+
+        logging.getLogger(__name__).warning(
+            "Ignoring stale SSL_CERT_FILE=%r because the path does not exist",
+            configured_cert,
+        )
+
+        os.environ.pop("SSL_CERT_FILE", None)
 
     import ssl
 
@@ -1788,6 +1954,87 @@ logger = logging.getLogger(__name__)
 _AGENT_PENDING_SENTINEL = object()
 
 
+def _resolve_runtime_max_tokens() -> int | None:
+    """Resolve the output-token cap for gateway-created AIAgent instances (#20741).
+
+    Precedence (highest first):
+
+        CLAWK_MAX_TOKENS env  >  model.max_tokens  >  selected provider's
+        max_output_tokens  >  None
+
+    ``model.max_tokens`` was historically dropped before reaching the
+    gateway-spawned agent, so providers without a hardcoded default
+    (OpenRouter free models, Ollama Cloud, custom OpenAI-compatible
+    endpoints) truncated long generations with ``finish_reason="length"``.
+    """
+
+    from clawk_cli.runtime_provider import _lift_max_output_tokens
+
+    # 1. Internal env override (highest priority).
+    env_raw = (os.getenv("CLAWK_MAX_TOKENS") or "").strip()
+
+    if env_raw:
+        try:
+            env_val = int(env_raw)
+
+        except ValueError:
+            env_val = 0
+
+        if env_val > 0:
+            return env_val
+
+    try:
+        from clawk_cli.config import load_config
+
+        cfg = load_config() or {}
+
+    except Exception:
+        return None
+
+    lifted: dict = {}
+
+    # 2. Documented global cap: model.max_tokens.
+    model_cfg = cfg.get("model")
+
+    if isinstance(model_cfg, dict):
+        _lift_max_output_tokens(model_cfg, lifted)
+
+        if "max_output_tokens" in lifted:
+            return lifted["max_output_tokens"]
+
+        # 3. Per-provider fallback: the selected provider's max_output_tokens.
+        provider_name = str(model_cfg.get("provider") or "").strip()
+
+        if provider_name:
+            providers = cfg.get("providers")
+
+            if isinstance(providers, dict):
+                entry = providers.get(provider_name)
+
+                if isinstance(entry, dict):
+                    _lift_max_output_tokens(entry, lifted)
+
+                    if "max_output_tokens" in lifted:
+                        return lifted["max_output_tokens"]
+
+            custom_list = cfg.get("custom_providers")
+
+            if isinstance(custom_list, list):
+                for entry in custom_list:
+                    if not isinstance(entry, dict):
+                        continue
+
+                    if str(entry.get("name") or "").strip() == provider_name:
+                        _lift_max_output_tokens(entry, lifted)
+
+                        if "max_output_tokens" in lifted:
+                            return lifted["max_output_tokens"]
+
+                        break
+
+    return None
+
+
 def _resolve_runtime_agent_kwargs() -> dict:
     """Resolve provider credentials for gateway-created AIAgent instances.
 
@@ -1860,6 +2107,7 @@ def _resolve_runtime_agent_kwargs() -> dict:
         "command": runtime.get("command"),
         "args": list(runtime.get("args") or []),
         "credential_pool": runtime.get("credential_pool"),
+        "max_tokens": _resolve_runtime_max_tokens(),
     }
 
 
@@ -1925,6 +2173,7 @@ def _try_resolve_fallback_provider() -> dict | None:
                     "args": list(runtime.get("args") or []),
                     "credential_pool": runtime.get("credential_pool"),
                     "model": entry.get("model"),
+                    "max_tokens": _resolve_runtime_max_tokens(),
                 }
 
             except Exception as fb_exc:
@@ -1972,6 +2221,12 @@ def _build_media_placeholder(event) -> str:
 
         elif mtype.startswith("audio/"):
             parts.append(f"[User sent audio: {url}]")
+
+        elif (
+            mtype.startswith("video/")
+            or getattr(event, "message_type", None) == MessageType.VIDEO
+        ):
+            parts.append(f"[User sent a video: {url}]")
 
         else:
             parts.append(f"[User sent a file: {url}]")
@@ -2424,6 +2679,82 @@ def _resolve_gateway_model(config: dict | None = None) -> str:
     return ""
 
 
+def _ensure_windows_gateway_venv_imports() -> None:
+    """Make detached Windows gateway runs see the Clawksis venv packages.
+
+    Some Windows restart paths run the gateway under uv's base ``pythonw.exe``
+    to avoid the venv launcher respawning a visible console interpreter.  That
+    mode can import the source tree via cwd/PYTHONPATH but still miss optional
+    packages installed only in ``venv/Lib/site-packages`` (notably the MCP SDK).
+    Patch the live process before MCP discovery so tool injection does not
+    depend on every launcher preserving PYTHONPATH perfectly.
+    """
+
+    import site
+
+    if sys.platform != "win32":
+        return
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    candidates: list[Path] = []
+
+    if os.environ.get("VIRTUAL_ENV"):
+        candidates.append(Path(os.environ["VIRTUAL_ENV"]))
+
+    candidates.append(project_root / "venv")
+
+    seen: set[str] = set()
+
+    for venv_dir in candidates:
+        try:
+            resolved_venv = venv_dir.resolve()
+
+        except OSError:
+            resolved_venv = venv_dir
+
+        venv_key = str(resolved_venv).lower()
+
+        if venv_key in seen:
+            continue
+
+        seen.add(venv_key)
+
+        site_packages = resolved_venv / "Lib" / "site-packages"
+
+        if not site_packages.exists():
+            continue
+
+        project_entry = str(project_root)
+
+        site_entry = str(site_packages)
+
+        if project_entry not in sys.path:
+            sys.path.insert(0, project_entry)
+
+        # addsitepackages() semantics matter here: pywin32, used by the MCP
+        # SDK on Windows, relies on .pth processing to expose pywintypes.
+        site.addsitedir(site_entry)
+
+        if site_entry in sys.path:
+            sys.path.remove(site_entry)
+
+        insert_at = 1 if sys.path and sys.path[0] == project_entry else 0
+
+        sys.path.insert(insert_at, site_entry)
+
+        os.environ["VIRTUAL_ENV"] = str(resolved_venv)
+
+        pythonpath = [project_entry, site_entry]
+
+        if os.environ.get("PYTHONPATH"):
+            pythonpath.append(os.environ["PYTHONPATH"])
+
+        os.environ["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(pythonpath))
+
+        return
+
+
 def _resolve_clawk_bin() -> Optional[list[str]]:
     """Resolve the Clawksis update command as argv parts.
 
@@ -2792,7 +3123,10 @@ async def _dispose_unused_adapter(adapter: "BasePlatformAdapter | None") -> None
         )
 
 
-class GatewayRunner:
+from gateway.kanban_watchers import GatewayKanbanWatchersMixin
+
+
+class GatewayRunner(GatewayKanbanWatchersMixin):
     """
 
     Main gateway controller.
@@ -2815,11 +3149,23 @@ class GatewayRunner:
 
     _busy_text_mode: str = "interrupt"
 
+    # Upper bound on queued busy-mode follow-ups retained per session
+    # (head slot + overflow).  Beyond this, additional follow-ups are
+    # dropped with a warning so a runaway sender can't grow the queue
+    # without bound.
+    _BUSY_QUEUE_MAX_PENDING: int = 50
+
     _restart_drain_timeout: float = DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
 
     _exit_code: Optional[int] = None
 
     _draining: bool = False
+
+    # Set True by the signal handler for an UNMARKED signal (container restart /
+    # OOM / kill) — as opposed to a planned `clawk gateway stop`. Gates whether
+    # stop() persists "stopped" (planned) or keeps "running" so container_boot
+    # auto-starts on the next boot (#42675).
+    _signal_initiated_shutdown: bool = False
 
     _restart_requested: bool = False
 
@@ -2836,6 +3182,8 @@ class GatewayRunner:
     _session_model_overrides: Dict[str, Dict[str, str]] = {}
 
     _session_reasoning_overrides: Dict[str, Dict[str, Any]] = {}
+
+    _startup_restore_in_progress: bool = False
 
     def __init__(self, config: Optional[GatewayConfig] = None):
 
@@ -2968,6 +3316,20 @@ class GatewayRunner:
         ] = {}  # last busy-ack timestamp per session (debounce)
 
         self._session_run_generation: Dict[str, int] = {}
+
+        # Startup restore gate: while restart-interrupted sessions are being
+
+        # auto-resumed, real inbound messages are queued instead of competing
+
+        # with the synthetic resume turns for the same session.  The queued
+
+        # events drain only after all startup resume tasks have finished.
+
+        self._startup_restore_in_progress = False
+
+        self._startup_restore_queue: List[MessageEvent] = []
+
+        self._startup_restore_tasks: List[asyncio.Task] = []
 
         # LRU cache of live SessionSources keyed by session_key. Used by
 
@@ -3955,6 +4317,34 @@ class GatewayRunner:
 
         return None
 
+    def _normalize_source_for_session_key(
+        self,
+        source: SessionSource,
+    ) -> SessionSource:
+        """Apply Telegram DM topic recovery to a source for session-key purposes.
+
+        ``_handle_message_with_agent`` rewrites ``source.thread_id`` via
+        ``_recover_telegram_topic_thread_id`` *before* deriving the session
+        key for a normal message turn (a lobby/stripped reply gets pinned to
+        the user's last-active topic).  Session-scoped command handlers like
+        ``/model`` and ``/reasoning`` derive their override key from the raw
+        inbound ``event.source``, which skips that recovery — so the override
+        is stored under a different key than the next message turn reads,
+        and the override is silently dropped on Telegram forum topics and
+        after compression session splits (#30479).
+
+        Returns a recovery-normalized copy when a rewrite applies, otherwise
+        the original source unchanged.  Always derive the override storage key
+        from the result so storage and read use an identical key.
+        """
+        try:
+            recovered = self._recover_telegram_topic_thread_id(source)
+        except Exception:
+            return source
+        if recovered is None:
+            return source
+        return dataclasses.replace(source, thread_id=recovered)
+
     def _resolve_session_agent_runtime(
         self,
         *,
@@ -4916,23 +5306,37 @@ class GatewayRunner:
 
     @staticmethod
     def _load_busy_text_mode() -> str:
-        """Load normal busy TEXT follow-up behavior from config/env."""
+        """Resolve normal busy TEXT follow-up behavior.
 
-        mode = os.getenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", "").strip().lower()
+        ``busy_input_mode`` is the single source of truth (default
+        ``interrupt``). The legacy ``busy_text_mode`` knob is honored only
+        when a user explicitly set it, so existing queue setups keep
+        working; new installs follow ``busy_input_mode``. Returns one of
+        ``interrupt`` | ``queue``.
+        """
 
-        if not mode:
+        # Legacy explicit override wins for backward compat.
+        legacy = os.getenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", "").strip().lower()
+
+        if not legacy:
             cfg = _load_gateway_runtime_config()
 
-            mode = (
+            legacy = (
                 str(cfg_get(cfg, "display", "busy_text_mode", default="") or "")
                 .strip()
                 .lower()
             )
 
-        if mode == "interrupt":
+        if legacy == "interrupt":
             return "interrupt"
 
-        return "queue"
+        if legacy == "queue":
+            return "queue"
+
+        # No explicit legacy knob → follow busy_input_mode.
+        input_mode = GatewayRunner._load_busy_input_mode()
+
+        return "queue" if input_mode == "queue" else "interrupt"
 
     @staticmethod
     def _load_restart_drain_timeout() -> float:
@@ -5136,13 +5540,60 @@ class GatewayRunner:
     def _queue_or_replace_pending_event(
         self, session_key: str, event: MessageEvent
     ) -> None:
+        """Queue a busy-mode follow-up for a session.
+
+        Text follow-ups use FIFO semantics (issue #28503): the head slot
+        keeps the first event and later ones land in the overflow chain in
+        arrival order, so rapid sends each get their own turn instead of
+        silently overwriting one another.  Photo/media bursts keep their
+        album-merge semantics — they collapse into the head slot.  A
+        per-session cap bounds the retained queue.
+        """
 
         adapter = self.adapters.get(event.source.platform)
 
         if not adapter:
             return
 
-        merge_pending_message_event(adapter._pending_messages, session_key, event)
+        pending_slot = getattr(adapter, "_pending_messages", None)
+
+        if pending_slot is None:
+            return
+
+        existing = pending_slot.get(session_key)
+
+        incoming_has_media = (
+            bool(getattr(event, "media_urls", None))
+            or event.message_type == MessageType.PHOTO
+        )
+
+        existing_has_media = existing is not None and (
+            bool(getattr(existing, "media_urls", None))
+            or getattr(existing, "message_type", None) == MessageType.PHOTO
+        )
+
+        # Photo/album bursts (or any media-bearing turn merging into a
+        # media head) keep the existing collapse-into-head-slot behavior.
+        if incoming_has_media or existing_has_media:
+            merge_pending_message_event(
+                pending_slot, session_key, event, merge_text=True
+            )
+
+            return
+
+        # Text follow-ups: enforce the per-session cap, then FIFO-enqueue.
+        if self._queue_depth(session_key, adapter=adapter) >= (
+            self._BUSY_QUEUE_MAX_PENDING
+        ):
+            logger.warning(
+                "Busy queue cap (%d) reached for session %s — dropping follow-up",
+                self._BUSY_QUEUE_MAX_PENDING,
+                session_key,
+            )
+
+            return
+
+        self._enqueue_fifo(session_key, event, adapter)
 
     async def _handle_active_session_busy_message(
         self, event: MessageEvent, session_key: str
@@ -6192,10 +6643,34 @@ class GatewayRunner:
                 """
             ).strip()
 
+            watcher_env = os.environ.copy()
+
+            # This watcher is intentionally outside the running gateway. If it
+            # inherits the gateway marker, `clawk gateway restart` refuses to
+            # run as a self-restart loop guard and the gateway stays stopped.
+            watcher_env.pop("_CLAWK_GATEWAY", None)
+
+            project_root = Path(__file__).resolve().parent.parent
+
+            venv_dir = Path(watcher_env.get("VIRTUAL_ENV") or project_root / "venv")
+
+            site_packages = venv_dir / "Lib" / "site-packages"
+
+            if site_packages.exists():
+                watcher_env["VIRTUAL_ENV"] = str(venv_dir)
+
+                pythonpath = [str(project_root), str(site_packages)]
+
+                if watcher_env.get("PYTHONPATH"):
+                    pythonpath.append(watcher_env["PYTHONPATH"])
+
+                watcher_env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(pythonpath))
+
             subprocess.Popen(
                 [sys.executable, "-c", watcher, str(current_pid), *cmd_argv],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 **windows_detach_popen_kwargs(),
             )
 
@@ -6208,6 +6683,15 @@ class GatewayRunner:
             f"{cmd} gateway restart"
         )
 
+        # Same marker scrub as the Windows watcher above: this watcher runs
+        # `clawk gateway restart` from outside the gateway, but it inherits
+        # _CLAWK_GATEWAY=1 from us, and the CLI's self-restart loop guard
+        # refuses to run when that marker is set — silently (DEVNULL), so the
+        # gateway stops and never comes back.
+        watcher_env = os.environ.copy()
+
+        watcher_env.pop("_CLAWK_GATEWAY", None)
+
         setsid_bin = shutil.which("setsid")
 
         if setsid_bin:
@@ -6215,6 +6699,7 @@ class GatewayRunner:
                 [setsid_bin, "bash", "-lc", shell_cmd],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 start_new_session=True,
             )
 
@@ -6223,6 +6708,7 @@ class GatewayRunner:
                 ["bash", "-lc", shell_cmd],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=watcher_env,
                 start_new_session=True,
             )
 
@@ -6373,6 +6859,148 @@ class GatewayRunner:
         "restart_interrupted",
     })
 
+    async def _run_startup_resume_event(
+        self,
+        adapter: "BasePlatformAdapter",
+        event: MessageEvent,
+        session_key: str,
+    ) -> None:
+        """Dispatch one synthetic startup resume and wait for its agent turn.
+
+
+
+        ``BasePlatformAdapter.handle_message()`` returns after it installs the
+
+        adapter-level guard and spawns the background processing task.  Startup
+
+        restore needs a stronger boundary: inbound messages must stay queued
+
+        until the resumed agent turn itself has finished, otherwise a user
+
+        message can race the restore turn immediately after ``handle_message``
+
+        returns.
+
+        """
+
+        try:
+            await adapter.handle_message(event)
+
+            session_tasks = getattr(adapter, "_session_tasks", {})
+
+            task = (
+                session_tasks.get(session_key)
+                if isinstance(session_tasks, dict)
+                else None
+            )
+
+            if task is not None:
+                await asyncio.shield(task)
+
+        finally:
+            # _schedule_resume_pending_sessions pre-claims the runner slot
+
+            # before spawning this task.  If adapter.handle_message raises
+
+            # before _handle_message takes ownership, release that pre-claim;
+
+            # otherwise the real run's normal cleanup owns the slot.
+
+            if self._running_agents.get(session_key) is _AGENT_PENDING_SENTINEL:
+                self._release_running_agent_state(session_key)
+
+    def _queue_startup_restore_event(self, event: MessageEvent) -> None:
+        queue = getattr(self, "_startup_restore_queue", None)
+
+        if queue is None:
+            queue = []
+
+            self._startup_restore_queue = queue
+
+        queue.append(event)
+
+        try:
+            source = event.source
+
+            logger.info(
+                "Queued inbound message during gateway startup restore: "
+                "platform=%s chat=%s",
+                source.platform.value if source and source.platform else "unknown",
+                source.chat_id if source else "unknown",
+            )
+
+        except Exception:
+            pass
+
+    async def _drain_startup_restore_queue(self) -> int:
+        """Replay inbound messages queued while startup auto-resume ran."""
+
+        drained = 0
+
+        queue = getattr(self, "_startup_restore_queue", None)
+
+        if queue is None:
+            return 0
+
+        while queue:
+            event = queue.pop(0)
+
+            source = getattr(event, "source", None)
+
+            adapter = self.adapters.get(source.platform) if source is not None else None
+
+            if adapter is None:
+                logger.debug(
+                    "Dropping startup-restore queued message: "
+                    "adapter unavailable for %s",
+                    getattr(getattr(source, "platform", None), "value", None),
+                )
+
+                continue
+
+            # Mark this replay so _handle_message does not queue it again while
+
+            # the restore gate remains closed for any fresh inbound arrivals.
+
+            try:
+                setattr(event, "_hermes_startup_restore_replay", True)
+
+            except Exception:
+                pass
+
+            await adapter.handle_message(event)
+
+            drained += 1
+
+        return drained
+
+    async def _finish_startup_restore(self) -> None:
+        """Wait for startup auto-resume, then release and drain inbound queue."""
+
+        tasks = list(getattr(self, "_startup_restore_tasks", []) or [])
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.debug(
+                        "startup auto-resume task failed",
+                        exc_info=(type(result), result, result.__traceback__),
+                    )
+
+        self._startup_restore_tasks = []
+
+        drained = await self._drain_startup_restore_queue()
+
+        self._startup_restore_in_progress = False
+
+        if drained:
+            logger.info(
+                "Drained %d inbound message(s) queued during startup restore",
+                drained,
+            )
+
     def _schedule_resume_pending_sessions(self, platform=None) -> int:
         """Auto-continue fresh restart-interrupted sessions after startup.
 
@@ -6469,6 +7097,20 @@ class GatewayRunner:
 
                 continue
 
+            # Claim the session slot *before* spawning the task so that an
+
+            # inbound message arriving between task creation and the task's
+
+            # first await (where _process_message_background sets the real
+
+            # sentinel) sees the slot as occupied and queues behind it
+
+            # instead of spinning up a duplicate AIAgent (#45456).
+
+            self._running_agents[entry.session_key] = _AGENT_PENDING_SENTINEL
+
+            self._running_agents_ts[entry.session_key] = time.time()
+
             # Empty-text internal event — the _is_resume_pending branch in
 
             # _handle_message_with_agent prepends the proper reason-aware
@@ -6482,11 +7124,23 @@ class GatewayRunner:
                 internal=True,
             )
 
-            task = asyncio.create_task(adapter.handle_message(event))
+            task = asyncio.create_task(
+                self._run_startup_resume_event(adapter, event, entry.session_key)
+            )
 
             self._background_tasks.add(task)
 
             task.add_done_callback(self._background_tasks.discard)
+
+            if getattr(self, "_startup_restore_in_progress", False):
+                tasks = getattr(self, "_startup_restore_tasks", None)
+
+                if tasks is None:
+                    tasks = []
+
+                    self._startup_restore_tasks = tasks
+
+                tasks.append(task)
 
             scheduled += 1
 
@@ -6878,6 +7532,22 @@ class GatewayRunner:
         except Exception as e:
             logger.debug("Stuck-loop detection failed: %s", e)
 
+        # Serialize startup restore against inbound dispatch.  Platform
+
+        # adapters can begin receiving messages as soon as they connect, but
+
+        # restart-interrupted sessions are not auto-resumed until all startup
+
+        # wiring below completes.  Queue inbound messages until the resume
+
+        # pass runs and every synthetic resume turn has finished.
+
+        self._startup_restore_in_progress = True
+
+        self._startup_restore_queue = []
+
+        self._startup_restore_tasks = []
+
         connected_count = 0
 
         enabled_platform_count = 0
@@ -7050,6 +7720,8 @@ class GatewayRunner:
 
                 self._request_clean_exit(reason)
 
+                self._startup_restore_in_progress = False
+
                 return True
 
             if enabled_platform_count > 0:
@@ -7217,6 +7889,8 @@ class GatewayRunner:
         # visible for manual recovery on the next user message.
 
         self._schedule_resume_pending_sessions()
+
+        await self._finish_startup_restore()
 
         # Drain any recovered process watchers (from crash recovery checkpoint)
 
@@ -7897,1619 +8571,6 @@ class GatewayRunner:
 
         except Exception:
             return "default"
-
-    async def _kanban_notifier_watcher(self, interval: float = 5.0) -> None:
-        """Poll ``kanban_notify_subs`` and deliver terminal events to users.
-
-
-
-        For each subscription row, fetches ``task_events`` newer than the
-
-        stored cursor with kind in the terminal set (``completed``,
-
-        ``blocked``, ``gave_up``, ``crashed``, ``timed_out``). Sends one
-
-        message per new event to ``(platform, chat_id, thread_id)``,
-
-        then advances the cursor. When a task reaches a terminal state
-
-        (``completed`` / ``archived``), the subscription is removed.
-
-
-
-        Runs in the gateway event loop; all SQLite work is pushed to a
-
-        thread via ``asyncio.to_thread`` so the loop never blocks on the
-
-        WAL lock. Failures in one tick don't stop subsequent ticks.
-
-
-
-        **Multi-board:** iterates every board discovered on disk per
-
-        tick. Subscriptions live inside each board's own DB and cannot
-
-        cross boards, so delivery semantics are unchanged — this is
-
-        purely a fan-out of the single-DB poll.
-
-        """
-
-        # Gate: only the dispatch-owning gateway opens kanban DBs for notifier polling.
-
-        # Non-dispatch gateways have no subscriptions to deliver — all kanban state lives
-
-        # in the dispatch owner's per-board DBs. This prevents N-gateway -shm contention.
-
-        # TODO: gate per-board when per-board dispatcher_owner tracking lands.
-
-        try:
-            from clawk_cli.config import load_config as _load_config
-
-        except Exception:
-            logger.warning("kanban notifier: config loader unavailable; disabled")
-
-            return
-
-        env_override = (
-            os.environ.get("CLAWK_KANBAN_DISPATCH_IN_GATEWAY", "").strip().lower()
-        )
-
-        if env_override in {"0", "false", "no", "off"}:
-            logger.info(
-                "kanban notifier: disabled via CLAWK_KANBAN_DISPATCH_IN_GATEWAY env"
-            )
-
-            return
-
-        try:
-            cfg = _load_config()
-
-        except Exception as exc:
-            logger.warning("kanban notifier: cannot load config (%s); disabled", exc)
-
-            return
-
-        kanban_cfg = cfg.get("kanban", {}) if isinstance(cfg, dict) else {}
-
-        if not kanban_cfg.get("dispatch_in_gateway", True):
-            logger.info(
-                "kanban notifier: disabled via config kanban.dispatch_in_gateway=false"
-            )
-
-            return
-
-        from gateway.config import Platform as _Platform
-
-        try:
-            from clawk_cli import kanban_db as _kb
-
-        except Exception:
-            logger.warning(
-                "kanban notifier: kanban_db not importable; notifier disabled"
-            )
-
-            return
-
-        TERMINAL_KINDS = ("completed", "blocked", "gave_up", "crashed", "timed_out")
-
-        # Subscriptions are removed only when the task reaches a truly final
-
-        # status (done / archived). We used to also unsub on any terminal
-
-        # event kind (gave_up / crashed / timed_out / blocked), but that
-
-        # silently dropped the user out of the loop whenever the dispatcher
-
-        # respawned the task: a worker that crashes, gets reclaimed, runs
-
-        # again, and crashes a second time would only notify on the first
-
-        # crash because the subscription was deleted after the first event.
-
-        # Same shape as the reblock-after-unblock cycle that PR #22941
-
-        # fixed for `blocked`. Keeping the subscription alive until the
-
-        # task is genuinely done lets the cursor (advanced atomically by
-
-        # claim_unseen_events_for_sub) handle dedup, and any retry-loop
-
-        # event reaches the user.
-
-        # Per-subscription send-failure counter. Adapter.send raising
-
-        # means the chat is dead (deleted, bot kicked, etc.) — after N
-
-        # consecutive send failures the sub is dropped so we don't spin
-
-        # against a dead chat every 5 seconds forever.
-
-        MAX_SEND_FAILURES = 3
-
-        sub_fail_counts: dict[tuple, int] = getattr(self, "_kanban_sub_fail_counts", {})
-
-        self._kanban_sub_fail_counts = sub_fail_counts
-
-        notifier_profile = getattr(self, "_kanban_notifier_profile", None)
-
-        if not notifier_profile:
-            notifier_profile = self._active_profile_name()
-
-            self._kanban_notifier_profile = notifier_profile
-
-        # Initial delay so the gateway can finish wiring adapters.
-
-        await asyncio.sleep(5)
-
-        while self._running:
-            try:
-
-                def _collect():
-
-                    deliveries: list[dict] = []
-
-                    active_platforms = {
-                        getattr(platform, "value", str(platform)).lower()
-                        for platform in self.adapters.keys()
-                    }
-
-                    if not active_platforms:
-                        logger.debug(
-                            "kanban notifier: no connected adapters; skipping tick"
-                        )
-
-                        return deliveries
-
-                    # Enumerate every board on disk, but poll each resolved DB
-
-                    # path once. Multiple slugs can point at the same DB when
-
-                    # CLAWK_KANBAN_DB pins the board path; without this guard
-
-                    # one gateway could collect the same subscription/event
-
-                    # more than once before advancing the cursor.
-
-                    try:
-                        boards = _kb.list_boards(include_archived=False)
-
-                    except Exception:
-                        boards = [_kb.read_board_metadata(_kb.DEFAULT_BOARD)]
-
-                    seen_db_paths: set[str] = set()
-
-                    for board_meta in boards:
-                        slug = board_meta.get("slug") or _kb.DEFAULT_BOARD
-
-                        db_path = board_meta.get("db_path")
-
-                        try:
-                            resolved_db_path = (
-                                str(Path(db_path).expanduser().resolve())
-                                if db_path
-                                else str(_kb.kanban_db_path(slug).resolve())
-                            )
-
-                        except Exception:
-                            resolved_db_path = f"slug:{slug}"
-
-                        if resolved_db_path in seen_db_paths:
-                            logger.debug(
-                                "kanban notifier: skipping duplicate board slug %s for DB %s",
-                                slug,
-                                resolved_db_path,
-                            )
-
-                            continue
-
-                        seen_db_paths.add(resolved_db_path)
-
-                        try:
-                            conn = _kb.connect(board=slug)
-
-                        except Exception as exc:
-                            logger.debug(
-                                "kanban notifier: cannot open board %s: %s", slug, exc
-                            )
-
-                            continue
-
-                        try:
-                            # `connect()` runs the schema + idempotent migration
-
-                            # on first open per process, so an explicit
-
-                            # `init_db()` here would be redundant. Worse:
-
-                            # `init_db()` deliberately busts the per-process
-
-                            # cache and re-runs the migration on a *second*
-
-                            # connection, which races the first and used to
-
-                            # log a benign but noisy `duplicate column name`
-
-                            # traceback (and intermittent "database is locked"
-
-                            # — issue #21378) on every gateway start against
-
-                            # a legacy DB. `_add_column_if_missing` now
-
-                            # tolerates that race, but we still skip the
-
-                            # redundant call to avoid the wasted work.
-
-                            subs = _kb.list_notify_subs(conn)
-
-                            if not subs:
-                                logger.debug(
-                                    "kanban notifier: board %s has no subscriptions",
-                                    slug,
-                                )
-
-                            for sub in subs:
-                                owner_profile = sub.get("notifier_profile") or None
-
-                                if owner_profile and owner_profile != notifier_profile:
-                                    logger.debug(
-                                        "kanban notifier: subscription for %s owned by profile %s; current profile %s skipping",
-                                        sub.get("task_id"),
-                                        owner_profile,
-                                        notifier_profile,
-                                    )
-
-                                    continue
-
-                                platform = (sub.get("platform") or "").lower()
-
-                                if platform not in active_platforms:
-                                    logger.debug(
-                                        "kanban notifier: subscription for %s on %s skipped; adapter not connected",
-                                        sub.get("task_id"),
-                                        platform or "<missing>",
-                                    )
-
-                                    continue
-
-                                old_cursor, cursor, events = (
-                                    _kb.claim_unseen_events_for_sub(
-                                        conn,
-                                        task_id=sub["task_id"],
-                                        platform=sub["platform"],
-                                        chat_id=sub["chat_id"],
-                                        thread_id=sub.get("thread_id") or "",
-                                        kinds=TERMINAL_KINDS,
-                                    )
-                                )
-
-                                if not events:
-                                    continue
-
-                                task = _kb.get_task(conn, sub["task_id"])
-
-                                logger.debug(
-                                    "kanban notifier: claimed %d event(s) for %s on board %s cursor %s→%s",
-                                    len(events),
-                                    sub["task_id"],
-                                    slug,
-                                    old_cursor,
-                                    cursor,
-                                )
-
-                                deliveries.append({
-                                    "sub": sub,
-                                    "old_cursor": old_cursor,
-                                    "cursor": cursor,
-                                    "events": events,
-                                    "task": task,
-                                    "board": slug,
-                                })
-
-                        finally:
-                            conn.close()
-
-                    return deliveries
-
-                deliveries = await asyncio.to_thread(_collect)
-
-                for d in deliveries:
-                    sub = d["sub"]
-
-                    task = d["task"]
-
-                    board_slug = d.get("board")
-
-                    platform_str = (sub["platform"] or "").lower()
-
-                    try:
-                        plat = _Platform(platform_str)
-
-                    except ValueError:
-                        # Unknown platform string; skip and advance cursor so
-
-                        # we don't replay forever.
-
-                        await asyncio.to_thread(
-                            self._kanban_advance,
-                            sub,
-                            d["cursor"],
-                            board_slug,
-                        )
-
-                        continue
-
-                    adapter = self.adapters.get(plat)
-
-                    if adapter is None:
-                        logger.debug(
-                            "kanban notifier: adapter %s disconnected before delivery for %s; rewinding claim",
-                            platform_str,
-                            sub["task_id"],
-                        )
-
-                        await asyncio.to_thread(
-                            self._kanban_rewind,
-                            sub,
-                            d["cursor"],
-                            d.get("old_cursor", 0),
-                            board_slug,
-                        )
-
-                        continue
-
-                    title = (task.title if task else sub["task_id"])[:120]
-
-                    for ev in d["events"]:
-                        kind = ev.kind
-
-                        # Identity prefix: attribute terminal pings to the
-
-                        # worker that did the work. Makes fleets (where one
-
-                        # chat subscribes to many tasks) legible at a glance.
-
-                        who = task.assignee if task and task.assignee else None
-
-                        tag = f"@{who} " if who else ""
-
-                        if kind == "completed":
-                            # Prefer the run's summary (the worker's
-
-                            # intentional human-facing handoff, carried
-
-                            # in the event payload), then fall back to
-
-                            # task.result for legacy rows written before
-
-                            # runs shipped.
-
-                            handoff = ""
-
-                            payload_summary = None
-
-                            if ev.payload and ev.payload.get("summary"):
-                                payload_summary = str(ev.payload["summary"])
-
-                            if payload_summary:
-                                lines = payload_summary.strip().splitlines()
-
-                                h = lines[0][:200] if lines else payload_summary[:200]
-
-                                handoff = f"\n{h}"
-
-                            elif task and task.result:
-                                lines = task.result.strip().splitlines()
-
-                                r = lines[0][:160] if lines else task.result[:160]
-
-                                handoff = f"\n{r}"
-
-                            msg = (
-                                f"✔ {tag}Kanban {sub['task_id']} done"
-                                f" — {title}{handoff}"
-                            )
-
-                        elif kind == "blocked":
-                            reason = ""
-
-                            if ev.payload and ev.payload.get("reason"):
-                                reason = f": {str(ev.payload['reason'])[:160]}"
-
-                            msg = f"⏸ {tag}Kanban {sub['task_id']} blocked{reason}"
-
-                        elif kind == "gave_up":
-                            err = ""
-
-                            if ev.payload and ev.payload.get("error"):
-                                err = f"\n{str(ev.payload['error'])[:200]}"
-
-                            msg = (
-                                f"✖ {tag}Kanban {sub['task_id']} gave up "
-                                f"after repeated spawn failures{err}"
-                            )
-
-                        elif kind == "crashed":
-                            msg = (
-                                f"✖ {tag}Kanban {sub['task_id']} worker crashed "
-                                f"(pid gone); dispatcher will retry"
-                            )
-
-                        elif kind == "timed_out":
-                            limit = 0
-
-                            if ev.payload and ev.payload.get("limit_seconds"):
-                                limit = int(ev.payload["limit_seconds"])
-
-                            msg = (
-                                f"⏱ {tag}Kanban {sub['task_id']} timed out "
-                                f"(max_runtime={limit}s); will retry"
-                            )
-
-                        else:
-                            continue
-
-                        metadata: dict[str, Any] = {}
-
-                        if sub.get("thread_id"):
-                            metadata["thread_id"] = sub["thread_id"]
-
-                        sub_key = (
-                            sub["task_id"],
-                            sub["platform"],
-                            sub["chat_id"],
-                            sub.get("thread_id") or "",
-                        )
-
-                        try:
-                            await adapter.send(
-                                sub["chat_id"],
-                                msg,
-                                metadata=metadata,
-                            )
-
-                            logger.debug(
-                                "kanban notifier: delivered %s event for %s to %s/%s on board %s",
-                                kind,
-                                sub["task_id"],
-                                platform_str,
-                                sub["chat_id"],
-                                board_slug,
-                            )
-
-                            # After delivering the text notification, surface
-
-                            # any artifact paths the worker referenced in
-
-                            # ``kanban_complete(summary=..., artifacts=[...])``
-
-                            # (or the legacy ``result`` field) as native
-
-                            # uploads. ``extract_local_files`` finds bare
-
-                            # absolute paths in the summary;
-
-                            # ``send_document`` / ``send_image_file`` uploads
-
-                            # them. Only fires on the ``completed`` event so
-
-                            # we never spam attachments on retries.
-
-                            if kind == "completed":
-                                try:
-                                    await self._deliver_kanban_artifacts(
-                                        adapter=adapter,
-                                        chat_id=sub["chat_id"],
-                                        metadata=metadata,
-                                        event_payload=getattr(ev, "payload", None),
-                                        task=task,
-                                    )
-
-                                except Exception as art_exc:
-                                    logger.debug(
-                                        "kanban notifier: artifact delivery for %s failed: %s",
-                                        sub["task_id"],
-                                        art_exc,
-                                    )
-
-                            # Reset the failure counter on success.
-
-                            sub_fail_counts.pop(sub_key, None)
-
-                        except Exception as exc:
-                            fails = sub_fail_counts.get(sub_key, 0) + 1
-
-                            sub_fail_counts[sub_key] = fails
-
-                            logger.warning(
-                                "kanban notifier: send failed for %s on %s "
-                                "(attempt %d/%d): %s",
-                                sub["task_id"],
-                                platform_str,
-                                fails,
-                                MAX_SEND_FAILURES,
-                                exc,
-                            )
-
-                            if fails >= MAX_SEND_FAILURES:
-                                logger.warning(
-                                    "kanban notifier: dropping subscription "
-                                    "%s on %s after %d consecutive send failures",
-                                    sub["task_id"],
-                                    platform_str,
-                                    fails,
-                                )
-
-                                await asyncio.to_thread(
-                                    self._kanban_unsub, sub, board_slug
-                                )
-
-                                sub_fail_counts.pop(sub_key, None)
-
-                            else:
-                                await asyncio.to_thread(
-                                    self._kanban_rewind,
-                                    sub,
-                                    d["cursor"],
-                                    d.get("old_cursor", 0),
-                                    board_slug,
-                                )
-
-                            # Rewind the pre-send claim on transient failure so
-
-                            # a later tick can retry. After too many failures,
-
-                            # dropping the subscription is the terminal action.
-
-                            break
-
-                    else:
-                        # All events delivered; advance cursor. The cursor
-
-                        # is the dedup mechanism — it prevents re-delivery
-
-                        # of the same event on subsequent ticks.
-
-                        await asyncio.to_thread(
-                            self._kanban_advance,
-                            sub,
-                            d["cursor"],
-                            board_slug,
-                        )
-
-                        # Unsubscribe only when the task has reached a truly
-
-                        # final status (done / archived). For blocked /
-
-                        # gave_up / crashed / timed_out the subscription is
-
-                        # kept alive so the user gets notified again if the
-
-                        # dispatcher respawns the task and it cycles into the
-
-                        # same state. See the longer comment on TERMINAL_KINDS
-
-                        # above for the failure mode this prevents.
-
-                        task_terminal = task and task.status in {"done", "archived"}
-
-                        if task_terminal:
-                            await asyncio.to_thread(
-                                self._kanban_unsub,
-                                sub,
-                                board_slug,
-                            )
-
-            except Exception as exc:
-                logger.warning("kanban notifier tick failed: %s", exc)
-
-            # Sleep with cancellation checks.
-
-            for _ in range(int(max(1, interval))):
-                if not self._running:
-                    return
-
-                await asyncio.sleep(1)
-
-    def _kanban_advance(
-        self,
-        sub: dict,
-        cursor: int,
-        board: Optional[str] = None,
-    ) -> None:
-        """Sync helper: advance a subscription's cursor. Runs in to_thread.
-
-
-
-        ``board`` scopes the DB connection to the board that owns this
-
-        subscription. Unsub cursors in one board can't touch another's.
-
-        """
-
-        from clawk_cli import kanban_db as _kb
-
-        conn = _kb.connect(board=board)
-
-        try:
-            _kb.advance_notify_cursor(
-                conn,
-                task_id=sub["task_id"],
-                platform=sub["platform"],
-                chat_id=sub["chat_id"],
-                thread_id=sub.get("thread_id") or "",
-                new_cursor=cursor,
-            )
-
-        finally:
-            conn.close()
-
-    def _kanban_unsub(self, sub: dict, board: Optional[str] = None) -> None:
-
-        from clawk_cli import kanban_db as _kb
-
-        conn = _kb.connect(board=board)
-
-        try:
-            _kb.remove_notify_sub(
-                conn,
-                task_id=sub["task_id"],
-                platform=sub["platform"],
-                chat_id=sub["chat_id"],
-                thread_id=sub.get("thread_id") or "",
-            )
-
-        finally:
-            conn.close()
-
-    def _kanban_rewind(
-        self,
-        sub: dict,
-        claimed_cursor: int,
-        old_cursor: int,
-        board: Optional[str] = None,
-    ) -> None:
-        """Sync helper: undo a claimed notification cursor after send failure."""
-
-        from clawk_cli import kanban_db as _kb
-
-        conn = _kb.connect(board=board)
-
-        try:
-            _kb.rewind_notify_cursor(
-                conn,
-                task_id=sub["task_id"],
-                platform=sub["platform"],
-                chat_id=sub["chat_id"],
-                thread_id=sub.get("thread_id") or "",
-                claimed_cursor=claimed_cursor,
-                old_cursor=old_cursor,
-            )
-
-        finally:
-            conn.close()
-
-    async def _deliver_kanban_artifacts(
-        self,
-        *,
-        adapter,
-        chat_id: str,
-        metadata: dict,
-        event_payload: Optional[dict],
-        task,
-    ) -> None:
-        """Upload artifact files referenced by a completed kanban task.
-
-
-
-        Workers passing ``kanban_complete(artifacts=[...])`` ship absolute
-
-        file paths through the completion event so downstream humans get
-
-        the deliverable as a native upload instead of a path printed in
-
-        chat.
-
-
-
-        Sources scanned, in priority order:
-
-          1. ``event_payload['artifacts']`` (explicit list — preferred)
-
-          2. ``event_payload['summary']`` (truncated first line)
-
-          3. ``task.result`` (legacy fallback)
-
-
-
-        Files are deduplicated, missing files are silently skipped (the
-
-        path may have been mentioned for reference only), and delivery
-
-        errors are logged but do not break the notifier loop.
-
-        """
-
-        from pathlib import Path as _Path
-
-        candidates: list[str] = []
-
-        seen: set[str] = set()
-
-        def _add(path: str) -> None:
-
-            if not path:
-                return
-
-            expanded = os.path.expanduser(path)
-
-            if expanded in seen:
-                return
-
-            if not os.path.isfile(expanded):
-                return
-
-            seen.add(expanded)
-
-            candidates.append(expanded)
-
-        # 1. Explicit artifacts list in payload.
-
-        if isinstance(event_payload, dict):
-            raw = event_payload.get("artifacts")
-
-            if isinstance(raw, (list, tuple)):
-                for item in raw:
-                    if isinstance(item, str):
-                        _add(item)
-
-            # 2. Paths embedded in the payload summary.
-
-            summary = event_payload.get("summary")
-
-            if isinstance(summary, str) and summary:
-                paths, _ = adapter.extract_local_files(summary)
-
-                for p in paths:
-                    _add(p)
-
-        # 3. Legacy: paths embedded in task.result.
-
-        if task is not None and getattr(task, "result", None):
-            result_text = str(task.result)
-
-            paths, _ = adapter.extract_local_files(result_text)
-
-            for p in paths:
-                _add(p)
-
-        if not candidates:
-            return
-
-        from gateway.platforms.base import BasePlatformAdapter
-
-        candidates = BasePlatformAdapter.filter_local_delivery_paths(candidates)
-
-        if not candidates:
-            return
-
-        _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-
-        _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp"}
-
-        from urllib.parse import quote as _quote
-
-        # Partition images so they ride a single send_multiple_images call
-
-        # on platforms that support batch image uploads (Signal/Slack RPCs).
-
-        image_paths = [p for p in candidates if _Path(p).suffix.lower() in _IMAGE_EXTS]
-
-        other_paths = [
-            p for p in candidates if _Path(p).suffix.lower() not in _IMAGE_EXTS
-        ]
-
-        if image_paths:
-            try:
-                batch = [(f"file://{_quote(p)}", "") for p in image_paths]
-
-                await adapter.send_multiple_images(
-                    chat_id=chat_id,
-                    images=batch,
-                    metadata=metadata,
-                )
-
-            except Exception as exc:
-                logger.warning(
-                    "kanban notifier: image batch upload failed: %s",
-                    exc,
-                )
-
-        for path in other_paths:
-            ext = _Path(path).suffix.lower()
-
-            try:
-                if ext in _VIDEO_EXTS:
-                    await adapter.send_video(
-                        chat_id=chat_id,
-                        video_path=path,
-                        metadata=metadata,
-                    )
-
-                else:
-                    await adapter.send_document(
-                        chat_id=chat_id,
-                        file_path=path,
-                        metadata=metadata,
-                    )
-
-            except Exception as exc:
-                logger.warning(
-                    "kanban notifier: artifact upload (%s) failed: %s",
-                    path,
-                    exc,
-                )
-
-    async def _kanban_dispatcher_watcher(self) -> None:
-        """Embedded kanban dispatcher — one tick every `dispatch_interval_seconds`.
-
-
-
-        Gated by `kanban.dispatch_in_gateway` in config.yaml (default True).
-
-        When true, the gateway hosts the single dispatcher for this profile:
-
-        no separate `clawk kanban daemon` process needed. When false, the
-
-        loop exits immediately and an external daemon is expected.
-
-
-
-        Each tick calls :func:`kanban_db.dispatch_once` inside
-
-        ``asyncio.to_thread`` so the SQLite WAL lock never blocks the
-
-        event loop. Failures in one tick don't stop subsequent ticks —
-
-        same pattern as `_kanban_notifier_watcher`.
-
-
-
-        Shutdown: the loop checks ``self._running`` between ticks; gateway
-
-        stop() flips it to False and cancels pending tasks, and the
-
-        in-flight ``to_thread`` returns on its own after the current
-
-        ``dispatch_once`` call finishes (typically <1ms on an idle board).
-
-        """
-
-        # Read config once at boot. If the user flips the flag later, they
-
-        # restart the gateway; same pattern as every other background
-
-        # watcher here. Honours CLAWK_KANBAN_DISPATCH_IN_GATEWAY env var
-
-        # as an escape hatch (false-y value disables without editing YAML).
-
-        try:
-            from clawk_cli.config import load_config as _load_config
-
-        except Exception:
-            logger.warning("kanban dispatcher: config loader unavailable; disabled")
-
-            return
-
-        env_override = (
-            os.environ.get("CLAWK_KANBAN_DISPATCH_IN_GATEWAY", "").strip().lower()
-        )
-
-        if env_override in {"0", "false", "no", "off"}:
-            logger.info(
-                "kanban dispatcher: disabled via CLAWK_KANBAN_DISPATCH_IN_GATEWAY env"
-            )
-
-            return
-
-        try:
-            cfg = _load_config()
-
-        except Exception as exc:
-            logger.warning("kanban dispatcher: cannot load config (%s); disabled", exc)
-
-            return
-
-        kanban_cfg = cfg.get("kanban", {}) if isinstance(cfg, dict) else {}
-
-        if not kanban_cfg.get("dispatch_in_gateway", True):
-            logger.info(
-                "kanban dispatcher: disabled via config kanban.dispatch_in_gateway=false"
-            )
-
-            return
-
-        try:
-            from clawk_cli import kanban_db as _kb
-
-        except Exception:
-            logger.warning(
-                "kanban dispatcher: kanban_db not importable; dispatcher disabled"
-            )
-
-            return
-
-        try:
-            interval = float(kanban_cfg.get("dispatch_interval_seconds", 60) or 60)
-
-        except (ValueError, TypeError):
-            logger.warning(
-                "kanban dispatcher: invalid dispatch_interval_seconds=%r, using default 60",
-                kanban_cfg.get("dispatch_interval_seconds"),
-            )
-
-            interval = 60.0
-
-        interval = max(interval, 1.0)  # sanity floor — tighter than this is a footgun
-
-        # Read max_spawn config to limit concurrent kanban tasks
-
-        max_spawn = kanban_cfg.get("max_spawn", None)
-
-        if max_spawn is not None:
-            logger.info(f"kanban dispatcher: max_spawn={max_spawn}")
-
-        # Cap the number of simultaneously running tasks so slow workers
-
-        # (local LLMs, resource-constrained hosts) don't pile up and time
-
-        # out. When set, the dispatcher skips spawning when the board
-
-        # already has this many tasks in 'running' status.
-
-        raw_max_in_progress = kanban_cfg.get("max_in_progress", None)
-
-        max_in_progress = None
-
-        if raw_max_in_progress is not None:
-            try:
-                max_in_progress = int(raw_max_in_progress)
-
-            except (TypeError, ValueError):
-                logger.warning(
-                    "kanban dispatcher: invalid kanban.max_in_progress=%r; ignoring",
-                    raw_max_in_progress,
-                )
-
-                max_in_progress = None
-
-            else:
-                if max_in_progress < 1:
-                    logger.warning(
-                        "kanban dispatcher: kanban.max_in_progress=%r is below 1; ignoring",
-                        raw_max_in_progress,
-                    )
-
-                    max_in_progress = None
-
-                else:
-                    logger.info(f"kanban dispatcher: max_in_progress={max_in_progress}")
-
-        raw_failure_limit = kanban_cfg.get("failure_limit", _kb.DEFAULT_FAILURE_LIMIT)
-
-        try:
-            failure_limit = int(raw_failure_limit)
-
-        except (TypeError, ValueError):
-            logger.warning(
-                "kanban dispatcher: invalid kanban.failure_limit=%r; using default %d",
-                raw_failure_limit,
-                _kb.DEFAULT_FAILURE_LIMIT,
-            )
-
-            failure_limit = _kb.DEFAULT_FAILURE_LIMIT
-
-        if failure_limit < 1:
-            logger.warning(
-                "kanban dispatcher: kanban.failure_limit=%r is below 1; using default %d",
-                raw_failure_limit,
-                _kb.DEFAULT_FAILURE_LIMIT,
-            )
-
-            failure_limit = _kb.DEFAULT_FAILURE_LIMIT
-
-        # Read stale_timeout_seconds — 0 disables stale detection.
-
-        raw_stale = kanban_cfg.get("dispatch_stale_timeout_seconds", 0)
-
-        try:
-            stale_timeout_seconds = int(raw_stale or 0)
-
-        except (TypeError, ValueError):
-            logger.warning(
-                "kanban dispatcher: invalid kanban.dispatch_stale_timeout_seconds=%r; "
-                "disabling stale detection",
-                raw_stale,
-            )
-
-            stale_timeout_seconds = 0
-
-        # Read kanban.default_assignee — fallback profile for tasks
-
-        # created without an explicit assignee (e.g. via the dashboard).
-
-        # When set, the dispatcher applies it to unassigned ready tasks
-
-        # instead of skipping them indefinitely (#27145). Empty string
-
-        # (the schema default) means "no fallback, keep skipping" —
-
-        # backward-compatible with existing installs.
-
-        default_assignee = (kanban_cfg.get("default_assignee") or "").strip() or None
-
-        if default_assignee:
-            logger.info(
-                "kanban dispatcher: default_assignee=%r (unassigned ready tasks "
-                "will route to this profile)",
-                default_assignee,
-            )
-
-        # Read kanban.max_in_progress_per_profile — per-profile concurrency
-
-        # cap (#21582). When set, no single profile gets more than N
-
-        # workers running at once, even if the global max_in_progress
-
-        # would allow it. Prevents one profile's local model / API quota
-
-        # / browser pool from being overwhelmed by a fan-out.
-
-        raw_per_profile = kanban_cfg.get("max_in_progress_per_profile", None)
-
-        max_in_progress_per_profile = None
-
-        if raw_per_profile is not None:
-            try:
-                max_in_progress_per_profile = int(raw_per_profile)
-
-            except (TypeError, ValueError):
-                logger.warning(
-                    "kanban dispatcher: invalid kanban.max_in_progress_per_profile=%r; ignoring",
-                    raw_per_profile,
-                )
-
-                max_in_progress_per_profile = None
-
-            else:
-                if max_in_progress_per_profile < 1:
-                    logger.warning(
-                        "kanban dispatcher: kanban.max_in_progress_per_profile=%r is below 1; ignoring",
-                        raw_per_profile,
-                    )
-
-                    max_in_progress_per_profile = None
-
-                else:
-                    logger.info(
-                        "kanban dispatcher: max_in_progress_per_profile=%d",
-                        max_in_progress_per_profile,
-                    )
-
-        # Initial delay so the gateway finishes wiring adapters before the
-
-        # dispatcher spawns workers (those workers may hit gateway notify
-
-        # subscriptions etc.). Matches the notifier watcher's delay.
-
-        await asyncio.sleep(5)
-
-        # Health telemetry mirrored from `_cmd_daemon`: warn when ready
-
-        # queue is non-empty but spawns are 0 for N consecutive ticks —
-
-        # usually means broken PATH, missing venv, or credential loss.
-
-        HEALTH_WINDOW = 6
-
-        bad_ticks = 0
-
-        last_warn_at = 0
-
-        # Avoid hot-looping corrupt-looking board DBs, but do not suppress
-
-        # same-fingerprint retries forever: transient WAL/open races can
-
-        # surface as "database disk image is malformed" for one tick.
-
-        CORRUPT_BOARD_RETRY_AFTER_SECONDS = 300
-
-        disabled_corrupt_boards: dict[
-            str, tuple[tuple[str, int | None, int | None], float]
-        ] = {}
-
-        def _board_db_fingerprint(slug: str) -> tuple[str, int | None, int | None]:
-
-            path = _kb.kanban_db_path(slug)
-
-            try:
-                resolved = str(path.expanduser().resolve())
-
-            except Exception:
-                resolved = str(path)
-
-            try:
-                stat = path.stat()
-
-            except OSError:
-                return (resolved, None, None)
-
-            return (resolved, stat.st_mtime_ns, stat.st_size)
-
-        def _is_corrupt_board_db_error(exc: Exception) -> bool:
-
-            corrupt_guard_error = getattr(_kb, "KanbanDbCorruptError", None)
-
-            if corrupt_guard_error is not None and isinstance(exc, corrupt_guard_error):
-                return True
-
-            if not isinstance(exc, sqlite3.DatabaseError):
-                return False
-
-            msg = str(exc).lower()
-
-            return (
-                "file is not a database" in msg
-                or "database disk image is malformed" in msg
-            )
-
-        def _tick_once_for_board(slug: str) -> "Optional[object]":
-            """Run one dispatch_once for a specific board.
-
-
-
-            Runs in a worker thread via `asyncio.to_thread`. `board=slug`
-
-            is passed through `dispatch_once` so `resolve_workspace` and
-
-            `_default_spawn` see the right paths. The per-board DB is
-
-            opened explicitly so concurrent boards never share a
-
-            connection handle or accidentally claim across each other.
-
-            """
-
-            conn = None
-
-            fingerprint = _board_db_fingerprint(slug)
-
-            disabled_entry = disabled_corrupt_boards.get(slug)
-
-            if disabled_entry is not None:
-                disabled_fingerprint, disabled_at = disabled_entry
-
-                age = time.monotonic() - disabled_at
-
-                if (
-                    disabled_fingerprint == fingerprint
-                    and age < CORRUPT_BOARD_RETRY_AFTER_SECONDS
-                ):
-                    return None
-
-                if disabled_fingerprint == fingerprint:
-                    logger.info(
-                        "kanban dispatcher: board %s database fingerprint unchanged "
-                        "after %.0fs quarantine; retrying dispatch",
-                        slug,
-                        age,
-                    )
-
-                else:
-                    logger.info(
-                        "kanban dispatcher: board %s database changed; retrying dispatch",
-                        slug,
-                    )
-
-                disabled_corrupt_boards.pop(slug, None)
-
-            try:
-                conn = _kb.connect(board=slug)
-
-                # `connect()` runs the schema + idempotent migration on
-
-                # first open per process; the previous explicit
-
-                # `init_db()` call here busted the per-process cache and
-
-                # re-ran the migration on a second connection, racing
-
-                # the first. See the matching comment in
-
-                # `_kanban_notifier_watcher` and issue #21378.
-
-                return _kb.dispatch_once(
-                    conn,
-                    board=slug,
-                    max_spawn=max_spawn,
-                    max_in_progress=max_in_progress,
-                    failure_limit=failure_limit,
-                    stale_timeout_seconds=stale_timeout_seconds,
-                    default_assignee=default_assignee,
-                    max_in_progress_per_profile=max_in_progress_per_profile,
-                )
-
-            except sqlite3.DatabaseError as exc:
-                if _is_corrupt_board_db_error(exc):
-                    disabled_corrupt_boards[slug] = (fingerprint, time.monotonic())
-
-                    logger.error(
-                        "kanban dispatcher: board %s database %s is not a valid "
-                        "SQLite database; pausing dispatch for this board until "
-                        "the file changes, the gateway restarts, or the "
-                        "quarantine timer expires. Move or restore the file, "
-                        "then run `clawk kanban init` if you need a fresh board.",
-                        slug,
-                        fingerprint[0],
-                    )
-
-                    return None
-
-                logger.exception("kanban dispatcher: tick failed on board %s", slug)
-
-                return None
-
-            except Exception as exc:
-                if _is_corrupt_board_db_error(exc):
-                    disabled_corrupt_boards[slug] = (fingerprint, time.monotonic())
-
-                    logger.error(
-                        "kanban dispatcher: board %s database %s is not a valid "
-                        "SQLite database; pausing dispatch for this board until "
-                        "the file changes, the gateway restarts, or the "
-                        "quarantine timer expires. Move or restore the file, "
-                        "then run `clawk kanban init` if you need a fresh board.",
-                        slug,
-                        fingerprint[0],
-                    )
-
-                    return None
-
-                logger.exception("kanban dispatcher: tick failed on board %s", slug)
-
-                return None
-
-            finally:
-                if conn is not None:
-                    try:
-                        conn.close()
-
-                    except Exception:
-                        pass
-
-        def _tick_once() -> "list[tuple[str, Optional[object]]]":
-            """Run one dispatch_once per board. Returns (slug, result) pairs.
-
-
-
-            Enumerating boards on every tick keeps the dispatcher honest
-
-            when users create a new board mid-run: no restart required,
-
-            the next tick picks it up automatically.
-
-            """
-
-            try:
-                boards = _kb.list_boards(include_archived=False)
-
-            except Exception:
-                boards = [_kb.read_board_metadata(_kb.DEFAULT_BOARD)]
-
-            out: list[tuple[str, "Optional[object]"]] = []
-
-            for b in boards:
-                slug = b.get("slug") or _kb.DEFAULT_BOARD
-
-                out.append((slug, _tick_once_for_board(slug)))
-
-            return out
-
-        def _ready_nonempty() -> bool:
-            """Cheap probe: is there at least one ready+assigned+unclaimed
-
-            task on ANY board whose assignee maps to a real Clawksis profile
-
-            (i.e. one the dispatcher would actually spawn for)?
-
-
-
-            Tasks assigned to control-plane lanes (e.g. ``orion-cc``,
-
-            ``orion-research``) are pulled by terminals via
-
-            ``claim_task`` directly and never spawnable, so a queue full
-
-            of those is "correctly idle", not "stuck". Filtering them out
-
-            here keeps the stuck-warn fire only on real failures (broken
-
-            PATH, missing venv, credential loss for a real Clawksis profile).
-
-            """
-
-            try:
-                boards = _kb.list_boards(include_archived=False)
-
-            except Exception:
-                boards = [_kb.read_board_metadata(_kb.DEFAULT_BOARD)]
-
-            for b in boards:
-                slug = b.get("slug") or _kb.DEFAULT_BOARD
-
-                conn = None
-
-                try:
-                    conn = _kb.connect(board=slug)
-
-                    if _kb.has_spawnable_ready(conn):
-                        return True
-
-                    if _kb.has_spawnable_review(conn):
-                        return True
-
-                except Exception:
-                    continue
-
-                finally:
-                    if conn is not None:
-                        try:
-                            conn.close()
-
-                        except Exception:
-                            pass
-
-            return False
-
-        # Auto-decompose: turn fresh triage tasks into ready workgraphs
-
-        # before the dispatcher fans out workers. Gated by
-
-        # ``kanban.auto_decompose`` (default True). Capped by
-
-        # ``kanban.auto_decompose_per_tick`` (default 3) so a bulk-load
-
-        # of triage tasks doesn't burst-spend the aux LLM in one tick;
-
-        # remainder defers to subsequent ticks.
-
-        auto_decompose_enabled = bool(kanban_cfg.get("auto_decompose", True))
-
-        try:
-            auto_decompose_per_tick = int(
-                kanban_cfg.get("auto_decompose_per_tick", 3) or 3
-            )
-
-        except (TypeError, ValueError):
-            auto_decompose_per_tick = 3
-
-        if auto_decompose_per_tick < 1:
-            auto_decompose_per_tick = 1
-
-        def _auto_decompose_tick() -> int:
-            """Run the auto-decomposer for up to N triage tasks across all
-
-            boards. Returns the number of triage tasks that were
-
-            successfully decomposed or specified this tick.
-
-            """
-
-            try:
-                from clawk_cli import kanban_decompose as _decomp
-
-            except Exception as exc:  # pragma: no cover
-                logger.warning(
-                    "kanban auto-decompose: import failed (%s); skipping",
-                    exc,
-                )
-
-                return 0
-
-            try:
-                boards = _kb.list_boards(include_archived=False)
-
-            except Exception:
-                boards = [_kb.read_board_metadata(_kb.DEFAULT_BOARD)]
-
-            attempted = 0
-
-            successes = 0
-
-            for b in boards:
-                slug = b.get("slug") or _kb.DEFAULT_BOARD
-
-                if attempted >= auto_decompose_per_tick:
-                    break
-
-                # Pin this board for the duration of the call — same
-
-                # pattern as the dashboard specify endpoint. The
-
-                # decomposer module connects with no board kwarg and
-
-                # relies on the env var.
-
-                prev_env = os.environ.get("CLAWK_KANBAN_BOARD")
-
-                try:
-                    os.environ["CLAWK_KANBAN_BOARD"] = slug
-
-                    try:
-                        triage_ids = _decomp.list_triage_ids()
-
-                    except Exception as exc:
-                        logger.debug(
-                            "kanban auto-decompose: list_triage_ids failed on board %s (%s)",
-                            slug,
-                            exc,
-                        )
-
-                        triage_ids = []
-
-                    for tid in triage_ids:
-                        if attempted >= auto_decompose_per_tick:
-                            break
-
-                        attempted += 1
-
-                        try:
-                            outcome = _decomp.decompose_task(
-                                tid,
-                                author="auto-decomposer",
-                            )
-
-                        except Exception:
-                            logger.exception(
-                                "kanban auto-decompose: decompose_task crashed on %s",
-                                tid,
-                            )
-
-                            continue
-
-                        if outcome.ok:
-                            successes += 1
-
-                            if outcome.fanout and outcome.child_ids:
-                                logger.info(
-                                    "kanban auto-decompose [%s]: %s → %d children",
-                                    slug,
-                                    tid,
-                                    len(outcome.child_ids),
-                                )
-
-                            else:
-                                logger.info(
-                                    "kanban auto-decompose [%s]: %s → single task (no fanout)",
-                                    slug,
-                                    tid,
-                                )
-
-                        else:
-                            # Common no-op reasons (no aux client configured) shouldn't
-
-                            # spam logs every tick. Log at debug.
-
-                            logger.debug(
-                                "kanban auto-decompose [%s]: %s skipped: %s",
-                                slug,
-                                tid,
-                                outcome.reason,
-                            )
-
-                finally:
-                    if prev_env is None:
-                        os.environ.pop("CLAWK_KANBAN_BOARD", None)
-
-                    else:
-                        os.environ["CLAWK_KANBAN_BOARD"] = prev_env
-
-            return successes
-
-        logger.info("kanban dispatcher: embedded in gateway (interval=%.1fs)", interval)
-
-        while self._running:
-            try:
-                # Reap zombie children before per-board work so a board DB
-
-                # failure cannot block cleanup of unrelated workers.
-
-                pids = await asyncio.to_thread(_kb.reap_worker_zombies)
-
-                if pids:
-                    logger.info(
-                        "kanban dispatcher: reaped %d zombie worker(s), pids=%s",
-                        len(pids),
-                        pids,
-                    )
-
-            except Exception:
-                logger.exception("kanban dispatcher: zombie reaper failed")
-
-            try:
-                if auto_decompose_enabled:
-                    await asyncio.to_thread(_auto_decompose_tick)
-
-                results = await asyncio.to_thread(_tick_once)
-
-                any_spawned = False
-
-                for slug, res in results or []:
-                    if res is not None and getattr(res, "spawned", None):
-                        any_spawned = True
-
-                        # Quiet by default — only log when something actually
-
-                        # happened, so an idle gateway stays silent.
-
-                        logger.info(
-                            "kanban dispatcher [%s]: spawned=%d reclaimed=%d "
-                            "crashed=%d timed_out=%d promoted=%d auto_blocked=%d",
-                            slug,
-                            len(res.spawned),
-                            res.reclaimed,
-                            len(res.crashed) if hasattr(res.crashed, "__len__") else 0,
-                            len(res.timed_out)
-                            if hasattr(res.timed_out, "__len__")
-                            else 0,
-                            res.promoted,
-                            len(res.auto_blocked)
-                            if hasattr(res.auto_blocked, "__len__")
-                            else 0,
-                        )
-
-                # Health telemetry (aggregate across boards)
-
-                ready_pending = await asyncio.to_thread(_ready_nonempty)
-
-                if ready_pending and not any_spawned:
-                    bad_ticks += 1
-
-                else:
-                    bad_ticks = 0
-
-                if bad_ticks >= HEALTH_WINDOW:
-                    now = int(time.time())
-
-                    if now - last_warn_at >= 300:
-                        logger.warning(
-                            "kanban dispatcher stuck: ready queue non-empty for "
-                            "%d consecutive ticks but 0 workers spawned. Check "
-                            "profile health (venv, PATH, credentials) and "
-                            "`clawk kanban list --status ready`.",
-                            bad_ticks,
-                        )
-
-                        last_warn_at = now
-
-            except asyncio.CancelledError:
-                logger.debug("kanban dispatcher: cancelled")
-
-                raise
-
-            except Exception:
-                logger.exception("kanban dispatcher: unexpected watcher error")
-
-            # Sleep in 1s slices so shutdown is snappy — otherwise a stop()
-
-            # waits up to `interval` seconds for the current sleep to finish.
-
-            slept = 0.0
-
-            while slept < interval and self._running:
-                await asyncio.sleep(min(1.0, interval - slept))
-
-                slept += 1.0
 
     async def _platform_reconnect_watcher(self) -> None:
         """Background task that periodically retries connecting failed platforms.
@@ -10334,7 +9395,16 @@ class GatewayRunner:
 
             self._draining = False
 
-            self._update_runtime_status("stopped", self._exit_reason)
+            if self._signal_initiated_shutdown and not self._restart_requested:
+                # Unexpected signal (container restart / OOM / kill, not a
+                # planned `clawk gateway stop`): keep the persisted state as
+                # "running" so container_boot auto-starts on the next boot.
+                # Persisting "stopped" (or leaving the "draining" marker) would
+                # suppress that revival (#42675).
+                self._update_runtime_status("running")
+
+            else:
+                self._update_runtime_status("stopped", self._exit_reason)
 
             logger.info("Gateway stopped (total teardown %.2fs)", _phase_elapsed())
 
@@ -10845,9 +9915,7 @@ class GatewayRunner:
 
         return str(policy or "").strip().lower()
 
-    def _adapter_group_has_sender_restriction(
-        self, source: SessionSource
-    ) -> bool:
+    def _adapter_group_has_sender_restriction(self, source: SessionSource) -> bool:
         """Whether a per-group ``allow_from`` sender allowlist gates this chat.
 
 
@@ -11270,6 +10338,13 @@ class GatewayRunner:
 
         check_ids = {user_id}
 
+        # Some platforms (e.g. SimpleX) surface only the contact's display name
+        # in their UI, so operators naturally put that in {PLATFORM}_ALLOWED_USERS
+        # even though the adapter sets user_id to a stable numeric contactId.
+        # Match the display name too so both forms authorize.
+        if getattr(source, "user_name", None):
+            check_ids.add(source.user_name)
+
         if "@" in user_id:
             check_ids.add(user_id.split("@")[0])
 
@@ -11476,6 +10551,15 @@ class GatewayRunner:
         """
 
         source = event.source
+
+        if (
+            getattr(self, "_startup_restore_in_progress", False)
+            and not getattr(event, "internal", False)
+            and not getattr(event, "_hermes_startup_restore_replay", False)
+        ):
+            self._queue_startup_restore_event(event)
+
+            return None
 
         # Internal events (e.g. background-process completion notifications)
 
@@ -12373,6 +11457,10 @@ class GatewayRunner:
                 and _telegram_followup_grace > 0
                 and _started_at
                 and (time.time() - _started_at) <= _telegram_followup_grace
+                # Queue mode owns its own FIFO semantics below — rapid
+                # follow-ups must be queued as distinct turns, not merged
+                # into a single pending event.
+                and self._busy_input_mode != "queue"
             ):
                 logger.debug(
                     "Telegram follow-up arrived %.2fs after run start for %s — queueing without interrupt",
@@ -12738,6 +11826,9 @@ class GatewayRunner:
 
         if canonical == "verbose":
             return await self._handle_verbose_command(event)
+
+        if canonical == "version":
+            return await self._handle_version_command(event)
 
         if canonical == "footer":
             return await self._handle_footer_command(event)
@@ -13147,6 +12238,33 @@ class GatewayRunner:
 
             return None
 
+        # ── Active-session cap ────────────────────────────────────────
+
+        # Refuse a NEW session with a clean message when the gateway is already
+
+        # at ``max_concurrent_sessions``, so a busy box isn't overwhelmed.
+
+        # Existing active sessions returned earlier via busy handling, and
+
+        # read-only commands (/status, …) returned before reaching here — only a
+
+        # fresh agent-starting turn (including a resolved skill command) lands
+
+        # here, so this is the single choke point that must be gated.
+
+        _max_sessions = getattr(self.config, "max_concurrent_sessions", None)
+
+        if (
+            _max_sessions
+            and _quick_key not in self._running_agents
+            and len(self._running_agents) >= _max_sessions
+        ):
+            return (
+                f"Clawksis is at the active session limit "
+                f"({len(self._running_agents)}/{_max_sessions}). "
+                "Try again when another session finishes."
+            )
+
         # ── Claim this session before any await ───────────────────────
 
         # Between here and _run_agent registering the real AIAgent, there
@@ -13316,6 +12434,8 @@ class GatewayRunner:
 
         audio_file_paths: list[str] = []
 
+        video_paths: list[str] = []
+
         if event.media_urls:
             image_paths = []
 
@@ -13343,6 +12463,12 @@ class GatewayRunner:
                     not in {MessageType.AUDIO, MessageType.DOCUMENT}
                 ):
                     audio_paths.append(path)
+
+                if (
+                    mtype.startswith("video/")
+                    or event.message_type == MessageType.VIDEO
+                ):
+                    video_paths.append(path)
 
             if image_paths:
                 # Decide routing: native (attach pixels) vs text (vision_analyze
@@ -13383,7 +12509,10 @@ class GatewayRunner:
                     )
 
             if audio_paths:
-                message_text = await self._enrich_message_with_transcription(
+                (
+                    message_text,
+                    _voice_transcripts,
+                ) = await self._enrich_message_with_transcription(
                     message_text,
                     audio_paths,
                 )
@@ -13445,7 +12574,39 @@ class GatewayRunner:
                 _note = (
                     f"[The user sent an audio file attachment: '{_display}'. "
                     f"It is saved at: {_agent_path}. "
-                    f"Ask the user what they'd like you to do with it, or pass the path to a transcription or media tool.]"
+                    f"Its content is not inlined here. If the user's request involves "
+                    f"what the audio contains, transcribe or process it yourself — for "
+                    f"example by passing the path to a transcription or media tool — "
+                    f"instead of asking the user to describe it. Only ask what to do "
+                    f"with it if their intent is genuinely unclear.]"
+                )
+
+                message_text = f"{_note}\n\n{message_text}"
+
+        if video_paths:
+            from tools.credential_files import (
+                to_agent_visible_cache_path as _to_agent_path,
+            )
+
+            for _vpath in video_paths:
+                _basename = os.path.basename(_vpath)
+
+                _parts = _basename.split("_", 2)
+
+                _display = _parts[2] if len(_parts) >= 3 else _basename
+
+                _display = re.sub(r"[^\w.\- ]", "_", _display)
+
+                _agent_path = _to_agent_path(_vpath)
+
+                _note = (
+                    f"[The user sent a video attachment: '{_display}'. "
+                    f"It is saved at: {_agent_path}. "
+                    f"Its content is not inlined here. If the user's request involves "
+                    f"what the video contains, inspect or process it yourself — for "
+                    f"example by passing the path to a video analysis or media tool — "
+                    f"instead of asking the user to describe it. Only ask what to do "
+                    f"with it if their intent is genuinely unclear.]"
                 )
 
                 message_text = f"{_note}\n\n{message_text}"
@@ -14797,6 +13958,15 @@ class GatewayRunner:
 
             response = _sanitize_gateway_final_response(source.platform, response)
 
+            # Intentional-silence markers ([SILENT]/NO_REPLY/…) suppress delivery
+            # while the transcript writes below still record the turn — the agent
+            # can deliberately stay quiet in a busy group without the gateway
+            # sending the literal marker. Failed turns never count as silence.
+            from gateway.response_filters import is_intentional_silence_agent_result
+
+            if is_intentional_silence_agent_result(agent_result, response):
+                response = ""
+
             # If the agent's session_id changed during compression, update
 
             # session_entry so transcript writes below go to the right session.
@@ -15056,7 +14226,22 @@ class GatewayRunner:
                     session_entry.session_id,
                 )
 
-                self.session_store.reset_session(session_key)
+                reset_entry = self.session_store.reset_session(session_key)
+
+                # Re-point the Telegram topic binding at the fresh, parentless
+                # session.  Otherwise the (chat_id, thread_id) -> bloated-child
+                # binding survives the reset and the next inbound message's
+                # binding-heal walk re-anchors the freshly-reset lane back onto
+                # the oversized compressed transcript, re-firing the loop.
+                # (#35809)
+                if reset_entry is not None:
+                    session_entry = reset_entry
+
+                    self._sync_telegram_topic_binding(
+                        source,
+                        reset_entry,
+                        reason="compression-exhausted-auto-reset",
+                    )
 
                 self._evict_cached_agent(session_key)
 
@@ -15123,9 +14308,17 @@ class GatewayRunner:
                 if event.message_id:
                     _user_entry["message_id"] = str(event.message_id)
 
+                # The agent already persisted messages to SQLite via
+                # _flush_messages_to_session_db() when it has its own
+                # SessionDB reference, so skip the DB write here to prevent
+                # the duplicate-write bug (#42039).
+
+                agent_persisted = self._session_db is not None
+
                 self.session_store.append_to_transcript(
                     session_entry.session_id,
                     _user_entry,
+                    skip_db=agent_persisted,
                 )
 
             else:
@@ -15138,6 +14331,13 @@ class GatewayRunner:
                 )
 
                 # If no new messages found (edge case), fall back to simple user/assistant
+
+                # The agent already persisted messages to SQLite via
+                # _flush_messages_to_session_db() when it has its own
+                # SessionDB reference, so skip the DB write here to prevent
+                # the duplicate-write bug (#42039).
+
+                agent_persisted = self._session_db is not None
 
                 if not new_messages:
                     _user_entry = {
@@ -15152,12 +14352,14 @@ class GatewayRunner:
                     self.session_store.append_to_transcript(
                         session_entry.session_id,
                         _user_entry,
+                        skip_db=agent_persisted,
                     )
 
                     if response:
                         self.session_store.append_to_transcript(
                             session_entry.session_id,
                             {"role": "assistant", "content": response, "timestamp": ts},
+                            skip_db=agent_persisted,
                         )
 
                 else:
@@ -16223,12 +15425,87 @@ class GatewayRunner:
         if queue_depth:
             lines.append(t("gateway.status.queued", count=queue_depth))
 
+        if source.platform == Platform.MATRIX:
+            adapter = self.adapters.get(Platform.MATRIX)
+
+            scope = getattr(
+                adapter,
+                "_matrix_session_scope",
+                os.getenv("MATRIX_SESSION_SCOPE", "auto"),
+            )
+
+            thread = source.thread_id or "none"
+
+            lines.extend([
+                "",
+                t("gateway.status.matrix_scope_header"),
+                t(
+                    "gateway.status.matrix_scope_room",
+                    room=source.chat_name or source.chat_id,
+                ),
+                t("gateway.status.matrix_scope_room_id", room_id=source.chat_id),
+                t("gateway.status.matrix_scope_thread", thread_id=thread),
+                t("gateway.status.matrix_scope_mode", scope=scope),
+                t(
+                    "gateway.status.matrix_scope_key",
+                    session_key=self._redact_matrix_session_key(session_key),
+                ),
+            ])
+
         lines.extend([
             "",
             t("gateway.status.platforms", platforms=", ".join(connected_platforms)),
         ])
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _redact_matrix_session_key(session_key: str) -> str:
+        """Return a stable Matrix session-key fingerprint for shared room status."""
+
+        import hashlib
+
+        text = str(session_key or "")
+
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+        return f"sha256:{digest}"
+
+    def _gateway_session_origin_for_id(
+        self, session_id: str
+    ) -> Optional[SessionSource]:
+        """Best-effort origin lookup for gateway session IDs."""
+
+        lookup = getattr(type(self.session_store), "lookup_by_session_id", None)
+
+        if callable(lookup):
+            entry = lookup(self.session_store, session_id)
+
+            return getattr(entry, "origin", None) if entry is not None else None
+
+        # Test doubles and older stores may not expose the public lookup helper.
+
+        # Keep the Matrix resume guard fail-closed if no origin can be resolved.
+
+        entries = getattr(self.session_store, "_entries", {}) or {}
+
+        for entry in entries.values():
+            if getattr(entry, "session_id", None) == session_id:
+                return getattr(entry, "origin", None)
+
+        return None
+
+    @staticmethod
+    def _same_matrix_room(
+        current: SessionSource, origin: Optional[SessionSource]
+    ) -> bool:
+
+        return (
+            origin is not None
+            and origin.platform == Platform.MATRIX
+            and current.platform == Platform.MATRIX
+            and origin.chat_id == current.chat_id
+        )
 
     async def _handle_agents_command(self, event: MessageEvent) -> str:
         """Handle /agents command - list active agents and running tasks."""
@@ -17398,6 +16675,71 @@ class GatewayRunner:
 
         if not result.success:
             return t("gateway.model.error_prefix", error=result.error_message)
+
+        # Expensive-model confirmation gate (typed ``/model <name>`` path).
+        # The pickers (Telegram/Discord keyboards, TUI, dashboard) already
+        # confirm via their own UI; the typed text command previously bypassed
+        # the guard entirely. On a cost warning, ask for confirmation and apply
+        # the switch only when the user approves — re-entering this handler with
+        # a per-session bypass so the apply logic below runs exactly once.
+
+        _cost_bypass = getattr(self, "_model_cost_gate_bypass", None)
+
+        if not (_cost_bypass and session_key in _cost_bypass):
+            _cost_warning = None
+
+            try:
+                from clawk_cli.model_cost_guard import expensive_model_warning
+
+                _cost_warning = await asyncio.to_thread(
+                    expensive_model_warning,
+                    result.new_model,
+                    provider=result.target_provider,
+                    base_url=result.base_url or current_base_url or "",
+                    api_key=result.api_key or current_api_key or "",
+                    model_info=result.model_info,
+                )
+
+            except Exception:
+                _cost_warning = None
+
+            if _cost_warning is not None:
+
+                async def _on_cost_confirm(choice: str) -> str:
+                    if choice == "cancel":
+                        return (
+                            f"🟡 Model switch cancelled. Current model unchanged "
+                            f"({current_model or 'unknown'})."
+                        )
+
+                    # "once"/"always" both proceed — there is no persistent
+                    # opt-out for the cost guard (each expensive switch should
+                    # be an explicit decision). Re-run apply with the gate
+                    # bypassed for this session.
+                    _bypass = getattr(self, "_model_cost_gate_bypass", None) or set()
+
+                    self._model_cost_gate_bypass = _bypass | {session_key}
+
+                    try:
+                        return await self._handle_model_command(event)
+
+                    finally:
+                        try:
+                            self._model_cost_gate_bypass.discard(session_key)
+
+                        except Exception:
+                            pass
+
+                return await self._request_slash_confirm(
+                    event=event,
+                    command="model",
+                    title="Expensive Model Warning",
+                    message=(
+                        f"⚠️ **Expensive Model Warning**\n\n{_cost_warning.message}\n\n"
+                        f"_Reply `approve` to switch or `cancel` to keep the current model._"
+                    ),
+                    handler=_on_cost_confirm,
+                )
 
         # If there's a cached agent, update it in-place
 
@@ -18932,14 +18274,16 @@ class GatewayRunner:
             if not tts_text:
                 return
 
-            # Use .mp3 extension so edge-tts conversion to opus works correctly.
+            # Telegram renders OGG/Opus as a native voice bubble, so request
+            # an .ogg file there. Other platforms keep the .mp3 default. The
+            # TTS tool may still convert further — use file_path from result.
 
-            # The TTS tool may convert to .ogg — use file_path from result.
+            audio_ext = ".ogg" if event.source.platform == Platform.TELEGRAM else ".mp3"
 
             audio_path = os.path.join(
                 tempfile.gettempdir(),
                 "clawk_voice",
-                f"tts_reply_{_uuid.uuid4().hex[:12]}.mp3",
+                f"tts_reply_{_uuid.uuid4().hex[:12]}{audio_ext}",
             )
 
             os.makedirs(os.path.dirname(audio_path), exist_ok=True)
@@ -19883,6 +19227,13 @@ class GatewayRunner:
             enable_session_yolo(session_key)
 
             return EphemeralReply(t("gateway.yolo.enabled"))
+
+    async def _handle_version_command(self, event: MessageEvent) -> str:
+        """Handle /version — show the running Clawksis version."""
+
+        from clawk_cli.banner import format_banner_version_label
+
+        return format_banner_version_label()
 
     async def _handle_verbose_command(self, event: MessageEvent) -> str:
         """Handle /verbose command — cycle tool progress display mode.
@@ -21216,7 +20567,19 @@ class GatewayRunner:
 
         session_key = self._session_key_for_source(source)
 
-        name = event.get_command_args().strip()
+        raw_args = event.get_command_args().strip()
+
+        try:
+            parts = shlex.split(raw_args)
+
+        except ValueError as exc:
+            return t("gateway.resume.parse_error", error=exc)
+
+        allow_all = "--all" in parts
+
+        allow_cross_room = "--cross-room" in parts
+
+        name = " ".join(p for p in parts if p not in {"--all", "--cross-room"}).strip()
 
         # Strip common outer brackets/quotes users may type literally from the
 
@@ -21244,13 +20607,37 @@ class GatewayRunner:
             try:
                 titled = _list_titled_sessions()
 
+                if source.platform == Platform.MATRIX and not allow_all:
+                    scoped = []
+
+                    for s in titled:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if self._same_matrix_room(source, origin):
+                            scoped.append(s)
+
+                    titled = scoped
+
                 if not titled:
+                    if source.platform == Platform.MATRIX and not allow_all:
+                        return t("gateway.resume.matrix_no_named_sessions")
+
                     return t("gateway.resume.no_named_sessions")
 
                 lines = [t("gateway.resume.list_header")]
 
                 for idx, s in enumerate(titled[:10], start=1):
                     title = s["title"]
+
+                    if source.platform == Platform.MATRIX and allow_all:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if origin:
+                            title = f"{title} — {origin.chat_name or origin.chat_id}"
 
                     preview = s.get("preview", "")[:40]
 
@@ -21283,6 +20670,19 @@ class GatewayRunner:
         if name.isdigit():
             try:
                 titled = _list_titled_sessions()
+
+                if source.platform == Platform.MATRIX and not allow_all:
+                    scoped = []
+
+                    for s in titled:
+                        origin = self._gateway_session_origin_for_id(
+                            str(s.get("id") or "")
+                        )
+
+                        if self._same_matrix_room(source, origin):
+                            scoped.append(s)
+
+                    titled = scoped
 
             except Exception as e:
                 logger.debug("Failed to list titled sessions for numeric resume: %s", e)
@@ -21328,6 +20728,22 @@ class GatewayRunner:
                 "Failed to resolve resume continuation for %s: %s", target_id, e
             )
 
+        if source.platform == Platform.MATRIX:
+            target_origin = self._gateway_session_origin_for_id(target_id)
+
+            if (
+                not self._same_matrix_room(source, target_origin)
+                and not allow_cross_room
+            ):
+                if target_origin is None:
+                    return t("gateway.resume.matrix_blocked_no_origin", name=name)
+
+                return t(
+                    "gateway.resume.matrix_blocked_other_room",
+                    room=target_origin.chat_name or target_origin.chat_id,
+                    name=name,
+                )
+
         # Check if already on that session
 
         current_entry = self.session_store.get_or_create_session(source)
@@ -21371,6 +20787,20 @@ class GatewayRunner:
         msg_count = (
             len([m for m in history if m.get("role") == "user"]) if history else 0
         )
+
+        if source.platform == Platform.MATRIX and allow_cross_room:
+            msg_part = (
+                f" ({msg_count} message{'s' if msg_count != 1 else ''})"
+                if msg_count
+                else ""
+            )
+
+            return t(
+                "gateway.resume.matrix_cross_room_success",
+                title=title,
+                room=source.chat_name or source.chat_id,
+                msg_part=msg_part,
+            )
 
         if not msg_count:
             return t("gateway.resume.resumed_no_count", title=title)
@@ -21609,9 +21039,14 @@ class GatewayRunner:
         account_lines: list[str] = []
 
         if provider:
+            # Resolve through the gateway.slash_commands module so the account
+            # fetch/render share the single canonical home for slash-command
+            # helpers (and stay patchable from one place in tests).
+            from gateway import slash_commands as _sc
+
             try:
                 account_snapshot = await asyncio.to_thread(
-                    fetch_account_usage,
+                    _sc.fetch_account_usage,
                     provider,
                     base_url=base_url,
                     api_key=api_key,
@@ -21621,7 +21056,7 @@ class GatewayRunner:
                 account_snapshot = None
 
             if account_snapshot:
-                account_lines = render_account_usage_lines(
+                account_lines = _sc.render_account_usage_lines(
                     account_snapshot, markdown=True
                 )
 
@@ -22911,15 +22346,16 @@ class GatewayRunner:
 
     # programmatic interfaces that should not trigger system updates.
 
+    # DISCORD, MATTERMOST, and HOMEASSISTANT are plugin-migrated and are NOT
+    # listed here — they pass the /update gate via the platform registry's
+    # ``allow_update_command=True`` flag (the fallback below), so the hardcoded
+    # set stays limited to the still-builtin platforms.
     _UPDATE_ALLOWED_PLATFORMS = frozenset({
         Platform.TELEGRAM,
-        Platform.DISCORD,
         Platform.SLACK,
         Platform.WHATSAPP,
         Platform.SIGNAL,
-        Platform.MATTERMOST,
         Platform.MATRIX,
-        Platform.HOMEASSISTANT,
         Platform.EMAIL,
         Platform.SMS,
         Platform.DINGTALK,
@@ -23047,7 +22483,14 @@ class GatewayRunner:
         if is_managed():
             return f"✗ {format_managed_message('update Clawksis')}"
 
-        project_root = Path(__file__).parent.parent.resolve()
+        # Resolve the repo root from the slash-command module's location (the
+        # canonical home for this handler). gateway/slash_commands.py and
+        # gateway/run.py share the same parent, so ``parent.parent`` is the
+        # project root either way; sourcing it from slash_commands keeps the
+        # git-repo detection consistent across the decomposed handler.
+        import gateway.slash_commands as _slash_commands_mod
+
+        project_root = Path(_slash_commands_mod.__file__).parent.parent.resolve()
 
         git_dir = project_root / ".git"
 
@@ -24186,7 +23629,7 @@ class GatewayRunner:
         self,
         user_text: str,
         audio_paths: List[str],
-    ) -> str:
+    ) -> tuple[str, List[str]]:
         """
 
         Auto-transcribe user voice/audio messages using the configured STT provider
@@ -24226,23 +23669,25 @@ class GatewayRunner:
                     notes.append(f"[The user sent a voice message: {abs_path}]")
 
             if not notes:
-                return user_text
+                return user_text, []
 
             prefix = "\n\n".join(notes)
 
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, []
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", []
 
-            return prefix
+            return prefix, []
 
         from tools.transcription_tools import transcribe_audio
 
         enriched_parts = []
+
+        successful_transcripts: List[str] = []
 
         for path in audio_paths:
             try:
@@ -24252,6 +23697,8 @@ class GatewayRunner:
 
                 if result["success"]:
                     transcript = result["transcript"]
+
+                    successful_transcripts.append(transcript)
 
                     enriched_parts.append(
                         f"[The user sent a voice message~ "
@@ -24306,14 +23753,14 @@ class GatewayRunner:
             _placeholder = "(The user sent a message with no text content)"
 
             if user_text and user_text.strip() == _placeholder:
-                return prefix
+                return prefix, successful_transcripts
 
             if user_text:
-                return f"{prefix}\n\n{user_text}"
+                return f"{prefix}\n\n{user_text}", successful_transcripts
 
-            return prefix
+            return prefix, successful_transcripts
 
-        return user_text
+        return user_text, successful_transcripts
 
     def _build_process_event_source(self, evt: dict):
         """Resolve the canonical source for a synthetic background-process event.
@@ -24769,7 +24216,9 @@ class GatewayRunner:
         "honcho.user_peer_aliases",
     )
 
-    _HONCHO_CACHE_BUSTING_MEMO: dict[tuple[str, int | None], dict[str, Any]] = {}
+    _HONCHO_CACHE_BUSTING_MEMO: dict[
+        tuple[str, int | None, int | None], dict[str, Any]
+    ] = {}
 
     @classmethod
     def _empty_honcho_cache_busting_config(cls) -> dict[str, Any]:
@@ -24789,12 +24238,21 @@ class GatewayRunner:
             path = resolve_config_path()
 
             try:
-                mtime_ns = path.stat().st_mtime_ns
+                st = path.stat()
+
+                mtime_ns = st.st_mtime_ns
+
+                size = st.st_size
 
             except OSError:
                 mtime_ns = None
 
-            memo_key = (str(path), mtime_ns)
+                size = None
+
+            # Include size in the memo key: on filesystems with coarse mtime
+            # resolution (e.g. NTFS) two rapid edits can share st_mtime_ns, so
+            # mtime alone would miss a change that altered the file's length.
+            memo_key = (str(path), mtime_ns, size)
 
             cached = cls._HONCHO_CACHE_BUSTING_MEMO.get(memo_key)
 
@@ -25273,6 +24731,57 @@ class GatewayRunner:
             with _lock:
                 self._agent_cache.pop(session_key, None)
 
+    def _refresh_agent_cache_message_count(
+        self, session_key: str, session_id: str | None
+    ) -> None:
+        """Re-baseline the cached agent's transcript-count snapshot (#45966).
+
+        The cross-process coherence guard stores the session's
+        ``message_count`` next to the cached agent (as the 3rd tuple slot) and
+        rebuilds the agent when the live on-disk count diverges from that
+        snapshot.  This process's OWN turn grows the count, so without a
+        post-turn re-baseline the next same-process turn would always see a
+        mismatch and needlessly rebuild — destroying per-conversation prompt
+        caching.  Refreshing the snapshot to the now-current value leaves the
+        guard armed against external (different-process) writes only.
+
+        Fail-safe: never raises.  No-ops when there's no session DB, no
+        session_id, the entry is a legacy 2-tuple, or the cached agent is the
+        pending-construction sentinel.
+        """
+
+        session_db = getattr(self, "_session_db", None)
+
+        if session_db is None or not session_id:
+            return
+
+        try:
+            row = session_db.get_session(session_id)
+
+            live = row.get("message_count", 0) if row else None
+
+        except Exception:
+            return
+
+        if live is None:
+            return
+
+        _lock = getattr(self, "_agent_cache_lock", None)
+
+        if _lock is None:
+            return
+
+        with _lock:
+            cached = self._agent_cache.get(session_key)
+
+            if not cached or len(cached) < 3:
+                return  # legacy 2-tuple opts out of the guard
+
+            if cached[0] is _AGENT_PENDING_SENTINEL:
+                return  # agent still under construction — leave snapshot
+
+            self._agent_cache[session_key] = (cached[0], cached[1], live)
+
     @staticmethod
     def _init_cached_agent_for_turn(agent: Any, interrupt_depth: int) -> None:
         """Reset per-turn state on a cached agent before a new turn starts.
@@ -25303,6 +24812,11 @@ class GatewayRunner:
             agent._last_activity_ts = time.time()
 
             agent._last_activity_desc = "starting new turn (cached)"
+
+            # Reset the session-DB flush cursor so a fresh turn re-flushes
+            # from index 0; a stale cursor from the previous turn would skip
+            # persisting this turn's messages (#44327).
+            agent._last_flushed_db_idx = 0
 
         agent._api_call_count = 0
 
@@ -26124,6 +25638,19 @@ class GatewayRunner:
 
         repeat_count = [0]  # How many times the same message repeated
 
+        # Markdown-capable platforms render terminal commands as bare fenced
+        # code blocks (no language tag — Slack mrkdwn would print "bash" as a
+        # literal first line). Back-to-back command tools collapse under a
+        # single header (see ``last_codeblock_tool``); a different tool resets
+        # it so the next command gets a fresh header. (#42634)
+        _cb_adapter = self.adapters.get(source.platform)
+
+        _cb_supports_code_blocks = bool(
+            getattr(_cb_adapter, "supports_code_blocks", False)
+        )
+
+        last_codeblock_tool = [None]  # tool_name of the last code-block emission
+
         # Auto-cleanup of temporary progress bubbles (Telegram + any adapter
 
         # that implements ``delete_message``). When enabled via
@@ -26262,6 +25789,50 @@ class GatewayRunner:
             from agent.display import get_tool_emoji
 
             emoji = get_tool_emoji(tool_name, default="⚙️", args=args)
+
+            # Markdown-capable gateways render a command tool (terminal) as a
+            # bare fenced code block instead of a truncated quoted preview.
+            # Verbose keeps the full command; non-verbose collapses to the first
+            # line capped at tool_preview_length so a long/multi-line command
+            # doesn't render as a huge block (#42634).
+            _command = (args.get("command") if isinstance(args, dict) else None) or None
+
+            if _cb_supports_code_blocks and _command:
+                from agent.display import get_tool_preview_max_len
+
+                if progress_mode == "verbose":
+                    _body = _command
+                else:
+                    _pl = get_tool_preview_max_len()
+
+                    _cap = _pl if _pl > 0 else 40
+
+                    _body = _command.splitlines()[0] if _command else ""
+
+                    if len(_body) > _cap:
+                        _body = _body[: _cap - 1] + "…"
+
+                _code_block = f"```\n{_body}\n```"
+
+                if last_codeblock_tool[0] == tool_name:
+                    # Consecutive command tool — append the block under the
+                    # existing header instead of repeating the tool name.
+                    progress_queue.put(("__append_codeblock__", _code_block))
+
+                else:
+                    progress_queue.put(f"{emoji} {tool_name}\n{_code_block}")
+
+                last_codeblock_tool[0] = tool_name
+
+                last_progress_msg[0] = None
+
+                repeat_count[0] = 0
+
+                return
+
+            # A non-command tool breaks any running command-block streak so the
+            # next command tool starts a fresh header.
+            last_codeblock_tool[0] = None
 
             # Verbose mode: show detailed arguments, respects tool_preview_length
 
@@ -26635,6 +26206,25 @@ class GatewayRunner:
 
                     elif (
                         isinstance(raw, tuple)
+                        and len(raw) == 2
+                        and raw[0] == "__append_codeblock__"
+                    ):
+                        # Consecutive command tool — append its fenced block to
+                        # the current header line rather than emitting a new one.
+                        _, _code_block = raw
+
+                        if progress_lines:
+                            progress_lines[-1] = f"{progress_lines[-1]}\n{_code_block}"
+
+                            msg = progress_lines[-1]
+
+                        else:
+                            msg = _code_block
+
+                            progress_lines.append(msg)
+
+                    elif (
+                        isinstance(raw, tuple)
                         and len(raw) >= 1
                         and raw[0] == "__reset__"
                     ):
@@ -26859,6 +26449,23 @@ class GatewayRunner:
                                 last_progress_msg[0] = None
 
                                 repeat_count[0] = 0
+
+                            elif (
+                                isinstance(raw, tuple)
+                                and len(raw) == 2
+                                and raw[0] == "__append_codeblock__"
+                            ):
+                                _, _code_block = raw
+
+                                if progress_lines:
+                                    progress_lines[-1] = (
+                                        f"{progress_lines[-1]}\n{_code_block}"
+                                    )
+
+                                else:
+                                    progress_lines.append(_code_block)
+
+                                await _roll_progress_overflow_if_needed()
 
                             else:
                                 progress_lines.append(raw)
@@ -28035,6 +27642,47 @@ class GatewayRunner:
             if not final_response:
                 error_msg = f"⚠️ {result['error']}" if result.get("error") else ""
 
+                # A failed turn can still have split the session during mid-run
+                # context compression (the agent created a new session_id before
+                # the API call ultimately failed).  Sync the session store and
+                # Telegram topic binding so the NEXT message loads the compressed
+                # transcript instead of the stale pre-compression session — the
+                # same recovery the success path does below, but on the failure
+                # early-return.  Without this the new compressed session is
+                # orphaned on every failed compression turn.
+                _failed_session_split = False
+
+                _failed_effective_session_id = session_id
+
+                if (
+                    _agent
+                    and session_key
+                    and hasattr(_agent, "session_id")
+                    and _agent.session_id != session_id
+                ):
+                    _failed_session_split = True
+
+                    _failed_effective_session_id = _agent.session_id
+
+                    logger.info(
+                        "Session split detected on failed turn: %s → %s (compression)",
+                        session_id,
+                        _agent.session_id,
+                    )
+
+                    entry = self.session_store._entries.get(session_key)
+
+                    if entry:
+                        entry.session_id = _agent.session_id
+
+                        self.session_store._save()
+
+                        self._sync_telegram_topic_binding(
+                            source,
+                            entry,
+                            reason="agent-run-compression",
+                        )
+
                 return {
                     "final_response": error_msg,
                     "messages": result.get("messages", []),
@@ -28047,12 +27695,15 @@ class GatewayRunner:
                     "error": result.get("error"),
                     "compression_exhausted": result.get("compression_exhausted", False),
                     "tools": tools_holder[0] or [],
-                    "history_offset": len(agent_history),
+                    "history_offset": 0
+                    if _failed_session_split
+                    else len(agent_history),
                     "last_prompt_tokens": _last_prompt_toks,
                     "input_tokens": _input_toks,
                     "output_tokens": _output_toks,
                     "model": _resolved_model,
                     "context_length": _context_length,
+                    "session_id": _failed_effective_session_id,
                 }
 
             # Scan tool results for MEDIA:<path> tags that need to be delivered
@@ -29921,13 +29572,52 @@ async def start_gateway(
                     existing_pid,
                 )
 
+                _force_exited = False
+
                 try:
                     terminate_pid(existing_pid, force=True)
 
-                    time.sleep(0.5)
+                except ProcessLookupError:
+                    _force_exited = True
 
-                except (ProcessLookupError, PermissionError, OSError):
+                except (PermissionError, OSError):
                     pass
+
+                # Confirm the force-kill actually reaped the process before we
+
+                # clear its PID file / scoped locks. SIGKILL can fail to take
+
+                # (uninterruptible sleep, zombie-reaping parent); if we blindly
+
+                # clear the metadata and start a fresh instance we end up with
+
+                # two live gateways fighting over the same token (#19471).
+
+                if not _force_exited:
+                    for _ in range(20):
+                        if not _pid_exists(existing_pid):
+                            _force_exited = True
+
+                            break
+
+                        time.sleep(0.25)
+
+                if not _force_exited:
+                    logger.error(
+                        "Old gateway (PID %d) still appears alive after SIGKILL; "
+                        "aborting replacement to avoid a duplicate gateway.",
+                        existing_pid,
+                    )
+
+                    try:
+                        from gateway.status import clear_takeover_marker
+
+                        clear_takeover_marker()
+
+                    except Exception:
+                        pass
+
+                    return False
 
             remove_pid_file()
 

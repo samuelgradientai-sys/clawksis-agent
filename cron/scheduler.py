@@ -244,6 +244,7 @@ _HOME_TARGET_ENV_VARS = {
     "bluebubbles": "BLUEBUBBLES_HOME_CHANNEL",
     "qqbot": "QQBOT_HOME_CHANNEL",
     "whatsapp": "WHATSAPP_HOME_CHANNEL",
+    "whatsapp_cloud": "WHATSAPP_CLOUD_HOME_CHANNEL",
 }
 
 
@@ -735,6 +736,53 @@ def _iter_home_target_platforms():
 
     except Exception:
         pass
+
+
+def cron_delivery_targets() -> list:
+    """List configured + cron-deliverable platforms for the dashboard dropdown.
+
+    For every platform the gateway reports as connected that also exposes a
+    cron home channel (built-in via ``_HOME_TARGET_ENV_VARS`` or a plugin via
+    the platform registry), return a descriptor:
+
+        {"id": <platform>, "home_env_var": <ENV>, "home_target_set": <bool>}
+
+    ``home_target_set`` reflects whether the home channel env var is actually
+    populated, so the UI can flag platforms that are connected but not yet
+    pointed at a delivery target. Platforms whose gateway isn't configured are
+    never included. Returns ``[]`` if the gateway config can't be loaded.
+    """
+
+    try:
+        from gateway.config import load_gateway_config
+
+        gateway_config = load_gateway_config()
+
+        connected = gateway_config.get_connected_platforms()
+
+    except Exception:
+        return []
+
+    targets = []
+
+    for platform in connected:
+        name = getattr(platform, "value", platform)
+
+        if not isinstance(name, str):
+            name = str(name)
+
+        env_var = _resolve_home_env_var(name)
+
+        if not env_var:
+            continue
+
+        targets.append({
+            "id": name,
+            "home_env_var": env_var,
+            "home_target_set": bool(_get_home_target_chat_id(name)),
+        })
+
+    return targets
 
 
 def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[dict]:
@@ -1791,6 +1839,16 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
 
     prompt = str(job.get("prompt") or "")
 
+    # The user-authored prompt is the real injection surface and always keeps
+    # the STRICT scan. Runtime DATA blobs (script stdout/stderr, context_from
+    # output) are operator-authored — same trust class as install-vetted skill
+    # markdown — so when any of them are present the assembled prompt is scanned
+    # with the LOOSER tier (command-shapes allowed, invisible unicode
+    # sanitized) and the raw user prompt is strict-scanned separately below.
+    raw_user_prompt = prompt
+
+    has_runtime_data = False
+
     skills = job.get("skills")
 
     # Run data-collection script if configured, inject output as context.
@@ -1806,6 +1864,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
 
         if success:
             if script_output:
+                has_runtime_data = True
+
                 prompt = (
                     "## Script Output\n"
                     "The following data was collected by a pre-run script. "
@@ -1820,6 +1880,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                 return None
 
         else:
+            has_runtime_data = True
+
             prompt = (
                 "## Script Error\n"
                 "The data-collection script failed. Report this to the user.\n\n"
@@ -1881,6 +1943,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                     )
 
                 if latest_output:
+                    has_runtime_data = True
+
                     prompt = (
                         f"## Output from job '{source_job_id}'\n"
                         "The following is the most recent output from a preceding "
@@ -1962,7 +2026,14 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     skill_names = [str(name).strip() for name in skills if str(name).strip()]
 
     if not skill_names:
-        return _scan_assembled_cron_prompt(prompt, job, has_skills=False)
+        # Runtime DATA (script output / context_from) gets the looser tier, but
+        # the raw user prompt keeps the strict guarantee (scanned separately).
+        return _scan_assembled_cron_prompt(
+            prompt,
+            job,
+            has_skills=has_runtime_data,
+            strict_user_prompt=raw_user_prompt if has_runtime_data else None,
+        )
 
     from tools.skills_tool import skill_view
 
@@ -2083,11 +2154,20 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
             f"The user has provided the following instruction alongside the skill invocation: {prompt}",
         ])
 
-    return _scan_assembled_cron_prompt("\n".join(parts), job, has_skills=True)
+    return _scan_assembled_cron_prompt(
+        "\n".join(parts),
+        job,
+        has_skills=True,
+        strict_user_prompt=raw_user_prompt if has_runtime_data else None,
+    )
 
 
 def _scan_assembled_cron_prompt(
-    assembled: str, job: dict, *, has_skills: bool = False
+    assembled: str,
+    job: dict,
+    *,
+    has_skills: bool = False,
+    strict_user_prompt: Optional[str] = None,
 ) -> str:
     """Scan the fully-assembled cron prompt for injection patterns. Raises
 
@@ -2135,9 +2215,31 @@ def _scan_assembled_cron_prompt(
 
       vetted at install time by ``skills_guard.py``.
 
+    ``strict_user_prompt`` carries the raw user-authored prompt when the
+    looser tier was selected only because runtime DATA (script output /
+    context_from output) was injected. The user prompt is the real
+    injection surface, so it keeps the STRICT scan regardless of the tier
+    chosen for the surrounding data blobs.
+
     """
 
     from tools.cronjob_tools import _scan_cron_prompt, _scan_cron_skill_assembled
+
+    # The user-authored prompt always keeps the strict guarantee, even when the
+    # surrounding runtime data forced the looser assembled tier.
+    if strict_user_prompt:
+        user_scan_error = _scan_cron_prompt(strict_user_prompt)
+
+        if user_scan_error:
+            job_label = job.get("name") or job.get("id") or "<unknown>"
+
+            logger.warning(
+                "Cron job '%s': user prompt blocked by injection scanner — %s",
+                job_label,
+                user_scan_error,
+            )
+
+            raise CronPromptInjectionBlocked(user_scan_error)
 
     if has_skills:
         # Skill content is install-time vetted by skills_guard.py. Invisible
@@ -2446,6 +2548,25 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     origin = _resolve_origin(job)
 
     _cron_session_id = f"cron_{job_id}_{_clawk_now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Title the session from the job itself (name → short prompt → id) so the
+    # sidebar/history row reads sensibly. Without this, the row label defaults
+    # to the cron session's first message — the injected "[IMPORTANT: …]" hint
+    # — which is noise. ``job_name`` already encodes the name→prompt→id
+    # fallback. Truncate to stay within the title length limit and never let a
+    # titling failure abort the job.
+    if _session_db is not None:
+        try:
+            _cron_session_title = (job_name or "")[:80].strip() or job_id
+
+            _session_db.set_session_title(_cron_session_id, _cron_session_title)
+
+        except Exception as _title_exc:
+            logger.debug(
+                "Job '%s': could not set cron session title: %s",
+                job_id,
+                _title_exc,
+            )
 
     logger.info("Running job '%s' (ID: %s)", job_name, job_id)
 

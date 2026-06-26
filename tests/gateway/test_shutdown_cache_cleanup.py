@@ -51,6 +51,7 @@ class _FakeGateway:
         self._pending_messages = {}
         self._pending_approvals = {}
         self._busy_ack_ts = {}
+        self._signal_initiated_shutdown = False
 
     def _running_agent_count(self):
         return len(self._running_agents)

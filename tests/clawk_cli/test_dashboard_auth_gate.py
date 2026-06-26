@@ -158,23 +158,54 @@ def test_should_require_auth_truth_table(host, allow_public, expected):
 
 
 def _stub_uvicorn_run(monkeypatch):
-    """Replace uvicorn.run with a no-op recorder so start_server returns
+    """Neutralize the real server start so start_server returns immediately.
 
-    immediately (rather than blocking on the event loop).  Returns the dict
+    start_server drives uvicorn.Server directly (uvicorn.Config + asyncio.run)
 
-    that will capture the keyword args."""
+    instead of uvicorn.run, so stub all three: capture the uvicorn.Config
+
+    kwargs (which carry host/port/proxy_headers), make Server() a no-op whose
+
+    capture_signals() is a no-op context manager, and turn asyncio.run into a
+
+    no-op so we never bind a socket or block on the event loop.  Returns the
+
+    dict that captures the Config keyword args."""
+
+    import asyncio
+
+    import contextlib
 
     import uvicorn
 
     captured: dict = {}
 
-    def _fake_run(*args, **kwargs):
+    def _fake_config(*args, **kwargs):
 
         captured["args"] = args
 
         captured["kwargs"] = kwargs
 
-    monkeypatch.setattr(uvicorn, "run", _fake_run)
+        return object()
+
+    class _FakeServer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @contextlib.contextmanager
+        def capture_signals(self):
+            yield
+
+    def _fake_run(coro, *args, **kwargs):
+
+        if hasattr(coro, "close"):
+            coro.close()
+
+    monkeypatch.setattr(uvicorn, "Config", _fake_config)
+
+    monkeypatch.setattr(uvicorn, "Server", _FakeServer)
+
+    monkeypatch.setattr(asyncio, "run", _fake_run)
 
     return captured
 

@@ -146,7 +146,9 @@ def main() -> int:
             continue
 
         for py_file in dirpath.rglob("*.py"):
-            rel = str(py_file.relative_to(repo_root))
+            # Normalize to forward slashes so KNOWN_SAFE entries (always written
+            # with "/") match regardless of host OS path separator.
+            rel = py_file.relative_to(repo_root).as_posix()
 
             # Skip known-safe files.
             if rel in KNOWN_SAFE:
@@ -157,7 +159,7 @@ def main() -> int:
             if any(skip.rstrip("/") in parts for skip in SKIP_DIRS):
                 continue
 
-            content = py_file.read_text()
+            content = py_file.read_text(encoding="utf-8")
             violations = find_subprocess_calls(content, rel)
             all_violations.extend(violations)
 

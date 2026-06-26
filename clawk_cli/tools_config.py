@@ -352,6 +352,45 @@ def _get_plugin_toolset_keys() -> set:
         return set()
 
 
+def valid_post_setup_keys() -> Set[str]:
+    """Return the set of post-setup keys declared by any visible provider.
+
+    Collected from ``TOOL_CATEGORIES`` plus the plugin-registered web /
+    image-gen / video-gen / browser providers (which can also carry a
+    ``post_setup``). This is the allowlist the ``clawk tools post-setup``
+    command and the dashboard post-setup endpoint validate against, so a
+    caller can't drive ``_run_post_setup`` with an arbitrary key.
+    """
+
+    keys: Set[str] = set()
+
+    for cat in TOOL_CATEGORIES.values():
+        for prov in cat.get("providers", []):
+            ps = prov.get("post_setup")
+
+            if ps:
+                keys.add(ps)
+
+    # Plugin-registered providers can declare their own post_setup hooks.
+    for builder in (
+        _plugin_web_search_providers,
+        _plugin_image_gen_providers,
+        _plugin_video_gen_providers,
+        _plugin_browser_providers,
+    ):
+        try:
+            for prov in builder():
+                ps = prov.get("post_setup")
+
+                if ps:
+                    keys.add(ps)
+
+        except Exception:  # pragma: no cover — defensive; plugins optional
+            continue
+
+    return keys
+
+
 def _checklist_toolset_keys(platform: str) -> Set[str]:
     """Return the toolset keys the ``clawk tools`` checklist actually offers
 
@@ -2274,6 +2313,13 @@ def _get_platform_tools(
             continue
 
         if ts_def.get("includes"):
+            continue
+
+        # Posture toolsets (e.g. ``coding``) are selected per-session by
+        # agent/coding_context.py, never baked into per-platform tool config —
+        # recovering them here would leak the coding posture into every
+        # platform's default toolset list. See toolsets.py ``"posture": True``.
+        if ts_def.get("posture"):
             continue
 
         ts_tools = set(resolve_toolset(ts_key))

@@ -531,6 +531,12 @@ COMMAND_REGISTRY: list[CommandDef] = [
     ),
     CommandDef("update", "Update Clawksis to the latest version", "Info"),
     CommandDef(
+        "version",
+        "Show Clawksis version and runtime info",
+        "Info",
+        aliases=("v",),
+    ),
+    CommandDef(
         "debug",
         "Upload debug report (system info + logs) and get shareable links",
         "Info",

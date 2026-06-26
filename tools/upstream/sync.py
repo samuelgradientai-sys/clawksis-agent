@@ -166,7 +166,12 @@ def git(*args: str, check: bool = True) -> str:
 
 
 def git_bytes(*args: str) -> bytes | None:
-    res = subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+    res = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
     return res.stdout if res.returncode == 0 else None
 
 
@@ -257,7 +262,12 @@ def fetch_rev(rev: str) -> None:
         ["fetch", "--depth", "1", "upstream", "tag", rev],
         ["fetch", "upstream", rev],
     ):
-        res = subprocess.run(["git", *refspec], cwd=ROOT, capture_output=True)
+        res = subprocess.run(
+            ["git", *refspec],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+        )
         if res.returncode == 0 and rev_exists(rev):
             return
     raise RuntimeError(f"No pude traer '{rev}' de upstream.")
@@ -272,7 +282,12 @@ def ensure_history(state: dict) -> None:
     args = ["fetch", "upstream", "main"]
     if since:
         args.insert(1, f"--shallow-since={since}")
-    subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+    subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
     if not rev_exists(last):
         raise RuntimeError(
             f"El commit base {last[:9]} sigue sin estar disponible. "

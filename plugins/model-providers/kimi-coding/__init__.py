@@ -19,19 +19,22 @@ class KimiProfile(ProviderProfile):
     def build_api_kwargs_extras(
         self, *, reasoning_config: dict | None = None, **context
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Kimi uses extra_body.thinking XOR top-level reasoning_effort.
+        """Kimi uses extra_body.thinking + top-level reasoning_effort.
 
-        Moonshot's /v1 endpoint rejects requests that carry both
-        ``extra_body.thinking`` and a top-level ``reasoning_effort`` ("cannot
-        specify both 'thinking' and 'reasoning_effort'"). So we emit at most
-        one knob: an explicit, recognized effort sends ``reasoning_effort``
-        alone; every other case falls back to the ``thinking`` toggle alone.
+        Moonshot's OpenAI-compat endpoint treats ``extra_body.thinking`` and
+        a top-level ``reasoning_effort`` as mutually exclusive, so we emit at
+        most one of them — never both. A recognized effort
+        (``low|medium|high``) already turns reasoning on, so it is sent on its
+        own; otherwise we fall back to the ``extra_body.thinking`` binary
+        toggle. When reasoning is disabled we send only
+        ``thinking={"type": "disabled"}`` and omit ``reasoning_effort``.
+        Mirrors the OpenCodeGoProfile kimi-k2 branch.
         """
         extra_body = {}
         top_level = {}
 
         if not reasoning_config or not isinstance(reasoning_config, dict):
-            # No config → thinking enabled, let the server pick the depth.
+            # No config → thinking on via the binary toggle only.
             extra_body["thinking"] = {"type": "enabled"}
             return extra_body, top_level
 
@@ -40,8 +43,9 @@ class KimiProfile(ProviderProfile):
             extra_body["thinking"] = {"type": "disabled"}
             return extra_body, top_level
 
-        # Enabled: an explicit recognized effort wins and is sent on its own;
-        # otherwise drop to the thinking toggle so we never pair both.
+        # Enabled: a recognized effort wins (top-level only); any unknown or
+        # strong effort (e.g. ``xhigh``/``max``) is not in Moonshot's
+        # low|medium|high set, so drop to the thinking toggle instead.
         effort = (reasoning_config.get("effort") or "").strip().lower()
         if effort in {"low", "medium", "high"}:
             top_level["reasoning_effort"] = effort

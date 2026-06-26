@@ -550,7 +550,22 @@ def _resolve_model_override(model_obj: Optional[Dict[str, Any]]) -> tuple:
     # provider gets pinned instead.
 
     if provider_name == "custom":
-        provider_name = None
+        # Keep bare "custom" only when it actually resolves to a named
+        # providers/custom_providers entry (e.g. a single ``providers.custom``
+        # cliproxy gateway). Otherwise treat it as "no provider supplied" so the
+        # current main provider gets pinned instead of an unresolvable "custom".
+        # The explicit "custom:<name>" form is not equal to "custom" and so
+        # never reaches this branch — it is preserved as-is.
+        try:
+            from clawk_cli import runtime_provider as _rp
+
+            _has_entry = _rp.has_named_custom_provider(provider_name)
+
+        except Exception:
+            _has_entry = False
+
+        if not _has_entry:
+            provider_name = None
 
     if model_name and not provider_name:
         # Pin to the current main provider so the job is stable

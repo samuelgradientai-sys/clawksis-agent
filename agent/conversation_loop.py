@@ -1030,6 +1030,18 @@ def run_conversation(
                 if not _compressor.should_compress(_preflight_tokens):
                     break  # Under threshold or anti-thrash guard stopped it
 
+    # Persist the inbound user turn before any provider/tool work.  If the
+    # provider call (or tool execution) crashes mid-turn, the user's message
+    # is already flushed to the session log + SQLite so it survives the crash
+    # and resumes correctly on the next turn.  Subsequent in-loop persists
+    # overwrite this with the fuller transcript as the turn progresses.
+
+    try:
+        agent._persist_session(messages, conversation_history)
+
+    except Exception:
+        pass
+
     # Plugin hook: pre_llm_call
 
     # Fired once per turn before the tool-calling loop.  Plugins can
@@ -1606,7 +1618,17 @@ def run_conversation(
 
         # UI transcript and session persistence.
 
-        api_messages = agent._drop_thinking_only_and_merge_users(api_messages)
+        # In codex_responses mode, encrypted ``codex_reasoning_items`` are
+        # replayed to the Responses API on purpose (cross-turn coherence).
+        # They are NOT Anthropic-style thinking blocks, so a turn carrying
+        # only reasoning items must survive — dropping it here would strip
+        # the replay before the request and defeat the
+        # ``invalid_encrypted_content`` recovery contract (which only
+        # disables replay AFTER the provider rejects it).
+        api_messages = agent._drop_thinking_only_and_merge_users(
+            api_messages,
+            drop_codex_reasoning_items=agent.api_mode != "codex_responses",
+        )
 
         # Normalize message whitespace and tool-call JSON for consistent
 

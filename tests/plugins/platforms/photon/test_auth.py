@@ -322,7 +322,7 @@ def test_find_project_by_name_case_insensitive(monkeypatch: pytest.MonkeyPatch) 
         )
 
     monkeypatch.setattr(photon_auth.httpx, "get", fake_get)
-    proj = photon_auth.find_project_by_name("tok", "Clawksis")
+    proj = photon_auth.find_project_by_name("tok", "Clawk Agent")
     assert proj is not None and proj["id"] == "p2"
 
 

@@ -349,6 +349,11 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # First-time setup shells out to `npm install -g` for the coding
+            # CLIs and seeds a welcome cron — stub both so the test stays
+            # deterministic and never blocks on a real subprocess.
+            patch.object(setup_mod, "_install_coding_clis"),
+            patch.object(setup_mod, "_seed_welcome_checkin"),
         ):
             setup_mod.run_setup_wizard(args)
 
@@ -384,6 +389,10 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g` (Codex / Claude
+            # Code / OpenCode); on Linux CI that blocks on the network and trips
+            # the 30s timeout. Stub it like the first-time-setup test above.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 
@@ -420,6 +429,9 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_tools"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g`; stub it so the
+            # wizard doesn't block on the network under the 30s CI timeout.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 
@@ -889,6 +901,9 @@ class TestSetupWizardSkipsConfiguredSections:
             patch.object(setup_mod, "setup_tools") as mock_tools,
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
+            # _install_coding_clis shells out to `npm install -g`; stub it so the
+            # wizard doesn't block on the network under the 30s CI timeout.
+            patch.object(setup_mod, "_install_coding_clis"),
         ):
             setup_mod.run_setup_wizard(args)
 

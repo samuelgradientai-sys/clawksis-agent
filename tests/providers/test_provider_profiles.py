@@ -71,7 +71,10 @@ class TestKimiProfile:
         eb, tl = p.build_api_kwargs_extras(
             reasoning_config={"enabled": True, "effort": "high"}
         )
-        assert eb["thinking"] == {"type": "enabled"}
+        # XOR: a recognized effort turns reasoning on by itself, so the
+        # thinking toggle is omitted (Moonshot treats them as mutually
+        # exclusive — mirrors the opencode-zen kimi-k2 branch).
+        assert "thinking" not in eb
         assert tl["reasoning_effort"] == "high"
 
     def test_thinking_disabled(self):
@@ -83,13 +86,17 @@ class TestKimiProfile:
     def test_reasoning_effort_default(self):
         p = get_provider_profile("kimi")
         eb, tl = p.build_api_kwargs_extras(reasoning_config={"enabled": True})
-        assert tl["reasoning_effort"] == "medium"
+        # Enabled but no recognized effort → fall back to the thinking toggle
+        # only (XOR: no reasoning_effort).
+        assert eb["thinking"] == {"type": "enabled"}
+        assert "reasoning_effort" not in tl
 
     def test_no_config_defaults(self):
         p = get_provider_profile("kimi")
         eb, tl = p.build_api_kwargs_extras(reasoning_config=None)
+        # No config → thinking on via the binary toggle only (XOR).
         assert eb["thinking"] == {"type": "enabled"}
-        assert tl["reasoning_effort"] == "medium"
+        assert "reasoning_effort" not in tl
 
 
 class TestOpenRouterProfile:

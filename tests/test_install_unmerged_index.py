@@ -1,14 +1,20 @@
-"""Regression: installer fails when the existing checkout has an unmerged index.
+"""Regression: installer recovers when the checkout has an unmerged index.
 
 A previously interrupted update can leave ``$INSTALL_DIR`` with unmerged index
-entries (files in a conflicted, "needs merge" state). In that state the update
-path's ``git stash`` aborts with "could not write index" and the following
+entries (files in a conflicted, "needs merge" state). In that state a bare
 ``git checkout <branch>`` aborts with "you need to resolve your current index
 first" -- surfacing to GUI/bootstrap users as ``git checkout main failed
 (exit 1)`` and failing the whole install at the repository stage.
 
-The ``clawk update`` Python path already clears the conflict with ``git reset``
-before stashing (#4735); both installer scripts must do the same.
+This fork's installers are a *managed-only* entry point: the checkout under
+``$INSTALL_DIR`` is never user-edited, so both ``install.sh`` and
+``install.ps1`` discard any working-tree dirt with ``git reset --hard`` before
+the ``git checkout`` (the older upstream path stashed and re-applied the dirt,
+which clobbered freshly-pulled source files -> ``[UNRESOLVED_ENTRY]``). The
+hard reset also clears an unmerged index, so the subsequent checkout proceeds.
+Fork users who customize their clone use ``clawk update``, which keeps the
+stash machinery and clears the conflict with ``git reset`` before stashing
+(#4735).
 """
 
 from __future__ import annotations
@@ -40,15 +46,16 @@ def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     )
 
 
-def _extract_autostash_block() -> str:
-    """Pull the autostash if-block from install.sh's update_repo()."""
-    text = INSTALL_SH.read_text()
+def _extract_reset_block() -> str:
+    """Pull the managed-clone reset if-block from install.sh's clone_repo()."""
+    text = INSTALL_SH.read_text(encoding="utf-8")
     m = re.search(
-        r'local autostash_ref="".*?\n            fi\n',
+        r'if \[ -n "\$\(git status --porcelain\)" \]; then\n'
+        r".*?git reset --hard HEAD.*?\n            fi\n",
         text,
         re.DOTALL,
     )
-    assert m is not None, "autostash block not found in install.sh"
+    assert m is not None, "managed-clone reset block not found in install.sh"
     return m.group(0)
 
 
@@ -78,17 +85,18 @@ def _make_unmerged_repo(repo: Path) -> None:
 
 
 @pytest.mark.live_system_guard_bypass  # runs against a dedicated throwaway repo
-def test_install_sh_clears_unmerged_index_then_stashes(tmp_path: Path) -> None:
+def test_install_sh_clears_unmerged_index_before_checkout(tmp_path: Path) -> None:
     repo = tmp_path / "clawksis-agent"
     repo.mkdir()
     _make_unmerged_repo(repo)
+    start = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
-    # Sanity: this is exactly the state that breaks `git stash` / `git checkout`.
+    # Sanity: this is exactly the state that breaks a bare `git checkout`.
     assert _git(repo, "ls-files", "--unmerged").stdout.strip(), (
         "test setup failed to produce an unmerged index"
     )
 
-    block = _extract_autostash_block()
+    block = _extract_reset_block()
     script = (
         "set -e\n"
         'log_info() { echo "INFO: $*"; }\n'
@@ -102,42 +110,38 @@ def test_install_sh_clears_unmerged_index_then_stashes(tmp_path: Path) -> None:
         ["bash", "-c", script], cwd=repo, capture_output=True, text=True
     )
 
-    # The block must complete (previously `git stash` failed with "could not
-    # write index" on the unmerged tree).
+    # The block must complete and clear the conflicted index.
     assert res.returncode == 0, res.stderr
     assert "BLOCK_OK" in res.stdout
-    assert "Clearing unmerged index entries" in res.stdout
 
     # The conflict state is gone ...
     assert _git(repo, "ls-files", "--unmerged").stdout.strip() == "", (
         "unmerged entries should have been cleared"
     )
-    # ... and the local changes were preserved in a stash, not discarded.
-    assert _git(repo, "stash", "list").stdout.strip(), (
-        "local changes should be preserved in a stash"
+    # ... so the checkout that previously aborted ("you need to resolve your
+    # current index first") now succeeds.
+    assert _git(repo, "checkout", start, check=False).returncode == 0, (
+        "checkout should succeed once the unmerged index is cleared"
     )
 
 
-def test_install_ps1_clears_unmerged_index_before_stash() -> None:
-    """install.ps1 must clear an unmerged index before stash/checkout, and do
-    so *before* the stash push (order matters — the fix is a no-op otherwise)."""
-    text = INSTALL_PS1.read_text()
-    assert "ls-files --unmerged" in text, (
-        "install.ps1 must detect an unmerged index before updating"
+def test_install_ps1_clears_unmerged_index_before_checkout() -> None:
+    """install.ps1 must clear a dirty/unmerged index with a hard reset before
+    the checkout, and do so *before* the checkout (order matters — the fix is a
+    no-op otherwise)."""
+    text = INSTALL_PS1.read_text(encoding="utf-8")
+    assert "reset --hard HEAD" in text, (
+        "install.ps1 must hard-reset the managed clone before updating"
     )
-    idx_unmerged = text.index("ls-files --unmerged")
-    idx_reset = text.index("reset -q", idx_unmerged)
-    idx_stash = text.index("stash push --include-untracked")
-    assert idx_unmerged < idx_stash, (
-        "the unmerged-index clear must run before `git stash push`"
-    )
-    assert idx_reset < idx_stash, "`git reset` must run before `git stash push`"
+    idx_reset = text.index("reset --hard HEAD")
+    idx_checkout = text.index("checkout $Branch", idx_reset)
+    assert idx_reset < idx_checkout, "the hard reset must run before `git checkout`"
 
 
-def test_install_sh_clears_unmerged_index_before_stash_source_order() -> None:
+def test_install_sh_clears_unmerged_index_before_checkout_source_order() -> None:
     """Same ordering contract for install.sh's source."""
-    text = INSTALL_SH.read_text()
-    assert "ls-files --unmerged" in text
-    idx_unmerged = text.index("ls-files --unmerged")
-    idx_stash = text.index("stash push --include-untracked")
-    assert idx_unmerged < idx_stash
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    assert "reset --hard HEAD" in text
+    idx_reset = text.index("reset --hard HEAD")
+    idx_checkout = text.index('checkout "$BRANCH"', idx_reset)
+    assert idx_reset < idx_checkout

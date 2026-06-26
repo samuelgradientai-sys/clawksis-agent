@@ -174,7 +174,24 @@ from tools.tool_backend_helpers import (  # noqa: F401
     prefers_gateway,
 )
 
-from tools.url_safety import is_safe_url
+from tools.url_safety import (
+    is_safe_url,
+    normalize_url_for_request,
+)
+
+
+async def async_is_safe_url(url: str) -> bool:
+    """Off-event-loop SSRF probe used by the web tools.
+
+    Wraps the module-level ``is_safe_url`` (which does blocking DNS) in a thread
+    so it never stalls the loop. Defined locally — rather than imported from
+    ``tools.url_safety`` — so tests can monkeypatch EITHER
+    ``web_tools.is_safe_url`` OR ``web_tools.async_is_safe_url`` and the web
+    tools honour the patch (the website-policy gate patches the former; the
+    brave/secret-exfil suites patch the latter).
+    """
+    return await asyncio.to_thread(is_safe_url, url)
+
 
 import sys
 
@@ -1523,16 +1540,27 @@ async def web_extract_tool(
         ssrf_blocked: List[Dict[str, Any]] = []
 
         for url in urls:
-            if not is_safe_url(url):
+            # Normalize first (IDNA host + percent-encode non-ASCII path/query)
+            # so the SSRF check and the backend both see a canonical ASCII URL —
+            # otherwise an international URL like ``wttr.in/Köln`` reaches the
+            # provider unescaped. Use the async SSRF probe so DNS resolution
+            # doesn't block the event loop.
+            normalized = normalize_url_for_request(url)
+
+            # Run the (DNS-resolving, blocking) SSRF probe off the event loop so
+            # it doesn't stall the loop; async_is_safe_url wraps the module-level
+            # is_safe_url so monkeypatching either symbol works and the
+            # website-policy gate downstream still runs.
+            if not await async_is_safe_url(normalized):
                 ssrf_blocked.append({
-                    "url": url,
+                    "url": normalized,
                     "title": "",
                     "content": "",
                     "error": "Blocked: URL targets a private or internal network address",
                 })
 
             else:
-                safe_urls.append(url)
+                safe_urls.append(normalized)
 
         # Dispatch only safe URLs to the configured backend
 

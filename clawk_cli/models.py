@@ -344,6 +344,7 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "openai/gpt-oss-120b",
     ],
     "kimi-coding": [
+        "kimi-k2.7-code",
         "kimi-k2.6",
         "kimi-k2.5",
         "kimi-for-coding",
@@ -2171,7 +2172,11 @@ def _fetch_novita_pricing(
 _KNOWN_PROVIDER_NAMES: set[str] = (
     set(_PROVIDER_LABELS.keys())
     | set(_PROVIDER_ALIASES.keys())
-    | {"openrouter", "custom"}
+    # ``nous`` was dropped from CANONICAL_PROVIDERS when the Nous Portal was
+    # removed from the picker, but the dormant runtime paths still resolve it
+    # (normalize_provider passthrough). Keep it recognised so the documented
+    # ``nous:model`` switch syntax in parse_model_input keeps working.
+    | {"openrouter", "custom", "nous"}
 )
 
 
@@ -2324,6 +2329,34 @@ def _get_custom_base_url() -> str:
         pass
 
     return ""
+
+
+def _configured_model_endpoint() -> tuple[str, str]:
+    """Return ``(base_url, api_key)`` from the configured ``model`` block.
+
+    Lets ``provider_model_ids`` honour a user-pointed proxy/gateway base_url
+    (e.g. an Anthropic-compatible reverse proxy) instead of always hitting the
+    vendor's canonical endpoint. Returns empty strings when nothing is set.
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        config = load_config()
+
+        model_cfg = config.get("model", {})
+
+        if isinstance(model_cfg, dict):
+            base_url = str(model_cfg.get("base_url", "")).strip()
+
+            api_key = str(model_cfg.get("api_key", "")).strip()
+
+            return base_url, api_key
+
+    except Exception:
+        pass
+
+    return "", ""
 
 
 def curated_models_for_provider(
@@ -3095,6 +3128,22 @@ def provider_model_ids(
             pass
 
     if normalized == "anthropic":
+        # When the user points the Anthropic provider at a custom proxy /
+        # gateway base_url, that endpoint is the source of truth for the
+        # catalog — query it directly (x-api-key auth) and return its listing
+        # verbatim instead of the vendor's canonical api.anthropic.com dump.
+        configured_base_url, configured_api_key = _configured_model_endpoint()
+
+        if configured_base_url:
+            proxy_live = fetch_api_models(
+                configured_api_key,
+                configured_base_url,
+                api_mode="anthropic_messages",
+            )
+
+            if proxy_live:
+                return proxy_live
+
         live = _fetch_anthropic_models()
 
         if live:
@@ -3201,18 +3250,23 @@ def provider_model_ids(
             pass
 
     if normalized == "custom":
-        base_url = _get_custom_base_url()
+        base_url, configured_api_key = _configured_model_endpoint()
 
         if base_url:
-            # Try common API key env vars for custom endpoints
-
-            api_key = (
+            # Prefer the configured model api_key; fall back to the common
+            # custom-endpoint env vars when nothing is wired in config.
+            api_key = configured_api_key or (
                 os.getenv("CUSTOM_API_KEY", "")
                 or os.getenv("OPENAI_API_KEY", "")
                 or os.getenv("OPENROUTER_API_KEY", "")
             )
 
-            live = fetch_api_models(api_key, base_url)
+            # Versioned Anthropic-compatible proxies (``…/anthropic/v1``) speak
+            # the Messages API and reject ``Authorization: Bearer`` — probe them
+            # with the native ``x-api-key`` auth so the catalog resolves.
+            api_mode = "anthropic_messages" if "/anthropic/" in base_url else None
+
+            live = fetch_api_models(api_key, base_url, api_mode=api_mode)
 
             if live:
                 return live
@@ -3268,6 +3322,27 @@ def provider_model_ids(
                 live = _p.fetch_models(api_key=api_key)
 
                 if live:
+                    # Kimi's /models can lag freshly-routed coding aliases
+                    # (e.g. kimi-k2.7-code), so merge the curated floor in
+                    # FRONT of the live catalog — curated first, live-only
+                    # models appended, deduped — mirroring the anthropic /
+                    # openai curated-merge philosophy. Returning live verbatim
+                    # dropped curated coding models the API hadn't enumerated.
+                    if normalized in ("kimi-coding", "kimi-coding-cn"):
+                        curated = _PROVIDER_MODELS.get(normalized, [])
+
+                        merged = list(curated)
+
+                        seen = set(merged)
+
+                        for model_id in live:
+                            if model_id not in seen:
+                                merged.append(model_id)
+
+                                seen.add(model_id)
+
+                        return merged
+
                     return live
 
             # Use profile's fallback_models if defined

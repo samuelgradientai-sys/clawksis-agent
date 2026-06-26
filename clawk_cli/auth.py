@@ -87,8 +87,6 @@ from clawk_cli.config import get_clawk_home, get_config_path, read_raw_config
 
 from clawk_constants import OPENROUTER_BASE_URL, secure_parent_dir
 
-from agent.credential_persistence import sanitize_borrowed_credential_payload
-
 from utils import atomic_replace, atomic_yaml_write, is_truthy_value
 
 
@@ -294,6 +292,20 @@ class ProviderConfig:
 
 
 PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
+    # Nous Portal is no longer offered in the BYOK picker (see
+    # CANONICAL_PROVIDERS), but the provider code path remains available so
+    # an explicitly-configured ``model.provider: nous`` still works. Keep the
+    # dormant registry entry so _model_flow_nous / _login_nous can resolve
+    # their ProviderConfig without a KeyError.
+    "nous": ProviderConfig(
+        id="nous",
+        name="Nous Portal",
+        auth_type="oauth_device_code",
+        portal_base_url=DEFAULT_NOUS_PORTAL_URL,
+        inference_base_url=DEFAULT_NOUS_INFERENCE_URL,
+        client_id=DEFAULT_NOUS_CLIENT_ID,
+        scope=DEFAULT_NOUS_SCOPE,
+    ),
     "openai-codex": ProviderConfig(
         id="openai-codex",
         name="OpenAI Codex",
@@ -1839,6 +1851,10 @@ def write_credential_pool(provider_id: str, entries: List[Dict[str, Any]]) -> Pa
 
     """
 
+    # Imported lazily so importing clawk_cli.auth doesn't hard-require the
+    # agent package (test harnesses stub `agent` with an empty __path__).
+    from agent.credential_persistence import sanitize_borrowed_credential_payload
+
     with _auth_store_lock():
         auth_store = _load_auth_store()
 
@@ -2404,6 +2420,22 @@ def resolve_provider(
         os.getenv("OPENROUTER_API_KEY")
     ):
         return "openrouter"
+
+    # A credential added via `clawk auth add openrouter` lives in the credential
+    # pool, not as an OPENROUTER_API_KEY env var. Auto-detection must consult the
+    # pool too — otherwise such a credential is invisible and requests go out with
+    # no Authorization header (OpenRouter "401: Missing Authentication header").
+    # See issue #42130.
+    try:
+        from agent.credential_pool import load_pool
+
+        _or_pool = load_pool("openrouter")
+
+        if _or_pool and _or_pool.has_credentials():
+            return "openrouter"
+
+    except Exception as e:
+        logger.debug("Could not consult OpenRouter credential pool: %s", e)
 
     # Auto-detect API-key providers by checking their env vars
 
@@ -7461,9 +7493,7 @@ def refresh_nous_oauth_pure(
 
             state["scope"] = refreshed.get("scope") or state.get("scope")
 
-            refreshed_url = _validate_nous_inference_url_from_network(
-                refreshed.get("inference_base_url")
-            )
+            refreshed_url = _validate_nous_inference_url_from_network(refreshed.get("inference_base_url"))  # fmt: skip  # noqa: E501
 
             if refreshed_url:
                 state["inference_base_url"] = refreshed_url
@@ -7865,9 +7895,7 @@ def resolve_nous_runtime_credentials(
 
                         state["scope"] = refreshed.get("scope") or state.get("scope")
 
-                        refreshed_url = _validate_nous_inference_url_from_network(
-                            refreshed.get("inference_base_url")
-                        )
+                        refreshed_url = _validate_nous_inference_url_from_network(refreshed.get("inference_base_url"))  # fmt: skip  # noqa: E501
 
                         if refreshed_url:
                             inference_base_url = refreshed_url

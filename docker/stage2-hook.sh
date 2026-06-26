@@ -97,7 +97,6 @@ as_clawk() { [ "$(id -u)" = 0 ] || { "$@"; return; }; s6-setuidgid clawk "$@"; }
 # clawk UID are both unaffected.
 
 cur_uid="$(id -u)"
-
 if [ "$cur_uid" != 0 ] && [ "$cur_uid" != "$(id -u clawk)" ]; then
 
     cat >&2 <<EOF
@@ -416,6 +415,31 @@ fi
 
 
 
+# --- Fix ownership of top-level clawk-owned state FILES under $CLAWK_HOME ---
+# The targeted subdir chown above only descends into clawk-owned
+# *subdirectories*; loose state files living directly under $CLAWK_HOME are
+# missed. When created or rewritten by `docker exec <container> clawk …`
+# (root unless `-u` is passed) they land root-owned, and the unprivileged
+# clawk runtime then hits PermissionError on next startup (e.g. gateway.lock /
+# state.db / auth.json), producing a gateway restart loop (#35098).
+#
+# We use an explicit allowlist rather than a blanket `find -user root` sweep so
+# host-owned files in a bind-mounted $CLAWK_HOME are never touched — same
+# targeted-ownership contract as the subdir chown above (#19788, PR #19795).
+for f in \
+    auth.json auth.lock .env \
+    state.db state.db-shm state.db-wal \
+    clawk_state.db \
+    response_store.db response_store.db-shm response_store.db-wal \
+    gateway.pid gateway.lock gateway_state.json processes.json \
+    active_profile; do
+    if [ -e "$CLAWK_HOME/$f" ]; then
+        chown clawk:clawk "$CLAWK_HOME/$f" 2>/dev/null || true
+    fi
+done
+
+
+
 # --- Fix ownership of build trees under $INSTALL_DIR ---
 
 # Clawksis-owned trees under $INSTALL_DIR must be re-chowned whenever the
@@ -487,17 +511,11 @@ if [ -n "$venv_owner" ] && [ "$venv_owner" != "$actual_clawk_uid" ]; then
     echo "[stage2] Fixing ownership of build trees under $INSTALL_DIR to clawk ($actual_clawk_uid)"
 
     chown -R clawk:clawk \
-
         "$INSTALL_DIR/.venv" \
-
         "$INSTALL_DIR/ui-tui" \
-
         "$INSTALL_DIR/gateway" \
-
         "$INSTALL_DIR/node_modules" \
-
         2>/dev/null || \
-
         echo "[stage2] Warning: chown of build trees failed (rootless container?) — continuing"
 
 fi
@@ -521,6 +539,19 @@ fi
 if [ -d "$CLAWK_HOME/profiles" ]; then
 
     chown -R clawk:clawk "$CLAWK_HOME/profiles" 2>/dev/null || true
+
+fi
+
+
+
+# Always reset ownership of $CLAWK_HOME/cron to clawk on every boot.
+# Cron job files can land owned by root when crons are created via
+# `docker exec <container> clawk …` (root unless `-u` is passed), which
+# then breaks the supervised clawk runtime that reads/writes them.
+# Idempotent; skipped on rootless containers where chown would fail.
+if [ -d "$CLAWK_HOME/cron" ]; then
+
+    chown -R clawk:clawk "$CLAWK_HOME/cron" 2>/dev/null || true
 
 fi
 

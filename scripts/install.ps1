@@ -2096,7 +2096,27 @@ function Install-Repository {
 
 
 
-                if ($revParseOk -and $statusOk) {
+                # #40998: a clone interrupted before its first commit leaves a
+
+                # .git with no resolvable HEAD. rev-parse --is-inside-work-tree
+
+                # and status both still succeed there, but `git stash`/`checkout`
+
+                # on update abort with "You do not have the initial commit yet".
+
+                # Require a resolvable HEAD so such a checkout is treated as
+
+                # broken and re-cloned fresh, not "updated".
+
+                $global:LASTEXITCODE = 0
+
+                $null = & git -c windows.appendAtomically=false rev-parse --verify HEAD 2>&1
+
+                $hasCommit = ($LASTEXITCODE -eq 0)
+
+
+
+                if ($revParseOk -and $statusOk -and $hasCommit) {
 
                     $repoValid = $true
 
@@ -2210,25 +2230,33 @@ function Install-Repository {
 
         } else {
 
-            # Directory exists but isn't a usable git repo.  Wipe it and
+            # Directory exists but isn't a usable git repo (no .git, broken
 
-            # fall through to a fresh clone.  A leftover ``.git`` stub from
+            # stub, or a clone interrupted before its first commit -- #40998).
 
-            # a partial uninstall used to lock the installer into the
+            # Move it aside and fall through to a fresh clone.  A leftover
 
-            # "update" branch forever, emitting three ``fatal: not a git
+            # ``.git`` stub from a partial uninstall used to lock the installer
 
-            # repository`` errors and failing with "not in a git directory".
+            # into the "update" branch forever, emitting three ``fatal: not a
 
-            Write-Warn "Existing directory at $InstallDir is not a valid git repo -- replacing it."
+            # git repository`` errors and failing with "not in a git directory".
+
+            # Non-destructive on review feedback: never `Remove-Item` it -- the
+
+            # backup preserves any partial download for recovery.
+
+            $brokenBackup = "$InstallDir.broken-{0}" -f (Get-Date -Format "yyyyMMddHHmmss")
+
+            Write-Warn "Existing directory at $InstallDir is not a valid git repo -- moving it aside to $brokenBackup."
 
             try {
 
-                Remove-Item -Recurse -Force $InstallDir -ErrorAction Stop
+                Move-Item -LiteralPath $InstallDir -Destination $brokenBackup -Force -ErrorAction Stop
 
             } catch {
 
-                Write-Err "Could not remove $InstallDir : $_"
+                Write-Err "Could not move $InstallDir aside : $_"
 
                 Write-Info "Close any programs that might be using files in $InstallDir (editors,"
 

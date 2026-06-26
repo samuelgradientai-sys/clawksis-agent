@@ -22,7 +22,6 @@ Usage::
 import json
 import os
 import re
-import shlex
 import shutil
 import stat
 import subprocess
@@ -100,30 +99,6 @@ _CLONE_ALL_DEFAULT_EXCLUDE_ROOT: frozenset[str] = frozenset({
     "node_modules",
 })
 
-# Per-profile history artifacts excluded from --clone-all regardless of the
-# source profile.  A new profile is a fresh workspace — inheriting the source
-# profile's session history, backup archives, or quick-backup snapshots is
-# never useful (restoring one inside the clone would resurrect the SOURCE
-# profile's state) and can balloon the copy by tens of GB.  Unlike
-# ``_CLONE_ALL_DEFAULT_EXCLUDE_ROOT`` this set is NOT gated on the default
-# profile: named profiles accumulate the same artifacts.
-#
-# Rationale per item:
-#   state.db (+wal/shm) — SQLite session store (can reach many GB)
-#   sessions            — per-session transcript/data dirs
-#   backups             — `clawk backup` archives
-#   state-snapshots     — quick-backup snapshot trees
-#   checkpoints         — session checkpoint data
-_CLONE_ALL_HISTORY_EXCLUDE_ROOT: frozenset[str] = frozenset({
-    "state.db",
-    "state.db-wal",
-    "state.db-shm",
-    "sessions",
-    "backups",
-    "state-snapshots",
-    "checkpoints",
-})
-
 # Marker file written by `clawk profile create --no-skills`.  When present in
 # a profile's root, callers of seed_profile_skills() (fresh-create, `clawk
 # update`'s all-profile sync, the web dashboard) skip bundled-skill seeding
@@ -144,16 +119,15 @@ def has_bundled_skills_opt_out(profile_dir: Path) -> bool:
 def _clone_all_copytree_ignore(source_dir: Path):
     """Exclude infrastructure artifacts when cloning a profile via --clone-all.
 
-    Three categories:
-      1. Root-level entries in ``_CLONE_ALL_HISTORY_EXCLUDE_ROOT`` — session
-         history, backups, and snapshots that belong to the SOURCE profile
-         and should never carry into a fresh clone.  Applies to any source.
-      2. Root-level entries in ``_CLONE_ALL_DEFAULT_EXCLUDE_ROOT`` — known
+    Two categories:
+      1. Root-level entries in ``_CLONE_ALL_DEFAULT_EXCLUDE_ROOT`` — known
          Clawksis infrastructure directories that only the default profile
          (``~/.clawksis``) ever contains.  Gated on ``source_dir`` actually
          being the default profile so a named-profile source never has its
-         own data silently dropped.
-      3. Universal exclusions at any depth — Python bytecode caches that
+         own data silently dropped.  Session history, backups, and state.db
+         are intentionally NOT excluded — clone-all is a complete snapshot
+         minus infrastructure.
+      2. Universal exclusions at any depth — Python bytecode caches that
          are stale or regenerable (``__pycache__``, ``*.pyc``, ``*.pyo``)
          and runtime sockets / temp files (``*.sock``, ``*.tmp``).
 
@@ -185,11 +159,11 @@ def _clone_all_copytree_ignore(source_dir: Path):
                 # over-copy than silently drop user data.
                 at_root = False
             if at_root:
-                # History artifacts: excluded for ANY source profile.
-                if entry in _CLONE_ALL_HISTORY_EXCLUDE_ROOT:
-                    ignored.append(entry)
-                    continue
                 # Infrastructure: only the default profile contains these.
+                # Session history, backups, and state.db are deliberately
+                # PRESERVED — clone-all means "complete snapshot minus
+                # infrastructure", so the cloned profile keeps working with
+                # its source's full state.
                 if is_default_source and entry in _CLONE_ALL_DEFAULT_EXCLUDE_ROOT:
                     ignored.append(entry)
         return ignored
@@ -466,10 +440,7 @@ def create_wrapper_script(name: str, target: Optional[str] = None) -> Optional[P
     else:
         wrapper_path = wrapper_dir / canon
         try:
-            clawk_exe = shutil.which("clawk") or "clawk"
-            wrapper_path.write_text(
-                f'#!/bin/sh\nexec {shlex.quote(clawk_exe)} -p {profile} "$@"\n'
-            )
+            wrapper_path.write_text(f'#!/bin/sh\nexec clawk -p {profile} "$@"\n')
             wrapper_path.chmod(
                 wrapper_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
             )
@@ -971,25 +942,6 @@ def create_profile(
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
 
-    # Seed an empty .env so the profile has its own credentials file from
-    # day one. Without it, profile-scoped env writes (dashboard Channels /
-    # Keys pages, `clawk -p <name> auth add`) had no file until first
-    # write, and the profile silently inherited API keys from the shell
-    # environment — users reasonably read that as "the new profile reads
-    # the root .env". Skipped when --clone/--clone-all already copied one.
-    env_path = profile_dir / ".env"
-    if not env_path.exists():
-        try:
-            env_path.write_text(
-                "# Per-profile secrets for this Clawksis profile.\n"
-                "# API keys and tokens set here override the shell environment.\n"
-                "# Behavioral settings belong in config.yaml, not here.\n",
-                encoding="utf-8",
-            )
-            os.chmod(str(env_path), 0o600)
-        except OSError:
-            pass  # best-effort — save_env_value creates the file on demand
-
     # Seed a default SOUL.md so the user has a file to customize immediately.
     # Skipped when the profile already has one (from --clone / --clone-all).
     soul_path = profile_dir / "SOUL.md"
@@ -1013,14 +965,6 @@ def create_profile(
             )
         except OSError:
             pass  # best-effort — the feature still works via the empty skills/ dir
-
-    # Cloned configs can be older than the running Clawksis (or predate schema
-    # tracking entirely). Migrate config-only clones immediately so
-    # desktop/status surfaces don't warn that a just-created profile is
-    # v0/outdated. Leave --clone-all snapshots byte-for-byte apart from the
-    # explicit runtime/history stripping above.
-    if not clone_all:
-        _migrate_profile_config_if_outdated(profile_dir)
 
     # Persist description if the caller provided one. Done last so a
     # partial-create failure doesn't strand a description file in an

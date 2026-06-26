@@ -626,7 +626,21 @@ def _print_setup_summary(config: dict, clawk_home):
             missing_browser_hint = "CAMOFOX_URL"
 
         elif browser_provider == "Local browser":
-            missing_browser_hint = "npm install -g agent-browser"
+            # Distinguish the two local failure modes: the agent-browser CLI
+            # missing entirely vs. present-but-without-a-Chromium-engine. The
+            # latter is the common case (npm install but never ran the browser
+            # download), and the right fix is to fetch the engine, not reinstall
+            # the CLI. Mirrors tools.browser_tool.check_browser_requirements.
+            from clawk_cli.nous_subscription import (
+                _has_agent_browser,
+                _local_browser_runtime_ready,
+            )
+
+            if _has_agent_browser() and not _local_browser_runtime_ready():
+                missing_browser_hint = "agent-browser install --with-deps"
+
+            else:
+                missing_browser_hint = "npm install -g agent-browser"
 
         tool_status.append(("Browser Automation", False, missing_browser_hint))
 
@@ -2416,6 +2430,53 @@ def setup_agent_settings(config: dict):
 # Section 4: Messaging Platforms (Gateway)
 
 # =============================================================================
+
+
+def _profile_name_from_clawk_home(home) -> Optional[str]:
+    """Return the profile name when CLAWK_HOME points at a named profile dir.
+
+    Profile homes live under ``<root>/profiles/<name>`` on every OS. Inspect the
+    path *parts* so Windows-style separators are handled correctly even when the
+    value is a ``PureWindowsPath``. Returns None for the default (non-profile)
+    home so the managed-bot setup falls back to the global account.
+    """
+
+    parts = getattr(home, "parts", ())
+
+    if "profiles" in parts:
+        idx = parts.index("profiles")
+
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+
+    return None
+
+
+def _setup_telegram_auto_result():
+    """Run the automatic managed-bot Telegram setup, scoped to the active
+    profile when CLAWK_HOME is a named profile.
+
+    Returns the :class:`TelegramBotSetupResult` (or None on failure/timeout).
+    """
+
+    from clawk_cli.telegram_managed_bot import auto_setup_telegram_bot_result
+
+    profile_name = _profile_name_from_clawk_home(get_clawk_home())
+
+    return auto_setup_telegram_bot_result(profile_name=profile_name)
+
+
+def _setup_telegram_auto() -> Optional[str]:
+    """Run the automatic managed-bot Telegram setup and persist the token."""
+
+    result = _setup_telegram_auto_result()
+
+    if not result:
+        return None
+
+    save_env_value("TELEGRAM_BOT_TOKEN", result.token)
+
+    return result.token
 
 
 def _setup_telegram():

@@ -74,7 +74,7 @@ def _get_platform_default_clawk_home() -> Path:
     if sys.platform == "win32":
         local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
         base = Path(local_appdata) if local_appdata else home / "AppData" / "Local"
-        return base / "clawksis"
+        return base / "clawk"
     return home / ".clawksis"
 
 
@@ -409,20 +409,20 @@ def get_subprocess_home(env: dict[str, str] | None = None) -> str | None:
     Policy is controlled by ``terminal.home_mode`` (bridged to
     ``TERMINAL_HOME_MODE``):
 
-    * ``auto`` (default): host installs keep the real user HOME; containers use
+    * ``profile`` (default): use ``{CLAWK_HOME}/home`` when it exists, giving
+      each profile strict per-profile subprocess HOME isolation (#4426).
+    * ``auto``: host installs keep the real user HOME; containers use
       ``{CLAWK_HOME}/home`` for persistent state. If a host parent already has
       HOME pointed at the profile home, repair subprocesses back to real HOME.
     * ``real``: always prefer the real OS-user HOME.
-    * ``profile``: use ``{CLAWK_HOME}/home`` when it exists, preserving the
-      older strict per-profile tool-config isolation.
     """
     env = env or {}
     profile_home = _profile_home_path(env)
     mode = (
-        str(env.get("TERMINAL_HOME_MODE") or os.getenv("TERMINAL_HOME_MODE", "auto"))
+        str(env.get("TERMINAL_HOME_MODE") or os.getenv("TERMINAL_HOME_MODE", "profile"))
         .strip()
         .lower()
-        or "auto"
+        or "profile"
     )
     if mode in {"isolated", "profile_home", "profile-home"}:
         mode = "profile"

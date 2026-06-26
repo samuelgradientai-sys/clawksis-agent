@@ -474,6 +474,16 @@ gateway:
 
     resumed_no_count:      "↻ 已恢復工作階段 **{title}**。對話已還原。"
 
+    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
+
+    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
+
+    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
+
+    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
+
+    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
+
 
 
   retry:
@@ -527,6 +537,18 @@ gateway:
     queued:                "**排隊中的後續：** {count}"
 
     platforms:             "**已連線平台：** {platforms}"
+
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "- room: {room}"
+
+    matrix_scope_room_id:  "- room_id: {room_id}"
+
+    matrix_scope_thread:   "- thread: {thread_id}"
+
+    matrix_scope_mode:     "- session_scope: {scope}"
+
+    matrix_scope_key:      "- session_key: {session_key}"
 
 
 

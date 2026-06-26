@@ -72,7 +72,12 @@ _SKIP_PARTS = {"integration", "e2e", "docker"}
 
 # Per-file wall-clock cap. Override
 # via --file-timeout or CLAWK_TEST_FILE_TIMEOUT.
-_DEFAULT_FILE_TIMEOUT_SECONDS = 140.0  # set by observing the slowest file at commit time was ~100s in CI and adding some leeway
+# Originally 140s (slowest file was ~100s + leeway). The suite has since grown:
+# the largest files now run ~190-235s in CI (test_run_agent.py = 367 tests;
+# test_cmd_update.py = 25 heavy cmd_update tests), so the old cap SIGKILL'd them
+# mid-run even though every test passes. Raised to keep the leeway over the
+# current slowest file.
+_DEFAULT_FILE_TIMEOUT_SECONDS = 300.0
 
 # Duration cache: maps relative file paths to last-observed subprocess
 # wall-clock seconds. Used by ``--slice`` to distribute files across

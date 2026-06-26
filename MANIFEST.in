@@ -8,6 +8,8 @@ graft optional-skills
 
 graft locales
 
+graft optional-mcps
+
 # Bundled plugin manifests (plugin.yaml / plugin.yml). Without these the
 
 # PluginManager scan (clawk_cli/plugins.py) finds zero plugins on installs

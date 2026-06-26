@@ -2169,9 +2169,9 @@ class TestBuildApiKwargs:
         assert "temperature" not in kwargs
 
     def test_kimi_coding_endpoint_sends_max_tokens_and_reasoning(self, agent):
-        """Kimi endpoint should send max_tokens=32000 and reasoning_effort as
+        """Kimi endpoint should send max_tokens=32000 and, with no
 
-        top-level params, matching Kimi CLI's default behavior."""
+        reasoning_config, the thinking toggle only (XOR: no reasoning_effort)."""
 
         agent.provider = "kimi-coding"
 
@@ -2187,7 +2187,9 @@ class TestBuildApiKwargs:
 
         assert kwargs["max_tokens"] == 32000
 
-        assert kwargs["reasoning_effort"] == "medium"
+        assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
+
+        assert "reasoning_effort" not in kwargs
 
     def test_kimi_coding_endpoint_respects_custom_effort(self, agent):
         """reasoning_effort should reflect reasoning_config.effort when set."""
@@ -2269,9 +2271,9 @@ class TestBuildApiKwargs:
 
         assert kwargs["max_tokens"] == 32000
 
-        assert kwargs["reasoning_effort"] == "medium"
-
         assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
+
+        assert "reasoning_effort" not in kwargs
 
     def test_moonshot_cn_endpoint_sends_max_tokens_and_reasoning(self, agent):
         """api.moonshot.cn (China endpoint) should get the same params."""
@@ -2290,9 +2292,9 @@ class TestBuildApiKwargs:
 
         assert kwargs["max_tokens"] == 32000
 
-        assert kwargs["reasoning_effort"] == "medium"
-
         assert kwargs["extra_body"]["thinking"] == {"type": "enabled"}
+
+        assert "reasoning_effort" not in kwargs
 
     def test_provider_preferences_injected(self, agent):
 
@@ -3627,8 +3629,10 @@ class TestConcurrentToolExecution:
                 api_request_id="",
                 enabled_tools=list(agent.valid_tool_names),
                 skip_pre_tool_call_hook=True,
+                skip_tool_request_middleware=True,
                 enabled_toolsets=agent.enabled_toolsets,
                 disabled_toolsets=agent.disabled_toolsets,
+                tool_request_middleware_trace=[],
             )
 
             assert result == "result"
@@ -8457,6 +8461,13 @@ class TestStreamingApiCall:
         assert tc[1].function.name == "read"
 
     def test_truncated_tool_call_args_upgrade_finish_reason_to_length(self, agent):
+        """A clean stream-end mid tool-call (no finish_reason) with incomplete
+        tool args now routes through the partial-stream stub (#31998): the
+        truncated tool call is dropped (tool_calls=None, so nothing
+        auto-executes) and finish_reason is upgraded to ``length`` so the loop
+        triggers chunking-guided continuation instead of a false output cap."""
+
+        from clawk_constants import PARTIAL_STREAM_STUB_ID
 
         chunks = [
             _make_chunk(
@@ -8472,15 +8483,13 @@ class TestStreamingApiCall:
 
         resp = agent._interruptible_streaming_api_call({"messages": []})
 
-        tc = resp.choices[0].message.tool_calls
+        assert resp.id == PARTIAL_STREAM_STUB_ID
 
-        assert len(tc) == 1
-
-        assert tc[0].function.name == "write_file"
-
-        assert tc[0].function.arguments == '{"path":"x.txt","content":"hel'
+        assert resp.choices[0].message.tool_calls is None
 
         assert resp.choices[0].finish_reason == "length"
+
+        assert getattr(resp, "_dropped_tool_names", None) == ["write_file"]
 
     def test_ollama_reused_index_separate_tool_calls(self, agent):
         """Ollama sends every tool call at index 0 with different ids.

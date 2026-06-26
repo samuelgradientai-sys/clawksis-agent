@@ -296,6 +296,8 @@ from clawk_cli.browser_connect import (
 
 from clawk_cli.env_loader import load_clawk_dotenv
 
+from clawk_cli.cli_commands_mixin import CLICommandsMixin
+
 from utils import base_url_host_matches
 
 
@@ -1296,6 +1298,16 @@ def _cleanup_all_browsers(*args, **kwargs):
 
 _cleanup_done = False
 
+# Session ids whose ``on_session_finalize`` hook has already been emitted by the
+
+# single-query finalize path. The atexit-registered ``_run_cleanup`` consults
+
+# this so the one-shot ``-q`` flow doesn't re-emit the finalize hook a second
+
+# time when atexit later runs cleanup for the same session.
+
+_single_query_finalize_attempted_session_ids: set = set()
+
 # Weak reference to the active AIAgent for memory provider shutdown at exit
 
 _active_agent_ref = None
@@ -1380,8 +1392,14 @@ def _prepare_deferred_agent_startup() -> None:
         )
 
 
-def _run_cleanup():
-    """Run resource cleanup exactly once."""
+def _run_cleanup(notify_session_finalize: bool = True):
+    """Run resource cleanup exactly once.
+
+    ``notify_session_finalize`` gates the ``on_session_finalize`` hook below.
+    The single-query ``-q`` path emits that hook itself (via
+    ``_notify_single_query_session_finalize``) BEFORE running cleanup, then calls
+    this with ``notify_session_finalize=False`` so the hook isn't fired twice.
+    """
 
     global _cleanup_done
 
@@ -1438,18 +1456,31 @@ def _run_cleanup():
 
     # session boundary — NOT per-turn inside run_conversation().
 
-    try:
-        from clawk_cli.plugins import invoke_hook as _invoke_hook
+    # Skip when the caller already emitted ``on_session_finalize`` (the
 
-        _invoke_hook(
-            "on_session_finalize",
-            session_id=_active_agent_ref.session_id if _active_agent_ref else None,
-            platform="cli",
-            reason="shutdown",
-        )
+    # single-query ``-q`` path) or when there is no active agent / the session
 
-    except Exception:
-        pass
+    # was already finalized — so the hook fires exactly once per session.
+
+    _finalize_session_id = _active_agent_ref.session_id if _active_agent_ref else None
+
+    if (
+        notify_session_finalize
+        and _active_agent_ref is not None
+        and _finalize_session_id not in _single_query_finalize_attempted_session_ids
+    ):
+        try:
+            from clawk_cli.plugins import invoke_hook as _invoke_hook
+
+            _invoke_hook(
+                "on_session_finalize",
+                session_id=_finalize_session_id,
+                platform="cli",
+                reason="shutdown",
+            )
+
+        except Exception:
+            pass
 
     try:
         if _active_agent_ref and hasattr(_active_agent_ref, "shutdown_memory_provider"):
@@ -1475,6 +1506,56 @@ def _run_cleanup():
 
     except Exception:
         pass
+
+
+def _notify_single_query_session_finalize(cli) -> None:
+    """Emit the ``on_session_finalize`` hook for a one-shot ``-q`` run.
+
+    Uses the live agent's session id / platform (not the CLI's pre-agent
+    placeholder) so memory providers see the real session. The id is recorded
+    in ``_single_query_finalize_attempted_session_ids`` so the atexit-driven
+    ``_run_cleanup`` doesn't fire the hook a second time for the same session.
+    """
+
+    agent = getattr(cli, "agent", None)
+
+    session_id = getattr(agent, "session_id", None) if agent is not None else None
+
+    platform = getattr(agent, "platform", None) if agent is not None else None
+
+    if session_id:
+        _single_query_finalize_attempted_session_ids.add(session_id)
+
+    from clawk_cli.plugins import invoke_hook as _invoke_hook
+
+    _invoke_hook(
+        "on_session_finalize",
+        session_id=session_id,
+        platform=platform or "cli",
+        reason="shutdown",
+    )
+
+
+def _finalize_single_query(cli) -> None:
+    """Finalize a single-query (``-q``) run.
+
+    Emits the session-finalize hook (best-effort — a failing hook must not
+    block teardown), runs the shared resource cleanup with the finalize hook
+    suppressed (already emitted above), and always releases the active-session
+    slot afterwards even if cleanup raises.
+    """
+
+    try:
+        _notify_single_query_session_finalize(cli)
+
+    except Exception:
+        logger.debug("single-query session finalize hook failed", exc_info=True)
+
+    try:
+        _run_cleanup(notify_session_finalize=False)
+
+    finally:
+        cli._release_active_session()
 
 
 def _emit_interrupted_session_end(cli, *, reason: str = "keyboard_interrupt") -> None:
@@ -4376,9 +4457,9 @@ def _build_compact_banner() -> str:
     dim_color = _skin.get_color("banner_dim", "#4A3496") if _skin else "#4A3496"
 
     if skin_name == "default":
-        line1 = "★ CLAWKSIS - AI Agent Framework"
+        line1 = "⚕ NOUS HERMES - AI Agent Framework"
 
-        tiny_line = "★ CLAWKSIS"
+        tiny_line = "⚕ NOUS HERMES"
 
     else:
         agent_name = (
@@ -4644,7 +4725,7 @@ def save_config_value(key_path: str, value: any) -> bool:
 # ============================================================================
 
 
-class ClawksisCLI:
+class ClawksisCLI(CLICommandsMixin):
     """
 
     Interactive CLI for the Clawksis.
@@ -5496,11 +5577,19 @@ class ClawksisCLI:
 
 
 
-        Instead we just reset prompt_toolkit's renderer cache so the next
+        Instead we delegate entirely to ``original_on_resize`` — prompt_toolkit's
 
-        incremental redraw starts from a clean slate, then let
+        built-in ``Application._on_resize`` — which begins with
 
-        ``original_on_resize`` recalculate layout for the new size.
+        ``renderer.erase(leave_alternate_screen=False)``.  That erase relies on
+
+        the renderer's cached cursor position to move back to the live prompt
+
+        origin before erasing downward.  We must NOT reset the renderer (or
+
+        invalidate) first: doing so discards that cached cursor position and
+
+        leaves stale prompt glyphs in scrollback after a narrow resize.
 
 
 
@@ -5521,18 +5610,6 @@ class ClawksisCLI:
         """
 
         self._status_bar_suppressed_after_resize = True
-
-        try:
-            app.renderer.reset(leave_alternate_screen=False)
-
-        except Exception:
-            pass
-
-        try:
-            app.invalidate()
-
-        except Exception:
-            pass
 
         original_on_resize()
 
@@ -11836,47 +11913,41 @@ class ClawksisCLI:
 
 
 
-        **Platform note (Windows dead-lock — issue #30768):**
+        **Platform note (native-Windows dead-lock — issues #30768, #33961):**
 
-        The queue-based modal relies on prompt_toolkit key bindings receiving
+        The modal is safe on every platform — including native Windows — when it
 
-        keyboard events and calling ``_submit_slash_confirm_response``.  On
+        is marshaled onto the app's event loop.  When invoked off the main thread
 
-        Windows (PowerShell / Windows Terminal) the prompt_toolkit input
+        (e.g. the ``process_loop`` daemon thread) we schedule the modal snapshot /
 
-        channel can become unresponsive when the modal is entered from the
+        restore work on ``self._app.loop`` via ``call_soon_threadsafe`` and keep
 
-        ``process_loop`` daemon thread, causing a dead-lock: the user sees the
-
-        confirmation panel but keystrokes never reach the key bindings and the
-
-        ``response_queue.get()`` blocks until the 120-second timeout expires.
+        the queue-based response path, so prompt_toolkit's key bindings drive it.
 
 
 
-        To avoid this, we fall back to ``_prompt_text_input`` (a simple
+        The raw ``input()``-based ``_prompt_text_input`` fallback is kept ONLY for
 
-        ``input()``-based prompt) when any of these conditions hold:
+        the cases where it is actually safe:
 
 
-
-        * ``sys.platform == "win32"`` — native Windows console (ConPTY /
-
-          win32_input) does not support the modal reliably.
 
         * ``self._app`` is not set — unit tests / non-interactive contexts.
 
+        * No running event loop / main-thread call where nothing else owns stdin.
 
 
-        On non-Windows platforms the modal itself is still safe from the
 
-        ``process_loop`` daemon thread as long as the main-thread event loop
+        It is NEVER used off the main thread on native Windows: a bare ``input()``
 
-        owns the prompt_toolkit buffer mutations.  When we are off the main
+        there blocks forever against the console prompt_toolkit already owns,
 
-        thread, schedule the modal snapshot / restore work on ``self._app.loop``
+        which is the #33961 dead-lock.  In that degraded case (no app loop, or a
 
-        via ``call_soon_threadsafe`` and keep the queue-based response path.
+        ``call_soon_threadsafe`` scheduling failure) we clean-cancel with ``None``
+
+        instead of routing to raw ``input()``.
 
         """
 
@@ -11894,19 +11965,6 @@ class ClawksisCLI:
         if not getattr(self, "_app", None):
             return self._prompt_text_input("Choice [1/2/3]: ")
 
-        # On Windows the prompt_toolkit input channel can deadlock when the
-
-        # modal is entered from the process_loop daemon thread — keystrokes
-
-        # never reach the key bindings, so response_queue.get() blocks for
-
-        # the full timeout (issue #30768).  Fall back to the simpler
-
-        # stdin-based prompt which works reliably on Windows.
-
-        if sys.platform == "win32":
-            return self._prompt_text_input("Choice [1/2/3]: ")
-
         try:
             app_loop = self._app.loop
 
@@ -11915,8 +11973,22 @@ class ClawksisCLI:
 
         in_main_thread = threading.current_thread() is threading.main_thread()
 
-        if not in_main_thread and app_loop is None:
+        # The raw stdin prompt fights prompt_toolkit's active stdin ownership.
+        # On native Windows (issue #33961) a bare input() on a non-main thread
+        # blocks forever against the console the app already owns, so the
+        # process_loop daemon thread deadlocks.  Only fall back to stdin when it
+        # is actually safe; off the main thread on win32 we must clean-cancel
+        # (return None) instead, never call input().
+
+        def _stdin_fallback() -> str | None:
+
+            if sys.platform == "win32" and not in_main_thread:
+                return None
+
             return self._prompt_text_input("Choice [1/2/3]: ")
+
+        if not in_main_thread and app_loop is None:
+            return _stdin_fallback()
 
         response_queue = queue.Queue()
 
@@ -11972,7 +12044,7 @@ class ClawksisCLI:
             return ready.wait(timeout=5)
 
         if not _run_on_app_loop(_setup_modal):
-            return self._prompt_text_input("Choice [1/2/3]: ")
+            return _stdin_fallback()
 
         _last_countdown_refresh = _time.monotonic()
 
@@ -12259,6 +12331,64 @@ class ClawksisCLI:
 
         self._invalidate(min_interval=0.0)
 
+    def _confirm_expensive_model_switch(self, result) -> bool:
+        """Ask for explicit confirmation before applying costly model switches."""
+
+        if not getattr(result, "success", False):
+            return True
+
+        try:
+            from clawk_cli.model_cost_guard import expensive_model_warning
+
+            warning = expensive_model_warning(
+                result.new_model,
+                provider=result.target_provider,
+                base_url=result.base_url or self.base_url or "",
+                api_key=result.api_key or self.api_key or "",
+                model_info=result.model_info,
+            )
+
+        except Exception:
+            warning = None
+
+        if warning is None:
+            return True
+
+        choices = [
+            (
+                "once",
+                "Switch anyway",
+                "Use this model for the current Clawksis session.",
+            ),
+            ("cancel", "Cancel", "Keep the current model."),
+        ]
+
+        raw = self._prompt_text_input_modal(
+            title="!!! Expensive Model Warning !!!",
+            detail=warning.message,
+            choices=choices,
+            timeout=120,
+        )
+
+        choice = self._normalize_slash_confirm_choice(raw, choices)
+
+        return choice == "once"
+
+    def _confirm_and_apply_model_switch_result(
+        self, result, persist_global: bool
+    ) -> None:
+
+        try:
+            if result.success and not self._confirm_expensive_model_switch(result):
+                _cprint("  Model switch cancelled.")
+
+                return
+
+            self._apply_model_switch_result(result, persist_global)
+
+        except Exception as exc:
+            _cprint(f"  ✗ Model selection failed: {exc}")
+
     def _close_model_picker(self) -> None:
 
         self._model_picker_state = None
@@ -12534,7 +12664,15 @@ class ClawksisCLI:
 
                 self._close_model_picker()
 
-                self._apply_model_switch_result(result, persist_global)
+                if getattr(self, "_app", None):
+                    threading.Thread(
+                        target=self._confirm_and_apply_model_switch_result,
+                        args=(result, persist_global),
+                        daemon=True,
+                    ).start()
+
+                else:
+                    self._confirm_and_apply_model_switch_result(result, persist_global)
 
                 return
 
@@ -12677,6 +12815,11 @@ class ClawksisCLI:
 
         if not result.success:
             _cprint(f"  ✗ {result.error_message}")
+
+            return
+
+        if not self._confirm_expensive_model_switch(result):
+            _cprint("  Model switch cancelled.")
 
             return
 
@@ -14204,6 +14347,11 @@ class ClawksisCLI:
             if self._handle_update_command():
                 return False
 
+        elif canonical == "version":
+            from clawk_cli.main import _print_version_info
+
+            _print_version_info(check_updates=True)
+
         elif canonical == "paste":
             self._handle_paste_command()
 
@@ -14914,350 +15062,6 @@ class ClawksisCLI:
             f"\n  {_DIM}Invoke a bundle with /<slug>. "
             f"Manage with `clawk bundles`.{_RST}"
         )
-
-    def _handle_browser_command(self, cmd: str):
-        """Handle /browser connect|disconnect|status — manage live Chromium-family CDP connection."""
-
-        import platform as _plat
-
-        parts = cmd.strip().split(None, 1)
-
-        sub = parts[1].lower().strip() if len(parts) > 1 else "status"
-
-        _DEFAULT_CDP = DEFAULT_BROWSER_CDP_URL
-
-        current = os.environ.get("BROWSER_CDP_URL", "").strip()
-
-        if sub.startswith("connect"):
-            # Optionally accept a custom CDP URL: /browser connect ws://host:port
-
-            connect_parts = cmd.strip().split(
-                None, 2
-            )  # ["/browser", "connect", "ws://..."]
-
-            cdp_url = (
-                connect_parts[2].strip() if len(connect_parts) > 2 else _DEFAULT_CDP
-            )
-
-            parsed_cdp = urlparse(cdp_url if "://" in cdp_url else f"http://{cdp_url}")
-
-            if parsed_cdp.scheme not in {"http", "https", "ws", "wss"}:
-                print()
-
-                print(
-                    f"   ⚠ Unsupported browser url scheme: {parsed_cdp.scheme or '(missing)'} "
-                    "(expected one of: http, https, ws, wss)"
-                )
-
-                print()
-
-                return
-
-            try:
-                _port = parsed_cdp.port or (
-                    443 if parsed_cdp.scheme in {"https", "wss"} else 80
-                )
-
-            except ValueError:
-                print()
-
-                print(f"   ⚠ Invalid port in browser url: {cdp_url}")
-
-                print()
-
-                return
-
-            if not parsed_cdp.hostname:
-                print()
-
-                print(f"   ⚠ Missing host in browser url: {cdp_url}")
-
-                print()
-
-                return
-
-            _host = parsed_cdp.hostname
-
-            if parsed_cdp.path.startswith("/devtools/browser/"):
-                cdp_url = parsed_cdp.geturl()
-
-            else:
-                cdp_url = parsed_cdp._replace(
-                    path="",
-                    params="",
-                    query="",
-                    fragment="",
-                ).geturl()
-
-            # Clear any existing browser sessions so the next tool call uses the new backend
-
-            try:
-                from tools.browser_tool import cleanup_all_browsers
-
-                cleanup_all_browsers()
-
-            except Exception:
-                pass
-
-            print()
-
-            # Check if a Chromium-family browser is already serving CDP on the debug port
-
-            _already_open = is_browser_debug_ready(cdp_url, timeout=1.0)
-
-            if _already_open:
-                print(
-                    f"   ✓ Chromium-family browser is already listening on port {_port}"
-                )
-
-            elif cdp_url == _DEFAULT_CDP:
-                # Try to auto-launch a Chromium-family browser with remote debugging
-
-                print(
-                    "   Chromium-family browser isn't running with remote debugging — attempting to launch..."
-                )
-
-                _launched = self._try_launch_chrome_debug(_port, _plat.system())
-
-                if _launched:
-                    # Wait for the DevTools discovery endpoint to come up
-
-                    for _wait in range(10):
-                        if is_browser_debug_ready(cdp_url, timeout=1.0):
-                            _already_open = True
-
-                            break
-
-                        time.sleep(0.5)
-
-                    if _already_open:
-                        print(
-                            f"   ✓ Chromium-family browser launched and listening on port {_port}"
-                        )
-
-                    else:
-                        print(
-                            f"   ⚠ Browser launched but port {_port} isn't responding yet"
-                        )
-
-                        print(
-                            "     Try again in a few seconds — the debug instance may still be starting"
-                        )
-
-                else:
-                    print("   ⚠ Could not auto-launch a Chromium-family browser")
-
-                    sys_name = _plat.system()
-
-                    chrome_cmd = manual_chrome_debug_command(_port, sys_name)
-
-                    if chrome_cmd:
-                        print(f"     Launch a Chromium-family browser manually:")
-
-                        print(f"     {chrome_cmd}")
-
-                    else:
-                        print(
-                            "     No supported Chromium-family browser executable found in this environment"
-                        )
-
-            else:
-                print(f"   ⚠ Port {_port} is not reachable at {cdp_url}")
-
-            if not _already_open:
-                print()
-
-                print(
-                    "Browser not connected — start a Chromium-family browser with remote debugging and retry /browser connect"
-                )
-
-                print()
-
-                return
-
-            os.environ["BROWSER_CDP_URL"] = cdp_url
-
-            # Eagerly start the CDP supervisor so pending_dialogs + frame_tree
-
-            # show up in the next browser_snapshot.  No-op if already started.
-
-            try:
-                from tools.browser_tool import _ensure_cdp_supervisor  # type: ignore[import-not-found]
-
-                _ensure_cdp_supervisor("default")
-
-            except Exception:
-                pass
-
-            print()
-
-            print("🌐 Browser connected to live Chromium-family browser via CDP")
-
-            print(f"   Endpoint: {cdp_url}")
-
-            print()
-
-            # Inject context message so the model knows this slash command
-
-            # intentionally makes the dev/debug CDP browser available for use.
-
-            if hasattr(self, "_pending_input"):
-                self._pending_input.put(
-                    "[System note: The user invoked /browser connect and connected your browser tools to "
-                    "a Chromium-family dev/debug browser via Chrome DevTools Protocol. "
-                    "Your browser_navigate, browser_snapshot, browser_click, and other browser tools now "
-                    "control that CDP browser. The command itself is a signal that using browser tools for "
-                    "their current browser-related request is expected; do not wait for separate permission "
-                    "just because CDP is connected. This is typically a Clawksis-managed isolated debug "
-                    "profile, not the user's main everyday browser. It is still user-visible and may contain "
-                    "pages, logged-in sessions, or cookies in that debug profile, so avoid destructive actions, "
-                    "closing tabs, or navigating away unless the user's task calls for it.]"
-                )
-
-        elif sub == "disconnect":
-            if current:
-                os.environ.pop("BROWSER_CDP_URL", None)
-
-                try:
-                    from tools.browser_tool import (
-                        cleanup_all_browsers,
-                        _stop_cdp_supervisor,
-                    )
-
-                    _stop_cdp_supervisor("default")
-
-                    cleanup_all_browsers()
-
-                except Exception:
-                    pass
-
-                print()
-
-                print("🌐 Browser disconnected from live Chromium-family browser")
-
-                print(
-                    "   Browser tools reverted to default mode (local headless or cloud provider)"
-                )
-
-                print()
-
-                if hasattr(self, "_pending_input"):
-                    self._pending_input.put(
-                        "[System note: The user has disconnected the browser tools from their live Chromium-family browser. "
-                        "Browser tools are back to default mode (headless local browser or cloud provider).]"
-                    )
-
-            else:
-                print()
-
-                print(
-                    "Browser is not connected to a live Chromium-family browser (already using default mode)"
-                )
-
-                print()
-
-        elif sub == "status":
-            print()
-
-            if current:
-                print("🌐 Browser: connected to live Chromium-family browser via CDP")
-
-                print(f"   Endpoint: {current}")
-
-                _port = 9222
-
-                try:
-                    _port = int(current.rsplit(":", 1)[-1].split("/")[0])
-
-                except (ValueError, IndexError):
-                    pass
-
-                try:
-                    import socket
-
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-                    s.settimeout(1)
-
-                    s.connect(("127.0.0.1", _port))
-
-                    s.close()
-
-                    print("   Status: ✓ reachable")
-
-                except (OSError, Exception):
-                    print("   Status: ⚠ not reachable (browser may not be running)")
-
-            else:
-                try:
-                    from tools.browser_tool import _get_cloud_provider
-
-                    provider = _get_cloud_provider()
-
-                except Exception:
-                    provider = None
-
-                if provider is not None:
-                    print(f"🌐 Browser: {provider.provider_name()} (cloud)")
-
-                else:
-                    # Show engine info for local mode
-
-                    try:
-                        from tools.browser_tool import _get_browser_engine
-
-                        engine = _get_browser_engine()
-
-                    except Exception:
-                        engine = "auto"
-
-                    if engine == "lightpanda":
-                        print(
-                            "🌐 Browser: local Lightpanda (agent-browser --engine lightpanda)"
-                        )
-
-                        print(
-                            "   ⚡ Lightpanda: faster navigation, no screenshot support"
-                        )
-
-                        print(
-                            "   Automatic Chromium fallback for screenshots and failed commands"
-                        )
-
-                    elif engine == "chrome":
-                        print(
-                            "🌐 Browser: local headless Chromium (agent-browser --engine chrome)"
-                        )
-
-                    else:
-                        print("🌐 Browser: local headless Chromium (agent-browser)")
-
-            print()
-
-            print(
-                "   /browser connect      — connect to your live Chromium-family browser"
-            )
-
-            print("   /browser disconnect   — revert to default")
-
-            print()
-
-        else:
-            print()
-
-            print("Usage: /browser connect|disconnect|status")
-
-            print()
-
-            print(
-                "   connect      Connect browser tools to your live Chromium-family browser session"
-            )
-
-            print("   disconnect   Revert to default browser backend")
-
-            print("   status       Show current browser mode")
-
-            print()
 
     # ────────────────────────────────────────────────────────────────
 
@@ -25475,73 +25279,87 @@ def main(
 
                 logger.debug("kanban image-ref extraction failed: %s", _exc)
 
-        if quiet:
-            # Quiet mode: suppress banner, spinner, tool previews.
+        try:
+            if quiet:
+                # Quiet mode: suppress banner, spinner, tool previews.
 
-            # Only print the final response and parseable session info.
+                # Only print the final response and parseable session info.
 
-            cli.tool_progress_mode = "off"
+                if not cli._claim_active_session("cli", stderr=True):
+                    sys.exit(1)
 
-            if cli._ensure_runtime_credentials():
-                effective_query: Any = query
+                cli.tool_progress_mode = "off"
 
-                if single_query_images or single_query_image_urls:
-                    # Honour the same image-routing decision used by the
+                if cli._ensure_runtime_credentials():
+                    effective_query: Any = query
 
-                    # interactive path. With a vision-capable model (incl.
+                    if single_query_images or single_query_image_urls:
+                        # Honour the same image-routing decision used by the
 
-                    # custom-provider models declared via
+                        # interactive path. With a vision-capable model (incl.
 
-                    # `model.supports_vision: true`), attach images natively
+                        # custom-provider models declared via
 
-                    # as image_url content parts. Otherwise fall back to the
+                        # `model.supports_vision: true`), attach images natively
 
-                    # text-pipeline (vision_analyze pre-description).
+                        # as image_url content parts. Otherwise fall back to the
 
-                    _img_mode = "text"
+                        # text-pipeline (vision_analyze pre-description).
 
-                    _build_parts = None
-
-                    try:
-                        from agent.image_routing import (
-                            build_native_content_parts as _build_parts,  # noqa: F811
-                        )
-
-                        from agent.image_routing import decide_image_input_mode
-
-                        from clawk_cli.config import load_config
-
-                        _img_mode = decide_image_input_mode(
-                            (cli.provider or "").strip(),
-                            (cli.model or "").strip(),
-                            load_config(),
-                        )
-
-                    except Exception:
                         _img_mode = "text"
 
-                    if _img_mode == "native" and _build_parts is not None:
+                        _build_parts = None
+
                         try:
-                            _parts, _skipped = _build_parts(
-                                query if isinstance(query, str) else "",
-                                [str(p) for p in single_query_images],
-                                image_urls=list(single_query_image_urls) or None,
+                            from agent.image_routing import (
+                                build_native_content_parts as _build_parts,  # noqa: F811
                             )
 
-                            if any(p.get("type") == "image_url" for p in _parts):
-                                effective_query = _parts
+                            from agent.image_routing import decide_image_input_mode
 
-                            else:
-                                # All images unreadable — text fallback.
+                            from clawk_cli.config import load_config
 
-                                # ``_preprocess_images_with_vision`` only knows
+                            _img_mode = decide_image_input_mode(
+                                (cli.provider or "").strip(),
+                                (cli.model or "").strip(),
+                                load_config(),
+                            )
 
-                                # about local files; URLs would be lost there,
+                        except Exception:
+                            _img_mode = "text"
 
-                                # so keep the original query text intact when
+                        if _img_mode == "native" and _build_parts is not None:
+                            try:
+                                _parts, _skipped = _build_parts(
+                                    query if isinstance(query, str) else "",
+                                    [str(p) for p in single_query_images],
+                                    image_urls=list(single_query_image_urls) or None,
+                                )
 
-                                # only URLs were supplied.
+                                if any(p.get("type") == "image_url" for p in _parts):
+                                    effective_query = _parts
 
+                                else:
+                                    # All images unreadable — text fallback.
+
+                                    # ``_preprocess_images_with_vision`` only knows
+
+                                    # about local files; URLs would be lost there,
+
+                                    # so keep the original query text intact when
+
+                                    # only URLs were supplied.
+
+                                    if single_query_images:
+                                        effective_query = (
+                                            cli._preprocess_images_with_vision(
+                                                query,
+                                                single_query_images,
+                                                announce=False,
+                                            )
+                                        )
+
+                            except Exception:
                                 if single_query_images:
                                     effective_query = (
                                         cli._preprocess_images_with_vision(
@@ -25551,211 +25369,219 @@ def main(
                                         )
                                     )
 
-                        except Exception:
-                            if single_query_images:
-                                effective_query = cli._preprocess_images_with_vision(
-                                    query,
-                                    single_query_images,
-                                    announce=False,
-                                )
+                        elif single_query_images:
+                            effective_query = cli._preprocess_images_with_vision(
+                                query,
+                                single_query_images,
+                                announce=False,
+                            )
 
-                    elif single_query_images:
-                        effective_query = cli._preprocess_images_with_vision(
-                            query,
-                            single_query_images,
-                            announce=False,
+                    turn_route = cli._resolve_turn_agent_config(effective_query)
+
+                    if turn_route["signature"] != cli._active_agent_route_signature:
+                        cli.agent = None
+
+                    if cli._init_agent(
+                        model_override=turn_route["model"],
+                        runtime_override=turn_route["runtime"],
+                        request_overrides=turn_route.get("request_overrides"),
+                    ):
+                        cli.agent.quiet_mode = True
+
+                        cli.agent.suppress_status_output = True
+
+                        # Suppress streaming display callbacks so stdout stays
+
+                        # machine-readable (no styled "Clawksis" box, no tool-gen
+
+                        # status lines).  The response is printed once below.
+
+                        cli.agent.stream_delta_callback = None
+
+                        cli.agent.tool_gen_callback = None
+
+                        try:
+                            result = cli.agent.run_conversation(
+                                user_message=effective_query,
+                                conversation_history=cli.conversation_history,
+                            )
+
+                        except KeyboardInterrupt:
+                            _emit_interrupted_session_end(
+                                cli, reason="keyboard_interrupt"
+                            )
+
+                            print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+
+                            sys.exit(130)
+
+                        # Sync session_id if mid-run compression created a
+
+                        # continuation session. The exit line below reports
+
+                        # session_id to stderr for automation wrappers; without
+
+                        # this sync it would point at the ended parent.
+
+                        if (
+                            getattr(cli.agent, "session_id", None)
+                            and cli.agent.session_id != cli.session_id
+                        ):
+                            cli.session_id = cli.agent.session_id
+
+                        response = (
+                            result.get("final_response", "")
+                            if isinstance(result, dict)
+                            else str(result)
                         )
 
-                turn_route = cli._resolve_turn_agent_config(effective_query)
+                        # Surface backend errors that produced no visible output
 
-                if turn_route["signature"] != cli._active_agent_route_signature:
-                    cli.agent = None
+                        # (e.g. invalid model slug → provider 4xx). Mirrors the
 
-                if cli._init_agent(
-                    model_override=turn_route["model"],
-                    runtime_override=turn_route["runtime"],
-                    request_overrides=turn_route.get("request_overrides"),
-                ):
-                    cli.agent.quiet_mode = True
+                        # interactive CLI path. Write to stderr so piped stdout
 
-                    cli.agent.suppress_status_output = True
+                        # stays clean for automation wrappers.
 
-                    # Suppress streaming display callbacks so stdout stays
+                        if (
+                            not response
+                            and isinstance(result, dict)
+                            and result.get("error")
+                            and (result.get("failed") or result.get("partial"))
+                        ):
+                            print(f"Error: {result['error']}", file=sys.stderr)
 
-                    # machine-readable (no styled "Clawksis" box, no tool-gen
+                        elif response:
+                            print(response)
 
-                    # status lines).  The response is printed once below.
+                        # Kanban goal-loop mode: a worker spawned for a
 
-                    cli.agent.stream_delta_callback = None
+                        # goal_mode card keeps working in THIS session until an
 
-                    cli.agent.tool_gen_callback = None
+                        # auxiliary judge agrees the card is done, the worker
 
-                    try:
-                        result = cli.agent.run_conversation(
-                            user_message=effective_query,
-                            conversation_history=cli.conversation_history,
-                        )
+                        # terminates the task itself, or the turn budget runs
 
-                    except KeyboardInterrupt:
-                        _emit_interrupted_session_end(cli, reason="keyboard_interrupt")
+                        # out (→ sticky block). Gated on the env vars the
+
+                        # dispatcher sets in `_default_spawn`; a no-op for every
+
+                        # normal worker and every non-kanban `-q` run.
+
+                        if os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1":
+                            try:
+                                _run_kanban_goal_loop_q(cli, response)
+
+                            except Exception as _goal_exc:
+                                logger.debug("kanban goal loop failed: %s", _goal_exc)
+
+                        # Session ID goes to stderr so piped stdout is clean.
 
                         print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
 
-                        sys.exit(130)
+                        # Ensure proper exit code for automation wrappers.
 
-                    # Sync session_id if mid-run compression created a
+                        #
 
-                    # continuation session. The exit line below reports
+                        # Kanban workers get a special case: when the run failed
 
-                    # session_id to stderr for automation wrappers; without
+                        # purely because the provider rate-limited / exhausted
 
-                    # this sync it would point at the ended parent.
+                        # quota (not because the task itself is broken), exit with
 
-                    if (
-                        getattr(cli.agent, "session_id", None)
-                        and cli.agent.session_id != cli.session_id
-                    ):
-                        cli.session_id = cli.agent.session_id
+                        # the EX_TEMPFAIL sentinel instead of the generic 1. The
 
-                    response = (
-                        result.get("final_response", "")
-                        if isinstance(result, dict)
-                        else str(result)
-                    )
+                        # dispatcher's reap classifier maps that code to a
 
-                    # Surface backend errors that produced no visible output
+                        # ``rate_limited`` exit and releases the task back to
 
-                    # (e.g. invalid model slug → provider 4xx). Mirrors the
+                        # ``ready`` WITHOUT incrementing the failure counter, so a
 
-                    # interactive CLI path. Write to stderr so piped stdout
+                        # 5-hour quota window can't trip the circuit breaker and
 
-                    # stays clean for automation wrappers.
+                        # permanently block the card. Non-kanban runs keep the
 
-                    if (
-                        not response
-                        and isinstance(result, dict)
-                        and result.get("error")
-                        and (result.get("failed") or result.get("partial"))
-                    ):
-                        print(f"Error: {result['error']}", file=sys.stderr)
+                        # plain 0/1 contract automation wrappers expect.
 
-                    elif response:
-                        print(response)
+                        _exit_code = 0
 
-                    # Kanban goal-loop mode: a worker spawned for a
+                        if isinstance(result, dict) and result.get("failed"):
+                            _exit_code = 1
 
-                    # goal_mode card keeps working in THIS session until an
+                            if os.environ.get("CLAWK_KANBAN_TASK") and result.get(
+                                "failure_reason"
+                            ) in ("rate_limit", "billing"):
+                                try:
+                                    from clawk_cli.kanban_db import (
+                                        KANBAN_RATE_LIMIT_EXIT_CODE as _RL_CODE,
+                                    )
 
-                    # auxiliary judge agrees the card is done, the worker
+                                    _exit_code = _RL_CODE
 
-                    # terminates the task itself, or the turn budget runs
+                                except Exception:
+                                    _exit_code = 1
 
-                    # out (→ sticky block). Gated on the env vars the
+                        sys.exit(_exit_code)
 
-                    # dispatcher sets in `_default_spawn`; a no-op for every
+                # Exit with error code if credentials or agent init fails
 
-                    # normal worker and every non-kanban `-q` run.
+                sys.exit(1)
 
-                    if os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1":
-                        try:
-                            _run_kanban_goal_loop_q(cli, response)
+            else:
+                # Single-query mode (`clawk chat -q "…"`): skip the welcome
 
-                        except Exception as _goal_exc:
-                            logger.debug("kanban goal loop failed: %s", _goal_exc)
+                # banner. Building the banner takes ~420 ms on cold start —
 
-                    # Session ID goes to stderr so piped stdout is clean.
+                # ~200 ms of that is the version-update check, the rest is
 
-                    print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+                # toolset / skill enumeration and Rich panel rendering. None
 
-                    # Ensure proper exit code for automation wrappers.
+                # of that is useful for a one-shot query: the user already
 
-                    #
+                # picked the prompt, doesn't need a toolset reference, and
 
-                    # Kanban workers get a special case: when the run failed
+                # gets the session ID + resume hint from
 
-                    # purely because the provider rate-limited / exhausted
+                # ``_print_exit_summary()`` after the response prints.
 
-                    # quota (not because the task itself is broken), exit with
+                #
 
-                    # the EX_TEMPFAIL sentinel instead of the generic 1. The
+                # The fully-quiet ``-Q`` / ``--quiet`` machine-readable path
 
-                    # dispatcher's reap classifier maps that code to a
+                # above was already banner-free; this brings the human-
 
-                    # ``rate_limited`` exit and releases the task back to
+                # facing single-query path in line so all non-interactive
 
-                    # ``ready`` WITHOUT incrementing the failure counter, so a
+                # invocations are fast.
 
-                    # 5-hour quota window can't trip the circuit breaker and
+                if not cli._claim_active_session("cli", stderr=False):
+                    sys.exit(1)
 
-                    # permanently block the card. Non-kanban runs keep the
+                _query_label = query or (
+                    "[image attached]" if single_query_images else ""
+                )
 
-                    # plain 0/1 contract automation wrappers expect.
+                if _query_label:
+                    cli.console.print(f"[bold blue]Query:[/] {_query_label}")
 
-                    _exit_code = 0
+                # Surface security advisories before the agent runs — short
 
-                    if isinstance(result, dict) and result.get("failed"):
-                        _exit_code = 1
+                # banner, doesn't depend on the welcome banner being shown.
 
-                        if os.environ.get("CLAWK_KANBAN_TASK") and result.get(
-                            "failure_reason"
-                        ) in ("rate_limit", "billing"):
-                            try:
-                                from clawk_cli.kanban_db import (
-                                    KANBAN_RATE_LIMIT_EXIT_CODE as _RL_CODE,
-                                )
+                cli._show_security_advisories()
 
-                                _exit_code = _RL_CODE
+                cli.chat(query, images=single_query_images or None)
 
-                            except Exception:
-                                _exit_code = 1
+                cli._print_exit_summary()
 
-                    sys.exit(_exit_code)
+        finally:
+            # Always finalize the one-shot session: emit on_session_finalize,
 
-            # Exit with error code if credentials or agent init fails
+            # run resource cleanup, and release the active-session slot — on
 
-            sys.exit(1)
+            # every exit path (success, ``sys.exit``, or interrupt).
 
-        else:
-            # Single-query mode (`clawk chat -q "…"`): skip the welcome
-
-            # banner. Building the banner takes ~420 ms on cold start —
-
-            # ~200 ms of that is the version-update check, the rest is
-
-            # toolset / skill enumeration and Rich panel rendering. None
-
-            # of that is useful for a one-shot query: the user already
-
-            # picked the prompt, doesn't need a toolset reference, and
-
-            # gets the session ID + resume hint from
-
-            # ``_print_exit_summary()`` after the response prints.
-
-            #
-
-            # The fully-quiet ``-Q`` / ``--quiet`` machine-readable path
-
-            # above was already banner-free; this brings the human-
-
-            # facing single-query path in line so all non-interactive
-
-            # invocations are fast.
-
-            _query_label = query or ("[image attached]" if single_query_images else "")
-
-            if _query_label:
-                cli.console.print(f"[bold blue]Query:[/] {_query_label}")
-
-            # Surface security advisories before the agent runs — short
-
-            # banner, doesn't depend on the welcome banner being shown.
-
-            cli._show_security_advisories()
-
-            cli.chat(query, images=single_query_images or None)
-
-            cli._print_exit_summary()
+            _finalize_single_query(cli)
 
         return
 

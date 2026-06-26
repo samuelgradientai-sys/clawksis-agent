@@ -557,7 +557,7 @@ class TestOllamaCloudProvidersNew:
 
         from clawk_cli.providers import normalize_provider as np
 
-        assert np("ollama") == "custom"  # bare "ollama" = local
+        assert np("ollama") == "ollama"  # bare "ollama" = first-class local overlay
 
         assert np("ollama-cloud") == "ollama-cloud"
 

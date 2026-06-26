@@ -96,6 +96,12 @@ class ProviderProfile:
         True  # False → doctor skips /models probe for this provider
     )
 
+    # supports_vision_tool_messages: some providers accept multimodal user
+    # messages but reject list-type *tool* message content with a 400 (e.g.
+    # Xiaomi MiMo's "text is not set"). False = downgrade tool results to a
+    # text summary proactively instead of waiting for a reactive 400.
+    supports_vision_tool_messages: bool = True
+
     # ── Model catalog ─────────────────────────────────────────
 
     # fallback_models: curated list shown in /model picker when live fetch fails.
