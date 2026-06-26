@@ -18,7 +18,6 @@ import {
   Quote,
   Brain,
   ChevronRight,
-  Zap,
   CheckCircle2,
   Loader2,
   AlertCircle,
@@ -86,6 +85,11 @@ function ChatHeader({
       ? tokensUsed.toLocaleString() + "/" + (tokensMax / 1000).toFixed(1) + "k tokens"
       : tokensUsed.toLocaleString() + " tokens";
 
+  const tokenPercent =
+    tokensMax > 0
+      ? Math.min(100, Math.round((tokensUsed / tokensMax) * 100))
+      : null;
+
   return (
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -109,14 +113,115 @@ function ChatHeader({
         ref={tokensRef}
         onClick={onTokensClick}
         disabled={!onTokensClick}
-        className="hidden md:flex items-center gap-3 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-        aria-label="Ver desglose de uso de tokens"
+        title={"Ver desglose de uso de tokens · sesión " + shortSession}
+        className="hidden md:flex items-center gap-2 rounded-lg border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:border-[#6C4FD6]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
+        aria-label="Abrir menú de uso de tokens"
       >
-        <span>Session</span>
-        <span className="font-mono text-foreground/80">{shortSession}</span>
-        <span>·</span>
-        <span>{tokensLabel}</span>
+        <Brain className="size-3.5 text-[#6C4FD6]" />
+        <span className="font-medium">Uso de tokens</span>
+        <span className="hidden text-muted-foreground lg:inline">·</span>
+        <span className="font-mono text-foreground/90">{tokensLabel}</span>
+        {tokenPercent !== null && (
+          <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {tokenPercent}%
+          </span>
+        )}
+        <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
       </button>
+    </div>
+  );
+}
+
+
+function ProjectCreateDialog({
+  open,
+  error,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  error: string | null;
+  onClose: () => void;
+  onCreate: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    onCreate(cleanName);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#6C4FD6]/40 bg-popover text-popover-foreground shadow-2xl shadow-[#6C4FD6]/20">
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20 text-[#6C4FD6]">
+              <span className="text-sm font-bold">C</span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-foreground">
+                Nuevo proyecto
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Crea un espacio separado para conversaciones relacionadas.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <label className="block text-xs font-medium text-muted-foreground">
+            Nombre del proyecto
+          </label>
+
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") onClose();
+            }}
+            placeholder="Ej. Agencia, Inventario, Clientes..."
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-[#6C4FD6] focus:ring-2 focus:ring-[#6C4FD6]/25"
+          />
+
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!name.trim()}
+            className="rounded-lg bg-[#6C4FD6] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#5a40c2] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Crear proyecto
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -341,7 +446,7 @@ const MessageBubble = memo(function MessageBubble({
   return (
     <div className="group flex gap-3 py-4">
       <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#6C4FD6] text-white">
-        <Zap className="size-3.5" />
+        <span className="text-xs font-bold leading-none">C</span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="text-[15px] leading-relaxed text-foreground">
@@ -812,7 +917,7 @@ function EmptyState() {
     <div className="flex flex-1 items-center justify-center px-4 py-12">
       <div className="flex max-w-md flex-col items-center gap-3 text-center">
         <div className="flex size-12 items-center justify-center rounded-lg bg-[#6C4FD6]/10">
-          <Zap className="size-6 text-[#6C4FD6]" />
+          <span className="text-sm font-bold leading-none text-[#6C4FD6]">C</span>
         </div>
         <h2 className="text-base font-semibold text-foreground">
           Empezá una conversación
@@ -879,10 +984,13 @@ export default function ChatModern() {
 
   const {
     sessions,
+    projects,
     loading: sessionsLoading,
     error: sessionsError,
     createSession,
     deleteSession,
+    createProject,
+    moveSessionToProject,
     refresh: refreshSessions,
   } = useSessions(sendRpc, readyForRpc);
 
@@ -899,6 +1007,8 @@ export default function ChatModern() {
   const didAutoOpenSidebarTopRef = useRef(false);
   // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
   const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectDialogError, setProjectDialogError] = useState<string | null>(null);
 
   // optimistic-new-chat-sidebar-v1
   // Conversaciones creadas localmente que aún no aparecen en session.list.
@@ -1076,7 +1186,7 @@ export default function ChatModern() {
           started_at: Date.now() / 1000,
           preview: trimmed,
           message_count: Math.max((current?.message_count ?? 0) + 1, 1),
-          model: session.model ?? current?.model,
+          model: session.model ?? current?.model ?? undefined,
         },
       }));
 
@@ -1086,23 +1196,35 @@ export default function ChatModern() {
     sendMessage(text);
   };
 
-  const handleNewChat = async () => {
+  const handleNewChat = async (projectId: string | null = null) => {
     const newId = await createSession();
     if (newId) {
+      const project = projectId
+        ? projects.find((p) => p.id === projectId) ?? null
+        : null;
+
       setVisualActiveSessionId(newId);
       setOptimisticSessions((prev) => [
         {
           id: newId,
-          title: "Nueva conversación",
+          title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
           preview: "",
           source: "dashboard",
           started_at: Date.now() / 1000,
           message_count: 0,
           model: session.model,
           model_provider: session.modelProvider,
+          project_id: project?.id ?? null,
+          project_name: project?.name ?? null,
+          project_archived: false,
         } as (typeof sessions)[number],
         ...prev.filter((s) => s.id !== newId),
       ]);
+
+      if (projectId) {
+        await moveSessionToProject(newId, projectId);
+      }
+
       await switchSession(newId, { assumeLive: true });
       void refreshSessions();
       window.setTimeout(() => {
@@ -1133,6 +1255,32 @@ export default function ChatModern() {
       return next;
     });
     await deleteSession(id);
+  };
+
+  const handleCreateProject = () => {
+    setProjectDialogError(null);
+    setProjectDialogOpen(true);
+  };
+
+  const handleSubmitProjectCreate = async (name: string) => {
+    setProjectDialogError(null);
+
+    const project = await createProject(name);
+    if (!project) {
+      setProjectDialogError("No se pudo crear el proyecto. Revisa si el nombre ya existe.");
+      return;
+    }
+
+    setProjectDialogOpen(false);
+    void refreshSessions();
+  };
+
+  const handleMoveSessionToProject = async (
+    sessionId: string,
+    projectId: string | null,
+  ) => {
+    await moveSessionToProject(sessionId, projectId);
+    void refreshSessions();
   };
 
   // Título de la conversación que se está viendo (para el header).
@@ -1192,15 +1340,29 @@ export default function ChatModern() {
   })();
 
   return (
-    <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
+    <>
+      <ProjectCreateDialog
+        open={projectDialogOpen}
+        error={projectDialogError}
+        onClose={() => setProjectDialogOpen(false)}
+        onCreate={handleSubmitProjectCreate}
+      />
+
+      <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
       <SessionSidebar
         sessions={sidebarSessions}
+        projects={projects}
         activeSessionId={sidebarActiveSessionId}
         loading={sessionsLoading}
         error={sessionsError}
         onSelectSession={handleSelectSession}
-        onNewChat={handleNewChat}
+        onNewChat={() => handleNewChat(null)}
+        onNewChatInProject={(projectId) => {
+          void handleNewChat(projectId);
+        }}
+        onCreateProject={handleCreateProject}
         onDeleteSession={handleDeleteSession}
+        onMoveSessionToProject={handleMoveSessionToProject}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -1292,6 +1454,7 @@ export default function ChatModern() {
           buildPromptWithQuotes={buildPromptWithQuotes}
         />
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,26 +1,36 @@
 /**
  * useSessions — Hook para gestionar la lista de sesiones del usuario.
  *
- * Consume los métodos JSON-RPC:
- *   - session.list — trae lista paginada (top N por started_at desc)
- *   - session.create — crea sesión nueva (devuelve session_id)
- *
- * Fase 2.9 — exporta deriveTitle(): heurística para mostrar mejor el título
- * de la sesión cuando el backend no tiene uno bueno (ej: system prompts
- * metidos como primer mensaje del usuario).
+ * Carga sesiones desde REST para recibir metadatos de proyectos/carpetas
+ * (project_id/project_name), y conserva RPC para crear/borrar sesiones vivas.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { fetchJSON } from "@/lib/api";
+
+export interface ChatProject {
+  id: string;
+  name: string;
+  description: string;
+  created_at: number;
+  updated_at: number;
+  archived: boolean;
+  session_count: number;
+}
 
 export interface SessionSummary {
   id: string;
-  title: string;
-  preview: string;
+  title?: string | null;
+  preview?: string | null;
   started_at: number;
   message_count: number;
-  source: string;
-  /** Modelo de la sesión (lo agrega session.list; puede faltar en gateways viejos). */
-  model?: string;
+  source?: string | null;
+  /** Modelo de la sesión. Puede faltar en gateways viejos. */
+  model?: string | null;
+  model_provider?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
+  project_archived?: boolean;
 }
 
 export type RpcSender = (
@@ -30,11 +40,17 @@ export type RpcSender = (
 
 interface UseSessionsResult {
   sessions: SessionSummary[];
+  projects: ChatProject[];
   loading: boolean;
+  projectsLoading: boolean;
   error: string | null;
+  projectsError: string | null;
   refresh: () => Promise<void>;
+  refreshProjects: () => Promise<void>;
   createSession: () => Promise<string | null>;
   deleteSession: (id: string) => Promise<void>;
+  createProject: (name: string, description?: string) => Promise<ChatProject | null>;
+  moveSessionToProject: (sessionId: string, projectId: string | null) => Promise<void>;
 }
 
 const SESSION_LIST_LIMIT = 100;
@@ -58,12 +74,6 @@ const TOXIC_TITLE_PATTERNS = [
 
 const MAX_TITLE_LENGTH = 50;
 
-/**
- * Limpia y trunca un texto candidato a título.
- *  - Colapsa whitespace múltiple
- *  - Trunca a MAX_TITLE_LENGTH con "..."
- *  - Devuelve "" si quedaría vacío después de limpiar
- */
 function cleanTitle(raw: string): string {
   const cleaned = raw.replace(/\s+/g, " ").trim();
   if (!cleaned) return "";
@@ -71,24 +81,12 @@ function cleanTitle(raw: string): string {
   return cleaned.slice(0, MAX_TITLE_LENGTH - 1).trimEnd() + "…";
 }
 
-/**
- * Verifica si un texto candidato a título es "tóxico" (system prompt, slash
- * command, etc) y por lo tanto NO debería usarse como título.
- */
 function isToxic(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return true;
   return TOXIC_TITLE_PATTERNS.some((p) => p.test(trimmed));
 }
 
-/**
- * Deriva el título a mostrar en el sidebar usando heurística:
- *  1. Si session.title NO es tóxico → usarlo
- *  2. Sino, intentar session.preview (último mensaje) si NO es tóxico
- *  3. Sino, fallback a "Conversación {short-id}"
- *
- * Función pura — fácil de testear y razonar.
- */
 export function deriveTitle(session: SessionSummary): string {
   const titleRaw = session.title ?? "";
   if (titleRaw && !isToxic(titleRaw)) {
@@ -102,17 +100,12 @@ export function deriveTitle(session: SessionSummary): string {
     if (cleaned) return cleaned;
   }
 
-  // Fallback final: usar source + primeros 8 chars del ID
   const shortId = (session.id ?? "").slice(0, 8) || "?";
   const source = (session.source ?? "").trim().toLowerCase();
   const label = SOURCE_LABELS[source] ?? "Conversación";
   return label + " · " + shortId;
 }
 
-/**
- * Mapeo de source del backend → etiqueta amigable en el sidebar.
- * Solo se usa cuando no hay title ni preview útil (fallback).
- */
 const SOURCE_LABELS: Record<string, string> = {
   cron: "Cron job",
   dashboard: "Conversación",
@@ -129,32 +122,53 @@ export function useSessions(
   ready: boolean,
 ): UseSessionsResult {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [projects, setProjects] = useState<ChatProject[]>([]);
   const [loading, setLoading] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!ready) return;
     setLoading(true);
     setError(null);
     try {
-      const res = (await sendRpc("session.list", {
-        limit: SESSION_LIST_LIMIT,
-      })) as { sessions?: SessionSummary[] };
+      const res = await fetchJSON<{ sessions?: SessionSummary[] }>(
+        `/api/sessions?limit=${SESSION_LIST_LIMIT}&order=recent`,
+      );
       const list = res?.sessions ?? [];
       list.sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
       setSessions(list);
     } catch (err) {
-      console.error("[useSessions] session.list failed", err);
+      console.error("[useSessions] /api/sessions failed", err);
       setError(err instanceof Error ? err.message : "Failed to load sessions");
     } finally {
       setLoading(false);
     }
-  }, [sendRpc, ready]);
+  }, [ready]);
+
+  const refreshProjects = useCallback(async () => {
+    if (!ready) return;
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const res = await fetchJSON<{ projects?: ChatProject[] }>("/api/projects");
+      const list = res?.projects ?? [];
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setProjects(list);
+    } catch (err) {
+      console.error("[useSessions] /api/projects failed", err);
+      setProjectsError(err instanceof Error ? err.message : "Failed to load projects");
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
     void refresh();
-  }, [ready, refresh]);
+    void refreshProjects();
+  }, [ready, refresh, refreshProjects]);
 
   const createSession = useCallback(async (): Promise<string | null> => {
     if (!ready) return null;
@@ -165,6 +179,7 @@ export function useSessions(
       const newId = res?.session_id ?? null;
       if (newId) {
         await refresh();
+        await refreshProjects();
       }
       return newId;
     } catch (err) {
@@ -172,7 +187,7 @@ export function useSessions(
       setError(err instanceof Error ? err.message : "Failed to create session");
       return null;
     }
-  }, [sendRpc, ready, refresh]);
+  }, [sendRpc, ready, refresh, refreshProjects]);
 
   const deleteSession = useCallback(
     async (id: string): Promise<void> => {
@@ -180,9 +195,6 @@ export function useSessions(
       try {
         await sendRpc("session.delete", { session_id: id });
       } catch (err) {
-        // NO la sacamos ni refrescamos: el refresh borraría el error y parecería
-        // que "no borra" sin explicar por qué (p.ej. sesión activa). Mostramos
-        // el motivo real.
         console.error("[useSessions] session.delete failed", err);
         setError(
           err instanceof Error
@@ -191,19 +203,94 @@ export function useSessions(
         );
         return;
       }
-      // Éxito: sacarla ya y re-sincronizar con el backend.
+
       setSessions((prev) => prev.filter((s) => s.id !== id));
       void refresh();
+      void refreshProjects();
     },
-    [sendRpc, ready, refresh],
+    [sendRpc, ready, refresh, refreshProjects],
+  );
+
+  const createProject = useCallback(
+    async (name: string, description = ""): Promise<ChatProject | null> => {
+      if (!ready) return null;
+
+      const cleanName = name.trim();
+      if (!cleanName) return null;
+
+      try {
+        const project = await fetchJSON<ChatProject>("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: cleanName, description }),
+        });
+        await refreshProjects();
+        return project;
+      } catch (err) {
+        console.error("[useSessions] create project failed", err);
+        setProjectsError(err instanceof Error ? err.message : "No se pudo crear el proyecto");
+        return null;
+      }
+    },
+    [ready, refreshProjects],
+  );
+
+  const moveSessionToProject = useCallback(
+    async (sessionId: string, projectId: string | null): Promise<void> => {
+      if (!ready || !sessionId) return;
+
+      const cleanProjectId = projectId?.trim() || null;
+      const project = cleanProjectId
+        ? projects.find((p) => p.id === cleanProjectId) ?? null
+        : null;
+
+      try {
+        await fetchJSON<{
+          ok: boolean;
+          session_id: string;
+          project_id: string | null;
+          project_name: string | null;
+        }>(`/api/sessions/${encodeURIComponent(sessionId)}/project`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: cleanProjectId }),
+        });
+
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  project_id: cleanProjectId,
+                  project_name: project?.name ?? null,
+                  project_archived: false,
+                }
+              : s,
+          ),
+        );
+
+        await refresh();
+        await refreshProjects();
+      } catch (err) {
+        console.error("[useSessions] move session to project failed", err);
+        setError(err instanceof Error ? err.message : "No se pudo mover la sesión");
+      }
+    },
+    [ready, projects, refresh, refreshProjects],
   );
 
   return {
     sessions,
+    projects,
     loading,
+    projectsLoading,
     error,
+    projectsError,
     refresh,
+    refreshProjects,
     createSession,
     deleteSession,
+    createProject,
+    moveSessionToProject,
   };
 }
