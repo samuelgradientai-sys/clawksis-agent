@@ -35,16 +35,22 @@ from clawk_cli import main as clawk_main
 
 
 @pytest.fixture(autouse=True)
-def _no_update_sleep(monkeypatch):
-    """Skip cmd_update's long (~3s) post-restart graceful-shutdown sleep so the
-    suite stays under the CI per-file wall-clock cap, while preserving short
-    sleeps that tests use to simulate slow installs (heartbeat timing)."""
+def _fast_update(monkeypatch):
+    """Keep cmd_update fast for the CI per-file cap: skip the long (~3s)
+    post-restart sleep (preserving short install-simulation sleeps) and make the
+    gateway-restart process sweep (psutil scan + drain wait + SIGKILL, slow on
+    Linux CI) a no-op. These tests cover update logic, not the restart."""
+    import clawk_cli.gateway as _gw
+
     _real_sleep = clawk_main._time.sleep
     monkeypatch.setattr(
         clawk_main._time,
         "sleep",
         lambda secs=0, *a, **k: None if (secs or 0) >= 2 else _real_sleep(secs),
     )
+    monkeypatch.setattr(_gw, "find_gateway_pids", lambda *a, **k: [])
+    monkeypatch.setattr(_gw, "_get_service_pids", lambda *a, **k: set())
+    monkeypatch.setattr(_gw, "find_profile_gateway_processes", lambda *a, **k: [])
 
 
 @pytest.fixture(autouse=True)
