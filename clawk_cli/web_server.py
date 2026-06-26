@@ -2391,6 +2391,416 @@ async def get_action_status(name: str, lines: int = 200):
     }
 
 
+
+# ---------------------------------------------------------------------------
+# Chat projects / folders — chat-projects-v1
+# ---------------------------------------------------------------------------
+
+class ChatProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class ChatProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    archived: Optional[bool] = None
+
+
+class SessionProjectUpdate(BaseModel):
+    project_id: Optional[str] = None
+
+
+def _chat_projects_db_path():
+    from clawk_constants import get_clawk_home
+
+    return get_clawk_home() / "state.db"
+
+
+def _chat_projects_connect():
+    import sqlite3
+
+    conn = sqlite3.connect(_chat_projects_db_path())
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _chat_project_clean_text(value: Any, *, field: str, max_len: int, required: bool = False) -> str:
+    text = str(value or "").strip()
+
+    if required and not text:
+        raise HTTPException(status_code=400, detail=f"{field} is required")
+
+    if len(text) > max_len:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field} must be at most {max_len} characters",
+        )
+
+    if any(ord(ch) < 32 and ch not in ("\t", "\n", "\r") for ch in text):
+        raise HTTPException(status_code=400, detail=f"{field} contains control characters")
+
+    return text
+
+
+def _ensure_chat_projects_schema(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            archived INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+
+    session_cols = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+
+    if "project_id" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_projects_archived_name "
+        "ON chat_projects(archived, name)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_project_id "
+        "ON sessions(project_id)"
+    )
+    conn.commit()
+
+
+def _project_row_to_dict(row) -> Dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"] or "",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "archived": bool(row["archived"]),
+        "session_count": int(row["session_count"] or 0),
+    }
+
+
+def _project_exists(conn, project_id: str, *, include_archived: bool = False) -> bool:
+    if include_archived:
+        row = conn.execute(
+            "SELECT id FROM chat_projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM chat_projects WHERE id = ? AND archived = 0",
+            (project_id,),
+        ).fetchone()
+
+    return row is not None
+
+
+def _attach_session_projects(sessions: List[Dict[str, Any]]) -> None:
+    if not sessions:
+        return
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        ids = [str(s.get("id") or "") for s in sessions if s.get("id")]
+        if not ids:
+            return
+
+        placeholders = ",".join("?" for _ in ids)
+        rows = conn.execute(
+            f"""
+            SELECT
+                s.id AS session_id,
+                s.project_id AS project_id,
+                p.name AS project_name,
+                p.archived AS project_archived
+            FROM sessions s
+            LEFT JOIN chat_projects p ON p.id = s.project_id
+            WHERE s.id IN ({placeholders})
+            """,
+            ids,
+        ).fetchall()
+
+        project_map = {
+            row["session_id"]: {
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+                "project_archived": bool(row["project_archived"]) if row["project_archived"] is not None else False,
+            }
+            for row in rows
+        }
+
+        for session in sessions:
+            meta = project_map.get(str(session.get("id") or ""), {})
+            session["project_id"] = meta.get("project_id")
+            session["project_name"] = meta.get("project_name")
+            session["project_archived"] = bool(meta.get("project_archived", False))
+
+    finally:
+        conn.close()
+
+
+@app.get("/api/projects")
+async def list_chat_projects(include_archived: bool = False):
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        where = "" if include_archived else "WHERE p.archived = 0"
+        rows = conn.execute(
+            f"""
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            {where}
+            GROUP BY p.id
+            ORDER BY p.archived ASC, LOWER(p.name) ASC
+            """
+        ).fetchall()
+
+        return {"projects": [_project_row_to_dict(row) for row in rows]}
+
+    finally:
+        conn.close()
+
+
+@app.post("/api/projects")
+async def create_chat_project(body: ChatProjectCreate):
+    import time
+    import uuid
+
+    name = _chat_project_clean_text(body.name, field="name", max_len=80, required=True)
+    description = _chat_project_clean_text(
+        body.description,
+        field="description",
+        max_len=500,
+        required=False,
+    )
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        duplicate = conn.execute(
+            "SELECT id FROM chat_projects WHERE LOWER(name) = LOWER(?) AND archived = 0",
+            (name,),
+        ).fetchone()
+        if duplicate:
+            raise HTTPException(status_code=409, detail="A project with that name already exists")
+
+        now = time.time()
+        project_id = uuid.uuid4().hex[:12]
+
+        conn.execute(
+            """
+            INSERT INTO chat_projects (id, name, description, created_at, updated_at, archived)
+            VALUES (?, ?, ?, ?, ?, 0)
+            """,
+            (project_id, name, description, now, now),
+        )
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            WHERE p.id = ?
+            GROUP BY p.id
+            """,
+            (project_id,),
+        ).fetchone()
+
+        return _project_row_to_dict(row)
+
+    finally:
+        conn.close()
+
+
+@app.patch("/api/projects/{project_id}")
+async def update_chat_project(project_id: str, body: ChatProjectUpdate):
+    import time
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        row = conn.execute(
+            "SELECT * FROM chat_projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        updates = []
+        params: List[Any] = []
+
+        if body.name is not None:
+            name = _chat_project_clean_text(body.name, field="name", max_len=80, required=True)
+            duplicate = conn.execute(
+                """
+                SELECT id FROM chat_projects
+                WHERE LOWER(name) = LOWER(?) AND archived = 0 AND id <> ?
+                """,
+                (name, project_id),
+            ).fetchone()
+            if duplicate:
+                raise HTTPException(status_code=409, detail="A project with that name already exists")
+            updates.append("name = ?")
+            params.append(name)
+
+        if body.description is not None:
+            description = _chat_project_clean_text(
+                body.description,
+                field="description",
+                max_len=500,
+                required=False,
+            )
+            updates.append("description = ?")
+            params.append(description)
+
+        if body.archived is not None:
+            updates.append("archived = ?")
+            params.append(1 if body.archived else 0)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="Nothing to update")
+
+        updates.append("updated_at = ?")
+        params.append(time.time())
+        params.append(project_id)
+
+        conn.execute(
+            f"UPDATE chat_projects SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        conn.commit()
+
+        updated = conn.execute(
+            """
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            WHERE p.id = ?
+            GROUP BY p.id
+            """,
+            (project_id,),
+        ).fetchone()
+
+        return _project_row_to_dict(updated)
+
+    finally:
+        conn.close()
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_chat_project(project_id: str):
+    import time
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        if not _project_exists(conn, project_id, include_archived=True):
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Safe delete semantics: do not delete chats. Unassign sessions, then archive the project.
+        conn.execute("UPDATE sessions SET project_id = NULL WHERE project_id = ?", (project_id,))
+        conn.execute(
+            "UPDATE chat_projects SET archived = 1, updated_at = ? WHERE id = ?",
+            (time.time(), project_id),
+        )
+        conn.commit()
+
+        return {"ok": True}
+
+    finally:
+        conn.close()
+
+
+@app.patch("/api/sessions/{session_id}/project")
+async def move_session_to_project(session_id: str, body: SessionProjectUpdate):
+    from clawk_state import SessionDB
+
+    db = SessionDB()
+    try:
+        sid = db.resolve_session_id(session_id)
+        if not sid:
+            raise HTTPException(status_code=404, detail="Session not found")
+    finally:
+        db.close()
+
+    project_id = str(body.project_id or "").strip() or None
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        if project_id is not None and not _project_exists(conn, project_id):
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        conn.execute(
+            "UPDATE sessions SET project_id = ? WHERE id = ?",
+            (project_id, sid),
+        )
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.project_id,
+                p.name AS project_name
+            FROM sessions s
+            LEFT JOIN chat_projects p ON p.id = s.project_id
+            WHERE s.id = ?
+            """,
+            (sid,),
+        ).fetchone()
+
+        return {
+            "ok": True,
+            "session_id": row["id"],
+            "project_id": row["project_id"],
+            "project_name": row["project_name"],
+        }
+
+    finally:
+        conn.close()
+
+
+
+
 @app.get("/api/sessions")
 async def get_sessions(
     limit: int = 20,
@@ -2398,6 +2808,7 @@ async def get_sessions(
     min_messages: int = 0,
     archived: str = "exclude",
     order: str = "created",
+    project_id: Optional[str] = None,
 ):
     """List sessions.
 
@@ -2461,6 +2872,16 @@ async def get_sessions(
                 include_archived=include_archived,
                 archived_only=archived_only,
             )
+
+            _attach_session_projects(sessions)
+
+            requested_project_id = (project_id or "").strip()
+            if requested_project_id:
+                if requested_project_id.lower() in ("none", "null", "unassigned"):
+                    sessions = [s for s in sessions if not s.get("project_id")]
+                else:
+                    sessions = [s for s in sessions if s.get("project_id") == requested_project_id]
+                total = len(sessions)
 
             now = time.time()
 
