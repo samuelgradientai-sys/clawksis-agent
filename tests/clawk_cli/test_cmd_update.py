@@ -1,9 +1,5 @@
 """Tests for cmd_update — branch fallback when remote branch doesn't exist."""
 
-import faulthandler as _fh  # TEMP diagnostic: dump stacks if the file runs slow on CI
-
-_fh.dump_traceback_later(30, repeat=True)
-
 import subprocess
 
 from types import SimpleNamespace
