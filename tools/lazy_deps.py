@@ -161,6 +161,13 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     "search.exa": ("exa-py==2.10.2",),
     "search.firecrawl": ("firecrawl-py==4.17.0",),
     "search.parallel": ("parallel-web==0.4.2",),
+    # ─── Structured scraping (own-infra default) ───────────────────────────
+    # ScrapeGraphAI — local, LLM-powered structured extraction. Heavy (langchain
+    # stack + playwright), so lazy-installed on first use of the `scrapegraph`
+    # tool / extract backend. Unpinned like ddgs: it iterates fast and we always
+    # want the latest scraper/loader fixes. Note: JavaScript pages also need a
+    # one-time `python -m playwright install chromium`.
+    "scrape.scrapegraph": ("scrapegraphai",),
     # ─── TTS providers ─────────────────────────────────────────────────────
     # Pinned to exact versions to match pyproject.toml's no-ranges policy
     # (see comment at top of [project.dependencies]). When bumping, update
