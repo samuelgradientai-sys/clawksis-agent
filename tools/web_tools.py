@@ -327,13 +327,38 @@ def _get_extract_backend() -> str:
 
     1. ``web.extract_backend`` (per-capability override)
 
-    2. ``web.backend`` (shared fallback — existing behavior)
+    2. Local ScrapeGraphAI when installed — prefer our own infrastructure over
+       paid third-party extract APIs (Firecrawl/Exa/...) when no explicit
+       override is set.
 
-    3. Auto-detect from env vars
+    3. ``web.backend`` (shared fallback — existing behavior)
+
+    4. Auto-detect from env vars
 
     """
 
-    return _get_capability_backend("extract")
+    cfg = _load_web_config()
+    specific = (cfg.get("extract_backend") or "").lower().strip()
+    if specific and _is_backend_available(specific):
+        return specific
+
+    # Prefer in-house ScrapeGraphAI for extraction over paid 3rd-party APIs once
+    # the local library is present (the `scrapegraph` tool installs it on first
+    # use). Explicit web.extract_backend above still wins.
+    if _scrapegraph_importable():
+        return "scrapegraph"
+
+    return _get_backend()
+
+
+def _scrapegraph_importable() -> bool:
+    """True when the local scrapegraphai library is installed."""
+    try:
+        from tools.scrapegraph_common import is_available
+
+        return is_available()
+    except Exception:
+        return False
 
 
 def _get_capability_backend(capability: str) -> str:
@@ -380,6 +405,9 @@ def _is_backend_available(backend: str) -> bool:
 
     if backend == "ddgs":
         return _ddgs_package_importable()
+
+    if backend == "scrapegraph":
+        return _scrapegraph_importable()
 
     if backend == "xai":
         # Cheap probe — env var OR auth.json has OAuth tokens. Must not

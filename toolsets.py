@@ -149,8 +149,8 @@ _CLAWK_WEBHOOK_SAFE_TOOLS = [
 TOOLSETS = {
     # Basic toolsets - individual tool categories
     "web": {
-        "description": "Web research and content extraction tools (incl. anti-bot scrape)",
-        "tools": ["web_search", "web_extract", "scrape"],
+        "description": "Web research and content extraction tools (incl. anti-bot scrape + structured ScrapeGraphAI extraction)",
+        "tools": ["web_search", "web_extract", "scrape", "scrapegraph"],
         "includes": [],  # No other toolsets included
     },
     "search": {
