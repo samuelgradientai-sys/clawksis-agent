@@ -602,7 +602,6 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-
 # ---------------------------------------------------------------------------
 # Local artifact downloads — artifact-download-v1
 # ---------------------------------------------------------------------------
@@ -651,11 +650,7 @@ def _artifact_is_loopback_request(request: "Request") -> bool:
     host = getattr(client, "host", "") if client else ""
     host = str(host or "").strip().lower()
 
-    return (
-        host == "localhost"
-        or host == "::1"
-        or host.startswith("127.")
-    )
+    return host == "localhost" or host == "::1" or host.startswith("127.")
 
 
 def _artifact_is_within_root(candidate: "Path", root: "Path") -> bool:
@@ -695,7 +690,10 @@ async def download_local_artifact(path: str, request: Request):
     candidate = Path(raw_path).expanduser().resolve(strict=False)
 
     if not _artifact_is_within_root(candidate, root):
-        raise HTTPException(status_code=403, detail="Artifact path is outside the allowed exports directory.")
+        raise HTTPException(
+            status_code=403,
+            detail="Artifact path is outside the allowed exports directory.",
+        )
 
     if not candidate.exists():
         raise HTTPException(status_code=404, detail="Artifact not found.")
@@ -704,11 +702,15 @@ async def download_local_artifact(path: str, request: Request):
         raise HTTPException(status_code=400, detail="Artifact path is not a file.")
 
     if candidate.suffix.lower() not in _ARTIFACT_ALLOWED_SUFFIXES:
-        raise HTTPException(status_code=400, detail="Artifact file type is not allowed.")
+        raise HTTPException(
+            status_code=400, detail="Artifact file type is not allowed."
+        )
 
     parts_lower = {part.lower() for part in candidate.parts}
     if parts_lower & _ARTIFACT_BLOCKED_NAMES:
-        raise HTTPException(status_code=403, detail="Sensitive file names are not downloadable.")
+        raise HTTPException(
+            status_code=403, detail="Sensitive file names are not downloadable."
+        )
 
     return FileResponse(
         str(candidate),
@@ -716,7 +718,6 @@ async def download_local_artifact(path: str, request: Request):
         media_type="application/octet-stream",
         headers={"Cache-Control": "private, no-store"},
     )
-
 
 
 # ---------------------------------------------------------------------------
@@ -2391,10 +2392,10 @@ async def get_action_status(name: str, lines: int = 200):
     }
 
 
-
 # ---------------------------------------------------------------------------
 # Chat projects / folders — chat-projects-v1
 # ---------------------------------------------------------------------------
+
 
 class ChatProjectCreate(BaseModel):
     name: str
@@ -2425,7 +2426,9 @@ def _chat_projects_connect():
     return conn
 
 
-def _chat_project_clean_text(value: Any, *, field: str, max_len: int, required: bool = False) -> str:
+def _chat_project_clean_text(
+    value: Any, *, field: str, max_len: int, required: bool = False
+) -> str:
     text = str(value or "").strip()
 
     if required and not text:
@@ -2438,7 +2441,9 @@ def _chat_project_clean_text(value: Any, *, field: str, max_len: int, required: 
         )
 
     if any(ord(ch) < 32 and ch not in ("\t", "\n", "\r") for ch in text):
-        raise HTTPException(status_code=400, detail=f"{field} contains control characters")
+        raise HTTPException(
+            status_code=400, detail=f"{field} contains control characters"
+        )
 
     return text
 
@@ -2458,8 +2463,7 @@ def _ensure_chat_projects_schema(conn) -> None:
     )
 
     session_cols = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+        row["name"] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
     }
 
     if "project_id" not in session_cols:
@@ -2470,8 +2474,7 @@ def _ensure_chat_projects_schema(conn) -> None:
         "ON chat_projects(archived, name)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sessions_project_id "
-        "ON sessions(project_id)"
+        "CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id)"
     )
     conn.commit()
 
@@ -2534,7 +2537,9 @@ def _attach_session_projects(sessions: List[Dict[str, Any]]) -> None:
             row["session_id"]: {
                 "project_id": row["project_id"],
                 "project_name": row["project_name"],
-                "project_archived": bool(row["project_archived"]) if row["project_archived"] is not None else False,
+                "project_archived": bool(row["project_archived"])
+                if row["project_archived"] is not None
+                else False,
             }
             for row in rows
         }
@@ -2602,7 +2607,9 @@ async def create_chat_project(body: ChatProjectCreate):
             (name,),
         ).fetchone()
         if duplicate:
-            raise HTTPException(status_code=409, detail="A project with that name already exists")
+            raise HTTPException(
+                status_code=409, detail="A project with that name already exists"
+            )
 
         now = time.time()
         project_id = uuid.uuid4().hex[:12]
@@ -2659,7 +2666,9 @@ async def update_chat_project(project_id: str, body: ChatProjectUpdate):
         params: List[Any] = []
 
         if body.name is not None:
-            name = _chat_project_clean_text(body.name, field="name", max_len=80, required=True)
+            name = _chat_project_clean_text(
+                body.name, field="name", max_len=80, required=True
+            )
             duplicate = conn.execute(
                 """
                 SELECT id FROM chat_projects
@@ -2668,7 +2677,9 @@ async def update_chat_project(project_id: str, body: ChatProjectUpdate):
                 (name, project_id),
             ).fetchone()
             if duplicate:
-                raise HTTPException(status_code=409, detail="A project with that name already exists")
+                raise HTTPException(
+                    status_code=409, detail="A project with that name already exists"
+                )
             updates.append("name = ?")
             params.append(name)
 
@@ -2735,7 +2746,9 @@ async def delete_chat_project(project_id: str):
             raise HTTPException(status_code=404, detail="Project not found")
 
         # Safe delete semantics: do not delete chats. Unassign sessions, then archive the project.
-        conn.execute("UPDATE sessions SET project_id = NULL WHERE project_id = ?", (project_id,))
+        conn.execute(
+            "UPDATE sessions SET project_id = NULL WHERE project_id = ?", (project_id,)
+        )
         conn.execute(
             "UPDATE chat_projects SET archived = 1, updated_at = ? WHERE id = ?",
             (time.time(), project_id),
@@ -2797,8 +2810,6 @@ async def move_session_to_project(session_id: str, body: SessionProjectUpdate):
 
     finally:
         conn.close()
-
-
 
 
 @app.get("/api/sessions")
@@ -2880,7 +2891,11 @@ async def get_sessions(
                 if requested_project_id.lower() in ("none", "null", "unassigned"):
                     sessions = [s for s in sessions if not s.get("project_id")]
                 else:
-                    sessions = [s for s in sessions if s.get("project_id") == requested_project_id]
+                    sessions = [
+                        s
+                        for s in sessions
+                        if s.get("project_id") == requested_project_id
+                    ]
                 total = len(sessions)
 
             now = time.time()
