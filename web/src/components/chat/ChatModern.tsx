@@ -422,6 +422,9 @@ const MessageBubble = memo(function MessageBubble({
   onQuote?: (message: ChatMessage) => void;
 }) {
   const isUser = message.role === "user";
+  const isCommand = message.content.trim().startsWith("/");
+  const isSlashOutput =
+    message.role === "assistant" && message.id.startsWith("slash-");
 
   const actions = !message.streaming ? (
     <MessageActions
@@ -437,7 +440,14 @@ const MessageBubble = memo(function MessageBubble({
   if (isUser) {
     return (
       <div className="group flex flex-col items-end gap-1.5 py-3">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-muted/50 px-4 py-2.5 text-sm leading-relaxed text-foreground">
+        <div
+          className={
+            "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
+            (isCommand
+              ? "border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 font-mono"
+              : "bg-muted/50")
+          }
+        >
           {message.content}
         </div>
         {actions}
@@ -452,9 +462,13 @@ const MessageBubble = memo(function MessageBubble({
         <span className="text-xs font-bold leading-none">C</span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="text-[15px] leading-relaxed text-foreground">
-          <Markdown content={message.content} streaming={message.streaming} />
-        </div>
+        {isSlashOutput ? (
+          <SlashOutput content={message.content} />
+        ) : (
+          <div className="text-[15px] leading-relaxed text-foreground">
+            <Markdown content={message.content} streaming={message.streaming} />
+          </div>
+        )}
 
         {message.toolCalls.length > 0 && (
           <div className="mt-1 flex flex-col gap-1.5">
@@ -476,6 +490,41 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
+const SLASH_OUTPUT_COLLAPSE_CHARS = 1200;
+const SLASH_OUTPUT_COLLAPSE_LINES = 18;
+
+/** Salida de un comando slash: borde de acento + colapso de salidas largas. */
+function SlashOutput({ content }: { content: string }) {
+  const long =
+    content.length > SLASH_OUTPUT_COLLAPSE_CHARS ||
+    content.split("\n").length > SLASH_OUTPUT_COLLAPSE_LINES;
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = long && !expanded;
+  return (
+    <div className="rounded-md border-l-2 border-[#6C4FD6]/40 bg-muted/20 py-1.5 pl-3 pr-2">
+      <div
+        className={
+          "text-[15px] leading-relaxed text-foreground" +
+          (collapsed
+            ? " max-h-72 overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent)]"
+            : "")
+        }
+      >
+        <Markdown content={content} streaming={false} />
+      </div>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs font-medium text-[#6C4FD6] hover:underline"
+        >
+          {expanded ? "Mostrar menos" : "Mostrar más"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function AttachmentChip({
   attachment,
