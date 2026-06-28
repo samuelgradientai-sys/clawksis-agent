@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { executeSlash } from "@/lib/slashExec";
 
 export type ConnectionStatus =
   | "idle"
@@ -529,39 +530,58 @@ export function useChatGateway(): UseChatGatewayResult {
         },
       ]);
 
-      // Slash command (/model, /help, /status, …): ejecutarlo vía slash.exec —
-      // como el terminal — en lugar de mandarlo al modelo. El output se muestra
-      // como respuesta; los comandos con efectos (model/new/stop) emiten eventos
-      // que el chat ya procesa.
+      // Slash command (/model, /help, /status, skills, …): dispatcher unificado.
+      // executeSlash intenta slash.exec y, si el backend lo rechaza (skills,
+      // comandos pending-input como /retry /queue /goal /undo /steer, o alias),
+      // cae a command.dispatch — el mismo contrato que la TUI. Sin esto, las
+      // skills aparecían en el autocomplete pero fallaban al ejecutarse, y los
+      // comandos pending-input daban error 4018 en el chat Modern. Los comandos
+      // con efectos (model/new/stop) emiten eventos que el chat ya procesa.
       if (text.trim().startsWith("/")) {
-        sendRpc("slash.exec", {
-          session_id: session.sessionId,
-          command: text.trim(),
-        })
-          .then((res) => {
-            const output = (res as { output?: string })?.output ?? "";
-            if (output) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: "slash-" + Date.now(),
-                  role: "assistant",
-                  content: output,
-                  toolCalls: [],
-                  streaming: false,
-                  timestamp: Date.now(),
-                },
-              ]);
-            }
-          })
-          .catch((err) => {
-            console.error("[useChatGateway] slash.exec failed", err);
+        const appendSystem = (out: string) => {
+          if (!out) return;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: "slash-" + Date.now(),
+              role: "assistant",
+              content: out,
+              toolCalls: [],
+              streaming: false,
+              timestamp: Date.now(),
+            },
+          ]);
+        };
+        const submitToAgent = (msg: string) =>
+          sendRpc("prompt.submit", {
+            session_id: session.sessionId,
+            text: msg,
+          }).catch((err) => {
+            console.error("[useChatGateway] prompt.submit failed", err);
             setErrorMessage(
-              err instanceof Error
-                ? err.message.replace(/^\d+:\s*/, "")
-                : "El comando falló",
+              err instanceof Error ? err.message : "Failed to send message",
             );
           });
+        void executeSlash({
+          command: text.trim(),
+          sessionId: session.sessionId,
+          gw: {
+            request<T = unknown>(
+              method: string,
+              params?: Record<string, unknown>,
+            ): Promise<T> {
+              return sendRpc(method, params) as Promise<T>;
+            },
+          },
+          callbacks: { sys: appendSystem, send: submitToAgent },
+        }).catch((err) => {
+          console.error("[useChatGateway] executeSlash failed", err);
+          setErrorMessage(
+            err instanceof Error
+              ? err.message.replace(/^\d+:\s*/, "")
+              : "El comando falló",
+          );
+        });
         return;
       }
 
