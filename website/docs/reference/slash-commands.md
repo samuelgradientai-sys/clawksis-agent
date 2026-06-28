@@ -14,7 +14,7 @@ description: "Complete reference for interactive CLI and messaging slash command
 
 
 
-Clawksis has two slash-command surfaces, both driven by a central `COMMAND_REGISTRY` in `clawk_cli/commands.py`:
+Clawksis has three slash-command surfaces, all driven by a central `COMMAND_REGISTRY` in `clawk_cli/commands.py`:
 
 
 
@@ -22,11 +22,27 @@ Clawksis has two slash-command surfaces, both driven by a central `COMMAND_REGIS
 
 - **Messaging slash commands** — dispatched by `gateway/run.py`, with help text and platform menus generated from the registry
 
+- **Modern web chat (dashboard)** — the React chat in `clawk dashboard` runs the same commands over the gateway WebSocket (`slash.exec` with a `command.dispatch` fallback); see [Modern web chat](#modern-web-chat-dashboard) below
 
 
-Installed skills are also exposed as dynamic slash commands on both surfaces. That includes bundled skills like `/plan`, which opens plan mode and saves markdown plans under `.clawksis/plans/` relative to the active workspace/backend working directory.
+
+Installed skills are also exposed as dynamic slash commands on all three surfaces. That includes bundled skills like `/plan`, which opens plan mode and saves markdown plans under `.clawksis/plans/` relative to the active workspace/backend working directory.
 
 
+
+## Modern web chat (dashboard)
+
+The dashboard's **Modern** chat (`clawk dashboard` → Chat) runs the full slash-command set over the gateway WebSocket, against the same `COMMAND_REGISTRY` as the CLI and messaging surfaces. A single shared dispatcher (`web/src/lib/slashExec.ts`) tries `slash.exec` first and falls back to `command.dispatch`, so the whole command set behaves the same as Telegram/CLI:
+
+- **Skills** (`/plan`, `/<skill-name>`, …) and **pending-input commands** (`/retry`, `/queue`, `/q`, `/goal`, `/undo`, `/steer`) execute correctly — not only the registry-backed commands.
+- **Aliases** resolve identically (`/q` → `/queue`, `/bg` → `/background`, …).
+- **Interactive commands** that need a terminal in the CLI open a native dialog instead of the headless worker: `/model` (no args) opens the model picker; `/clear`, `/new`, and `/reset` show a confirmation dialog before discarding conversation state. Pass an argument (`/model opus-4.6`) or a skip token (`/new now`) to run them directly.
+
+The composer UX mirrors the terminal:
+
+- **`/` autocomplete** with per-command descriptions, category labels, and a `Tab` complete · `↑↓` navigate · `Esc` close hint (served by `complete.slash`).
+- **`↑`/`↓` input history** of sent messages and commands (persisted locally), when the caret is on the first/last line.
+- **Collapsible output** — long command output (e.g. `/help`) collapses with a *show more / show less* toggle.
 
 ## Permissions and admin/user split
 
