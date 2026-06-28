@@ -49,6 +49,7 @@ export const SlashPopover = forwardRef<SlashPopoverHandle, Props>(
     const [items, setItems] = useState<CompletionItem[]>([]);
     const [selected, setSelected] = useState(0);
     const [replaceFrom, setReplaceFrom] = useState(1);
+    const [catByCmd, setCatByCmd] = useState<Record<string, string>>({});
     const lastInputRef = useRef<string>("");
 
     // Debounced completion fetch. We never clear `items` in the effect body
@@ -80,6 +81,35 @@ export const SlashPopover = forwardRef<SlashPopoverHandle, Props>(
 
       return () => window.clearTimeout(timer);
     }, [input, gw]);
+
+    // Catálogo (una vez): mapa comando→categoría para las etiquetas. El setState
+    // va en el callback async (no en el cuerpo del efecto) para no disparar la
+    // regla set-state-in-effect — mismo patrón que el fetch de completions.
+    useEffect(() => {
+      if (!gw) return;
+      let cancelled = false;
+      void gw
+        .request<{ categories?: { name: string; pairs: [string, string][] }[] }>(
+          "commands.catalog",
+        )
+        .then((r) => {
+          if (cancelled) return;
+          const map: Record<string, string> = {};
+          for (const cat of r?.categories ?? []) {
+            for (const pair of cat.pairs ?? []) {
+              const cmd = pair?.[0];
+              if (typeof cmd === "string") map[cmd.toLowerCase()] = cat.name;
+            }
+          }
+          setCatByCmd(map);
+        })
+        .catch(() => {
+          /* sin catálogo simplemente no se muestran etiquetas de categoría */
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [gw]);
 
     const apply = useCallback(
       (item: CompletionItem) => {
@@ -132,39 +162,59 @@ export const SlashPopover = forwardRef<SlashPopoverHandle, Props>(
     if (!visible) return null;
 
     return (
-      <div
-        className="absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto rounded-md border border-border bg-popover shadow-xl text-sm"
-        role="listbox"
-      >
-        {items.map((it, i) => {
-          const active = i === selected;
+      <div className="absolute bottom-full left-0 right-0 mb-2 rounded-md border border-border bg-popover shadow-xl text-sm">
+        <div className="max-h-60 overflow-y-auto" role="listbox">
+          {items.map((it, i) => {
+            const active = i === selected;
+            // Categoría (best-effort): se deriva el nombre del comando y se busca
+            // en el catálogo. Si no matchea, simplemente no se muestra etiqueta.
+            const cmdKey = (
+              "/" +
+              (it.display || it.text).replace(/^\/+/, "").trim().split(/\s+/)[0]
+            ).toLowerCase();
+            const category = catByCmd[cmdKey];
 
-          return (
-            <ListItem
-              key={`${it.text}-${i}`}
-              active={active}
-              role="option"
-              aria-selected={active}
-              onMouseEnter={() => setSelected(i)}
-              onClick={() => apply(it)}
-              className="px-3 py-1.5"
-            >
-              <ChevronRight
-                className={`h-3 w-3 shrink-0 ${active ? "text-primary" : "text-transparent"}`}
-              />
+            return (
+              <ListItem
+                key={`${it.text}-${i}`}
+                active={active}
+                role="option"
+                aria-selected={active}
+                onMouseEnter={() => setSelected(i)}
+                onClick={() => apply(it)}
+                className="px-3 py-1.5"
+              >
+                <ChevronRight
+                  className={`h-3 w-3 shrink-0 ${active ? "text-primary" : "text-transparent"}`}
+                />
 
-              <span className="font-mono text-xs shrink-0 truncate">
-                {it.display}
-              </span>
-
-              {it.meta && (
-                <span className="text-xs text-text-tertiary truncate ml-auto">
-                  {it.meta}
+                <span className="font-mono text-xs shrink-0 truncate">
+                  {it.display}
                 </span>
-              )}
-            </ListItem>
-          );
-        })}
+
+                {category && (
+                  <span className="shrink-0 rounded bg-muted/60 px-1 py-px text-[10px] text-text-tertiary">
+                    {category}
+                  </span>
+                )}
+
+                {it.meta && (
+                  <span className="text-xs text-text-tertiary truncate ml-auto">
+                    {it.meta}
+                  </span>
+                )}
+              </ListItem>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-[10px] text-text-tertiary">
+          <span>↹ Tab completar</span>
+          <span aria-hidden>·</span>
+          <span>↑↓ navegar</span>
+          <span aria-hidden>·</span>
+          <span>Esc cerrar</span>
+        </div>
       </div>
     );
   },
