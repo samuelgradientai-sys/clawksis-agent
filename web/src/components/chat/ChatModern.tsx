@@ -44,6 +44,8 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
+import { ModelPickerDialog } from "@/components/ModelPickerDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
 
 interface ChatHeaderProps {
@@ -1010,6 +1012,24 @@ export default function ChatModern() {
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectDialogError, setProjectDialogError] = useState<string | null>(null);
 
+  // Comandos interactivos interceptados: en el worker headless (sin TTY) el
+  // picker de /model y los modales de confirmación destructivos se cuelgan, así
+  // que los resolvemos con UI nativa de React.
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [destructiveConfirm, setDestructiveConfirm] = useState<{
+    command: string;
+    raw: string;
+  } | null>(null);
+  // Adapter mínimo sobre sendRpc para los diálogos que esperan un GatewayClient.
+  const gwForDialogs = useMemo(
+    () =>
+      ({
+        request: (method: string, params?: Record<string, unknown>) =>
+          sendRpc(method, params),
+      }) as unknown as GatewayClient,
+    [sendRpc],
+  );
+
   // optimistic-new-chat-sidebar-v1
   // Conversaciones creadas localmente que aún no aparecen en session.list.
   const [optimisticSessions, setOptimisticSessions] = useState<
@@ -1175,6 +1195,29 @@ export default function ChatModern() {
 
   const handleSend = (text: string) => {
     const trimmed = text.trim();
+
+    // Comandos interactivos que cuelgan el worker headless (sin TTY): los
+    // resolvemos con UI nativa de React en vez de mandarlos al worker.
+    if (trimmed.startsWith("/")) {
+      const base = trimmed.slice(1).split(/\s+/)[0].toLowerCase();
+      const rest = trimmed.slice(1 + base.length).trim();
+      // /model SIN args → picker React. Con args ("/model opus") va directo al
+      // worker (es un config.set, funciona headless).
+      if (base === "model" && !rest) {
+        setModelPickerOpen(true);
+        return;
+      }
+      // Destructivos → confirmación React; al confirmar añadimos el token de
+      // skip ("now") para que el worker no abra su propio modal y cuelgue.
+      if (
+        (base === "new" || base === "reset" || base === "clear") &&
+        !/(^|\s)(now|--yes|-y)(\s|$)/i.test(rest)
+      ) {
+        setDestructiveConfirm({ command: base, raw: trimmed });
+        return;
+      }
+    }
+
     const activeId = sidebarActiveSessionId ?? session.sessionId;
 
     if (activeId && trimmed) {
@@ -1346,6 +1389,33 @@ export default function ChatModern() {
         error={projectDialogError}
         onClose={() => setProjectDialogOpen(false)}
         onCreate={handleSubmitProjectCreate}
+      />
+
+      {modelPickerOpen && (
+        <ModelPickerDialog
+          gw={gwForDialogs}
+          sessionId={session.sessionId ?? undefined}
+          onSubmit={(slashCommand) => {
+            setModelPickerOpen(false);
+            sendMessage(slashCommand);
+          }}
+          onClose={() => setModelPickerOpen(false)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!destructiveConfirm}
+        destructive
+        title={`/${destructiveConfirm?.command ?? ""} — descarta la conversación`}
+        description="Esto borra el estado de la conversación actual. ¿Continuar?"
+        confirmLabel="Continuar"
+        cancelLabel="Cancelar"
+        onCancel={() => setDestructiveConfirm(null)}
+        onConfirm={() => {
+          const c = destructiveConfirm;
+          setDestructiveConfirm(null);
+          if (c) sendMessage(`${c.raw} now`);
+        }}
       />
 
       <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
