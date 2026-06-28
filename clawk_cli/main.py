@@ -11174,6 +11174,63 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
         r2 = _run_build("build:vite")
 
     if r2.returncode != 0:
+        # npm bug #4828: optional native deps (@rollup/rollup-*, lightningcss-*,
+        # @tailwindcss/oxide-*) are listed in package-lock.json but `npm ci`
+        # doesn't materialize the platform binary, so Vite aborts with "Cannot
+        # find native binding" and the build silently falls through to the stale
+        # dist below — the reason `clawk update` kept serving an old dashboard.
+        # A plain reinstall doesn't fix it (npm keeps skipping the optional dep
+        # while lockfile+node_modules disagree); removing BOTH node_modules and
+        # the lockfile forces a clean re-resolve that installs the binary. The
+        # committed lockfile already lists every platform, so restore it after
+        # the repair to keep the working tree clean for the next update autostash.
+        _native_binding_err = (
+            "cannot find native binding"
+            in ((r2.stderr or "") + (r2.stdout or "")).lower()
+        )
+
+        if _native_binding_err:
+            _say(
+                "  ⚠ native binding missing (npm bug #4828) — "
+                "repairing node_modules and retrying"
+            )
+
+            _ws_root = _workspace_root(web_dir)
+
+            shutil.rmtree(_ws_root / "node_modules", ignore_errors=True)
+
+            _lock = _ws_root / "package-lock.json"
+            _lock_existed = _lock.exists()
+
+            try:
+                _lock.unlink()
+            except OSError:
+                pass
+
+            _rr = subprocess.run(
+                [npm, "install", "--silent"],
+                cwd=_ws_root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "CI": "1"},
+            )
+
+            if _rr.returncode == 0:
+                r2 = _run_build("build:vite")
+            else:
+                _relay(_rr)
+
+            if _lock_existed:
+                subprocess.run(
+                    ["git", "checkout", "--", "package-lock.json"],
+                    cwd=_ws_root,
+                    capture_output=True,
+                    text=True,
+                )
+
+    if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
 
         # using subprocess.run kept them split. Pull from whichever has
