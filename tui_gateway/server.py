@@ -5608,9 +5608,106 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
 
     if err:
-        return err
+        # The session is not live-loaded (e.g. a cron/detached session the chat
+        # UI polls during token restore). Fall back to durable per-session usage
+        # from the DB instead of erroring 4001 — which otherwise floods the chat
+        # console on every refresh. Unknown keys yield empty usage, not an error.
+        key = (
+            (params or {}).get("session_id") or (params or {}).get("session_key") or ""
+        )
+
+        db = _get_db()
+
+        row = None
+
+        if db is not None and key:
+            try:
+                row = db.get_session(str(key)) or None
+
+            except Exception:
+                row = None
+
+        return _ok(rid, _usage_from_session_row(row))
 
     return _ok(rid, _session_usage_with_db_fallback(session, params))
+
+
+@method("usage.by_model")
+def _(rid, params: dict) -> dict:
+    """Aggregate token usage across all sessions, grouped by model.
+
+    The chat Modern header/popover combines this with ``session.usage`` but it
+    was never registered as a JSON-RPC method (only exposed via the REST
+    analytics endpoint), so the chat fell back to cache and logged
+    ``-32601 unknown method: usage.by_model`` on every refresh. Mirror the
+    analytics aggregation off the same ``sessions`` table the gateway owns.
+    """
+
+    db = _get_db()
+
+    empty = {"models": [], "total_tokens": 0, "total_cost_usd": 0}
+
+    if db is None:
+        return _ok(rid, empty)
+
+    try:
+        cur = db._conn.execute(
+            """
+            SELECT model,
+                   SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+                   SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+                   SUM(COALESCE(cache_read_tokens, 0)) AS cache_read_tokens,
+                   SUM(COALESCE(cache_write_tokens, 0)) AS cache_write_tokens,
+                   SUM(COALESCE(reasoning_tokens, 0)) AS reasoning_tokens,
+                   COALESCE(SUM(COALESCE(actual_cost_usd, estimated_cost_usd, 0)), 0)
+                       AS cost_usd,
+                   COUNT(*) AS sessions_count
+            FROM sessions
+            WHERE model IS NOT NULL AND model != ''
+            GROUP BY model
+            ORDER BY SUM(COALESCE(input_tokens, 0)) + SUM(COALESCE(output_tokens, 0)) DESC
+            """
+        )
+
+        rows = [dict(r) for r in cur.fetchall()]
+
+    except Exception as exc:
+        return _err(rid, 5007, str(exc))
+
+    models = []
+
+    total_tokens = 0
+
+    total_cost = 0.0
+
+    for r in rows:
+        it = int(r.get("input_tokens") or 0)
+        ot = int(r.get("output_tokens") or 0)
+        crt = int(r.get("cache_read_tokens") or 0)
+        cwt = int(r.get("cache_write_tokens") or 0)
+        rt = int(r.get("reasoning_tokens") or 0)
+        tt = it + ot + crt + cwt + rt
+        cost = float(r.get("cost_usd") or 0)
+
+        models.append({
+            "model": r.get("model") or "unknown",
+            "input_tokens": it,
+            "output_tokens": ot,
+            "cache_read_tokens": crt,
+            "cache_write_tokens": cwt,
+            "reasoning_tokens": rt,
+            "total_tokens": tt,
+            "cost_usd": cost,
+            "sessions_count": int(r.get("sessions_count") or 0),
+        })
+
+        total_tokens += tt
+        total_cost += cost
+
+    return _ok(
+        rid,
+        {"models": models, "total_tokens": total_tokens, "total_cost_usd": total_cost},
+    )
 
 
 @method("session.status")
