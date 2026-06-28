@@ -528,6 +528,8 @@ locales = ["locales/*.yaml"]
 # (data-files flattens every glob into its single target dir; a shared glob
 # would collapse all manifests into one folder and lose the per-MCP layout).
 # MANIFEST.in `graft optional-mcps` ships them in the sdist.
+"optional-mcps/google-workspace" = ["optional-mcps/google-workspace/manifest.yaml"]
+
 "optional-mcps/linear" = ["optional-mcps/linear/manifest.yaml"]
 
 "optional-mcps/linkedin" = ["optional-mcps/linkedin/manifest.yaml"]
