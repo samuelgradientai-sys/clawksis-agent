@@ -58,6 +58,7 @@ class TestGetToolset:
             "web_search",
             "web_extract",
             "scrape",
+            "scrapegraph",
             "web_search_plus",
         }
 
@@ -71,7 +72,7 @@ class TestResolveToolset:
 
         tools = resolve_toolset("web")
 
-        assert set(tools) == {"web_search", "web_extract", "scrape"}
+        assert set(tools) == {"web_search", "web_extract", "scrape", "scrapegraph"}
 
     def test_composite_toolset(self):
 
@@ -220,7 +221,7 @@ class TestGetToolsetInfo:
 
         assert info["is_composite"] is False
 
-        assert info["tool_count"] == 3
+        assert info["tool_count"] == 4
 
     def test_composite(self):
 

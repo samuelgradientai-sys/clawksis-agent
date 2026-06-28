@@ -58,6 +58,7 @@ _CLAWK_CORE_TOOLS = [
     "web_search",
     "web_extract",
     "scrape",
+    "scrapegraph",
     # Terminal + process management
     "terminal",
     "process",
