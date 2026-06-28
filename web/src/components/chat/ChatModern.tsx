@@ -40,6 +40,7 @@ import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
 import { useImageAttachments } from "./hooks/useImageAttachments";
+import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -567,6 +568,9 @@ function Composer({
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Historial de inputs (↑/↓ tipo terminal) + flag para reposicionar el caret.
+  const history = useCommandHistory();
+  const caretToEndRef = useRef(false);
   const voice = useVoiceInput();
   // Slash-command autocomplete (mismo backend que el terminal: complete.slash).
   const slashRef = useRef<SlashPopoverHandle>(null);
@@ -645,6 +649,14 @@ function Composer({
     ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
   }, [value]);
 
+  // Tras recuperar una entrada del historial, poner el caret al final.
+  useEffect(() => {
+    if (!caretToEndRef.current) return;
+    caretToEndRef.current = false;
+    const ta = textareaRef.current;
+    if (ta) ta.selectionStart = ta.selectionEnd = ta.value.length;
+  }, [value]);
+
   const handleSubmit = () => {
     if (!canSend) return;
     if (voice.listening) voice.stop();
@@ -655,6 +667,7 @@ function Composer({
       finalPrompt = "¿Qué ves en esta imagen?";
     }
     if (!finalPrompt.trim()) return;
+    history.push(value);
     onSend(finalPrompt);
     setValue("");
     clearAttachments();
@@ -667,6 +680,29 @@ function Composer({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // El popover de comandos consume Arrow/Tab/Escape cuando está visible.
     if (slashRef.current?.handleKey(e)) return;
+
+    // ↑/↓ navegan el historial de inputs cuando el caret está en la primera/
+    // última línea (no interfiere con edición multilínea ni con el popover).
+    const pos = e.currentTarget.selectionStart ?? 0;
+    if (e.key === "ArrowUp" && !value.slice(0, pos).includes("\n")) {
+      const entry = history.prev(value);
+      if (entry !== null) {
+        e.preventDefault();
+        caretToEndRef.current = true;
+        setValue(entry);
+        return;
+      }
+    }
+    if (e.key === "ArrowDown" && !value.slice(pos).includes("\n")) {
+      const entry = history.next();
+      if (entry !== null) {
+        e.preventDefault();
+        caretToEndRef.current = true;
+        setValue(entry);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -784,7 +820,10 @@ function Composer({
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            history.resetNav();
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={
