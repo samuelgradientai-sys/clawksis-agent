@@ -11176,17 +11176,23 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
     if r2.returncode != 0:
         # npm bug #4828: optional native deps (@rollup/rollup-*, lightningcss-*,
         # @tailwindcss/oxide-*) are listed in package-lock.json but `npm ci`
-        # doesn't materialize the platform binary, so Vite aborts with "Cannot
-        # find native binding" and the build silently falls through to the stale
-        # dist below — the reason `clawk update` kept serving an old dashboard.
-        # A plain reinstall doesn't fix it (npm keeps skipping the optional dep
-        # while lockfile+node_modules disagree); removing BOTH node_modules and
-        # the lockfile forces a clean re-resolve that installs the binary. The
-        # committed lockfile already lists every platform, so restore it after
-        # the repair to keep the working tree clean for the next update autostash.
+        # doesn't materialize the platform binary, so Vite aborts and the build
+        # silently falls through to the stale dist below — the reason `clawk
+        # update` kept serving an old dashboard. A plain reinstall doesn't fix it
+        # (npm keeps skipping the optional dep while lockfile+node_modules
+        # disagree); removing BOTH node_modules and the lockfile forces a clean
+        # re-resolve that installs the binary. The committed lockfile already
+        # lists every platform, so restore it after the repair to keep the
+        # working tree clean for the next update autostash.
+        #
+        # Detect via the issue-4828 marker every culprit prints: rollup says
+        # "Cannot find module @rollup/rollup-linux-x64-gnu. npm has a bug related
+        # to optional dependencies (https://github.com/npm/cli/issues/4828)",
+        # while lightningcss/oxide say "Cannot find native binding ...4828". The
+        # earlier "native binding"-only check missed rollup (which fails first).
+        _build_out_lc = ((r2.stderr or "") + (r2.stdout or "")).lower()
         _native_binding_err = (
-            "cannot find native binding"
-            in ((r2.stderr or "") + (r2.stdout or "")).lower()
+            "4828" in _build_out_lc or "cannot find native binding" in _build_out_lc
         )
 
         if _native_binding_err:
