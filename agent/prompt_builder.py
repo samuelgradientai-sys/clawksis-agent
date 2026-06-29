@@ -722,6 +722,18 @@ PLATFORM_HINTS = {
         "![alt](/path) for local files; local paths are not served that way. "
         "Use MEDIA:/absolute/path instead."
     ),
+    "tui": (
+        "You are in the Clawksis dashboard chat (a browser UI with a Terminal "
+        "and a Modern view). The Modern view renders full Markdown — headings, "
+        "bold, italic, code blocks, tables, AND inline media. To SHOW an image "
+        "or video to the user, embed it with Markdown image syntax "
+        "![description](URL): http(s) image/video URLs render inline. For local "
+        "files you create or generate, save them under ~/clawksis_exports and "
+        "reference them as ![description](/artifacts/download?path=ABSOLUTE_PATH) "
+        "— that endpoint serves the file inline so the picture/clip shows right "
+        "in the chat. Don't just mention a file path or say you can't send "
+        "media — embed it as Markdown so the user actually sees the image/video."
+    ),
 }
 
 # ---------------------------------------------------------------------------

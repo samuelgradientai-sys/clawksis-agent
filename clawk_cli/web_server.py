@@ -622,7 +622,30 @@ _ARTIFACT_ALLOWED_SUFFIXES = {
     ".png",
     ".jpg",
     ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".mp4",
+    ".webm",
+    ".mov",
+    ".m4v",
     ".zip",
+}
+
+# Media types served INLINE so the dashboard chat can render images/videos the
+# agent "sends" (markdown ![](/artifacts/download?path=…)) instead of forcing a
+# download. Everything else stays application/octet-stream (download).
+_ARTIFACT_INLINE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
 }
 
 _ARTIFACT_BLOCKED_NAMES = {
@@ -710,6 +733,19 @@ async def download_local_artifact(path: str, request: Request):
     if parts_lower & _ARTIFACT_BLOCKED_NAMES:
         raise HTTPException(
             status_code=403, detail="Sensitive file names are not downloadable."
+        )
+
+    inline_media_type = _ARTIFACT_INLINE_MEDIA_TYPES.get(candidate.suffix.lower())
+    if inline_media_type:
+        # Serve media inline (correct Content-Type + inline disposition) so the
+        # chat's <img>/<video> render it instead of triggering a download.
+        return FileResponse(
+            str(candidate),
+            media_type=inline_media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'inline; filename="{candidate.name}"',
+            },
         )
 
     return FileResponse(

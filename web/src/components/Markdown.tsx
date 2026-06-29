@@ -237,13 +237,46 @@ type InlineNode =
   | { type: "bold"; content: string }
   | { type: "italic"; content: string }
   | { type: "link"; text: string; href: string }
+  | { type: "media"; alt: string; href: string }
   | { type: "br" };
+
+const _MD_IMG_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(?:[?#]|$)/i;
+const _MD_VID_EXT = /\.(mp4|webm|mov|m4v|ogv|ogg)(?:[?#]|$)/i;
+
+/** For `/artifacts/download?path=<file>` links the extension is in the query. */
+function _mediaProbe(src: string): string {
+  const q = src.indexOf("path=");
+  if (q !== -1) {
+    try {
+      return decodeURIComponent(src.slice(q + 5));
+    } catch {
+      return src.slice(q + 5);
+    }
+  }
+  return src;
+}
+function isVideoSrc(src: string): boolean {
+  return _MD_VID_EXT.test(src) || _MD_VID_EXT.test(_mediaProbe(src));
+}
+function isMediaUrl(src: string): boolean {
+  const probe = _mediaProbe(src);
+  return (
+    _MD_IMG_EXT.test(src) ||
+    _MD_VID_EXT.test(src) ||
+    _MD_IMG_EXT.test(probe) ||
+    _MD_VID_EXT.test(probe)
+  );
+}
+/** http(s) or same-origin relative path — safe to use as media src / link href. */
+function isSafeRef(src: string): boolean {
+  return /^https?:\/\//i.test(src) || src.startsWith("/");
+}
 
 function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
-  // Pattern priority: code > link > bold > italic > bare URL > line break
+  // Pattern priority: image > code > link > bold > italic > bare URL > line break
   const pattern =
-    /(`[^`]+`)|(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\bhttps?:\/\/[^\s<>)\]]+)|(\n)/g;
+    /(!\[([^\]]*)\]\(([^)]+)\))|(`[^`]+`)|(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\bhttps?:\/\/[^\s<>)\]]+)|(\n)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -253,21 +286,29 @@ function parseInline(text: string): InlineNode[] {
     }
 
     if (match[1]) {
+      // ![alt](url) image / video → rendered inline as media
+      nodes.push({ type: "media", alt: match[2] ?? "", href: match[3] });
+    } else if (match[4]) {
       // Inline code
-      nodes.push({ type: "code", content: match[1].slice(1, -1) });
-    } else if (match[2]) {
-      // [text](url) link
-      nodes.push({ type: "link", text: match[3], href: match[4] });
+      nodes.push({ type: "code", content: match[4].slice(1, -1) });
     } else if (match[5]) {
+      // [text](url) link
+      nodes.push({ type: "link", text: match[6], href: match[7] });
+    } else if (match[8]) {
       // **bold**
-      nodes.push({ type: "bold", content: match[6] });
-    } else if (match[7]) {
-      // *italic*
-      nodes.push({ type: "italic", content: match[8] });
-    } else if (match[9]) {
-      // Bare URL
-      nodes.push({ type: "link", text: match[9], href: match[9] });
+      nodes.push({ type: "bold", content: match[9] });
     } else if (match[10]) {
+      // *italic*
+      nodes.push({ type: "italic", content: match[11] });
+    } else if (match[12]) {
+      // Bare URL — image/video URLs render inline as media, rest as a link.
+      const url = match[12];
+      if (isMediaUrl(url)) {
+        nodes.push({ type: "media", alt: "", href: url });
+      } else {
+        nodes.push({ type: "link", text: url, href: url });
+      }
+    } else if (match[13]) {
       // Line break within paragraph
       nodes.push({ type: "br" });
     }
@@ -325,11 +366,12 @@ function InlineContent({
               </em>
             );
           case "link": {
-            // Security: only render http(s)/mailto links. Other schemes
+            // Security: only render http(s)/mailto AND same-origin relative
+            // links (/artifacts/download, /api/...). Other schemes
             // (javascript:, data:, vbscript:) are dropped to plain text so a
             // crafted link in agent/message content can't execute on click.
             const href = node.href.trim();
-            if (!/^(https?:|mailto:)/i.test(href)) {
+            if (!/^(https?:|mailto:)/i.test(href) && !href.startsWith("/")) {
               return (
                 <HighlightedText
                   key={i}
@@ -348,6 +390,43 @@ function InlineContent({
               >
                 {node.text}
               </a>
+            );
+          }
+          case "media": {
+            // Imágenes/videos que el agente "manda": markdown ![](url), URLs
+            // http(s) de media, o links same-origin /artifacts/download?path=…
+            // Solo http(s) o relativo (same-origin); data:/javascript: caen a
+            // texto (anti-XSS). Sirve para image_generate/video_generate y para
+            // cualquier archivo de media bajo ~/clawksis_exports.
+            const src = node.href.trim();
+            if (!isSafeRef(src)) {
+              return (
+                <HighlightedText
+                  key={i}
+                  text={node.alt || src}
+                  terms={highlightTerms}
+                />
+              );
+            }
+            if (isVideoSrc(src)) {
+              return (
+                <video
+                  key={i}
+                  src={src}
+                  controls
+                  preload="metadata"
+                  className="my-2 block max-h-[28rem] max-w-full rounded-lg border border-border"
+                />
+              );
+            }
+            return (
+              <img
+                key={i}
+                src={src}
+                alt={node.alt}
+                loading="lazy"
+                className="my-2 block max-h-[28rem] max-w-full rounded-lg border border-border"
+              />
             );
           }
           case "br":
