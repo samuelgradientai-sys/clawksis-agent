@@ -545,6 +545,19 @@ const MessageBubble = memo(function MessageBubble({
   if (isUser) {
     return (
       <div className="group flex flex-col items-end gap-1.5 py-3">
+        {message.images && message.images.length > 0 && (
+          <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
+            {message.images.map((img, i) => (
+              <img
+                key={i}
+                src={img.previewUrl}
+                alt={img.name}
+                loading="lazy"
+                className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
+              />
+            ))}
+          </div>
+        )}
         <div
           className={
             "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
@@ -697,7 +710,7 @@ interface ComposerProps {
   busy: boolean;
   disabled: boolean;
   resuming: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, images?: { previewUrl: string; name: string }[]) => void;
   onInterrupt: () => void;
   sendRpc: RpcSender;
   ready: boolean;
@@ -827,7 +840,10 @@ function Composer({
     }
     if (!finalPrompt.trim()) return;
     history.push(value);
-    onSend(finalPrompt);
+    onSend(
+      finalPrompt,
+      images.map((i) => ({ previewUrl: i.previewUrl, name: i.name })),
+    );
     setValue("");
     clearAttachments();
     onClearCitations();
@@ -1174,6 +1190,7 @@ export default function ChatModern() {
     sendMessage,
     interrupt,
     errorMessage,
+    liveStatus,
     clearError,
     sendRpc,
     readyForRpc,
@@ -1391,7 +1408,10 @@ export default function ChatModern() {
     void switchSession(targetId);
   };
 
-  const handleSend = (text: string) => {
+  const handleSend = (
+    text: string,
+    images?: { previewUrl: string; name: string }[],
+  ) => {
     const trimmed = text.trim();
 
     // Comandos interactivos que cuelgan el worker headless (sin TTY): los
@@ -1434,7 +1454,7 @@ export default function ChatModern() {
       setVisualActiveSessionId(activeId);
     }
 
-    sendMessage(text);
+    sendMessage(text, images);
   };
 
   const handleNewChat = async (projectId: string | null = null) => {
@@ -1702,6 +1722,12 @@ export default function ChatModern() {
                   </ErrorBoundary>
                 );
               })}
+              {liveStatus && busy && (
+                <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+                  <span className="min-w-0 flex-1 break-words">{liveStatus}</span>
+                </div>
+              )}
             </div>
           )}
         </div>

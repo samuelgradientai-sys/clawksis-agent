@@ -27,6 +27,11 @@ export interface ToolCall {
   duration_s?: number;
 }
 
+export interface ChatImagePreview {
+  previewUrl: string;
+  name: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -36,6 +41,8 @@ export interface ChatMessage {
   toolCalls: ToolCall[];
   streaming: boolean;
   timestamp: number;
+  /** Miniaturas de imágenes adjuntadas por el usuario (data URL local). */
+  images?: ChatImagePreview[];
 }
 
 export interface SessionInfo {
@@ -78,9 +85,11 @@ interface UseChatGatewayResult {
   session: SessionInfo;
   messages: ChatMessage[];
   busy: boolean;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string, images?: ChatImagePreview[]) => void;
   interrupt: () => void;
   errorMessage: string | null;
+  /** Progreso en vivo del turno (retry / cambio de fallback / rate-limit). */
+  liveStatus: string | null;
   /** Descartar el error visible (lo dispara el banner de error). */
   clearError: () => void;
   /** Para hooks satélite que necesitan reusar la conexión (ej: useSessions) */
@@ -109,6 +118,11 @@ export function useChatGateway(): UseChatGatewayResult {
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  // Progreso en vivo del turno (retry / cambio de fallback / rate-limit). El
+  // loop del agente lo reporta por eventos status.update; sin esto el Modern no
+  // mostraba NADA durante la cascada de fallback (que dura minutos) y parecía
+  // colgado. El Terminal sí los renderiza.
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const nextIdRef = useRef(1);
@@ -237,6 +251,8 @@ export function useChatGateway(): UseChatGatewayResult {
       case "message.delta": {
         const text = (payload.text as string) ?? "";
         if (!text) break;
+        // Llegó contenido real → limpiar el progreso en vivo (retry/fallback).
+        setLiveStatus(null);
         deltaBufferRef.current += text;
         if (flushHandleRef.current == null) {
           flushHandleRef.current = requestAnimationFrame(flushDeltas);
@@ -268,6 +284,7 @@ export function useChatGateway(): UseChatGatewayResult {
           ];
         });
         setBusy(false);
+        setLiveStatus(null);
         // El usage del backend (_get_usage) es el total ACUMULADO de la sesión
         // (session_*_tokens), no un delta por turno: por eso se ASIGNA, no se
         // suma (sumar inflaba el contador en cada respuesta).
@@ -335,6 +352,7 @@ export function useChatGateway(): UseChatGatewayResult {
       case "error": {
         const msg = (payload.message as string) ?? "Unknown error";
         setErrorMessage(msg);
+        setLiveStatus(null);
         // Desatascar la UI: el agente falló a mitad de turno, así que liberamos
         // el "busy" y finalizamos el mensaje en streaming para que no quede
         // colgado en "Pensando..." para siempre.
@@ -363,6 +381,54 @@ export function useChatGateway(): UseChatGatewayResult {
           }
           return prev;
         });
+        break;
+      }
+
+      case "status.update": {
+        // El loop del agente reporta progreso y errores de retry/fallback/
+        // billing SOLO por status.update. El Modern los ignoraba → durante la
+        // cascada de fallback (minutos) quedaba en spinner sin mostrar nada.
+        const text = (payload.text as string) ?? "";
+        const kind = (payload.kind as string) ?? "";
+        if (!text) break;
+
+        const isTerminal = kind === "error" || text.trimStart().startsWith("❌");
+
+        if (isTerminal) {
+          // Fallo terminal (sin créditos / billing / fallbacks agotados):
+          // tratarlo como FIN de turno — mostrar el error y parar el spinner
+          // ya, sin esperar el message.complete final (que tarda minutos).
+          setLiveStatus(null);
+          setErrorMessage(text.replace(/^❌\s*/, ""));
+          setBusy(false);
+          if (flushHandleRef.current != null) {
+            cancelAnimationFrame(flushHandleRef.current);
+            flushHandleRef.current = null;
+          }
+          const buffered = deltaBufferRef.current;
+          deltaBufferRef.current = "";
+          setMessages((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (last.role === "assistant" && last.streaming) {
+              const content = last.content + buffered;
+              const empty =
+                !content.trim() &&
+                last.toolCalls.length === 0 &&
+                !(last.reasoning ?? "").trim();
+              if (empty) return prev.slice(0, -1);
+              return [
+                ...prev.slice(0, -1),
+                { ...last, content, streaming: false },
+              ];
+            }
+            return prev;
+          });
+        } else {
+          // Progreso no-terminal (reintentando, cambiando de proveedor,
+          // rate-limit transitorio): mostrarlo en vivo para no parecer colgado.
+          setLiveStatus(text);
+        }
         break;
       }
 
@@ -550,14 +616,15 @@ export function useChatGateway(): UseChatGatewayResult {
   }, [handleEvent, sendRpc]);
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (text: string, images?: ChatImagePreview[]) => {
       if (!text.trim()) return;
       if (!session.sessionId) {
         setErrorMessage("No hay sesión activa todavía");
         return;
       }
-      // Nuevo turno: limpiar cualquier error previo.
+      // Nuevo turno: limpiar cualquier error previo + progreso en vivo.
       setErrorMessage(null);
+      setLiveStatus(null);
       const userMsgId = "usr-" + Date.now();
       setMessages((prev) => [
         ...prev,
@@ -568,6 +635,7 @@ export function useChatGateway(): UseChatGatewayResult {
           toolCalls: [],
           streaming: false,
           timestamp: Date.now(),
+          images: images && images.length ? images : undefined,
         },
       ]);
 
@@ -872,6 +940,7 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage,
     interrupt,
     errorMessage,
+    liveStatus,
     clearError,
     sendRpc,
     readyForRpc: status === "connected",

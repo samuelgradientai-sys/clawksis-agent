@@ -11945,7 +11945,15 @@ def _resolve_managed_path(
                 raise HTTPException(status_code=400, detail="Path cannot contain '..'")
             candidate = root / candidate
         elif not candidate.is_absolute():
-            raise HTTPException(status_code=400, detail="Path must be absolute")
+            # No locked managed root (root is None — e.g. the dashboard running
+            # with HOME=/root and no CLAWK_DASHBOARD_FILES_ROOT): resolve a
+            # RELATIVE path against the policy's default path (the home) instead
+            # of rejecting it. The chat image/file upload sends a relative path
+            # ("chat-uploads/<ts>_<name>"), so this makes paste/upload work the
+            # same in local / VPS / hosted. The '..' guard still applies.
+            if any(part == ".." for part in candidate.parts):
+                raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+            candidate = policy.default_path / candidate
 
     if ".." in candidate.parts:
         raise HTTPException(status_code=400, detail="Path cannot contain '..'")

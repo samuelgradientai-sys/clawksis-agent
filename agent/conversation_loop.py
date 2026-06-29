@@ -224,12 +224,60 @@ def _is_nous_inference_route(provider: str, base_url: str) -> bool:
     ) or base_url_host_matches(base, "inference.nousresearch.com")
 
 
+def _classify_billing_subtype(error_message: str) -> str:
+    """Disambiguate a 402/billing error for accurate user-facing wording.
+
+    Three real cases hide behind FailoverReason.billing:
+      - 'insufficient_for_request': the account HAS balance, but this request's
+        max_tokens exceeds what the credits can cover (OpenRouter: "requires
+        more credits, or fewer max_tokens ... can only afford N"). NOT exhausted.
+      - 'no_credits': no / insufficient credits, or billing not set up.
+      - 'exhausted': default — credits/billing ran out.
+    """
+    low = (error_message or "").lower()
+    if (
+        "can only afford" in low
+        or "fewer max_tokens" in low
+        or ("more credits" in low and "max_tokens" in low)
+    ):
+        return "insufficient_for_request"
+    if (
+        "insufficient" in low
+        or "out of credits" in low
+        or "no credits" in low
+        or "add more credits" in low
+        or "requires more credits" in low
+        or "payment required" in low
+    ):
+        return "no_credits"
+    return "exhausted"
+
+
+def _billing_headline(error_message: str) -> str:
+    """Short, accurate one-liner describing a billing/credit failure."""
+    subtype = _classify_billing_subtype(error_message)
+    if subtype == "insufficient_for_request":
+        return (
+            "Provider balance can't cover this request (max_tokens too high for "
+            "your remaining credits)"
+        )
+    if subtype == "no_credits":
+        return "Provider has no / insufficient credits"
+    return "Billing or credits exhausted"
+
+
+def _billing_status_line(error_message: str) -> str:
+    """Chat status shown when eagerly switching to a fallback on a billing 402."""
+    return f"⚠️ {_billing_headline(error_message)} — switching to fallback provider..."
+
+
 def _billing_or_entitlement_message(
     *,
     capability: str,
     provider: str,
     base_url: str,
     model: str,
+    error_message: str = "",
 ) -> str:
 
     if _is_nous_inference_route(provider, base_url):
@@ -239,13 +287,33 @@ def _billing_or_entitlement_message(
 
     model_label = (model or "").strip() or "the selected model"
 
-    lines = [
-        (
-            f"{provider_label} reported that billing, credits, or account "
-            f"entitlement is exhausted for {model_label}."
-        ),
-        "Add credits or update billing with that provider, then retry.",
-    ]
+    subtype = _classify_billing_subtype(error_message)
+
+    if subtype == "insufficient_for_request":
+        lines = [
+            (
+                f"{provider_label} couldn't cover this request for {model_label}: "
+                "your remaining credits aren't enough for the requested max_tokens "
+                "(you have balance — it just isn't enough for this call)."
+            ),
+            "Add credits, or lower the model's max output tokens, then retry.",
+        ]
+    elif subtype == "no_credits":
+        lines = [
+            (
+                f"{provider_label} reported no or insufficient credits for "
+                f"{model_label}."
+            ),
+            "Add credits or set up billing with that provider, then retry.",
+        ]
+    else:
+        lines = [
+            (
+                f"{provider_label} reported that billing, credits, or account "
+                f"entitlement is exhausted for {model_label}."
+            ),
+            "Add credits or update billing with that provider, then retry.",
+        ]
 
     if base_url_host_matches(str(base_url or ""), "openrouter.ai"):
         lines.append("OpenRouter credits: https://openrouter.ai/settings/credits")
@@ -4355,7 +4423,7 @@ def run_conversation(
                     if not pool_may_recover:
                         if classified.reason == FailoverReason.billing:
                             agent._buffer_status(
-                                "⚠️ Billing or credits exhausted — switching to fallback provider..."
+                                _billing_status_line(classified.message)
                             )
 
                         else:
@@ -5219,7 +5287,7 @@ def run_conversation(
 
                     if classified.reason == FailoverReason.billing:
                         agent._emit_status(
-                            f"❌ Billing or credits exhausted — {_final_summary}"
+                            f"❌ {_billing_headline(classified.message)} — {_final_summary}"
                         )
 
                         _billing_guidance = _billing_or_entitlement_message(
@@ -5227,6 +5295,7 @@ def run_conversation(
                             provider=_provider,
                             base_url=str(_base),
                             model=_model,
+                            error_message=classified.message,
                         )
 
                         _print_billing_or_entitlement_guidance(
@@ -5315,7 +5384,7 @@ def run_conversation(
 
                     if classified.reason == FailoverReason.billing:
                         _final_response = (
-                            f"Billing or credits exhausted: {_final_summary}"
+                            f"{_billing_headline(classified.message)}: {_final_summary}"
                         )
 
                         if _billing_guidance:

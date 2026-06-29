@@ -100,10 +100,11 @@ export function useImageAttachments(
         const dataUrl = await blobToDataUrl(file);
         const uploadPath = `chat-uploads/${Date.now()}_${sanitizeName(file.name)}`;
         const res = await api.uploadFile(uploadPath, dataUrl, true);
-        // image.attach resuelve por path absoluto. uploadFile devuelve el root
-        // gestionado (absoluto) + el path relativo guardado.
-        const root = (res.root || "").replace(/[\\/]+$/, "");
-        const absPath = root ? `${root}/${res.path}` : res.path;
+        // image.attach resuelve por path absoluto. /api/files/upload devuelve
+        // res.path YA absoluto (display_path = str(resolved)); NO concatenar
+        // res.root — eso doble-prefijaba ("/root/.../root/...") cuando root!=None
+        // y rompía image.attach.
+        const absPath = res.path;
         await sendRpc("image.attach", { session_id: sessionId, path: absPath });
         setImages((prev) => [
           ...prev,
