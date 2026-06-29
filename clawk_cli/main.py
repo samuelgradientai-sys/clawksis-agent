@@ -2620,17 +2620,15 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
 
         return [npm, "start"], tui_dir
 
-    # Rebuild only when deps were just (re)installed or the dist is actually
-    # stale (missing / older than its inputs). This used to be an unconditional
-    # rebuild on every launch, which meant the dashboard's Terminal chat re-ran
-    # `npm run build` (esbuild) on EVERY PTY connection — slow, and a hard
-    # failure ("Chat unavailable: 1" / SystemExit 1) whenever node_modules was
-    # incomplete. Reusing a fresh prebuilt dist is correct for dev too (an
-    # unchanged source tree has nothing to rebuild); _tui_need_rebuild() still
-    # forces a rebuild after a real source/config change, and building stays the
-    # deploy's job (`clawk update`).
-
-    should_build = did_install or _tui_need_rebuild(tui_dir)
+    # Desktop/dev launches retain the historical "always rebuild" behaviour.
+    # Termux cold starts use the freshness check because esbuild startup is
+    # expensive on old mobile CPUs. The dashboard's Terminal-chat PTY avoids the
+    # rebuild-on-every-connection a different (cleaner) way: it sets
+    # CLAWK_TUI_DIR and takes the prebuilt-bundle shortcut above, so it never
+    # reaches this branch — keeping desktop/dev's always-build contract intact.
+    should_build = True
+    if _is_termux_startup_environment():
+        should_build = did_install or _tui_need_rebuild(tui_dir)
 
     if should_build:
         npm = _node_bin("npm")
