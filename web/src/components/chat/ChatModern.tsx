@@ -406,6 +406,24 @@ function ReasoningPanel({
   );
 }
 
+// Indicador "pensando…" mientras la respuesta del asistente está en streaming
+// pero todavía no llegó el primer token (ni reasoning ni tool calls). Sin esto
+// la burbuja queda vacía (solo el avatar) y el chat "se siente colgado" aunque
+// el time-to-first-token sea igual al del modo Terminal (que sí muestra spinner).
+function TypingDots() {
+  return (
+    <div
+      className="flex items-center gap-1 py-1.5"
+      role="status"
+      aria-label="Pensando…"
+    >
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60" />
+    </div>
+  );
+}
+
 // memo: durante el streaming, message.delta crea un nuevo objeto SOLO para el
 // último mensaje (los anteriores conservan su referencia), así que con props
 // estables (onRegenerate/onQuote/canRegenerate) solo re-renderiza el mensaje
@@ -464,6 +482,11 @@ const MessageBubble = memo(function MessageBubble({
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {isSlashOutput ? (
           <SlashOutput content={message.content} />
+        ) : message.streaming &&
+          !message.content &&
+          message.toolCalls.length === 0 &&
+          !message.reasoning ? (
+          <TypingDots />
         ) : (
           <div className="text-[15px] leading-relaxed text-foreground">
             <Markdown content={message.content} streaming={message.streaming} />

@@ -116,6 +116,31 @@ export function useChatGateway(): UseChatGatewayResult {
     new Map(),
   );
 
+  // Coalescing de message.delta: deepseek (y cualquier modelo rápido) escupe
+  // tokens a gran velocidad; aplicar setMessages por CADA token reparsea el
+  // markdown completo (O(n^2)) y reflowea el scroll por token → tirones. Igual
+  // que el TUI (turnController.scheduleStreaming), buffereamos los deltas y los
+  // volcamos en UN render por frame (requestAnimationFrame). El buffer pendiente
+  // se vuelca sí o sí en message.complete para no perder los últimos tokens.
+  const deltaBufferRef = useRef("");
+  const flushHandleRef = useRef<number | null>(null);
+
+  const flushDeltas = useCallback(() => {
+    flushHandleRef.current = null;
+    const buffered = deltaBufferRef.current;
+    if (!buffered) return;
+    deltaBufferRef.current = "";
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      if (last.role !== "assistant" || !last.streaming) return prev;
+      return [
+        ...prev.slice(0, -1),
+        { ...last, content: last.content + buffered },
+      ];
+    });
+  }, []);
+
   const sendRpc = useCallback(
     (method: string, params?: Record<string, unknown>): Promise<unknown> => {
       const ws = wsRef.current;
@@ -211,17 +236,23 @@ export function useChatGateway(): UseChatGatewayResult {
 
       case "message.delta": {
         const text = (payload.text as string) ?? "";
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const last = prev[prev.length - 1];
-          if (last.role !== "assistant" || !last.streaming) return prev;
-          const updated = { ...last, content: last.content + text };
-          return [...prev.slice(0, -1), updated];
-        });
+        if (!text) break;
+        deltaBufferRef.current += text;
+        if (flushHandleRef.current == null) {
+          flushHandleRef.current = requestAnimationFrame(flushDeltas);
+        }
         break;
       }
 
       case "message.complete": {
+        // Volcar cualquier delta pendiente del buffer ANTES de cerrar el
+        // streaming, si no se pierden los últimos tokens.
+        if (flushHandleRef.current != null) {
+          cancelAnimationFrame(flushHandleRef.current);
+          flushHandleRef.current = null;
+        }
+        const buffered = deltaBufferRef.current;
+        deltaBufferRef.current = "";
         setMessages((prev) => {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
@@ -230,6 +261,7 @@ export function useChatGateway(): UseChatGatewayResult {
             ...prev.slice(0, -1),
             {
               ...last,
+              content: last.content + buffered,
               streaming: false,
               reasoning: (payload.reasoning as string) || last.reasoning,
             },
@@ -307,18 +339,27 @@ export function useChatGateway(): UseChatGatewayResult {
         // el "busy" y finalizamos el mensaje en streaming para que no quede
         // colgado en "Pensando..." para siempre.
         setBusy(false);
+        // Volcar/limpiar el buffer de deltas: preserva el parcial y evita que se
+        // filtre al próximo turno.
+        if (flushHandleRef.current != null) {
+          cancelAnimationFrame(flushHandleRef.current);
+          flushHandleRef.current = null;
+        }
+        const buffered = deltaBufferRef.current;
+        deltaBufferRef.current = "";
         setMessages((prev) => {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           if (last.role === "assistant" && last.streaming) {
+            const content = last.content + buffered;
             const empty =
-              !last.content.trim() &&
+              !content.trim() &&
               last.toolCalls.length === 0 &&
               !(last.reasoning ?? "").trim();
             // Error antes de cualquier contenido → dropear la burbuja vacía
             // (si no, queda un avatar huérfano al lado del banner de error).
             if (empty) return prev.slice(0, -1);
-            return [...prev.slice(0, -1), { ...last, streaming: false }];
+            return [...prev.slice(0, -1), { ...last, content, streaming: false }];
           }
           return prev;
         });
@@ -328,7 +369,7 @@ export function useChatGateway(): UseChatGatewayResult {
       default:
         break;
     }
-  }, []);
+  }, [flushDeltas]);
 
   useEffect(() => {
     let cancelled = false;
