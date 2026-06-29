@@ -2620,16 +2620,17 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
 
         return [npm, "start"], tui_dir
 
-    # Desktop/dev launches retain the historical "always rebuild" behaviour.
+    # Rebuild only when deps were just (re)installed or the dist is actually
+    # stale (missing / older than its inputs). This used to be an unconditional
+    # rebuild on every launch, which meant the dashboard's Terminal chat re-ran
+    # `npm run build` (esbuild) on EVERY PTY connection — slow, and a hard
+    # failure ("Chat unavailable: 1" / SystemExit 1) whenever node_modules was
+    # incomplete. Reusing a fresh prebuilt dist is correct for dev too (an
+    # unchanged source tree has nothing to rebuild); _tui_need_rebuild() still
+    # forces a rebuild after a real source/config change, and building stays the
+    # deploy's job (`clawk update`).
 
-    # Termux cold starts use the freshness check because esbuild startup is
-
-    # expensive on old mobile CPUs.
-
-    should_build = True
-
-    if _is_termux_startup_environment():
-        should_build = did_install or _tui_need_rebuild(tui_dir)
+    should_build = did_install or _tui_need_rebuild(tui_dir)
 
     if should_build:
         npm = _node_bin("npm")
@@ -2651,7 +2652,12 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
             if preview:
                 print(preview)
 
-            sys.exit(1)
+            # Carry the real cause in the SystemExit message so callers that
+            # surface str(exc) (e.g. the dashboard PTY → "Chat unavailable: …")
+            # show something actionable instead of an opaque "1".
+            last = preview.splitlines()[-1].strip() if preview else ""
+
+            sys.exit("TUI build failed" + (f": {last}" if last else ""))
 
     node = _node_bin("node")
 
@@ -10636,12 +10642,14 @@ def _web_ui_build_needed(web_dir: Path) -> bool:
         if mp.exists() and mp.stat().st_mtime > dist_mtime:
             return True
 
-    # Workspace root lockfile (single package-lock.json covers all workspaces).
-
-    root_lock = project_root / "package-lock.json"
-
-    if root_lock.exists() and root_lock.stat().st_mtime > dist_mtime:
-        return True
+    # NOTE: deliberately NOT gating a Vite rebuild on package-lock.json mtime.
+    # `git pull` / `clawk update` / `git checkout` bump the (tracked) workspace
+    # lockfile's mtime on every deploy without changing the built output, which
+    # made this return True forever after an update — so `clawk dashboard` ran a
+    # full (~200s) npm-install + vite-build on EVERY launch. A lockfile change
+    # only justifies `npm install` (done at build time), not a source rebuild;
+    # the source-mtime + package.json/vite.config checks above already catch
+    # real changes to the bundle's inputs.
 
     return False
 

@@ -7380,11 +7380,20 @@ async def cleanup_sessions_endpoint(body: SessionCleanup):
     db = SessionDB()
     try:
         src = (body.source or "").strip().lower()
+        # Enumerate RAW rows (not the display projection): the cleanup panel
+        # frees disk, so it must see every deletable row — children (sub-agent,
+        # compression continuations, branches) included — not just the surfaced
+        # logical tips. The display defaults (include_children=False,
+        # project_compression_tips=True) made preview undercount and "Eliminar"
+        # leave most of the garbage on disk. This matches the surface that
+        # count_empty_sessions/delete_empty_sessions already operate on.
         rows = db.list_sessions_rich(
             source=src or None,
             limit=1_000_000,
             offset=0,
             include_archived=True,
+            include_children=True,
+            project_compression_tips=False,
         )
         now = _time.time()
         model_q = (body.model or "").strip().lower()
