@@ -59,7 +59,7 @@ jobs:
       # enablement: true auto-creates the Pages site with the GitHub Actions
       # build type via the API, so the deploy works without first flipping
       # Settings → Pages → Source to "GitHub Actions" by hand.
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
