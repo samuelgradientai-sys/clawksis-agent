@@ -229,6 +229,65 @@ function ProjectCreateDialog({
   );
 }
 
+// Auto-render de media en resultados de tools (image_generate / video_generate
+// / cualquier tool que devuelva una imagen o video): así "generá una imagen de
+// X" muestra la imagen sola en el chat, sin depender de que el agente la embeba
+// en markdown.
+const _TOOL_IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(?:[?#]|$)/i;
+const _TOOL_VID_RE = /\.(mp4|webm|mov|m4v|ogv|ogg)(?:[?#]|$)/i;
+
+function _toolMediaSrc(raw: string): string | null {
+  const s = raw.trim();
+  // Solo lo definitivamente servible: http(s) y same-origin /artifacts|/api.
+  // Los archivos locales generados llegan ya como /artifacts/download?path=…
+  // (el backend los copia a ~/clawksis_exports); NO intentamos servir paths
+  // locales crudos para no mostrar imágenes rotas (403 fuera de exports).
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/artifacts/") || s.startsWith("/api/")) return s;
+  return null;
+}
+
+function extractToolMedia(result: unknown): { src: string; video: boolean }[] {
+  let obj: unknown = result;
+  if (typeof result === "string") {
+    try {
+      obj = JSON.parse(result);
+    } catch {
+      return [];
+    }
+  }
+  if (!obj || typeof obj !== "object") return [];
+  const rec = obj as Record<string, unknown>;
+  if (rec.success === false) return [];
+
+  const candidates: string[] = [];
+  for (const k of ["image", "video", "url", "chat_url", "host_image"]) {
+    if (typeof rec[k] === "string") candidates.push(rec[k] as string);
+  }
+  if (Array.isArray(rec.images)) {
+    for (const im of rec.images) {
+      const u = (im as Record<string, unknown>)?.url;
+      if (typeof u === "string") candidates.push(u);
+    }
+  }
+
+  const out: { src: string; video: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    const probe = c.includes("path=")
+      ? decodeURIComponent(c.split("path=")[1] ?? "")
+      : c;
+    const isVid = _TOOL_VID_RE.test(c) || _TOOL_VID_RE.test(probe);
+    const isImg = _TOOL_IMG_RE.test(c) || _TOOL_IMG_RE.test(probe);
+    if (!isVid && !isImg) continue;
+    const src = _toolMediaSrc(c);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    out.push({ src, video: isVid });
+  }
+  return out;
+}
+
 function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
   const [expanded, setExpanded] = useState(false);
   const isRunning = toolCall.status === "running";
@@ -236,6 +295,10 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
     .map(([k, v]) => k + "=" + (typeof v === "string" ? v : JSON.stringify(v)))
     .join(" ")
     .slice(0, 120);
+  const media = useMemo(
+    () => (isRunning ? [] : extractToolMedia(toolCall.result)),
+    [isRunning, toolCall.result],
+  );
 
   return (
     <div className="flex flex-col gap-1">
@@ -277,6 +340,30 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
           )}
         </span>
       </button>
+
+      {media.length > 0 && (
+        <div className="ml-5 flex flex-wrap gap-2">
+          {media.map((m, idx) =>
+            m.video ? (
+              <video
+                key={idx}
+                src={m.src}
+                controls
+                preload="metadata"
+                className="max-h-80 max-w-full rounded-lg border border-border"
+              />
+            ) : (
+              <img
+                key={idx}
+                src={m.src}
+                loading="lazy"
+                alt="resultado generado"
+                className="max-h-80 max-w-full rounded-lg border border-border"
+              />
+            ),
+          )}
+        </div>
+      )}
 
       {expanded && toolCall.result !== undefined && (
         <pre className="ml-5 max-h-64 overflow-auto rounded border border-border bg-muted/20 p-2 text-xs text-muted-foreground">
