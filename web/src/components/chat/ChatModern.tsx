@@ -1761,6 +1761,7 @@ export default function ChatModern() {
         sessions={sidebarSessions}
         projects={projects}
         activeSessionId={sidebarActiveSessionId}
+        activeBusy={busy}
         loading={sessionsLoading}
         error={sessionsError}
         onSelectSession={handleSelectSession}

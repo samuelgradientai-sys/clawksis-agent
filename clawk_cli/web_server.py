@@ -2848,6 +2848,23 @@ async def move_session_to_project(session_id: str, body: SessionProjectUpdate):
         conn.close()
 
 
+@app.get("/api/sessions/running")
+async def get_running_sessions():
+    """DB session_ids that currently have an in-flight turn.
+
+    Powers the sidebar's per-conversation running indicator (a spinner while a
+    turn runs, even for conversations the user is not viewing — the turn runs in
+    a worker thread independent of the WebSocket). Best-effort: returns an empty
+    list if the in-process gateway is unavailable (e.g. nothing has run yet).
+    """
+    try:
+        from tui_gateway.server import get_running_session_ids
+
+        return {"running": get_running_session_ids()}
+    except Exception:
+        return {"running": []}
+
+
 @app.get("/api/sessions")
 async def get_sessions(
     limit: int = 20,

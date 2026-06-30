@@ -8,7 +8,9 @@
  * - Los chats existentes se pueden mover desde un menú discreto de tres puntos.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { api } from "@/lib/api";
 import {
   Plus,
   Loader2,
@@ -41,6 +43,8 @@ interface SessionSidebarProps {
   sessions: SessionSummary[];
   projects: ChatProject[];
   activeSessionId: string | null;
+  /** Running state of the *open* conversation, for instant spinner feedback. */
+  activeBusy?: boolean;
   loading: boolean;
   error: string | null;
   onSelectSession: (sessionId: string) => void;
@@ -225,6 +229,7 @@ function SessionItem({
   session,
   projects,
   isActive,
+  isRunning,
   menuOpen,
   onClick,
   onToggleMenu,
@@ -235,6 +240,7 @@ function SessionItem({
   session: SessionSummary;
   projects: ChatProject[];
   isActive: boolean;
+  isRunning: boolean;
   menuOpen: boolean;
   onClick: () => void;
   onToggleMenu: () => void;
@@ -271,9 +277,14 @@ function SessionItem({
         }
       >
         <span className="flex items-center gap-1.5">
-          {isActive && (
+          {isRunning ? (
+            <Loader2
+              className="size-3 shrink-0 animate-spin text-[#6C4FD6]"
+              aria-label="corriendo"
+            />
+          ) : isActive ? (
             <span className="size-1.5 shrink-0 rounded-full bg-[#6C4FD6]" />
-          )}
+          ) : null}
           <span className="truncate text-xs font-medium">{title}</span>
         </span>
 
@@ -363,6 +374,7 @@ export function SessionSidebar({
   sessions,
   projects,
   activeSessionId,
+  activeBusy,
   loading,
   error,
   onSelectSession,
@@ -376,6 +388,37 @@ export function SessionSidebar({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const lastAutoOpenedSessionId = useRef<string | null>(null);
+
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
+
+  // Poll which conversations have an in-flight turn so each row shows a spinner
+  // while it runs — even ones the user isn't viewing (turns run server-side in a
+  // worker thread, independent of the open WebSocket).
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      try {
+        const res = await api.getRunningSessions();
+        if (alive) setRunningIds(new Set(res.running ?? []));
+      } catch {
+        /* best-effort: a failed poll leaves the last known state */
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Overlay the open conversation's busy state for instant feedback (the poll is
+  // every 2.5s, but the open chat should flip to a spinner the moment you send).
+  const effectiveRunning = useMemo(() => {
+    const set = new Set(runningIds);
+    if (activeBusy && activeSessionId) set.add(activeSessionId);
+    return set;
+  }, [runningIds, activeBusy, activeSessionId]);
 
   const activeProjects = projects.filter((project) => !project.archived);
   const projectIds = new Set(activeProjects.map((project) => project.id));
@@ -421,6 +464,7 @@ export function SessionSidebar({
       session={session}
       projects={activeProjects}
       isActive={session.id === activeSessionId}
+      isRunning={effectiveRunning.has(session.id)}
       menuOpen={openMenuSessionId === session.id}
       onClick={() => onSelectSession(session.id)}
       onToggleMenu={() =>

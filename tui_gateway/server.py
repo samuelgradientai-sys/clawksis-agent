@@ -174,6 +174,30 @@ from tui_gateway.render import make_stream_renderer, render_diff, render_message
 
 _sessions: dict[str, dict] = {}
 
+
+def get_running_session_ids() -> list[str]:
+    """DB session_ids of gateway sessions that currently have an in-flight turn.
+
+    Read-only snapshot for the dashboard sidebar's per-conversation running
+    indicator (loader while a turn runs, even for conversations the user is not
+    viewing — the turn runs in a worker thread independent of the WS). Maps each
+    live gateway session to its agent's current DB ``session_id`` (the id the
+    sidebar lists) so rows can be matched. Best-effort; never raises.
+    """
+    out: list[str] = []
+    try:
+        for sess in list(_sessions.values()):
+            if not (sess or {}).get("running"):
+                continue
+            agent = (sess or {}).get("agent")
+            sid = getattr(agent, "session_id", None) or (sess or {}).get("session_key")
+            if sid:
+                out.append(str(sid))
+    except Exception:
+        pass
+    return out
+
+
 _methods: dict[str, callable] = {}
 
 _pending: dict[str, tuple[str, threading.Event]] = {}

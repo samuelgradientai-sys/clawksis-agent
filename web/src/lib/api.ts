@@ -715,6 +715,10 @@ export const api = {
 
     fetchJSON<PaginatedSessions>(`/api/sessions?limit=${limit}&offset=${offset}`),
 
+  /** DB session_ids with an in-flight turn — for the sidebar running indicator. */
+  getRunningSessions: () =>
+    fetchJSON<{ running: string[] }>("/api/sessions/running"),
+
   getSessionMessages: (id: string) =>
 
     fetchJSON<SessionMessagesResponse>(`/api/sessions/${encodeURIComponent(id)}/messages`),
