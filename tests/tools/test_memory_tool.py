@@ -630,7 +630,9 @@ class TestMemoryStorePersistence:
 
         mem_file = tmp_path / "MEMORY.md"
 
-        mem_file.write_text("duplicate entry\n§\nduplicate entry\n§\nunique entry")
+        mem_file.write_text(
+            "duplicate entry\n§\nduplicate entry\n§\nunique entry", encoding="utf-8"
+        )
 
         store = MemoryStore()
 
