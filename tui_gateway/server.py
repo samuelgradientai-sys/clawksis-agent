@@ -4456,6 +4456,58 @@ def _inflight_text(value: Any) -> str:
     return _content_display_text(value).strip()
 
 
+def _durable_turns_enabled() -> bool:
+    """True when resilience.durable_turns is on (opt-in). Never raises."""
+    try:
+        from agent.resilience.runtime import get_settings
+
+        return bool(get_settings().durable_turns.enabled)
+    except Exception:
+        return False
+
+
+def _record_pending_turn(session: dict, text: Any, started_at: float) -> None:
+    """Durably journal an in-flight turn so it can resume after a crash.
+
+    Gated by resilience.durable_turns; a no-op (and never raises) otherwise.
+    The journal is the durable twin of the in-memory ``inflight_turn`` marker.
+    """
+    if not _durable_turns_enabled():
+        return
+    try:
+        key = str(session.get("session_key") or "")
+        if not key:
+            return
+        db = _get_db()
+        if db is None:
+            return
+        db.record_pending_turn(
+            key,
+            _inflight_text(text),
+            int(session.get("history_version", 0) or 0),
+            started_at,
+        )
+    except Exception:
+        pass
+
+
+def _clear_pending_turn(session: dict) -> None:
+    """Clear the durable pending-turn marker (the in-memory turn ended cleanly,
+    erroring, or interrupted — anything but a hard crash). No-op when disabled."""
+    if not _durable_turns_enabled():
+        return
+    try:
+        key = str(session.get("session_key") or "")
+        if not key:
+            return
+        db = _get_db()
+        if db is None:
+            return
+        db.clear_pending_turn(key)
+    except Exception:
+        pass
+
+
 def _start_inflight_turn(session: dict, text: Any) -> None:
 
     now = time.time()
@@ -4467,6 +4519,63 @@ def _start_inflight_turn(session: dict, text: Any) -> None:
         "updated_at": now,
         "user": _inflight_text(text),
     }
+
+    _record_pending_turn(session, text, now)
+
+
+def _maybe_resume_pending_turn(sid: str, session: dict, session_key: str) -> None:
+    """Auto-resume a turn that a process crash left in the durable journal.
+
+    Called after ``session.resume`` has fully rebuilt the session. Gated by
+    resilience.durable_turns and bounded by its freshness window. Re-dispatches
+    the original prompt with an interruption note so the model continues from the
+    persisted transcript instead of replaying non-idempotent tool calls. The
+    journal entry is cleared before re-dispatch so a turn that crashes the same
+    way cannot loop forever. Heavily guarded: it must never break a resume.
+    """
+    if not _durable_turns_enabled():
+        return
+    try:
+        if session.get("running"):
+            return
+        db = _get_db()
+        if db is None:
+            return
+        from agent.resilience.runtime import get_settings
+
+        freshness = float(get_settings().durable_turns.freshness_seconds or 3600.0)
+        rows = db.list_pending_turns(max_age_seconds=freshness)
+        row = next((r for r in rows if r.get("session_id") == session_key), None)
+        if not row:
+            return
+        prompt = str(row.get("prompt") or "").strip()
+        # Clear FIRST: the re-dispatch re-journals via _start_inflight_turn, so a
+        # repeated crash escalates into a fresh (single) entry rather than looping.
+        db.clear_pending_turn(session_key)
+        if not prompt:
+            return
+
+        note = (
+            "[Sistema] El turno anterior quedó interrumpido por un reinicio del "
+            "proceso antes de completarse. Retomá la última solicitud del usuario "
+            "desde el estado actual de la conversación; NO repitas tool-calls ya "
+            f"ejecutados. Solicitud original:\n\n{prompt}"
+        )
+
+        def _dispatch() -> None:
+            try:
+                # Let session.resume return to the client first so it is listening
+                # on the transport before the resumed turn streams events.
+                time.sleep(0.5)
+                if session.get("running"):
+                    return
+                _run_prompt_submit("resume-" + uuid.uuid4().hex[:8], sid, session, note)
+            except Exception:
+                pass
+
+        threading.Thread(target=_dispatch, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _append_inflight_delta(session: dict, delta: Any) -> None:
@@ -4493,6 +4602,8 @@ def _append_inflight_delta(session: dict, delta: Any) -> None:
 def _clear_inflight_turn(session: dict) -> None:
 
     session["inflight_turn"] = None
+
+    _clear_pending_turn(session)
 
 
 def _inflight_snapshot(session: dict) -> dict | None:
@@ -5029,6 +5140,10 @@ def _(rid, params: dict) -> dict:
             return _err(rid, 5000, f"resume failed: {e}")
 
         session = _sessions.get(sid) or {}
+
+    # Auto-resume a turn a crash left in the durable journal (opt-in; no-op
+    # otherwise). Threaded + guarded so it never delays or breaks the resume reply.
+    _maybe_resume_pending_turn(sid, session, target)
 
     return _ok(
         rid,
