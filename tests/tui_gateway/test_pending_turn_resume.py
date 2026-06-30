@@ -78,7 +78,9 @@ def test_resume_dispatches_and_clears(monkeypatch):
     monkeypatch.setattr(srv.threading, "Thread", _SyncThread)
     calls = []
     monkeypatch.setattr(
-        srv, "_run_prompt_submit", lambda rid, sid, sess, text: calls.append((sid, text))
+        srv,
+        "_run_prompt_submit",
+        lambda rid, sid, sess, text: calls.append((sid, text)),
     )
     session = {"session_key": "sk1", "running": False}
     srv._maybe_resume_pending_turn("sid1", session, "sk1")
@@ -99,9 +101,7 @@ def test_resume_noop_when_running(monkeypatch):
 
 
 def test_resume_noop_when_no_match(monkeypatch):
-    db = _FakeDB(
-        pending=[{"session_id": "other", "prompt": "x", "started_at": 1.0}]
-    )
+    db = _FakeDB(pending=[{"session_id": "other", "prompt": "x", "started_at": 1.0}])
     _enable(monkeypatch, db)
     monkeypatch.setattr(srv.time, "sleep", lambda s: None)
     monkeypatch.setattr(srv.threading, "Thread", _SyncThread)
