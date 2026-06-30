@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 
+import { MediaAttachment } from "@/components/MediaAttachment";
+
 /**
  * Lightweight markdown renderer for LLM output.
  * Handles: code blocks, inline code, bold, italic, headers, links, lists, horizontal rules.
@@ -292,8 +294,13 @@ function parseInline(text: string): InlineNode[] {
       // Inline code
       nodes.push({ type: "code", content: match[4].slice(1, -1) });
     } else if (match[5]) {
-      // [text](url) link
-      nodes.push({ type: "link", text: match[6], href: match[7] });
+      // [text](url) — image/video links render inline as media (the agent
+      // sometimes LINKS a generated image instead of using ![]()); else a link.
+      if (isMediaUrl(match[7])) {
+        nodes.push({ type: "media", alt: match[6] ?? "", href: match[7] });
+      } else {
+        nodes.push({ type: "link", text: match[6], href: match[7] });
+      }
     } else if (match[8]) {
       // **bold**
       nodes.push({ type: "bold", content: match[9] });
@@ -408,24 +415,13 @@ function InlineContent({
                 />
               );
             }
-            if (isVideoSrc(src)) {
-              return (
-                <video
-                  key={i}
-                  src={src}
-                  controls
-                  preload="metadata"
-                  className="my-2 block max-h-[28rem] max-w-full rounded-lg border border-border"
-                />
-              );
-            }
             return (
-              <img
+              <MediaAttachment
                 key={i}
                 src={src}
                 alt={node.alt}
-                loading="lazy"
-                className="my-2 block max-h-[28rem] max-w-full rounded-lg border border-border"
+                video={isVideoSrc(src)}
+                className="my-2"
               />
             );
           }

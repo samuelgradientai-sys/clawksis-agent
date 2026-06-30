@@ -29,6 +29,8 @@ import {
   Wrench,
   FileText,
 } from "lucide-react";
+
+import { MediaAttachment } from "@/components/MediaAttachment";
 import { Markdown } from "../Markdown";
 import {
   useChatGateway,
@@ -348,25 +350,14 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
 
       {media.length > 0 && (
         <div className="ml-5 flex flex-wrap gap-2">
-          {media.map((m, idx) =>
-            m.video ? (
-              <video
-                key={idx}
-                src={m.src}
-                controls
-                preload="metadata"
-                className="max-h-80 max-w-full rounded-lg border border-border"
-              />
-            ) : (
-              <img
-                key={idx}
-                src={m.src}
-                loading="lazy"
-                alt="resultado generado"
-                className="max-h-80 max-w-full rounded-lg border border-border"
-              />
-            ),
-          )}
+          {media.map((m, idx) => (
+            <MediaAttachment
+              key={idx}
+              src={m.src}
+              video={m.video}
+              alt="resultado generado"
+            />
+          ))}
         </div>
       )}
 
