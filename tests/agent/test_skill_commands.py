@@ -1148,3 +1148,63 @@ class TestInlineShellExpansion:
         # timeout marker (which echoes the command text) survives.
 
         assert "DYN_MARKER" not in msg.replace("sleep 5 && printf DYN_MARKER", "")
+
+
+class TestExtractUserInstructionFromSkillMessage:
+    """Memory hygiene: recover the user's instruction from /skill scaffolding."""
+
+    def test_normal_message_passes_through(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        msg = "remember my timezone is CET"
+        assert ex(msg) == msg
+
+    def test_single_skill_with_instruction(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        msg = (
+            '[IMPORTANT: The user has invoked the "myskill" skill, indicating they '
+            "want you to follow its instructions. The full skill content is loaded "
+            "below.]\nSKILL BODY: step 1, step 2...\n"
+            "The user has provided the following instruction alongside the skill "
+            "invocation: scrape example.com"
+        )
+        assert ex(msg) == "scrape example.com"
+
+    def test_single_skill_strips_runtime_note(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        msg = (
+            '[IMPORTANT: The user has invoked the "x" skill, indicating they want '
+            "you to follow its instructions. The full skill content is loaded "
+            "below.]\nBODY\n"
+            "The user has provided the following instruction alongside the skill "
+            "invocation: do it\n\n[Runtime note: something]"
+        )
+        assert ex(msg) == "do it"
+
+    def test_bare_skill_returns_none(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        msg = (
+            '[IMPORTANT: The user has invoked the "x" skill, indicating they want '
+            "you to follow its instructions. The full skill content is loaded "
+            "below.]\nBODY with no trailing user instruction"
+        )
+        assert ex(msg) is None
+
+    def test_bundle_with_instruction(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        msg = (
+            '[IMPORTANT: The user has invoked the "mybundle" skill bundle, follow them.]'
+            "\nUser instruction: research the topic"
+            '\n\n[Loaded as part of the "mybundle" skill bundle.]\nSKILL A BODY'
+        )
+        assert ex(msg) == "research the topic"
+
+    def test_non_string_returns_none(self):
+        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+
+        assert ex(None) is None
+        assert ex({"a": 1}) is None

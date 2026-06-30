@@ -310,6 +310,29 @@ def build_memory_context_block(raw_context: str) -> str:
     )
 
 
+def _strip_skill_scaffolding(content: Any) -> Optional[str]:
+    """Reduce a slash-skill-expanded turn to the user's actual instruction.
+
+    When a user runs ``/skill`` or ``/bundle``, the turn balloons into a
+    model-facing message embedding the full skill body. Feeding that verbatim to
+    memory providers pollutes embeddings/stores with scaffolding instead of user
+    intent. This recovers just the instruction:
+
+    - returns the text unchanged for a normal (non-scaffolding) turn,
+    - returns the extracted instruction when the scaffolding carried one,
+    - returns ``None`` for a bare ``/skill`` with no instruction — the caller
+      should skip the turn for memory (nothing worth storing).
+
+    Imported lazily and fail-open: any error returns the original content so a
+    bug here can never silently drop real user turns from memory.
+    """
+    try:
+        from agent.skill_commands import extract_user_instruction_from_skill_message
+        return extract_user_instruction_from_skill_message(content)
+    except Exception:  # pragma: no cover - defensive: never lose a real turn
+        return content
+
+
 class MemoryManager:
     """Orchestrates the built-in provider plus at most one external provider.
 
@@ -440,6 +463,11 @@ class MemoryManager:
         Returns merged context text labeled by provider. Empty providers
         are skipped. Failures in one provider don't block others.
         """
+        # Strip /skill scaffolding so providers query on the user's real
+        # instruction, not the embedded skill body. None = bare /skill turn.
+        query = _strip_skill_scaffolding(query)
+        if query is None:
+            return ""
         parts = []
         for provider in self._providers:
             try:
@@ -461,6 +489,9 @@ class MemoryManager:
         wedged provider can never block the caller. See ``sync_all`` for
         the full rationale (agent stuck "running" minutes after a turn).
         """
+        query = _strip_skill_scaffolding(query)
+        if query is None:
+            return
         providers = list(self._providers)
         if not providers:
             return
@@ -517,6 +548,11 @@ class MemoryManager:
         before turn N+1; provider implementations don't need their own
         ordering guarantees.
         """
+        # Strip /skill scaffolding so we store the user's instruction, not the
+        # embedded skill body. None = bare /skill turn → nothing to store.
+        user_content = _strip_skill_scaffolding(user_content)
+        if user_content is None:
+            return
         providers = list(self._providers)
         if not providers:
             return

@@ -455,8 +455,12 @@ class TestMemoryStoreAdd:
         result = store.add("memory", "Python 3.12 project")
 
         assert result["success"] is True
+        # Success is terminal: it no longer echoes the full entries list
+        # (anti-thrash); verify the write via the store's live state instead.
+        assert result.get("done") is True
+        assert "entries" not in result
 
-        assert "Python 3.12 project" in result["entries"]
+        assert "Python 3.12 project" in store.memory_entries
 
     def test_add_to_user(self, store):
 
@@ -526,9 +530,9 @@ class TestMemoryStoreReplace:
 
         assert result["success"] is True
 
-        assert "Python 3.12 project" in result["entries"]
+        assert "Python 3.12 project" in store.memory_entries
 
-        assert "Python 3.11 project" not in result["entries"]
+        assert "Python 3.11 project" not in store.memory_entries
 
     def test_replace_no_match(self, store):
 
@@ -1045,3 +1049,68 @@ class TestLoadTimeSnapshotSanitization:
         assert snapshot.count("[BLOCKED:") == 1
 
         assert "Clean fact" in snapshot
+
+
+class TestMemoryStoreBatch:
+    def test_batch_remove_then_add_atomic(self, store):
+        # Fill near the limit so a naive add would overflow, then free space and
+        # add in ONE atomic batch — the whole point of apply_batch.
+        store.add("memory", "x" * 240)
+        store.add("memory", "y" * 240)
+        result = store.apply_batch(
+            "memory",
+            [
+                {"action": "remove", "old_text": "x" * 240},
+                {"action": "add", "content": "new compact fact"},
+            ],
+        )
+        assert result["success"] is True
+        assert result.get("done") is True
+        assert "new compact fact" in store.memory_entries
+        assert ("x" * 240) not in store.memory_entries
+        # The y entry is untouched.
+        assert ("y" * 240) in store.memory_entries
+
+    def test_batch_all_or_nothing_on_overflow(self, store):
+        store.add("memory", "keep me")
+        # Net result exceeds the 500-char limit → nothing is written.
+        result = store.apply_batch(
+            "memory",
+            [
+                {"action": "add", "content": "a" * 300},
+                {"action": "add", "content": "b" * 300},
+            ],
+        )
+        assert result["success"] is False
+        assert "current_entries" in result
+        assert store.memory_entries == ["keep me"]
+
+    def test_batch_aborts_on_bad_op_without_partial_write(self, store):
+        store.add("memory", "fact one")
+        result = store.apply_batch(
+            "memory",
+            [
+                {"action": "add", "content": "fact two"},
+                {"action": "remove", "old_text": "does-not-exist"},
+            ],
+        )
+        assert result["success"] is False
+        # All-or-nothing: the good op before the failure is NOT applied.
+        assert store.memory_entries == ["fact one"]
+
+    def test_batch_empty_rejected(self, store):
+        result = store.apply_batch("memory", [])
+        assert result["success"] is False
+
+    def test_memory_tool_batch_dispatch(self, store):
+        import json
+
+        out = memory_tool(
+            action="batch",
+            target="memory",
+            operations=[{"action": "add", "content": "via dispatch"}],
+            store=store,
+        )
+        parsed = json.loads(out)
+        assert parsed["success"] is True
+        assert "via dispatch" in store.memory_entries

@@ -463,6 +463,124 @@ class MemoryStore:
 
         return self._success_response(target, "Entry removed.")
 
+    def apply_batch(self, target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Apply a sequence of add/replace/remove ops to one target atomically.
+
+        All operations are validated and applied against the FINAL budget --
+        intermediate overflow is irrelevant. This lets the model free space
+        (remove/replace) and add new entries in a SINGLE tool call instead of
+        the multi-turn consolidate-then-retry dance that re-sends the whole
+        conversation context several times.
+
+        Semantics: all-or-nothing. If any op is malformed, doesn't match, or the
+        net result would exceed the char limit, NOTHING is written and an error
+        is returned describing the first failure plus the live state.
+        """
+        if not operations:
+            return {"success": False, "error": "operations list is empty."}
+
+        # Scan every add/replace content for injection/exfil BEFORE touching
+        # disk -- a single poisoned op rejects the whole batch.
+        for i, op in enumerate(operations):
+            act = (op or {}).get("action")
+            new_content = (op or {}).get("content")
+            if act in {"add", "replace"} and new_content:
+                scan_error = _scan_memory_content(new_content)
+                if scan_error:
+                    return {"success": False, "error": f"Operation {i + 1}: {scan_error}"}
+
+        with self._file_lock(self._path_for(target)):
+            bak = self._reload_target(target)
+            if bak:
+                return _drift_error(self._path_for(target), bak)
+
+            # Work on a copy; only commit if the whole batch validates.
+            working: List[str] = list(self._entries_for(target))
+            limit = self._char_limit(target)
+
+            for i, op in enumerate(operations):
+                op = op or {}
+                act = op.get("action")
+                content = (op.get("content") or "").strip()
+                old_text = (op.get("old_text") or "").strip()
+                pos = f"Operation {i + 1} ({act or 'unknown'})"
+
+                if act == "add":
+                    if not content:
+                        return self._batch_error(target, f"{pos}: content is required.")
+                    if content in working:
+                        continue  # idempotent -- skip duplicate, don't fail the batch
+                    working.append(content)
+
+                elif act == "replace":
+                    if not old_text:
+                        return self._batch_error(target, f"{pos}: old_text is required.")
+                    if not content:
+                        return self._batch_error(
+                            target,
+                            f"{pos}: content is required (use action='remove' to delete).",
+                        )
+                    matches = [j for j, e in enumerate(working) if old_text in e]
+                    if not matches:
+                        return self._batch_error(target, f"{pos}: no entry matched '{old_text}'.")
+                    if len({working[j] for j in matches}) > 1:
+                        return self._batch_error(
+                            target,
+                            f"{pos}: '{old_text}' matched multiple distinct entries -- be more specific.",
+                        )
+                    working[matches[0]] = content
+
+                elif act == "remove":
+                    if not old_text:
+                        return self._batch_error(target, f"{pos}: old_text is required.")
+                    matches = [j for j, e in enumerate(working) if old_text in e]
+                    if not matches:
+                        return self._batch_error(target, f"{pos}: no entry matched '{old_text}'.")
+                    if len({working[j] for j in matches}) > 1:
+                        return self._batch_error(
+                            target,
+                            f"{pos}: '{old_text}' matched multiple distinct entries -- be more specific.",
+                        )
+                    working.pop(matches[0])
+
+                else:
+                    return self._batch_error(
+                        target,
+                        f"{pos}: unknown action. Use add, replace, or remove.",
+                    )
+
+            # Budget check against the FINAL state only.
+            new_total = len(ENTRY_DELIMITER.join(working)) if working else 0
+            if new_total > limit:
+                current = self._char_count(target)
+                return {
+                    "success": False,
+                    "error": (
+                        f"After applying all {len(operations)} operations, memory would be at "
+                        f"{new_total:,}/{limit:,} chars -- over the limit. Remove or shorten more "
+                        f"entries in the same batch (see current_entries below), then retry."
+                    ),
+                    "current_entries": self._entries_for(target),
+                    "usage": f"{current:,}/{limit:,}",
+                }
+
+            # Commit.
+            self._set_entries(target, working)
+            self.save_to_disk(target)
+
+        return self._success_response(target, f"Applied {len(operations)} operation(s).")
+
+    def _batch_error(self, target: str, message: str) -> Dict[str, Any]:
+        """Build a batch-abort error that reports live (uncommitted) state."""
+        current = self._char_count(target)
+        limit = self._char_limit(target)
+        return {
+            "success": False,
+            "error": message + " No operations were applied (batch is all-or-nothing).",
+            "current_entries": self._entries_for(target),
+            "usage": f"{current:,}/{limit:,}",
+        }
+
     def format_for_system_prompt(self, target: str) -> Optional[str]:
         """
         Return the frozen snapshot for system prompt injection.
@@ -484,15 +602,22 @@ class MemoryStore:
         limit = self._char_limit(target)
         pct = min(100, int((current / limit) * 100)) if limit > 0 else 0
 
+        # Intentionally TERMINAL: confirm the write landed and tell the model to
+        # stop. We do NOT echo the full entries list on success — dumping it
+        # invites the model to "find more to fix" and re-issue the same ops
+        # (observed thrash: correct write on call 1, then redundant repeats).
+        # Entries are only returned on the error / over-budget paths, where the
+        # model genuinely needs them to decide what to consolidate.
         resp = {
             "success": True,
+            "done": True,
             "target": target,
-            "entries": entries,
             "usage": f"{pct}% — {current:,}/{limit:,} chars",
             "entry_count": len(entries),
         }
         if message:
             resp["message"] = message
+        resp["note"] = "Write saved. This update is complete — do not repeat it."
         return resp
 
     def _render_block(self, target: str, entries: List[str]) -> str:
@@ -627,15 +752,19 @@ class MemoryStore:
 
 
 def _apply_write_gate(
-    action: str, target: str, content: Optional[str], old_text: Optional[str]
+    action: str,
+    target: str,
+    content: Optional[str],
+    old_text: Optional[str],
+    operations: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[str]:
     """Evaluate the memory write gate. Returns a JSON tool-result string when
     the write should NOT proceed normally (blocked or staged), or None when the
     caller should perform the real write.
 
-    Only the mutating actions (add/replace/remove) are gated.
+    Only the mutating actions (add/replace/remove/batch) are gated.
     """
-    if action not in {"add", "replace", "remove"}:
+    if action not in {"add", "replace", "remove", "batch"}:
         return None
 
     try:
@@ -653,6 +782,14 @@ def _apply_write_gate(
     elif action == "replace":
         summary = f"replace in {label}"
         detail = f"old: {old_text}\nnew: {content}"
+    elif action == "batch":
+        ops = operations or []
+        summary = f"apply {len(ops)} op(s) to {label}"
+        detail = "; ".join(
+            f"{(o or {}).get('action', '?')}: "
+            f"{((o or {}).get('content') or (o or {}).get('old_text') or '')[:60]}"
+            for o in ops
+        )
     else:  # remove
         summary = f"remove from {label}"
         detail = old_text or ""
@@ -671,6 +808,7 @@ def _apply_write_gate(
         "target": target,
         "content": content,
         "old_text": old_text,
+        "operations": operations,
     }
     record = wa.stage_write(
         wa.MEMORY,
@@ -694,6 +832,7 @@ def memory_tool(
     target: str = "memory",
     content: str = None,
     old_text: str = None,
+    operations: Optional[List[Dict[str, Any]]] = None,
     store: Optional[MemoryStore] = None,
 ) -> str:
     """
@@ -721,10 +860,12 @@ def memory_tool(
         return tool_error(f"{missing} is required for 'replace' action.", success=False)
     if action == "remove" and not old_text:
         return tool_error("old_text is required for 'remove' action.", success=False)
+    if action == "batch" and not operations:
+        return tool_error("operations (a non-empty list) is required for 'batch' action.", success=False)
 
     # Approval gate: when on, stages the write (background/gateway) or prompts
     # inline (interactive CLI); when off (default) passes straight through.
-    gate_result = _apply_write_gate(action, target, content, old_text)
+    gate_result = _apply_write_gate(action, target, content, old_text, operations)
     if gate_result is not None:
         return gate_result
 
@@ -737,9 +878,13 @@ def memory_tool(
     elif action == "remove":
         result = store.remove(target, old_text)
 
+    elif action == "batch":
+        result = store.apply_batch(target, operations)
+
     else:
         return tool_error(
-            f"Unknown action '{action}'. Use: add, replace, remove", success=False
+            f"Unknown action '{action}'. Use: add, replace, remove, batch",
+            success=False,
         )
 
     return json.dumps(result, ensure_ascii=False)
@@ -768,6 +913,8 @@ def apply_memory_pending(
         return store.replace(target, old_text, content)
     if action == "remove":
         return store.remove(target, old_text)
+    if action == "batch":
+        return store.apply_batch(target, payload.get("operations") or [])
     return {"success": False, "error": f"Unknown staged action '{action}'."}
 
 
@@ -796,7 +943,9 @@ MEMORY_SCHEMA = {
         "- 'user': who the user is -- name, role, preferences, communication style, pet peeves\n"
         "- 'memory': your notes -- environment facts, project conventions, tool quirks, lessons learned\n\n"
         "ACTIONS: add (new entry), replace (update existing -- old_text identifies it), "
-        "remove (delete -- old_text identifies it).\n\n"
+        "remove (delete -- old_text identifies it), batch (apply several add/replace/remove "
+        "ops atomically in ONE call -- use this to free space AND add in a single turn instead "
+        "of the consolidate-then-retry dance; all-or-nothing, budget checked on the final state).\n\n"
         "SKIP: trivial/obvious info, things easily re-discovered, raw data dumps, and temporary task state."
     ),
     "parameters": {
@@ -804,7 +953,7 @@ MEMORY_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["add", "replace", "remove"],
+                "enum": ["add", "replace", "remove", "batch"],
                 "description": "The action to perform.",
             },
             "target": {
@@ -819,6 +968,24 @@ MEMORY_SCHEMA = {
             "old_text": {
                 "type": "string",
                 "description": "Short unique substring identifying the entry to replace or remove.",
+            },
+            "operations": {
+                "type": "array",
+                "description": (
+                    "For action='batch': operations applied atomically to the same target. "
+                    "Each item is {action: add|replace|remove, content?, old_text?}. "
+                    "All-or-nothing; the char-limit budget is checked only on the FINAL state, "
+                    "so you can remove/replace to free space AND add in the same call."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["add", "replace", "remove"]},
+                        "content": {"type": "string"},
+                        "old_text": {"type": "string"},
+                    },
+                    "required": ["action"],
+                },
             },
         },
         "required": ["action", "target"],
@@ -838,6 +1005,7 @@ registry.register(
         target=args.get("target", "memory"),
         content=args.get("content"),
         old_text=args.get("old_text"),
+        operations=args.get("operations"),
         store=kw.get("store"),
     ),
     check_fn=check_memory_requirements,
