@@ -904,6 +904,7 @@ _CATEGORY_ORDER = [
     "stt",
     "logging",
     "discord",
+    "resilience",
     "auxiliary",
 ]
 

@@ -1536,6 +1536,33 @@ DEFAULT_CONFIG = {
         "search_backend": "ddgs",  # default web_search backend: free DuckDuckGo, no key, lazy-installed on first use (search.ddgs in LAZY_DEPS)
         "extract_backend": "",  # per-capability override for web_extract (e.g. "native")
     },
+    # Capa de robustez OPT-IN ante 429 / rate limits / outages de proveedores.
+    # Todo default OFF ⇒ comportamiento byte-for-byte idéntico (el retry + rotación
+    # de credenciales + failover de proveedor ya existentes siguen siendo el camino base;
+    # esto los aumenta cuando se habilita). Ver agent/resilience/.
+    "resilience": {
+        "circuit_breaker": {
+            "enabled": False,  # corta a fallback tras N fallos transitorios seguidos (no quema todo el retry)
+            "failure_threshold": 3,  # fallos transitorios consecutivos para abrir
+            "cooldown_seconds": 60,  # segundos abierto antes del probe half-open
+        },
+        "rate_limits": {
+            "enabled": False,  # throttle preventivo para no llegar al 429
+            "use_response_headers": True,  # sembrar caps desde los x-ratelimit-* de las respuestas
+            "max_wait_seconds": 60,  # tope duro de espera por throttle (anti-stall)
+            "providers": {},  # caps estáticos, p.ej. {"anthropic": {"rpm": 50, "tpm": 40000}}
+        },
+        "adaptive_cooldown": {
+            "enabled": False,  # cooldown de credencial exhausta crece exponencial (vs fijo 1h)
+            "base_seconds": 60,
+            "max_seconds": 3600,
+        },
+        "auto_restore_primary": False,  # volver al proveedor primario cuando su cooldown expira
+        "durable_turns": {
+            "enabled": False,  # journal de turnos en vuelo (tui_gateway) para reanudar tras crash
+            "freshness_seconds": 3600,
+        },
+    },
     "browser": {
         "inactivity_timeout": 120,
         "command_timeout": 30,  # Timeout for browser commands in seconds (screenshot, navigate, etc.)
