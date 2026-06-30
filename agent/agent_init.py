@@ -496,6 +496,16 @@ def init_agent(
 
     agent._credential_pool = credential_pool
 
+    # Activate the OPT-IN resilience runtime (rate limiter / circuit breaker /
+    # adaptive 429 cooldown) from the `resilience` config block. Idempotent and
+    # process-global; a no-op when every resilience flag is off (the default).
+    try:
+        from agent.resilience.runtime import install_resilience_runtime
+
+        install_resilience_runtime()
+    except Exception:
+        pass
+
     agent.log_prefix_chars = log_prefix_chars
 
     agent.log_prefix = f"{log_prefix} " if log_prefix else ""
