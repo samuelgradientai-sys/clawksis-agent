@@ -183,6 +183,44 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _apply_rate_limit(agent, api_kwargs: dict) -> None:
+    """OPT-IN preemptive throttle before an API call.
+
+    Consults the process-global resilience rate limiter (``resilience.rate_limits``
+    config). No-op when disabled or when the active provider has no configured
+    cap. Never raises — a limiter problem must not break the request.
+    """
+    try:
+        from agent.resilience.runtime import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        if limiter is None:
+            return
+        provider = str(getattr(agent, "provider", "") or "")
+        if not provider:
+            return
+        try:
+            est = estimate_request_context_tokens(api_kwargs)
+        except Exception:
+            est = 0
+
+        def _interrupt() -> bool:
+            return bool(getattr(agent, "_interrupt_requested", False))
+
+        def _on_wait(secs: float) -> None:
+            try:
+                agent._buffer_status(
+                    f"⏳ Rate limit interno: esperando ~{secs:.0f}s antes de llamar a {provider}…"
+                )
+            except Exception:
+                pass
+
+        limiter.acquire(provider, est, should_interrupt=_interrupt, on_wait=_on_wait)
+    except Exception:
+        # The limiter must never break a request.
+        pass
+
+
 def interruptible_api_call(agent, api_kwargs: dict):
     """
 
@@ -211,6 +249,11 @@ def interruptible_api_call(agent, api_kwargs: dict):
     """
 
     result = {"response": None, "error": None}
+
+    # OPT-IN preemptive rate limiting (resilience.rate_limits): throttle before
+    # issuing the call so we stay under the provider's RPM/TPM instead of
+    # learning the limit by hitting a 429. No-op by default.
+    _apply_rate_limit(agent, api_kwargs)
 
     request_client_holder = {"client": None, "owner_tid": None}
 
