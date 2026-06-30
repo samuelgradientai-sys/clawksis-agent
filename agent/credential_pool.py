@@ -396,6 +396,34 @@ def _exhausted_ttl(error_code: Optional[int]) -> int:
     return EXHAUSTED_TTL_DEFAULT_SECONDS
 
 
+# Adaptive 429 cooldown (OPT-IN). Installed once at startup from the resilience
+# config via ``set_adaptive_cooldown``. While None (the default), the static
+# EXHAUSTED_TTL_* constants apply — i.e. legacy behavior, unchanged.
+_adaptive_cfg: Any = None
+
+
+def set_adaptive_cooldown(cfg: Any) -> None:
+    """Install adaptive-cooldown settings (or disable when None/not enabled)."""
+    global _adaptive_cfg
+    _adaptive_cfg = (
+        cfg if (cfg is not None and getattr(cfg, "enabled", False)) else None
+    )
+
+
+def _adaptive_429_ttl(consecutive: int) -> float:
+    """Exponential cooldown for repeated 429s on one credential (with jitter).
+
+    Reuses :func:`agent.retry_utils.jittered_backoff` so the growth/jitter math
+    matches the rest of the agent's retry behavior.
+    """
+    from agent.retry_utils import jittered_backoff
+
+    cfg = _adaptive_cfg
+    base = float(getattr(cfg, "base_seconds", 60.0) or 60.0)
+    cap = float(getattr(cfg, "max_seconds", 3600.0) or 3600.0)
+    return jittered_backoff(max(1, consecutive), base_delay=base, max_delay=cap)
+
+
 def _parse_absolute_timestamp(value: Any) -> Optional[float]:
     """Best-effort parse for provider reset timestamps.
 
@@ -535,6 +563,9 @@ def _exhausted_until(entry: PooledCredential) -> Optional[float]:
         return reset_at
 
     if entry.last_status_at:
+        if _adaptive_cfg is not None and entry.last_error_code == 429:
+            consecutive = int((entry.extra or {}).get("consecutive_429", 1) or 1)
+            return entry.last_status_at + _adaptive_429_ttl(consecutive)
         return entry.last_status_at + _exhausted_ttl(entry.last_error_code)
 
     return None
@@ -805,15 +836,43 @@ class CredentialPool:
         else:
             terminal_status = STATUS_EXHAUSTED
 
-        updated = replace(
-            entry,
+        now_ts = time.time()
+
+        replace_kwargs: Dict[str, Any] = dict(
             last_status=terminal_status,
-            last_status_at=time.time(),
+            last_status_at=now_ts,
             last_error_code=status_code,
             last_error_reason=normalized_error.get("reason"),
             last_error_message=normalized_error.get("message"),
             last_error_reset_at=normalized_error.get("reset_at"),
         )
+
+        # Adaptive 429 cooldown (opt-in): count consecutive 429s on this
+        # credential so _exhausted_until can grow the cooldown exponentially.
+        # 429s within a decay window escalate; an isolated one resets to 1.
+        # No-op (and no extra mutation) unless the feature is installed.
+        if (
+            _adaptive_cfg is not None
+            and terminal_status == STATUS_EXHAUSTED
+            and status_code == 429
+        ):
+            prev_extra = dict(entry.extra or {})
+            last_429_at = prev_extra.get("_last_429_at") or 0.0
+            prev_count = int(prev_extra.get("consecutive_429", 0) or 0)
+            window = max(
+                float(getattr(_adaptive_cfg, "max_seconds", 3600.0) or 3600.0),
+                float(getattr(_adaptive_cfg, "base_seconds", 60.0) or 60.0),
+            )
+            count = (
+                prev_count + 1
+                if (last_429_at and (now_ts - last_429_at) <= window)
+                else 1
+            )
+            prev_extra["consecutive_429"] = count
+            prev_extra["_last_429_at"] = now_ts
+            replace_kwargs["extra"] = prev_extra
+
+        updated = replace(entry, **replace_kwargs)
 
         self._replace_entry(entry, updated)
 
