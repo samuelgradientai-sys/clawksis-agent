@@ -107,6 +107,12 @@ interface UseChatGatewayResult {
 export function useChatGateway(): UseChatGatewayResult {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Espejo de `messages` para callbacks estables (editAndResubmit) que no deben
+  // recrearse en cada delta de streaming (romperían el memo de las burbujas).
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [session, setSession] = useState<SessionInfo>({
     sessionId: null,
     model: null,
@@ -937,6 +943,61 @@ export function useChatGateway(): UseChatGatewayResult {
     sendMessage(lastUserText);
   }, [busy, session.sessionId, messages, sendRpc, sendMessage]);
 
+  // Editar un mensaje del usuario y reenviar desde ahí (estilo ChatGPT): trunca
+  // el historial ANTES de ese mensaje user y reenvía el texto editado. El backend
+  // (prompt.submit + truncate_before_user_ordinal) reescribe history y DB, así que
+  // sobrevive a navegar/recargar. El ordinal indexa la sublista de mensajes user
+  // del backend, que NO incluye los slash (van por executeSlash, no por
+  // prompt.submit) → contamos solo users que no empiezan con "/".
+  const editAndResubmit = useCallback(
+    async (messageId: string, newText: string): Promise<void> => {
+      if (busy) return;
+      const sid = session.sessionId;
+      if (!sid || !newText.trim()) return;
+      if (newText.trim().startsWith("/")) return; // no editar a un slash command
+
+      const msgs = messagesRef.current;
+      const idx = msgs.findIndex((m) => m.id === messageId);
+      if (idx < 0 || msgs[idx].role !== "user") return;
+
+      // ordinal = cantidad de mensajes user NO-slash antes de idx (alinea con
+      // user_indices del backend, que filtra los slash).
+      let ordinal = 0;
+      for (let i = 0; i < idx; i++) {
+        if (msgs[i].role === "user" && !msgs[i].content.trim().startsWith("/")) {
+          ordinal++;
+        }
+      }
+
+      // Truncado local: dejar lo previo + el mensaje user editado; la respuesta
+      // nueva llega por streaming y se appendea encima (igual que regenerateLast).
+      const editedMsg: ChatMessage = {
+        ...msgs[idx],
+        id: "usr-" + Date.now(),
+        content: newText,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev.slice(0, idx), editedMsg]);
+
+      // Gate de cola sincrónico antes del RPC (igual que sendMessage).
+      setBusy(true);
+      try {
+        await sendRpc("prompt.submit", {
+          session_id: sid,
+          text: newText,
+          truncate_before_user_ordinal: ordinal,
+        });
+      } catch (err) {
+        console.error("[useChatGateway] editAndResubmit failed", err);
+        setErrorMessage(
+          err instanceof Error ? err.message : "Failed to edit message",
+        );
+        setBusy(false);
+      }
+    },
+    [busy, session.sessionId, sendRpc],
+  );
+
   const clearError = useCallback(() => setErrorMessage(null), []);
 
   return {
@@ -954,5 +1015,6 @@ export function useChatGateway(): UseChatGatewayResult {
     switchSession,
     resuming,
     regenerateLast,
+    editAndResubmit,
   };
 }

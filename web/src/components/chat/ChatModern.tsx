@@ -374,16 +374,16 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
 
 function MessageActions({
   content,
-  role,
   onRegenerate,
   canRegenerate,
   onQuote,
+  onEdit,
 }: {
   content: string;
-  role: "user" | "assistant";
   onRegenerate?: () => void;
   canRegenerate?: boolean;
   onQuote?: () => void;
+  onEdit?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -439,12 +439,12 @@ function MessageActions({
           Regenerar
         </button>
       )}
-      {role === "assistant" && (
+      {onEdit && (
         <button
           type="button"
-          disabled
-          title="Editar — disponible próximamente"
-          className="flex items-center gap-1 text-xs text-muted-foreground opacity-40 cursor-not-allowed"
+          onClick={onEdit}
+          title="Editar y reenviar"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <Pencil className="size-3" />
           Editar
@@ -551,11 +551,15 @@ const MessageBubble = memo(function MessageBubble({
   onRegenerate,
   canRegenerate,
   onQuote,
+  onEdit,
+  canEdit,
 }: {
   message: ChatMessage;
   onRegenerate?: () => void;
   canRegenerate?: boolean;
   onQuote?: (message: ChatMessage) => void;
+  onEdit?: (messageId: string, newText: string) => void;
+  canEdit?: boolean;
 }) {
   const isUser = message.role === "user";
   const isCommand = message.content.trim().startsWith("/");
@@ -565,19 +569,46 @@ const MessageBubble = memo(function MessageBubble({
   // Auto-limpieza: al terminar, tools + razonamiento colapsan a un chip
   // "ver pasos" (la conversación queda limpia). Re-expandible a mano.
   const [stepsOpen, setStepsOpen] = useState(false);
+  // Modo edición inline para mensajes del usuario (estilo ChatGPT).
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+
+  // Editar solo en mensajes del usuario que no son slash, fuera de streaming
+  // (canEdit = !busy) y con handler cableado.
+  const canEditThis = isUser && !isCommand && !!onEdit && !!canEdit;
 
   const actions = !message.streaming ? (
     <MessageActions
       content={message.content}
-      role={message.role}
       onRegenerate={onRegenerate}
       canRegenerate={canRegenerate}
       onQuote={onQuote ? () => onQuote(message) : undefined}
+      onEdit={
+        canEditThis
+          ? () => {
+              setDraft(message.content);
+              setEditing(true);
+            }
+          : undefined
+      }
     />
   ) : null;
 
   // Usuario: burbuja a la derecha (estilo Claude).
   if (isUser) {
+    const cancelEdit = () => {
+      setEditing(false);
+      setDraft(message.content);
+    };
+    const saveEdit = () => {
+      const next = draft.trim();
+      if (!next || next === message.content.trim()) {
+        cancelEdit();
+        return;
+      }
+      onEdit?.(message.id, next);
+      setEditing(false);
+    };
     return (
       <div className="group flex flex-col items-end gap-1.5 py-3">
         {message.images && message.images.length > 0 && (
@@ -593,17 +624,57 @@ const MessageBubble = memo(function MessageBubble({
             ))}
           </div>
         )}
-        <div
-          className={
-            "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
-            (isCommand
-              ? "border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 font-mono"
-              : "bg-muted/50")
-          }
-        >
-          {message.content}
-        </div>
-        {actions}
+        {editing ? (
+          <div className="flex w-full max-w-[85%] flex-col gap-2">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEdit();
+                } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  saveEdit();
+                }
+              }}
+              rows={Math.min(8, draft.split("\n").length + 1)}
+              className="w-full resize-none rounded-2xl border border-[#6C4FD6]/40 bg-muted/50 px-4 py-2.5 text-sm leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-[#6C4FD6]"
+            />
+            <div className="flex items-center justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={!draft.trim() || draft.trim() === message.content.trim()}
+                className="rounded bg-[#6C4FD6] px-3 py-1 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Guardar y reenviar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              className={
+                "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
+                (isCommand
+                  ? "border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 font-mono"
+                  : "bg-muted/50")
+              }
+            >
+              {message.content}
+            </div>
+            {actions}
+          </>
+        )}
       </div>
     );
   }
@@ -1292,6 +1363,7 @@ export default function ChatModern() {
     switchSession,
     resuming,
     regenerateLast,
+    editAndResubmit,
   } = useChatGateway();
 
   const {
@@ -1842,6 +1914,8 @@ export default function ChatModern() {
                         }
                         canRegenerate={isLast && !busy}
                         onQuote={handleQuote}
+                        onEdit={editAndResubmit}
+                        canEdit={!busy}
                       />
                     </ErrorBoundary>
                   );
