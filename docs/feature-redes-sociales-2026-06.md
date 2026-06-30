@@ -133,3 +133,36 @@ Estas limitaciones son intencionales para validar rápido.
 
 *Brief de decisiones tomadas el 30 jun 2026.*
 *Próxima sesión: presentar arquitectura visual + arrancar Sesión 1 del roadmap.*
+
+---
+
+## Validación visual del concepto (30 jun 2026)
+
+✅ **Test visual exitoso con script de prueba** (pre-implementación).
+
+Resultado: imagen 1080×1920 con foto real de Bali de Unsplash, gradient
+elegante de abajo hacia arriba, tipografía DejaVu Sans Bold, sombras
+sutiles para legibilidad. Aprobado por Andres como "MUY MEJOR que la
+prueba básica anterior".
+
+Referencia visual guardada en: `docs/concept-images/bali-concept-validated-2026-06-30.jpg`
+
+Stack confirmado funcional:
+- Unsplash API (Access Key configurada en .env)
+- Pillow 12.2.0 (instalada en .venv)
+- DejaVu Sans Bold (en assets/fonts/)
+
+**Tiempo de generación**: ~3 segundos por imagen (1s Unsplash + 2s PIL).
+**Calidad final**: 92, ~300-500KB por imagen.
+
+### Pregunta de Andres sobre carruseles
+
+"Si por ejemplo le pedimos un carrusel para IG podría hacerlo?"
+
+**Respuesta**: Sí, totalmente factible. El código que tendremos para UN post
+se reutiliza ~90%. Carrusel = loop por N slides. El LLM decide la estructura
+(qué slides, qué texto) y el helper compone cada slide.
+
+Estimación adicional para soportar carruseles: ~2h después del feature base.
+Esto SE VA al roadmap como Sesión 3 (post-MVP).
+
