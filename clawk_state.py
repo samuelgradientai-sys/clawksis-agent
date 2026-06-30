@@ -61,7 +61,7 @@ T = TypeVar("T")
 DEFAULT_DB_PATH = get_clawk_home() / "state.db"
 
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17  # 17: pending_turns (durable in-flight turn journal)
 
 
 # ---------------------------------------------------------------------------
@@ -589,6 +589,26 @@ CREATE TABLE IF NOT EXISTS business_profiles (
     fallback_uses INTEGER DEFAULT 0
 
 );
+
+
+
+CREATE TABLE IF NOT EXISTS pending_turns (
+
+    session_id TEXT PRIMARY KEY,
+
+    prompt TEXT NOT NULL,
+
+    history_version INTEGER,
+
+    started_at REAL NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'pending'
+
+);
+
+
+
+CREATE INDEX IF NOT EXISTS idx_pending_turns_started ON pending_turns(started_at);
 
 
 
@@ -3402,6 +3422,74 @@ class SessionDB:
             return msg_id
 
         return self._execute_write(_do)
+
+    # ── Durable pending-turn journal (resilience.durable_turns) ──────────
+    # Lets tui_gateway resume a heavy in-flight turn after a process crash.
+    # The durable twin of the in-memory ``inflight_turn`` marker.
+
+    def record_pending_turn(
+        self,
+        session_id: str,
+        prompt: str,
+        history_version: Optional[int] = None,
+        started_at: Optional[float] = None,
+    ) -> None:
+        """Durably record an in-flight turn so it can resume after a crash.
+
+        Written when a turn starts, cleared on clean completion. On startup,
+        surviving rows are candidate turns to auto-resume. Only the prompt +
+        bookkeeping are stored; the transcript itself is already persisted at
+        message boundaries by the agent.
+        """
+        ts = float(started_at if started_at is not None else time.time())
+
+        def _do(conn):
+            conn.execute(
+                "INSERT OR REPLACE INTO pending_turns "
+                "(session_id, prompt, history_version, started_at, status) "
+                "VALUES (?, ?, ?, ?, 'pending')",
+                (session_id, prompt, history_version, ts),
+            )
+
+        self._execute_write(_do)
+
+    def clear_pending_turn(self, session_id: str) -> None:
+        """Clear the pending-turn marker for a session (clean completion)."""
+
+        def _do(conn):
+            conn.execute(
+                "DELETE FROM pending_turns WHERE session_id = ?", (session_id,)
+            )
+
+        self._execute_write(_do)
+
+    def list_pending_turns(
+        self, max_age_seconds: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """List durable pending turns, newest first.
+
+        When ``max_age_seconds`` is given, only turns started within that window
+        are returned (stale crashed turns are skipped — mirrors the gateway's
+        auto-continue freshness window).
+        """
+        cutoff = None
+        if max_age_seconds is not None:
+            cutoff = time.time() - float(max_age_seconds)
+
+        with self._lock:
+            if cutoff is not None:
+                cursor = self._conn.execute(
+                    "SELECT * FROM pending_turns WHERE started_at >= ? "
+                    "ORDER BY started_at DESC",
+                    (cutoff,),
+                )
+            else:
+                cursor = self._conn.execute(
+                    "SELECT * FROM pending_turns ORDER BY started_at DESC"
+                )
+            rows = cursor.fetchall()
+
+        return [dict(r) for r in rows]
 
     def replace_messages(self, session_id: str, messages: List[Dict[str, Any]]) -> None:
         """Atomically replace every message for a session.
