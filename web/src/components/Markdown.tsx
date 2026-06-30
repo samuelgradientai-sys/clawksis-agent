@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Check, Copy } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
 
@@ -158,6 +159,53 @@ function parseBlocks(text: string): BlockNode[] {
 /*  Block renderer                                                     */
 /* ------------------------------------------------------------------ */
 
+/** Fenced code block with a ChatGPT-style header bar: language label on the
+ *  left, a one-click "Copiar" button on the right. */
+function CodeBlock({
+  lang,
+  content,
+  caret,
+}: {
+  lang: string;
+  content: string;
+  caret?: ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard denied — leave the label as-is */
+    }
+  };
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-secondary/60">
+      <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-3 py-1">
+        <span className="select-none font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          {lang || "código"}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label="Copiar código"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied ? "Copiado" : "Copiar"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto px-3 py-2.5 text-xs font-mono leading-relaxed">
+        <code>
+          {content}
+          {caret}
+        </code>
+      </pre>
+    </div>
+  );
+}
+
 function Block({
   block,
   highlightTerms,
@@ -169,14 +217,7 @@ function Block({
 }) {
   switch (block.type) {
     case "code":
-      return (
-        <pre className="bg-secondary/60 border border-border px-3 py-2.5 text-xs font-mono leading-relaxed overflow-x-auto">
-          <code>
-            {block.content}
-            {caret}
-          </code>
-        </pre>
-      );
+      return <CodeBlock lang={block.lang} content={block.content} caret={caret} />;
 
     case "heading": {
       const Tag = `h${Math.min(block.level, 4)}` as "h1" | "h2" | "h3" | "h4";
@@ -355,7 +396,7 @@ function InlineContent({
             return (
               <code
                 key={i}
-                className="bg-secondary/60 px-1.5 py-0.5 text-xs font-mono text-primary/90"
+                className="rounded bg-secondary/60 px-1.5 py-0.5 text-xs font-mono text-primary/90"
               >
                 {node.content}
               </code>
