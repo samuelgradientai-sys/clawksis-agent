@@ -112,6 +112,36 @@ INTERRUPT_WAITING_FOR_MODEL_PREFIX = (
 )
 
 
+# ── Per-provider circuit breaker (OPT-IN, resilience.circuit_breaker) ──────
+# Fast-fails to a fallback provider after repeated *transient* failures instead
+# of burning the retry budget. No-op unless enabled. Reuses the existing
+# _try_activate_fallback + FailoverReason; it augments — never replaces — the
+# base retry/rotation/fallback path. Only transient provider failures trip it
+# (NOT auth/billing/content/format/context, which have their own handling).
+_BREAKER_TRANSIENT_REASONS = frozenset({
+    FailoverReason.rate_limit,
+    FailoverReason.server_error,
+    FailoverReason.overloaded,
+    FailoverReason.timeout,
+    FailoverReason.unknown,
+})
+
+
+def _resilience_breaker(agent):
+    """Return ``(breaker, key)`` for the active provider, or ``(None, "")`` when
+    the circuit breaker is disabled. Never raises."""
+    try:
+        from agent.resilience.circuit_breaker import make_key
+        from agent.resilience.runtime import get_circuit_breaker
+
+        breaker = get_circuit_breaker()
+        if breaker is None:
+            return None, ""
+        return breaker, make_key(getattr(agent, "provider", "") or "")
+    except Exception:
+        return None, ""
+
+
 def _ollama_context_limit_error(agent: Any, request_tokens: int) -> Optional[str]:
     """Return a user-facing error when Ollama is loaded with too little context."""
 
@@ -3266,6 +3296,10 @@ def run_conversation(
 
                 agent._touch_activity(f"API call #{api_call_count} completed")
 
+                _cb_ok, _cb_ok_key = _resilience_breaker(agent)
+                if _cb_ok is not None:
+                    _cb_ok.record_success(_cb_ok_key)
+
                 break  # Success, exit retry loop
 
             except InterruptedError:
@@ -3723,6 +3757,14 @@ def run_conversation(
                     context_length=_ctx_len,
                     num_messages=len(api_messages) if api_messages else 0,
                 )
+
+                # Circuit breaker (opt-in): count transient provider failures so a
+                # provider that keeps erroring fast-fails to fallback below. Counted
+                # exactly once here, only for transient reasons.
+                if classified.reason in _BREAKER_TRANSIENT_REASONS:
+                    _cb_fail, _cb_fail_key = _resilience_breaker(agent)
+                    if _cb_fail is not None:
+                        _cb_fail.record_failure(_cb_fail_key)
 
                 logger.debug(
                     "Error classified: reason=%s status=%s retryable=%s compress=%s rotate=%s fallback=%s",
@@ -4447,7 +4489,16 @@ def run_conversation(
                     FailoverReason.billing,
                 }
 
-                if is_rate_limited and agent._fallback_index < len(
+                # Circuit breaker (opt-in): when this provider's breaker is open
+                # (repeated transient failures), fast-fail to the fallback too —
+                # the same pool_may_recover guard below keeps credential rotation
+                # in charge first, so this only fires once rotation can't help.
+                _cb_open_obj, _cb_open_key = _resilience_breaker(agent)
+                breaker_open = _cb_open_obj is not None and _cb_open_obj.is_open(
+                    _cb_open_key
+                )
+
+                if (is_rate_limited or breaker_open) and agent._fallback_index < len(
                     agent._fallback_chain
                 ):
                     # Don't eagerly fallback if credential pool rotation may
