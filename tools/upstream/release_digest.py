@@ -18,10 +18,32 @@ import sys
 # Section titles (matched case-insensitively, by substring) whose items are
 # integration candidates for Clawksis.
 CORE_KEYWORDS = (
-    "highlight", "core agent", "architecture", "agent loop", "agent",
-    "multi-agent", "kanban", "skill", "memory", "session", "mcp", "provider",
-    "model", "tool", "reasoning", "performance", "perf", "security", "gateway",
-    "automation", "cron", "delegat", "context", "dashboard", "channel", "api",
+    "highlight",
+    "core agent",
+    "architecture",
+    "agent loop",
+    "agent",
+    "multi-agent",
+    "kanban",
+    "skill",
+    "memory",
+    "session",
+    "mcp",
+    "provider",
+    "model",
+    "tool",
+    "reasoning",
+    "performance",
+    "perf",
+    "security",
+    "gateway",
+    "automation",
+    "cron",
+    "delegat",
+    "context",
+    "dashboard",
+    "channel",
+    "api",
 )
 
 # Section titles likely OUT of scope for Clawksis (SaaS — no desktop app, no
@@ -89,8 +111,10 @@ def build_digest(md):
         "",
     ]
     if not core:
-        lines.append("_No se detectaron secciones de arquitectura en las notas — "
-                     "ver notas completas abajo._")
+        lines.append(
+            "_No se detectaron secciones de arquitectura en las notas — "
+            "ver notas completas abajo._"
+        )
     for title, items in core:
         lines.append(f"### {title}")
         lines.extend(items)
