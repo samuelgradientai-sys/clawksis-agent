@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 
+import { DiffViewer } from "./DiffViewer";
+
 /**
  * Expandable tool call row — the web equivalent of Ink's ToolTrail node.
  *
@@ -171,9 +173,7 @@ export const ToolCall = memo(function ToolCall({ tool }: { tool: ToolEntry }) {
 
           {tool.inline_diff && (
             <Section label="diff">
-              <pre className="whitespace-pre overflow-x-auto text-[0.7rem] leading-snug">
-                {colorizeDiff(tool.inline_diff)}
-              </pre>
+              <DiffViewer diff={tool.inline_diff} />
             </Section>
           )}
 
@@ -231,22 +231,4 @@ function fmtElapsed(ms: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   return s ? `${m}m ${s}s` : `${m}m`;
-}
-
-/** Colorize unified-diff lines for the inline diff section. */
-function colorizeDiff(diff: string): React.ReactNode {
-  return diff.split("\n").map((line, i) => (
-    <div key={i} className={diffLineClass(line)}>
-      {line || "\u00A0"}
-    </div>
-  ));
-}
-
-function diffLineClass(line: string): string {
-  if (line.startsWith("+") && !line.startsWith("+++"))
-    return "text-success";
-  if (line.startsWith("-") && !line.startsWith("---"))
-    return "text-destructive";
-  if (line.startsWith("@@")) return "text-primary";
-  return "text-text-secondary";
 }
