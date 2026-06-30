@@ -530,6 +530,68 @@ CREATE TABLE IF NOT EXISTS compression_locks (
 
 
 
+CREATE TABLE IF NOT EXISTS business_profiles (
+
+    -- Identidad (6 campos)
+
+    id TEXT PRIMARY KEY,
+
+    user_id TEXT NOT NULL,
+
+    name TEXT NOT NULL,
+
+    description TEXT,
+
+    created_at REAL NOT NULL,
+
+    updated_at REAL NOT NULL,
+
+    -- Tono y voz (4 campos)
+
+    tone TEXT,
+
+    voice_traits TEXT,
+
+    emoji_style TEXT,
+
+    target_audience TEXT,
+
+    -- Contexto del negocio (5 campos)
+
+    destinations TEXT,
+
+    hashtags_core TEXT,
+
+    networks TEXT,
+
+    website_url TEXT,
+
+    contact_info TEXT,
+
+    -- Aprendizaje de posts existentes (4 campos)
+
+    style_examples TEXT,
+
+    style_summary TEXT,
+
+    style_embeddings BLOB,
+
+    style_analyzed_at REAL,
+
+    -- API keys del usuario (4 campos)
+
+    openai_key_enc TEXT,
+
+    fal_key_enc TEXT,
+
+    use_fallback_keys INTEGER DEFAULT 1,
+
+    fallback_uses INTEGER DEFAULT 0
+
+);
+
+
+
 CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
