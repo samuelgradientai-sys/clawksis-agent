@@ -178,9 +178,7 @@ _AUTH_HEADER_RE = re.compile(
 # vendor prefix (custom/local backends) would otherwise leak when a request or
 # curl command is logged or echoed into tool output / transcripts.
 
-_SECRET_HEADER_NAMES = (
-    r"(?:x-api-key|x-goog-api-key|api-key|apikey|x-api-token|x-auth-token|x-access-token)"
-)
+_SECRET_HEADER_NAMES = r"(?:x-api-key|x-goog-api-key|api-key|apikey|x-api-token|x-auth-token|x-access-token)"
 
 _SECRET_HEADER_RE = re.compile(
     rf"({_SECRET_HEADER_NAMES}\s*:\s*)(\S+)",

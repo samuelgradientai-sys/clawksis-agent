@@ -538,7 +538,7 @@ def _stored_prompt_matches_runtime(agent, prompt: str) -> bool:
         value = ""
         for line in prompt.splitlines():
             if line.startswith(prefix):
-                value = line[len(prefix):].strip()
+                value = line[len(prefix) :].strip()
         return value
 
     stored_model = line_value("Model")

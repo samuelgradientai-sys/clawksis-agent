@@ -601,10 +601,11 @@ IMAGE_CACHE_DIR = get_clawk_dir("cache/images", "image_cache")
 # before being written to the cache directory. With no cap, a single large
 # upload (Discord Nitro allows 500 MB) — or a remote URL pointing at an
 # arbitrarily large file — can spike RAM and OOM-kill the gateway. The
-# ``cache_*_from_bytes`` helpers (the shared funnel every platform reaches) and
-# the streaming URL downloaders enforce this cap, so the protection holds
-# regardless of which adapter or code path produced the bytes. This matters for
-# Clawksis: non-technical users routinely send big files over WhatsApp/Telegram.
+# ``cache_*_from_bytes`` helpers are the shared funnel every platform reaches
+# (adapter SDKs and the URL downloaders both route their bytes through them),
+# so the cap holds regardless of which code path produced the payload — it is
+# rejected before being written to the cache dir. This matters for Clawksis:
+# non-technical users routinely send big files over WhatsApp/Telegram.
 #
 # Configurable via ``gateway.max_inbound_media_bytes`` in config.yaml. ``0``
 # disables the cap. Default 128 MiB — generous for ordinary photos / voice
@@ -622,6 +623,7 @@ def get_inbound_media_max_bytes() -> int:
     """
     try:
         from clawk_cli.config import load_config as _load_config
+
         cfg = _load_config()
     except Exception:
         return DEFAULT_INBOUND_MEDIA_MAX_BYTES
@@ -649,40 +651,8 @@ def validate_inbound_media_size(
     limit = get_inbound_media_max_bytes() if max_bytes is None else max_bytes
     if limit and size > limit:
         raise ValueError(
-            f"Inbound {media_type} payload is too large "
-            f"({size} bytes > {limit} bytes)"
+            f"Inbound {media_type} payload is too large ({size} bytes > {limit} bytes)"
         )
-
-
-async def _read_httpx_body_with_limit(response, *, media_type: str) -> bytes:
-    """Read an httpx streaming response body without exceeding the media cap.
-
-    Rejects early on an oversized ``Content-Length`` header, then re-checks the
-    running total as chunks arrive so a lying/absent header can't smuggle an
-    unbounded body past the cap.
-    """
-    max_bytes = get_inbound_media_max_bytes()
-    content_length = response.headers.get("content-length")
-    if content_length:
-        try:
-            declared_size = int(content_length)
-        except ValueError:
-            logger.debug(
-                "Ignoring invalid Content-Length for inbound %s: %r",
-                media_type, content_length,
-            )
-        else:
-            validate_inbound_media_size(
-                declared_size, media_type=media_type, max_bytes=max_bytes,
-            )
-
-    chunks: List[bytes] = []
-    total = 0
-    async for chunk in response.aiter_bytes():
-        total += len(chunk)
-        validate_inbound_media_size(total, media_type=media_type, max_bytes=max_bytes)
-        chunks.append(chunk)
-    return b"".join(chunks)
 
 
 def get_image_cache_dir() -> Path:
@@ -772,19 +742,16 @@ async def cache_image_from_url(url: str, ext: str = ".jpg", retries: int = 2) ->
     ) as client:
         for attempt in range(retries + 1):
             try:
-                async with client.stream(
-                    "GET",
+                response = await client.get(
                     url,
                     headers={
                         "User-Agent": "Mozilla/5.0 (compatible; ClawksisAgent/1.0)",
                         "Accept": "image/*,*/*;q=0.8",
                     },
-                ) as response:
-                    response.raise_for_status()
-                    data = await _read_httpx_body_with_limit(
-                        response, media_type="image"
-                    )
-                return cache_image_from_bytes(data, ext)
+                )
+                response.raise_for_status()
+                # Size cap enforced in cache_image_from_bytes (the shared funnel).
+                return cache_image_from_bytes(response.content, ext)
             except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
                 if (
                     isinstance(exc, httpx.HTTPStatusError)
@@ -898,19 +865,16 @@ async def cache_audio_from_url(url: str, ext: str = ".ogg", retries: int = 2) ->
     ) as client:
         for attempt in range(retries + 1):
             try:
-                async with client.stream(
-                    "GET",
+                response = await client.get(
                     url,
                     headers={
                         "User-Agent": "Mozilla/5.0 (compatible; ClawksisAgent/1.0)",
                         "Accept": "audio/*,*/*;q=0.8",
                     },
-                ) as response:
-                    response.raise_for_status()
-                    data = await _read_httpx_body_with_limit(
-                        response, media_type="audio"
-                    )
-                return cache_audio_from_bytes(data, ext)
+                )
+                response.raise_for_status()
+                # Size cap enforced in cache_audio_from_bytes (the shared funnel).
+                return cache_audio_from_bytes(response.content, ext)
             except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
                 if (
                     isinstance(exc, httpx.HTTPStatusError)

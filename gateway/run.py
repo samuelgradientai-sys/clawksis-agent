@@ -7170,6 +7170,7 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
         # landing before the restart leaves us running stale code). Best-effort.
         try:
             from gateway.code_skew import record_boot_fingerprint
+
             record_boot_fingerprint()
         except Exception:
             pass

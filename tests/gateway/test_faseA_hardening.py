@@ -20,7 +20,7 @@ class TestInboundMediaSizeCap:
             gw_base.validate_inbound_media_size(101, media_type="image", max_bytes=100)
 
     def test_validate_zero_disables_cap(self):
-        gw_base.validate_inbound_media_size(10 ** 9, media_type="video", max_bytes=0)
+        gw_base.validate_inbound_media_size(10**9, media_type="video", max_bytes=0)
 
     def test_cache_image_rejects_oversized(self, monkeypatch):
         monkeypatch.setattr(gw_base, "get_inbound_media_max_bytes", lambda: 10)
@@ -45,8 +45,7 @@ class TestChannelAliases:
         plats = {}
         cd._apply_channel_aliases(plats)
         assert any(
-            e["id"] == "999@g.us" and e["name"] == "Soporte"
-            for e in plats["whatsapp"]
+            e["id"] == "999@g.us" and e["name"] == "Soporte" for e in plats["whatsapp"]
         )
 
     def test_blank_alias_ignored(self, monkeypatch):

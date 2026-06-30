@@ -12,7 +12,9 @@ def _make_skill_tree(base: Path) -> None:
     (base / "myskill" / "SKILL.md").write_text("x", encoding="utf-8")
     # A whole old package preserved under references/ (e.g. after consolidation).
     (base / "myskill" / "references" / "old").mkdir(parents=True)
-    (base / "myskill" / "references" / "old" / "SKILL.md").write_text("y", encoding="utf-8")
+    (base / "myskill" / "references" / "old" / "SKILL.md").write_text(
+        "y", encoding="utf-8"
+    )
     # A category literally named "scripts" containing a real skill.
     (base / "scripts" / "foo").mkdir(parents=True)
     (base / "scripts" / "foo" / "SKILL.md").write_text("z", encoding="utf-8")
@@ -58,12 +60,16 @@ class TestCuratorConsolidateGate:
             cur,
             "apply_automatic_transitions",
             lambda now=None: {
-                "checked": 1, "marked_stale": 0, "archived": 0, "reactivated": 0
+                "checked": 1,
+                "marked_stale": 0,
+                "archived": 0,
+                "reactivated": 0,
             },
         )
         monkeypatch.setattr(cur, "load_state", lambda: {})
         monkeypatch.setattr(cur, "save_state", lambda s: None)
         import agent.curator_backup as cb
+
         monkeypatch.setattr(cb, "snapshot_skills", lambda reason=None: None)
 
     def test_review_skips_llm_when_consolidate_off(self, monkeypatch):

@@ -65,21 +65,28 @@ class TestStoredPromptMatchesRuntime:
 
     def test_same_identity_matches(self):
         a = self._agent("deepseek-chat", "deepseek")
-        assert _stored_prompt_matches_runtime(
-            a, "Model: deepseek-chat\nProvider: deepseek"
-        ) is True
+        assert (
+            _stored_prompt_matches_runtime(
+                a, "Model: deepseek-chat\nProvider: deepseek"
+            )
+            is True
+        )
 
     def test_model_drift_rejected(self):
         a = self._agent("deepseek-chat", "deepseek")
-        assert _stored_prompt_matches_runtime(
-            a, "Model: gpt-4o\nProvider: deepseek"
-        ) is False
+        assert (
+            _stored_prompt_matches_runtime(a, "Model: gpt-4o\nProvider: deepseek")
+            is False
+        )
 
     def test_provider_drift_rejected(self):
         a = self._agent("deepseek-chat", "deepseek")
-        assert _stored_prompt_matches_runtime(
-            a, "Model: deepseek-chat\nProvider: openrouter"
-        ) is False
+        assert (
+            _stored_prompt_matches_runtime(
+                a, "Model: deepseek-chat\nProvider: openrouter"
+            )
+            is False
+        )
 
     def test_no_identity_lines_passthrough(self):
         a = self._agent("deepseek-chat", "deepseek")

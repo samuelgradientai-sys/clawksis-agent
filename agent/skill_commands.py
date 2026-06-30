@@ -104,7 +104,7 @@ def _extract_single_skill_user_instruction(message: str) -> Optional[str]:
     if marker_idx < 0:
         return None
 
-    instruction = message[marker_idx + len(_SINGLE_SKILL_INSTRUCTION):]
+    instruction = message[marker_idx + len(_SINGLE_SKILL_INSTRUCTION) :]
     runtime_idx = instruction.find(_RUNTIME_NOTE)
     if runtime_idx >= 0:
         instruction = instruction[:runtime_idx]
@@ -119,7 +119,7 @@ def _extract_bundle_user_instruction(message: str) -> Optional[str]:
     if marker_idx < 0:
         return None
 
-    instruction = message[marker_idx + len(_BUNDLE_USER_INSTRUCTION):]
+    instruction = message[marker_idx + len(_BUNDLE_USER_INSTRUCTION) :]
     first_skill_idx = instruction.find(_BUNDLE_FIRST_SKILL_BLOCK)
     if first_skill_idx >= 0:
         instruction = instruction[:first_skill_idx]

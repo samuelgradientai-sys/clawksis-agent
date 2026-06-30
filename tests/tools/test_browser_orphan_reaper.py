@@ -20,7 +20,13 @@ def fake_tmpdir(tmp_path):
 
 @pytest.fixture(autouse=True)
 def _isolate_sessions():
-    """Ensure _active_sessions is empty for each test."""
+    """Ensure _active_sessions is empty for each test.
+
+    Also bypasses the daemon-identity gate (``_verify_reapable_browser_daemon``)
+    so these reap-orchestration tests exercise the reap *decision* logic with
+    synthetic PIDs. The verification itself (a fail-closed psutil identity /
+    binding gate) is covered in tests/tools/test_browser_daemon_verify.py.
+    """
 
     import tools.browser_tool as bt
 
@@ -28,7 +34,8 @@ def _isolate_sessions():
 
     bt._active_sessions.clear()
 
-    yield
+    with patch("tools.browser_tool._verify_reapable_browser_daemon", return_value=True):
+        yield
 
     bt._active_sessions.clear()
 

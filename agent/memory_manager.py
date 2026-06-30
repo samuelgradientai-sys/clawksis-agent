@@ -328,6 +328,7 @@ def _strip_skill_scaffolding(content: Any) -> Optional[str]:
     """
     try:
         from agent.skill_commands import extract_user_instruction_from_skill_message
+
         return extract_user_instruction_from_skill_message(content)
     except Exception:  # pragma: no cover - defensive: never lose a real turn
         return content

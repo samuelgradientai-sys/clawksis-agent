@@ -463,7 +463,9 @@ class MemoryStore:
 
         return self._success_response(target, "Entry removed.")
 
-    def apply_batch(self, target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def apply_batch(
+        self, target: str, operations: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Apply a sequence of add/replace/remove ops to one target atomically.
 
         All operations are validated and applied against the FINAL budget --
@@ -487,7 +489,10 @@ class MemoryStore:
             if act in {"add", "replace"} and new_content:
                 scan_error = _scan_memory_content(new_content)
                 if scan_error:
-                    return {"success": False, "error": f"Operation {i + 1}: {scan_error}"}
+                    return {
+                        "success": False,
+                        "error": f"Operation {i + 1}: {scan_error}",
+                    }
 
         with self._file_lock(self._path_for(target)):
             bak = self._reload_target(target)
@@ -514,7 +519,9 @@ class MemoryStore:
 
                 elif act == "replace":
                     if not old_text:
-                        return self._batch_error(target, f"{pos}: old_text is required.")
+                        return self._batch_error(
+                            target, f"{pos}: old_text is required."
+                        )
                     if not content:
                         return self._batch_error(
                             target,
@@ -522,7 +529,9 @@ class MemoryStore:
                         )
                     matches = [j for j, e in enumerate(working) if old_text in e]
                     if not matches:
-                        return self._batch_error(target, f"{pos}: no entry matched '{old_text}'.")
+                        return self._batch_error(
+                            target, f"{pos}: no entry matched '{old_text}'."
+                        )
                     if len({working[j] for j in matches}) > 1:
                         return self._batch_error(
                             target,
@@ -532,10 +541,14 @@ class MemoryStore:
 
                 elif act == "remove":
                     if not old_text:
-                        return self._batch_error(target, f"{pos}: old_text is required.")
+                        return self._batch_error(
+                            target, f"{pos}: old_text is required."
+                        )
                     matches = [j for j, e in enumerate(working) if old_text in e]
                     if not matches:
-                        return self._batch_error(target, f"{pos}: no entry matched '{old_text}'.")
+                        return self._batch_error(
+                            target, f"{pos}: no entry matched '{old_text}'."
+                        )
                     if len({working[j] for j in matches}) > 1:
                         return self._batch_error(
                             target,
@@ -568,7 +581,9 @@ class MemoryStore:
             self._set_entries(target, working)
             self.save_to_disk(target)
 
-        return self._success_response(target, f"Applied {len(operations)} operation(s).")
+        return self._success_response(
+            target, f"Applied {len(operations)} operation(s)."
+        )
 
     def _batch_error(self, target: str, message: str) -> Dict[str, Any]:
         """Build a batch-abort error that reports live (uncommitted) state."""
@@ -861,7 +876,10 @@ def memory_tool(
     if action == "remove" and not old_text:
         return tool_error("old_text is required for 'remove' action.", success=False)
     if action == "batch" and not operations:
-        return tool_error("operations (a non-empty list) is required for 'batch' action.", success=False)
+        return tool_error(
+            "operations (a non-empty list) is required for 'batch' action.",
+            success=False,
+        )
 
     # Approval gate: when on, stages the write (background/gateway) or prompts
     # inline (interactive CLI); when off (default) passes straight through.
@@ -980,7 +998,10 @@ MEMORY_SCHEMA = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["add", "replace", "remove"]},
+                        "action": {
+                            "type": "string",
+                            "enum": ["add", "replace", "remove"],
+                        },
                         "content": {"type": "string"},
                         "old_text": {"type": "string"},
                     },

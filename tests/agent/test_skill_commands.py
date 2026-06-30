@@ -1154,13 +1154,17 @@ class TestExtractUserInstructionFromSkillMessage:
     """Memory hygiene: recover the user's instruction from /skill scaffolding."""
 
     def test_normal_message_passes_through(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         msg = "remember my timezone is CET"
         assert ex(msg) == msg
 
     def test_single_skill_with_instruction(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         msg = (
             '[IMPORTANT: The user has invoked the "myskill" skill, indicating they '
@@ -1172,7 +1176,9 @@ class TestExtractUserInstructionFromSkillMessage:
         assert ex(msg) == "scrape example.com"
 
     def test_single_skill_strips_runtime_note(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         msg = (
             '[IMPORTANT: The user has invoked the "x" skill, indicating they want '
@@ -1184,7 +1190,9 @@ class TestExtractUserInstructionFromSkillMessage:
         assert ex(msg) == "do it"
 
     def test_bare_skill_returns_none(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         msg = (
             '[IMPORTANT: The user has invoked the "x" skill, indicating they want '
@@ -1194,7 +1202,9 @@ class TestExtractUserInstructionFromSkillMessage:
         assert ex(msg) is None
 
     def test_bundle_with_instruction(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         msg = (
             '[IMPORTANT: The user has invoked the "mybundle" skill bundle, follow them.]'
@@ -1204,7 +1214,9 @@ class TestExtractUserInstructionFromSkillMessage:
         assert ex(msg) == "research the topic"
 
     def test_non_string_returns_none(self):
-        from agent.skill_commands import extract_user_instruction_from_skill_message as ex
+        from agent.skill_commands import (
+            extract_user_instruction_from_skill_message as ex,
+        )
 
         assert ex(None) is None
         assert ex({"a": 1}) is None

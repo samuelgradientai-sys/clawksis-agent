@@ -1385,8 +1385,9 @@ def _write_owner_pid(socket_dir: str, session_name: str) -> None:
         logger.debug("Could not write owner_pid file for %s: %s", session_name, exc)
 
 
-def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
-                                    session_name: str) -> bool:
+def _verify_reapable_browser_daemon(
+    daemon_pid: int, socket_dir: str, session_name: str
+) -> bool:
     """Confirm a live PID is genuinely *this* session's agent-browser daemon.
 
     The orphan reaper scans world-writable, predictably-named temp paths
@@ -1415,7 +1416,9 @@ def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
         logger.warning(
             "Refusing to reap browser daemon PID %d (session %s): "
             "psutil unavailable for identity verification",
-            daemon_pid, session_name)
+            daemon_pid,
+            session_name,
+        )
         return False
 
     try:
@@ -1429,14 +1432,21 @@ def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
         logger.warning(
             "Refusing to reap browser daemon PID %d (session %s): "
             "could not read process identity (%s)",
-            daemon_pid, session_name, exc)
+            daemon_pid,
+            session_name,
+            exc,
+        )
         return False
 
     looks_like_browser = "agent-browser" in name or "agent-browser" in cmdline
     if not looks_like_browser:
         logger.warning(
             "Refusing to reap PID %d (session %s): not an agent-browser "
-            "process (name=%r)", daemon_pid, session_name, name)
+            "process (name=%r)",
+            daemon_pid,
+            session_name,
+            name,
+        )
         return False
 
     # Binding check: the live process must reference *this* socket dir.
@@ -1446,8 +1456,9 @@ def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
     if not bound:
         try:
             env_dir = (proc.environ() or {}).get("AGENT_BROWSER_SOCKET_DIR", "")
-            bound = bool(env_dir) and os.path.normpath(env_dir) == \
-                os.path.normpath(socket_dir)
+            bound = bool(env_dir) and os.path.normpath(env_dir) == os.path.normpath(
+                socket_dir
+            )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             # environ() can be denied even same-user on some platforms.
             # cmdline already failed to bind — fail closed.
@@ -1457,7 +1468,9 @@ def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
         logger.warning(
             "Refusing to reap agent-browser PID %d: not bound to session "
             "socket dir %s (possible recycled PID or planted pid file)",
-            daemon_pid, socket_dir)
+            daemon_pid,
+            socket_dir,
+        )
         return False
 
     return True

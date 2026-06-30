@@ -64,6 +64,7 @@ def is_skill_support_path(path) -> bool:
     directory that contains ``SKILL.md``.
     """
     from pathlib import Path as _Path
+
     path_obj = path if hasattr(path, "parts") else _Path(str(path))
     parts = path_obj.parts
     # Only components BEFORE the leaf can be containing support directories, and
