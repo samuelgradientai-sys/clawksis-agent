@@ -52,11 +52,15 @@ function StreamingCaret() {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+type Align = "left" | "right" | "center" | "";
+
 type BlockNode =
   | { type: "code"; lang: string; content: string }
   | { type: "heading"; level: number; content: string }
   | { type: "hr" }
   | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "blockquote"; content: string }
+  | { type: "table"; headers: string[]; aligns: Align[]; rows: string[][] }
   | { type: "paragraph"; content: string };
 
 /* ------------------------------------------------------------------ */
@@ -67,6 +71,24 @@ function parseBlocks(text: string): BlockNode[] {
   const lines = text.split("\n");
   const blocks: BlockNode[] = [];
   let i = 0;
+
+  const isBlockquote = (s: string) => /^>\s?/.test(s);
+  const splitTableRow = (row: string) =>
+    row
+      .trim()
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((c) => c.trim());
+  const isTableSep = (s: string) => {
+    if (!s.includes("-")) return false;
+    const cells = splitTableRow(s);
+    return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+  };
+  const isTableStart = (idx: number) =>
+    idx + 1 < lines.length &&
+    lines[idx].includes("|") &&
+    isTableSep(lines[idx + 1]);
 
   while (i < lines.length) {
     const line = lines[i];
@@ -127,6 +149,35 @@ function parseBlocks(text: string): BlockNode[] {
       continue;
     }
 
+    // Blockquote
+    if (isBlockquote(line)) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && isBlockquote(lines[i])) {
+        quoteLines.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      blocks.push({ type: "blockquote", content: quoteLines.join("\n") });
+      continue;
+    }
+
+    // Table (GFM pipe table: header row + ---|--- separator + data rows)
+    if (isTableStart(i)) {
+      const headers = splitTableRow(line);
+      const aligns: Align[] = splitTableRow(lines[i + 1]).map((s) => {
+        const l = s.startsWith(":");
+        const r = s.endsWith(":");
+        return l && r ? "center" : r ? "right" : l ? "left" : "";
+      });
+      i += 2;
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") {
+        rows.push(splitTableRow(lines[i]));
+        i++;
+      }
+      blocks.push({ type: "table", headers, aligns, rows });
+      continue;
+    }
+
     // Empty line
     if (line.trim() === "") {
       i++;
@@ -142,7 +193,9 @@ function parseBlocks(text: string): BlockNode[] {
       !lines[i].match(/^#{1,4}\s/) &&
       !lines[i].match(/^[-*+]\s/) &&
       !lines[i].match(/^\d+[.)]\s/) &&
-      !lines[i].match(/^[-*_]{3,}\s*$/)
+      !lines[i].match(/^[-*_]{3,}\s*$/) &&
+      !isBlockquote(lines[i]) &&
+      !isTableStart(i)
     ) {
       paraLines.push(lines[i]);
       i++;
@@ -259,6 +312,56 @@ function Block({
         </Tag>
       );
     }
+
+    case "blockquote":
+      return (
+        <blockquote className="border-l-2 border-border pl-3 italic text-muted-foreground">
+          <InlineContent text={block.content} highlightTerms={highlightTerms} />
+          {caret}
+        </blockquote>
+      );
+
+    case "table":
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {block.headers.map((h, i) => {
+                  const a = block.aligns[i];
+                  return (
+                    <th
+                      key={i}
+                      className="border border-border bg-muted/40 px-2 py-1 text-left font-semibold"
+                      style={a ? { textAlign: a } : undefined}
+                    >
+                      <InlineContent text={h} highlightTerms={highlightTerms} />
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((cell, c) => {
+                    const a = block.aligns[c];
+                    return (
+                      <td
+                        key={c}
+                        className="border border-border px-2 py-1 align-top"
+                        style={a ? { textAlign: a } : undefined}
+                      >
+                        <InlineContent text={cell} highlightTerms={highlightTerms} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
 
     case "paragraph":
       return (
