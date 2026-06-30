@@ -419,13 +419,36 @@ GOOGLE_MODEL_OPERATIONAL_GUIDANCE = (
     "package.json, requirements.txt, Cargo.toml, etc. before importing.\n"
     "- **Conciseness:** Keep explanatory text brief — a few sentences, not "
     "paragraphs. Focus on actions and results over narration.\n"
-    "- **Parallel tool calls:** When you need to perform multiple independent "
-    "operations (e.g. reading several files), make all the tool calls in a "
-    "single response rather than sequentially.\n"
     "- **Non-interactive commands:** Use flags like -y, --yes, --non-interactive "
     "to prevent CLI tools from hanging on prompts.\n"
     "- **Keep going:** Work autonomously until the task is fully resolved. "
     "Don't stop with a plan — execute it.\n"
+)
+
+
+# Universal parallel-tool-call guidance — applied to ALL models.
+#
+# Every assistant turn resends the accumulated conversation (and re-reads the
+# cached prefix). A model that issues one tool call per turn multiplies the
+# round-trips — and the resent context / token cost — for any task needing
+# several independent reads, searches, or safe lookups. Batching independent
+# calls into one response collapses N turns into one. The runtime already
+# executes independent tool calls concurrently; this tells the *model* to emit
+# them together. Previously only Gemini got this steer (in the Google block
+# above); this makes it universal and the now-redundant Google bullet was
+# dropped so no model receives it twice. Matters for BYOK cost: fewer
+# round-trips = less resent context billed to the user.
+PARALLEL_TOOL_CALL_GUIDANCE = (
+    "# Parallel tool calls\n"
+    "When you need several pieces of information that don't depend on each "
+    "other, request them together in a single response instead of one tool "
+    "call per turn. Independent reads, searches, web fetches, and read-only "
+    "commands should be batched into the same assistant turn — the runtime "
+    "executes independent calls concurrently, and batching avoids resending "
+    "the whole conversation on every extra round-trip.\n"
+    "Only serialize calls when a later call genuinely depends on an earlier "
+    "call's result (e.g. you must read a file before you can patch it). When "
+    "in doubt and the calls are independent, batch them."
 )
 
 

@@ -33,6 +33,7 @@ from agent.prompt_builder import (
     KANBAN_GUIDANCE,
     MEMORY_GUIDANCE,
     OPENAI_MODEL_EXECUTION_GUIDANCE,
+    PARALLEL_TOOL_CALL_GUIDANCE,
     PLATFORM_HINTS,
     SCRAPING_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
@@ -114,6 +115,12 @@ def build_system_prompt_parts(
     # users who want a leaner prompt can turn it off.
     if getattr(agent, "_task_completion_guidance", True) and agent.valid_tool_names:
         stable_parts.append(TASK_COMPLETION_GUIDANCE)
+
+    # Universal parallel-tool-call steer (ALL models). Only meaningful when
+    # tools are loaded, so gate on the same tool-presence condition. Replaces
+    # the former Gemini-only bullet — fewer round-trips = less resent context.
+    if agent.valid_tool_names:
+        stable_parts.append(PARALLEL_TOOL_CALL_GUIDANCE)
 
     # Tool-aware behavioral guidance: only inject when the tools are loaded
     tool_guidance = []

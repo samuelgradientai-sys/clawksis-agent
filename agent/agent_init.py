@@ -236,6 +236,23 @@ def _merge_custom_provider_extra_body(
     agent.request_overrides = overrides
 
 
+def emit_agent_event(
+    agent, event_name: str, payload: Optional[Dict[str, Any]] = None
+) -> None:
+    """Fire the agent's generic observability callback, if one is registered.
+
+    Safe to call from anywhere: a no-op when no callback is set, and never
+    propagates a listener's exception into the agent loop.
+    """
+    cb = getattr(agent, "event_callback", None)
+    if cb is None:
+        return
+    try:
+        cb(event_name, payload or {})
+    except Exception:
+        logger.debug("event_callback failed for event %r", event_name, exc_info=True)
+
+
 def init_agent(
     agent,
     base_url: str = None,
@@ -280,6 +297,7 @@ def init_agent(
     status_callback: callable = None,
     notice_callback: callable = None,
     notice_clear_callback: callable = None,
+    event_callback: callable = None,
     max_tokens: int = None,
     reasoning_config: Dict[str, Any] = None,
     service_tier: str = None,
@@ -463,6 +481,12 @@ def init_agent(
     agent.background_review_callback = (
         None  # Optional sync callback for gateway delivery
     )
+
+    # Generic observability hook: callers pass a callable(event_name, payload)
+    # to receive agent lifecycle events (memory writes, skill runs, delegations,
+    # …) without coupling telemetry to the core loop. None disables it. Emit
+    # defensively via emit_agent_event(agent, name, payload).
+    agent.event_callback = event_callback
 
     agent.skip_context_files = skip_context_files
 

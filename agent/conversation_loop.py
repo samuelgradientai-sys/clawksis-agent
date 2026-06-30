@@ -434,14 +434,27 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 exc,
             )
 
-    if stored_prompt:
+    if stored_prompt and _stored_prompt_matches_runtime(agent, stored_prompt):
         # Continuing session — reuse the exact system prompt from the
-
         # previous turn so the Anthropic cache prefix matches.
-
         agent._cached_system_prompt = stored_prompt
-
         return
+
+    if stored_prompt:
+        # The stored prompt names a Model/Provider that no longer matches the
+        # runtime (a model switch or a fallback activated between turns).
+        # Reusing it would report the wrong backend to the model and to the
+        # user — rebuild instead. This matters because Clawksis rotates
+        # models/keys via the fallback chain, so a resumed session would
+        # otherwise keep the previous backend's identity in its prompt.
+        stored_state = "stale_runtime"
+        logger.info(
+            "Stored system prompt for session %s has stale runtime identity; "
+            "rebuilding for model=%s provider=%s.",
+            agent.session_id,
+            getattr(agent, "model", "") or "",
+            getattr(agent, "provider", "") or "",
+        )
 
     if conversation_history and stored_state in ("null", "empty"):
         # Continuing session whose stored prompt is unusable.  The
@@ -508,6 +521,37 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 agent.session_id,
                 exc,
             )
+
+
+def _stored_prompt_matches_runtime(agent, prompt: str) -> bool:
+    """Return False when the persisted Model/Provider lines are stale.
+
+    The system prompt embeds ``Model: <x>`` / ``Provider: <y>`` lines. If the
+    user switched models or the fallback chain rotated the backend between
+    turns, a resumed session must NOT reuse the old prompt verbatim (it would
+    misreport the active backend). Conservative: only rebuilds when a stored
+    line is present AND differs from the runtime value.
+    """
+
+    def line_value(label: str) -> str:
+        prefix = f"{label}:"
+        value = ""
+        for line in prompt.splitlines():
+            if line.startswith(prefix):
+                value = line[len(prefix):].strip()
+        return value
+
+    stored_model = line_value("Model")
+    current_model = str(getattr(agent, "model", "") or "").strip()
+    if stored_model and current_model and stored_model != current_model:
+        return False
+
+    stored_provider = line_value("Provider")
+    current_provider = str(getattr(agent, "provider", "") or "").strip()
+    if stored_provider and current_provider and stored_provider != current_provider:
+        return False
+
+    return True
 
 
 def _get_continuation_prompt(
