@@ -1,0 +1,64 @@
+/* Scoped Prism token colors for the chat DiffViewer.
+ *
+ * We intentionally do NOT import a full prismjs theme (those set global
+ * backgrounds/spacing that fight the diff cells + the dashboard theme). These
+ * rules only color Prism's `.token.*` classes and are scoped under
+ * `.clawk-diff`, so they apply solely inside a diff. Palette tuned for the dark
+ * dashboard; the diff red/green backgrounds still show through (text color vs
+ * cell background), GitHub-style. */
+
+.clawk-diff .token.comment,
+.clawk-diff .token.prolog,
+.clawk-diff .token.doctype,
+.clawk-diff .token.cdata {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.clawk-diff .token.punctuation {
+  color: #89ddff;
+}
+
+.clawk-diff .token.keyword,
+.clawk-diff .token.atrule,
+.clawk-diff .token.attr-name,
+.clawk-diff .token.selector {
+  color: #c792ea;
+}
+
+.clawk-diff .token.string,
+.clawk-diff .token.char,
+.clawk-diff .token.attr-value,
+.clawk-diff .token.inserted {
+  color: #c3e88d;
+}
+
+.clawk-diff .token.function,
+.clawk-diff .token.class-name {
+  color: #82aaff;
+}
+
+.clawk-diff .token.number,
+.clawk-diff .token.boolean,
+.clawk-diff .token.constant,
+.clawk-diff .token.symbol {
+  color: #f78c6c;
+}
+
+.clawk-diff .token.operator,
+.clawk-diff .token.entity,
+.clawk-diff .token.url {
+  color: #89ddff;
+}
+
+.clawk-diff .token.property,
+.clawk-diff .token.tag,
+.clawk-diff .token.deleted {
+  color: #f07178;
+}
+
+.clawk-diff .token.regex,
+.clawk-diff .token.important,
+.clawk-diff .token.variable {
+  color: #ffcb6b;
+}
