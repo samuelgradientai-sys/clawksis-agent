@@ -21,5 +21,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: typecheck only needs the TS sources + type defs, not
+      # native builds. Skipping install scripts drops node-pty's node-gyp header
+      # fetch (a transient pre-tsc flake) and is faster. (The workflow_call
+      # centralization upstream uses needs a parent orchestrator + a sibling
+      # lint workflow; Clawksis has a single typecheck job, so we keep the
+      # direct push/PR trigger and adopt only the install hardening.)
+      - run: npm ci --ignore-scripts
       - run: npm run --prefix ${{ matrix.package }} typecheck
