@@ -7165,6 +7165,15 @@ class GatewayRunner(GatewayKanbanWatchersMixin):
 
         logger.info("Starting Clawksis Gateway...")
 
+        # Snapshot the checkout revision so we can later detect a hot ``git
+        # pull`` under this long-lived process (deploy = pull + restart; a pull
+        # landing before the restart leaves us running stale code). Best-effort.
+        try:
+            from gateway.code_skew import record_boot_fingerprint
+            record_boot_fingerprint()
+        except Exception:
+            pass
+
         try:
             self._gateway_loop = asyncio.get_running_loop()
 
