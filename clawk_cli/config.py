@@ -1557,7 +1557,9 @@ DEFAULT_CONFIG = {
             "base_seconds": 60,
             "max_seconds": 3600,
         },
-        "auto_restore_primary": False,  # volver al proveedor primario cuando su cooldown expira
+        # NOTA: la reanudación al proveedor primario cuando su cooldown expira NO
+        # es un toggle — ya es built-in y siempre activa (run_conversation llama
+        # _restore_primary_runtime() al inicio de cada turno, respetando el cooldown).
         "durable_turns": {
             "enabled": False,  # journal de turnos en vuelo (tui_gateway) para reanudar tras crash
             "freshness_seconds": 3600,
