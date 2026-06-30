@@ -42,11 +42,22 @@ jobs:
             echo "Ya existe un issue (abierto o cerrado) para $LATEST."
             exit 0
           fi
-          NOTES=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq '.body' | head -c 6000)
+          BODY=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq '.body')
+          # Curate the architecture / capability highlights into a checklist so
+          # the issue is actionable ("tick what to bring to Clawksis") instead of
+          # a raw notes dump. Deterministic, no API key. Fail-open: if the digest
+          # script errors, fall back to the raw notes so the issue still opens.
+          DIGEST=$(printf '%s' "$BODY" | python3 tools/upstream/release_digest.py 2>/dev/null) || DIGEST=""
           {
             printf 'Upstream publico [`%s`](https://github.com/NousResearch/hermes-agent/releases/tag/%s) y el fork esta sincronizado hasta `%s`.\n\n' "$LATEST" "$LATEST" "$SYNCED"
-            printf 'Para traerlo:\n\n```bash\npython tools/upstream/sync.py --target %s          # dry-run\npython tools/upstream/sync.py --target %s --apply  # aplicar\n```\n\n' "$LATEST" "$LATEST"
-            printf '## Release notes de upstream\n\n%s\n' "$NOTES"
+            if [ -n "$DIGEST" ]; then
+              printf '%s\n\n' "$DIGEST"
+            fi
+            printf '---\n\n## Cómo traerlo\n\n'
+            printf 'Quick wins / cambios puntuales: cherry-pick manual + tests (como Fase A).\n\n'
+            printf 'Sync completo file-by-file:\n\n```bash\npython tools/upstream/sync.py --target %s          # dry-run\npython tools/upstream/sync.py --target %s --apply  # aplicar\n```\n\n' "$LATEST" "$LATEST"
+            printf 'Para un análisis de fit profundo, correr la auditoría diferencial.\n\n'
+            printf '<details><summary>Release notes completas de upstream</summary>\n\n%s\n\n</details>\n' "$(printf '%s' "$BODY" | head -c 8000)"
           } > /tmp/issue-body.md
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "Upstream Hermes $LATEST disponible (ultimo sync: $SYNCED)" \
