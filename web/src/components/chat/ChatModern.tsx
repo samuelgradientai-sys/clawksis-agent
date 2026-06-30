@@ -18,12 +18,15 @@ import {
   Quote,
   Brain,
   ChevronRight,
+  ChevronDown,
   CheckCircle2,
   Loader2,
   AlertCircle,
   WifiOff,
   Square,
   X,
+  Clock,
+  Wrench,
   FileText,
 } from "lucide-react";
 import { Markdown } from "../Markdown";
@@ -33,6 +36,8 @@ import {
   type ConnectionStatus,
   type ToolCall,
 } from "./hooks/useChatGateway";
+import { useMessageQueue, type QueuedMessage } from "./hooks/useMessageQueue";
+import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
 import { useTokenUsage } from "./hooks/useTokenUsage";
 import { TokenUsagePopover } from "./TokenUsagePopover";
@@ -462,15 +467,16 @@ function MessageActions({
 function ReasoningPanel({
   text,
   streaming,
+  defaultOpen,
 }: {
   text: string;
   streaming?: boolean;
+  defaultOpen?: boolean;
 }) {
-  // Abierto mientras piensa (para ver el razonamiento en vivo); colapsable a mano.
-  // Los turnos cargados del historial llegan con streaming=false → colapsados.
-  // (Init desde `streaming`: cubre el caso normal — el panel aparece cuando llega
-  // el primer reasoning.delta, con streaming=true.)
-  const [open, setOpen] = useState(!!streaming);
+  // Abierto mientras piensa (para ver el razonamiento en vivo) o cuando se
+  // re-expande desde el resumen post-turno; colapsable a mano. Los turnos
+  // cargados del historial llegan con streaming=false → colapsados.
+  const [open, setOpen] = useState(!!streaming || !!defaultOpen);
   return (
     <div className="rounded-lg border border-border/60 bg-muted/15">
       <button
@@ -493,6 +499,37 @@ function ReasoningPanel({
   );
 }
 
+// Chip compacto al que colapsan tools + razonamiento cuando el turno termina
+// (auto-limpieza: la conversación queda limpia, sólo la respuesta final). No se
+// borran datos: "ver pasos" los re-expande.
+function StepsSummary({
+  toolCount,
+  hasReasoning,
+  onExpand,
+}: {
+  toolCount: number;
+  hasReasoning: boolean;
+  onExpand: () => void;
+}) {
+  const parts: string[] = [];
+  if (toolCount > 0) {
+    parts.push(toolCount + (toolCount === 1 ? " herramienta" : " herramientas"));
+  }
+  if (hasReasoning) parts.push("razonamiento");
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      className="flex items-center gap-1.5 self-start rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+    >
+      <Wrench className="size-3 text-[#6C4FD6]/70" />
+      <span>{parts.join(" · ")}</span>
+      <span className="opacity-60">· ver pasos</span>
+      <ChevronRight className="size-3" />
+    </button>
+  );
+}
+
 // Indicador "pensando…" mientras la respuesta del asistente está en streaming
 // pero todavía no llegó el primer token (ni reasoning ni tool calls). Sin esto
 // la burbuja queda vacía (solo el avatar) y el chat "se siente colgado" aunque
@@ -500,13 +537,16 @@ function ReasoningPanel({
 function TypingDots() {
   return (
     <div
-      className="flex items-center gap-1 py-1.5"
+      className="flex items-center gap-2 py-1"
       role="status"
       aria-label="Pensando…"
     >
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60" />
+      <span className="flex items-end gap-1">
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6] [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6] [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6]" />
+      </span>
+      <span className="clawk-shimmer-text text-sm font-medium">Pensando…</span>
     </div>
   );
 }
@@ -530,6 +570,10 @@ const MessageBubble = memo(function MessageBubble({
   const isCommand = message.content.trim().startsWith("/");
   const isSlashOutput =
     message.role === "assistant" && message.id.startsWith("slash-");
+
+  // Auto-limpieza: al terminar, tools + razonamiento colapsan a un chip
+  // "ver pasos" (la conversación queda limpia). Re-expandible a mano.
+  const [stepsOpen, setStepsOpen] = useState(false);
 
   const actions = !message.streaming ? (
     <MessageActions
@@ -574,9 +618,22 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   // Asistente: texto flush con avatar mínimo.
+  const hasReasoning = !!(message.reasoning && message.reasoning.trim());
+  const hasTools = message.toolCalls.length > 0;
+  const hasSteps = hasTools || hasReasoning;
+  // Mientras transmite, mostramos tools + razonamiento en vivo (transparencia).
+  // Al terminar, se colapsan a un resumen hasta que el usuario expanda.
+  const showSteps = message.streaming || stepsOpen;
+  const showSummary = !message.streaming && hasSteps && !stepsOpen;
+
   return (
     <div className="group flex gap-3 py-4">
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#6C4FD6] text-white">
+      <div
+        className={
+          "flex size-7 shrink-0 items-center justify-center rounded-full bg-[#6C4FD6] text-white " +
+          (message.streaming ? "clawk-glow" : "")
+        }
+      >
         <span className="text-xs font-bold leading-none">C</span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -593,7 +650,7 @@ const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {message.toolCalls.length > 0 && (
+        {showSteps && hasTools && (
           <div className="mt-1 flex flex-col gap-1.5">
             {message.toolCalls.map((tc) => (
               <ToolCallRow key={tc.id} toolCall={tc} />
@@ -601,10 +658,19 @@ const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {message.reasoning && (
+        {showSteps && hasReasoning && (
           <ReasoningPanel
-            text={message.reasoning}
+            text={message.reasoning ?? ""}
             streaming={message.streaming}
+            defaultOpen={!message.streaming}
+          />
+        )}
+
+        {showSummary && (
+          <StepsSummary
+            toolCount={message.toolCalls.length}
+            hasReasoning={hasReasoning}
+            onExpand={() => setStepsOpen(true)}
           />
         )}
 
@@ -806,13 +872,16 @@ function Composer({
     void voice.start((t) => setValue(base + t));
   };
 
+  // Con imágenes no se puede encolar mientras el agente está ocupado (image.attach
+  // stagea en la sesión viva). En ese caso el envío espera a que el turno termine.
+  const blockedByImagesWhileBusy = busy && images.length > 0;
   const canSend =
     (value.trim().length > 0 ||
       attachments.length > 0 ||
       citations.length > 0 ||
       images.length > 0) &&
-    !busy &&
-    !disabled;
+    !disabled &&
+    !blockedByImagesWhileBusy;
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -1064,31 +1133,34 @@ function Composer({
               )}
             </button>
 
-            {busy ? (
+            {/* Detener el turno actual (la cola se mantiene y drena después). */}
+            {busy && (
               <button
                 type="button"
                 onClick={onInterrupt}
-                aria-label="Interrumpir"
+                aria-label="Detener respuesta"
+                title="Detener la respuesta actual"
                 className="flex size-8 items-center justify-center rounded-lg bg-destructive text-white hover:bg-destructive/80 transition-colors"
               >
                 <Square className="size-3.5 fill-current" />
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSend}
-                aria-label="Enviar mensaje"
-                className={
-                  "flex size-8 items-center justify-center rounded-lg transition-colors " +
-                  (canSend
-                    ? "bg-[#6C4FD6] text-white hover:bg-[#5a40c2]"
-                    : "bg-muted/40 text-muted-foreground cursor-not-allowed")
-                }
-              >
-                <ArrowUp className="size-4" />
-              </button>
             )}
+            {/* Enviar / encolar: habilitado aunque el agente esté ocupado. */}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSend}
+              aria-label={busy ? "Agregar a la cola" : "Enviar mensaje"}
+              title={busy ? "Agregar a la cola" : "Enviar mensaje"}
+              className={
+                "flex size-8 items-center justify-center rounded-lg transition-colors " +
+                (canSend
+                  ? "bg-[#6C4FD6] text-white hover:bg-[#5a40c2]"
+                  : "bg-muted/40 text-muted-foreground cursor-not-allowed")
+              }
+            >
+              <ArrowUp className="size-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -1142,6 +1214,38 @@ function EmptyState() {
           Escribí un mensaje abajo para empezar a chatear con Clawksis.
         </p>
       </div>
+    </div>
+  );
+}
+
+// Burbuja de un mensaje en cola (estilo Telegram): atenuada, con borde punteado
+// y un botón para cancelarlo antes de que se envíe.
+function QueuedBubble({
+  item,
+  onCancel,
+}: {
+  item: QueuedMessage;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="group flex flex-col items-end gap-1 py-2">
+      <div className="flex max-w-[85%] items-start gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Cancelar mensaje en cola"
+          title="Cancelar"
+          className="mt-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+        >
+          <X className="size-3.5" />
+        </button>
+        <div className="whitespace-pre-wrap rounded-2xl rounded-br-md border border-dashed border-border bg-muted/20 px-4 py-2.5 text-sm leading-relaxed text-muted-foreground">
+          {item.text}
+        </div>
+      </div>
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+        <Clock className="size-2.5" /> En cola
+      </span>
     </div>
   );
 }
@@ -1392,11 +1496,21 @@ export default function ChatModern() {
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  // Autoscroll inteligente: sigue al fondo sólo si ya estás cerca; si subiste a
+  // leer, te deja quieto y muestra el pill "saltar a lo último".
+  const { showJump, scrollToBottom } = useAutoScroll(
+    scrollRef,
+    messages,
+    session.sessionId,
+  );
+
+  // Cola estilo Telegram: enviar si el agente está libre, encolar si está ocupado.
+  const queue = useMessageQueue({
+    busy,
+    ready: readyForRpc,
+    hasSession: !!session.sessionId,
+    send: sendMessage,
+  });
 
   const isConnecting = status === "connecting" || status === "idle";
   const composerDisabled =
@@ -1404,6 +1518,7 @@ export default function ChatModern() {
 
   const handleSelectSession = (targetId: string) => {
     if (targetId === sidebarActiveSessionId) return;
+    queue.clear();
     setVisualActiveSessionId(targetId);
     void switchSession(targetId);
   };
@@ -1436,6 +1551,17 @@ export default function ChatModern() {
       }
     }
 
+    // Cola estilo Telegram: si el agente está ocupado, encolamos el texto en
+    // vez de mandarlo (se dispara solo al terminar el turno). NO se encolan:
+    //  - slash commands: varios (/steer /goal /retry /queue) son "pending-input",
+    //    diseñados para correr A MITAD de turno → van directo, no a la cola.
+    //  - mensajes con imágenes: image.attach stagea en la sesión viva → iría al
+    //    turno equivocado (lo bloquea el composer mientras está ocupado).
+    if (busy && !trimmed.startsWith("/") && !(images && images.length)) {
+      queue.enqueue(text);
+      return;
+    }
+
     const activeId = sidebarActiveSessionId ?? session.sessionId;
 
     if (activeId && trimmed) {
@@ -1455,9 +1581,11 @@ export default function ChatModern() {
     }
 
     sendMessage(text, images);
+    scrollToBottom();
   };
 
   const handleNewChat = async (projectId: string | null = null) => {
+    queue.clear();
     const newId = await createSession();
     if (newId) {
       const project = projectId
@@ -1502,6 +1630,7 @@ export default function ChatModern() {
     // Si es la conversación activa, el gateway rechaza borrarla mientras está
     // viva. Soltamos la sesión (cambiando a otra / nueva) ANTES de borrarla.
     if (id === sidebarActiveSessionId) {
+      queue.clear();
       const fallback = sessions.find((s) => s.id !== id);
       if (fallback) {
           setVisualActiveSessionId(fallback.id);
@@ -1696,39 +1825,61 @@ export default function ChatModern() {
           </div>
         )}
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {resuming && messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Cargando conversación…
-            </div>
-          ) : messages.length === 0 && !isConnecting ? (
-            <EmptyState />
-          ) : (
-            <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-2">
-              {messages.map((msg, idx) => {
-                const isLast =
-                  idx === messages.length - 1 && msg.role === "assistant";
-                return (
-                  <ErrorBoundary key={msg.id} resetKey={msg.content}>
-                    <MessageBubble
-                      message={msg}
-                      onRegenerate={
-                        isLast && !lastUserIsSlash ? regenerateLast : undefined
-                      }
-                      canRegenerate={isLast && !busy}
-                      onQuote={handleQuote}
-                    />
-                  </ErrorBoundary>
-                );
-              })}
-              {liveStatus && busy && (
-                <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
-                  <span className="min-w-0 flex-1 break-words">{liveStatus}</span>
-                </div>
-              )}
-            </div>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto">
+            {resuming && messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Cargando conversación…
+              </div>
+            ) : messages.length === 0 &&
+              !isConnecting &&
+              queue.queued.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-2">
+                {messages.map((msg, idx) => {
+                  const isLast =
+                    idx === messages.length - 1 && msg.role === "assistant";
+                  return (
+                    <ErrorBoundary key={msg.id} resetKey={msg.content}>
+                      <MessageBubble
+                        message={msg}
+                        onRegenerate={
+                          isLast && !lastUserIsSlash ? regenerateLast : undefined
+                        }
+                        canRegenerate={isLast && !busy}
+                        onQuote={handleQuote}
+                      />
+                    </ErrorBoundary>
+                  );
+                })}
+                {liveStatus && busy && (
+                  <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+                    <span className="min-w-0 flex-1 break-words">{liveStatus}</span>
+                  </div>
+                )}
+                {queue.queued.map((item) => (
+                  <QueuedBubble
+                    key={item.id}
+                    item={item}
+                    onCancel={() => queue.cancel(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {showJump && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom(true)}
+              className="clawk-msg-in absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-[#6C4FD6] px-3 py-1.5 text-xs font-medium text-white shadow-lg transition-colors hover:bg-[#5a40c2]"
+            >
+              <ChevronDown className="size-3.5" />
+              Saltar a lo último
+            </button>
           )}
         </div>
 

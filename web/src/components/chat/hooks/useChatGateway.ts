@@ -694,6 +694,11 @@ export function useChatGateway(): UseChatGatewayResult {
         return;
       }
 
+      // Marcamos busy de inmediato (no esperando message.start) para que la cola
+      // de mensajes tenga un gate confiable: sin esto, en la ventana del
+      // round-trip busy=false y el siguiente mensaje en cola se dispararía sobre
+      // una sesión que ya está por ocuparse (→ 4009 / mensaje perdido).
+      setBusy(true);
       sendRpc("prompt.submit", {
         session_id: session.sessionId,
         text,
@@ -702,6 +707,8 @@ export function useChatGateway(): UseChatGatewayResult {
         setErrorMessage(
           err instanceof Error ? err.message : "Failed to send message",
         );
+        // El submit falló (p.ej. 4009 session busy): liberamos para no colgar.
+        setBusy(false);
       });
     },
     [session.sessionId, sendRpc],

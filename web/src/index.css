@@ -223,6 +223,60 @@ code { font-size: 0.875rem; }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ------------------------------------------------------------------ */
+/* Modern Chat — indicador "pensando", glow del avatar, entrada del    */
+/* pill. transform/opacity solamente (compositor-friendly) y todo se    */
+/* apaga con prefers-reduced-motion abajo.                              */
+/* ------------------------------------------------------------------ */
+
+/* Barrido de gradiente sobre el label "Pensando…". */
+@keyframes clawk-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.clawk-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted-foreground) 0%,
+    var(--color-foreground) 50%,
+    var(--color-muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: clawk-shimmer 2s linear infinite;
+}
+
+/* Glow suave que pulsa en el avatar del asistente mientras piensa. */
+@keyframes clawk-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 79, 214, 0); }
+  50%      { box-shadow: 0 0 0 5px rgba(108, 79, 214, 0.18); }
+}
+.clawk-glow {
+  animation: clawk-glow-pulse 1.9s ease-in-out infinite;
+}
+
+/* Entrada sutil (subida + fade) — pill "saltar a lo último". */
+@keyframes clawk-msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.clawk-msg-in {
+  animation: clawk-msg-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clawk-shimmer-text,
+  .clawk-glow,
+  .clawk-msg-in {
+    animation: none !important;
+  }
+  .clawk-shimmer-text {
+    color: var(--color-muted-foreground);
+  }
+}
+
 /* Hide scrollbar utility — used by the header's overflow-x nav row. */
 .scrollbar-none {
   -ms-overflow-style: none;
