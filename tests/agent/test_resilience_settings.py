@@ -10,7 +10,6 @@ def test_none_config_all_disabled():
     assert s.circuit_breaker.enabled is False
     assert s.rate_limits.enabled is False
     assert s.adaptive_cooldown.enabled is False
-    assert s.auto_restore_primary is False
     assert s.durable_turns.enabled is False
 
 
@@ -27,13 +26,13 @@ def test_partial_block_parsed_with_defaults():
     s = get_resilience_settings({
         "resilience": {
             "circuit_breaker": {"enabled": True, "failure_threshold": 5},
-            "auto_restore_primary": True,
+            "durable_turns": {"enabled": True},
         }
     })
     assert s.circuit_breaker.enabled is True
     assert s.circuit_breaker.failure_threshold == 5
     assert s.circuit_breaker.cooldown_seconds == 60.0  # default kept
-    assert s.auto_restore_primary is True
+    assert s.durable_turns.enabled is True
     assert s.rate_limits.enabled is False
     assert s.any_enabled is True
 

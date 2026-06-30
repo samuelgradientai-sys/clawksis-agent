@@ -112,8 +112,12 @@ class ResilienceSettings:
     adaptive_cooldown: AdaptiveCooldownSettings = field(
         default_factory=AdaptiveCooldownSettings
     )
-    auto_restore_primary: bool = False
     durable_turns: DurableTurnsSettings = field(default_factory=DurableTurnsSettings)
+
+    # NOTE: auto-restore to the primary provider is NOT a setting here — it is a
+    # built-in, always-on behavior. ``run_conversation`` calls
+    # ``_restore_primary_runtime()`` at the top of every turn (cooldown-aware),
+    # so once the primary recovers the agent returns to it automatically.
 
     @property
     def any_enabled(self) -> bool:
@@ -121,7 +125,6 @@ class ResilienceSettings:
             self.circuit_breaker.enabled
             or self.rate_limits.enabled
             or self.adaptive_cooldown.enabled
-            or self.auto_restore_primary
             or self.durable_turns.enabled
         )
 
@@ -199,6 +202,5 @@ def get_resilience_settings(config: Mapping[str, Any] | None) -> ResilienceSetti
         circuit_breaker=cb,
         rate_limits=rl,
         adaptive_cooldown=ac,
-        auto_restore_primary=_as_bool(block.get("auto_restore_primary"), False),
         durable_turns=dt,
     )
