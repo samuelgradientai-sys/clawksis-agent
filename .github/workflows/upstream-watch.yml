@@ -31,10 +31,15 @@ jobs:
             echo "Al dia."
             exit 0
           fi
-          EXISTS=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+          # Dedup contra issues abiertos Y cerrados (--state all): una vez que
+          # un humano cerro el aviso de un release (lo audito / decidio que
+          # hacer), no volver a abrirlo en cada corrida. Solo se vuelve a
+          # alertar con un release MAS nuevo (tag distinto). El last_synced_tag
+          # queda intacto para que sync.py mantenga el baseline correcto.
+          EXISTS=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
             --search "in:title $LATEST" --json number --jq 'length')
           if [ "$EXISTS" != "0" ]; then
-            echo "Ya hay un issue abierto para $LATEST."
+            echo "Ya existe un issue (abierto o cerrado) para $LATEST."
             exit 0
           fi
           NOTES=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq '.body' | head -c 6000)
