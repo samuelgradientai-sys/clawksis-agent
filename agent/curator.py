@@ -187,6 +187,26 @@ def get_prune_builtins() -> bool:
     return bool(cfg.get("prune_builtins", True))
 
 
+# The LLM umbrella-consolidation pass spends aux-model tokens on EVERY routine
+# curator tick (merging overlapping skills). Off by default so background ticks
+# only run the free deterministic prune (apply_automatic_transitions) — saves
+# ~$1-5/mo per BYOK user. The daily-improvement loop (skill creation + per-use
+# self-improvement) is a separate mechanism and is NOT affected by this gate.
+# Turn on with curator.consolidate: true to merge skills on every scheduled run.
+DEFAULT_CONSOLIDATE = False
+
+
+def get_consolidate() -> bool:
+    """Whether routine curator runs perform the LLM umbrella-consolidation pass.
+
+    OFF by default (cost). The deterministic stale/archive prune always runs
+    regardless. Explicit ``clawk curator run`` still consolidates unless
+    ``--no-consolidate`` is passed.
+    """
+    cfg = _load_config()
+    return bool(cfg.get("consolidate", DEFAULT_CONSOLIDATE))
+
+
 # ---------------------------------------------------------------------------
 # Idle / interval check
 # ---------------------------------------------------------------------------
@@ -1447,6 +1467,7 @@ def run_curator_review(
     on_summary: Optional[Callable[[str], None]] = None,
     synchronous: bool = False,
     dry_run: bool = False,
+    consolidate: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Execute a single curator review pass.
 
@@ -1467,6 +1488,8 @@ def run_curator_review(
     can read what the curator WOULD have done.
     """
     start = datetime.now(timezone.utc)
+    if consolidate is None:
+        consolidate = get_consolidate()
     if dry_run:
         # Count candidates without mutating state.
         try:
@@ -1634,6 +1657,23 @@ def run_curator_review(
                 on_summary(f"curator: {final_summary}")
             except Exception:
                 pass
+
+    # Cost gate: the LLM umbrella-consolidation pass is opt-in (default off via
+    # curator.consolidate). The free deterministic prune already ran above, so
+    # routine ticks stay tidy without spending aux-model tokens. dry-run always
+    # previews (the user explicitly asked to see what it would do).
+    if not consolidate and not dry_run:
+        if on_summary:
+            try:
+                on_summary(f"curator: {auto_summary} (LLM consolidation off)")
+            except Exception:
+                pass
+        return {
+            "started_at": start.isoformat(),
+            "auto_transitions": counts,
+            "summary_so_far": auto_summary,
+            "consolidation": "skipped",
+        }
 
     if synchronous:
         _llm_pass()

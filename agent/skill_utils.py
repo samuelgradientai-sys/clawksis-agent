@@ -41,6 +41,41 @@ EXCLUDED_SKILL_DIRS = frozenset((
     ".ruff_cache",
 ))
 
+# Progressive-disclosure support dirs. Supporting files live inside a skill
+# package and are loaded explicitly via skill_view(skill, file_path=...). They
+# are NOT standalone skills and must not be scanned for active SKILL.md entries,
+# even when a curator or archive workflow preserves a whole old skill package
+# under references/ (e.g. after umbrella consolidation). With 25+ skill
+# categories the fork can otherwise leak nested package SKILL.md files into the
+# active index.
+SKILL_SUPPORT_DIRS = frozenset(("references", "templates", "assets", "scripts"))
+
+
+def is_skill_support_path(path) -> bool:
+    """True if *path* is under a support dir of an actual skill root.
+
+    ``references/``, ``templates/``, ``assets/``, ``scripts/`` are support areas
+    only when they sit directly inside a skill directory containing ``SKILL.md``.
+    A preserved package such as ``some-skill/references/old-pkg/SKILL.md`` is
+    documentation data unless explicitly loaded via ``file_path``.
+
+    Legitimate categories/skill names like ``skills/scripts/foo`` stay
+    discoverable because their ``scripts`` component is not directly under a
+    directory that contains ``SKILL.md``.
+    """
+    from pathlib import Path as _Path
+    path_obj = path if hasattr(path, "parts") else _Path(str(path))
+    parts = path_obj.parts
+    # Only components BEFORE the leaf can be containing support directories, and
+    # never the very first component (a top-level "scripts/" is not a skill root).
+    for idx, part in enumerate(parts[:-1]):
+        if part not in SKILL_SUPPORT_DIRS or idx == 0:
+            continue
+        skill_root = _Path(*parts[:idx])
+        if (skill_root / "SKILL.md").exists():
+            return True
+    return False
+
 
 def is_excluded_skill_path(path) -> bool:
     """True if any component of *path* is in EXCLUDED_SKILL_DIRS.
@@ -58,7 +93,9 @@ def is_excluded_skill_path(path) -> bool:
         from pathlib import PurePath
 
         parts = PurePath(str(path)).parts
-    return any(part in EXCLUDED_SKILL_DIRS for part in parts)
+    return any(part in EXCLUDED_SKILL_DIRS for part in parts) or is_skill_support_path(
+        path
+    )
 
 
 # ── Lazy YAML loader ─────────────────────────────────────────────────────
@@ -666,7 +703,12 @@ def iter_skill_index_files(skills_dir: Path, filename: str):
     for root, dirs, files in os.walk(skills_dir, followlinks=True):
         dirs[:] = [d for d in dirs if d not in EXCLUDED_SKILL_DIRS]
         if filename in files:
-            matches.append(Path(root) / filename)
+            candidate = Path(root) / filename
+            # Skip a SKILL.md/DESCRIPTION.md preserved under a skill's support
+            # dir (references/templates/assets/scripts) — progressive-disclosure
+            # data, not an active standalone skill.
+            if not is_skill_support_path(candidate):
+                matches.append(candidate)
     for path in sorted(matches, key=lambda p: str(p.relative_to(skills_dir))):
         yield path
 

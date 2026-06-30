@@ -606,7 +606,10 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
     monkeypatch.setattr(c, "_run_llm_review", _stub)
 
     captured = []
-    c.run_curator_review(on_summary=lambda s: captured.append(s), synchronous=True)
+    # LLM consolidation is now opt-in (cost gate); enable it to test the pass.
+    c.run_curator_review(
+        on_summary=lambda s: captured.append(s), synchronous=True, consolidate=True
+    )
 
     assert len(calls) == 1
     assert "skill CURATOR" in calls[0] or "CURATOR" in calls[0]
@@ -625,7 +628,11 @@ def test_run_review_skips_llm_when_no_candidates(curator_env, monkeypatch):
     )
 
     captured = []
-    c.run_curator_review(on_summary=lambda s: captured.append(s), synchronous=True)
+    # Enable consolidation so we reach the LLM pass; with no candidates it must
+    # still skip the actual LLM call and report "skipped".
+    c.run_curator_review(
+        on_summary=lambda s: captured.append(s), synchronous=True, consolidate=True
+    )
 
     assert calls == []  # LLM not invoked
     assert any("skipped" in s for s in captured)
