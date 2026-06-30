@@ -79,6 +79,12 @@ class TestKnownPrefixes:
 
         assert "abc123def456" not in result
 
+    def test_notion_token(self):
+
+        result = redact_sensitive_text("NOTION_TOKEN=ntn_abc123def456ghi789jkl")
+
+        assert "abc123def456" not in result
+
     def test_short_token_fully_masked(self):
 
         result = redact_sensitive_text("key=sk-short1234567")
@@ -222,6 +228,52 @@ class TestAuthHeaders:
         result = redact_sensitive_text(text)
 
         assert "mytoken12345" not in result
+
+    def test_basic_scheme(self):
+
+        text = "Authorization: Basic dXNlcjpzdXBlcnNlY3JldHBhc3N3b3JkXX"
+
+        result = redact_sensitive_text(text)
+
+        assert "Authorization: Basic" in result
+
+        assert "dXNlcjpzdXBlcnNlY3JldHBhc3N3b3JkXX" not in result
+
+    def test_token_scheme(self):
+
+        text = "authorization: Token ghp_aaaaaaaaaabbbbbbbbbb1234"
+
+        result = redact_sensitive_text(text)
+
+        assert "aaaaaaaaaabbbbbbbbbb" not in result
+
+    def test_proxy_authorization(self):
+
+        text = "Proxy-Authorization: Bearer proxysecrettoken1234567890"
+
+        result = redact_sensitive_text(text)
+
+        assert "Proxy-Authorization: Bearer" in result
+
+        assert "proxysecrettoken1234567890" not in result
+
+    def test_x_api_key_header(self):
+
+        text = "x-api-key: sup3rs3cr3tapikeyvalue0987654321"
+
+        result = redact_sensitive_text(text)
+
+        assert "x-api-key:" in result
+
+        assert "sup3rs3cr3tapikeyvalue0987654321" not in result
+
+    def test_x_goog_api_key_header(self):
+
+        text = "X-Goog-Api-Key: AIzaSyOpaqueGoogleKeyValue1234567890"
+
+        result = redact_sensitive_text(text)
+
+        assert "AIzaSyOpaqueGoogleKeyValue1234567890" not in result
 
 
 class TestTelegramTokens:

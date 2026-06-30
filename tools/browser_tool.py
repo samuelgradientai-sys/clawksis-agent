@@ -1385,6 +1385,84 @@ def _write_owner_pid(socket_dir: str, session_name: str) -> None:
         logger.debug("Could not write owner_pid file for %s: %s", session_name, exc)
 
 
+def _verify_reapable_browser_daemon(daemon_pid: int, socket_dir: str,
+                                    session_name: str) -> bool:
+    """Confirm a live PID is genuinely *this* session's agent-browser daemon.
+
+    The orphan reaper scans world-writable, predictably-named temp paths
+    (``agent-browser-h_*`` etc.) and reads a daemon PID from a ``.pid`` file we
+    do NOT write ourselves — the agent-browser daemon writes it.  A same-user
+    actor can plant a fake socket dir whose ``.pid`` points at an arbitrary
+    victim process, or a recycled PID can land on an unrelated process after the
+    real daemon exits.  Either way, a *tree* kill of that PID is an
+    arbitrary-process DoS.
+
+    Before reaping we require, via ``psutil`` (cross-platform for same-user
+    processes — the only ones the reaper can signal):
+
+      1. **Identity** — ``agent-browser`` appears in the process name or cmdline.
+      2. **Binding** — the process references *this* session's socket dir (in its
+         cmdline, or ``AGENT_BROWSER_SOCKET_DIR`` in its environment).
+
+    Requirement (2) is the real spoof defense: a planted ``.pid`` pointing at a
+    victim PID won't have that victim referencing our socket dir.  Fail-closed:
+    any ambiguity (unreadable cmdline, no match, psutil missing) means we refuse
+    to reap and leave the process and its socket dir alone.
+    """
+    try:
+        import psutil
+    except ImportError:  # psutil is a hard dep; defensive only
+        logger.warning(
+            "Refusing to reap browser daemon PID %d (session %s): "
+            "psutil unavailable for identity verification",
+            daemon_pid, session_name)
+        return False
+
+    try:
+        proc = psutil.Process(daemon_pid)
+        name = (proc.name() or "").lower()
+        cmdline = " ".join(proc.cmdline() or []).lower()
+    except psutil.NoSuchProcess:
+        # Vanished between the liveness check and now — nothing to reap.
+        return False
+    except (psutil.AccessDenied, OSError) as exc:
+        logger.warning(
+            "Refusing to reap browser daemon PID %d (session %s): "
+            "could not read process identity (%s)",
+            daemon_pid, session_name, exc)
+        return False
+
+    looks_like_browser = "agent-browser" in name or "agent-browser" in cmdline
+    if not looks_like_browser:
+        logger.warning(
+            "Refusing to reap PID %d (session %s): not an agent-browser "
+            "process (name=%r)", daemon_pid, session_name, name)
+        return False
+
+    # Binding check: the live process must reference *this* socket dir.
+    socket_dir_l = socket_dir.lower()
+    socket_base_l = os.path.basename(socket_dir).lower()
+    bound = socket_dir_l in cmdline or (socket_base_l and socket_base_l in cmdline)
+    if not bound:
+        try:
+            env_dir = (proc.environ() or {}).get("AGENT_BROWSER_SOCKET_DIR", "")
+            bound = bool(env_dir) and os.path.normpath(env_dir) == \
+                os.path.normpath(socket_dir)
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            # environ() can be denied even same-user on some platforms.
+            # cmdline already failed to bind — fail closed.
+            bound = False
+
+    if not bound:
+        logger.warning(
+            "Refusing to reap agent-browser PID %d: not bound to session "
+            "socket dir %s (possible recycled PID or planted pid file)",
+            daemon_pid, socket_dir)
+        return False
+
+    return True
+
+
 def _reap_orphaned_browser_sessions():
     """Scan for orphaned agent-browser daemon processes from previous runs.
 
@@ -1484,8 +1562,15 @@ def _reap_orphaned_browser_sessions():
             shutil.rmtree(socket_dir, ignore_errors=True)
             continue
 
-        # Daemon is alive and its owner is dead (or legacy + untracked).  Reap.
-        # Use the process-tree termination helper so Chromium children
+        # Daemon is alive and its owner is dead (or legacy + untracked).
+        # Before a tree-kill, confirm this PID is genuinely *this* session's
+        # agent-browser daemon — the .pid file is world-writable / attacker-
+        # plantable and PIDs recycle, so killing it blindly is an arbitrary-
+        # process DoS. Fail-closed: if we can't verify, leave it (and its dir).
+        if not _verify_reapable_browser_daemon(daemon_pid, socket_dir, session_name):
+            continue
+
+        # Reap. Use the process-tree termination helper so Chromium children
         # (renderer, GPU, etc.) are cleaned up, not just the daemon parent.
         try:
             from tools.process_registry import ProcessRegistry

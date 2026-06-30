@@ -139,6 +139,7 @@ _PREFIX_PATTERNS = [
     r"mem0_[A-Za-z0-9]{10,}",  # Mem0 Platform API key
     r"brv_[A-Za-z0-9]{10,}",  # ByteRover API key
     r"xai-[A-Za-z0-9]{30,}",  # xAI (Grok) API key
+    r"ntn_[A-Za-z0-9]{10,}",  # Notion internal integration token
 ]
 
 
@@ -164,7 +165,25 @@ _JSON_FIELD_RE = re.compile(
 # Authorization headers
 
 _AUTH_HEADER_RE = re.compile(
-    r"(Authorization:\s*Bearer\s+)(\S+)",
+    # Any scheme (Bearer, Basic, Token, Digest, …) plus the bare-credential
+    # form, and Proxy-Authorization. The previous rule only matched ``Bearer``,
+    # so ``Basic <base64 user:pass>`` and ``token <pat>`` leaked verbatim.
+    r"((?:Proxy-)?Authorization:\s*)([A-Za-z][\w.+-]*\s+)?(\S+)",
+    re.IGNORECASE,
+)
+
+
+# API-key style auth headers carrying a single opaque value (no scheme word):
+# x-api-key (Anthropic + many), x-goog-api-key, etc. Values without a known
+# vendor prefix (custom/local backends) would otherwise leak when a request or
+# curl command is logged or echoed into tool output / transcripts.
+
+_SECRET_HEADER_NAMES = (
+    r"(?:x-api-key|x-goog-api-key|api-key|apikey|x-api-token|x-auth-token|x-access-token)"
+)
+
+_SECRET_HEADER_RE = re.compile(
+    rf"({_SECRET_HEADER_NAMES}\s*:\s*)(\S+)",
     re.IGNORECASE,
 )
 
@@ -573,6 +592,14 @@ def redact_sensitive_text(
 
     if "uthorization" in text or "UTHORIZATION" in text:
         text = _AUTH_HEADER_RE.sub(
+            lambda m: m.group(1) + (m.group(2) or "") + _mask_token(m.group(3)),
+            text,
+        )
+
+    # API-key style headers (x-api-key, api-key, …). Header values are
+    # colon-separated, so gate on ":" — the regex itself is the precise filter.
+    if ":" in text:
+        text = _SECRET_HEADER_RE.sub(
             lambda m: m.group(1) + _mask_token(m.group(2)),
             text,
         )
