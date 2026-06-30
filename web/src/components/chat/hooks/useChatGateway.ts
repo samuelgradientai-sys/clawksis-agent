@@ -102,6 +102,8 @@ interface UseChatGatewayResult {
   resuming: boolean;
   /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
   regenerateLast: () => Promise<void>;
+  /** Editar un mensaje del usuario y reenviar al agente (estilo ChatGPT). */
+  editAndResubmit: (messageId: string, newText: string) => Promise<void>;
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -667,8 +669,8 @@ export function useChatGateway(): UseChatGatewayResult {
             },
           ]);
         };
-        const submitToAgent = (msg: string) =>
-          sendRpc("prompt.submit", {
+        const submitToAgent: (msg: string) => void = (msg) => {
+          void sendRpc("prompt.submit", {
             session_id: session.sessionId,
             text: msg,
           }).catch((err) => {
@@ -677,6 +679,7 @@ export function useChatGateway(): UseChatGatewayResult {
               err instanceof Error ? err.message : "Failed to send message",
             );
           });
+        };
         void executeSlash({
           command: text.trim(),
           sessionId: session.sessionId,
