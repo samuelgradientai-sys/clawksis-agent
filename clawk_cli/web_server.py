@@ -13611,6 +13611,11 @@ _BUILTIN_DASHBOARD_THEMES = [
         "label": "Rosé",
         "description": "Soft pink and warm ivory — easy on the eyes",
     },
+    {
+        "name": "pixel",
+        "label": "Clawksis Pixel",
+        "description": "16-bit retro — pixel font, purple grid & scanlines",
+    },
 ]
 
 
