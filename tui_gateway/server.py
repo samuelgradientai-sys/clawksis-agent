@@ -12364,3 +12364,272 @@ def _(rid, params: dict) -> dict:
 
     except Exception as e:
         return _err(rid, 5003, str(e))
+
+
+# ── Media gallery (media.*) ─────────────────────────────────────────
+#
+# Feature: gallery UI at /media (see MediaPage.tsx). Reads the
+# ``media_generations`` table populated by tools/media_persistence.py
+# hooked into image_generate_tool (video pending — next session).
+
+
+@method("media.list")
+def _(rid, params: dict) -> dict:
+    """List media with filters + pagination.
+
+    Params (all optional):
+      limit         int, default 60, max 200
+      offset        int, default 0
+      media_type    "image" | "video" | None (both)
+      date_from     unix timestamp (float), lower bound (inclusive)
+      date_to       unix timestamp (float), upper bound (inclusive)
+      model         exact match on model column
+      session_id    exact match on session_id column
+      search        substring match on prompt (case-insensitive)
+      min_size      int bytes, lower bound
+      max_size      int bytes, upper bound
+
+    Returns: {items: [...], total: N, has_more: bool}
+    """
+    db = _get_db()
+
+    if db is None:
+        return _db_unavailable_error(rid, code=5006)
+
+    try:
+        import sqlite3
+
+        from pathlib import Path
+
+        limit = min(int(params.get("limit", 60) or 60), 200)
+
+        offset = int(params.get("offset", 0) or 0)
+
+        where_clauses = []
+
+        args: list = []
+
+        media_type = params.get("media_type")
+
+        if media_type in ("image", "video"):
+            where_clauses.append("media_type = ?")
+
+            args.append(media_type)
+
+        val = params.get("date_from")
+
+        if val is not None:
+            where_clauses.append("created_at >= ?")
+
+            args.append(float(val))
+
+        val = params.get("date_to")
+
+        if val is not None:
+            where_clauses.append("created_at <= ?")
+
+            args.append(float(val))
+
+        for col in ("model", "session_id"):
+            val = params.get(col)
+
+            if val:
+                where_clauses.append(f"{col} = ?")
+
+                args.append(str(val))
+
+        search = params.get("search")
+
+        if search:
+            where_clauses.append("LOWER(prompt) LIKE ?")
+
+            args.append(f"%{str(search).lower()}%")
+
+        min_size = params.get("min_size")
+
+        if min_size is not None:
+            where_clauses.append("file_size_bytes >= ?")
+
+            args.append(int(min_size))
+
+        max_size = params.get("max_size")
+
+        if max_size is not None:
+            where_clauses.append("file_size_bytes <= ?")
+
+            args.append(int(max_size))
+
+        where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        db_path = Path.home() / ".clawksis" / "state.db"
+
+        conn = sqlite3.connect(str(db_path))
+
+        conn.row_factory = sqlite3.Row
+
+        cur = conn.cursor()
+
+        cur.execute(f"SELECT COUNT(*) as c FROM media_generations{where_sql}", args)
+
+        total = cur.fetchone()["c"]
+
+        cur.execute(
+            f"SELECT id, session_id, message_id, media_type, status, "
+            f"file_path, original_url, file_size_bytes, width, height, "
+            f"prompt, model, provider, created_at "
+            f"FROM media_generations{where_sql} "
+            f"ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            args + [limit, offset],
+        )
+
+        items = [dict(row) for row in cur.fetchall()]
+
+        conn.close()
+
+        return _ok(rid, {
+            "items": items,
+            "total": total,
+            "has_more": offset + len(items) < total,
+        })
+
+    except Exception as e:
+        logger.exception("media.list failed")
+
+        return _err(rid, 5003, str(e))
+
+
+@method("media.delete")
+def _(rid, params: dict) -> dict:
+    """Delete a media entry: removes DB row + file from disk."""
+    db = _get_db()
+
+    if db is None:
+        return _db_unavailable_error(rid, code=5006)
+
+    try:
+        import sqlite3
+
+        from pathlib import Path
+
+        media_id = params.get("id")
+
+        if not media_id:
+            return _err(rid, 4004, "missing 'id'")
+
+        db_path = Path.home() / ".clawksis" / "state.db"
+
+        conn = sqlite3.connect(str(db_path))
+
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT file_path, file_size_bytes FROM media_generations WHERE id = ?",
+            (media_id,),
+        )
+
+        row = cur.fetchone()
+
+        if not row:
+            conn.close()
+
+            return _err(rid, 4040, "media not found")
+
+        file_path_str, file_size = row
+
+        freed = int(file_size or 0)
+
+        file_missing = False
+
+        try:
+            file_path = Path(file_path_str)
+
+            if file_path.exists():
+                file_path.unlink()
+            else:
+                file_missing = True
+        except Exception:
+            logger.exception("Failed to delete file %s", file_path_str)
+
+        cur.execute("DELETE FROM media_generations WHERE id = ?", (media_id,))
+
+        conn.commit()
+
+        conn.close()
+
+        return _ok(rid, {
+            "deleted": True,
+            "freed_bytes": freed,
+            "file_missing": file_missing,
+        })
+
+    except Exception as e:
+        logger.exception("media.delete failed")
+
+        return _err(rid, 5003, str(e))
+
+
+@method("media.stats")
+def _(rid, params: dict) -> dict:
+    """Aggregate stats for the gallery header."""
+    db = _get_db()
+
+    if db is None:
+        return _db_unavailable_error(rid, code=5006)
+
+    try:
+        import sqlite3
+
+        import time as _time
+
+        from pathlib import Path
+
+        db_path = Path.home() / ".clawksis" / "state.db"
+
+        conn = sqlite3.connect(str(db_path))
+
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'image'")
+
+        total_images = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'video'")
+
+        total_videos = cur.fetchone()[0]
+
+        cur.execute("SELECT COALESCE(SUM(file_size_bytes), 0) FROM media_generations")
+
+        total_size = cur.fetchone()[0]
+
+        seven_days_ago = _time.time() - (7 * 86400)
+
+        cur.execute(
+            "SELECT COUNT(*) FROM media_generations WHERE created_at >= ?",
+            (seven_days_ago,),
+        )
+
+        last_7 = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'expired'")
+
+        expired_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'ready'")
+
+        ready_count = cur.fetchone()[0]
+
+        conn.close()
+
+        return _ok(rid, {
+            "total_images": total_images,
+            "total_videos": total_videos,
+            "total_size_bytes": total_size,
+            "last_7_days": last_7,
+            "expired_count": expired_count,
+            "ready_count": ready_count,
+        })
+
+    except Exception as e:
+        logger.exception("media.stats failed")
+
+        return _err(rid, 5003, str(e))
