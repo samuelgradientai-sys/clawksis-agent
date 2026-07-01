@@ -43,6 +43,26 @@ def is_available() -> bool:
     return importlib.util.find_spec("scrapegraphai") is not None
 
 
+def _patch_langchain_community() -> None:
+    """Re-export ``ChatOllama`` into ``langchain_community.chat_models``.
+
+    ``scrapegraphai`` imports ``ChatOllama`` from the old location
+    ``langchain_community.chat_models``, but ``langchain-community`` v0.4+
+    removed it (the model lives in ``langchain_ollama`` now). This shim
+    patches the old namespace so scrapegraphai can find it regardless of
+    the installed langchain-community version.
+    """
+    try:
+        from langchain_ollama import ChatOllama as _ChatOllama_
+    except ImportError:
+        return  # langchain-ollama not installed either — nothing to patch
+
+    import langchain_community.chat_models as _lm
+
+    if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
+        _lm.ChatOllama = _ChatOllama_
+
+
 def ensure_installed(*, prompt: bool = False) -> None:
     """Make ``scrapegraphai`` importable, lazy-installing it if needed.
 
@@ -50,6 +70,7 @@ def ensure_installed(*, prompt: bool = False) -> None:
     installed (lazy installs disabled, offline, or install failed).
     """
     if is_available():
+        _patch_langchain_community()
         return
     try:
         from tools.lazy_deps import FeatureUnavailable, ensure
@@ -61,6 +82,7 @@ def ensure_installed(*, prompt: bool = False) -> None:
         raise ScrapegraphUnavailable(f"{_INSTALL_HINT} ({exc})") from exc
     if not is_available():
         raise ScrapegraphUnavailable(_INSTALL_HINT)
+    _patch_langchain_community()
 
 
 def build_llm_config(*, temperature: float = 0.0) -> dict[str, Any]:
