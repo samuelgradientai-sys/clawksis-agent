@@ -12486,11 +12486,14 @@ def _(rid, params: dict) -> dict:
 
         conn.close()
 
-        return _ok(rid, {
-            "items": items,
-            "total": total,
-            "has_more": offset + len(items) < total,
-        })
+        return _ok(
+            rid,
+            {
+                "items": items,
+                "total": total,
+                "has_more": offset + len(items) < total,
+            },
+        )
 
     except Exception as e:
         logger.exception("media.list failed")
@@ -12556,11 +12559,14 @@ def _(rid, params: dict) -> dict:
 
         conn.close()
 
-        return _ok(rid, {
-            "deleted": True,
-            "freed_bytes": freed,
-            "file_missing": file_missing,
-        })
+        return _ok(
+            rid,
+            {
+                "deleted": True,
+                "freed_bytes": freed,
+                "file_missing": file_missing,
+            },
+        )
 
     except Exception as e:
         logger.exception("media.delete failed")
@@ -12620,14 +12626,17 @@ def _(rid, params: dict) -> dict:
 
         conn.close()
 
-        return _ok(rid, {
-            "total_images": total_images,
-            "total_videos": total_videos,
-            "total_size_bytes": total_size,
-            "last_7_days": last_7,
-            "expired_count": expired_count,
-            "ready_count": ready_count,
-        })
+        return _ok(
+            rid,
+            {
+                "total_images": total_images,
+                "total_videos": total_videos,
+                "total_size_bytes": total_size,
+                "last_7_days": last_7,
+                "expired_count": expired_count,
+                "ready_count": ready_count,
+            },
+        )
 
     except Exception as e:
         logger.exception("media.stats failed")

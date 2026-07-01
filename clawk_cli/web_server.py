@@ -677,7 +677,9 @@ async def get_media_file(media_id: str, request: Request):
         raise HTTPException(status_code=410, detail="Media URL expired before caching.")
 
     if status != "ready":
-        raise HTTPException(status_code=409, detail=f"Media not ready (status={status}).")
+        raise HTTPException(
+            status_code=409, detail=f"Media not ready (status={status})."
+        )
 
     media_root = (Path.home() / ".clawksis" / "media").resolve(strict=False)
     candidate = Path(file_path_str).expanduser().resolve(strict=False)

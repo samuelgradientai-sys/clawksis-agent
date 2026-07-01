@@ -35,7 +35,11 @@ STATE_DB = Path.home() / ".clawksis" / "state.db"
 
 def _is_disabled() -> bool:
     """True if persistence is disabled via env var."""
-    return os.environ.get("CLAWKSIS_MEDIA_PERSIST_DISABLED", "").strip() in ("1", "true", "True")
+    return os.environ.get("CLAWKSIS_MEDIA_PERSIST_DISABLED", "").strip() in (
+        "1",
+        "true",
+        "True",
+    )
 
 
 def _extract_extension(url: str, fallback: str = "png") -> str:
@@ -58,7 +62,9 @@ def _download_url(url: str, dest: Path, timeout: float = 30.0) -> Optional[int]:
     tmp = dest.with_suffix(dest.suffix + ".tmp")
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Clawksis/media-persistence"})
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "Clawksis/media-persistence"}
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read()
         tmp.write_bytes(data)
@@ -74,12 +80,15 @@ def _download_url(url: str, dest: Path, timeout: float = 30.0) -> Optional[int]:
         return None
 
 
-def _extract_dimensions(file_path: Path, media_type: str) -> tuple[Optional[int], Optional[int]]:
+def _extract_dimensions(
+    file_path: Path, media_type: str
+) -> tuple[Optional[int], Optional[int]]:
     """Best-effort dimension extraction. Returns (width, height) or (None, None)."""
     if media_type != "image":
         return (None, None)
     try:
         from PIL import Image  # lazy import — PIL may not be everywhere
+
         with Image.open(file_path) as img:
             return img.size
     except Exception:
@@ -108,7 +117,9 @@ def register_media(
         return None
 
     if not url or media_type not in ("image", "video"):
-        logger.warning("register_media: invalid args (url=%s, type=%s)", bool(url), media_type)
+        logger.warning(
+            "register_media: invalid args (url=%s, type=%s)", bool(url), media_type
+        )
         return None
 
     try:
@@ -124,7 +135,9 @@ def register_media(
 
         # 2. Download
         media_id = str(uuid.uuid4())
-        ext = _extract_extension(url, fallback="png" if media_type == "image" else "mp4")
+        ext = _extract_extension(
+            url, fallback="png" if media_type == "image" else "mp4"
+        )
         now = time.time()
         yyyy_mm = time.strftime("%Y/%m", time.localtime(now))
         dest = MEDIA_ROOT / yyyy_mm / f"{media_id}.{ext}"
@@ -142,14 +155,27 @@ def register_media(
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    media_id, session_id, message_id, media_type, "expired",
-                    str(dest), url, None, None, None,
-                    prompt, model, provider, now,
+                    media_id,
+                    session_id,
+                    message_id,
+                    media_type,
+                    "expired",
+                    str(dest),
+                    url,
+                    None,
+                    None,
+                    None,
+                    prompt,
+                    model,
+                    provider,
+                    now,
                 ),
             )
             conn.commit()
             conn.close()
-            logger.info("Media URL expired/failed, registered as expired: %s", media_id[:8])
+            logger.info(
+                "Media URL expired/failed, registered as expired: %s", media_id[:8]
+            )
             return media_id
 
         # 3. Dimensions (best effort)
@@ -165,9 +191,20 @@ def register_media(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                media_id, session_id, message_id, media_type, "ready",
-                str(dest), url, file_size, width, height,
-                prompt, model, provider, now,
+                media_id,
+                session_id,
+                message_id,
+                media_type,
+                "ready",
+                str(dest),
+                url,
+                file_size,
+                width,
+                height,
+                prompt,
+                model,
+                provider,
+                now,
             ),
         )
         conn.commit()
@@ -175,7 +212,9 @@ def register_media(
 
         logger.info(
             "Media registered: id=%s type=%s size=%s bytes",
-            media_id[:8], media_type, file_size,
+            media_id[:8],
+            media_type,
+            file_size,
         )
         return media_id
 
