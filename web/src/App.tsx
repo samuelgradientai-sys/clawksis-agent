@@ -109,7 +109,7 @@ import {
   X,
 
   Zap,
-
+  Image
 } from "lucide-react";
 
 import { Button } from "@nous-research/ui/ui/components/button";
@@ -176,6 +176,8 @@ const SystemPage = lazy(() => import("@/pages/SystemPage"));
 const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
 
 const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
+
+const MediaPage = lazy(() => import("@/pages/MediaPage"));
 
 
 
@@ -327,6 +329,7 @@ const BUILTIN_ROUTES_CORE: Record<string, RouteComponent> = {
   "/mcp": McpPage,
 
   "/pairing": PairingPage,
+  "/media": MediaPage,
 
   "/channels": ChannelsPage,
 
@@ -410,7 +413,9 @@ const BUILTIN_NAV_REST: NavItem[] = [
 
   },
 
-  { path: "/cookbook", label: "Cookbook", icon: Download },
+    { path: "/media", label: "Media", icon: Image },
+
+{ path: "/cookbook", label: "Cookbook", icon: Download },
 
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
 

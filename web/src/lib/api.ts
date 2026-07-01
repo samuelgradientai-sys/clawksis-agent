@@ -2018,7 +2018,107 @@ export const api = {
 
     ),
 
+  // ── Media gallery ──────────────────────────────────────────────────
+  //
+  // Consumes /api/gallery/* endpoints (see clawk_cli/web_server.py).
+  // The gallery UI lives at /media in the dashboard (MediaPage.tsx).
+
+  getGalleryMedia: (filters: MediaListFilters = {}) => {
+
+    const params = new URLSearchParams();
+
+    if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+
+    if (filters.offset !== undefined) params.set("offset", String(filters.offset));
+
+    if (filters.media_type) params.set("media_type", filters.media_type);
+
+    if (filters.date_from !== undefined) params.set("date_from", String(filters.date_from));
+
+    if (filters.date_to !== undefined) params.set("date_to", String(filters.date_to));
+
+    if (filters.model) params.set("model", filters.model);
+
+    if (filters.session_id) params.set("session_id", filters.session_id);
+
+    if (filters.search) params.set("search", filters.search);
+
+    if (filters.min_size !== undefined) params.set("min_size", String(filters.min_size));
+
+    if (filters.max_size !== undefined) params.set("max_size", String(filters.max_size));
+
+    const qs = params.toString();
+
+    return fetchJSON<MediaListResponse>(`/api/gallery${qs ? "?" + qs : ""}`);
+
+  },
+
+  getGalleryStats: () =>
+
+    fetchJSON<MediaStats>("/api/gallery/stats"),
+
+  deleteGalleryMedia: (mediaId: string) =>
+
+    fetchJSON<MediaDeleteResponse>(`/api/gallery/${encodeURIComponent(mediaId)}`, {
+      method: "DELETE",
+    }),
+
 };
+
+// ---------------------------------------------------------------------------
+// Media gallery types
+// ---------------------------------------------------------------------------
+
+export interface MediaItem {
+  id: string;
+  session_id: string | null;
+  message_id: string | null;
+  media_type: "image" | "video";
+  status: "ready" | "expired" | "downloading" | "missing";
+  file_path: string;
+  original_url: string | null;
+  file_size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  prompt: string | null;
+  model: string | null;
+  provider: string | null;
+  created_at: number;
+}
+
+export interface MediaListResponse {
+  items: MediaItem[];
+  total: number;
+  has_more: boolean;
+}
+
+export interface MediaListFilters {
+  limit?: number;
+  offset?: number;
+  media_type?: "image" | "video";
+  date_from?: number;
+  date_to?: number;
+  model?: string;
+  session_id?: string;
+  search?: string;
+  min_size?: number;
+  max_size?: number;
+}
+
+export interface MediaStats {
+  total_images: number;
+  total_videos: number;
+  total_size_bytes: number;
+  last_7_days: number;
+  expired_count: number;
+  ready_count: number;
+}
+
+export interface MediaDeleteResponse {
+  deleted: boolean;
+  freed_bytes: number;
+  file_missing: boolean;
+}
 
 
 
