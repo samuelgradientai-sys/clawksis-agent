@@ -95,6 +95,13 @@ export const FONT_CHOICES: FontChoice[] = [
     stack: `"DM Sans", ${SYSTEM_SANS}`,
     fontUrl: GF("DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"),
   },
+  {
+    id: "pixelify-sans",
+    label: "Pixelify Sans (pixel)",
+    category: "sans",
+    stack: `"Pixelify Sans", ${SYSTEM_SANS}`,
+    fontUrl: GF("Pixelify+Sans:wght@400;500;600;700"),
+  },
 
   // ── Serif ─────────────────────────────────────────────────────────────
   {
@@ -140,6 +147,13 @@ export const FONT_CHOICES: FontChoice[] = [
     category: "mono",
     stack: `"Space Mono", ${SYSTEM_MONO}`,
     fontUrl: GF("Space+Mono:wght@400;700"),
+  },
+  {
+    id: "vt323",
+    label: "VT323 (pixel)",
+    category: "mono",
+    stack: `"VT323", ${SYSTEM_MONO}`,
+    fontUrl: GF("VT323"),
   },
 ];
 
