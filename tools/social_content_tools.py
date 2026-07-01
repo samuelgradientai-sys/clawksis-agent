@@ -24,6 +24,13 @@ registry registers them and the agent can SEE them — but they don't do work ye
 
 from __future__ import annotations
 
+# ============================================================================
+# FEATURE DESACTIVADO (2026-06-30)
+# Para reactivar: cambiar este flag a False + descomentar los 4 tools en
+# toolsets.py (_CLAWK_CORE_TOOLS). Ver docs/feature-redes-DESACTIVADO.md
+# ============================================================================
+FEATURE_DEACTIVATED = True
+
 import json
 import logging
 import os
@@ -247,7 +254,8 @@ def list_recent_generations_tool(limit: int = 10) -> str:
 
 from tools.registry import registry  # noqa: E402
 
-registry.register(
+if not FEATURE_DEACTIVATED:
+    registry.register(
     name="setup_business_profile",
     toolset="social_content",
     schema=SETUP_BUSINESS_PROFILE_SCHEMA,
@@ -263,7 +271,7 @@ registry.register(
     emoji="🏢",
 )
 
-registry.register(
+    registry.register(
     name="get_business_profile",
     toolset="social_content",
     schema=GET_BUSINESS_PROFILE_SCHEMA,
@@ -271,7 +279,7 @@ registry.register(
     emoji="📋",
 )
 
-registry.register(
+    registry.register(
     name="generate_social_content",
     toolset="social_content",
     schema=GENERATE_SOCIAL_CONTENT_SCHEMA,
@@ -281,7 +289,7 @@ registry.register(
     emoji="✨",
 )
 
-registry.register(
+    registry.register(
     name="list_recent_generations",
     toolset="social_content",
     schema=LIST_RECENT_GENERATIONS_SCHEMA,

@@ -126,12 +126,13 @@ _CLAWK_CORE_TOOLS = [
     "kanban_unblock",
     # Computer use (macOS, gated on cua-driver being installed via check_fn)
     "computer_use",
-    # Social media content generation (feature redes sociales)
-    # docs/feature-redes-sociales-2026-06.md
-    "setup_business_profile",
-    "get_business_profile",
-    "generate_social_content",
-    "list_recent_generations",
+    # Social media content generation tools (feature DESACTIVADO 2026-06-30)
+    # Code preserved in tools/social_content_tools.py + docs/feature-redes-DESACTIVADO.md
+    # To re-activate: uncomment these 4 tools below and remove the no-op flag in the module.
+    # "setup_business_profile",
+    # "get_business_profile",
+    # "generate_social_content",
+    # "list_recent_generations",
 ]
 
 
