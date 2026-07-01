@@ -90,17 +90,47 @@ async def _handle_scrapegraph(args, **kw):
             data = await extract_many(urls, prompt, schema=schema, headless=headless)
     except ScrapegraphUnavailable as exc:
         return tool_result(ok=False, error=str(exc))
-    except Exception as exc:  # noqa: BLE001 — surface the real cause to the model
+    except Exception as exc:  # noqa: BLE001 — classify and surface user-friendly error
         logger.warning("scrapegraph extraction failed: %s", exc)
-        return tool_result(
-            ok=False,
-            urls=urls,
-            error=(
-                f"ScrapeGraphAI extraction failed: {exc}. The page may need "
-                "JavaScript (set render_js=true), be behind anti-bot (try the "
-                "`scrape` tool), or the prompt may need to be more specific."
-            ),
-        )
+        exc_msg = str(exc).lower()
+
+        # 1) Browser/headless — no X server or headed mode on headless server
+        if any(kw in exc_msg for kw in ("missing x server", "headed browser", "browsertype.launch", "x display", "xserver")):
+            hint = (
+                "ScrapeGraphAI attempted to launch a headed browser but there "
+                "is no display server. Happens when `render_js=false` on a "
+                "headless server. Omit `render_js` or set it to `true`."
+            )
+        # 2) Auth / credential errors
+        elif any(kw in exc_msg for kw in ("401", "authenticationerror", "unauthorized", "no api key")):
+            hint = (
+                "The LLM model used by ScrapeGraphAI is not authenticated. "
+                "Check auxiliary_text model credentials, or set "
+                "OPENAI_API_KEY / OPENROUTER_API_KEY in the environment."
+            )
+        # 3) Rate limit
+        elif any(kw in exc_msg for kw in ("429", "ratelimiterror", "rate_limit", "too many requests")):
+            hint = (
+                "The model is rate-limited. Retry later or configure a "
+                "different model with higher rate limits."
+            )
+        # 4) Output parsing (LLM returned bad JSON)
+        elif any(kw in exc_msg for kw in ("invalid json output", "output_parsing_failure", "parsing")):
+            hint = (
+                "The LLM returned malformed output. Try a more specific "
+                "prompt with fewer fields, or use the `scrape` tool "
+                "(Scrapling) for raw page content instead."
+            )
+        # 5) Generic fallback — safe, no internal details leaked
+        else:
+            hint = (
+                "ScrapeGraphAI extraction failed. Could be a network error, "
+                "model overload, or page issue. Try: using `scrape` "
+                "(Scrapling) for raw content, a different URL, "
+                "or a more specific prompt."
+            )
+
+        return tool_result(ok=False, urls=urls, error=hint)
 
     try:
         rendered = json.dumps(data, ensure_ascii=False, indent=2, default=str)
