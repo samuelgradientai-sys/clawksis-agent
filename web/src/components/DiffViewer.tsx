@@ -68,29 +68,31 @@ export function parseUnifiedDiff(diff: string): FileDiff[] {
   let oldN = 0;
   let newN = 0;
 
-  const startFile = (path: string) => {
-    cur = { path, hunks: [], adds: 0, dels: 0 };
-    files.push(cur);
+  const startFile = (path: string): FileDiff => {
+    const next: FileDiff = { path, hunks: [], adds: 0, dels: 0 };
+    files.push(next);
     hunk = null;
+    cur = next;
+    return next;
   };
 
   for (const raw of diff.split("\n")) {
     if (raw.startsWith("diff --git")) {
-      startFile("");
+      cur = startFile("");
       continue;
     }
     if (raw.startsWith("--- ")) {
-      if (!cur || cur.hunks.length > 0) startFile("");
+      if (!cur || cur.hunks.length > 0) cur = startFile("");
       continue;
     }
     if (raw.startsWith("+++ ")) {
-      if (!cur) startFile("");
+      if (!cur) cur = startFile("");
       if (cur) cur.path = cleanPath(raw.slice(4));
       continue;
     }
     const m = raw.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
     if (m) {
-      if (!cur) startFile("");
+      if (!cur) cur = startFile("");
       oldN = parseInt(m[1], 10);
       newN = parseInt(m[2], 10);
       hunk = { heading: m[3].trim(), lines: [] };
