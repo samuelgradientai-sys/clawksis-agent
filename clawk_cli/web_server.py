@@ -603,6 +603,320 @@ async def auth_middleware(request: Request, call_next):
 
 
 # ---------------------------------------------------------------------------
+# Media gallery — serve locally cached files from ~/.clawksis/media/
+# ---------------------------------------------------------------------------
+#
+# Companion to the media_generations table (populated by
+# tools/media_persistence.py). The DB stores absolute file_path; this
+# endpoint validates and serves it with correct MIME type.
+#
+# This route intentionally lives outside /api/ (mirrors /artifacts/download):
+# direct <img src="/media/file/xxx"> in the React gallery cannot attach the
+# session token header. Security is kept by strict loopback-only access and
+# a narrow allowlist of the media root + extensions.
+# ---------------------------------------------------------------------------
+
+
+_MEDIA_ALLOWED_EXT_TO_MIME: Dict[str, str] = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+}
+
+
+@app.get("/media/file/{media_id}")
+async def get_media_file(media_id: str, request: Request):
+    """Serve a media file registered in media_generations by ID.
+
+    Security model (mirrors /artifacts/download):
+    - loopback / SSH-tunnel only
+    - file_path comes from the DB (not user-controllable directly)
+    - path validated to be inside ~/.clawksis/media/
+    - only allowed extensions are served (image/video MIME)
+    - symlinks resolved before allowlist check
+    """
+    import sqlite3
+    from pathlib import Path
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Media files are only available from local or SSH-tunnel dashboard access.",
+        )
+
+    if not media_id or len(media_id) > 128 or "/" in media_id or ".." in media_id:
+        raise HTTPException(status_code=400, detail="Invalid media id.")
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        raise HTTPException(status_code=503, detail="State DB unavailable.")
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT file_path, media_type, status FROM media_generations WHERE id = ?",
+            (media_id,),
+        )
+        row = cur.fetchone()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Media not found.")
+
+    file_path_str, media_type, status = row
+
+    if status == "expired":
+        raise HTTPException(status_code=410, detail="Media URL expired before caching.")
+
+    if status != "ready":
+        raise HTTPException(status_code=409, detail=f"Media not ready (status={status}).")
+
+    media_root = (Path.home() / ".clawksis" / "media").resolve(strict=False)
+    candidate = Path(file_path_str).expanduser().resolve(strict=False)
+
+    try:
+        candidate.relative_to(media_root)
+    except ValueError:
+        raise HTTPException(
+            status_code=403,
+            detail="Media file is outside the allowed media directory.",
+        )
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Media file missing on disk.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file.")
+
+    ext = candidate.suffix.lower()
+    mime = _MEDIA_ALLOWED_EXT_TO_MIME.get(ext)
+    if not mime:
+        raise HTTPException(status_code=400, detail=f"Extension not allowed: {ext}")
+
+    return FileResponse(
+        str(candidate),
+        media_type=mime,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{candidate.name}"',
+        },
+    )
+
+
+# REST endpoints for the gallery UI (consumed by MediaPage.tsx).
+# Path: /api/gallery (NOT /api/media — that's taken by the equipo's endpoint
+# that serves images from cache/screenshots as base64 data URLs).
+# These live under /api/ so the auth middleware protects them like other
+# dashboard data endpoints. The file-serving endpoint above is outside /api/
+# because <img src="..."> can't attach the session token.
+
+
+@app.get("/api/gallery")
+async def get_media_list(
+    limit: int = 60,
+    offset: int = 0,
+    media_type: Optional[str] = None,
+    date_from: Optional[float] = None,
+    date_to: Optional[float] = None,
+    model: Optional[str] = None,
+    session_id: Optional[str] = None,
+    search: Optional[str] = None,
+    min_size: Optional[int] = None,
+    max_size: Optional[int] = None,
+):
+    """List media with filters + pagination.
+
+    All filters are optional. Sorts by created_at DESC.
+    Returns: {items: [...], total: int, has_more: bool}
+    """
+    import sqlite3
+    from pathlib import Path
+
+    limit = min(max(int(limit), 1), 200)
+    offset = max(int(offset), 0)
+
+    where_clauses = []
+    args: list = []
+
+    if media_type in ("image", "video"):
+        where_clauses.append("media_type = ?")
+        args.append(media_type)
+
+    if date_from is not None:
+        where_clauses.append("created_at >= ?")
+        args.append(float(date_from))
+
+    if date_to is not None:
+        where_clauses.append("created_at <= ?")
+        args.append(float(date_to))
+
+    if model:
+        where_clauses.append("model = ?")
+        args.append(str(model))
+
+    if session_id:
+        where_clauses.append("session_id = ?")
+        args.append(str(session_id))
+
+    if search:
+        where_clauses.append("LOWER(prompt) LIKE ?")
+        args.append(f"%{str(search).lower()}%")
+
+    if min_size is not None:
+        where_clauses.append("file_size_bytes >= ?")
+        args.append(int(min_size))
+
+    if max_size is not None:
+        where_clauses.append("file_size_bytes <= ?")
+        args.append(int(max_size))
+
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        cur.execute(f"SELECT COUNT(*) as c FROM media_generations{where_sql}", args)
+        total = cur.fetchone()["c"]
+
+        cur.execute(
+            f"SELECT id, session_id, message_id, media_type, status, "
+            f"file_path, original_url, file_size_bytes, width, height, "
+            f"prompt, model, provider, created_at "
+            f"FROM media_generations{where_sql} "
+            f"ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            args + [limit, offset],
+        )
+        items = [dict(row) for row in cur.fetchall()]
+        conn.close()
+
+        return {
+            "items": items,
+            "total": total,
+            "has_more": offset + len(items) < total,
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+@app.get("/api/gallery/stats")
+async def get_media_stats():
+    """Aggregate stats for the gallery header."""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'image'")
+        total_images = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'video'")
+        total_videos = cur.fetchone()[0]
+
+        cur.execute("SELECT COALESCE(SUM(file_size_bytes), 0) FROM media_generations")
+        total_size = cur.fetchone()[0]
+
+        seven_days_ago = time.time() - (7 * 86400)
+        cur.execute(
+            "SELECT COUNT(*) FROM media_generations WHERE created_at >= ?",
+            (seven_days_ago,),
+        )
+        last_7 = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'expired'")
+        expired = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'ready'")
+        ready = cur.fetchone()[0]
+
+        conn.close()
+
+        return {
+            "total_images": total_images,
+            "total_videos": total_videos,
+            "total_size_bytes": total_size,
+            "last_7_days": last_7,
+            "expired_count": expired,
+            "ready_count": ready,
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+@app.delete("/api/gallery/{media_id}")
+async def delete_media(media_id: str):
+    """Delete a media entry: removes DB row + file from disk."""
+    import sqlite3
+    from pathlib import Path
+
+    if not media_id or len(media_id) > 128 or "/" in media_id or ".." in media_id:
+        raise HTTPException(status_code=400, detail="Invalid media id")
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT file_path, file_size_bytes FROM media_generations WHERE id = ?",
+            (media_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        file_path_str, file_size = row
+        freed = int(file_size or 0)
+        file_missing = False
+
+        try:
+            fp = Path(file_path_str)
+            if fp.exists():
+                fp.unlink()
+            else:
+                file_missing = True
+        except Exception:
+            logger.exception("Failed to delete file %s", file_path_str)
+
+        cur.execute("DELETE FROM media_generations WHERE id = ?", (media_id,))
+        conn.commit()
+        conn.close()
+
+        return {
+            "deleted": True,
+            "freed_bytes": freed,
+            "file_missing": file_missing,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+# ---------------------------------------------------------------------------
 # Local artifact downloads — artifact-download-v1
 # ---------------------------------------------------------------------------
 #
