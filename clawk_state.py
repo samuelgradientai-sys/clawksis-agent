@@ -592,6 +592,54 @@ CREATE TABLE IF NOT EXISTS business_profiles (
 
 
 
+CREATE TABLE IF NOT EXISTS media_generations (
+
+    -- Identidad (3 campos)
+
+    id TEXT PRIMARY KEY,
+
+    session_id TEXT,
+
+    message_id TEXT,
+
+    -- Clasificación (2 campos)
+
+    media_type TEXT NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'ready',
+
+    -- Storage local (4 campos)
+
+    file_path TEXT NOT NULL,
+
+    original_url TEXT,
+
+    file_size_bytes INTEGER,
+
+    width INTEGER,
+
+    height INTEGER,
+
+    -- Metadata de generación (3 campos)
+
+    prompt TEXT,
+
+    model TEXT,
+
+    provider TEXT,
+
+    -- Timestamp
+
+    created_at REAL NOT NULL
+
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_created_at ON media_generations(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_media_type ON media_generations(media_type);
+
+CREATE INDEX IF NOT EXISTS idx_media_session_id ON media_generations(session_id);
+
 CREATE TABLE IF NOT EXISTS pending_turns (
 
     session_id TEXT PRIMARY KEY,
