@@ -45,9 +45,11 @@ logger = logging.getLogger(__name__)
 # HELPERS internos (privados — no se exponen al agente)
 # ============================================================================
 
+
 def _get_db():
     """Obtener conexión a state.db usando SessionDB del estado central."""
     from clawk_state import SessionDB
+
     db = SessionDB()
     return db
 
@@ -256,45 +258,45 @@ from tools.registry import registry  # noqa: E402
 
 if not FEATURE_DEACTIVATED:
     registry.register(
-    name="setup_business_profile",
-    toolset="social_content",
-    schema=SETUP_BUSINESS_PROFILE_SCHEMA,
-    handler=lambda args, **kw: setup_business_profile_tool(
-        name=args.get("name", ""),
-        description=args.get("description", ""),
-        tone=args.get("tone", ""),
-        destinations=args.get("destinations"),
-        hashtags_core=args.get("hashtags_core"),
-        networks=args.get("networks"),
-        target_audience=args.get("target_audience", ""),
-    ),
-    emoji="🏢",
-)
+        name="setup_business_profile",
+        toolset="social_content",
+        schema=SETUP_BUSINESS_PROFILE_SCHEMA,
+        handler=lambda args, **kw: setup_business_profile_tool(
+            name=args.get("name", ""),
+            description=args.get("description", ""),
+            tone=args.get("tone", ""),
+            destinations=args.get("destinations"),
+            hashtags_core=args.get("hashtags_core"),
+            networks=args.get("networks"),
+            target_audience=args.get("target_audience", ""),
+        ),
+        emoji="🏢",
+    )
 
     registry.register(
-    name="get_business_profile",
-    toolset="social_content",
-    schema=GET_BUSINESS_PROFILE_SCHEMA,
-    handler=lambda args, **kw: get_business_profile_tool(),
-    emoji="📋",
-)
+        name="get_business_profile",
+        toolset="social_content",
+        schema=GET_BUSINESS_PROFILE_SCHEMA,
+        handler=lambda args, **kw: get_business_profile_tool(),
+        emoji="📋",
+    )
 
     registry.register(
-    name="generate_social_content",
-    toolset="social_content",
-    schema=GENERATE_SOCIAL_CONTENT_SCHEMA,
-    handler=lambda args, **kw: generate_social_content_tool(
-        topic=args.get("topic", ""),
-    ),
-    emoji="✨",
-)
+        name="generate_social_content",
+        toolset="social_content",
+        schema=GENERATE_SOCIAL_CONTENT_SCHEMA,
+        handler=lambda args, **kw: generate_social_content_tool(
+            topic=args.get("topic", ""),
+        ),
+        emoji="✨",
+    )
 
     registry.register(
-    name="list_recent_generations",
-    toolset="social_content",
-    schema=LIST_RECENT_GENERATIONS_SCHEMA,
-    handler=lambda args, **kw: list_recent_generations_tool(
-        limit=int(args.get("limit", 10)),
-    ),
-    emoji="📚",
-)
+        name="list_recent_generations",
+        toolset="social_content",
+        schema=LIST_RECENT_GENERATIONS_SCHEMA,
+        handler=lambda args, **kw: list_recent_generations_tool(
+            limit=int(args.get("limit", 10)),
+        ),
+        emoji="📚",
+    )
