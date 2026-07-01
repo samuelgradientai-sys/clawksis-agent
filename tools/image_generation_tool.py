@@ -918,6 +918,22 @@ def image_generate_tool(
         _debug.log_call("image_generate_tool", debug_call_data)
         _debug.save()
 
+        try:
+            from tools.media_persistence import register_media
+
+            _image_url = response_data.get("image")
+            if _image_url:
+                register_media(
+                    url=_image_url,
+                    media_type="image",
+                    prompt=prompt,
+                    model=model_id,
+                    provider="fal",
+                    session_id=None,
+                )
+        except Exception:
+            logger.exception("Media gallery persistence failed (non-fatal)")
+
         return json.dumps(response_data, indent=2, ensure_ascii=False)
 
     except Exception as e:
