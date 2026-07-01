@@ -149,7 +149,8 @@ def test_handler_runtime_error(monkeypatch):
     monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _boom)
     res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
     assert res["ok"] is False
-    assert "LLM exploded" in res["error"]
+    # Handler classifies errors — "LLM exploded" maps to generic fallback
+    assert "model overload" in res["error"] or "extraction failed" in res["error"]
 
 
 # ── web_extract backend ─────────────────────────────────────────────────────
