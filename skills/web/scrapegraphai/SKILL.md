@@ -89,6 +89,7 @@ def _patch_langchain_community() -> None:
     except ImportError:
         return
     import langchain_community.chat_models as _lm
+
     if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
         _lm.ChatOllama = _ChatOllama_
 ```
@@ -150,11 +151,13 @@ import asyncio
 
 ensure_installed()  # Triggers the ChatOllama patch
 
-result = asyncio.run(extract_structured(
-    "https://example.com",
-    "Extract the main heading and description",
-    headless=True  # ← MUST be True on headless servers
-))
+result = asyncio.run(
+    extract_structured(
+        "https://example.com",
+        "Extract the main heading and description",
+        headless=True,  # ← MUST be True on headless servers
+    )
+)
 print(result)
 ```
 

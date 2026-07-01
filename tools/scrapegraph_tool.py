@@ -95,27 +95,45 @@ async def _handle_scrapegraph(args, **kw):
         exc_msg = str(exc).lower()
 
         # 1) Browser/headless — no X server or headed mode on headless server
-        if any(kw in exc_msg for kw in ("missing x server", "headed browser", "browsertype.launch", "x display", "xserver")):
+        if any(
+            kw in exc_msg
+            for kw in (
+                "missing x server",
+                "headed browser",
+                "browsertype.launch",
+                "x display",
+                "xserver",
+            )
+        ):
             hint = (
                 "ScrapeGraphAI attempted to launch a headed browser but there "
                 "is no display server. Happens when `render_js=false` on a "
                 "headless server. Omit `render_js` or set it to `true`."
             )
         # 2) Auth / credential errors
-        elif any(kw in exc_msg for kw in ("401", "authenticationerror", "unauthorized", "no api key")):
+        elif any(
+            kw in exc_msg
+            for kw in ("401", "authenticationerror", "unauthorized", "no api key")
+        ):
             hint = (
                 "The LLM model used by ScrapeGraphAI is not authenticated. "
                 "Check auxiliary_text model credentials, or set "
                 "OPENAI_API_KEY / OPENROUTER_API_KEY in the environment."
             )
         # 3) Rate limit
-        elif any(kw in exc_msg for kw in ("429", "ratelimiterror", "rate_limit", "too many requests")):
+        elif any(
+            kw in exc_msg
+            for kw in ("429", "ratelimiterror", "rate_limit", "too many requests")
+        ):
             hint = (
                 "The model is rate-limited. Retry later or configure a "
                 "different model with higher rate limits."
             )
         # 4) Output parsing (LLM returned bad JSON)
-        elif any(kw in exc_msg for kw in ("invalid json output", "output_parsing_failure", "parsing")):
+        elif any(
+            kw in exc_msg
+            for kw in ("invalid json output", "output_parsing_failure", "parsing")
+        ):
             hint = (
                 "The LLM returned malformed output. Try a more specific "
                 "prompt with fewer fields, or use the `scrape` tool "
