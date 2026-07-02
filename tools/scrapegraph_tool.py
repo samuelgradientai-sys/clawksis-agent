@@ -64,7 +64,7 @@ def _coerce_schema(raw: Any) -> Any:
     if isinstance(raw, str):
         try:
             return json.loads(raw)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             return None
     if isinstance(raw, dict):
         return raw
@@ -152,7 +152,7 @@ async def _handle_scrapegraph(args, **kw):
 
     try:
         rendered = json.dumps(data, ensure_ascii=False, indent=2, default=str)
-    except Exception:
+    except (TypeError, ValueError):
         rendered = str(data)
     truncated = len(rendered) > _MAX_RESULT_CHARS
     if truncated:

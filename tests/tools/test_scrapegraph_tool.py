@@ -56,6 +56,17 @@ def test_schema_shape():
     assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == ["url"]
 
 
+def test_coerce_schema():
+    from tools.scrapegraph_tool import _coerce_schema
+
+    assert _coerce_schema(None) is None
+    assert _coerce_schema("") is None
+    assert _coerce_schema({"type": "object"}) == {"type": "object"}
+    assert _coerce_schema('{"type": "object"}') == {"type": "object"}
+    assert _coerce_schema("not json") is None
+    assert _coerce_schema(42) is None
+
+
 # ── LLM config builder (uses the agent's own model) ─────────────────────────
 
 
