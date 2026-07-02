@@ -60,6 +60,18 @@ import {
 
 } from "./fonts";
 
+import {
+
+  BACKGROUND_CHOICES,
+
+  THEME_DEFAULT_BACKGROUND_ID,
+
+  getBackgroundChoice,
+
+  type BackgroundChoice,
+
+} from "./backgrounds";
+
 
 
 /** LocalStorage key — pre-applied before the React tree mounts to avoid
@@ -625,6 +637,10 @@ function injectFontStylesheet(url: string | undefined) {
  *  sentinel / absent = "use the active theme's font". */
 const FONT_STORAGE_KEY = "clawksis-dashboard-font";
 
+/** LocalStorage key for the selected background (independent of theme).
+ *  Local-only, no backend — the `<Backdrop />` reads the id from context. */
+const BACKGROUND_STORAGE_KEY = "clawksis-dashboard-background";
+
 /** The active font-override id, mirrored at module scope so `applyTheme`
  *  can re-assert it after it rewrites the theme's font vars. */
 let _ACTIVE_FONT_OVERRIDE: string = THEME_DEFAULT_FONT_ID;
@@ -821,6 +837,48 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
 
       window.localStorage.setItem(FONT_STORAGE_KEY, next);
+
+    }
+
+  }, []);
+
+
+
+  /** Active background id (independent of theme). `THEME_DEFAULT_BACKGROUND_ID`
+
+   *  = use the theme's default backdrop. Local-only (localStorage). */
+
+  const [bgId, setBgId] = useState<string>(() => {
+
+    if (typeof window === "undefined") return THEME_DEFAULT_BACKGROUND_ID;
+
+    const stored = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
+
+    return stored && getBackgroundChoice(stored)
+
+      ? stored
+
+      : THEME_DEFAULT_BACKGROUND_ID;
+
+  });
+
+
+
+  const setBackground = useCallback((id: string) => {
+
+    const next =
+
+      id === THEME_DEFAULT_BACKGROUND_ID || getBackgroundChoice(id)
+
+        ? id
+
+        : THEME_DEFAULT_BACKGROUND_ID;
+
+    setBgId(next);
+
+    if (typeof window !== "undefined") {
+
+      window.localStorage.setItem(BACKGROUND_STORAGE_KEY, next);
 
     }
 
@@ -1048,9 +1106,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       setFont,
 
+      bgId,
+
+      backgroundChoices: BACKGROUND_CHOICES,
+
+      setBackground,
+
     }),
 
-    [themeName, availableThemes, setTheme, resolveTheme, fontId, setFont],
+    [themeName, availableThemes, setTheme, resolveTheme, fontId, setFont, bgId, setBackground],
 
   );
 
@@ -1094,6 +1158,12 @@ const ThemeContext = createContext<ThemeContextValue>({
 
   setFont: () => {},
 
+  bgId: THEME_DEFAULT_BACKGROUND_ID,
+
+  backgroundChoices: BACKGROUND_CHOICES,
+
+  setBackground: () => {},
+
 });
 
 
@@ -1119,6 +1189,18 @@ interface ThemeContextValue {
   /** Set the font override (independent of theme). */
 
   setFont: (id: string) => void;
+
+  /** Active background id (`THEME_DEFAULT_BACKGROUND_ID` = theme default). */
+
+  bgId: string;
+
+  /** Catalog of selectable backgrounds for the picker. */
+
+  backgroundChoices: BackgroundChoice[];
+
+  /** Set the background (independent of theme). */
+
+  setBackground: (id: string) => void;
 
 }
 

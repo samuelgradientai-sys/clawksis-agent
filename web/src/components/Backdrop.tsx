@@ -1,6 +1,24 @@
 import { useGpuTier } from "@nous-research/ui/hooks/use-gpu-tier";
 
+import { useTheme } from "@/themes";
 import { BackgroundPaths } from "./BackgroundPaths";
+import { SmokeBackdrop } from "./backgrounds/SmokeBackdrop";
+import { GridBackdrop } from "./backgrounds/GridBackdrop";
+
+/** Renders the background layer the user selected in the "Fondo" picker.
+ *  The theme-default / unknown ids fall back to the brand paths. */
+function SelectedBackground({ bgId }: { bgId: string }) {
+  switch (bgId) {
+    case "none":
+      return null;
+    case "smoke":
+      return <SmokeBackdrop />;
+    case "grid":
+      return <GridBackdrop />;
+    default:
+      return <BackgroundPaths />;
+  }
+}
 
 /**
  * Replicates the visual layer stack of `<Overlays dark />` from
@@ -32,6 +50,7 @@ import { BackgroundPaths } from "./BackgroundPaths";
  */
 export function Backdrop() {
   const gpuTier = useGpuTier();
+  const { bgId } = useTheme();
 
   return (
     <>
@@ -46,8 +65,8 @@ export function Backdrop() {
         }
       />
 
-      {/* Animated brand paths — replaces the former filler-bg0.webp image. */}
-      <BackgroundPaths />
+      {/* Fondo seleccionable (picker "Fondo"): paths / humo / grilla / ninguno. */}
+      <SelectedBackground bgId={bgId} />
 
       <div
         aria-hidden

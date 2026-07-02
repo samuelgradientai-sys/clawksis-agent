@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Palette, Check, Type } from "lucide-react";
+import { Palette, Check, Type, Layers } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { BottomSheet } from "@nous-research/ui/ui/components/bottom-sheet";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
-import { BUILTIN_THEMES, THEME_DEFAULT_FONT_ID, useTheme } from "@/themes";
-import type { DashboardTheme, FontChoice, ThemeListEntry } from "@/themes";
+import {
+  BUILTIN_THEMES,
+  THEME_DEFAULT_FONT_ID,
+  THEME_DEFAULT_BACKGROUND_ID,
+  useTheme,
+} from "@/themes";
+import type {
+  BackgroundChoice,
+  DashboardTheme,
+  FontChoice,
+  ThemeListEntry,
+} from "@/themes";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +35,17 @@ import { cn } from "@/lib/utils";
  * the sidebar (same idea as a responsive Drawer).
  */
 export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitcherProps) {
-  const { themeName, availableThemes, setTheme, fontId, fontChoices, setFont } = useTheme();
+  const {
+    themeName,
+    availableThemes,
+    setTheme,
+    fontId,
+    fontChoices,
+    setFont,
+    bgId,
+    backgroundChoices,
+    setBackground,
+  } = useTheme();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -109,6 +129,11 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               fontId={fontId}
               setFont={setFont}
             />
+            <BackgroundSection
+              backgroundChoices={backgroundChoices}
+              bgId={bgId}
+              setBackground={setBackground}
+            />
           </div>
         </BottomSheet>
       )}
@@ -151,6 +176,11 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               fontChoices={fontChoices}
               fontId={fontId}
               setFont={setFont}
+            />
+            <BackgroundSection
+              backgroundChoices={backgroundChoices}
+              bgId={bgId}
+              setBackground={setBackground}
             />
           </div>
         );
@@ -316,6 +346,86 @@ function FontSection({ fontChoices, fontId, setFont }: FontSectionProps) {
   );
 }
 
+/** Background section: pick an animated/static backdrop independently of the
+ *  theme, or "theme default" to use the theme's own backdrop. */
+function BackgroundSection({
+  backgroundChoices,
+  bgId,
+  setBackground,
+}: BackgroundSectionProps) {
+  const { t } = useI18n();
+  return (
+    <>
+      <div className="mt-1 border-t border-current/20 px-3 pb-1 pt-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers className="h-3 w-3 text-text-tertiary" />
+          <Typography
+            mondwest
+            className="text-display text-xs tracking-[0.12em] text-text-tertiary"
+          >
+            {t.theme?.backgroundTitle ?? "Fondo"}
+          </Typography>
+        </span>
+      </div>
+
+      {/* Theme-default (clears the override). */}
+      <ListItem
+        active={bgId === THEME_DEFAULT_BACKGROUND_ID}
+        aria-selected={bgId === THEME_DEFAULT_BACKGROUND_ID}
+        className="gap-3"
+        onClick={() => setBackground(THEME_DEFAULT_BACKGROUND_ID)}
+        role="option"
+      >
+        <span aria-hidden className="h-4 w-9 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Typography className="truncate text-xs tracking-normal">
+            {t.theme?.backgroundDefault ?? "Predeterminado del tema"}
+          </Typography>
+          <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+            {t.theme?.backgroundDefaultHint ?? "Usar el fondo que trae el tema"}
+          </Typography>
+        </div>
+        <Check
+          className={cn(
+            "h-3 w-3 shrink-0 text-midground",
+            bgId === THEME_DEFAULT_BACKGROUND_ID ? "opacity-100" : "opacity-0",
+          )}
+        />
+      </ListItem>
+
+      {backgroundChoices.map((b) => {
+        const isActive = b.id === bgId;
+        return (
+          <ListItem
+            active={isActive}
+            aria-selected={isActive}
+            className="gap-3"
+            key={b.id}
+            onClick={() => setBackground(b.id)}
+            role="option"
+          >
+            <span aria-hidden className="h-4 w-9 shrink-0" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <Typography className="truncate text-xs tracking-normal">
+                {b.label}
+              </Typography>
+              <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+                {b.description}
+              </Typography>
+            </div>
+            <Check
+              className={cn(
+                "h-3 w-3 shrink-0 text-midground",
+                isActive ? "opacity-100" : "opacity-0",
+              )}
+            />
+          </ListItem>
+        );
+      })}
+    </>
+  );
+}
+
 function ThemeSwatch({ theme }: { theme: DashboardTheme }) {
   // Inverted themes (Nous Blue / future lens themes) author their palette
   // pre-inversion — `#FFAC02` reads as `#0053FD` blue once the foreground-
@@ -360,6 +470,12 @@ interface FontSectionProps {
   fontChoices: FontChoice[];
   fontId: string;
   setFont: (id: string) => void;
+}
+
+interface BackgroundSectionProps {
+  backgroundChoices: BackgroundChoice[];
+  bgId: string;
+  setBackground: (id: string) => void;
 }
 
 interface ThemeSwitcherProps {

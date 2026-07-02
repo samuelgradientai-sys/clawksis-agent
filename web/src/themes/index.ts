@@ -7,4 +7,11 @@ export {
   isOverrideFont,
 } from "./fonts";
 export type { FontChoice, FontCategory } from "./fonts";
+export {
+  BACKGROUND_CHOICES,
+  THEME_DEFAULT_BACKGROUND_ID,
+  getBackgroundChoice,
+  isOverrideBackground,
+} from "./backgrounds";
+export type { BackgroundChoice } from "./backgrounds";
 export type { DashboardTheme, ThemeLayer, ThemeListEntry, ThemeListResponse, ThemePalette } from "./types";
