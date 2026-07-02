@@ -128,7 +128,7 @@ Example pattern:
 opencode_run(
     prompt="""Crea un sitio estático... [spec detallada: secciones, paleta, animaciones, responsive]""",
     workdir="/root/project-landing",
-    timeout=300  # generous for full-page generation
+    timeout=300,  # generous for full-page generation
 )
 ```
 
