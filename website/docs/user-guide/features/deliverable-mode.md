@@ -46,7 +46,7 @@ Three pieces fit together:
 
 1. **The agent has tools that produce files.** `execute_code` for charts via
 
-   matplotlib, the `latex-pdf-report` skill for PDFs, the `powerpoint` skill
+   matplotlib, the `latex-pdf-report` skill for PDFs, the `pptx-author` skill
 
    for decks, `image_generate` for images, `text_to_speech` for audio, and so
 

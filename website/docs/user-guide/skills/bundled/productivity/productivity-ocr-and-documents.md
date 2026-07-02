@@ -44,7 +44,7 @@ Extract text from PDFs/scans (pymupdf, marker-pdf).
 
 | Tags | `PDF`, `Documents`, `Research`, `Arxiv`, `Text-Extraction`, `OCR` |
 
-| Related skills | [`powerpoint`](/docs/user-guide/skills/bundled/productivity/productivity-powerpoint) |
+| Related skills | [`pptx-author`](/docs/user-guide/skills/optional/finance/finance-pptx-author) |
 
 
 
@@ -66,7 +66,7 @@ The following is the complete skill definition that Clawksis loads when this ski
 
 For DOCX: use `python-docx` (parses actual document structure, far better than OCR).
 
-For PPTX: see the `powerpoint` skill (uses `python-pptx` with full slide/notes support).
+For PPTX: see the `pptx-author` skill (optional, Apache-2.0; python-pptx headless).
 
 This skill covers **PDFs and scanned documents**.
 
@@ -366,5 +366,5 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
 
-- For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+- For PowerPoint: see the `pptx-author` skill (optional, python-pptx)
 
