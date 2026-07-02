@@ -30,10 +30,12 @@ Two surfaces use this module:
 
 ## When to use this vs `scrape` (Scrapling)
 
-| Tool | Best for |
-|---|---|
-| **`scrapegraph`** | **Structured data** — "get me prices + specs as JSON", "extract the table of GPU models with TDP and price" |
-| **`scrape` / Scrapling** | **Raw content** — "fetch this page as markdown", anti-bot bypass (Cloudflare), spiders/crawlers |
+| Tool | Best for | When to switch |
+|---|---|---|
+| **`scrapegraph`** | **Structured data** — "get me prices + specs as JSON", "extract the table of GPU models with TDP and price", contact info extraction from simple pages | Start here |
+| **`scrape` / Scrapling** | **Raw content** — "fetch this page as markdown", anti-bot bypass (Cloudflare), spiders/crawlers | ✅ Falls back when scrapegraph returns `"NA"` or `"Invalid json output"` |
+
+**⚠️ Common trap:** scrapegraph often fails on **long-form articles** (1000+ words), returning `"NA"` content. Don't burn tokens retrying — switch to `scrape` immediately. The LLM can't structurally parse dense text. Don't keep retrying — fall back to `scrape(url, mode="auto")` for raw markdown. See `references/scrapling-fallback.md` for the full decision tree and real examples.
 
 **The library auto-installs on first use** (lazy deps via `tools.lazy_deps`). If lazy install is disabled, run manually:
 
@@ -50,7 +52,8 @@ python -m playwright install chromium  # only needed for JS-heavy pages
 | `urls` | array | optional | Multiple URLs (returns combined result) |
 | `prompt` | string | "Extract main content" | What to extract in plain language |
 | `output_schema` | object | optional | JSON Schema for forcing the output shape |
-| `render_js` | boolean | `true` | Render JavaScript with headless browser. Set `false` to skip browser for static pages |
+| `render_js` | boolean | `true` | Render JavaScript with headless browser. ⚠️ On headless servers, NEVER set `false` — crashes (headed mode needs X server). Omit or set `true`. |
+| `timeout` | integer | `60` | Max seconds for the LLM extraction (min 10, max 300). Increase for large pages. |
 
 ## ❗ Critical: `render_js` and headless mode
 
@@ -75,6 +78,8 @@ Missing X server or $DISPLAY
 
 If you genuinely need the page without JS execution, just let it use headless anyway — the difference is the browser window visibility, not JS execution.
 
+📎 See `references/headed-browser-error.md` for the exact error transcript and troubleshooting.
+
 ## Known pitfalls
 
 ### 1. `langchain-community` ChatOllama compat shim
@@ -89,7 +94,6 @@ def _patch_langchain_community() -> None:
     except ImportError:
         return
     import langchain_community.chat_models as _lm
-
     if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
         _lm.ChatOllama = _ChatOllama_
 ```
@@ -132,16 +136,43 @@ uv run pytest tests/tools/test_scrapegraph_tool.py -v
 Tests cover:
 - Tool registration + schema shape
 - LLM config builder (auxiliary client, env fallback)
-- Handler success/error/unavailable paths
+- `_coerce_schema` helper — None, dict, valid/invalid JSON strings, non-string types
+- `_normalize_urls` — scheme normalisation, dedup, empty input
+- Handler success/error/unavailable paths (single + multi-URL)
 - Web extract backend (per-URL error isolation, result shaping)
 - Backend prioritisation (scrapegraph vs 3rd-party)
 
 ### 6. LLM not available / authentication errors
 
-If the extraction returns errors like:
-- `AuthenticationError: 401` → The model API key is missing or expired (check `OPENAI_API_KEY` / `OPENROUTER_API_KEY` in `.env`, or the auxiliary client config)
-- `RateLimitError: 429` → Model rate-limited; retry with a different model or wait
-- No output (empty dict `{}`) → The LLM returned empty; try a more specific prompt
+Since commit `cb5a6c7f`, errors are **classified** into 5 categories and surfaced
+as clean, actionable messages instead of raw exception dumps:
+
+| Error pattern | What the agent sees |
+|---|---|
+| No display server / `render_js=false` | "No display server. Omit `render_js` or set it to `true`." |
+| HTTP 401 / Unauthorized | "Check auxiliary_text model credentials, or set OPENAI_API_KEY." |
+| HTTP 429 / RateLimitError | "Model is rate-limited. Retry later or switch models." |
+| Invalid JSON output / parse failure | "Try a more specific prompt or use the `scrape` tool." |
+| Any other error | Generic safe message — no paths or exception internals leaked. |
+
+📎 See `references/error-classifier.md` for the full classification table and
+test coverage details.
+
+### 7. Narrow `except Exception:` in tool handlers
+
+The tool handler in `scrapegraph_tool.py` and the helpers in `scrapegraph_common.py`
+contain several `except Exception:` patterns from earlier iterations. When improving
+this code, narrow each catch to the specific exception type the operation can raise:
+
+| Context | Current | Correct |
+|---|---|---|
+| `_coerce_schema()` — JSON parsing | `except Exception:` | `except (json.JSONDecodeError, TypeError):` |
+| JSON serialization in handler | `except Exception:` | `except (TypeError, ValueError):` |
+| `build_llm_config()` — auxiliary client | `except Exception` with `# noqa: BLE001` | Acceptable (covers unknown module attributes), but prefer `(ImportError, AttributeError)` |
+
+**Why:** Broad `except Exception:` silently catches `KeyboardInterrupt`, `SystemExit`,
+and unexpected bugs that should propagate. Narrowing makes failures visible instead
+of silently falling back to `return None` or `str(data)`.
 
 ## Verifying it works
 
@@ -151,13 +182,11 @@ import asyncio
 
 ensure_installed()  # Triggers the ChatOllama patch
 
-result = asyncio.run(
-    extract_structured(
-        "https://example.com",
-        "Extract the main heading and description",
-        headless=True,  # ← MUST be True on headless servers
-    )
-)
+result = asyncio.run(extract_structured(
+    "https://example.com",
+    "Extract the main heading and description",
+    headless=True  # ← MUST be True on headless servers
+))
 print(result)
 ```
 
@@ -185,4 +214,4 @@ Expected output (with `render_js` omitted or `true`):
 | `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners |
 | `tools/scrapegraph_tool.py` | Agent tool registration + handler |
 | `plugins/web/scrapegraphai/provider.py` | `web_extract` backend |
-| `tests/tools/test_scrapegraph_tool.py` | Tests (17 tests, all pass) |
+| `tests/tools/test_scrapegraph_tool.py` | Tests (18 tests, all pass) |
