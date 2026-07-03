@@ -1243,6 +1243,17 @@ export default function CookbookPage() {
                 </div>
               )}
 
+              {/* Fuente=llama.cpp sin búsqueda: los GGUF salen de la búsqueda
+                  EN VIVO en Hugging Face — sin query no hay qué listar. */}
+              {sourceFilter === "gguf" && !q && (
+                <div className="rounded-lg border border-dashed border-sky-500/40 bg-sky-500/5 px-3 py-2 text-sm text-muted-foreground">
+                  Los modelos de <span className="text-sky-400">llama.cpp</span>{" "}
+                  vienen de la búsqueda en vivo en Hugging Face: escribí arriba
+                  (ej. <span className="font-mono">qwen</span>,{" "}
+                  <span className="font-mono">gemma</span>) para verlos. Los que
+                  ya instalaste están en la pestaña Installed.
+                </div>
+              )}
               {visibleModels.length === 0 &&
                 visibleHf.length === 0 &&
                 !showCustomPull &&

@@ -504,8 +504,31 @@ function SessionItem({
   );
 }
 
+// Filtro por TIPO de sesión: conversaciones vs crons vs canales (Telegram…).
+type KindFilter = "all" | "chats" | "cron" | "channels";
+
+const KIND_STORAGE_KEY = "clawksis-sidebar-kind-filter";
+
+const CHANNEL_SOURCES = new Set([
+  "telegram",
+  "whatsapp",
+  "discord",
+  "slack",
+  "imessage",
+  "signal",
+  "gateway",
+  "webhook",
+]);
+
+function kindOfSource(source?: string | null): Exclude<KindFilter, "all"> {
+  const v = (source ?? "").trim().toLowerCase();
+  if (v === "cron") return "cron";
+  if (CHANNEL_SOURCES.has(v)) return "channels";
+  return "chats";
+}
+
 export function SessionSidebar({
-  sessions,
+  sessions: sessionsProp,
   projects,
   activeSessionId,
   activeBusy,
@@ -520,6 +543,31 @@ export function SessionSidebar({
   onRenameSession,
 }: SessionSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>("chats");
+  // Filtro por tipo (persistido): Todos / Chats / Crons / Channels. Se aplica
+  // como shadow del prop, así TODO el sidebar (fijados, grupos, contadores)
+  // refleja el filtro sin tocar cada uso.
+  const [kindFilter, setKindFilter] = useState<KindFilter>(() => {
+    try {
+      const v = window.localStorage.getItem(KIND_STORAGE_KEY);
+      return v === "chats" || v === "cron" || v === "channels" ? v : "all";
+    } catch {
+      return "all";
+    }
+  });
+  const pickKind = (v: KindFilter) => {
+    const next = kindFilter === v ? "all" : v;
+    setKindFilter(next);
+    try {
+      if (next === "all") window.localStorage.removeItem(KIND_STORAGE_KEY);
+      else window.localStorage.setItem(KIND_STORAGE_KEY, next);
+    } catch {
+      /* sin persistencia */
+    }
+  };
+  const sessions =
+    kindFilter === "all"
+      ? sessionsProp
+      : sessionsProp.filter((s) => kindOfSource(s.source) === kindFilter);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const lastAutoOpenedSessionId = useRef<string | null>(null);
@@ -762,6 +810,43 @@ export function SessionSidebar({
 
         {mode === "chats" && (
           <div>
+            {/* Filtro por tipo: qué llena la lista (conversaciones, crons,
+                mensajes de canales tipo Telegram). Click de nuevo = Todos. */}
+            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+              {(
+                [
+                  ["chats", "Chats"],
+                  ["cron", "Crons"],
+                  ["channels", "Channels"],
+                ] as const
+              ).map(([kind, label]) => {
+                const count = sessionsProp.filter(
+                  (s) => kindOfSource(s.source) === kind,
+                ).length;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => pickKind(kind)}
+                    title={
+                      kind === "cron"
+                        ? "Solo sesiones creadas por cron jobs"
+                        : kind === "channels"
+                          ? "Solo mensajes de canales (Telegram, WhatsApp…)"
+                          : "Solo conversaciones (dashboard/terminal)"
+                    }
+                    className={`rounded-md border px-2 py-0.5 text-2xs transition-colors ${
+                      kindFilter === kind
+                        ? "border-[#6C4FD6]/60 bg-[#6C4FD6]/15 text-foreground"
+                        : "border-border/60 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label} {count > 0 ? count : ""}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* FIJADOS — estilo Hermes: shift+click o el menú ⋯ fija un chat. */}
             <div className="mt-2 flex items-center gap-1.5 px-2 text-[10px] font-medium uppercase tracking-wide text-[#6C4FD6]">
               <Pin className="size-3 shrink-0" />
