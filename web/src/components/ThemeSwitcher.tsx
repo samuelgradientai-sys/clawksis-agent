@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Palette, Check, Type, Layers } from "lucide-react";
+import { Palette, Check, Type, Layers, Move } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { BottomSheet } from "@nous-research/ui/ui/components/bottom-sheet";
@@ -18,6 +18,7 @@ import type {
   FontChoice,
   ThemeListEntry,
 } from "@/themes";
+import { isSmoothScrollOn, setSmoothScrollOn } from "@/components/SmoothScroll";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -134,6 +135,7 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               bgId={bgId}
               setBackground={setBackground}
             />
+            <MotionSection />
           </div>
         </BottomSheet>
       )}
@@ -182,6 +184,7 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               bgId={bgId}
               setBackground={setBackground}
             />
+            <MotionSection />
           </div>
         );
         return dropUp ? createPortal(dropdown, document.body) : dropdown;
@@ -422,6 +425,55 @@ function BackgroundSection({
           </ListItem>
         );
       })}
+    </>
+  );
+}
+
+/** Motion section: opt-in smooth scroll (mini-Lenis casero). OFF por defecto. */
+function MotionSection() {
+  const { t } = useI18n();
+  const [on, setOn] = useState(isSmoothScrollOn());
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setSmoothScrollOn(next);
+  };
+  return (
+    <>
+      <div className="mt-1 border-t border-current/20 px-3 pb-1 pt-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Move className="h-3 w-3 text-text-tertiary" />
+          <Typography
+            mondwest
+            className="text-display text-xs tracking-[0.12em] text-text-tertiary"
+          >
+            {t.theme?.motionTitle ?? "Movimiento"}
+          </Typography>
+        </span>
+      </div>
+      <ListItem
+        active={on}
+        aria-selected={on}
+        className="gap-3"
+        onClick={toggle}
+        role="option"
+      >
+        <span aria-hidden className="h-4 w-9 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Typography className="truncate text-xs tracking-normal">
+            {t.theme?.smoothScroll ?? "Scroll suave (parallax)"}
+          </Typography>
+          <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+            {t.theme?.smoothScrollHint ?? "Momentum al scrollear, como la landing"}
+          </Typography>
+        </div>
+        <Check
+          className={cn(
+            "h-3 w-3 shrink-0 text-midground",
+            on ? "opacity-100" : "opacity-0",
+          )}
+        />
+      </ListItem>
     </>
   );
 }

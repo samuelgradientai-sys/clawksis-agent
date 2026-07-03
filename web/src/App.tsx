@@ -198,6 +198,11 @@ const Backdrop = lazy(() =>
   import("@/components/Backdrop").then((m) => ({ default: m.Backdrop })),
 );
 
+// Scroll suave opt-in (mini-Lenis casero). Sin peso hasta que se activa.
+const SmoothScroll = lazy(() =>
+  import("@/components/SmoothScroll").then((m) => ({ default: m.SmoothScroll })),
+);
+
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -1040,6 +1045,12 @@ export default function App() {
       <Suspense fallback={null}>
 
         <Backdrop />
+
+      </Suspense>
+
+      <Suspense fallback={null}>
+
+        <SmoothScroll />
 
       </Suspense>
 
