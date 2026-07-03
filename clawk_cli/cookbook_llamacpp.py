@@ -100,8 +100,31 @@ def install_status() -> str:
         return _install_status
 
 
+# Variantes de build que NO queremos por default (piden runtimes/GPUs
+# específicos): el objetivo es el build CPU plano que corre en cualquier lado.
+_ASSET_VARIANT_TOKENS = (
+    "vulkan",
+    "rocm",
+    "sycl",
+    "openvino",
+    "cuda",
+    "cudart",
+    "hip",
+    "opencl",
+    "android",
+    "s390x",
+    "xcframework",
+    "-ui.",
+)
+
+
 def _pick_release_asset(assets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Elige el .zip del release que corresponde a esta plataforma (CPU build)."""
+    """Elige el archivo del release para esta plataforma (build CPU plano).
+
+    Los releases de ggml-org publican .zip para Windows y .tar.gz para
+    Linux/macOS (p.ej. ``llama-bXXXX-bin-ubuntu-x64.tar.gz``); ambos valen.
+    Se excluyen las variantes GPU/runtime (vulkan/rocm/sycl/cuda/...).
+    """
 
     sysname = platform.system()
 
@@ -121,24 +144,19 @@ def _pick_release_asset(assets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]
     else:
         return None
 
-    def score(name: str) -> int:
-        n = name.lower()
+    for a in assets:
+        name = str(a.get("name", "")).lower()
 
-        return sum(1 for t in tokens if t in n)
+        if not (name.endswith(".zip") or name.endswith(".tar.gz")):
+            continue
 
-    zips = [
-        a
-        for a in assets
-        if str(a.get("name", "")).endswith(".zip")
-        and "cudart" not in str(a.get("name", "")).lower()
-    ]
+        if any(v in name for v in _ASSET_VARIANT_TOKENS):
+            continue
 
-    if not zips:
-        return None
+        if all(t in name for t in tokens):
+            return a
 
-    best = max(zips, key=lambda a: score(str(a.get("name", ""))))
-
-    return best if score(str(best.get("name", ""))) >= len(tokens) - 0 else None
+    return None
 
 
 def _do_install() -> None:
@@ -171,40 +189,67 @@ def _do_install() -> None:
 
         url = str(asset.get("browser_download_url") or "")
 
+        asset_name = str(asset.get("name", ""))
+
         dest = bin_dir()
 
         dest.mkdir(parents=True, exist_ok=True)
 
-        tmp_zip = dest / "_llamacpp_release.zip"
+        tmp_archive = dest / (
+            "_llamacpp_release" + (".zip" if asset_name.endswith(".zip") else ".tar.gz")
+        )
 
         with (
             urllib.request.urlopen(
                 urllib.request.Request(
                     url, headers={"User-Agent": "clawksis-cookbook"}
                 ),
-                timeout=60,
+                timeout=120,
             ) as resp,
-            open(tmp_zip, "wb") as out,
+            open(tmp_archive, "wb") as out,
         ):
             shutil.copyfileobj(resp, out, length=_CHUNK)
 
-        # Extraer plano: el zip trae build/bin/… — nos quedamos con los
-        # binarios/librerías en bin_dir sin la jerarquía del zip.
+        # Extraer plano: el archivo trae build/bin/… — nos quedamos con los
+        # binarios/librerías en bin_dir sin la jerarquía interna. Windows
+        # publica .zip; Linux/macOS publican .tar.gz.
 
-        with zipfile.ZipFile(tmp_zip) as zf:
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
+        if tmp_archive.suffix == ".zip":
+            with zipfile.ZipFile(tmp_archive) as zf:
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
 
-                name = Path(info.filename).name
+                    name = Path(info.filename).name
 
-                if not name:
-                    continue
+                    if not name:
+                        continue
 
-                with zf.open(info) as src, open(dest / name, "wb") as out:
-                    shutil.copyfileobj(src, out)
+                    with zf.open(info) as src, open(dest / name, "wb") as out:
+                        shutil.copyfileobj(src, out)
 
-        tmp_zip.unlink(missing_ok=True)
+        else:
+            import tarfile
+
+            with tarfile.open(tmp_archive, "r:gz") as tf:
+                for member in tf.getmembers():
+                    if not member.isfile():
+                        continue
+
+                    name = Path(member.name).name
+
+                    if not name:
+                        continue
+
+                    src = tf.extractfile(member)
+
+                    if src is None:
+                        continue
+
+                    with src, open(dest / name, "wb") as out:
+                        shutil.copyfileobj(src, out)
+
+        tmp_archive.unlink(missing_ok=True)
 
         if os.name != "nt":
             for f in dest.iterdir():

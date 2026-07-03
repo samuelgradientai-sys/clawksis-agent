@@ -334,3 +334,51 @@ def test_registry_file_is_json(gguf_home):
     data = json.loads((cookbook_llamacpp.models_dir() / "registry.json").read_text())
 
     assert isinstance(data, list) and data[0]["file"] == "x-Q4_K_M.gguf"
+
+
+# ── picker de assets del release de llama.cpp ────────────────────────────────
+
+
+def test_release_asset_picker_real_names(monkeypatch):
+    """Nombres REALES del release b9866: Linux/macOS publican .tar.gz (no .zip)
+    y hay variantes GPU (vulkan/rocm/cuda) que NO deben elegirse por default."""
+
+    import platform
+
+    names = [
+        "cudart-llama-bin-win-cuda-12.4-x64.zip",
+        "llama-b9866-bin-macos-arm64.tar.gz",
+        "llama-b9866-bin-ubuntu-arm64.tar.gz",
+        "llama-b9866-bin-ubuntu-vulkan-x64.tar.gz",
+        "llama-b9866-bin-ubuntu-rocm-7.2-x64.tar.gz",
+        "llama-b9866-bin-ubuntu-x64.tar.gz",
+        "llama-b9866-bin-win-cpu-x64.zip",
+        "llama-b9866-bin-win-cuda-12.4-x64.zip",
+        "llama-b9866-ui.tar.gz",
+    ]
+
+    assets = [{"name": n} for n in names]
+
+    cases = [
+        ("Linux", "x86_64", "llama-b9866-bin-ubuntu-x64.tar.gz"),
+        ("Windows", "AMD64", "llama-b9866-bin-win-cpu-x64.zip"),
+        ("Darwin", "arm64", "llama-b9866-bin-macos-arm64.tar.gz"),
+        ("Linux", "aarch64", "llama-b9866-bin-ubuntu-arm64.tar.gz"),
+    ]
+
+    for sysname, machine, expected in cases:
+        monkeypatch.setattr(platform, "system", lambda s=sysname: s)
+
+        monkeypatch.setattr(platform, "machine", lambda m=machine: m)
+
+        got = cookbook_llamacpp._pick_release_asset(assets)
+
+        assert got and got["name"] == expected, (sysname, machine, got)
+
+
+def test_hardware_includes_live_system_info():
+
+    hw = cookbook.detect_hardware()
+
+    for key in ("ram_available_gb", "disk_free_gb", "load_1m"):
+        assert key in hw

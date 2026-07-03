@@ -544,13 +544,22 @@ def _detect_gpu() -> Dict[str, Any]:
 
 
 def detect_hardware() -> Dict[str, Any]:
-    """Detect RAM / CPU / GPU. Never raises; missing pieces default to 0/empty."""
+    """Detect RAM / CPU / GPU + estado vivo del sistema.
+
+    Además del total de RAM, expone lo que le sirve al Cookbook para decidir
+    de verdad: RAM DISPONIBLE ahora (correr un modelo compite con lo que ya
+    está corriendo), disco libre (los GGUF ocupan gigas) y load average.
+    Never raises; missing pieces default to 0/empty.
+    """
     ram_gb = 0.0
+    ram_available_gb = 0.0
     cpu_cores = os.cpu_count() or 0
     try:
         import psutil
 
-        ram_gb = round(psutil.virtual_memory().total / (1024**3), 1)
+        vm = psutil.virtual_memory()
+        ram_gb = round(vm.total / (1024**3), 1)
+        ram_available_gb = round(vm.available / (1024**3), 1)
     except Exception:
         try:
             # Linux fallback.
@@ -558,13 +567,31 @@ def detect_hardware() -> Dict[str, Any]:
                 for line in fh:
                     if line.startswith("MemTotal:"):
                         ram_gb = round(int(line.split()[1]) / (1024**2), 1)
-                        break
+                    elif line.startswith("MemAvailable:"):
+                        ram_available_gb = round(int(line.split()[1]) / (1024**2), 1)
         except Exception:
             ram_gb = 0.0
+
+    disk_free_gb = 0.0
+    try:
+        disk_free_gb = round(
+            shutil.disk_usage(os.path.expanduser("~")).free / (1024**3), 1
+        )
+    except Exception:
+        pass
+
+    load_1m = 0.0
+    try:
+        load_1m = round(os.getloadavg()[0], 2)  # POSIX; en Windows no existe
+    except (AttributeError, OSError):
+        pass
 
     gpu = _detect_gpu()
     return {
         "ram_gb": ram_gb,
+        "ram_available_gb": ram_available_gb,
+        "disk_free_gb": disk_free_gb,
+        "load_1m": load_1m,
         "cpu_cores": cpu_cores,
         "gpu_name": gpu.get("name", ""),
         "vram_gb": gpu.get("vram_gb", 0.0),

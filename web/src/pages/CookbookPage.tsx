@@ -43,6 +43,9 @@ interface CookbookModel {
 
 interface Hardware {
   ram_gb?: number;
+  ram_available_gb?: number;
+  disk_free_gb?: number;
+  load_1m?: number;
   cpu_cores?: number;
   gpu_name?: string;
   vram_gb?: number;
@@ -143,6 +146,12 @@ function fmtBytes(n?: number | null): string {
 function fmtSpeed(bps?: number): string {
   if (!bps || bps <= 0) return "";
   return `${fmtBytes(bps)}/s`;
+}
+
+function fmtCtx(tokens?: number): string {
+  if (!tokens || tokens <= 0) return "";
+  if (tokens >= 1000) return `${Math.round(tokens / 1024)}k`;
+  return String(tokens);
 }
 
 function fmtEta(s?: number | null): string {
@@ -737,11 +746,8 @@ export default function CookbookPage() {
           <h1 className="text-xl font-semibold">Cookbook — local models</h1>
           <p className="text-sm text-muted-foreground">
             Open LLMs you can run on this machine — via Ollama or llama.cpp — and
-            use as the agent&apos;s model.
-          </p>
-          <p className="mt-0.5 text-xs text-amber-400/90">
-            The agent uses tools — pick a model marked “tools ✓”. “no tools”
-            models error the moment the agent calls a tool (e.g. delegating).
+            use as the agent&apos;s model. Each row shows what the model brings:
+            context window, tool support, size and how it fits your hardware.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -779,9 +785,15 @@ export default function CookbookPage() {
         <div className="rounded-lg border border-border bg-card/40 p-3 text-sm">
           <div className="mb-1 font-medium">Your hardware</div>
           <div className="text-muted-foreground">
-            {hw.ram_gb ?? "?"}GB RAM · {hw.cpu_cores ?? "?"} cores ·{" "}
+            {hw.ram_gb ?? "?"}GB RAM
+            {hw.ram_available_gb ? ` (${hw.ram_available_gb}GB free now)` : ""} ·{" "}
+            {hw.cpu_cores ?? "?"} cores ·{" "}
             {hw.gpu_name ? `${hw.gpu_name} (${hw.vram_gb ?? 0}GB VRAM)` : "no discrete GPU"}
             {hw.platform ? ` · ${hw.platform}` : ""}
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground/80">
+            {hw.disk_free_gb ? `Disk: ${hw.disk_free_gb}GB free for model downloads` : ""}
+            {hw.load_1m ? ` · load ${hw.load_1m}` : ""}
           </div>
         </div>
         <div className="rounded-lg border border-border bg-card/40 p-3 text-sm">
@@ -1107,11 +1119,28 @@ export default function CookbookPage() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {m.use_case} · ~{m.size_gb}GB · {m.fit.mode.toUpperCase()} ·{" "}
+                        {m.use_case} · ~{m.size_gb}GB
+                        {m.context > 0 && (
+                          <>
+                            {" · "}
+                            <span
+                              className="text-sky-400/90"
+                              title={`Ventana de contexto: ${m.context.toLocaleString()} tokens`}
+                            >
+                              ctx {fmtCtx(m.context)}
+                            </span>
+                          </>
+                        )}
+                        {" · "}
+                        {m.fit.mode.toUpperCase()} ·{" "}
                         {m.tool_use ? (
-                          <span className="text-emerald-400">tools ✓</span>
+                          <span className="text-emerald-400" title="Soporta function-calling: el agente puede usar herramientas">
+                            tools ✓
+                          </span>
                         ) : (
-                          <span className="text-amber-400">no tools ⚠</span>
+                          <span className="text-amber-400" title="Sin function-calling: el agente falla al llamar una herramienta">
+                            no tools ⚠
+                          </span>
                         )}
                       </div>
                       {status === "pulling" && (
@@ -1228,7 +1257,11 @@ export default function CookbookPage() {
                             </div>
                           ) : (
                             files.map((f) => {
-                              const tooBig = ramGb > 0 && f.size_bytes / 1024 ** 3 > ramGb;
+                              const sizeGb = f.size_bytes / 1024 ** 3;
+                              const noDisk =
+                                (hw.disk_free_gb ?? 0) > 0 &&
+                                sizeGb > (hw.disk_free_gb ?? 0);
+                              const tooBig = (ramGb > 0 && sizeGb > ramGb) || noDisk;
                               const dlEntry = Object.entries(downloads).find(
                                 ([, d]) => d.repo === r.repo && d.file === f.file,
                               );
@@ -1263,9 +1296,11 @@ export default function CookbookPage() {
                                       type="button"
                                       onClick={() => void onDownload(r.repo, f.file)}
                                       title={
-                                        tooBig
-                                          ? "Bigger than this machine's RAM — will likely not load"
-                                          : "Download to the llama.cpp models folder"
+                                        noDisk
+                                          ? "Not enough free disk space for this file"
+                                          : tooBig
+                                            ? "Bigger than this machine's RAM — will likely not load"
+                                            : "Download to the llama.cpp models folder"
                                       }
                                       className={`rounded border px-2 py-0.5 ${tooBig ? "border-amber-500/50 text-amber-400" : "border-[var(--color-primary)] bg-[var(--color-primary)]/15"}`}
                                     >
