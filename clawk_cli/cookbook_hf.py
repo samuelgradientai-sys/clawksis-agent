@@ -59,8 +59,15 @@ def _license_from_tags(tags: List[str]) -> str:
 def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
     """Repos GGUF de Hugging Face que matchean *query*, por descargas.
 
+    Con ``expand[]=gguf`` HF devuelve la metadata extraída del GGUF: ventana
+    de contexto real, arquitectura y total de parámetros — lo que permite
+    filtrar por características ("modelos con 256k de contexto") y estimar
+    el fit sin bajar nada. ``tool_use`` es heurístico: el chat_template del
+    GGUF menciona tools ⇒ el modelo soporta function-calling.
+
     Shape por fila: {repo, author, name, downloads, likes, updated_at,
-    license, gated, tags}. Vacío sin query o sin red.
+    license, gated, tags, context, architecture, params_b, size_q4_gb,
+    tool_use}. Vacío sin query o sin red.
     """
 
     q = (query or "").strip()
@@ -75,9 +82,14 @@ def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
     if cached and time.monotonic() - cached[0] < _SEARCH_TTL:
         return cached[1]
 
+    expand = "&".join(
+        f"expand[]={e}"
+        for e in ("gguf", "downloads", "likes", "lastModified", "tags", "gated")
+    )
+
     url = (
         f"{HF_API}/models?search={urllib.parse.quote(q)}"
-        f"&filter=gguf&sort=downloads&direction=-1&limit={int(limit)}"
+        f"&filter=gguf&sort=downloads&direction=-1&limit={int(limit)}&{expand}"
     )
 
     data = _get_json(url)
@@ -93,6 +105,22 @@ def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
 
             tags = [str(t) for t in (item.get("tags") or [])]
 
+            gguf = item.get("gguf") if isinstance(item.get("gguf"), dict) else {}
+
+            context = int(gguf.get("context_length") or 0)
+
+            params_total = int(gguf.get("total") or 0)
+
+            params_b = round(params_total / 1e9, 1) if params_total else 0.0
+
+            # Estimación Q4_K_M: ~0.6 GB por B de parámetros + overhead runtime.
+
+            size_q4_gb = round(params_b * 0.6 + 1.0, 1) if params_b else 0.0
+
+            template = str(gguf.get("chat_template") or "")
+
+            tool_use = "tool" in template.lower() if template else False
+
             rows.append({
                 "repo": repo,
                 "author": repo.split("/", 1)[0] if "/" in repo else "",
@@ -103,6 +131,11 @@ def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
                 "license": _license_from_tags(tags),
                 "gated": bool(item.get("gated")),
                 "tags": [t for t in tags if not t.startswith("license:")][:8],
+                "context": context,
+                "architecture": str(gguf.get("architecture") or ""),
+                "params_b": params_b,
+                "size_q4_gb": size_q4_gb,
+                "tool_use": tool_use,
             })
 
     _cache[key] = (time.monotonic(), rows)

@@ -11774,7 +11774,9 @@ async def get_models_analytics(days: int = 30):
         try:
             from clawk_cli.config import cfg_get, load_config
 
-            raw_hidden = cfg_get(load_config(), "dashboard", "hidden_models", default=None)
+            raw_hidden = cfg_get(
+                load_config(), "dashboard", "hidden_models", default=None
+            )
             if isinstance(raw_hidden, list):
                 hidden = {str(h) for h in raw_hidden}
         except Exception:
@@ -14973,6 +14975,22 @@ async def post_cookbook_download_cancel(body: CookbookDownloadIdBody):
     from clawk_cli import cookbook_llamacpp
 
     return await asyncio.to_thread(cookbook_llamacpp.cancel_download, body.id)
+
+
+@app.get("/api/cookbook/active")
+async def get_cookbook_active():
+    """Descargas GGUF y pulls de Ollama EN CURSO (server-side, en background).
+
+    Las descargas corren en threads del server y NO dependen del navegador:
+    al volver a la pestaña, la UI llama esto para re-engancharse al progreso
+    en vez de dar por muerta la instalación.
+    """
+
+    from clawk_cli import cookbook, cookbook_llamacpp
+
+    downloads = await asyncio.to_thread(cookbook_llamacpp.active_downloads)
+    pulls = await asyncio.to_thread(cookbook.active_pulls)
+    return {"downloads": downloads, "pulls": pulls}
 
 
 @app.get("/api/cookbook/installed")

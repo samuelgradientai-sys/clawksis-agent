@@ -751,7 +751,7 @@ export function SessionSidebar({
           <div className="px-2 py-2 text-xs text-destructive">{error}</div>
         )}
 
-        {!loading && !error && sessions.length === 0 && activeProjects.length === 0 && (
+        {!loading && sessions.length === 0 && activeProjects.length === 0 && (
           <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
             <MessageSquare className="size-5 text-muted-foreground/50" />
             <span className="text-xs text-muted-foreground">
@@ -760,7 +760,7 @@ export function SessionSidebar({
           </div>
         )}
 
-        {!error && mode === "chats" && (
+        {mode === "chats" && (
           <div>
             {/* FIJADOS — estilo Hermes: shift+click o el menú ⋯ fija un chat. */}
             <div className="mt-2 flex items-center gap-1.5 px-2 text-[10px] font-medium uppercase tracking-wide text-[#6C4FD6]">
@@ -829,7 +829,7 @@ export function SessionSidebar({
           </div>
         )}
 
-        {!error && mode === "projects" && !selectedProject && (
+        {mode === "projects" && !selectedProject && (
           <div>
             <div className="mt-2 flex items-center gap-1.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <Folder className="size-3 shrink-0" />
@@ -881,7 +881,7 @@ export function SessionSidebar({
           </div>
         )}
 
-        {!error && mode === "projects" && selectedProject && (
+        {mode === "projects" && selectedProject && (
           <div>
             <button
               type="button"

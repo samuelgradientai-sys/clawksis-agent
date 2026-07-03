@@ -84,6 +84,12 @@ interface HFRepo {
   license: string;
   gated: boolean;
   tags: string[];
+  /** Metadata extraída del GGUF por HF (expand[]=gguf). 0/"" si no está. */
+  context: number;
+  architecture: string;
+  params_b: number;
+  size_q4_gb: number;
+  tool_use: boolean;
 }
 
 interface HFFile {
@@ -239,6 +245,28 @@ export default function CookbookPage() {
   const [llamacpp, setLlamacpp] = useState<LlamaCppStatus>({});
   // Tab: buscar/catálogo vs instalados.
   const [tab, setTab] = useState<"models" | "installed">("models");
+  // Filtros por características — aplican a Ollama Y a los GGUF de HF.
+  const [fitFilter, setFitFilter] = useState<"all" | "fits" | "no_fit">("all");
+  const [toolsFilter, setToolsFilter] = useState<"all" | "tools">("all");
+  const [ctxFilter, setCtxFilter] = useState<0 | 32768 | 131072 | 262144>(0);
+  // Elegir backend (Ollama vs llama.cpp) es una preferencia: persiste.
+  const [sourceFilter, setSourceFilterRaw] = useState<"all" | "ollama" | "gguf">(() => {
+    try {
+      const v = window.localStorage.getItem("clawksis-cookbook-source");
+      return v === "ollama" || v === "gguf" ? v : "all";
+    } catch {
+      return "all";
+    }
+  });
+  const setSourceFilter = (v: "all" | "ollama" | "gguf") => {
+    setSourceFilterRaw(v);
+    try {
+      if (v === "all") window.localStorage.removeItem("clawksis-cookbook-source");
+      else window.localStorage.setItem("clawksis-cookbook-source", v);
+    } catch {
+      /* sin persistencia */
+    }
+  };
   const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [installedLoading, setInstalledLoading] = useState(false);
   const [busyModel, setBusyModel] = useState<string | null>(null);
@@ -279,14 +307,48 @@ export default function CookbookPage() {
     }
   }, []);
 
+  // Las descargas/pulls corren en el SERVER (threads en background): navegar
+  // a otra pestaña no las detiene. Al montar, re-enganchamos la UI a lo que
+  // siga en curso — sin esto, volver a Cookbook parecía "instalación muerta".
+  const reattachActive = useCallback(async () => {
+    try {
+      const res = await fetchJSON<{
+        downloads?: Array<DownloadProgress & { download_id: string }>;
+        pulls?: Array<PullProgress & { tag: string }>;
+      }>("/api/cookbook/active");
+      for (const d of res.downloads ?? []) {
+        if (
+          d.status === "downloading" ||
+          d.status === "verifying" ||
+          d.status === "registering"
+        ) {
+          setDownloads((prev) => ({ ...prev, [d.download_id]: d }));
+          pollDownload(d.download_id);
+        }
+      }
+      for (const p of res.pulls ?? []) {
+        if (p.status === "pulling" || p.status === "validating") {
+          setPulling((prev) => ({ ...prev, [p.tag]: p }));
+          pollPull(p.tag);
+        }
+      }
+    } catch {
+      // best-effort: sin endpoint (server viejo) simplemente no re-engancha
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
-    const boot = setTimeout(() => void load(), 0);
+    const boot = setTimeout(() => {
+      void load();
+      void reattachActive();
+    }, 0);
     const timers = pollTimers.current;
     return () => {
       clearTimeout(boot);
       for (const t of Object.values(timers)) clearInterval(t);
     };
-  }, [load]);
+  }, [load, reattachActive]);
 
   useEffect(() => {
     if (tab !== "installed") return;
@@ -739,6 +801,54 @@ export default function CookbookPage() {
 
   const searchingAny = remoteLoading || hfLoading;
 
+  // ── Filtros por características (aplican a Ollama Y a los GGUF de HF) ─────
+  const modelFits = (m: CookbookModel) => m.fit.tier !== "no_fit";
+  const visibleModels = filtered.filter((m) => {
+    if (sourceFilter === "gguf") return false;
+    if (fitFilter === "fits" && !modelFits(m)) return false;
+    if (fitFilter === "no_fit" && modelFits(m)) return false;
+    if (toolsFilter === "tools" && !m.tool_use) return false;
+    if (ctxFilter && m.context < ctxFilter) return false;
+    return true;
+  });
+  // HF: el fit se estima con el tamaño Q4 derivado de los parámetros reales
+  // del GGUF (metadata de HF); sin metadata (0) no se descarta por fit.
+  const hfFits = (r: HFRepo) =>
+    r.size_q4_gb > 0 && ramGb > 0 ? r.size_q4_gb <= ramGb : true;
+  const visibleHf = hfRows.filter((r) => {
+    if (sourceFilter === "ollama") return false;
+    if (fitFilter === "fits" && !hfFits(r)) return false;
+    if (fitFilter === "no_fit" && hfFits(r)) return false;
+    if (toolsFilter === "tools" && !r.tool_use) return false;
+    if (ctxFilter && r.context < ctxFilter) return false;
+    return true;
+  });
+  const filtersActive =
+    fitFilter !== "all" || toolsFilter !== "all" || ctxFilter !== 0 || sourceFilter !== "all";
+  const hiddenByFilters =
+    filtered.length - visibleModels.length + (hfRows.length - visibleHf.length);
+
+  const filterChip = (
+    label: string,
+    active: boolean,
+    onClick: () => void,
+    title?: string,
+  ) => (
+    <button
+      key={label}
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${
+        active
+          ? "border-[#6C4FD6]/60 bg-[#6C4FD6]/15 text-foreground"
+          : "border-border/60 bg-card/30 text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -1013,6 +1123,62 @@ export default function CookbookPage() {
               </button>
             )}
           </div>
+
+          {/* Filtros por características: qué me sirve, tools, contexto, backend */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground/70">Fit:</span>
+              {filterChip("Todos", fitFilter === "all", () => setFitFilter("all"))}
+              {filterChip(
+                "✓ Me sirven",
+                fitFilter === "fits",
+                () => setFitFilter(fitFilter === "fits" ? "all" : "fits"),
+                "Solo modelos que entran en este hardware",
+              )}
+              {filterChip(
+                "✗ No entran",
+                fitFilter === "no_fit",
+                () => setFitFilter(fitFilter === "no_fit" ? "all" : "no_fit"),
+                "Solo modelos demasiado grandes para esta máquina",
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground/70">Tools:</span>
+              {filterChip(
+                "tools ✓",
+                toolsFilter === "tools",
+                () => setToolsFilter(toolsFilter === "tools" ? "all" : "tools"),
+                "Solo modelos con function-calling (el agente los necesita)",
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground/70">Contexto:</span>
+              {filterChip("32k+", ctxFilter === 32768, () =>
+                setCtxFilter(ctxFilter === 32768 ? 0 : 32768),
+              )}
+              {filterChip("128k+", ctxFilter === 131072, () =>
+                setCtxFilter(ctxFilter === 131072 ? 0 : 131072),
+              )}
+              {filterChip("256k+", ctxFilter === 262144, () =>
+                setCtxFilter(ctxFilter === 262144 ? 0 : 262144),
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground/70">Fuente:</span>
+              {filterChip("Ollama", sourceFilter === "ollama", () =>
+                setSourceFilter(sourceFilter === "ollama" ? "all" : "ollama"),
+              )}
+              {filterChip("llama.cpp", sourceFilter === "gguf", () =>
+                setSourceFilter(sourceFilter === "gguf" ? "all" : "gguf"),
+              )}
+            </div>
+            {filtersActive && hiddenByFilters > 0 && (
+              <span className="text-muted-foreground/70">
+                {hiddenByFilters} ocultos por filtros
+              </span>
+            )}
+          </div>
+
           {(searchingAny || (browseAll && !!libraryRows)) && (
             <div className="text-xs text-muted-foreground">
               {searchingAny ? (
@@ -1077,8 +1243,8 @@ export default function CookbookPage() {
                 </div>
               )}
 
-              {filtered.length === 0 &&
-                hfRows.length === 0 &&
+              {visibleModels.length === 0 &&
+                visibleHf.length === 0 &&
                 !showCustomPull &&
                 !searchingAny &&
                 !!q && (
@@ -1088,7 +1254,7 @@ export default function CookbookPage() {
                 )}
 
               {/* Ollama results (curated + library) */}
-              {filtered.map((m) => {
+              {visibleModels.map((m) => {
                 const tier = TIER_STYLE[m.fit.tier];
                 const pull = pulling[m.ollama];
                 const status = pull?.status ?? "";
@@ -1194,23 +1360,34 @@ export default function CookbookPage() {
               })}
 
               {/* Hugging Face GGUF results (llama.cpp) */}
-              {q && hfRows.length > 0 && (
+              {q && visibleHf.length > 0 && (
                 <div className="mt-2 text-xs font-medium text-muted-foreground">
                   Hugging Face — GGUF for llama.cpp
                 </div>
               )}
               {q &&
-                hfRows.map((r) => {
+                visibleHf.map((r) => {
                   const files = hfFiles[r.repo];
                   const expanded = files !== undefined;
+                  const fits = hfFits(r);
+                  const hfTier = TIER_STYLE[
+                    r.size_q4_gb > 0 ? (fits ? "good" : "no_fit") : "unknown"
+                  ];
                   return (
                     <div
                       key={r.repo}
                       className="rounded-lg border border-border bg-card/30 px-3 py-2"
                     >
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="shrink-0 rounded border border-sky-500/50 px-2 py-0.5 text-xs text-sky-400">
-                          GGUF
+                        <span
+                          className={`shrink-0 rounded border px-2 py-0.5 text-xs ${hfTier.cls}`}
+                          title={
+                            r.size_q4_gb > 0
+                              ? `~${r.size_q4_gb}GB en Q4 vs ${ramGb}GB RAM`
+                              : "Tamaño desconocido hasta elegir versión"
+                          }
+                        >
+                          {hfTier.label}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1226,6 +1403,29 @@ export default function CookbookPage() {
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
+                            {r.params_b > 0 && <>{r.params_b}B · ~{r.size_q4_gb}GB Q4 · </>}
+                            {r.context > 0 && (
+                              <>
+                                <span
+                                  className="text-sky-400/90"
+                                  title={`Ventana de contexto: ${r.context.toLocaleString()} tokens`}
+                                >
+                                  ctx {fmtCtx(r.context)}
+                                </span>
+                                {" · "}
+                              </>
+                            )}
+                            {r.tool_use ? (
+                              <span className="text-emerald-400" title="El chat template declara tools (function-calling)">
+                                tools ✓
+                              </span>
+                            ) : (
+                              <span className="text-amber-400" title="Sin tools declarados en el chat template">
+                                no tools ⚠
+                              </span>
+                            )}
+                            {r.architecture ? ` · ${r.architecture}` : ""}
+                            {" · "}
                             {r.downloads.toLocaleString()} downloads · ♥ {r.likes}
                             {r.license ? ` · ${r.license}` : ""}
                             {r.updated_at ? ` · updated ${r.updated_at.slice(0, 10)}` : ""}

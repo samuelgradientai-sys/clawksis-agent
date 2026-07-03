@@ -968,6 +968,13 @@ def pull_progress(tag: str) -> Dict[str, Any]:
     }
 
 
+def active_pulls() -> List[Dict[str, Any]]:
+    """Pulls de Ollama en curso (para re-engancharse a la UI tras navegar)."""
+    with _pull_lock:
+        tags = [t for t, s in _pull_status.items() if s in ("pulling", "validating")]
+    return [{"tag": t, **pull_progress(t)} for t in tags]
+
+
 def cancel_pull(tag: str) -> Dict[str, Any]:
     """Cancela un pull en curso (Ollama conserva los blobs parciales → resume)."""
     with _pull_lock:

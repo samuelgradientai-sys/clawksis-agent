@@ -568,6 +568,16 @@ def _schedule_ws_orphan_reap(session_name: str) -> None:
         if session.get("transport") is not _detached_ws_transport:
             return  # reconnected — leave it alone
 
+        # Requisito duro: el dashboard ejecuta trabajo en SEGUNDO PLANO. Un
+        # turno todavía corriendo (o encolado como inflight) NO se finaliza
+        # aunque la pestaña lleve cerrada más que la ventana de gracia — se
+        # re-agenda el reap y la sesión sigue trabajando; su resultado queda
+        # persistido y un resume posterior lo muestra completo.
+        if session.get("running") or session.get("inflight_turn"):
+            _schedule_ws_orphan_reap(session_name)
+
+            return
+
         _finalize_session(session, end_reason="ws_orphan_reap")
 
         _sessions.pop(session_name, None)
@@ -5537,7 +5547,35 @@ def _(rid, params: dict) -> dict:
     active = {s.get("session_key") for s in snapshot if s.get("session_key")}
 
     if target in active:
-        return _err(rid, 4023, "cannot delete an active session")
+        # Una sesión VIVA pero ociosa no debe bloquear el delete: el usuario
+        # está borrando la conversación a propósito (p.ej. la tenía abierta
+        # hace un rato y quedó registrada en este proceso). La finalizamos y
+        # la soltamos antes del delete. Solo un turno EN CURSO mantiene el
+        # bloqueo — borrar debajo de un agente trabajando corrompería el turno.
+        live = None
+
+        try:
+            live = _find_live_session_by_key(target)
+
+        except Exception:
+            live = None
+
+        if live is None:
+            return _err(rid, 4023, "cannot delete an active session")
+
+        live_sid, live_session = live
+
+        if live_session.get("running") or live_session.get("inflight_turn"):
+            return _err(
+                rid,
+                4023,
+                "cannot delete an active session — a turn is still running "
+                "(/interrupt it first)",
+            )
+
+        _finalize_session(live_session, end_reason="deleted_by_user")
+
+        _sessions.pop(live_sid, None)
 
     sessions_dir = get_clawk_home() / "sessions"
 
