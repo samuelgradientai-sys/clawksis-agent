@@ -19,7 +19,10 @@ export const THEME_DEFAULT_BACKGROUND_ID = "theme";
 export const BACKGROUND_CHOICES: BackgroundChoice[] = [
   { id: "none", label: "Ninguno", description: "Fondo sólido, sin animación" },
   { id: "smoke", label: "Humo morado", description: "Humo WebGL — como la landing" },
+  { id: "aurora", label: "Aurora", description: "Manchas moradas difuminadas que derivan" },
+  { id: "beams", label: "Haces", description: "Haces de luz diagonales que se deslizan" },
   { id: "grid", label: "Grilla", description: "Grilla sutil tipo blueprint" },
+  { id: "dots", label: "Puntos", description: "Grilla de puntos que respira" },
 ];
 
 const BG_BY_ID: Record<string, BackgroundChoice> = Object.fromEntries(

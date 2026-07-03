@@ -4,6 +4,11 @@ import { useTheme } from "@/themes";
 import { BackgroundPaths } from "./BackgroundPaths";
 import { SmokeBackdrop } from "./backgrounds/SmokeBackdrop";
 import { GridBackdrop } from "./backgrounds/GridBackdrop";
+import {
+  AuroraBackdrop,
+  BeamsBackdrop,
+  DotsBackdrop,
+} from "./backgrounds/CssBackdrops";
 
 /** Renders the background layer the user selected in the "Fondo" picker.
  *  The theme-default / unknown ids fall back to the brand paths. */
@@ -15,6 +20,12 @@ function SelectedBackground({ bgId }: { bgId: string }) {
       return <SmokeBackdrop />;
     case "grid":
       return <GridBackdrop />;
+    case "aurora":
+      return <AuroraBackdrop />;
+    case "beams":
+      return <BeamsBackdrop />;
+    case "dots":
+      return <DotsBackdrop />;
     default:
       return <BackgroundPaths />;
   }

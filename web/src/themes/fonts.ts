@@ -102,6 +102,34 @@ export const FONT_CHOICES: FontChoice[] = [
     stack: `"Pixelify Sans", ${SYSTEM_SANS}`,
     fontUrl: GF("Pixelify+Sans:wght@400;500;600;700"),
   },
+  {
+    id: "space-grotesk",
+    label: "Space Grotesk",
+    category: "sans",
+    stack: `"Space Grotesk", ${SYSTEM_SANS}`,
+    fontUrl: GF("Space+Grotesk:wght@400;500;600;700"),
+  },
+  {
+    id: "sora",
+    label: "Sora",
+    category: "sans",
+    stack: `"Sora", ${SYSTEM_SANS}`,
+    fontUrl: GF("Sora:wght@400;500;600;700"),
+  },
+  {
+    id: "orbitron",
+    label: "Orbitron (sci-fi)",
+    category: "sans",
+    stack: `"Orbitron", ${SYSTEM_SANS}`,
+    fontUrl: GF("Orbitron:wght@400;500;600;700;800"),
+  },
+  {
+    id: "silkscreen",
+    label: "Silkscreen (pixel)",
+    category: "sans",
+    stack: `"Silkscreen", ${SYSTEM_SANS}`,
+    fontUrl: GF("Silkscreen:wght@400;700"),
+  },
 
   // ── Serif ─────────────────────────────────────────────────────────────
   {
@@ -124,6 +152,13 @@ export const FONT_CHOICES: FontChoice[] = [
     category: "serif",
     stack: `"Source Serif 4", ${SYSTEM_SERIF}`,
     fontUrl: GF("Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700"),
+  },
+  {
+    id: "playfair-display",
+    label: "Playfair Display",
+    category: "serif",
+    stack: `"Playfair Display", ${SYSTEM_SERIF}`,
+    fontUrl: GF("Playfair+Display:wght@400;500;600;700"),
   },
 
   // ── Mono ──────────────────────────────────────────────────────────────
@@ -154,6 +189,20 @@ export const FONT_CHOICES: FontChoice[] = [
     category: "mono",
     stack: `"VT323", ${SYSTEM_MONO}`,
     fontUrl: GF("VT323"),
+  },
+  {
+    id: "share-tech-mono",
+    label: "Share Tech Mono",
+    category: "mono",
+    stack: `"Share Tech Mono", ${SYSTEM_MONO}`,
+    fontUrl: GF("Share+Tech+Mono"),
+  },
+  {
+    id: "press-start-2p",
+    label: "Press Start 2P (8-bit)",
+    category: "mono",
+    stack: `"Press Start 2P", ${SYSTEM_MONO}`,
+    fontUrl: GF("Press+Start+2P"),
   },
 ];
 
