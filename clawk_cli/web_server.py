@@ -1153,6 +1153,16 @@ async def download_local_artifact(path: str, request: Request):
     candidate = Path(raw_path).expanduser().resolve(strict=False)
 
     if not _artifact_is_within_root(candidate, root):
+        # El agente también manda media generada como
+        # ![](/artifacts/download?path=~/.clawksis/cache/images/…). Esos
+        # archivos viven fuera de exports; delegar al bridge de media local,
+        # que aplica sus propias reglas (loopback, symlinks resueltos antes
+        # del allowlist, roots de media y extensiones de media solamente).
+        if any(
+            _artifact_is_within_root(candidate, media_root)
+            for media_root in _local_media_allowed_roots()
+        ):
+            return await get_local_media(path=raw_path, request=request)
         raise HTTPException(
             status_code=403,
             detail="Artifact path is outside the allowed exports directory.",

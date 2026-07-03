@@ -212,7 +212,9 @@ const TERMINAL_THEME_STATIC = {
 // (fallback vía `supports-[backdrop-filter]`, cero costo si no hay soporte).
 // Los colores ANSI, el cursor y la selección no se tocan: solo el fondo de
 // las celdas vacías deja pasar el fondo de la app.
-const TERMINAL_GLASS_ALPHA = 0.5;
+// Tinte bajo (0.22): con 0.5 + blur fuerte sobre el wallpaper oscuro el
+// resultado se percibía negro sólido — el usuario no veía el fondo.
+const TERMINAL_GLASS_ALPHA = 0.22;
 
 const XTERM_TRANSPARENT_BG = "rgba(0,0,0,0)";
 
@@ -1933,7 +1935,9 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
             "supports-[backdrop-filter]:[background:var(--term-bg-glass)]",
 
-            "supports-[backdrop-filter]:backdrop-blur-xl",
+            // blur moderado: con blur-xl el wallpaper se licuaba a un tono
+            // plano y el conjunto volvía a leerse como "negro opaco".
+            "supports-[backdrop-filter]:backdrop-blur-sm",
 
           )}
 
