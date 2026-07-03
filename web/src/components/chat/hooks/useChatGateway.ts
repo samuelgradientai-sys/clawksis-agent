@@ -45,6 +45,59 @@ export interface ChatMessage {
   images?: ChatImagePreview[];
 }
 
+// Nota interna que el resume-pending del gateway antepone al prompt del
+// usuario re-despachado ("[A previous request was interrupted... Please finish
+// processing...]"). Es para el MODELO, no para la vista: se recorta del texto
+// del mensaje user al hidratar el history.
+const RESUME_NOTE_RE =
+  /^\s*\[(?:session resumed|a previous request|please finish)[^\]]*\]\s*/i;
+
+/** Reconstruye ChatMessages COMPLETOS desde session.history: los mensajes
+ *  role:"tool" del gateway se adjuntan como toolCalls (desplegables de pasos)
+ *  al assistant de su turno, y el razonamiento persistido viaja en
+ *  msg.reasoning — así los pasos y el "Pensando" sobreviven al F5 en vez de
+ *  perderse (antes se filtraba todo lo que no fuera user/assistant). */
+export function mapHistoryMessages(
+  raw: Array<Record<string, unknown>>,
+  idPrefix: string,
+): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  let pendingTools: ToolCall[] = [];
+  const base = Date.now() - 1000 * (raw.length + 1);
+  raw.forEach((m, i) => {
+    const role = m.role;
+    if (role === "tool") {
+      pendingTools.push({
+        id: idPrefix + "-tc-" + i,
+        name: String((m.name as string) ?? "tool"),
+        args: {},
+        status: "done",
+        summary: typeof m.context === "string" ? m.context : undefined,
+      });
+      return;
+    }
+    if (role !== "user" && role !== "assistant") return;
+    let content = String((m.text as string) ?? (m.content as string) ?? "");
+    if (role === "user") content = content.replace(RESUME_NOTE_RE, "");
+    const reasoningRaw =
+      (typeof m.reasoning === "string" && m.reasoning) ||
+      (typeof m.reasoning_content === "string" && m.reasoning_content) ||
+      "";
+    if (!content.trim() && role === "user") return; // era solo la nota interna
+    out.push({
+      id: idPrefix + "-" + i,
+      role,
+      content,
+      reasoning: reasoningRaw.trim() ? reasoningRaw : undefined,
+      toolCalls: role === "assistant" ? pendingTools : [],
+      streaming: false,
+      timestamp: (m.timestamp as number) ?? base + i * 1000,
+    });
+    if (role === "assistant") pendingTools = [];
+  });
+  return out;
+}
+
 export interface SessionInfo {
   sessionId: string | null;
   model: string | null;
@@ -679,18 +732,9 @@ export function useChatGateway(): UseChatGatewayResult {
               })) as { messages?: Array<Record<string, unknown>> };
               if (cancelled || seqAtOpen !== switchSeqRef.current) return;
 
-              const initialMessages: ChatMessage[] = (history?.messages ?? [])
-                .filter((m) => m.role === "user" || m.role === "assistant")
-                .map((m, i) => ({
-                  id: "hist-" + i,
-                  role: m.role as "user" | "assistant",
-                  content: (m.text as string) ?? (m.content as string) ?? "",
-                  toolCalls: [],
-                  streaming: false,
-                  timestamp:
-                    (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
-                }));
-              setMessages(initialMessages);
+              // Reconstrucción COMPLETA: pasos (tool calls) + razonamiento
+              // persistidos sobreviven al F5 (antes se filtraban).
+              setMessages(mapHistoryMessages(history?.messages ?? [], "hist"));
             } catch (histErr) {
               console.warn(
                 "[useChatGateway] session.history failed (empty session)",
@@ -967,18 +1011,10 @@ export function useChatGateway(): UseChatGatewayResult {
         setBusy(Boolean(resumeResult?.running));
         const historyMessages = resumeResult?.messages ?? [];
         if (historyMessages.length) {
-          const initialMessages: ChatMessage[] = historyMessages
-            .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m, i) => ({
-              id: "hist-" + Date.now() + "-" + i,
-              role: m.role as "user" | "assistant",
-              content: (m.text as string) ?? (m.content as string) ?? "",
-              toolCalls: [],
-              streaming: false,
-              timestamp:
-                (m.timestamp as number) ?? Date.now() - 1000 * (1000 - i),
-            }));
-          setMessages(initialMessages);
+          // Igual que en el connect inicial: pasos + razonamiento incluidos.
+          setMessages(
+            mapHistoryMessages(historyMessages, "hist-" + Date.now()),
+          );
         }
         if (mySeq !== switchSeqRef.current) return;
         // Turno EN VUELO: el history persistido aún no tiene este turno, pero
