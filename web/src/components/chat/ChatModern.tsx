@@ -175,8 +175,13 @@ function ProjectCreateDialog({
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#6C4FD6]/40 bg-popover text-popover-foreground shadow-2xl shadow-[#6C4FD6]/20">
         <div className="border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20 text-[#6C4FD6]">
-              <span className="text-sm font-bold">C</span>
+            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20">
+              <img
+                src="/clawksis-logo-512.png"
+                alt="Clawksis"
+                draggable={false}
+                className="size-6 select-none object-contain"
+              />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">
@@ -692,11 +697,16 @@ const MessageBubble = memo(function MessageBubble({
     <div className="group flex gap-3 py-4">
       <div
         className={
-          "flex size-7 shrink-0 items-center justify-center rounded-full bg-[#6C4FD6] text-white " +
+          "flex size-7 shrink-0 items-center justify-center rounded-full " +
           (message.streaming ? "clawk-glow" : "")
         }
       >
-        <span className="text-xs font-bold leading-none">C</span>
+        <img
+          src="/clawksis-logo-512.png"
+          alt="Clawksis"
+          draggable={false}
+          className="size-7 select-none object-contain"
+        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {isSlashOutput ? (
@@ -1267,7 +1277,12 @@ function EmptyState() {
     <div className="flex flex-1 items-center justify-center px-4 py-12">
       <div className="flex max-w-md flex-col items-center gap-3 text-center">
         <div className="flex size-12 items-center justify-center rounded-lg bg-[#6C4FD6]/10">
-          <span className="text-sm font-bold leading-none text-[#6C4FD6]">C</span>
+          <img
+            src="/clawksis-logo-512.png"
+            alt="Clawksis"
+            draggable={false}
+            className="size-9 select-none object-contain"
+          />
         </div>
         <h2 className="text-base font-semibold text-foreground">
           Empezá una conversación

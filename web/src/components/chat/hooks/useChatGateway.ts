@@ -66,6 +66,7 @@ interface JsonRpcEvent {
   method: "event";
   params: {
     type: string;
+    /** Live session id (sid) del gateway que emitió el evento. */
     session_id?: string;
     payload?: Record<string, unknown>;
   };
@@ -123,6 +124,10 @@ export function useChatGateway(): UseChatGatewayResult {
     tokensMax: 0,
     title: null,
   });
+  // Sid VIVO de la conversación abierta, como ref para que handleEvent (estable)
+  // pueda filtrar eventos de OTRAS sesiones sin re-suscribirse. El WS trae los
+  // eventos de todas las sesiones del gateway (chats paralelos, crons).
+  const liveSidRef = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
@@ -187,6 +192,15 @@ export function useChatGateway(): UseChatGatewayResult {
 
   const handleEvent = useCallback((event: JsonRpcEvent) => {
     const { type, payload = {} } = event.params;
+
+    // Multi-conversación: ignorar eventos de sesiones AJENAS. Sin este filtro,
+    // un turno corriendo en la conversación A (o un cron) streamea sus mensajes
+    // sobre la conversación B que está abierta — los "chats mezclados". Los
+    // eventos sin session_id (p.ej. gateway.ready) pasan siempre.
+    const evtSid = event.params.session_id;
+    if (evtSid && liveSidRef.current && evtSid !== liveSidRef.current) {
+      return;
+    }
 
     switch (type) {
       case "gateway.ready":
@@ -447,6 +461,12 @@ export function useChatGateway(): UseChatGatewayResult {
 
   useEffect(() => {
     let cancelled = false;
+    // Auto-reconexión con backoff exponencial: la conexión al gateway puede
+    // parpadear (túnel SSH que se cae, red móvil, restart del server). Sin
+    // esto, un solo drop dejaba el chat muerto en "Conectando..." hasta un
+    // F5 manual. El backoff se resetea en cada conexión exitosa.
+    let reconnectDelay = 1_000;
+    let reconnectTimer: number | undefined;
 
     async function resolveSession(): Promise<string | null> {
       try {
@@ -521,6 +541,7 @@ export function useChatGateway(): UseChatGatewayResult {
 
         ws.onopen = async () => {
           if (cancelled) return;
+          reconnectDelay = 1_000; // conexión sana → resetear el backoff
           setStatus("connected");
           try {
             const sid = await resolveSession();
@@ -556,6 +577,7 @@ export function useChatGateway(): UseChatGatewayResult {
               setMessages([]);
             }
 
+            liveSidRef.current = sid;
             setSession((prev) => ({ ...prev, sessionId: sid }));
           } catch (err) {
             console.error("[useChatGateway] session init failed", err);
@@ -587,10 +609,16 @@ export function useChatGateway(): UseChatGatewayResult {
         };
 
         ws.onclose = () => {
-          if (!cancelled) {
-            setStatus("disconnected");
-            setBusy(false);
-          }
+          if (cancelled) return;
+          setStatus("disconnected");
+          setBusy(false);
+          // Reintentar solo: resolveSession() reanuda la sesión más reciente
+          // al reabrir, así la conversación en curso vuelve sin F5.
+          const delay = reconnectDelay;
+          reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+          reconnectTimer = window.setTimeout(() => {
+            if (!cancelled) void connect();
+          }, delay);
         };
 
         ws.onerror = () => {
@@ -611,6 +639,7 @@ export function useChatGateway(): UseChatGatewayResult {
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
       if (wsRef.current) {
         try {
           wsRef.current.close();
@@ -743,6 +772,9 @@ export function useChatGateway(): UseChatGatewayResult {
       setErrorMessage(null);
       // Mostrar ya el header/asociación de la sesión; el composer queda
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
+      // Provisional hasta que el resume devuelva el sid vivo: alcanza para que
+      // el filtro de handleEvent descarte los eventos de la conversación anterior.
+      liveSidRef.current = targetId;
       setSession((prev) => ({
         ...prev,
         sessionId: targetId,
@@ -790,9 +822,15 @@ export function useChatGateway(): UseChatGatewayResult {
           session_id?: string;
           messages?: Array<Record<string, unknown>>;
           info?: Record<string, unknown>;
+          running?: boolean;
         };
         if (mySeq !== switchSeqRef.current) return;
         const liveSid = resumeResult?.session_id ?? targetId;
+        liveSidRef.current = liveSid;
+        // Conversación reanudada con un turno EN VUELO (sobrevive al navegar):
+        // restaurar busy para que el composer entre en modo cola ("Agregar a la
+        // cola", estilo Telegram) en vez de chocar con 4009 session busy.
+        setBusy(Boolean(resumeResult?.running));
         const historyMessages = resumeResult?.messages ?? [];
         if (historyMessages.length) {
           const initialMessages: ChatMessage[] = historyMessages
