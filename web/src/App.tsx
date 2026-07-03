@@ -138,46 +138,121 @@ import { useSystemActions } from "@/contexts/useSystemActions";
 
 import type { SystemAction } from "@/contexts/system-actions-context";
 
-// Route pages are code-split (React.lazy) so each one ships as its own chunk
-// and is only downloaded when the user navigates to it. This keeps the initial
-// bundle small instead of shipping every page (recharts, xterm, etc.) up front.
-const ConfigPage = lazy(() => import("@/pages/ConfigPage"));
+// Route pages are code-split (React.lazy) so each one ships as its own chunk.
+// react-router v7 envuelve la navegación en startTransition: mientras el chunk
+// de la página destino no llega, React SIGUE MOSTRANDO la página anterior — si
+// esa descarga se cuelga o falla (túnel caído, hashes viejos tras un rebuild),
+// la UI queda "pegada" en la sección actual con la URL ya cambiada. Dos
+// defensas:
+//
+//   1. lazyPage(): reintenta el import una vez y, si sigue fallando, recarga
+//      la página (guard compartido con el listener vite:preloadError de
+//      main.tsx para no entrar en loop).
+//   2. prefetchAllPages(): al quedar el navegador idle tras el boot, baja
+//      TODOS los chunks de páginas en segundo plano — navegar deja de
+//      depender de la red en el momento del click.
 
-const DocsPage = lazy(() => import("@/pages/DocsPage"));
+type PageImporter = () => Promise<{ default: ComponentType }>;
 
-const EnvPage = lazy(() => import("@/pages/EnvPage"));
+const PAGE_IMPORTERS: PageImporter[] = [];
 
-const SessionsPage = lazy(() => import("@/pages/SessionsPage"));
+const CHUNK_RELOAD_KEY = "clawk-chunk-reload-at";
 
-const LogsPage = lazy(() => import("@/pages/LogsPage"));
+function lazyPage<P extends object>(
+  importer: () => Promise<{ default: ComponentType<P> }>,
+) {
+  PAGE_IMPORTERS.push(importer as unknown as PageImporter);
 
-const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
+  return lazy(() =>
+    importer().catch(async () => {
+      // Blip de red / deploy a mitad de camino: un reintento corto suele
+      // alcanzar. Si no, el bundle de esta pestaña quedó desactualizado y
+      // solo una recarga trae los hashes nuevos.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
-const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
+      try {
+        return await importer();
+      } catch (err) {
+        let lastReload = 0;
 
-const CronPage = lazy(() => import("@/pages/CronPage"));
+        try {
+          lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+        } catch {
+          /* sessionStorage puede no estar disponible */
+        }
 
-const ProfilesPage = lazy(() => import("@/pages/ProfilesPage"));
+        if (Date.now() - lastReload > 30_000) {
+          try {
+            sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+          } catch {
+            /* ídem */
+          }
 
-const SkillsPage = lazy(() => import("@/pages/SkillsPage"));
+          window.location.reload();
 
-const PluginsPage = lazy(() => import("@/pages/PluginsPage"));
+          // La recarga toma el control: no resolvemos nunca para que React
+          // no pinte un estado a medias mientras el documento se descarta.
+          await new Promise<never>(() => {});
+        }
 
-const McpPage = lazy(() => import("@/pages/McpPage"));
+        throw err;
+      }
+    }),
+  );
+}
 
-const PairingPage = lazy(() => import("@/pages/PairingPage"));
+let pagesPrefetched = false;
 
-const ChannelsPage = lazy(() => import("@/pages/ChannelsPage"));
+function prefetchAllPages() {
+  if (pagesPrefetched) return;
 
-const WebhooksPage = lazy(() => import("@/pages/WebhooksPage"));
+  pagesPrefetched = true;
 
-const SystemPage = lazy(() => import("@/pages/SystemPage"));
+  for (const importer of PAGE_IMPORTERS) {
+    void importer().catch(() => {
+      // Silencioso: si falla acá, lazyPage() lo reintenta al navegar.
+      pagesPrefetched = false;
+    });
+  }
+}
 
-const VisualizationPage = lazy(() => import("@/pages/VisualizationPage"));
+const ConfigPage = lazyPage(() => import("@/pages/ConfigPage"));
 
-const CookbookPage = lazy(() => import("@/pages/CookbookPage"));
+const DocsPage = lazyPage(() => import("@/pages/DocsPage"));
 
-const MediaPage = lazy(() => import("@/pages/MediaPage"));
+const EnvPage = lazyPage(() => import("@/pages/EnvPage"));
+
+const SessionsPage = lazyPage(() => import("@/pages/SessionsPage"));
+
+const LogsPage = lazyPage(() => import("@/pages/LogsPage"));
+
+const AnalyticsPage = lazyPage(() => import("@/pages/AnalyticsPage"));
+
+const ModelsPage = lazyPage(() => import("@/pages/ModelsPage"));
+
+const CronPage = lazyPage(() => import("@/pages/CronPage"));
+
+const ProfilesPage = lazyPage(() => import("@/pages/ProfilesPage"));
+
+const SkillsPage = lazyPage(() => import("@/pages/SkillsPage"));
+
+const PluginsPage = lazyPage(() => import("@/pages/PluginsPage"));
+
+const McpPage = lazyPage(() => import("@/pages/McpPage"));
+
+const PairingPage = lazyPage(() => import("@/pages/PairingPage"));
+
+const ChannelsPage = lazyPage(() => import("@/pages/ChannelsPage"));
+
+const WebhooksPage = lazyPage(() => import("@/pages/WebhooksPage"));
+
+const SystemPage = lazyPage(() => import("@/pages/SystemPage"));
+
+const VisualizationPage = lazyPage(() => import("@/pages/VisualizationPage"));
+
+const CookbookPage = lazyPage(() => import("@/pages/CookbookPage"));
+
+const MediaPage = lazyPage(() => import("@/pages/MediaPage"));
 
 
 
@@ -185,7 +260,7 @@ const MediaPage = lazy(() => import("@/pages/MediaPage"));
 // Lee preferencia de localStorage vía useChatMode. Fase 2.6.4 del plan visual.
 // Default: terminal (no romper UX existente).
 const ChatRouter = memo(
-  lazy(() => import("@/components/chat/ChatRouter")),
+  lazyPage(() => import("@/components/chat/ChatRouter")),
 );
 
 // NOTE: ChatPage ya no se importa aquí — el ChatRouter wrapper se encarga
@@ -821,6 +896,36 @@ export default function App() {
     if (isChatRoute) setChatEverActive(true);
 
   }, [isChatRoute]);
+
+
+
+  // Con el navegador idle tras el primer paint, bajamos TODOS los chunks de
+  // páginas en segundo plano: navegar deja de depender de la red en el
+  // momento del click (la causa de la "sección pegada" con router v7 —
+  // startTransition sigue mostrando la página anterior hasta que el chunk
+  // destino llega, y si esa descarga se cuelga no llega nunca).
+
+  useEffect(() => {
+
+    const w = window as Window & {
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(prefetchAllPages, { timeout: 8000 });
+
+      return () => w.cancelIdleCallback?.(id);
+    }
+
+    const t = window.setTimeout(prefetchAllPages, 3000);
+
+    return () => window.clearTimeout(t);
+
+  }, []);
 
 
 
