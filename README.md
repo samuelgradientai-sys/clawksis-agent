@@ -315,36 +315,134 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 
 ## Self-hosted: acceso por dominio
 
-### 1. Instalar y configurar
+Objetivo: entrar al dashboard desde `https://panel.tudominio.com` en cualquier
+dispositivo, **sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**.
+Son tres piezas, cada una independiente:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-clawk setup
+1. El **dashboard como servicio** (systemd) — arranca solo, sobrevive reinicios.
+2. El **login** — el gate de autenticación se activa automáticamente al escuchar
+   fuera de loopback; nadie entra sin usuario/contraseña.
+3. La **ruta pública** — Opción A: Cloudflare Tunnel (recomendada, sin abrir
+   puertos) · Opción B: nginx + certbot (clásica).
+
+### 1. Dashboard como servicio (systemd)
+
+No hay que correr `clawk dashboard` a mano nunca más. Creá
+`/etc/systemd/system/clawk-dashboard.service`:
+
+```ini
+[Unit]
+Description=Clawksis Dashboard (web UI :9119)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=HOME=/root
+# Credenciales del login (ver sección 2). Env gana sobre config.yaml.
+Environment=CLAWK_DASHBOARD_BASIC_AUTH_USERNAME=tu-usuario
+Environment=CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD=tu-password-fuerte
+Environment=CLAWK_DASHBOARD_BASIC_AUTH_SECRET=<64 hex aleatorios: openssl rand -hex 32>
+WorkingDirectory=/usr/local/lib/clawksis-agent
+ExecStart=/usr/local/lib/clawksis-agent/venv/bin/python3 -m clawk_cli.main dashboard --no-open --host 0.0.0.0 --port 9119 --skip-build
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-### 2. Gateway como servicio (arranca solo al reiniciar)
-
 ```bash
-sudo clawk gateway install --system
-clawk gateway status
+sudo chmod 600 /etc/systemd/system/clawk-dashboard.service   # protege el password
+sudo systemctl daemon-reload
+sudo systemctl enable --now clawk-dashboard
+systemctl status clawk-dashboard    # → active (running)
 ```
 
-### 3. Reverse proxy con nginx + HTTPS
+> `--host 0.0.0.0` es lo que **activa el login** (ver abajo). `--skip-build`
+> sirve el `web_dist` ya compilado (lo reconstruye `clawk update`).
+> Ajustá `WorkingDirectory`/`ExecStart` si tu instalación no está en
+> `/usr/local/lib/clawksis-agent`.
 
-El dashboard corre en `127.0.0.1:9119` por defecto. Config nginx:
+### 2. Login (gate de autenticación)
+
+El gate se **activa solo** cuando el dashboard escucha en un host no-loopback
+(`--host 0.0.0.0`) sin `--insecure`: toda request sin sesión recibe la página de
+login (`/` → 302) y la API responde 401. Con `--host 127.0.0.1` el gate NO se
+activa — por eso nunca publiques un dashboard que escucha solo en loopback.
+
+El provider incluido es **basic auth** (usuario + contraseña, sesiones HMAC sin
+base de datos). Se configura por env (como en el unit de arriba) **o** en
+`~/.clawksis/config.yaml`:
+
+```yaml
+dashboard:
+  basic_auth:
+    username: tu-usuario
+    # Opción preferida: hash scrypt (sin plaintext en disco)…
+    # password_hash: "scrypt$..."
+    # …o plaintext (se hashea en memoria al cargar):
+    password: "tu-password-fuerte"
+    secret: "<64 hex aleatorios>"      # clave de firma de sesiones (openssl rand -hex 32)
+    session_ttl_seconds: 43200          # opcional (12 h por defecto)
+```
+
+### 3A. Ruta pública con Cloudflare Tunnel (recomendada)
+
+Sin abrir puertos, sin certificados que renovar: HTTPS, WebSockets y DNS los
+maneja Cloudflare. Requiere tu dominio en Cloudflare (plan gratis alcanza).
+
+1. **Crear el tunnel** (una vez): [Cloudflare dashboard](https://one.dash.cloudflare.com)
+   → *Zero Trust → Networks → Tunnels → Create a tunnel* (tipo `cloudflared`).
+   Copiá el **token** que te da.
+
+2. **Correr cloudflared en el servidor** (Docker, reinicia solo):
+
+   ```bash
+   docker run -d --name clawksis-cf-tunnel --restart always --network host \
+     cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <TU_TOKEN>
+   ```
+
+   > `--network host` permite que el tunnel llegue a `localhost:9119` directo.
+
+3. **Publicar el hostname** (en la config del tunnel, pestaña *Public Hostname*):
+
+   | Campo | Valor |
+   |---|---|
+   | Subdomain | `panel` (o el que quieras) |
+   | Domain | `tudominio.com` |
+   | Service | `http://localhost:9119` |
+
+   Cloudflare crea el registro DNS automáticamente. En ~1 minuto,
+   `https://panel.tudominio.com` sirve el login del dashboard. El mismo tunnel
+   admite más hostnames (p. ej. el bridge u otros servicios del mismo VPS).
+
+**Endurecimiento recomendado:** con el tunnel no hace falta el puerto 9119
+abierto al mundo — bloquealo en el firewall (panel del proveedor o
+`ufw deny 9119`; el tunnel entra por `localhost`, no lo afecta). Para una
+segunda capa (además del login), podés poner una política de **Cloudflare
+Access** sobre el hostname (Zero Trust → Access): pide verificación por email
+antes de llegar siquiera al login.
+
+### 3B. Ruta pública con nginx + HTTPS (alternativa clásica)
+
+Si preferís no usar Cloudflare: apuntá un registro `A` de tu dominio a la IP del
+servidor y usá nginx como reverse proxy (dejá el dashboard en `--host 0.0.0.0`
+igual, para que el login siga activo; o `127.0.0.1` + `--insecure` NUNCA).
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name tudominio.com;
+    server_name panel.tudominio.com;
 
-    ssl_certificate     /etc/letsencrypt/live/tudominio.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/tudominio.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/panel.tudominio.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/panel.tudominio.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:9119;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;   # WebSockets del chat/gateway
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
     }
@@ -353,19 +451,27 @@ server {
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d tudominio.com
+sudo certbot --nginx -d panel.tudominio.com
 ```
 
-### 4. Login y dashboard
+### Verificación y problemas comunes
 
-Configura la contraseña del dashboard en `~/.clawksis/config.yaml`:
-
-```yaml
-dashboard:
-  password: "tu-password-aqui"
+```bash
+systemctl is-active clawk-dashboard          # → active
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9119/            # → 302 (login: gate OK)
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9119/api/config  # → 401 (API protegida)
 ```
 
-Luego entra a `https://tudominio.com` — verás el login y después el dashboard.
+- **Entra directo sin login** → estás escuchando en `127.0.0.1` (el gate no se
+  activa) o pasaste `--insecure`. Usá `--host 0.0.0.0`.
+- **La página carga pero el chat dice "Conectando..."** → el proxy no pasa
+  WebSockets: usá el tunnel de Cloudflare (los soporta nativo) o los headers
+  `Upgrade`/`Connection` de nginx del ejemplo.
+- **Cambié el password y no aplica** → el env del unit gana sobre config.yaml:
+  editá el unit + `sudo systemctl daemon-reload && sudo systemctl restart clawk-dashboard`.
+- **Actualizar Clawksis** → `clawk update` reconstruye el `web_dist`; el
+  servicio sigue sirviendo la versión nueva sin reiniciar (las pestañas
+  abiertas se recargan solas al detectar el bundle nuevo).
 
 ---
 
