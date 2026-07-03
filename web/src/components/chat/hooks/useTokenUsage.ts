@@ -294,7 +294,18 @@ export function useTokenUsage(
       }
 
       try {
-        await Promise.all(tasks);
+        // Un RPC puede quedar huérfano (WS reconectando, sesión no viva) y no
+        // resolver NUNCA — sin este techo, el popover quedaba en "Cargando
+        // datos…" para siempre. A los 10s soltamos con lo cacheado.
+        await Promise.race([
+          Promise.all(tasks),
+          new Promise((_, reject) =>
+            window.setTimeout(
+              () => reject(new Error("timeout cargando uso de tokens")),
+              10_000,
+            ),
+          ),
+        ]);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load token usage",

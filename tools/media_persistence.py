@@ -95,6 +95,76 @@ def _extract_dimensions(
         return (None, None)
 
 
+def register_local_media(
+    path,
+    media_type: str = "image",
+    *,
+    prompt: Optional[str] = None,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> Optional[str]:
+    """Registra en la galería un archivo YA guardado en disco (sin descarga).
+
+    Para providers que escriben directo a ``cache/images/`` (OpenAI y todo lo
+    que use agent.image_gen_provider.save_*): la fila apunta al archivo
+    existente (sin copia). Idempotente por path. NEVER raises.
+    """
+    if _is_disabled():
+        return None
+    try:
+        from pathlib import Path as _P
+
+        fp = _P(str(path))
+        if not fp.is_file() or media_type not in ("image", "video"):
+            return None
+        marker = "file://" + str(fp)
+        conn = sqlite3.connect(str(STATE_DB))
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM media_generations WHERE original_url = ?", (marker,)
+        )
+        existing = cur.fetchone()
+        if existing:
+            conn.close()
+            return existing[0]
+        media_id = str(uuid.uuid4())
+        now = time.time()
+        width, height = _extract_dimensions(fp, media_type)
+        cur.execute(
+            """
+            INSERT INTO media_generations (
+                id, session_id, message_id, media_type, status,
+                file_path, original_url, file_size_bytes, width, height,
+                prompt, model, provider, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                media_id,
+                session_id,
+                None,
+                media_type,
+                "ready",
+                str(fp),
+                marker,
+                fp.stat().st_size,
+                width,
+                height,
+                prompt,
+                model,
+                provider,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        logger.info("Local media registered: %s (%s)", media_id[:8], fp.name)
+        return media_id
+    except Exception:
+        logger.exception("register_local_media failed (non-fatal)")
+        return None
+
+
 def register_media(
     *,
     url: str,
