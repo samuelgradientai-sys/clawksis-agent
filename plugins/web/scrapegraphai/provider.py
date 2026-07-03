@@ -38,7 +38,7 @@ def _stringify(data: Any) -> str:
                 return val
         try:
             return json.dumps(data, ensure_ascii=False, indent=2, default=str)
-        except Exception:
+        except (TypeError, ValueError):
             return str(data)
     return str(data)
 
@@ -62,7 +62,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
             from tools.scrapegraph_common import is_available
 
             return is_available()
-        except Exception:
+        except ImportError:
             return False
 
     def supports_search(self) -> bool:
@@ -85,7 +85,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
 
         try:
             from tools.interrupt import is_interrupted
-        except Exception:  # interrupt module optional
+        except ImportError:  # interrupt module optional
 
             def is_interrupted() -> bool:
                 return False

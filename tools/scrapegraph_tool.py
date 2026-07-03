@@ -216,7 +216,9 @@ SCRAPEGRAPH_SCHEMA = {
                 "type": "boolean",
                 "description": (
                     "Render JavaScript with a local headless browser (default "
-                    "true). Set false to skip the browser for fast static pages."
+                    "true). ⚠️ On headless servers NEVER set this to false — "
+                    "the headed browser mode requires a display server (X11) "
+                    "and will crash. Just omit it (defaults to headless=true)."
                 ),
             },
         },

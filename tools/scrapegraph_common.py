@@ -74,7 +74,7 @@ def ensure_installed(*, prompt: bool = False) -> None:
         return
     try:
         from tools.lazy_deps import FeatureUnavailable, ensure
-    except Exception as exc:  # lazy_deps itself unavailable
+    except ImportError as exc:
         raise ScrapegraphUnavailable(_INSTALL_HINT) from exc
     try:
         ensure(LAZY_FEATURE, prompt=prompt)
@@ -104,7 +104,7 @@ def build_llm_config(*, temperature: float = 0.0) -> dict[str, Any]:
         api_key = getattr(client, "api_key", "") or ""
         raw_base = getattr(client, "base_url", None)
         base_url = str(raw_base).rstrip("/") if raw_base else None
-    except Exception as exc:  # noqa: BLE001 — fall back to env below
+    except (ImportError, AttributeError) as exc:
         logger.debug("scrapegraph: auxiliary client unavailable (%s)", exc)
 
     if not api_key:
