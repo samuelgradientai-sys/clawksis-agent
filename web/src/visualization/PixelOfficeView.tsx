@@ -188,10 +188,14 @@ export function PixelOfficeView({ feed, provider, onSelectAgent }: PixelOfficeVi
   const showLoading = isPixelAgents && !ready;
 
   return (
-    <div className="relative h-full min-h-[70vh] w-full overflow-hidden rounded-lg border border-border bg-black/40">
+    // h-full (sin min-h de viewport): el host decide la altura — página
+    // Visualization a pantalla completa o el panel lateral del chat. El
+    // min-h chico evita colapsos mientras el flex del host se asienta.
+    <div className="relative h-full min-h-[280px] w-full overflow-hidden rounded-xl border border-foreground/10 bg-black/30">
       {showLoading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
-          Loading office…
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#6C4FD6]" />
+          Cargando oficina…
         </div>
       )}
       <iframe

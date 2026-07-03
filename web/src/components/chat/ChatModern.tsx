@@ -1778,6 +1778,14 @@ export default function ChatModern() {
   const composerDisabled =
     status !== "connected" || !session.sessionId || resuming;
 
+  // Botón rojo = PARAR TODO: interrumpe el turno Y vacía la cola. Sin el
+  // clear, el mensaje encolado se auto-disparaba ~700ms después del interrupt
+  // y el agente "seguía de largo" — el bug de "le di stop y continuó".
+  const handleInterrupt = useCallback(() => {
+    queue.clear();
+    interrupt();
+  }, [queue, interrupt]);
+
   const handleSelectSession = (targetId: string) => {
     if (targetId === sidebarActiveSessionId) return;
     queue.clear();
@@ -1815,8 +1823,11 @@ export default function ChatModern() {
 
     // /stop con un turno corriendo = interrupción INMEDIATA (mismo RPC que el
     // botón rojo). El /stop del backend vía slash.exec no corta un turno en
-    // vuelo — por eso "seguía de largo" tras pedirle parar.
+    // vuelo — por eso "seguía de largo" tras pedirle parar. La cola se vacía
+    // TAMBIÉN: si quedara un mensaje encolado, el drenado lo dispararía
+    // ~700ms después del interrupt y el agente "seguiría de largo" con él.
     if (busy && (trimmed === "/stop" || trimmed === "/interrupt")) {
+      queue.clear();
       interrupt();
       return;
     }
@@ -2164,7 +2175,7 @@ export default function ChatModern() {
           disabled={composerDisabled}
           resuming={resuming}
           onSend={handleSend}
-          onInterrupt={interrupt}
+          onInterrupt={handleInterrupt}
           sendRpc={sendRpc}
           ready={readyForRpc}
           sessionId={session.sessionId}

@@ -503,7 +503,21 @@ export function useChatGateway(): UseChatGatewayResult {
     let reconnectDelay = 1_000;
     let reconnectTimer: number | undefined;
 
-    async function resolveSession(): Promise<string | null> {
+    interface ResumePayload {
+      session_id?: string;
+      resumed?: string;
+      running?: boolean;
+      inflight?: {
+        user?: string;
+        assistant?: string;
+        streaming?: boolean;
+      } | null;
+    }
+
+    async function resolveSession(): Promise<{
+      sid: string;
+      resume: ResumePayload | null;
+    } | null> {
       try {
         const recent = (await sendRpc("session.most_recent")) as {
           session_id?: string;
@@ -511,11 +525,13 @@ export function useChatGateway(): UseChatGatewayResult {
         const sid = recent?.session_id;
         if (sid) {
           try {
-            const resumeResult = (await sendRpc("session.resume", { session_id: sid })) as { session_id?: string; resumed?: string };
+            const resumeResult = (await sendRpc("session.resume", {
+              session_id: sid,
+            })) as ResumePayload;
             const liveSid = resumeResult?.session_id ?? sid;
             selectedKeyRef.current = sid;
             console.log("[useChatGateway] resumed session", sid, "→ live sid", liveSid);
-            return liveSid;
+            return { sid: liveSid, resume: resumeResult };
           } catch (resumeErr) {
             console.warn(
               "[useChatGateway] resume failed, creating new session",
@@ -536,15 +552,17 @@ export function useChatGateway(): UseChatGatewayResult {
           selectedKeyRef.current = newSid;
           console.log("[useChatGateway] created new session", newSid);
           try {
-            const resumeResult = (await sendRpc("session.resume", { session_id: newSid })) as { session_id?: string };
+            const resumeResult = (await sendRpc("session.resume", {
+              session_id: newSid,
+            })) as ResumePayload;
             const liveSid = resumeResult?.session_id ?? newSid;
-            return liveSid;
+            return { sid: liveSid, resume: resumeResult };
           } catch (err) {
             console.warn(
               "[useChatGateway] resume after create failed (continuing anyway)",
               err,
             );
-            return newSid;
+            return { sid: newSid, resume: null };
           }
         }
       } catch (err) {
@@ -553,6 +571,44 @@ export function useChatGateway(): UseChatGatewayResult {
       }
 
       return null;
+    }
+
+    // Turno EN VUELO al (re)cargar la página: el F5 con el agente trabajando
+    // detach-ea la sesión en el server (el turno SIGUE corriendo, hay 90s de
+    // gracia) y el resume la reengancha — pero este path descartaba `running`
+    // e `inflight`, así que la conversación aparecía "muerta" y la respuesta
+    // parecía perdida. Misma hidratación que switchSession.
+    function applyResumeLiveState(resume: ResumePayload | null) {
+      if (!resume) return;
+      setBusy(Boolean(resume.running));
+      const inflight = resume.inflight;
+      if (inflight && (inflight.streaming || inflight.assistant)) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const inflightUser = (inflight.user || "").trim();
+          const lastUser = [...next].reverse().find((m) => m.role === "user");
+          if (inflightUser && lastUser?.content !== inflightUser) {
+            next.push({
+              id: "usr-inflight-" + Date.now(),
+              role: "user",
+              content: inflightUser,
+              toolCalls: [],
+              streaming: false,
+              timestamp: Date.now(),
+            });
+          }
+          next.push({
+            id: "asst-inflight-" + Date.now(),
+            role: "assistant",
+            content: inflight.assistant || "",
+            toolCalls: [],
+            streaming: true,
+            timestamp: Date.now(),
+          });
+          return next;
+        });
+        setBusy(true);
+      }
     }
 
     async function connect() {
@@ -588,16 +644,15 @@ export function useChatGateway(): UseChatGatewayResult {
             // switch), re-reanudar ESA sesión — session.most_recent puede ser
             // un cron u otro chat y escribiría su transcript encima.
             let sid: string | null = null;
+            let resumePayload: ResumePayload | null = null;
             const preferredKey = selectedKeyRef.current;
             if (preferredKey) {
               try {
                 const r = (await sendRpc("session.resume", {
                   session_id: preferredKey,
-                })) as { session_id?: string; running?: boolean };
+                })) as ResumePayload;
                 sid = r?.session_id ?? preferredKey;
-                if (!cancelled && seqAtOpen === switchSeqRef.current) {
-                  setBusy(Boolean(r?.running));
-                }
+                resumePayload = r;
               } catch (resumeErr) {
                 console.warn(
                   "[useChatGateway] re-resume of selected session failed",
@@ -606,7 +661,11 @@ export function useChatGateway(): UseChatGatewayResult {
                 sid = null;
               }
             }
-            if (!sid) sid = await resolveSession();
+            if (!sid) {
+              const resolved = await resolveSession();
+              sid = resolved?.sid ?? null;
+              resumePayload = resolved?.resume ?? null;
+            }
             if (cancelled) return;
             if (!sid) {
               setErrorMessage("No se pudo crear/obtener sesión");
@@ -638,6 +697,12 @@ export function useChatGateway(): UseChatGatewayResult {
                 histErr,
               );
               if (seqAtOpen === switchSeqRef.current) setMessages([]);
+            }
+
+            // DESPUÉS del history: busy + burbujas del turno en vuelo (si el
+            // agente seguía trabajando cuando se recargó la página).
+            if (!cancelled && seqAtOpen === switchSeqRef.current) {
+              applyResumeLiveState(resumePayload);
             }
 
             liveSidRef.current = sid;
