@@ -30,11 +30,11 @@ import { Card } from "@nous-research/ui/ui/components/card";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { ToolCall, type ToolEntry } from "@/components/ToolCall";
 import { GatewayClient, type ConnectionState } from "@/lib/gatewayClient";
-import { CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { CLAWK_BASE_PATH, buildWsAuthParam, fetchJSON } from "@/lib/api";
 
 import { cn } from "@/lib/utils";
 import { AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface SessionInfo {
   cwd?: string;
@@ -49,6 +49,13 @@ interface RpcEnvelope {
 }
 
 const TOOL_LIMIT = 20;
+
+// Backup poll cadence for the model badge, and how recent a gateway
+// `session.info` has to be to veto the poll's value (a live session
+// override must win over the config-level default). FRESH > POLL so a
+// session.info always covers at least one full poll tick.
+const MODEL_POLL_MS = 12_000;
+const SESSION_INFO_FRESH_MS = 15_000;
 
 const STATE_LABEL: Record<ConnectionState, string> = {
   idle: "idle",
@@ -90,6 +97,11 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
   const [modelOpen, setModelOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Timestamp of the last `session.info` that carried a model — the backup
+  // poll below defers to it for SESSION_INFO_FRESH_MS so it never clobbers
+  // a fresher value pushed by the gateway.
+  const lastSessionInfoAt = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
     const offState = gw.onState(setState);
@@ -100,6 +112,11 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
       }
 
       if (ev.payload) {
+        // Only a payload that actually carries a model should veto the
+        // backup poll — cwd/warning-only updates must not block it.
+        if (ev.payload.model) {
+          lastSessionInfoAt.current = Date.now();
+        }
         setInfo((prev) => ({ ...prev, ...ev.payload }));
       }
     });
@@ -146,6 +163,70 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
       gw.close();
     };
   }, [gw]);
+
+  // Backup poll for the model badge. `session.info` only reaches this
+  // component for changes made through its own sidecar session (model
+  // picker) — a switch that lands in config from outside the session
+  // (Cookbook "Use" → use_model writes model.provider/default, /model in
+  // the PTY) never emits here, so the badge stayed stale until a reload.
+  // GET /api/model/info reads exactly those config keys (load_config() →
+  // model.default + model.provider in clawk_cli/web_server.py), so it
+  // reflects the Cookbook path; /api/status carries no model fields.
+  // Best-effort like everything else here: failures are silent, the WS
+  // paths own the error banner. A fresh session.info (last
+  // SESSION_INFO_FRESH_MS) always outranks the poll.
+  useEffect(() => {
+    let disposed = false;
+
+    const poll = async () => {
+      try {
+        const data = await fetchJSON<{ model?: string; provider?: string }>(
+          "/api/model/info",
+        );
+
+        if (disposed || !data?.model) {
+          return;
+        }
+
+        setInfo((prev) => {
+          // Gateway pushed a model recently (e.g. per-session /model
+          // override) — the live session wins over the config default.
+          if (Date.now() - lastSessionInfoAt.current < SESSION_INFO_FRESH_MS) {
+            return prev;
+          }
+
+          if (data.model === prev.model) {
+            return prev; // same reference → no re-render
+          }
+
+          return {
+            ...prev,
+            model: data.model,
+            provider: data.provider || prev.provider,
+          };
+        });
+      } catch {
+        // Silent — a missed poll just means the badge updates next tick.
+      }
+    };
+
+    const id = window.setInterval(poll, MODEL_POLL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void poll();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    void poll();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   // Event subscriber WebSocket — receives the rebroadcast of every
   // dispatcher emit from the PTY child's gateway.  See /api/pub +

@@ -1009,7 +1009,18 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
     // hosts.  Wide layouts still get WebGL for crisp box-drawing.
 
-    const useWebgl = terminalTierWidthPx(host) >= 768;
+    // El renderer WebGL de xterm NO soporta transparencia: pinta el fondo
+    // OPACO aunque el theme sea rgba(0,0,0,0) — con él, el glass del wrapper
+    // nunca se ve (terminal negro pleno). Si el navegador soporta
+    // backdrop-filter (= el glass está activo), usamos el renderer DOM, que
+    // sí deja pasar el fondo. WebGL queda para el fallback sólido, donde su
+    // velocidad extra sigue sumando y la transparencia no aplica.
+    const glassActive =
+      typeof CSS !== "undefined" &&
+      (CSS.supports("backdrop-filter", "blur(1px)") ||
+        CSS.supports("-webkit-backdrop-filter", "blur(1px)"));
+
+    const useWebgl = !glassActive && terminalTierWidthPx(host) >= 768;
 
     if (useWebgl) {
 

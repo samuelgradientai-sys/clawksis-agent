@@ -418,6 +418,40 @@ function isSafeRef(src: string): boolean {
   return /^https?:\/\//i.test(src) || src.startsWith("/");
 }
 
+/** Un path de filesystem local referido por el agente (/root/…, ~/…,
+ *  file://…) no es cargable por el browser: se puentea por el endpoint del
+ *  backend GET /media/local?path=… (allowlist ~/.clawksis/{audio_cache,
+ *  cache/images,artifacts}). Las refs same-origin que el dashboard ya sirve
+ *  (/artifacts/, /api/, /media/, assets) y las http(s) pasan intactas. */
+function toServableSrc(src: string): string {
+  let p = src.trim();
+  let fileScheme = false;
+  if (/^file:\/\//i.test(p)) {
+    fileScheme = true;
+    p = p.replace(/^file:\/\//i, "");
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+      /* % literal en el path — se usa tal cual */
+    }
+  }
+  const servable = [
+    "/artifacts/",
+    "/api/",
+    "/media/",
+    "/assets/",
+    "/ds-assets/",
+    "/fonts",
+  ];
+  const localFs =
+    fileScheme ||
+    p.startsWith("~/") ||
+    (p.startsWith("/") &&
+      !servable.some((k) => p.startsWith(k)) &&
+      p.indexOf("/", 1) !== -1);
+  return localFs ? "/media/local?path=" + encodeURIComponent(p) : src;
+}
+
 function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
   // Pattern priority: image > code > link > bold > italic > bare URL > line break
@@ -549,7 +583,7 @@ function InlineContent({
             // Solo http(s) o relativo (same-origin); data:/javascript: caen a
             // texto (anti-XSS). Sirve para image_generate/video_generate y para
             // cualquier archivo de media bajo ~/clawksis_exports.
-            const src = node.href.trim();
+            const src = toServableSrc(node.href);
             if (!isSafeRef(src)) {
               return (
                 <HighlightedText

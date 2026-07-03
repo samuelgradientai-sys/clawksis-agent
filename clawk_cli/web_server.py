@@ -721,6 +721,122 @@ async def get_media_file(media_id: str, request: Request):
     )
 
 
+# ---------------------------------------------------------------------------
+# Local media bridge — el agente referencia archivos locales en sus respuestas
+# (líneas "MEDIA:/root/.clawksis/audio_cache/briefing_x.ogg" de TTS y markdown
+# ![](/root/.clawksis/cache/images/x.png)). El chat Modern reescribe esas
+# referencias a GET /media/local?path=… y este endpoint las sirve.
+#
+# Security model (espejo de /media/file y /artifacts/download):
+# - loopback / SSH-tunnel only; con el OAuth gate activo la cookie de sesión
+#   sigue aplicando (la ruta NO está en _GATE_PUBLIC_PREFIXES a propósito);
+# - symlinks resueltos ANTES del chequeo de allowlist (sin escape vía link);
+# - traversal (..) neutralizado por resolve();
+# - SOLO archivos bajo ~/.clawksis/{audio_cache, cache/images, artifacts};
+# - solo extensiones allowlisted, MIME inferido del mapa (sin .svg: servirlo
+#   inline same-origin permitiría XSS).
+# Vive fuera de /api/ porque <img src>/<audio src> no pueden adjuntar el
+# session token header.
+# ---------------------------------------------------------------------------
+
+
+_LOCAL_MEDIA_EXT_TO_MIME: Dict[str, str] = {
+    # audio (TTS briefings, notas de voz)
+    ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
+    ".opus": "audio/opus",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
+    # imágenes
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".avif": "image/avif",
+    # video
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".ogv": "video/ogg",
+}
+
+
+def _local_media_allowed_roots() -> "List[Path]":
+    """Roots servibles por /media/local (resueltos para comparar post-symlink)."""
+    home = get_clawk_home()
+    return [
+        (home / "audio_cache").resolve(strict=False),
+        (home / "cache" / "images").resolve(strict=False),
+        (home / "artifacts").resolve(strict=False),
+    ]
+
+
+@app.get("/media/local")
+async def get_local_media(path: str, request: Request):
+    """Serve a local media file referenced by the agent, by absolute path.
+
+    Security model (mirrors /media/file and /artifacts/download):
+    - loopback / SSH-tunnel only;
+    - symlinks resolved BEFORE the allowlist check;
+    - only files under ~/.clawksis/{audio_cache, cache/images, artifacts};
+    - only allowlisted media extensions (MIME inferred from the map).
+    """
+    from pathlib import Path
+    from urllib.parse import unquote
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Local media is only available from local or SSH-tunnel dashboard access.",
+        )
+
+    raw_path = unquote(str(path or "")).strip()
+    if raw_path.startswith("file://"):
+        raw_path = raw_path[len("file://") :]
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="Missing media path.")
+
+    # resolve() colapsa ".." y resuelve symlinks ANTES del chequeo de roots.
+    candidate = Path(raw_path).expanduser().resolve(strict=False)
+
+    if not any(
+        _artifact_is_within_root(candidate, root)
+        for root in _local_media_allowed_roots()
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Media path is outside the allowed local media directories.",
+        )
+
+    ext = candidate.suffix.lower()
+    local_mime = _LOCAL_MEDIA_EXT_TO_MIME.get(ext)
+    if not local_mime:
+        raise HTTPException(
+            status_code=400, detail=f"Extension not allowed: {ext or '(none)'}"
+        )
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Media file not found.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Media path is not a file.")
+
+    return FileResponse(
+        str(candidate),
+        media_type=local_mime,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{candidate.name}"',
+        },
+    )
+
+
 # REST endpoints for the gallery UI (consumed by MediaPage.tsx).
 # Path: /api/gallery (NOT /api/media — that's taken by the equipo's endpoint
 # that serves images from cache/screenshots as base64 data URLs).

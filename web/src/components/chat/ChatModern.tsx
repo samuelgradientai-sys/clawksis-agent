@@ -311,6 +311,127 @@ function extractToolMedia(result: unknown): { src: string; video: boolean }[] {
   return out;
 }
 
+// ── Media local del agente (audio TTS + imágenes cacheadas) ─────────────────
+// El agente emite líneas "MEDIA:/root/.clawksis/audio_cache/briefing_x.ogg" y
+// markdown ![](/root/.clawksis/cache/images/x.png) con paths locales del
+// servidor. Sin esto se ven como texto crudo / imagen rota. Aquí: (a) se
+// extraen las líneas MEDIA: del texto y se renderizan como <audio>/<img>/
+// <video> vía GET /media/local?path=… (backend: allowlist audio_cache,
+// cache/images, artifacts), (b) se reescriben los paths locales del markdown
+// hacia ese mismo endpoint.
+const _LOCAL_AUDIO_RE = /\.(ogg|oga|opus|mp3|wav|m4a|aac|flac)(?:[?#]|$)/i;
+
+// Prefijos same-origin que el dashboard ya sirve: no reescribir.
+const _SERVABLE_PREFIXES = [
+  "/artifacts/",
+  "/api/",
+  "/media/",
+  "/assets/",
+  "/ds-assets/",
+  "/fonts",
+];
+
+/** Path de filesystem local del agente (/root/…, ~/…, file://…) — el browser
+ *  no puede cargarlo directo; hay que puentearlo por /media/local. */
+function _isLocalFsPath(p: string): boolean {
+  if (p.startsWith("file://") || p.startsWith("~/")) return true;
+  if (!p.startsWith("/")) return false;
+  if (_SERVABLE_PREFIXES.some((pref) => p.startsWith(pref))) return false;
+  // ≥2 segmentos (/root/x.png sí; /logo.png — asset raíz del dashboard — no).
+  return p.indexOf("/", 1) !== -1;
+}
+
+function _toLocalMediaUrl(p: string): string {
+  let abs = p;
+  if (abs.startsWith("file://")) {
+    abs = abs.slice("file://".length);
+    try {
+      abs = decodeURIComponent(abs);
+    } catch {
+      /* % literal en el path — se usa tal cual */
+    }
+  }
+  return "/media/local?path=" + encodeURIComponent(abs);
+}
+
+type LocalMedia = { src: string; kind: "audio" | "video" | "image"; name: string };
+
+const _MD_LOCAL_REF_RE = /(!?)\[([^\]]*)\]\(([^)]+)\)/g;
+
+/** Separa las líneas "MEDIA:<path>" del texto (van como adjuntos debajo del
+ *  mensaje) y reescribe imágenes/links markdown con paths locales hacia
+ *  /media/local. Respeta bloques de código (no toca su contenido). */
+function extractLocalMedia(content: string): {
+  text: string;
+  media: LocalMedia[];
+} {
+  const media: LocalMedia[] = [];
+  const seen = new Set<string>();
+  const push = (ref: string) => {
+    const src = _toLocalMediaUrl(ref);
+    if (seen.has(src)) return;
+    seen.add(src);
+    // .ogg matchea audio y video: audio gana (caso TTS briefing).
+    const kind = _LOCAL_AUDIO_RE.test(ref)
+      ? "audio"
+      : _TOOL_VID_RE.test(ref)
+        ? "video"
+        : "image";
+    const name = ref.split(/[\\/]/).filter(Boolean).pop() || "media";
+    media.push({ src, kind, name });
+  };
+
+  const rewriteRef = (
+    full: string,
+    bang: string,
+    label: string,
+    rawUrl: string,
+  ): string => {
+    const url = rawUrl.trim();
+    if (!_isLocalFsPath(url)) return full;
+    const isMedia =
+      _TOOL_IMG_RE.test(url) ||
+      _TOOL_VID_RE.test(url) ||
+      _LOCAL_AUDIO_RE.test(url);
+    if (!bang && !isMedia) return full; // link normal no-media: no tocar
+    if (_LOCAL_AUDIO_RE.test(url)) {
+      push(url); // .ogg/.mp3/.wav → <audio controls> debajo del texto
+      return label;
+    }
+    return `${bang}[${label}](${_toLocalMediaUrl(url)})`;
+  };
+
+  const kept: string[] = [];
+  let inFence = false;
+  for (const line of content.split("\n")) {
+    if (/^```/.test(line)) {
+      inFence = !inFence;
+      kept.push(line);
+      continue;
+    }
+    if (inFence) {
+      kept.push(line);
+      continue;
+    }
+    // (a) línea "MEDIA:<path absoluto>" → fuera del texto, como adjunto.
+    const m = line.trim().match(/^MEDIA:\s*(\S+)\s*$/);
+    if (
+      m &&
+      _isLocalFsPath(m[1]) &&
+      (_LOCAL_AUDIO_RE.test(m[1]) ||
+        _TOOL_IMG_RE.test(m[1]) ||
+        _TOOL_VID_RE.test(m[1]))
+    ) {
+      push(m[1]);
+      continue;
+    }
+    // (b) ![alt](/root/…png), ![alt](file:///…), [txt](/root/…mp4) → endpoint.
+    kept.push(line.replace(_MD_LOCAL_REF_RE, rewriteRef));
+  }
+
+  return { text: kept.join("\n"), media };
+}
+
 // ── Modo de respuesta: Rápida / Normal / Pensar ─────────────────────────────
 // Controla agent.reasoning_effort vía config.set (aplica en vivo al agente de
 // la sesión): para preguntas simples no quema razonamiento largo; para tareas
@@ -734,6 +855,13 @@ const MessageBubble = memo(function MessageBubble({
     }
     return out;
   }, [message.toolCalls]);
+
+  // Media local del agente: líneas "MEDIA:<path>" separadas del texto +
+  // markdown con paths locales reescrito hacia GET /media/local?path=….
+  const { text: assistantText, media: localMedia } = useMemo(
+    () => extractLocalMedia(message.content),
+    [message.content],
+  );
   // Modo edición inline para mensajes del usuario (estilo ChatGPT).
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -878,7 +1006,34 @@ const MessageBubble = memo(function MessageBubble({
           <TypingDots />
         ) : (
           <div className="text-[15px] leading-relaxed text-foreground">
-            <Markdown content={message.content} streaming={message.streaming} />
+            <Markdown content={assistantText} streaming={message.streaming} />
+          </div>
+        )}
+
+        {/* Audio TTS / media local que el agente referencia (líneas MEDIA:<path>
+            o markdown con paths /root/…): audio como <audio controls>, imagen/
+            video vía MediaAttachment, todo puenteado por GET /media/local. */}
+        {localMedia.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {localMedia.map((m, i) =>
+              m.kind === "audio" ? (
+                <audio
+                  key={m.src + i}
+                  src={m.src}
+                  controls
+                  preload="metadata"
+                  title={m.name}
+                  className="w-full max-w-md"
+                />
+              ) : (
+                <MediaAttachment
+                  key={m.src + i}
+                  src={m.src}
+                  video={m.kind === "video"}
+                  alt={m.name}
+                />
+              ),
+            )}
           </div>
         )}
 
