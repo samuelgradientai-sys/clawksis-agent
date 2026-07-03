@@ -30,6 +30,8 @@ import {
   FileText,
   Zap,
   Gauge,
+  Activity,
+  Images,
 } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
@@ -52,6 +54,7 @@ import { useImageAttachments } from "./hooks/useImageAttachments";
 import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
+import { ChatSidePanel, type SidePanelTab } from "./ChatSidePanel";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
@@ -71,6 +74,10 @@ interface ChatHeaderProps {
   onTokensClick?: () => void;
   /** Ref del botón de tokens para anclar el popover */
   tokensRef?: React.RefObject<HTMLButtonElement | null>;
+  /** Pestaña abierta del panel lateral (Visualización/Media), o null. */
+  sidePanel?: SidePanelTab | null;
+  /** Alterna el panel lateral: mismo tab = cerrar, otro tab = cambiar. */
+  onTogglePanel?: (tab: SidePanelTab) => void;
 }
 
 function ChatHeader({
@@ -83,6 +90,8 @@ function ChatHeader({
   title,
   onTokensClick,
   tokensRef,
+  sidePanel,
+  onTogglePanel,
 }: ChatHeaderProps) {
   const statusColor =
     status === "connected"
@@ -120,26 +129,55 @@ function ChatHeader({
         )}
       </div>
 
-      <button
-        type="button"
-        ref={tokensRef}
-        onClick={onTokensClick}
-        disabled={!onTokensClick}
-        title={"Ver desglose de uso de tokens · sesión " + shortSession}
-        className="hidden md:flex items-center gap-2 rounded-lg border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:border-[#6C4FD6]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
-        aria-label="Abrir menú de uso de tokens"
-      >
-        <Brain className="size-3.5 text-[#6C4FD6]" />
-        <span className="font-medium">Uso de tokens</span>
-        <span className="hidden text-muted-foreground lg:inline">·</span>
-        <span className="font-mono text-foreground/90">{tokensLabel}</span>
-        {tokenPercent !== null && (
-          <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            {tokenPercent}%
-          </span>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          ref={tokensRef}
+          onClick={onTokensClick}
+          disabled={!onTokensClick}
+          title={"Ver desglose de uso de tokens · sesión " + shortSession}
+          className="hidden md:flex items-center gap-2 rounded-lg border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:border-[#6C4FD6]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
+          aria-label="Abrir menú de uso de tokens"
+        >
+          <Brain className="size-3.5 text-[#6C4FD6]" />
+          <span className="font-medium">Uso de tokens</span>
+          <span className="hidden text-muted-foreground lg:inline">·</span>
+          <span className="font-mono text-foreground/90">{tokensLabel}</span>
+          {tokenPercent !== null && (
+            <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {tokenPercent}%
+            </span>
+          )}
+          <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
+        </button>
+
+        {onTogglePanel && (
+          <>
+            <button
+              type="button"
+              onClick={() => onTogglePanel("viz")}
+              title="Visualización: mirá a los agentes trabajar en vivo"
+              aria-label="Abrir panel de visualización"
+              className={`rounded-lg p-1.5 transition-colors hover:bg-muted/40 hover:text-foreground ${
+                sidePanel === "viz" ? "bg-[#6C4FD6]/15 text-[#6C4FD6]" : "text-muted-foreground"
+              }`}
+            >
+              <Activity className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onTogglePanel("media")}
+              title="Media: todo el contenido generado (imágenes/videos)"
+              aria-label="Abrir galería de media"
+              className={`rounded-lg p-1.5 transition-colors hover:bg-muted/40 hover:text-foreground ${
+                sidePanel === "media" ? "bg-[#6C4FD6]/15 text-[#6C4FD6]" : "text-muted-foreground"
+              }`}
+            >
+              <Images className="size-4" />
+            </button>
+          </>
         )}
-        <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
-      </button>
+      </div>
     </div>
   );
 }
@@ -1575,6 +1613,28 @@ export default function ChatModern() {
 
   const tokensButtonRef = useRef<HTMLButtonElement>(null);
   const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
+  // Panel lateral Visualización/Media. Persistimos el último estado para que
+  // quien vive con la oficina abierta la recupere al volver.
+  const [sidePanel, setSidePanel] = useState<SidePanelTab | null>(() => {
+    try {
+      const v = window.localStorage.getItem("clawksis-chat-side-panel");
+      return v === "viz" || v === "media" ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const toggleSidePanel = useCallback((tab: SidePanelTab) => {
+    setSidePanel((prev) => {
+      const next = prev === tab ? null : tab;
+      try {
+        if (next) window.localStorage.setItem("clawksis-chat-side-panel", next);
+        else window.localStorage.removeItem("clawksis-chat-side-panel");
+      } catch {
+        /* sin persistencia */
+      }
+      return next;
+    });
+  }, []);
   const didAutoOpenSidebarTopRef = useRef(false);
   // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
   const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
@@ -2025,7 +2085,7 @@ export default function ChatModern() {
 
       {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
           (backdrop) a través de un velo translúcido que mantiene legibilidad. */}
-      <div className="flex h-full min-h-0 flex-row overflow-hidden bg-background/30">
+      <div className="relative flex h-full min-h-0 flex-row overflow-hidden bg-background/30">
       <SessionSidebar
         sessions={sidebarSessions}
         projects={projects}
@@ -2056,6 +2116,8 @@ export default function ChatModern() {
             title={activeTitle ?? undefined}
             onTokensClick={handleTokensClick}
             tokensRef={tokensButtonRef}
+            sidePanel={sidePanel}
+            onTogglePanel={toggleSidePanel}
           />
           <TokenUsagePopover
             open={tokensPopoverOpen}
@@ -2163,6 +2225,14 @@ export default function ChatModern() {
           buildPromptWithQuotes={buildPromptWithQuotes}
         />
       </div>
+
+      {sidePanel && (
+        <ChatSidePanel
+          tab={sidePanel}
+          onSelectTab={toggleSidePanel}
+          onClose={() => toggleSidePanel(sidePanel)}
+        />
+      )}
       </div>
     </>
   );

@@ -384,15 +384,9 @@ const BUILTIN_NAV_REST: NavItem[] = [
 
   },
 
-  {
-
-    path: "/visualization",
-
-    label: "Visualization",
-
-    icon: Eye,
-
-  },
+  // "/visualization" ya no es sección del sidebar: vive dentro del chat
+  // moderno como panel lateral (ChatSidePanel). La ruta sigue viva para
+  // bookmarks/deep-links viejos.
 
   {
 
