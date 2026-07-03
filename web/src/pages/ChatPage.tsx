@@ -212,7 +212,7 @@ const TERMINAL_THEME_STATIC = {
 // (fallback vía `supports-[backdrop-filter]`, cero costo si no hay soporte).
 // Los colores ANSI, el cursor y la selección no se tocan: solo el fondo de
 // las celdas vacías deja pasar el fondo de la app.
-const TERMINAL_GLASS_ALPHA = 0.72;
+const TERMINAL_GLASS_ALPHA = 0.5;
 
 const XTERM_TRANSPARENT_BG = "rgba(0,0,0,0)";
 

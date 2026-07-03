@@ -1,15 +1,17 @@
 /**
  * useChatMode — Hook para gestionar la preferencia de modo de chat.
  *
- * Persiste en localStorage (clave "clawksis:chat-mode") y se sincroniza
- * entre pestañas mediante el evento storage.
+ * Estado a nivel módulo (useSyncExternalStore) para que TODAS las instancias
+ * del hook en la misma pestaña se sincronicen — la barra de pestañas vive en
+ * el header del chat moderno Y en la banda del modo terminal, y ambas tienen
+ * que reaccionar al mismo cambio. Persiste en localStorage (clave
+ * "clawksis:chat-mode") y se sincroniza entre pestañas del navegador vía el
+ * evento storage.
  *
- * Default: "terminal" — para no romper la UX de usuarios existentes que
- * están acostumbrados al chat actual con xterm. Los usuarios que prefieran
- * el modo moderno deben elegirlo explícitamente con el toggle.
+ * Default: "terminal" — para no romper la UX de usuarios existentes.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export type ChatMode = "terminal" | "modern";
 
@@ -27,34 +29,41 @@ function readMode(): ChatMode {
   }
 }
 
-function writeMode(mode: ChatMode): void {
-  if (typeof window === "undefined") return;
+let current: ChatMode = readMode();
+
+const listeners = new Set<() => void>();
+
+function emit(): void {
+  for (const l of listeners) l();
+}
+
+export function setChatMode(mode: ChatMode): void {
+  current = mode;
   try {
     window.localStorage.setItem(STORAGE_KEY, mode);
   } catch {
     /* ignore */
   }
+  emit();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key !== STORAGE_KEY) return;
+    if (e.newValue === "modern" || e.newValue === "terminal") {
+      current = e.newValue;
+      emit();
+    }
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 export function useChatMode(): [ChatMode, (mode: ChatMode) => void] {
-  const [mode, setMode] = useState<ChatMode>(readMode);
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return;
-      const next = e.newValue;
-      if (next === "modern" || next === "terminal") {
-        setMode(next);
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  const updateMode = useCallback((next: ChatMode) => {
-    writeMode(next);
-    setMode(next);
-  }, []);
-
-  return [mode, updateMode];
+  const mode = useSyncExternalStore(subscribe, () => current, () => DEFAULT_MODE);
+  return [mode, setChatMode];
 }

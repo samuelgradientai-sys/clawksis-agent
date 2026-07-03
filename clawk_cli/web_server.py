@@ -11767,12 +11767,28 @@ async def get_models_analytics(days: int = 30):
 
         rows = [dict(r) for r in cur.fetchall()]
 
+        # Modelos ocultados por el usuario desde la página Modelos (borrar
+        # de la lista sin tocar las sesiones que los usaron). Claves
+        # "provider|model" en config dashboard.hidden_models.
+        hidden = set()
+        try:
+            from clawk_cli.config import cfg_get, load_config
+
+            raw_hidden = cfg_get(load_config(), "dashboard", "hidden_models", default=None)
+            if isinstance(raw_hidden, list):
+                hidden = {str(h) for h in raw_hidden}
+        except Exception:
+            pass
+
         models = []
 
         for row in rows:
             provider = row.get("billing_provider") or ""
 
             model_name = row["model"]
+
+            if f"{provider}|{model_name}" in hidden or model_name in hidden:
+                continue
 
             caps = {}
 
@@ -11848,6 +11864,45 @@ async def get_models_analytics(days: int = 30):
 
     finally:
         db.close()
+
+
+class HideModelBody(BaseModel):
+    model: str
+    provider: str = ""
+
+
+@app.post("/api/analytics/models/hide")
+async def post_analytics_models_hide(body: HideModelBody):
+    """Oculta un modelo de la página Modelos (no borra sesiones ni historia).
+
+    Se persiste en config ``dashboard.hidden_models`` como "provider|model";
+    para restaurarlo basta quitar la entrada de esa lista en Config.
+    """
+
+    model = (body.model or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+
+    from clawk_cli.config import load_config, save_config
+
+    def _persist():
+        cfg = load_config()
+        dashboard = cfg.get("dashboard")
+        if not isinstance(dashboard, dict):
+            dashboard = {}
+            cfg["dashboard"] = dashboard
+        hidden = dashboard.get("hidden_models")
+        if not isinstance(hidden, list):
+            hidden = []
+        key = f"{(body.provider or '').strip()}|{model}"
+        if key not in hidden:
+            hidden.append(key)
+        dashboard["hidden_models"] = hidden
+        save_config(cfg)
+        return hidden
+
+    hidden = await asyncio.to_thread(_persist)
+    return {"ok": True, "hidden_models": hidden}
 
 
 # ---------------------------------------------------------------------------

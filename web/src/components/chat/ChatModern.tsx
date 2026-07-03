@@ -53,6 +53,7 @@ import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ChatSidePanel } from "./ChatSidePanel";
+import { ChatViewTabs } from "./ChatViewTabs";
 import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
@@ -143,6 +144,10 @@ function ChatHeader({
           )}
           <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
         </button>
+
+        {/* Pestañas de vista junto a "Uso de tokens": el chat moderno gana la
+            altura de la banda que antes vivía arriba (ChatRouter). */}
+        <ChatViewTabs />
       </div>
     </div>
   );

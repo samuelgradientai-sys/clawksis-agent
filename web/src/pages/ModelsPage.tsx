@@ -8,11 +8,12 @@ import {
   RefreshCw,
   Settings2,
   Star,
+  Trash2,
   Wrench,
   X,
   Zap,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, fetchJSON } from "@/lib/api";
 import type {
   AuxiliaryModelsResponse,
   AuxiliaryTaskAssignment,
@@ -362,6 +363,7 @@ function ModelCard({
   main,
   aux,
   onAssigned,
+  onHide,
   showTokens,
 }: {
   entry: ModelsAnalyticsModelEntry;
@@ -369,6 +371,7 @@ function ModelCard({
   main: { provider: string; model: string } | null;
   aux: AuxiliaryTaskAssignment[];
   onAssigned(): void;
+  onHide(entry: ModelsAnalyticsModelEntry): void;
   showTokens: boolean;
 }) {
   const { t } = useI18n();
@@ -452,13 +455,26 @@ function ModelCard({
                 </div>
               )
             )}
-            <UseAsMenu
-              provider={provider}
-              model={entry.model}
-              isMain={isMain}
-              mainAuxTask={mainAuxTask}
-              onAssigned={onAssigned}
-            />
+            <div className="flex items-center gap-1">
+              <UseAsMenu
+                provider={provider}
+                model={entry.model}
+                isMain={isMain}
+                mainAuxTask={mainAuxTask}
+                onAssigned={onAssigned}
+              />
+              {!isMain && (
+                <button
+                  type="button"
+                  onClick={() => onHide(entry)}
+                  title="Quitar este modelo de la lista (no borra sesiones ni historial)"
+                  aria-label={`Quitar ${entry.model} de la lista`}
+                  className="rounded p-1 text-text-tertiary transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -883,6 +899,29 @@ export default function ModelsPage() {
     setSaveKey((k) => k + 1);
   }, [refreshAux]);
 
+  // Quitar un modelo de la lista (dashboard.hidden_models en config). No
+  // borra sesiones ni historial — solo lo esconde de esta página.
+  const onHide = useCallback(
+    (entry: ModelsAnalyticsModelEntry) => {
+      if (
+        !window.confirm(
+          `¿Quitar "${entry.model}" de la lista? No borra sesiones ni historial; ` +
+            "se restaura quitándolo de dashboard.hidden_models en Config.",
+        )
+      ) {
+        return;
+      }
+      void fetchJSON("/api/analytics/models/hide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: entry.model, provider: entry.provider || "" }),
+      })
+        .then(() => load())
+        .catch((err) => setError(String(err)));
+    },
+    [load],
+  );
+
   useLayoutEffect(() => {
     // Period selector + refresh both live in afterTitle so the controls
     // sit immediately next to the page title instead of being pinned to
@@ -1046,6 +1085,7 @@ export default function ModelsPage() {
                   main={aux?.main ?? null}
                   aux={aux?.tasks ?? []}
                   onAssigned={onAssigned}
+                  onHide={onHide}
                   showTokens={showTokens}
                 />
               ))}
