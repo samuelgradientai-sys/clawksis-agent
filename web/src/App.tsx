@@ -50,6 +50,8 @@ import {
 
   BookOpen,
 
+  ChevronDown,
+
   Clock,
 
   Code,
@@ -1407,25 +1409,61 @@ export default function App() {
 
               <ul className="flex flex-col">
 
-                {sidebarNav.coreItems.map((item) => (
-
-                  <SidebarNavLink
-
-                    closeMobile={closeMobile}
-
-                    collapsed={isDesktopCollapsed}
-
-                    item={item}
-
-                    key={item.path}
-
-                    t={t}
-
-                    tooltipWarmRef={tooltipWarmRef}
-
-                  />
-
-                ))}
+                {(() => {
+                  // Grupos desplegables: Chat agrupa sus vistas hermanas y
+                  // las integraciones van juntas. En modo colapsado (solo
+                  // íconos) se renderiza plano — los grupos no aportan ahí.
+                  const items = sidebarNav.coreItems;
+                  if (isDesktopCollapsed) {
+                    return items.map((item) => (
+                      <SidebarNavLink
+                        closeMobile={closeMobile}
+                        collapsed={isDesktopCollapsed}
+                        item={item}
+                        key={item.path}
+                        t={t}
+                        tooltipWarmRef={tooltipWarmRef}
+                      />
+                    ));
+                  }
+                  const byPath = new Map(items.map((i) => [i.path, i]));
+                  const groupedPaths = new Set(
+                    NAV_GROUPS.flatMap((g) => g.paths),
+                  );
+                  return items.map((item) => {
+                    if (!groupedPaths.has(item.path)) {
+                      return (
+                        <SidebarNavLink
+                          closeMobile={closeMobile}
+                          collapsed={isDesktopCollapsed}
+                          item={item}
+                          key={item.path}
+                          t={t}
+                          tooltipWarmRef={tooltipWarmRef}
+                        />
+                      );
+                    }
+                    // El grupo se pinta en la posición de su PRIMER miembro
+                    // presente; el resto de miembros se omiten del nivel raíz.
+                    const group = NAV_GROUPS.find(
+                      (g) =>
+                        g.paths.find((p) => byPath.has(p)) === item.path,
+                    );
+                    if (!group) return null;
+                    return (
+                      <SidebarNavGroup
+                        key={"group:" + group.id}
+                        group={group}
+                        items={group.paths
+                          .map((p) => byPath.get(p))
+                          .filter((x): x is NavItem => !!x)}
+                        closeMobile={closeMobile}
+                        t={t}
+                        tooltipWarmRef={tooltipWarmRef}
+                      />
+                    );
+                  });
+                })()}
 
               </ul>
 
@@ -1758,6 +1796,149 @@ export default function App() {
 }
 
 
+
+// ── Grupos desplegables del sidebar ─────────────────────────────────────────
+// Chat contiene sus vistas hermanas (Sesiones/Modelos/Media) y las
+// integraciones van bajo un solo encabezado. `home` = path al que navega el
+// encabezado del grupo (si lo tiene); el chevron despliega/colapsa.
+
+interface NavGroup {
+  id: string;
+  label: string;
+  home?: string;
+  paths: string[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "chat",
+    label: "Chat",
+    home: "/chat",
+    paths: ["/chat", "/sessions", "/models", "/media"],
+  },
+  {
+    id: "integraciones",
+    label: "Integraciones",
+    paths: ["/skills", "/plugins", "/mcp", "/channels", "/webhooks", "/pairing"],
+  },
+];
+
+const NAV_GROUP_STORAGE_PREFIX = "clawksis-nav-group-";
+
+function SidebarNavGroup({
+  group,
+  items,
+  closeMobile,
+  t,
+  tooltipWarmRef,
+}: {
+  group: NavGroup;
+  items: NavItem[];
+  closeMobile: () => void;
+  t: Translations;
+  tooltipWarmRef: TooltipWarmRef;
+}) {
+  const { pathname } = useLocation();
+  const containsActive = items.some(
+    (i) => pathname === i.path || pathname.startsWith(i.path + "/"),
+  );
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const v = window.localStorage.getItem(NAV_GROUP_STORAGE_PREFIX + group.id);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch {
+      /* sin persistencia */
+    }
+    return true; // desplegado por defecto: nada desaparece de golpe
+  });
+  const toggle = () => {
+    setOpen((prev) => {
+      try {
+        window.localStorage.setItem(
+          NAV_GROUP_STORAGE_PREFIX + group.id,
+          prev ? "0" : "1",
+        );
+      } catch {
+        /* ídem */
+      }
+      return !prev;
+    });
+  };
+
+  const home = group.home ? items.find((i) => i.path === group.home) : null;
+  const HomeIcon = home?.icon;
+  const children = items.filter((i) => i.path !== group.home);
+
+  const headerClasses = cn(
+    "group/nav relative flex w-full items-center gap-3",
+    "px-5 py-2.5",
+    "font-mondwest font-bold text-display uppercase text-sm tracking-[0.12em]",
+    "whitespace-nowrap transition-colors cursor-pointer",
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-midground",
+    containsActive && !open
+      ? "text-midground"
+      : "text-text-secondary hover:text-midground",
+  );
+
+  return (
+    <li>
+      <div className="flex items-center">
+        {home && HomeIcon ? (
+          <NavLink
+            to={home.path}
+            onClick={closeMobile}
+            className={({ isActive }) =>
+              cn(headerClasses, "flex-1", isActive && "text-midground")
+            }
+            style={{ clipPath: "var(--component-tab-clip-path)" }}
+          >
+            <HomeIcon className="h-4 w-4 shrink-0" />
+            <span>{group.label}</span>
+          </NavLink>
+        ) : (
+          <button
+            type="button"
+            onClick={toggle}
+            className={cn(headerClasses, "flex-1 text-left")}
+          >
+            <Plug className="h-4 w-4 shrink-0" />
+            <span>{group.label}</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={(open ? "Colapsar " : "Desplegar ") + group.label}
+          className="mr-3 rounded p-1 text-text-tertiary transition-colors hover:text-midground"
+        >
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-150",
+              !open && "-rotate-90",
+            )}
+          />
+        </button>
+      </div>
+
+      {open && (
+        <ul className="ml-5 flex flex-col border-l border-current/10">
+          {children.map((item) => (
+            <SidebarNavLink
+              closeMobile={closeMobile}
+              collapsed={false}
+              item={item}
+              key={item.path}
+              t={t}
+              tooltipWarmRef={tooltipWarmRef}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 function SidebarNavLink({
 
