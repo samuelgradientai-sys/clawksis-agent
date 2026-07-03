@@ -4,15 +4,14 @@ No React, no JavaScript dependency. Listed providers come from the
 registry; clicking a provider sends a GET to
 ``/auth/login?provider=<name>``.
 
-Visual styling mirrors the Nous Research design system (the
-``@nous-research/ui`` package the React dashboard uses): the same
-``Collapse`` / ``Rules Compressed`` typeface, amber-on-dark colour
-tokens (``#170d02`` / ``#ffac02`` / ``#fff``), uppercase + wide-tracking
-brand chrome, and the inset-bevel button shadow. Fonts are served
-out of the SPA's ``/fonts/`` directory which the dashboard-auth gate
-already allowlists pre-auth (see ``_GATE_PUBLIC_PREFIXES`` in
-``middleware.py``), so the page renders without needing the React
-bundle loaded.
+Visual styling follows the Clawksis brand (Gradient AI): midnight-indigo
+background + the brand purple ``#6C4FD6`` accent (``#0e0c20`` /
+``#6C4FD6`` / ``#fff``), the pixel C logo, and the same ``Collapse`` /
+``Rules Compressed`` typefaces + uppercase wide-tracking chrome the DS
+uses. Fonts and the logo are served from the SPA's public files, which
+the dashboard-auth gate already allowlists pre-auth (see
+``_GATE_PUBLIC_PREFIXES`` in ``middleware.py``), so the page renders
+without needing the React bundle loaded.
 
 Test-stable class names: the existing test suite extracts the
 ``class="provider-btn"`` anchor href to walk the OAuth flow. That
@@ -72,12 +71,12 @@ _LOGIN_HTML_TEMPLATE = """\
   }}
 
   :root {{
-    --background-base: #170d02;
-    --background: #170d02;
-    --midground: #ffac02;
+    --background-base: #0e0c20;
+    --background: #0e0c20;
+    --midground: #6C4FD6;
     --foreground: #ffffff;
-    --hairline: color-mix(in srgb, #ffac02 18%, transparent);
-    --hairline-strong: color-mix(in srgb, #ffac02 35%, transparent);
+    --hairline: color-mix(in srgb, #6C4FD6 22%, transparent);
+    --hairline-strong: color-mix(in srgb, #6C4FD6 40%, transparent);
   }}
 
   *, *::before, *::after {{ box-sizing: border-box; }}
@@ -199,7 +198,7 @@ _LOGIN_HTML_TEMPLATE = """\
     padding: 0.95rem 1rem;
     text-align: center;
     background: var(--midground);
-    color: var(--background-base);
+    color: #ffffff;
     font-family: 'Collapse', sans-serif;
     font-weight: 700;
     font-size: 0.78rem;
@@ -215,7 +214,11 @@ _LOGIN_HTML_TEMPLATE = """\
     transition: filter 0.12s ease-out;
   }}
   .provider-btn:hover {{
-    filter: brightness(1.08);
+    filter: brightness(1.12);
+    box-shadow:
+      inset 1px 1px 0 0 rgba(255, 255, 255, 0.5),
+      inset -1px -1px 0 0 rgba(0, 0, 0, 0.5),
+      0 0 22px rgba(108, 79, 214, 0.45);
   }}
   .provider-btn:active {{
     /* DS Button uses `active:invert` on the default surface. */
@@ -294,16 +297,28 @@ _LOGIN_HTML_TEMPLATE = """\
     margin: 0 0.6em 0.2em;
   }}
 
-  /* Selection — DS uses midground bg + background text. */
+  /* Logo pixelado de Clawksis sobre la marca. */
+  .logo {{
+    display: block;
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 0.9rem;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 0 16px rgba(108, 79, 214, 0.5));
+  }}
+
+  /* Selection — DS uses midground bg + white text. */
   ::selection {{
     background: var(--midground);
-    color: var(--background-base);
+    color: #ffffff;
   }}
 </style>
 </head>
 <body>
 <main>
-  <div class="brand">Nous<span class="dot"></span>Research</div>
+  <img class="logo" src="/clawksis-logo-512.png" alt="" onerror="this.style.display='none'">
+  <div class="brand">Gradient<span class="dot"></span>AI</div>
   <div class="card">
     <h1>Sign in</h1>
     <p class="subtitle">Choose a sign-in method to continue to the Clawksis dashboard.</p>
@@ -343,10 +358,10 @@ _EMPTY_HTML = """\
     src: url('/fonts/RulesCompressed-Medium.woff2') format('woff2');
   }
   :root {
-    --background-base: #170d02;
-    --midground: #ffac02;
+    --background-base: #0e0c20;
+    --midground: #6C4FD6;
     --foreground: #ffffff;
-    --hairline: color-mix(in srgb, #ffac02 18%, transparent);
+    --hairline: color-mix(in srgb, #6C4FD6 22%, transparent);
   }
   *, *::before, *::after { box-sizing: border-box; }
   html, body {
@@ -381,7 +396,7 @@ _EMPTY_HTML = """\
   p { margin: 0 0 1rem; }
   code {
     background: var(--midground);
-    color: var(--background-base);
+    color: #ffffff;
     padding: 0.1em 0.35em;
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
@@ -393,9 +408,11 @@ _EMPTY_HTML = """\
 <h1>Sign-in unavailable</h1>
 <p>This dashboard is bound to a non-loopback host but no authentication
 providers are installed.</p>
-<p>Install <code>plugins/dashboard-auth-nous</code> (default) or another
-auth provider, or restart with <code>--insecure</code> to bypass the
-auth gate (not recommended on untrusted networks).</p>
+<p>Configure the built-in login (<code>dashboard.basic_auth</code> with
+username + password in <code>~/.clawksis/config.yaml</code> or the
+<code>CLAWK_DASHBOARD_BASIC_AUTH_*</code> env vars), or restart with
+<code>--insecure</code> to bypass the auth gate (not recommended on
+untrusted networks).</p>
 </main>
 </body>
 </html>

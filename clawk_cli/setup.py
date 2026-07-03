@@ -319,10 +319,10 @@ def prompt(question: str, default: str = None, password: bool = False) -> str:
 
     try:
         if password:
-            value = masked_secret_prompt(color(display, Colors.YELLOW))
+            value = masked_secret_prompt(color(display, Colors.MORADO))
 
         else:
-            value = input(color(display, Colors.YELLOW))
+            value = input(color(display, Colors.MORADO))
 
         cleaned = _sanitize_pasted_input(value)
 
@@ -385,7 +385,7 @@ def prompt_choice(
 
         return idx
 
-    print(color(question, Colors.YELLOW))
+    print(color(question, Colors.MORADO))
 
     for i, choice in enumerate(choices):
         marker = "●" if i == default else "○"
@@ -431,7 +431,7 @@ def prompt_yes_no(question: str, default: bool = True) -> bool:
     while True:
         try:
             value = (
-                input(color(f"{question} [{default_str}]: ", Colors.YELLOW))
+                input(color(f"{question} [{default_str}]: ", Colors.MORADO))
                 .strip()
                 .lower()
             )
@@ -890,12 +890,12 @@ def _print_setup_summary(config: dict, clawk_home):
 
     print()
 
-    print(f"   {color('Settings:', Colors.YELLOW)}  {get_config_path()}")
+    print(f"   {color('Settings:', Colors.MORADO)}  {get_config_path()}")
 
-    print(f"   {color('API Keys:', Colors.YELLOW)}  {get_env_path()}")
+    print(f"   {color('API Keys:', Colors.MORADO)}  {get_env_path()}")
 
     print(
-        f"   {color('Data:', Colors.YELLOW)}      {clawk_home}/cron/, sessions/, logs/"
+        f"   {color('Data:', Colors.MORADO)}      {clawk_home}/cron/, sessions/, logs/"
     )
 
     print()

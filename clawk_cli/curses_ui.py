@@ -628,7 +628,14 @@ def _run_curses_menu(
 
                 curses.init_pair(1, curses.COLOR_GREEN, -1)
 
-                curses.init_pair(2, curses.COLOR_YELLOW, -1)
+                # Título de los pickers en el morado de marca Clawksis:
+                # xterm 98 (#875fd7, el más cercano a #6C4FD6) en terminales
+                # de 256 colores; fallback a magenta en terminales de 8.
+                curses.init_pair(
+                    2,
+                    98 if curses.COLORS >= 256 else curses.COLOR_MAGENTA,
+                    -1,
+                )
 
                 if extra_color_pairs:
                     curses.init_pair(

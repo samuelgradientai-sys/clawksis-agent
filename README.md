@@ -317,6 +317,13 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 
 Objetivo: entrar al dashboard desde `https://panel.tudominio.com` en cualquier
 dispositivo, **sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**.
+
+> **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
+> `127.0.0.1`) entra directo, sin login — igual que siempre. La contraseña se
+> pide **solo** cuando lo exponés hacia afuera (`--host 0.0.0.0`, lo que
+> necesita un dominio): el gate se enciende automáticamente en ese modo. Para
+> pasar de local a dominio basta cambiar el `--host` del servicio y reiniciar.
+
 Son tres piezas, cada una independiente:
 
 1. El **dashboard como servicio** (systemd) — arranca solo, sobrevive reinicios.
