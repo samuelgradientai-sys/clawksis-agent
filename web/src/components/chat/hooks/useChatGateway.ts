@@ -128,6 +128,10 @@ export function useChatGateway(): UseChatGatewayResult {
   // pueda filtrar eventos de OTRAS sesiones sin re-suscribirse. El WS trae los
   // eventos de todas las sesiones del gateway (chats paralelos, crons).
   const liveSidRef = useRef<string | null>(null);
+  // KEY (id de DB) de la conversación que el usuario tiene abierta. En una
+  // reconexión se re-reanuda ESTA sesión — no session.most_recent, que puede
+  // ser un cron u otro chat recién corrido y pisaría el transcript en pantalla.
+  const selectedKeyRef = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
@@ -478,6 +482,7 @@ export function useChatGateway(): UseChatGatewayResult {
           try {
             const resumeResult = (await sendRpc("session.resume", { session_id: sid })) as { session_id?: string; resumed?: string };
             const liveSid = resumeResult?.session_id ?? sid;
+            selectedKeyRef.current = sid;
             console.log("[useChatGateway] resumed session", sid, "→ live sid", liveSid);
             return liveSid;
           } catch (resumeErr) {
@@ -497,6 +502,7 @@ export function useChatGateway(): UseChatGatewayResult {
         })) as { session_id?: string };
         const newSid = created?.session_id;
         if (newSid) {
+          selectedKeyRef.current = newSid;
           console.log("[useChatGateway] created new session", newSid);
           try {
             const resumeResult = (await sendRpc("session.resume", { session_id: newSid })) as { session_id?: string };
@@ -543,19 +549,45 @@ export function useChatGateway(): UseChatGatewayResult {
           if (cancelled) return;
           reconnectDelay = 1_000; // conexión sana → resetear el backoff
           setStatus("connected");
+          // Si el usuario cambia de conversación mientras esta init corre,
+          // switchSession avanza el seq → abortamos antes de pisar SU vista.
+          const seqAtOpen = switchSeqRef.current;
           try {
-            const sid = await resolveSession();
+            // Con una conversación abierta (reconexión, o carrera con un
+            // switch), re-reanudar ESA sesión — session.most_recent puede ser
+            // un cron u otro chat y escribiría su transcript encima.
+            let sid: string | null = null;
+            const preferredKey = selectedKeyRef.current;
+            if (preferredKey) {
+              try {
+                const r = (await sendRpc("session.resume", {
+                  session_id: preferredKey,
+                })) as { session_id?: string; running?: boolean };
+                sid = r?.session_id ?? preferredKey;
+                if (!cancelled && seqAtOpen === switchSeqRef.current) {
+                  setBusy(Boolean(r?.running));
+                }
+              } catch (resumeErr) {
+                console.warn(
+                  "[useChatGateway] re-resume of selected session failed",
+                  resumeErr,
+                );
+                sid = null;
+              }
+            }
+            if (!sid) sid = await resolveSession();
             if (cancelled) return;
             if (!sid) {
               setErrorMessage("No se pudo crear/obtener sesión");
               return;
             }
+            if (seqAtOpen !== switchSeqRef.current) return; // hubo switch: no pisar
 
             try {
               const history = (await sendRpc("session.history", {
                 session_id: sid,
               })) as { messages?: Array<Record<string, unknown>> };
-              if (cancelled) return;
+              if (cancelled || seqAtOpen !== switchSeqRef.current) return;
 
               const initialMessages: ChatMessage[] = (history?.messages ?? [])
                 .filter((m) => m.role === "user" || m.role === "assistant")
@@ -574,7 +606,7 @@ export function useChatGateway(): UseChatGatewayResult {
                 "[useChatGateway] session.history failed (empty session)",
                 histErr,
               );
-              setMessages([]);
+              if (seqAtOpen === switchSeqRef.current) setMessages([]);
             }
 
             liveSidRef.current = sid;
@@ -775,6 +807,7 @@ export function useChatGateway(): UseChatGatewayResult {
       // Provisional hasta que el resume devuelva el sid vivo: alcanza para que
       // el filtro de handleEvent descarte los eventos de la conversación anterior.
       liveSidRef.current = targetId;
+      selectedKeyRef.current = targetId;
       setSession((prev) => ({
         ...prev,
         sessionId: targetId,
