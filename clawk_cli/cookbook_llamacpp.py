@@ -231,14 +231,25 @@ def _do_install() -> None:
         else:
             import tarfile
 
+            # Los .so van con symlinks de versión (libllama-common.so.0 →
+            # libllama-common.so.0.0.XXXX); sin recrearlos, llama-server no
+            # arranca ("cannot open shared object file").
+
+            symlinks: List[tuple] = []
+
             with tarfile.open(tmp_archive, "r:gz") as tf:
                 for member in tf.getmembers():
-                    if not member.isfile():
-                        continue
-
                     name = Path(member.name).name
 
                     if not name:
+                        continue
+
+                    if member.issym() or member.islnk():
+                        symlinks.append((name, Path(member.linkname).name))
+
+                        continue
+
+                    if not member.isfile():
                         continue
 
                     src = tf.extractfile(member)
@@ -248,6 +259,20 @@ def _do_install() -> None:
 
                     with src, open(dest / name, "wb") as out:
                         shutil.copyfileobj(src, out)
+
+            for name, target in symlinks:
+                link = dest / name
+
+                link.unlink(missing_ok=True)
+
+                try:
+                    os.symlink(target, link)
+
+                except OSError:
+                    # Sin permisos de symlink: copia plana del destino.
+
+                    if (dest / target).is_file():
+                        shutil.copyfile(dest / target, link)
 
         tmp_archive.unlink(missing_ok=True)
 
@@ -781,6 +806,18 @@ def start_server(
 
     stop_server()
 
+    # Las .so del release viven junto al binario — sin rpath, el loader las
+    # encuentra vía LD_LIBRARY_PATH apuntando a esa carpeta.
+
+    env = dict(os.environ)
+
+    if os.name != "nt":
+        lib_dir = str(Path(binary).parent)
+
+        prev = env.get("LD_LIBRARY_PATH", "")
+
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
+
     try:
         proc = subprocess.Popen(
             [
@@ -798,6 +835,7 @@ def start_server(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=(os.name != "nt"),
+            env=env,
         )
 
     except Exception as exc:  # noqa: BLE001
