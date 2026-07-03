@@ -27,6 +27,7 @@ import { Toast } from "@nous-research/ui/ui/components/toast";
 import { Card, CardContent } from "@nous-research/ui/ui/components/card";
 import { Input } from "@nous-research/ui/ui/components/input";
 import { Label } from "@nous-research/ui/ui/components/label";
+import { Switch } from "@nous-research/ui/ui/components/switch";
 import { useI18n } from "@/i18n";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { PluginSlot } from "@/plugins";
@@ -138,8 +139,49 @@ export default function CronPage() {
     viewLabel: t.cron.viewLabel ?? "View",
     listView: t.cron.listView ?? "List",
     calendarView: t.cron.calendarView ?? "Calendar",
+    archiveChats: t.cron.archiveChats ?? "Archivar chats de cron",
+    archiveChatsHint:
+      t.cron.archiveChatsHint ??
+      "Al terminar cada ejecución, su conversación se archiva (no llena la lista de chats)",
   };
   const { setEnd } = usePageHeader();
+
+  // Toggle cron.archive_chat_sessions (config backend): when on, each run's
+  // chat session is archived at end-of-run so the conversations sidebar isn't
+  // flooded by scheduled jobs. null = still loading the current value.
+  const [archiveChats, setArchiveChats] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .getConfig()
+      .then((cfg) => {
+        if (!alive) return;
+        const cron = (cfg.cron ?? {}) as Record<string, unknown>;
+        setArchiveChats(Boolean(cron.archive_chat_sessions));
+      })
+      .catch(() => {
+        if (alive) setArchiveChats(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const toggleArchiveChats = useCallback(
+    async (next: boolean) => {
+      setArchiveChats(next); // optimistic
+      try {
+        // Read-modify-write the full config (the PUT replaces it whole).
+        const cfg = await api.getConfig();
+        const cron = { ...((cfg.cron ?? {}) as Record<string, unknown>) };
+        cron.archive_chat_sessions = next;
+        await api.saveConfig({ ...cfg, cron });
+      } catch {
+        setArchiveChats(!next); // revert on failure
+        showToast("No se pudo guardar la configuración", "error");
+      }
+    },
+    [showToast],
+  );
 
   // Translation surface for the human-readable schedule describer.
   // English ordinals are a special case ("1st", "2nd", "23rd"); every
@@ -962,6 +1004,22 @@ export default function CronPage() {
                   </SelectOption>
                 ))}
               </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="cron-archive-chats" title={cronExtra.archiveChatsHint}>
+                {cronExtra.archiveChats}
+              </Label>
+              <div
+                className="flex h-9 items-center"
+                title={cronExtra.archiveChatsHint}
+              >
+                <Switch
+                  id="cron-archive-chats"
+                  checked={archiveChats === true}
+                  disabled={archiveChats === null}
+                  onCheckedChange={toggleArchiveChats}
+                />
+              </div>
             </div>
           </div>
         </div>

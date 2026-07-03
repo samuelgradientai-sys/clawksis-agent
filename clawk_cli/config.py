@@ -2517,6 +2517,10 @@ DEFAULT_CONFIG = {
         # 1 = serial (pre-v0.9 behaviour).
         # Also overridable via CLAWK_CRON_MAX_PARALLEL env var.
         "max_parallel_jobs": None,
+        # Archive each cron run's chat session when the run finishes, so
+        # scheduled jobs don't flood the conversations sidebar. Transcripts
+        # stay accessible (Sessions → archived). Toggleable from the Cron page.
+        "archive_chat_sessions": False,
     },
     # Kanban multi-agent coordination — controls the dispatcher loop that
     # spawns workers for ready tasks. The dispatcher ticks every N seconds

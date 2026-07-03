@@ -3309,6 +3309,21 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             except (Exception, KeyboardInterrupt) as e:
                 logger.debug("Job '%s': failed to end session: %s", job_id, e)
 
+            # Opt-in (cron.archive_chat_sessions): archive the run's chat
+            # session so scheduled jobs don't flood the conversations sidebar.
+            # The transcript stays accessible (Sessions → archived). Done at
+            # end-of-run because the DB row is created lazily during the run.
+            try:
+                from clawk_cli.config import load_config as _load_cron_cfg
+
+                if bool(
+                    (_load_cron_cfg().get("cron") or {}).get("archive_chat_sessions")
+                ):
+                    _session_db.set_session_archived(_cron_session_id, True)
+
+            except (Exception, KeyboardInterrupt) as e:
+                logger.debug("Job '%s': failed to archive cron session: %s", job_id, e)
+
             try:
                 _session_db.close()
 
