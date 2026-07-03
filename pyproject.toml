@@ -528,6 +528,14 @@ locales = ["locales/*.yaml"]
 # (data-files flattens every glob into its single target dir; a shared glob
 # would collapse all manifests into one folder and lose the per-MCP layout).
 # MANIFEST.in `graft optional-mcps` ships them in the sdist.
+# gradient-whatsapp also ships its server: the manifest's git-install clones this
+# repo, but the wheel copy keeps `clawk mcp catalog` self-describing offline.
+"optional-mcps/gradient-whatsapp" = [
+    "optional-mcps/gradient-whatsapp/manifest.yaml",
+    "optional-mcps/gradient-whatsapp/mcp_server.py",
+    "optional-mcps/gradient-whatsapp/README.md",
+]
+
 "optional-mcps/google-workspace" = ["optional-mcps/google-workspace/manifest.yaml"]
 
 "optional-mcps/linear" = ["optional-mcps/linear/manifest.yaml"]
