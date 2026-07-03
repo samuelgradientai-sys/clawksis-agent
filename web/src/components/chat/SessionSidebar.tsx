@@ -810,38 +810,49 @@ export function SessionSidebar({
 
         {mode === "chats" && (
           <div>
-            {/* Filtro por tipo: qué llena la lista (conversaciones, crons,
-                mensajes de canales tipo Telegram). Click de nuevo = Todos. */}
-            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+            {/* Filtro por tipo — segmentado amigable: qué llena la lista
+                (conversaciones, crons, canales tipo Telegram). */}
+            <div className="mx-2 mb-1.5 grid grid-cols-4 gap-0.5 rounded-lg border border-foreground/10 bg-background/40 p-0.5">
               {(
                 [
-                  ["chats", "Chats"],
-                  ["cron", "Crons"],
-                  ["channels", "Channels"],
+                  ["all", "Todos", Inbox, "Ver todo junto"],
+                  ["chats", "Chats", MessageCircle, "Solo conversaciones (dashboard/terminal)"],
+                  ["cron", "Crons", Clock, "Solo sesiones creadas por cron jobs"],
+                  ["channels", "Canales", Hash, "Solo mensajes de canales (Telegram, WhatsApp…)"],
                 ] as const
-              ).map(([kind, label]) => {
-                const count = sessionsProp.filter(
-                  (s) => kindOfSource(s.source) === kind,
-                ).length;
+              ).map(([kind, label, Icon, hint]) => {
+                const count =
+                  kind === "all"
+                    ? sessionsProp.length
+                    : sessionsProp.filter(
+                        (s) => kindOfSource(s.source) === kind,
+                      ).length;
+                const active = kindFilter === kind;
                 return (
                   <button
                     key={kind}
                     type="button"
-                    onClick={() => pickKind(kind)}
-                    title={
-                      kind === "cron"
-                        ? "Solo sesiones creadas por cron jobs"
-                        : kind === "channels"
-                          ? "Solo mensajes de canales (Telegram, WhatsApp…)"
-                          : "Solo conversaciones (dashboard/terminal)"
+                    onClick={() =>
+                      kind === "all" ? pickKind(kindFilter) : pickKind(kind)
                     }
-                    className={`rounded-md border px-2 py-0.5 text-2xs transition-colors ${
-                      kindFilter === kind
-                        ? "border-[#6C4FD6]/60 bg-[#6C4FD6]/15 text-foreground"
-                        : "border-border/60 text-muted-foreground hover:text-foreground"
+                    title={`${hint} (${count})`}
+                    className={`flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 transition-all duration-150 ${
+                      active
+                        ? "bg-[#6C4FD6]/20 text-foreground shadow-sm ring-1 ring-[#6C4FD6]/40"
+                        : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                     }`}
                   >
-                    {label} {count > 0 ? count : ""}
+                    <Icon className={`size-3.5 ${active ? "text-[#6C4FD6]" : ""}`} />
+                    <span className="text-[10px] leading-none">{label}</span>
+                    <span
+                      className={`rounded-full px-1.5 text-[9px] leading-tight ${
+                        active
+                          ? "bg-[#6C4FD6]/25 text-foreground"
+                          : "bg-border/40 text-muted-foreground"
+                      }`}
+                    >
+                      {count}
+                    </span>
                   </button>
                 );
               })}
