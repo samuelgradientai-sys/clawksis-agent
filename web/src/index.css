@@ -325,3 +325,13 @@ code { font-size: 0.875rem; }
   display: none;
 }
 
+
+/* Terminal glass: en xterm v6 el theme background se aplica inline sobre
+   .xterm-scrollable-element, pero .xterm-viewport conserva el
+   background-color:#000 que trae xterm.css de fábrica y nunca recibe el
+   theme → una capa negra OPACA debajo de las celdas que anula la
+   transparencia (allowTransparency + background rgba(0,0,0,0)). Scoped al
+   host del chat para no afectar otros usos de xterm. */
+.clawk-chat-xterm-host .xterm-viewport {
+  background-color: transparent !important;
+}

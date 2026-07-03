@@ -692,9 +692,11 @@ async def get_media_file(media_id: str, request: Request):
     media_root = (Path.home() / ".clawksis" / "media").resolve(strict=False)
     candidate = Path(file_path_str).expanduser().resolve(strict=False)
 
-    try:
-        candidate.relative_to(media_root)
-    except ValueError:
+    # register_media descarga a ~/.clawksis/media/, pero register_local_media
+    # registra archivos in-place (cache/images de image_gen, audio_cache de
+    # TTS, artifacts) — mismos roots que sirve /media/local.
+    allowed_roots = [media_root, *_local_media_allowed_roots()]
+    if not any(_artifact_is_within_root(candidate, root) for root in allowed_roots):
         raise HTTPException(
             status_code=403,
             detail="Media file is outside the allowed media directory.",
@@ -707,7 +709,8 @@ async def get_media_file(media_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Path is not a file.")
 
     ext = candidate.suffix.lower()
-    mime = _MEDIA_ALLOWED_EXT_TO_MIME.get(ext)
+    # El mapa extendido cubre también audio (TTS en audio_cache).
+    mime = _MEDIA_ALLOWED_EXT_TO_MIME.get(ext) or _LOCAL_MEDIA_EXT_TO_MIME.get(ext)
     if not mime:
         raise HTTPException(status_code=400, detail=f"Extension not allowed: {ext}")
 
