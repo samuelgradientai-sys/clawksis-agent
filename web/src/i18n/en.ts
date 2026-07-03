@@ -579,6 +579,11 @@ export const en: Translations = {
 
     triggerNow: "Trigger now",
 
+    archiveChats: "Archive cron chats",
+
+    archiveChatsHint:
+      "After each run, archive the conversation the cron created so it doesn't clutter the chat list",
+
     delivery: {
 
       local: "Local",
@@ -1083,6 +1088,18 @@ export const en: Translations = {
     fontSerif: "Serif",
 
     fontMono: "Mono",
+
+    backgroundTitle: "Background",
+
+    backgroundDefault: "Theme default",
+
+    backgroundDefaultHint: "Use the active theme's background",
+
+    motionTitle: "Motion",
+
+    smoothScroll: "Smooth scroll (parallax)",
+
+    smoothScrollHint: "Momentum scrolling, like the landing page",
 
   },
 

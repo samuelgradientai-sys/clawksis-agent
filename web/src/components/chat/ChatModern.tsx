@@ -28,6 +28,8 @@ import {
   Clock,
   Wrench,
   FileText,
+  Zap,
+  Gauge,
 } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
@@ -298,6 +300,138 @@ function extractToolMedia(result: unknown): { src: string; video: boolean }[] {
     out.push({ src, video: isVid });
   }
   return out;
+}
+
+// ── Modo de respuesta: Rápida / Normal / Pensar ─────────────────────────────
+// Controla agent.reasoning_effort vía config.set (aplica en vivo al agente de
+// la sesión): para preguntas simples no quema razonamiento largo; para tareas
+// difíciles piensa a fondo. Persistido en localStorage.
+const REASONING_MODES = [
+  {
+    value: "minimal",
+    label: "Rápida",
+    icon: Zap,
+    hint: "Respuesta directa, sin razonamiento largo — ideal para preguntas simples",
+  },
+  {
+    value: "medium",
+    label: "Normal",
+    icon: Gauge,
+    hint: "Equilibrado (por defecto)",
+  },
+  {
+    value: "high",
+    label: "Pensar",
+    icon: Brain,
+    hint: "Razonamiento profundo para tareas difíciles",
+  },
+] as const;
+
+const REASONING_STORAGE_KEY = "clawksis-reasoning-mode";
+
+function ReasoningSelector({
+  sendRpc,
+  sessionId,
+  disabled,
+}: {
+  sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+  sessionId: string | null;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<string>(() => {
+    try {
+      return (
+        window.localStorage.getItem(REASONING_STORAGE_KEY) || "medium"
+      );
+    } catch {
+      return "medium";
+    }
+  });
+  const current =
+    REASONING_MODES.find((m) => m.value === mode) ?? REASONING_MODES[1];
+  const CurrentIcon = current.icon;
+
+  const apply = async (value: string) => {
+    setMode(value);
+    setOpen(false);
+    try {
+      window.localStorage.setItem(REASONING_STORAGE_KEY, value);
+    } catch {
+      /* sin persistencia local: igual se aplica al backend */
+    }
+    try {
+      await sendRpc("config.set", {
+        key: "reasoning",
+        value,
+        session_id: sessionId,
+      });
+    } catch (err) {
+      console.warn("[ReasoningSelector] config.set reasoning failed", err);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        title={current.hint}
+        aria-label={"Modo de respuesta: " + current.label}
+        className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <CurrentIcon className="size-4" />
+        <span className="hidden sm:inline">{current.label}</span>
+        <ChevronDown className="size-3 opacity-60" />
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            className="fixed inset-0 z-20 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute bottom-full left-0 z-30 mb-1 w-64 overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg">
+            {REASONING_MODES.map((m) => {
+              const Icon = m.icon;
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => void apply(m.value)}
+                  className={
+                    "flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-muted " +
+                    (m.value === mode ? "bg-[#6C4FD6]/15" : "")
+                  }
+                >
+                  <Icon
+                    className={
+                      "mt-0.5 size-3.5 shrink-0 " +
+                      (m.value === mode
+                        ? "text-[#6C4FD6]"
+                        : "text-muted-foreground")
+                    }
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{m.label}</span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      {m.hint}
+                    </span>
+                  </span>
+                  {m.value === mode && (
+                    <span className="text-[10px] text-[#6C4FD6]">✓</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
@@ -1162,7 +1296,7 @@ function Composer({
       />
 
       {/* Composer principal — layout tipo Claude: textarea arriba, controles abajo */}
-      <div className="relative rounded-2xl border border-border bg-muted/20 px-3 py-2.5 focus-within:border-[#6C4FD6]/60 transition-colors">
+      <div className="relative rounded-2xl border border-foreground/10 bg-background/40 px-3 py-2.5 shadow-lg shadow-black/20 backdrop-blur-xl transition-colors focus-within:border-[#6C4FD6]/50">
         {/* Autocomplete de slash commands (/) — flota sobre el composer. */}
         <SlashPopover ref={slashRef} input={value} gw={slashGw} onApply={setValue} />
         <textarea
@@ -1201,6 +1335,11 @@ function Composer({
             ready={ready}
             sessionId={sessionId}
             currentModel={currentModel}
+            disabled={disabled || busy}
+          />
+          <ReasoningSelector
+            sendRpc={sendRpc}
+            sessionId={sessionId}
             disabled={disabled || busy}
           />
 
@@ -1662,6 +1801,14 @@ export default function ChatModern() {
       }
     }
 
+    // /stop con un turno corriendo = interrupción INMEDIATA (mismo RPC que el
+    // botón rojo). El /stop del backend vía slash.exec no corta un turno en
+    // vuelo — por eso "seguía de largo" tras pedirle parar.
+    if (busy && (trimmed === "/stop" || trimmed === "/interrupt")) {
+      interrupt();
+      return;
+    }
+
     // Cola estilo Telegram: si el agente está ocupado, encolamos el texto en
     // vez de mandarlo (se dispara solo al terminar el turno). NO se encolan:
     //  - slash commands: varios (/steer /goal /retry /queue) son "pending-input",
@@ -1876,7 +2023,9 @@ export default function ChatModern() {
         }}
       />
 
-      <div className="flex h-full min-h-0 flex-row rounded-lg border border-border bg-background overflow-hidden">
+      {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
+          (backdrop) a través de un velo translúcido que mantiene legibilidad. */}
+      <div className="flex h-full min-h-0 flex-row overflow-hidden bg-background/30">
       <SessionSidebar
         sessions={sidebarSessions}
         projects={projects}

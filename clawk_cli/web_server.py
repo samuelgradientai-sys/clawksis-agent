@@ -305,11 +305,19 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 async def _immutable_asset_cache(request: "Request", call_next):
     """Mark Vite's content-hashed assets immutable so the browser stops doing a
     conditional GET + 304 for every chunk on each reload. The filename changes
-    when the content changes, and index.html (served elsewhere) is never cached,
-    so it always re-resolves the current hashes."""
+    when the content changes, and index.html is forced to ``no-cache`` (always
+    revalidate) so it always re-resolves the current hashes — without an
+    explicit header, browsers apply heuristic caching to the SPA shell and a
+    stale index keeps pointing at deleted chunks after a server-side rebuild
+    (frozen navigation until a hard refresh)."""
     response = await call_next(request)
-    if response.status_code == 200 and request.url.path.startswith("/assets/"):
+    if response.status_code != 200:
+        return response
+    path = request.url.path
+    if path.startswith("/assets/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 

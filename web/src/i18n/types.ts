@@ -614,6 +614,10 @@ export interface Translations {
 
     triggerNow: string;
 
+    archiveChats?: string;
+
+    archiveChatsHint?: string;
+
     delivery: {
 
       local: string;
@@ -1125,6 +1129,18 @@ export interface Translations {
     fontSerif?: string;
 
     fontMono?: string;
+
+    backgroundTitle?: string;
+
+    backgroundDefault?: string;
+
+    backgroundDefaultHint?: string;
+
+    motionTitle?: string;
+
+    smoothScroll?: string;
+
+    smoothScrollHint?: string;
 
   };
 
