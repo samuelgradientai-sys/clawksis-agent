@@ -42,7 +42,9 @@ import {
 } from "../../visualization/officeProviders";
 import { PixelOfficeView } from "../../visualization/PixelOfficeView";
 
-export type SidePanelTab = "viz" | "media";
+import type { SidePanelTab } from "./sidePanelStore";
+
+export type { SidePanelTab };
 
 const MSG_POLL_MS = 6000;
 
@@ -94,7 +96,7 @@ function VisualizationPanel() {
   }, [active]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
       <div className="flex items-center gap-1.5">
         {VISUALS.map((v) => (
           <button
@@ -245,7 +247,7 @@ function MediaPanel() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
       <div className="flex items-center gap-1.5">
         {chip("Todo", undefined)}
         {chip("Imágenes", "image")}

@@ -30,8 +30,6 @@ import {
   FileText,
   Zap,
   Gauge,
-  Activity,
-  Images,
 } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
@@ -54,7 +52,8 @@ import { useImageAttachments } from "./hooks/useImageAttachments";
 import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
-import { ChatSidePanel, type SidePanelTab } from "./ChatSidePanel";
+import { ChatSidePanel } from "./ChatSidePanel";
+import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
@@ -74,10 +73,6 @@ interface ChatHeaderProps {
   onTokensClick?: () => void;
   /** Ref del botón de tokens para anclar el popover */
   tokensRef?: React.RefObject<HTMLButtonElement | null>;
-  /** Pestaña abierta del panel lateral (Visualización/Media), o null. */
-  sidePanel?: SidePanelTab | null;
-  /** Alterna el panel lateral: mismo tab = cerrar, otro tab = cambiar. */
-  onTogglePanel?: (tab: SidePanelTab) => void;
 }
 
 function ChatHeader({
@@ -90,8 +85,6 @@ function ChatHeader({
   title,
   onTokensClick,
   tokensRef,
-  sidePanel,
-  onTogglePanel,
 }: ChatHeaderProps) {
   const statusColor =
     status === "connected"
@@ -150,33 +143,6 @@ function ChatHeader({
           )}
           <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
         </button>
-
-        {onTogglePanel && (
-          <>
-            <button
-              type="button"
-              onClick={() => onTogglePanel("viz")}
-              title="Visualización: mirá a los agentes trabajar en vivo"
-              aria-label="Abrir panel de visualización"
-              className={`rounded-lg p-1.5 transition-colors hover:bg-muted/40 hover:text-foreground ${
-                sidePanel === "viz" ? "bg-[#6C4FD6]/15 text-[#6C4FD6]" : "text-muted-foreground"
-              }`}
-            >
-              <Activity className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onTogglePanel("media")}
-              title="Media: todo el contenido generado (imágenes/videos)"
-              aria-label="Abrir galería de media"
-              className={`rounded-lg p-1.5 transition-colors hover:bg-muted/40 hover:text-foreground ${
-                sidePanel === "media" ? "bg-[#6C4FD6]/15 text-[#6C4FD6]" : "text-muted-foreground"
-              }`}
-            >
-              <Images className="size-4" />
-            </button>
-          </>
-        )}
       </div>
     </div>
   );
@@ -1613,28 +1579,9 @@ export default function ChatModern() {
 
   const tokensButtonRef = useRef<HTMLButtonElement>(null);
   const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
-  // Panel lateral Visualización/Media. Persistimos el último estado para que
-  // quien vive con la oficina abierta la recupere al volver.
-  const [sidePanel, setSidePanel] = useState<SidePanelTab | null>(() => {
-    try {
-      const v = window.localStorage.getItem("clawksis-chat-side-panel");
-      return v === "viz" || v === "media" ? v : null;
-    } catch {
-      return null;
-    }
-  });
-  const toggleSidePanel = useCallback((tab: SidePanelTab) => {
-    setSidePanel((prev) => {
-      const next = prev === tab ? null : tab;
-      try {
-        if (next) window.localStorage.setItem("clawksis-chat-side-panel", next);
-        else window.localStorage.removeItem("clawksis-chat-side-panel");
-      } catch {
-        /* sin persistencia */
-      }
-      return next;
-    });
-  }, []);
+  // Panel lateral Visualización/Media — estado compartido con la barra de
+  // pestañas unificada del ChatRouter (sidePanelStore, persistido).
+  const sidePanel = useSidePanel();
   const didAutoOpenSidebarTopRef = useRef(false);
   // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
   const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
@@ -2116,8 +2063,6 @@ export default function ChatModern() {
             title={activeTitle ?? undefined}
             onTokensClick={handleTokensClick}
             tokensRef={tokensButtonRef}
-            sidePanel={sidePanel}
-            onTogglePanel={toggleSidePanel}
           />
           <TokenUsagePopover
             open={tokensPopoverOpen}
@@ -2161,7 +2106,7 @@ export default function ChatModern() {
               queue.queued.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-2">
+              <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-4 sm:px-6">
                 {messages.map((msg, idx) => {
                   const isLast =
                     idx === messages.length - 1 && msg.role === "assistant";

@@ -56,7 +56,14 @@ import { cn } from "@/lib/utils";
 
 import { Copy, PanelRight, X } from "lucide-react";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { createPortal } from "react-dom";
 
@@ -196,6 +203,34 @@ const TERMINAL_THEME_STATIC = {
   selectionBackground: "#f0e6d244",
 
 };
+
+
+// Glass/acrylic del terminal (estilo Warp/Ghostty/Windows Terminal Acrylic):
+// el CANVAS de xterm se vuelve transparente (allowTransparency + background
+// rgba 0) y el tinte lo pone el wrapper — translúcido + backdrop-blur cuando
+// el navegador lo soporta, y EXACTAMENTE el color sólido del tema cuando no
+// (fallback vía `supports-[backdrop-filter]`, cero costo si no hay soporte).
+// Los colores ANSI, el cursor y la selección no se tocan: solo el fondo de
+// las celdas vacías deja pasar el fondo de la app.
+const TERMINAL_GLASS_ALPHA = 0.72;
+
+const XTERM_TRANSPARENT_BG = "rgba(0,0,0,0)";
+
+/** #rgb/#rrggbb → rgba(r,g,b,alpha); si no parsea, devuelve el color tal cual
+ *  (el wrapper queda sólido y el glass simplemente no tinta — sin romper). */
+function hexToRgba(color: string, alpha: number): string {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+
+  if (!m) return color;
+
+  let hex = m[1];
+
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+
+  const n = parseInt(hex, 16);
+
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
 
 
 
@@ -374,11 +409,18 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const terminalBg = theme.terminalBackground
     ?? (theme.palette?.background?.hex ?? "#000000");
 
+  // Tinte translúcido para el modo glass (el sólido queda como fallback).
+  const terminalGlassBg = useMemo(
+    () => hexToRgba(terminalBg, TERMINAL_GLASS_ALPHA),
+    [terminalBg],
+  );
+
+  // El fondo del canvas es transparente: el color/tinte lo pone el wrapper.
   const terminalTheme = useMemo(
 
-    () => ({ ...TERMINAL_THEME_STATIC, background: terminalBg }),
+    () => ({ ...TERMINAL_THEME_STATIC, background: XTERM_TRANSPARENT_BG }),
 
-    [terminalBg],
+    [],
 
   );
 
@@ -655,6 +697,9 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     const term = new Terminal({
 
       allowProposedApi: true,
+
+      // Fondo de celdas transparente → efecto glass (el wrapper tinta+blur).
+      allowTransparency: true,
 
       cursorBlink: true,
 
@@ -1639,6 +1684,8 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // Keep the live xterm theme in sync when the active theme's terminal
 
   // background changes (e.g. user switches to a custom YAML theme mid-session).
+  // El canvas sigue transparente: el cambio de tema se refleja en el tinte del
+  // wrapper (CSS var), no en el theme de xterm.
 
   useEffect(() => {
 
@@ -1646,7 +1693,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
     if (!term) return;
 
-    term.options.theme = { ...TERMINAL_THEME_STATIC, background: terminalBg };
+    term.options.theme = {
+      ...TERMINAL_THEME_STATIC,
+      background: XTERM_TRANSPARENT_BG,
+    };
 
   }, [terminalBg]);
 
@@ -1852,28 +1902,39 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
 
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-4">
 
         <div
 
           className={cn(
 
-            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
+            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl",
 
             "p-3 sm:p-4",
 
-            // Bug #23 (Fase 1): border sutil consistente con cards del dashboard
-            "border border-border",
+            // Glass/acrylic: tinte translúcido + blur del fondo de la app,
+            // con fallback automático al color sólido del tema cuando el
+            // navegador no soporta backdrop-filter (misma legibilidad, cero
+            // costo). El canvas de xterm es transparente (allowTransparency).
+            "border border-foreground/10",
+
+            "[background:var(--term-bg)]",
+
+            "supports-[backdrop-filter]:[background:var(--term-bg-glass)]",
+
+            "supports-[backdrop-filter]:backdrop-blur-xl",
 
           )}
 
           style={{
 
-            backgroundColor: terminalBg,
+            "--term-bg": terminalBg,
 
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
+            "--term-bg-glass": terminalGlassBg,
 
-          }}
+            boxShadow: "0 12px 32px -12px rgba(0, 0, 0, 0.5)",
+
+          } as CSSProperties}
 
         >
 
@@ -1949,7 +2010,12 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
             aria-label={modelToolsLabel}
 
-            className="flex min-h-0 shrink-0 flex-col overflow-hidden lg:h-full lg:w-80"
+            className={cn(
+              "flex min-h-0 shrink-0 flex-col overflow-hidden lg:h-full lg:w-80",
+              // Mismo lenguaje glass del terminal para MODEL/TOOLS.
+              "rounded-xl border border-foreground/10 bg-background/40",
+              "supports-[backdrop-filter]:backdrop-blur-xl",
+            )}
 
           >
 
