@@ -71,6 +71,7 @@ _GATE_PUBLIC_PREFIXES: tuple[str, ...] = (
     "/auth/login",
     "/auth/callback",
     "/auth/password-login",
+    "/auth/setup",  # first-run: crear el login (se auto-deshabilita al existir uno)
     "/auth/logout",
     "/login",
     "/api/auth/providers",

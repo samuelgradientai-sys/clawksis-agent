@@ -609,7 +609,15 @@ def test_gated_zero_providers_fails_closed_on_api_auth_providers():
         web_server.app.state.bound_host = prev_host
 
 
-def test_gated_zero_providers_login_page_renders_help_text():
+def test_gated_zero_providers_login_page_renders_help_text(monkeypatch):
+
+    # Con cero providers Y credenciales ya configuradas (setup no disponible)
+
+    # la página de ayuda "sign-in unavailable" sigue siendo la respuesta.
+
+    from clawk_cli.dashboard_auth import first_run
+
+    monkeypatch.setattr(first_run, "setup_available", lambda: False)
 
     clear_providers()
 
@@ -643,6 +651,47 @@ def test_gated_zero_providers_login_page_renders_help_text():
         assert "providers are installed" in text
 
         assert "--insecure" in text
+
+    finally:
+        web_server.app.state.auth_required = prev_required
+
+        web_server.app.state.bound_host = prev_host
+
+
+def test_gated_zero_providers_first_run_renders_setup_form(monkeypatch):
+
+    # Cero providers y NADA configurado → formulario de primera vez (crear
+
+    # usuario + contraseña), no la página "sign-in unavailable".
+
+    from clawk_cli.dashboard_auth import first_run
+
+    monkeypatch.setattr(first_run, "basic_auth_configured", lambda: False)
+
+    clear_providers()
+
+    prev_required = getattr(web_server.app.state, "auth_required", None)
+
+    prev_host = getattr(web_server.app.state, "bound_host", None)
+
+    web_server.app.state.bound_host = "fly-app.fly.dev"
+
+    web_server.app.state.auth_required = True
+
+    try:
+        client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
+
+        r = client.get("/login")
+
+        assert r.status_code == 200
+
+        text = r.text
+
+        assert 'class="provider-form setup-form"' in text
+
+        assert "/auth/setup" in text
+
+        assert 'name="confirm"' in text
 
     finally:
         web_server.app.state.auth_required = prev_required

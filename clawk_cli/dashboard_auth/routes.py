@@ -220,10 +220,21 @@ async def login_page(request: Request) -> HTMLResponse:
 
     next_path = _validate_post_login_target(request.query_params.get("next", ""))
 
-    return HTMLResponse(
-        render_login_html(next_path=next_path),
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
-    )
+    no_store = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+
+    # Primera vez: gate activo pero nadie configuró credenciales todavía →
+    # formulario de setup (crear usuario + contraseña) en vez del login o de
+    # la página "sign-in unavailable". Imports lazy para que los tests puedan
+    # patchear ``first_run.setup_available``.
+
+    from clawk_cli.dashboard_auth.first_run import setup_available
+
+    from clawk_cli.dashboard_auth.login_page import render_setup_html
+
+    if setup_available():
+        return HTMLResponse(render_setup_html(next_path=next_path), headers=no_store)
+
+    return HTMLResponse(render_login_html(next_path=next_path), headers=no_store)
 
 
 # ---------------------------------------------------------------------------
@@ -743,6 +754,112 @@ async def auth_password_login(request: Request, body: _PasswordLoginBody):
     audit_log(
         AuditEvent.LOGIN_SUCCESS,
         provider=body.provider,
+        user_id=session.user_id,
+        email=session.email,
+        org_id=session.org_id,
+        ip=ip,
+    )
+
+    expires_in = max(60, session.expires_at - int(time.time()))
+
+    landing = _validate_post_login_target(body.next) or "/"
+
+    resp = JSONResponse({"ok": True, "next": landing})
+
+    set_session_cookies(
+        resp,
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
+        access_token_expires_in=expires_in,
+        use_https=detect_https(request),
+        prefix=_prefix(request),
+    )
+
+    return resp
+
+
+# ---------------------------------------------------------------------------
+
+# Public: first-run setup (crear el login la primera vez)
+
+# ---------------------------------------------------------------------------
+
+
+# Serializa los POST de setup: el primero que completa gana; el guard de
+# ``setup_available()`` se re-chequea bajo el lock así una carrera no puede
+# registrar dos providers ni pisar credenciales recién creadas.
+
+_setup_lock = threading.Lock()
+
+
+class _SetupBody(BaseModel):
+    username: str
+
+    password: str
+
+    next: str = ""
+
+
+@router.post("/auth/setup", name="auth_setup")
+async def auth_setup(request: Request, body: _SetupBody):
+    """Create the dashboard login on first run and sign the creator in.
+
+    Only available while ``first_run.setup_available()`` holds — i.e. the
+    auth gate is engaged, no provider is registered, and no basic-auth
+    credentials exist in config or env. The first successful POST persists
+    the credentials (scrypt hash + random secret in config.yaml), registers
+    the ``basic`` provider live (no restart), sets the session cookies and
+    returns ``{"ok": true, "next": <path>}`` like /auth/password-login.
+
+    Failure modes:
+      * setup no longer available (someone configured a login) → 409
+      * invalid username/password (too short) → 400
+      * too many attempts from this IP → 429 (shared password-login budget)
+    """
+
+    ip = _client_ip(request)
+
+    if _password_rate_limited(ip):
+        audit_log(
+            AuditEvent.LOGIN_FAILURE,
+            provider="basic",
+            reason="rate_limited",
+            ip=ip,
+        )
+
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Try again shortly.",
+        )
+
+    from clawk_cli.dashboard_auth.first_run import (
+        complete_first_run_setup,
+        setup_available,
+    )
+
+    with _setup_lock:
+        if not setup_available():
+            audit_log(
+                AuditEvent.LOGIN_FAILURE,
+                provider="basic",
+                reason="setup_unavailable",
+                ip=ip,
+            )
+
+            raise HTTPException(
+                status_code=409,
+                detail="A login is already configured.",
+            )
+
+        try:
+            _provider, session = complete_first_run_setup(body.username, body.password)
+
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    audit_log(
+        AuditEvent.LOGIN_SUCCESS,
+        provider="basic",
         user_id=session.user_id,
         email=session.email,
         org_id=session.org_id,

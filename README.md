@@ -347,10 +347,12 @@ Wants=network-online.target
 Type=simple
 User=root
 Environment=HOME=/root
-# Credenciales del login (ver sección 2). Env gana sobre config.yaml.
-Environment=CLAWK_DASHBOARD_BASIC_AUTH_USERNAME=tu-usuario
-Environment=CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD=tu-password-fuerte
-Environment=CLAWK_DASHBOARD_BASIC_AUTH_SECRET=<64 hex aleatorios: openssl rand -hex 32>
+# (Opcional) Credenciales por env — si las omitís, la PRIMERA visita al
+# dashboard te deja crear usuario y contraseña desde el navegador (sección 2).
+# Env gana sobre config.yaml.
+#Environment=CLAWK_DASHBOARD_BASIC_AUTH_USERNAME=tu-usuario
+#Environment=CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD=tu-password-fuerte
+#Environment=CLAWK_DASHBOARD_BASIC_AUTH_SECRET=<64 hex aleatorios: openssl rand -hex 32>
 WorkingDirectory=/usr/local/lib/clawksis-agent
 ExecStart=/usr/local/lib/clawksis-agent/venv/bin/python3 -m clawk_cli.main dashboard --no-open --host 0.0.0.0 --port 9119 --skip-build
 Restart=always
@@ -379,9 +381,29 @@ El gate se **activa solo** cuando el dashboard escucha en un host no-loopback
 login (`/` → 302) y la API responde 401. Con `--host 127.0.0.1` el gate NO se
 activa — por eso nunca publiques un dashboard que escucha solo en loopback.
 
-El provider incluido es **basic auth** (usuario + contraseña, sesiones HMAC sin
-base de datos). Se configura por env (como en el unit de arriba) **o** en
-`~/.clawksis/config.yaml`:
+**Primera vez — el login se crea solo.** Si el gate está activo y todavía no
+configuraste credenciales, la primera visita a `/login` muestra un formulario
+de bienvenida: elegís usuario y contraseña, se guardan automáticamente en
+`~/.clawksis/config.yaml` (hash scrypt + clave de firma aleatoria — nunca texto
+plano) y quedás logueado en el acto. No hay que editar ningún archivo. Ese
+formulario desaparece en cuanto existe un login: nadie más puede "reclamar" el
+dashboard después.
+
+**¿Olvidaste la contraseña? Se cambia con un comando:**
+
+```bash
+clawk dashboard password            # setear o CAMBIAR usuario/contraseña (interactivo)
+clawk dashboard password --clear    # borrar el login (vuelve el formulario de primera vez)
+```
+
+Pide la contraseña dos veces sin mostrarla (no queda en el historial del
+shell) y guarda solo el hash. Después reiniciá el dashboard para aplicar:
+`sudo systemctl restart clawk-dashboard` (o cortá y relanzá `clawk dashboard`).
+
+**Configuración manual (opcional).** El provider incluido es **basic auth**
+(usuario + contraseña, sesiones HMAC sin base de datos). Si preferís
+provisionarlo vos — por ejemplo en el unit de systemd — va por env (gana sobre
+config.yaml) **o** directo en `~/.clawksis/config.yaml`:
 
 ```yaml
 dashboard:
@@ -394,6 +416,11 @@ dashboard:
     secret: "<64 hex aleatorios>"      # clave de firma de sesiones (openssl rand -hex 32)
     session_ttl_seconds: 43200          # opcional (12 h por defecto)
 ```
+
+> Si exponés el dashboard **antes** de crear el login, cualquiera que llegue a
+> la URL podría reclamarlo primero. En la práctica: abrí `/login` apenas
+> publiques el dominio, o creá las credenciales antes con
+> `clawk dashboard password`.
 
 ### 3A. Ruta pública con Cloudflare Tunnel (recomendada)
 

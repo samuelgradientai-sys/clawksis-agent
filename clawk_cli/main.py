@@ -20330,6 +20330,95 @@ def cmd_dashboard_register(args):
     _impl(args)
 
 
+def cmd_dashboard_password(args):
+    """Set, change, or remove the dashboard login (dashboard.basic_auth).
+
+    Same credentials the first-run setup page creates. Forgot the
+    password? Run this again — it simply overwrites the stored hash.
+    """
+
+    from clawk_cli.dashboard_auth.first_run import (
+        MIN_PASSWORD_LEN,
+        clear_basic_auth_credentials,
+        configured_username,
+        env_credentials_present,
+        save_basic_auth_credentials,
+    )
+
+    if getattr(args, "clear", False):
+        removed = clear_basic_auth_credentials()
+
+        if removed:
+            print("✓ Dashboard login removed from config.yaml.")
+
+        else:
+            print("No dashboard login was configured in config.yaml.")
+
+        if env_credentials_present():
+            print(
+                "⚠ CLAWK_DASHBOARD_BASIC_AUTH_* environment variables are "
+                "still set and take precedence — unset them too."
+            )
+
+        return
+
+    current = configured_username()
+
+    username = (getattr(args, "username", None) or "").strip()
+
+    if not username:
+        try:
+            prompt = f"Username [{current}]: " if current else "Username: "
+
+            username = input(prompt).strip() or current
+
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+
+            sys.exit(1)
+
+    password = getattr(args, "password", None) or ""
+
+    if not password:
+        import getpass
+
+        try:
+            password = getpass.getpass(f"New password (min {MIN_PASSWORD_LEN} chars): ")
+
+            confirm = getpass.getpass("Repeat password: ")
+
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+
+            sys.exit(1)
+
+        if password != confirm:
+            print("✗ Passwords do not match.")
+
+            sys.exit(1)
+
+    try:
+        save_basic_auth_credentials(username, password)
+
+    except ValueError as e:
+        print(f"✗ {e}")
+
+        sys.exit(1)
+
+    print(
+        f"✓ Dashboard login saved for {username!r} "
+        "(scrypt hash in ~/.clawksis/config.yaml — no plaintext at rest)."
+    )
+
+    print("  Restart the dashboard (or its service) to apply the change.")
+
+    if env_credentials_present():
+        print(
+            "⚠ CLAWK_DASHBOARD_BASIC_AUTH_* environment variables are set "
+            "and take precedence over config.yaml — update or unset them."
+        )
+
+
 def cmd_completion(args, parser=None):
     """Print shell completion script."""
 
@@ -24758,6 +24847,44 @@ Examples:
     )
 
     dashboard_register_parser.set_defaults(func=cmd_dashboard_register)
+
+    # `clawk dashboard password` — set/change/remove the built-in login
+    # (dashboard.basic_auth). Same credentials the first-run setup page
+    # creates; forgot the password → run this again to overwrite it.
+
+    dashboard_password_parser = dashboard_subparsers.add_parser(
+        "password",
+        help="Set or change the dashboard login (username + password)",
+        description=(
+            "Set, change, or remove the dashboard's built-in login "
+            "(dashboard.basic_auth in ~/.clawksis/config.yaml). The password "
+            "is stored as a scrypt hash — never plaintext. Forgot it? Run "
+            "this command again to overwrite it."
+        ),
+    )
+
+    dashboard_password_parser.add_argument(
+        "--username",
+        default=None,
+        help="Login username (prompted interactively if omitted)",
+    )
+
+    dashboard_password_parser.add_argument(
+        "--password",
+        default=None,
+        help=(
+            "New password (prompted interactively — recommended — if omitted, "
+            "so it doesn't land in your shell history)"
+        ),
+    )
+
+    dashboard_password_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Remove the configured login (the first-run setup page returns)",
+    )
+
+    dashboard_password_parser.set_defaults(func=cmd_dashboard_password)
 
     # =========================================================================
 

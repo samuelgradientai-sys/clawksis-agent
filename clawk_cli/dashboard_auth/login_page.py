@@ -320,8 +320,8 @@ _LOGIN_HTML_TEMPLATE = """\
   <img class="logo" src="/clawksis-logo-512.png" alt="" onerror="this.style.display='none'">
   <div class="brand">Gradient<span class="dot"></span>AI</div>
   <div class="card">
-    <h1>Sign in</h1>
-    <p class="subtitle">Choose a sign-in method to continue to the Clawksis dashboard.</p>
+    <h1>{title}</h1>
+    <p class="subtitle">{subtitle}</p>
     <div class="provider-list">
 {provider_buttons}
     </div>
@@ -512,8 +512,108 @@ def render_login_html(*, next_path: str = "") -> str:
             )
     script = _PASSWORD_FORM_SCRIPT if needs_password_script else ""
     return _LOGIN_HTML_TEMPLATE.format(
+        title="Sign in",
+        subtitle="Choose a sign-in method to continue to the Clawksis dashboard.",
         provider_buttons="\n".join(buttons),
         password_script=script,
+    )
+
+
+# First-run setup: mismo lenguaje visual del login, pero el form crea las
+# credenciales (POST /auth/setup) en vez de validarlas. Emitido SOLO cuando
+# ``first_run.setup_available()`` es True — o sea, gate activo y nadie
+# configuró un login todavía.
+_SETUP_FORM_SCRIPT = """\
+<script>
+(function () {
+  var form = document.querySelector('form.setup-form');
+  if (!form) { return; }
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var err = form.querySelector('.form-error');
+    var btn = form.querySelector('button[type=submit]');
+    var password = (form.querySelector('input[name=password]') || {}).value || '';
+    var confirm = (form.querySelector('input[name=confirm]') || {}).value || '';
+    if (err) { err.hidden = true; err.textContent = ''; }
+    if (password !== confirm) {
+      if (err) { err.textContent = 'Passwords do not match.'; err.hidden = false; }
+      return;
+    }
+    if (btn) { btn.disabled = true; }
+    fetch('/auth/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: (form.querySelector('input[name=username]') || {}).value || '',
+        password: password,
+        next: (form.querySelector('input[name=next]') || {}).value || ''
+      }),
+      credentials: 'same-origin'
+    }).then(function (resp) {
+      if (resp.ok) {
+        return resp.json().then(function (data) {
+          window.location.assign((data && data.next) || '/');
+        });
+      }
+      return resp.json().catch(function () { return {}; }).then(function (data) {
+        var msg = (data && data.detail) ||
+          (resp.status === 409 ? 'A login is already configured. Reload this page.'
+                               : 'Setup failed. Please try again.');
+        if (err) { err.textContent = msg; err.hidden = false; }
+        if (btn) { btn.disabled = false; }
+      });
+    }).catch(function () {
+      if (err) { err.textContent = 'Network error. Please try again.'; err.hidden = false; }
+      if (btn) { btn.disabled = false; }
+    });
+  });
+})();
+</script>
+"""
+
+
+def render_setup_html(*, next_path: str = "") -> str:
+    """HTML del formulario de primera vez (crear usuario + contraseña).
+
+    Misma plantilla/branding del login; el submit POSTea a ``/auth/setup``
+    que persiste las credenciales, registra el provider en vivo y deja la
+    sesión iniciada. ``next_path`` ya viene validado same-origin por el
+    caller; acá solo se HTML-escapea como defensa en profundidad.
+    """
+    from clawk_cli.dashboard_auth.first_run import MIN_PASSWORD_LEN
+
+    safe_next = html.escape(next_path, quote=True) if next_path else ""
+    form = (
+        f'      <form class="provider-form setup-form" autocomplete="on">\n'
+        f'        <input type="hidden" name="next" value="{safe_next}">\n'
+        f'        <label class="field">\n'
+        f'          <span class="field-label">Username</span>\n'
+        f'          <input class="field-input" type="text" name="username" '
+        f'autocomplete="username" autocapitalize="none" '
+        f'autocorrect="off" spellcheck="false" required>\n'
+        f"        </label>\n"
+        f'        <label class="field">\n'
+        f'          <span class="field-label">Password (min {MIN_PASSWORD_LEN} chars)</span>\n'
+        f'          <input class="field-input" type="password" name="password" '
+        f'autocomplete="new-password" minlength="{MIN_PASSWORD_LEN}" required>\n'
+        f"        </label>\n"
+        f'        <label class="field">\n'
+        f'          <span class="field-label">Repeat password</span>\n'
+        f'          <input class="field-input" type="password" name="confirm" '
+        f'autocomplete="new-password" minlength="{MIN_PASSWORD_LEN}" required>\n'
+        f"        </label>\n"
+        f'        <div class="form-error" role="alert" hidden></div>\n'
+        f'        <button class="provider-btn" type="submit">Create login</button>\n'
+        f"      </form>"
+    )
+    return _LOGIN_HTML_TEMPLATE.format(
+        title="Welcome",
+        subtitle=(
+            "First time here — create the dashboard login. It is saved "
+            "automatically; change it later with `clawk dashboard password`."
+        ),
+        provider_buttons=form,
+        password_script=_SETUP_FORM_SCRIPT,
     )
 
 
