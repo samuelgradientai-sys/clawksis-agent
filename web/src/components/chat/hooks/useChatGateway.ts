@@ -162,12 +162,26 @@ export function useChatGateway(): UseChatGatewayResult {
     if (!buffered) return;
     deltaBufferRef.current = "";
     setMessages((prev) => {
-      if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
-      if (last.role !== "assistant" || !last.streaming) return prev;
+      if (last && last.role === "assistant" && last.streaming) {
+        return [
+          ...prev.slice(0, -1),
+          { ...last, content: last.content + buffered },
+        ];
+      }
+      // Nos sumamos a un stream YA empezado (volvimos a una conversación cuyo
+      // turno corría en background y el message.start quedó atrás): crear la
+      // burbuja acá para no tirar los tokens al piso.
       return [
-        ...prev.slice(0, -1),
-        { ...last, content: last.content + buffered },
+        ...prev,
+        {
+          id: "asst-late-" + Date.now(),
+          role: "assistant" as const,
+          content: buffered,
+          toolCalls: [],
+          streaming: true,
+          timestamp: Date.now(),
+        },
       ];
     });
   }, []);
@@ -296,16 +310,33 @@ export function useChatGateway(): UseChatGatewayResult {
         const buffered = deltaBufferRef.current;
         deltaBufferRef.current = "";
         setMessages((prev) => {
-          if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
-          if (last.role !== "assistant" || !last.streaming) return prev;
+          if (last && last.role === "assistant" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...last,
+                content: last.content + buffered,
+                streaming: false,
+                reasoning: (payload.reasoning as string) || last.reasoning,
+              },
+            ];
+          }
+          // Turno completado sin burbuja abierta (la conversación corrió en
+          // background y volvimos tarde): crear el mensaje final con el texto
+          // completo del payload para que la respuesta NO se pierda.
+          const full = ((payload.text as string) || buffered || "").trim();
+          if (!full) return prev;
           return [
-            ...prev.slice(0, -1),
+            ...prev,
             {
-              ...last,
-              content: last.content + buffered,
+              id: "asst-done-" + Date.now(),
+              role: "assistant" as const,
+              content: full,
+              toolCalls: [],
               streaming: false,
-              reasoning: (payload.reasoning as string) || last.reasoning,
+              reasoning: (payload.reasoning as string) || undefined,
+              timestamp: Date.now(),
             },
           ];
         });
@@ -856,6 +887,11 @@ export function useChatGateway(): UseChatGatewayResult {
           messages?: Array<Record<string, unknown>>;
           info?: Record<string, unknown>;
           running?: boolean;
+          inflight?: {
+            user?: string;
+            assistant?: string;
+            streaming?: boolean;
+          } | null;
         };
         if (mySeq !== switchSeqRef.current) return;
         const liveSid = resumeResult?.session_id ?? targetId;
@@ -880,6 +916,40 @@ export function useChatGateway(): UseChatGatewayResult {
           setMessages(initialMessages);
         }
         if (mySeq !== switchSeqRef.current) return;
+        // Turno EN VUELO: el history persistido aún no tiene este turno, pero
+        // el gateway manda su snapshot (prompt + texto acumulado). Hidratarlo:
+        // sin esto, al volver a una conversación corriendo se veía "vacía" y
+        // la respuesta parecía perderse.
+        const inflight = resumeResult?.inflight;
+        if (inflight && (inflight.streaming || inflight.assistant)) {
+          setMessages((prev) => {
+            const next = [...prev];
+            const inflightUser = (inflight.user || "").trim();
+            const lastUser = [...next]
+              .reverse()
+              .find((m) => m.role === "user");
+            if (inflightUser && lastUser?.content !== inflightUser) {
+              next.push({
+                id: "usr-inflight-" + Date.now(),
+                role: "user",
+                content: inflightUser,
+                toolCalls: [],
+                streaming: false,
+                timestamp: Date.now(),
+              });
+            }
+            next.push({
+              id: "asst-inflight-" + Date.now(),
+              role: "assistant",
+              content: inflight.assistant || "",
+              toolCalls: [],
+              streaming: true,
+              timestamp: Date.now(),
+            });
+            return next;
+          });
+          setBusy(true);
+        }
         // Tokens por conversación + modelo de la sesión resumida.
         const info = resumeResult?.info ?? {};
 
