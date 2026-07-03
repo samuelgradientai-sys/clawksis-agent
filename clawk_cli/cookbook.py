@@ -767,6 +767,39 @@ def ollama_models() -> List[str]:
         return []
 
 
+def ollama_models_detailed() -> Dict[str, Dict[str, Any]]:
+    """tag -> {size} de los modelos pulleados (bytes reales en disco)."""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=3) as resp:
+            data = json.loads(resp.read().decode())
+        return {
+            m["name"]: {"size": int(m.get("size") or 0)}
+            for m in data.get("models", [])
+            if m.get("name")
+        }
+    except Exception:
+        return {}
+
+
+def delete_ollama_model(tag: str) -> Dict[str, Any]:
+    """Borra un modelo pulleado (DELETE /api/delete). Best-effort."""
+    if not tag:
+        return {"ok": False, "error": "tag is required"}
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA_BASE_URL}/api/delete",
+            data=json.dumps({"model": tag, "name": tag}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="DELETE",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if 200 <= resp.status < 300:
+                return {"ok": True}
+        return {"ok": False, "error": "delete failed"}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:200]}
+
+
 def ollama_status() -> Dict[str, Any]:
     return {
         "installed": ollama_installed(),
@@ -876,6 +909,9 @@ def start_ollama_install() -> Dict[str, Any]:
 
 # Background pull tracking: tag -> "pulling" | "done" | "error: ...".
 _pull_status: Dict[str, str] = {}
+# tag -> {completed, total, speed_bps, phase} (progreso real del streaming pull).
+_pull_progress: Dict[str, Dict[str, Any]] = {}
+_pull_cancel: Dict[str, threading.Event] = {}
 _pull_lock = threading.Lock()
 
 
@@ -884,20 +920,85 @@ def pull_status(tag: str) -> str:
         return _pull_status.get(tag, "")
 
 
+def pull_progress(tag: str) -> Dict[str, Any]:
+    """Progreso numérico del pull: bytes, %, velocidad y ETA (si se conocen)."""
+    with _pull_lock:
+        status = _pull_status.get(tag, "")
+        prog = dict(_pull_progress.get(tag) or {})
+    completed = int(prog.get("completed") or 0)
+    total = int(prog.get("total") or 0)
+    speed = int(prog.get("speed_bps") or 0)
+    return {
+        "status": status,
+        "phase": prog.get("phase", ""),
+        "downloaded": completed,
+        "total": total,
+        "percent": round(completed * 100.0 / total, 1) if total else None,
+        "speed_bps": speed,
+        "eta_seconds": int((total - completed) / speed)
+        if total and speed > 0
+        else None,
+    }
+
+
+def cancel_pull(tag: str) -> Dict[str, Any]:
+    """Cancela un pull en curso (Ollama conserva los blobs parciales → resume)."""
+    with _pull_lock:
+        ev = _pull_cancel.get(tag)
+        if ev is None:
+            return {"ok": False, "error": "no pull in progress for that tag"}
+        ev.set()
+    return {"ok": True}
+
+
 def _do_pull(tag: str) -> None:
     try:
         # The model installs on THIS host (where clawk runs). Make sure the
-        # daemon is up first — `ollama pull` needs it.
+        # daemon is up first — the pull API needs it.
         start_ollama_serve()
-        proc = subprocess.run(
-            ["ollama", "pull", tag], capture_output=True, text=True, timeout=3600
+        with _pull_lock:
+            cancel = _pull_cancel.setdefault(tag, threading.Event())
+            cancel.clear()
+        # Streaming pull vía la API HTTP (en vez de subprocess): cada línea trae
+        # {status, total, completed} → progreso real (%, velocidad, ETA) y
+        # cancelación cortando la conexión (Ollama conserva blobs → resume).
+        req = urllib.request.Request(
+            f"{OLLAMA_BASE_URL}/api/pull",
+            data=json.dumps({"model": tag, "stream": True}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
         )
-        if proc.returncode != 0:
-            with _pull_lock:
-                _pull_status[tag] = (
-                    "error: " + (proc.stderr or "pull failed").strip()[:200]
-                )
-            return
+        window_t = time.monotonic()
+        window_bytes = 0
+        last_completed = 0
+        with urllib.request.urlopen(req, timeout=3600) as resp:
+            for raw in resp:
+                if cancel.is_set():
+                    with _pull_lock:
+                        _pull_status[tag] = "cancelled"
+                    return
+                try:
+                    ev = json.loads(raw.decode("utf-8", "replace"))
+                except ValueError:
+                    continue
+                if ev.get("error"):
+                    with _pull_lock:
+                        _pull_status[tag] = "error: " + str(ev["error"])[:200]
+                    return
+                completed = int(ev.get("completed") or 0)
+                total = int(ev.get("total") or 0)
+                now = time.monotonic()
+                with _pull_lock:
+                    prog = _pull_progress.setdefault(tag, {})
+                    prog["phase"] = str(ev.get("status") or "")
+                    if total:
+                        prog["total"] = total
+                        prog["completed"] = completed
+                        window_bytes += max(0, completed - last_completed)
+                        last_completed = completed
+                        if now - window_t >= 1.0:
+                            prog["speed_bps"] = int(window_bytes / (now - window_t))
+                            window_t, window_bytes = now, 0
         # Pulled OK — now validate the model actually runs (a tiny generation).
         # "Installed" is not enough: a bad/corrupt pull or an unsupported arch
         # only surfaces when you try to run it. The user asked to validate this.

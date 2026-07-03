@@ -14747,11 +14747,24 @@ async def post_cookbook_pull(body: CookbookTagBody):
 
 @app.get("/api/cookbook/pull-status")
 async def get_cookbook_pull_status(tag: str):
-    """Background pull status for a tag: pulling / validating / done / error."""
+    """Background pull status for a tag: pulling / validating / done / error.
+
+    Incluye el progreso real del streaming pull (bytes, %, velocidad, ETA).
+    """
 
     from clawk_cli import cookbook
 
-    return {"tag": tag, "status": cookbook.pull_status(tag)}
+    progress = cookbook.pull_progress(tag)
+    return {"tag": tag, "status": cookbook.pull_status(tag), **progress}
+
+
+@app.post("/api/cookbook/pull-cancel")
+async def post_cookbook_pull_cancel(body: CookbookTagBody):
+    """Cancela un `ollama pull` en curso (los blobs parciales se conservan)."""
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.cancel_pull, (body.tag or "").strip())
 
 
 @app.post("/api/cookbook/install-ollama")
@@ -14790,6 +14803,212 @@ async def post_cookbook_use(body: CookbookTagBody):
     if not result.get("ok"):
         raise HTTPException(status_code=500, detail=result.get("error", "failed"))
     return result
+
+
+# ── Cookbook: provider architecture (Ollama + llama.cpp + futuros) ──────────
+#
+# Los endpoints de arriba quedan por compatibilidad (Ollama directo). Los de
+# abajo hablan con clawk_cli.cookbook_providers — la superficie común que
+# permite agregar backends (LM Studio, vLLM, MLX…) sin tocar el frontend.
+
+
+@app.get("/api/cookbook/providers")
+async def get_cookbook_providers():
+    """Estado de todos los backends de modelos locales (ollama, llamacpp…)."""
+
+    from clawk_cli import cookbook_providers
+
+    return await asyncio.to_thread(cookbook_providers.providers_status)
+
+
+class CookbookProviderBody(BaseModel):
+    provider: str
+
+
+@app.post("/api/cookbook/provider-install")
+async def post_cookbook_provider_install(body: CookbookProviderBody):
+    """Instala un backend en este host, en background. Poll provider-install-status."""
+
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    return await asyncio.to_thread(p.start_install)
+
+
+@app.get("/api/cookbook/provider-install-status")
+async def get_cookbook_provider_install_status(provider: str):
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(provider)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"unknown provider: {provider}")
+    return {"provider": provider, "status": p.install_status()}
+
+
+@app.get("/api/cookbook/hf-search")
+async def get_cookbook_hf_search(q: str):
+    """Búsqueda EN VIVO de repos GGUF en Hugging Face (para llama.cpp)."""
+
+    query = (q or "").strip()
+    if not query:
+        return {"models": []}
+
+    from clawk_cli import cookbook_hf
+
+    rows = await asyncio.to_thread(cookbook_hf.search_gguf, query)
+    return {"models": rows}
+
+
+@app.get("/api/cookbook/hf-files")
+async def get_cookbook_hf_files(repo: str):
+    """Archivos .gguf de un repo HF con tamaño y cuantización (elegir variante)."""
+
+    r = (repo or "").strip()
+    if not r:
+        raise HTTPException(status_code=400, detail="repo is required")
+
+    from clawk_cli import cookbook_hf
+
+    files = await asyncio.to_thread(cookbook_hf.repo_gguf_files, r)
+    return {"repo": r, "files": files}
+
+
+class CookbookDownloadBody(BaseModel):
+    repo: str
+    file: str
+
+
+@app.post("/api/cookbook/download")
+async def post_cookbook_download(body: CookbookDownloadBody):
+    """Descarga un GGUF de HF directo a la carpeta de modelos de llama.cpp.
+
+    Devuelve {download_id}; el progreso (bytes, %, velocidad, ETA, cancel) se
+    consulta con /download-status. Con un .part previo, RESUME donde quedó.
+    """
+
+    from clawk_cli import cookbook_llamacpp
+
+    result = await asyncio.to_thread(
+        cookbook_llamacpp.start_download, body.repo, body.file
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+@app.get("/api/cookbook/download-status")
+async def get_cookbook_download_status(id: str):
+    from clawk_cli import cookbook_llamacpp
+
+    return {"download_id": id, **cookbook_llamacpp.download_progress(id)}
+
+
+class CookbookDownloadIdBody(BaseModel):
+    id: str
+
+
+@app.post("/api/cookbook/download-cancel")
+async def post_cookbook_download_cancel(body: CookbookDownloadIdBody):
+    """Cancela una descarga GGUF (el .part queda para reanudar después)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.cancel_download, body.id)
+
+
+@app.get("/api/cookbook/installed")
+async def get_cookbook_installed():
+    """Modelos instalados de TODOS los providers (tamaño, ruta, quant, origen)."""
+
+    from clawk_cli import cookbook_providers
+
+    models = await asyncio.to_thread(cookbook_providers.all_installed_models)
+    return {"models": models}
+
+
+class CookbookModelBody(BaseModel):
+    provider: str
+    id: str
+
+
+@app.post("/api/cookbook/model-delete")
+async def post_cookbook_model_delete(body: CookbookModelBody):
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    result = await asyncio.to_thread(p.delete_model, body.id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+@app.post("/api/cookbook/model-use")
+async def post_cookbook_model_use(body: CookbookModelBody):
+    """Deja un modelo instalado (de cualquier provider) como modelo del agente.
+
+    Para llamacpp además arranca el servidor OpenAI-compatible si hace falta.
+    Aplica en todo lo que usa el modelo del agente: chat, agentes, skills,
+    workflows, crons.
+    """
+
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    result = await asyncio.to_thread(p.use_model, body.id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "failed"))
+    return result
+
+
+class CookbookRenameBody(BaseModel):
+    id: str
+    name: str
+
+
+@app.post("/api/cookbook/model-rename")
+async def post_cookbook_model_rename(body: CookbookRenameBody):
+    """Renombra el display-name de un GGUF registrado (solo llamacpp)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    result = await asyncio.to_thread(cookbook_llamacpp.rename_model, body.id, body.name)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+class CookbookIdBody(BaseModel):
+    id: str
+
+
+@app.post("/api/cookbook/model-verify")
+async def post_cookbook_model_verify(body: CookbookIdBody):
+    """Chequeo de integridad de un GGUF (existencia, tamaño, magic bytes)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.verify_model, body.id)
+
+
+@app.post("/api/cookbook/llamacpp-stop")
+async def post_cookbook_llamacpp_stop():
+    """Frena el llama-server en curso (libera la RAM del modelo)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.stop_server)
 
 
 # ---------------------------------------------------------------------------
