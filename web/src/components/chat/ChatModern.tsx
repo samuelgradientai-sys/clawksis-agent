@@ -574,6 +574,23 @@ const MessageBubble = memo(function MessageBubble({
   // Auto-limpieza: al terminar, tools + razonamiento colapsan a un chip
   // "ver pasos" (la conversación queda limpia). Re-expandible a mano.
   const [stepsOpen, setStepsOpen] = useState(false);
+
+  // Media generada por tools (image_generate / video_generate): debe seguir
+  // visible aunque los pasos se colapsen al chip "ver pasos" — sin esto, la
+  // imagen/video "desaparecía" al terminar el turno salvo que el modelo
+  // pegara la URL en su texto.
+  const toolMedia = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { src: string; video: boolean }[] = [];
+    for (const tc of message.toolCalls) {
+      for (const m of extractToolMedia(tc.result)) {
+        if (seen.has(m.src)) continue;
+        seen.add(m.src);
+        out.push(m);
+      }
+    }
+    return out;
+  }, [message.toolCalls]);
   // Modo edición inline para mensajes del usuario (estilo ChatGPT).
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -744,6 +761,21 @@ const MessageBubble = memo(function MessageBubble({
             hasReasoning={hasReasoning}
             onExpand={() => setStepsOpen(true)}
           />
+        )}
+
+        {/* Con los pasos colapsados, la media generada se muestra igual (los
+            ToolCallRow ya la renderizan cuando los pasos están abiertos). */}
+        {!showSteps && toolMedia.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {toolMedia.map((m, i) => (
+              <MediaAttachment
+                key={m.src + i}
+                src={m.src}
+                video={m.video}
+                alt="media generada"
+              />
+            ))}
+          </div>
         )}
 
         {actions}
