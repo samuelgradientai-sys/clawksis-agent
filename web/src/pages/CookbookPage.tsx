@@ -236,6 +236,10 @@ export default function CookbookPage() {
   const [hfFiles, setHfFiles] = useState<Record<string, HFFile[] | "loading">>({});
   // download_id -> progress (GGUF downloads in flight)
   const [downloads, setDownloads] = useState<Record<string, DownloadProgress>>({});
+  // .part huérfanos de un proceso anterior (restart a mitad de descarga)
+  const [interrupted, setInterrupted] = useState<
+    Array<{ file: string; repo: string; downloaded: number; resumable: boolean }>
+  >([]);
   // "Browse all" loads the entire Ollama library (hundreds of models).
   const [browseAll, setBrowseAll] = useState(false);
   const [libraryRows, setLibraryRows] = useState<CookbookModel[] | null>(null);
@@ -244,7 +248,7 @@ export default function CookbookPage() {
   const [installing, setInstalling] = useState<Record<string, string>>({});
   const [llamacpp, setLlamacpp] = useState<LlamaCppStatus>({});
   // Tab: buscar/catálogo vs instalados.
-  const [tab, setTab] = useState<"models" | "installed">("models");
+  const [tab, setTab] = useState<"models" | "installed" | "downloads">("models");
   // Filtros por características — aplican a Ollama Y a los GGUF de HF.
   const [fitFilter, setFitFilter] = useState<"all" | "fits" | "no_fit">("all");
   const [toolsFilter, setToolsFilter] = useState<"all" | "tools">("all");
@@ -315,7 +319,9 @@ export default function CookbookPage() {
       const res = await fetchJSON<{
         downloads?: Array<DownloadProgress & { download_id: string }>;
         pulls?: Array<PullProgress & { tag: string }>;
+        interrupted?: Array<{ file: string; repo: string; downloaded: number; resumable: boolean }>;
       }>("/api/cookbook/active");
+      setInterrupted(res.interrupted ?? []);
       for (const d of res.downloads ?? []) {
         if (
           d.status === "downloading" ||
@@ -799,6 +805,11 @@ export default function CookbookPage() {
   );
   const ramGb = hw.ram_gb ?? 0;
 
+  const activePulls = Object.entries(pulling).filter(
+    ([, p]) => p.status === "pulling" || p.status === "validating",
+  );
+  const activeCount = activeDownloads.length + activePulls.length;
+
   const searchingAny = remoteLoading || hfLoading;
 
   // ── Filtros por características (aplican a Ollama Y a los GGUF de HF) ─────
@@ -876,12 +887,25 @@ export default function CookbookPage() {
             >
               Installed
             </button>
+            <button
+              type="button"
+              onClick={() => setTab("downloads")}
+              className={`flex items-center gap-1 rounded px-2.5 py-1 ${tab === "downloads" ? "bg-[var(--color-primary)]/20 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Downloads
+              {activeCount > 0 && (
+                <span className="rounded-full bg-[var(--color-primary)]/30 px-1.5 text-2xs text-foreground">
+                  {activeCount}
+                </span>
+              )}
+            </button>
           </div>
           <button
             type="button"
             onClick={() => {
               void load();
               if (tab === "installed") void loadInstalled();
+              if (tab === "downloads") void reattachActive();
             }}
             className="rounded-md border border-border bg-card/40 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
@@ -997,7 +1021,93 @@ export default function CookbookPage() {
         </div>
       )}
 
-      {tab === "installed" ? (
+      {tab === "downloads" ? (
+        /* ── Downloads: todo lo que se está bajando (corre en el server) ── */
+        <div className="grid gap-2">
+          {Object.keys(downloads).length === 0 && Object.keys(pulling).length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+              No hay descargas en curso. Instalá un modelo desde la pestaña
+              Models — las descargas corren en el servidor y siguen aunque
+              cierres esta página o navegues a otra sección.
+            </div>
+          )}
+          {interrupted
+            .filter((it) => !Object.values(downloads).some((d) => d.file === it.file))
+            .map((it) => (
+              <div
+                key={"int-" + it.file}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm">{it.file}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Interrumpida (el server se reinició a mitad) ·{" "}
+                    {fmtBytes(it.downloaded)} ya bajados — se reanuda desde ahí
+                    {it.repo ? ` · ${it.repo}` : ""}
+                  </div>
+                </div>
+                {it.resumable ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onDownload(it.repo, it.file);
+                      setInterrupted((prev) => prev.filter((x) => x.file !== it.file));
+                    }}
+                    className="rounded-md border border-[var(--color-primary)] bg-[var(--color-primary)]/15 px-3 py-1 text-xs"
+                  >
+                    Reanudar
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    buscá el modelo en Models e Install del mismo archivo — retoma solo
+                  </span>
+                )}
+              </div>
+            ))}
+          {Object.entries(downloads).map(([id, d]) => (
+            <div key={id} className="rounded-lg border border-border bg-card/30 px-3 py-2">
+              <DownloadBar
+                label={`${d.file ?? "model"} · llama.cpp${
+                  d.status === "done"
+                    ? " · listo ✓"
+                    : d.status === "error"
+                      ? ` · error: ${d.error ?? ""}`
+                      : d.status === "cancelled"
+                        ? " · cancelado (reanudable)"
+                        : ""
+                }`}
+                progress={d}
+                onCancel={
+                  d.status === "downloading"
+                    ? () => void onCancelDownload(id)
+                    : undefined
+                }
+              />
+            </div>
+          ))}
+          {Object.entries(pulling).map(([tag, pr]) => (
+            <div key={tag} className="rounded-lg border border-border bg-card/30 px-3 py-2">
+              <DownloadBar
+                label={`${tag} · Ollama${
+                  pr.status === "done"
+                    ? " · listo ✓"
+                    : pr.status === "validating"
+                      ? " · validando…"
+                      : pr.status?.startsWith("error")
+                        ? ` · ${pr.status}`
+                        : pr.status === "cancelled"
+                          ? " · cancelado (reanudable)"
+                          : ""
+                }`}
+                progress={pr}
+                onCancel={
+                  pr.status === "pulling" ? () => void onCancelPull(tag) : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+      ) : tab === "installed" ? (
         /* ── Installed: gestión unificada de modelos de todos los providers ── */
         <div className="grid gap-2">
           {installedLoading ? (

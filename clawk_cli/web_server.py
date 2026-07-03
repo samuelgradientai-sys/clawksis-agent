@@ -14990,7 +14990,8 @@ async def get_cookbook_active():
 
     downloads = await asyncio.to_thread(cookbook_llamacpp.active_downloads)
     pulls = await asyncio.to_thread(cookbook.active_pulls)
-    return {"downloads": downloads, "pulls": pulls}
+    interrupted = await asyncio.to_thread(cookbook_llamacpp.interrupted_downloads)
+    return {"downloads": downloads, "pulls": pulls, "interrupted": interrupted}
 
 
 @app.get("/api/cookbook/installed")

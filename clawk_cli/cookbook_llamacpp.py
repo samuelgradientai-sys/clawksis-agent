@@ -528,6 +528,58 @@ def active_downloads() -> List[Dict[str, Any]]:
     return out
 
 
+def interrupted_downloads() -> List[Dict[str, Any]]:
+    """Descargas huérfanas: .part en disco SIN download activo en este proceso.
+
+    Pasa cuando el dashboard se reinicia a mitad de una descarga. Con el
+    sidecar .meta se reanudan con un click (Range desde lo ya bajado); sin
+    meta (descargas viejas) se informa el archivo para reinstalarlo a mano.
+    """
+
+    with _downloads_lock:
+        live = {
+            (d["repo"], d["file"])
+            for d in _downloads.values()
+            if d["status"] in ("downloading", "verifying", "registering")
+        }
+
+        live_files = {f for (_r, f) in live}
+
+    out: List[Dict[str, Any]] = []
+
+    mdir = models_dir()
+
+    if not mdir.is_dir():
+        return out
+
+    for part in sorted(mdir.glob("*.gguf.part")):
+        fname = part.name[: -len(".part")]
+
+        if fname in live_files:
+            continue
+
+        repo = ""
+
+        try:
+            meta = json.loads((part.with_name(part.name + ".meta")).read_text())
+
+            repo = str(meta.get("repo") or "")
+
+            fname = str(meta.get("file") or fname)
+
+        except Exception:
+            pass
+
+        out.append({
+            "file": fname,
+            "repo": repo,
+            "downloaded": part.stat().st_size,
+            "resumable": bool(repo),
+        })
+
+    return out
+
+
 def cancel_download(download_id: str) -> Dict[str, Any]:
     with _downloads_lock:
         d = _downloads.get(download_id)
@@ -575,8 +627,17 @@ def _do_download(download_id: str) -> None:
 
     part = dest.with_name(dest.name + ".part")
 
+    meta = dest.with_name(dest.name + ".part.meta")
+
     try:
         models_dir().mkdir(parents=True, exist_ok=True)
+
+        # Sidecar con repo/archivo: si el proceso muere a mitad (restart del
+        # dashboard), el .part queda reanudable con un click desde la UI.
+        try:
+            meta.write_text(json.dumps({"repo": repo, "file": filename}))
+        except Exception:
+            pass
 
         url = cookbook_hf.download_url(repo, filename)
 
@@ -655,6 +716,8 @@ def _do_download(download_id: str) -> None:
             d["status"] = "registering"
 
         part.replace(dest)
+
+        meta.unlink(missing_ok=True)
 
         model_id = _register_downloaded(repo, dest.name, actual)
 
