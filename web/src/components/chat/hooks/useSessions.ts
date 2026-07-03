@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchJSON } from "@/lib/api";
+import { api, fetchJSON } from "@/lib/api";
 
 export interface ChatProject {
   id: string;
@@ -49,6 +49,7 @@ interface UseSessionsResult {
   refreshProjects: () => Promise<void>;
   createSession: () => Promise<string | null>;
   deleteSession: (id: string) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<ChatProject | null>;
   moveSessionToProject: (sessionId: string, projectId: string | null) => Promise<void>;
 }
@@ -211,6 +212,29 @@ export function useSessions(
     [sendRpc, ready, refresh, refreshProjects],
   );
 
+  const renameSession = useCallback(
+    async (id: string, title: string): Promise<void> => {
+      const clean = title.trim();
+      if (!id || !clean) return;
+      // Optimista: el título nuevo aparece al instante; refresh() reconcilia.
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: clean } : s)),
+      );
+      try {
+        await api.renameSession(id, clean);
+      } catch (err) {
+        console.error("[useSessions] rename failed", err);
+        setError(
+          err instanceof Error
+            ? err.message.replace(/^\d+:\s*/, "")
+            : "No se pudo renombrar la conversación",
+        );
+      }
+      void refresh();
+    },
+    [refresh],
+  );
+
   const createProject = useCallback(
     async (name: string, description = ""): Promise<ChatProject | null> => {
       if (!ready) return null;
@@ -290,6 +314,7 @@ export function useSessions(
     refreshProjects,
     createSession,
     deleteSession,
+    renameSession,
     createProject,
     moveSessionToProject,
   };

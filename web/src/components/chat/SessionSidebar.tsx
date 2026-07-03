@@ -31,6 +31,12 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Pin,
+  PinOff,
+  Copy,
+  Download,
+  Pencil,
+  ListTree,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -53,9 +59,32 @@ interface SessionSidebarProps {
   onCreateProject: () => void;
   onDeleteSession: (sessionId: string) => void;
   onMoveSessionToProject: (sessionId: string, projectId: string | null) => void;
+  /** Renombrar conversación (persiste vía PATCH + refresca la lista). */
+  onRenameSession: (sessionId: string, title: string) => void | Promise<void>;
 }
 
 type SidebarMode = "chats" | "projects";
+
+// ── Fijados + agrupación (persistidos en localStorage, solo-cliente) ────────
+const PINNED_STORAGE_KEY = "clawksis-pinned-chats";
+const GROUPED_STORAGE_KEY = "clawksis-chats-grouped";
+
+function readPinnedIds(): string[] {
+  try {
+    const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Etiqueta corta de modelo para agrupar ("deepseek/deepseek-v4-flash" → "deepseek-v4-flash"). */
+function modelGroupLabel(model?: string | null): string {
+  const m = (model || "").trim();
+  if (!m) return "otros";
+  return m.split("/").pop() || m;
+}
 
 const SOURCE_META: Record<
   string,
@@ -230,23 +259,33 @@ function SessionItem({
   projects,
   isActive,
   isRunning,
+  isPinned,
   menuOpen,
   onClick,
   onToggleMenu,
   onCloseMenu,
   onDelete,
   onMoveToProject,
+  onTogglePin,
+  onRename,
+  onExport,
+  onCopyId,
 }: {
   session: SessionSummary;
   projects: ChatProject[];
   isActive: boolean;
   isRunning: boolean;
+  isPinned: boolean;
   menuOpen: boolean;
   onClick: () => void;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onDelete: () => void;
   onMoveToProject: (projectId: string | null) => void;
+  onTogglePin: () => void;
+  onRename: (title: string) => void | Promise<void>;
+  onExport: () => void;
+  onCopyId: () => void;
 }) {
   const title = deriveTitle(session);
   const dateLabel = formatRelativeDate(session.started_at);
@@ -254,20 +293,37 @@ function SessionItem({
   const SourceIcon = meta.icon;
   const model = session.model?.trim();
 
+  // Renombrado inline: reemplaza el título por un input (Enter guarda, Esc cancela).
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState("");
+
   const move = (projectId: string | null) => {
     onMoveToProject(projectId);
     onCloseMenu();
+  };
+
+  const saveRename = () => {
+    const next = draft.trim();
+    setRenaming(false);
+    if (next && next !== title) void onRename(next);
   };
 
   return (
     <div className="group relative">
       <button
         type="button"
-        onClick={() => {
+        onClick={(e) => {
+          // Shift+click fija/desfija (patrón Hermes) sin abrir la conversación.
+          if (e.shiftKey) {
+            e.preventDefault();
+            onTogglePin();
+            return;
+          }
+          if (renaming) return;
           onCloseMenu();
           onClick();
         }}
-        title={title}
+        title={title + " (Shift+click para fijar)"}
         aria-current={isActive ? "true" : undefined}
         className={
           "flex w-full flex-col gap-0.5 rounded px-2 py-1.5 pr-8 text-left transition-colors " +
@@ -285,7 +341,30 @@ function SessionItem({
           ) : isActive ? (
             <span className="size-1.5 shrink-0 rounded-full bg-[#6C4FD6]" />
           ) : null}
-          <span className="truncate text-xs font-medium">{title}</span>
+          {isPinned && (
+            <Pin className="size-3 shrink-0 text-[#6C4FD6]/80" aria-label="fijado" />
+          )}
+          {renaming ? (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  saveRename();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setRenaming(false);
+                }
+              }}
+              onBlur={saveRename}
+              className="w-full min-w-0 rounded border border-[#6C4FD6]/50 bg-background px-1 py-0.5 text-xs text-foreground focus:outline-none"
+            />
+          ) : (
+            <span className="truncate text-xs font-medium">{title}</span>
+          )}
         </span>
 
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
@@ -322,6 +401,61 @@ function SessionItem({
 
       {menuOpen && (
         <div className="absolute right-1 top-7 z-30 w-52 overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMenu();
+              onTogglePin();
+            }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-muted"
+          >
+            {isPinned ? (
+              <PinOff className="size-3.5 text-muted-foreground" />
+            ) : (
+              <Pin className="size-3.5 text-muted-foreground" />
+            )}
+            {isPinned ? "Desfijar" : "Fijar"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMenu();
+              setDraft(title);
+              setRenaming(true);
+            }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-muted"
+          >
+            <Pencil className="size-3.5 text-muted-foreground" />
+            Renombrar
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMenu();
+              onCopyId();
+            }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-muted"
+          >
+            <Copy className="size-3.5 text-muted-foreground" />
+            Copiar ID
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMenu();
+              onExport();
+            }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-muted"
+          >
+            <Download className="size-3.5 text-muted-foreground" />
+            Exportar
+          </button>
+
+          <div className="my-1 border-t border-border" />
+
           <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Mover a
           </div>
@@ -383,11 +517,52 @@ export function SessionSidebar({
   onCreateProject,
   onDeleteSession,
   onMoveSessionToProject,
+  onRenameSession,
 }: SessionSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>("chats");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const lastAutoOpenedSessionId = useRef<string | null>(null);
+
+  // Fijados (Shift+click o menú) + agrupación por modelo — persistidos local.
+  const [pinnedIds, setPinnedIds] = useState<string[]>(readPinnedIds);
+  const [grouped, setGrouped] = useState<boolean>(
+    () => window.localStorage.getItem(GROUPED_STORAGE_KEY) === "1",
+  );
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
+      try {
+        window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage lleno/bloqueado: el pin queda solo en memoria */
+      }
+      return next;
+    });
+  };
+  const toggleGrouped = () => {
+    setGrouped((prev) => {
+      try {
+        window.localStorage.setItem(GROUPED_STORAGE_KEY, prev ? "0" : "1");
+      } catch {
+        /* ídem */
+      }
+      return !prev;
+    });
+  };
+  const exportSession = (id: string) => {
+    const a = document.createElement("a");
+    a.href = api.exportSessionUrl(id);
+    a.download = "clawksis-chat-" + id.slice(0, 8) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const copySessionId = (id: string) => {
+    void navigator.clipboard?.writeText(id).catch(() => {});
+  };
 
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
 
@@ -428,9 +603,14 @@ export function SessionSidebar({
     sessionsByProject.set(project.id, []);
   }
 
+  const pinnedSet = new Set(pinnedIds);
+  // Fijados: cualquier conversación (general o de proyecto), en su propia sección.
+  const pinnedSessions = sessions.filter((s) => pinnedSet.has(s.id));
+
   const generalSessions: SessionSummary[] = [];
 
   for (const session of sessions) {
+    if (pinnedSet.has(session.id)) continue; // ya listado en Fijados
     const projectId = session.project_id ?? "";
     if (projectId && projectIds.has(projectId)) {
       sessionsByProject.get(projectId)?.push(session);
@@ -438,6 +618,23 @@ export function SessionSidebar({
       generalSessions.push(session);
     }
   }
+
+  // Agrupación por modelo (toggle): [etiqueta, sesiones] ordenado por recencia.
+  const groupedGeneral = useMemo(() => {
+    if (!grouped) return null;
+    const groups = new Map<string, SessionSummary[]>();
+    for (const s of generalSessions) {
+      const label = modelGroupLabel(s.model);
+      const arr = groups.get(label);
+      if (arr) arr.push(s);
+      else groups.set(label, [s]);
+    }
+    return Array.from(groups.entries()).sort(
+      (a, b) => (b[1][0]?.started_at ?? 0) - (a[1][0]?.started_at ?? 0),
+    );
+    // generalSessions se deriva de props en cada render; agrupar es barato.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grouped, sessions, pinnedIds, projects]);
 
   const selectedProject =
     activeProjects.find((project) => project.id === selectedProjectId) ?? null;
@@ -465,6 +662,7 @@ export function SessionSidebar({
       projects={activeProjects}
       isActive={session.id === activeSessionId}
       isRunning={effectiveRunning.has(session.id)}
+      isPinned={pinnedSet.has(session.id)}
       menuOpen={openMenuSessionId === session.id}
       onClick={() => onSelectSession(session.id)}
       onToggleMenu={() =>
@@ -475,6 +673,10 @@ export function SessionSidebar({
       onCloseMenu={() => setOpenMenuSessionId(null)}
       onDelete={() => onDeleteSession(session.id)}
       onMoveToProject={(projectId) => onMoveSessionToProject(session.id, projectId)}
+      onTogglePin={() => togglePin(session.id)}
+      onRename={(title) => onRenameSession(session.id, title)}
+      onExport={() => exportSession(session.id)}
+      onCopyId={() => copySessionId(session.id)}
     />
   );
 
@@ -560,15 +762,64 @@ export function SessionSidebar({
 
         {!error && mode === "chats" && (
           <div>
-            <SectionTitle
-              icon="chats"
-              title="Conversaciones"
-              count={generalSessions.length}
-            />
+            {/* FIJADOS — estilo Hermes: shift+click o el menú ⋯ fija un chat. */}
+            <div className="mt-2 flex items-center gap-1.5 px-2 text-[10px] font-medium uppercase tracking-wide text-[#6C4FD6]">
+              <Pin className="size-3 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Fijados</span>
+              {pinnedSessions.length > 0 && (
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
+                  {pinnedSessions.length}
+                </span>
+              )}
+            </div>
+            {pinnedSessions.length === 0 ? (
+              <div className="flex items-center gap-1.5 px-2 py-2 text-[11px] text-muted-foreground/70">
+                <Pin className="size-3 shrink-0 opacity-50" />
+                Shift+click para fijar un chat
+              </div>
+            ) : (
+              <div className="mb-1 flex flex-col gap-0.5">
+                {pinnedSessions.map(renderSession)}
+              </div>
+            )}
+
+            <div className="mt-2 flex items-center gap-1.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Inbox className="size-3 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Conversaciones</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[9px]">
+                {generalSessions.length}
+              </span>
+              <button
+                type="button"
+                onClick={toggleGrouped}
+                title={grouped ? "Lista plana" : "Agrupar por modelo"}
+                aria-pressed={grouped}
+                className={
+                  "rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground " +
+                  (grouped ? "bg-[#6C4FD6]/20 text-[#6C4FD6]" : "")
+                }
+              >
+                <ListTree className="size-3.5" />
+              </button>
+            </div>
 
             {generalSessions.length === 0 ? (
               <div className="px-2 py-4 text-xs text-muted-foreground">
                 No hay chats generales. Puedes crear una conversación nueva o abrir un proyecto.
+              </div>
+            ) : groupedGeneral ? (
+              <div className="flex flex-col gap-0.5">
+                {groupedGeneral.map(([label, groupSessions]) => (
+                  <div key={label}>
+                    <div className="mt-1.5 flex items-center gap-1.5 px-2 text-[10px] text-muted-foreground/80">
+                      <span className="min-w-0 truncate font-mono">{label}</span>
+                      <span className="font-mono text-[9px]">{groupSessions.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {groupSessions.map(renderSession)}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="flex flex-col gap-0.5">

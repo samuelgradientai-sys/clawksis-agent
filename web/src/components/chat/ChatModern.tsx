@@ -1388,6 +1388,7 @@ export default function ChatModern() {
     error: sessionsError,
     createSession,
     deleteSession,
+    renameSession,
     createProject,
     moveSessionToProject,
     refresh: refreshSessions,
@@ -1859,6 +1860,7 @@ export default function ChatModern() {
         onCreateProject={handleCreateProject}
         onDeleteSession={handleDeleteSession}
         onMoveSessionToProject={handleMoveSessionToProject}
+        onRenameSession={renameSession}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
