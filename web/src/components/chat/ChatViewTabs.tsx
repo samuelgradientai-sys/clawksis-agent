@@ -8,7 +8,7 @@
  * módulo, así que todas las instancias quedan sincronizadas.
  */
 
-import { Activity, Images, MessageSquare, Terminal } from "lucide-react";
+import { Activity, Images, MessageSquare, SquareKanban, Terminal } from "lucide-react";
 import { useChatMode } from "./hooks/useChatMode";
 import {
   toggleSidePanel,
@@ -96,6 +96,13 @@ export function ChatViewTabs() {
         title="Media — todo el contenido generado (imágenes/videos)"
         icon={<Images className="size-3.5" />}
         label="Media"
+      />
+      <TabChip
+        active={mode === "modern" && sidePanel === "tasks"}
+        onClick={() => openPanel("tasks")}
+        title="Tareas — kanban simple de la conversación"
+        icon={<SquareKanban className="size-3.5" />}
+        label="Tareas"
       />
     </div>
   );

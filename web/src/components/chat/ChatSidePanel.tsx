@@ -1,19 +1,24 @@
 /**
- * ChatSidePanel — Visualización + Media integrados al chat moderno.
+ * ChatSidePanel — Visualización + Media + Tareas integrados al chat moderno.
  *
  * La sección "Visualization" dejó de ser una página aparte del sidebar: ahora
  * vive acá, como panel lateral del chat, junto a una galería de media para
  * mirar todo el contenido generado (imágenes/videos) sin salir de la
- * conversación.
+ * conversación, y un kanban simple.
  *
  *   - Visualización: Pixel Office / Actividad / Grafo — mismos componentes de
  *     web/src/visualization, alimentados por el feed cross-process
  *     (/api/events) + el canal PTY si hay uno publicado.
  *   - Media: galería compacta sobre /api/gallery/* (misma data que la página
  *     Media), con lightbox y descarga.
+ *   - Tareas: kanban lite sobre la API del plugin (/api/plugins/kanban) —
+ *     ver TasksPanel.tsx.
+ *
+ * El ancho es redimensionable en desktop (drag en el borde izquierdo),
+ * persistido en sidePanelStore.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Download,
   ExternalLink,
@@ -42,7 +47,14 @@ import {
 } from "../../visualization/officeProviders";
 import { PixelOfficeView } from "../../visualization/PixelOfficeView";
 
-import type { SidePanelTab } from "./sidePanelStore";
+import {
+  PANEL_MIN_WIDTH,
+  panelMaxWidth,
+  setSidePanelWidth,
+  useSidePanelWidth,
+  type SidePanelTab,
+} from "./sidePanelStore";
+import { TasksPanel } from "./TasksPanel";
 
 export type { SidePanelTab };
 
@@ -96,7 +108,7 @@ function VisualizationPanel() {
   }, [active]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
       <div className="flex items-center gap-1.5">
         {VISUALS.map((v) => (
           <button
@@ -113,6 +125,26 @@ function VisualizationPanel() {
             {v.label}
           </button>
         ))}
+        {/* Selector de visual fusionado en la misma fila (solo si hay más de
+            un provider): antes ocupaba una fila propia que le robaba alto a
+            la oficina en el panel angosto. */}
+        {active === "office" && OFFICE_PROVIDERS.length > 1 && (
+          <select
+            value={officeProviderId}
+            onChange={(e) => {
+              setOfficeProviderId(e.target.value);
+              saveOfficeProviderId(e.target.value);
+            }}
+            aria-label="Visual de la oficina"
+            className="max-w-[9rem] rounded-md border border-border/60 bg-card/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+          >
+            {OFFICE_PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        )}
         <span
           title={feed.connected ? "En vivo" : "Conectando…"}
           className={`ml-auto inline-block h-2 w-2 rounded-full ${
@@ -122,29 +154,12 @@ function VisualizationPanel() {
       </div>
 
       {active === "office" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-          <select
-            value={officeProviderId}
-            onChange={(e) => {
-              setOfficeProviderId(e.target.value);
-              saveOfficeProviderId(e.target.value);
-            }}
-            aria-label="Visual de la oficina"
-            className="self-start rounded-md border border-border/60 bg-card/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          >
-            {OFFICE_PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <div className="min-h-0 flex-1">
-            <PixelOfficeView
-              key={officeProvider.id}
-              provider={officeProvider}
-              feed={feed}
-            />
-          </div>
+        <div className="min-h-0 flex-1">
+          <PixelOfficeView
+            key={officeProvider.id}
+            provider={officeProvider}
+            feed={feed}
+          />
         </div>
       )}
       {active === "activity" && (
@@ -394,6 +409,12 @@ function MediaPanel() {
 
 // ── Panel contenedor ─────────────────────────────────────────────────────────
 
+const PANEL_TABS: { id: SidePanelTab; label: string }[] = [
+  { id: "viz", label: "Visualización" },
+  { id: "media", label: "Media" },
+  { id: "tasks", label: "Tareas" },
+];
+
 export function ChatSidePanel({
   tab,
   onSelectTab,
@@ -403,31 +424,60 @@ export function ChatSidePanel({
   onSelectTab: (tab: SidePanelTab) => void;
   onClose: () => void;
 }) {
+  const width = useSidePanelWidth();
+  const dragging = useRef(false);
+
+  // Drag-resize del borde izquierdo (solo desktop: el aside es overlay en
+  // mobile). El panel está anclado a la derecha, así que el ancho es
+  // (borde derecho del viewport − cursor).
+  const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging.current) return;
+      setSidePanelWidth(window.innerWidth - ev.clientX);
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
-    <aside className="absolute inset-y-0 right-0 z-20 flex w-[88vw] max-w-[26rem] flex-col border-l border-border/60 bg-background/80 backdrop-blur-xl lg:static lg:z-auto lg:w-[24rem] lg:bg-background/40 xl:w-[27rem]">
+    <aside
+      style={{ "--panel-w": `${width}px` } as React.CSSProperties}
+      className="absolute inset-y-0 right-0 z-20 flex w-[88vw] max-w-[26rem] flex-col border-l border-border/60 bg-background/80 backdrop-blur-xl lg:static lg:z-auto lg:w-[var(--panel-w)] lg:max-w-none lg:bg-background/40"
+    >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Redimensionar panel"
+        title={`Arrastrá para redimensionar (${PANEL_MIN_WIDTH}–${panelMaxWidth()}px)`}
+        onPointerDown={onHandlePointerDown}
+        className="absolute inset-y-0 left-0 z-30 hidden w-1.5 cursor-col-resize transition-colors hover:bg-[#6C4FD6]/40 lg:block"
+      />
       <div className="flex items-center gap-1 border-b border-border/60 px-2 py-2">
-        <button
-          type="button"
-          onClick={() => onSelectTab("viz")}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            tab === "viz"
-              ? "bg-[#6C4FD6]/15 text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Visualización
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectTab("media")}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            tab === "media"
-              ? "bg-[#6C4FD6]/15 text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Media
-        </button>
+        {PANEL_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onSelectTab(t.id)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              tab === t.id
+                ? "bg-[#6C4FD6]/15 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
         <button
           type="button"
           onClick={onClose}
@@ -437,7 +487,7 @@ export function ChatSidePanel({
           <X className="size-4" />
         </button>
       </div>
-      {tab === "viz" ? <VisualizationPanel /> : <MediaPanel />}
+      {tab === "viz" ? <VisualizationPanel /> : tab === "media" ? <MediaPanel /> : <TasksPanel />}
     </aside>
   );
 }
