@@ -102,8 +102,8 @@ def _scrapling_cmd() -> Optional[List[str]]:
 
         if importlib.util.find_spec("scrapling") is not None:
             return [sys.executable, "-m", "scrapling"]
-    except Exception:
-        pass
+    except (ImportError, OSError):
+        logger.debug("scrape: scrapling module import check failed")
     return None
 
 
@@ -122,8 +122,8 @@ def _resolve_proxy(arg_proxy: Optional[str]) -> Optional[str]:
             p = web_cfg.get("scrapling_proxy")
             if isinstance(p, str) and p.strip():
                 return p.strip()
-    except Exception:
-        pass
+    except (ImportError, OSError, TypeError):
+        logger.debug("scrape: config load failed")
     return None
 
 
@@ -186,15 +186,16 @@ def _run_one(
         content = ""
         try:
             content = Path(out_path).read_text(encoding="utf-8", errors="replace")
-        except Exception:
+        except (OSError, UnicodeDecodeError) as exc:
+            logger.warning("scrape: failed to read output %s (%s)", out_path, exc)
             content = ""
         ran_ok = proc.returncode == 0 and bool(content.strip())
         return ran_ok, content, (proc.stderr or "").strip()
     finally:
         try:
             os.unlink(out_path)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("scrape: cleanup of %s failed (%s)", out_path, exc)
 
 
 async def _handle_scrape(args, **kw):

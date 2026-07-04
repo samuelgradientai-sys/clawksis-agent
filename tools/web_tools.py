@@ -357,7 +357,7 @@ def _scrapegraph_importable() -> bool:
         from tools.scrapegraph_common import is_available
 
         return is_available()
-    except Exception:
+    except ImportError:
         return False
 
 
