@@ -217,7 +217,7 @@ def _has_env(name: str) -> bool:
 
             val = get_env_value(name)
 
-        except Exception:
+        except (ImportError, AttributeError, TypeError, OSError):
             val = None
 
     return bool(val and val.strip())
@@ -231,7 +231,7 @@ def _load_web_config() -> dict:
 
         return load_config().get("web", {})
 
-    except (ImportError, Exception):
+    except (ImportError, OSError, TypeError):
         return {}
 
 
@@ -423,7 +423,7 @@ def _is_backend_available(backend: str) -> bool:
 
             return has_xai_credentials()
 
-        except Exception:
+        except (ImportError, AttributeError, OSError):
             return False
 
     return False
@@ -1298,15 +1298,11 @@ def _ensure_web_plugins_loaded() -> None:
 
         _ensure_plugins_discovered()
 
-    except Exception as exc:  # noqa: BLE001
+    except (ImportError, AttributeError, OSError, SyntaxError) as exc:
         # Warning, not debug: if a plugin import is genuinely broken the
-
         # user otherwise hits the misleading "No web extract provider
-
         # configured" error this helper is meant to eliminate, with no
-
         # clue in normal logs about the real cause.
-
         logger.warning("Web plugin discovery failed (non-fatal): %s", exc)
 
 
