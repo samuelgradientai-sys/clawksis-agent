@@ -139,7 +139,8 @@ La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú
 | `clawk status` | Estado de todos los componentes |
 | `clawk doctor` · `clawk doctor --fix` | Diagnóstico / autocorrección |
 | `clawk update` | Actualizar a la última versión |
-| `clawk dashboard` | Abrir el dashboard web |
+| `clawk dashboard` | Abrir el dashboard web (chat Modern/Terminal, sesiones, media, tareas) |
+| `clawk dashboard domain <dominio>` | Publicarlo en `https://<dominio>` con HTTPS, en un comando |
 | `clawk gateway install` | Mensajería como servicio del sistema |
 | `clawk cron add "<schedule>" "<prompt>"` | Programar una tarea recurrente |
 | `clawk skills` | Buscar, instalar y gestionar skills |
@@ -159,6 +160,23 @@ La referencia completa está organizada por categoría — expandí la que neces
 | `clawk desktop` (alias `gui`) | Compilar y abrir la app de escritorio nativa |
 | `clawk version` | Mostrar versión |
 | `clawk uninstall` | Desinstalar (preserva `~/.clawksis/`) |
+
+</details>
+
+<details>
+<summary><b>Dashboard web (<code>clawk dashboard</code>)</b></summary>
+
+El dashboard es una web UI (por defecto en `http://127.0.0.1:9119`): chat en dos modos — **Modern** (burbujas, con paneles laterales de **Visualización** de agentes, **Media** generada y **Tareas** kanban) y **Terminal** (la CLI clásica) —, gestión de sesiones, modelos, skills, plugins, MCP y canales. En un servidor, `clawk dashboard` queda corriendo en segundo plano (sobrevive al cierre de SSH).
+
+| Comando | Qué hace |
+|---|---|
+| `clawk dashboard` | Iniciar la web UI (en un servidor: en segundo plano) |
+| `clawk dashboard --stop` · `--status` | Detener / listar los procesos del dashboard |
+| `clawk dashboard --remote USER@HOST` | Abrirlo desde tu PC vía túnel SSH (sin `ssh -L` manual; `--start` lo arranca en el remoto, `--ssh-opt` pasa opciones a ssh) |
+| `clawk dashboard password` | Crear/cambiar el login (usuario + contraseña; `--clear` lo borra) |
+| `clawk dashboard service` | Instalarlo como servicio systemd (arranca solo al boot; `--uninstall`, `--status`, `--plain`) |
+| `clawk dashboard domain <dominio>` | Publicarlo en `https://<dominio>`: systemd + login forzado + Caddy con HTTPS automático, en un comando (ver [Self-hosted](#self-hosted-acceso-por-dominio)) |
+| `clawk dashboard --host 0.0.0.0 --insecure` | Exponerlo en toda interfaz (activa el login; preferí `domain` para HTTPS) |
 
 </details>
 
@@ -288,7 +306,7 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 | `clawk checkpoints` | Checkpoints del filesystem (`status`, `list`, `prune`, `clear`) |
 | `clawk profile` | Perfiles — instancias aisladas de Clawksis (`list`, `create`, `use`, `show`, `delete`, `export`, `import`…) |
 | `clawk security audit` | Auditoría supply-chain (OSV.dev) |
-| `clawk kanban` | Tablero de colaboración (tareas, links, comentarios, swarm) |
+| `clawk kanban` | Tablero de colaboración (tareas, links, comentarios, swarm); también como panel **Tareas** en el chat Modern del dashboard |
 
 </details>
 
