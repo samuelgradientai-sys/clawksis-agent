@@ -15,9 +15,12 @@
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/issues"><img src="https://img.shields.io/badge/Issues-GitHub-red?style=for-the-badge" alt="Issues"></a>
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/DOCUMENTATION.md"><img src="https://img.shields.io/badge/Docs-Timeline-6C4FD6?style=for-the-badge" alt="Documentación"></a>
   <a href="https://www.clawksis.com/"><img src="https://img.shields.io/badge/Web-clawksis.com-blue?style=for-the-badge" alt="Website"></a>
+  <img src="https://img.shields.io/badge/Plataformas-Linux%20·%20macOS%20·%20Windows%20·%20Android-black?style=for-the-badge" alt="Plataformas">
 </p>
 
 ---
+
+**Clawksis es un agente de IA que vive en tu servidor y trabaja para vos de forma continua.** A diferencia de un chatbot común, no espera a que le hables: corre tareas programadas, reacciona a eventos y te escribe **a vos** por Telegram, WhatsApp o Discord cuando pasa algo. Conectalo con la suscripción de **Claude o ChatGPT que ya pagás** —por OAuth, sin API key— y en minutos tenés tu propio asistente autónomo, privado y sin límites impuestos por terceros.
 
 ## Tabla de contenidos
 
@@ -29,7 +32,7 @@
 - [Self-hosted: acceso por dominio](#self-hosted-acceso-por-dominio)
 - [Mensajería](#mensajería)
 - [Problemas comunes](#problemas-comunes)
-- [Actualizar](#actualizar) · [Desinstalar](#desinstalar) · [Licencia](#licencia)
+- [Actualizar](#actualizar) · [Desinstalar](#desinstalar) · [Contribuir](#contribuir) · [Licencia](#licencia)
 
 ---
 
@@ -57,7 +60,7 @@ clawk setup
 >
 > **Android/Termux:** el mismo `curl` detecta Termux automáticamente.
 
-El instalador descarga el código, crea un virtualenv de Python, instala las dependencias de Node, construye el dashboard web y enlaza `clawk` en tu `PATH`.
+**Requisitos:** solo una máquina con acceso a terminal (Linux, macOS, Windows o Android). No hace falta preparar nada más: el instalador descarga el código, crea un virtualenv de Python, instala las dependencias de Node, construye el dashboard web y enlaza `clawk` en tu `PATH`.
 
 ---
 
@@ -76,11 +79,25 @@ clawk doctor
 
 `clawk setup` te pregunta qué proveedor usar (OpenAI, Anthropic, OpenRouter, DeepSeek, Gemini u otro), te pide la API key y configura el modelo. Todo queda en `~/.clawksis/.env` y `~/.clawksis/config.yaml`.
 
+¿Solo querés una respuesta rápida sin entrar al modo interactivo? Usá el modo one-shot:
+
+```bash
+clawk -z "resumime las novedades importantes de hoy"
+```
+
+Desde acá ya podés [conectar mensajería](#mensajería) para hablarle desde el celular, [programar tareas](#comandos) o [publicar el dashboard en tu dominio](#self-hosted-acceso-por-dominio).
+
 ---
 
 ## Proveedores soportados
 
-La forma más fácil de conectar cualquier proveedor es **`clawk model`** (menú interactivo que te lleva de la mano). Para ir directo, usá **`clawk auth add <id>`**: auto-detecta el tipo, hace el login OAuth en el navegador o te pide la API key y la guarda en `~/.clawksis/.env`. El valor por defecto (`auto`) usa lo que tengas configurado.
+Clawksis habla con **más de 30 proveedores LLM**, y la gran ventaja es cómo los conectás:
+
+- 🔑 **Usá la suscripción que ya pagás** — conectá **Claude Pro/Max** o **ChatGPT Plus/Pro** por **OAuth**, sin gastar en API keys.
+- 🧩 **O tu propia API key** — de casi cualquier proveedor (OpenRouter, OpenAI, DeepSeek, Gemini, Kimi…).
+- 🖥️ **O modelos 100% locales** — con Ollama o LM Studio, sin mandar nada a la nube.
+
+La forma más fácil de conectar cualquiera es **`clawk model`** (menú interactivo que te lleva de la mano). Para ir directo, usá **`clawk auth add <id>`**: auto-detecta el tipo, hace el login OAuth en el navegador o te pide la API key y la guarda en `~/.clawksis/.env`. El valor por defecto (`auto`) usa lo que tengas configurado.
 
 > 💡 **Tip:** `clawk auth add <id> --api-key TU_KEY` la pega sin prompt. Para ver o cambiar el modelo después: `clawk model`.
 
@@ -355,9 +372,9 @@ PC entrás con `clawk dashboard --remote user@server`). Todo lo de abajo sigue
 documentado para quien prefiera armarlo a mano o usar Cloudflare Tunnel/nginx.
 
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
-> `127.0.0.1`) entra directo, sin login — igual que siempre. La contraseña se
-> pide **solo** cuando lo exponés hacia afuera (`--host 0.0.0.0` o el modo
-> dominio de arriba): el gate se enciende automáticamente en esos modos.
+> `127.0.0.1`) entra directo, sin login. La contraseña se pide **solo** cuando
+> lo exponés hacia afuera (`--host 0.0.0.0` o el modo dominio de arriba): el
+> gate de autenticación se enciende automáticamente en esos modos.
 
 Son tres piezas, cada una independiente (la vía rápida las hace todas):
 
@@ -614,6 +631,16 @@ clawk uninstall
 ```
 
 Elimina el código y el comando `clawk`. Tu configuración en `~/.clawksis/` no se toca.
+
+---
+
+## Contribuir
+
+¿Encontraste un bug o tenés una idea? Toda contribución es bienvenida:
+
+- 🐛 **Reportar un problema** — abrí un [issue](https://github.com/samuelgradientai-sys/clawksis-agent/issues) con los pasos para reproducirlo (`clawk dump` genera un resumen del setup para adjuntar).
+- 🔧 **Enviar un cambio** — hacé un fork, trabajá en una rama y mandá un Pull Request.
+- 📖 **Documentación** — más contexto en [DOCUMENTATION.md](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/DOCUMENTATION.md) y en [clawksis.com](https://www.clawksis.com/).
 
 ---
 
