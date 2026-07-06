@@ -20236,6 +20236,12 @@ def _run_dashboard_detached(args):
         f"sobrevive al cierre de SSH.{_x}\n"
         f"  Pará el dashboard con:  {_b}clawk dashboard --stop{_x}   ·   log: {log_path}"
     )
+    try:
+        from clawk_cli.dashboard_service import print_dashboard_command_list
+
+        print_dashboard_command_list()
+    except Exception:
+        pass
 
 
 def _run_dashboard_remote(args):
@@ -20326,6 +20332,22 @@ def cmd_dashboard_register(args):
     """Register a self-hosted dashboard OAuth client with Nous Portal."""
 
     from clawk_cli.dashboard_register import cmd_dashboard_register as _impl
+
+    _impl(args)
+
+
+def cmd_dashboard_service(args):
+    """Install/manage the dashboard as a systemd service (one command)."""
+
+    from clawk_cli.dashboard_service import cmd_dashboard_service as _impl
+
+    _impl(args)
+
+
+def cmd_dashboard_domain(args):
+    """Publish the dashboard at https://<domain> (systemd + Caddy, one command)."""
+
+    from clawk_cli.dashboard_service import cmd_dashboard_domain as _impl
 
     _impl(args)
 
@@ -24885,6 +24907,86 @@ Examples:
     )
 
     dashboard_password_parser.set_defaults(func=cmd_dashboard_password)
+
+    # `clawk dashboard service` — instala/actualiza la unit systemd en un
+    # comando (reemplaza la sección manual del README: unit + chmod +
+    # daemon-reload + enable).
+
+    dashboard_service_parser = dashboard_subparsers.add_parser(
+        "service",
+        help="Install the dashboard as a systemd service (starts on boot, one command)",
+        description=(
+            "Write/refresh /etc/systemd/system/clawk-dashboard.service pointing "
+            "at this install, reload systemd, enable + start it, and verify it "
+            "answers HTTP. Linux + root. --uninstall removes it; --status shows it."
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "Bind host for the service (default 127.0.0.1 — local/SSH-tunnel "
+            "only; 0.0.0.0 exposes it with the login gate active)"
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--port", type=int, default=9119, help="Port (default 9119)"
+    )
+
+    dashboard_service_parser.add_argument(
+        "--plain",
+        action="store_true",
+        help=(
+            "Write a clean unit, discarding any domain-mode env preserved from "
+            "a previous `clawk dashboard domain` (use to leave domain mode)"
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Disable and remove the systemd service",
+    )
+
+    dashboard_service_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show the systemd service status and exit",
+    )
+
+    dashboard_service_parser.set_defaults(func=cmd_dashboard_service)
+
+    # `clawk dashboard domain <dominio>` — publica el dashboard en
+    # https://<dominio>: unit en modo reverse-proxy (loopback + login gate
+    # forzado) + Caddy con HTTPS automático. Solo falta el registro DNS.
+
+    dashboard_domain_parser = dashboard_subparsers.add_parser(
+        "domain",
+        help="Publish the dashboard at https://<domain> (reverse proxy + HTTPS, one command)",
+        description=(
+            "One-command public deploy: installs the systemd service bound to "
+            "loopback with the login gate FORCED on, installs Caddy if missing, "
+            "writes the reverse-proxy block and reloads it. HTTPS is automatic "
+            "(Let's Encrypt) once the domain's DNS A record points at this "
+            "server — the command prints the exact record to create."
+        ),
+    )
+
+    dashboard_domain_parser.add_argument(
+        "domain",
+        help="Domain to serve the dashboard at, e.g. panel.tudominio.com",
+    )
+
+    dashboard_domain_parser.add_argument(
+        "--port",
+        type=int,
+        default=9119,
+        help="Dashboard port to proxy to (default 9119)",
+    )
+
+    dashboard_domain_parser.set_defaults(func=cmd_dashboard_domain)
 
     # =========================================================================
 

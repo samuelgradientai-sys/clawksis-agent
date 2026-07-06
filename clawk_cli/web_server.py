@@ -441,9 +441,37 @@ def should_require_auth(host: str, allow_public: bool) -> bool:
 
     exactly the threat model the gate is designed for.
 
+    Override: ``CLAWK_DASHBOARD_FORCE_GATE`` truthy engages the gate even on
+    a loopback bind. Es el modo reverse-proxy (``clawk dashboard domain``):
+    el dashboard escucha solo en 127.0.0.1 pero Caddy/Nginx lo publica en un
+    dominio, así que el login tiene que estar activo aunque el bind sea
+    loopback. Gana sobre ``--insecure`` (env explícito > flag heredado).
+
     """
 
+    if _env_truthy("CLAWK_DASHBOARD_FORCE_GATE"):
+        return True
+
     return (host not in _LOOPBACK_HOST_VALUES) and (not allow_public)
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _public_proxy_hosts() -> "set[str]":
+    """Hostnames extra aceptados en el Host header (modo reverse-proxy).
+
+    ``CLAWK_DASHBOARD_PUBLIC_HOST`` — lista separada por comas de dominios
+    por los que un proxy local publica el dashboard (los setea la unit que
+    escribe ``clawk dashboard domain``). Sin él, la defensa anti-rebinding
+    de ``_is_accepted_host`` rechazaría el Host del dominio porque el bind
+    es loopback.
+    """
+
+    raw = os.environ.get("CLAWK_DASHBOARD_PUBLIC_HOST", "")
+
+    return {h.strip().lower() for h in raw.split(",") if h.strip()}
 
 
 def _is_accepted_host(host_header: str, bound_host: str) -> bool:
@@ -503,6 +531,13 @@ def _is_accepted_host(host_header: str, bound_host: str) -> bool:
     # defence can protect that mode; rely on operator network controls.
 
     if bound_host in {"0.0.0.0", "::"}:
+        return True
+
+    # Modo reverse-proxy: dominios publicados por un proxy local (Caddy) —
+
+    # allowlist explícito, así el anti-rebinding sigue activo para el resto.
+
+    if host_only in _public_proxy_hosts():
         return True
 
     # Loopback bind: accept the loopback names
@@ -1112,6 +1147,21 @@ def _artifact_allowed_root() -> "Path":
 
 
 def _artifact_is_loopback_request(request: "Request") -> bool:
+    # Modo gated (OAuth / `clawk dashboard domain`): estas rutas NO están en
+    # _GATE_PUBLIC_PREFIXES, así que gated_auth_middleware ya exigió una sesión
+    # válida antes de llegar acá, y start_server rehúsa arrancar gated sin auth
+    # provider. Además, con el gate activo uvicorn corre con proxy_headers=True
+    # y reescribe request.client.host a la IP REAL del navegador (vía el
+    # X-Forwarded-For que setea Caddy/Nginx), así que el peer NUNCA es loopback
+    # aunque el proxy sí lo sea — sin este short-circuit, toda la media del
+    # agente (imágenes/video del chat, galería, audio TTS) daría 403 a usuarios
+    # ya autenticados. La sesión del gate ES la credencial equivalente al peer
+    # loopback.
+    if getattr(getattr(request, "app", None), "state", None) is not None and getattr(
+        request.app.state, "auth_required", False
+    ):
+        return True
+
     client = getattr(request, "client", None)
     host = getattr(client, "host", "") if client else ""
     host = str(host or "").strip().lower()

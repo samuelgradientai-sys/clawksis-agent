@@ -318,23 +318,43 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 Objetivo: entrar al dashboard desde `https://panel.tudominio.com` en cualquier
 dispositivo, **sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**.
 
+### La vía rápida: UN comando
+
+```bash
+sudo clawk dashboard domain panel.tudominio.com
+```
+
+Eso hace todo del lado del servidor: instala el dashboard como **servicio
+systemd** (arranca solo al bootear), fuerza el **login** aunque escuche en
+loopback, instala **Caddy** si falta y escribe el reverse proxy con **HTTPS
+automático** (Let's Encrypt). Al final imprime el único paso que queda de tu
+lado: crear el registro DNS `A` de tu dominio apuntando a la IP del servidor.
+En cuanto propague, `https://panel.tudominio.com` anda — la primera visita a
+`/login` crea tu usuario y contraseña.
+
+¿Solo querés el servicio, sin dominio? `sudo clawk dashboard service` (y de tu
+PC entrás con `clawk dashboard --remote user@server`). Todo lo de abajo sigue
+documentado para quien prefiera armarlo a mano o usar Cloudflare Tunnel/nginx.
+
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
 > `127.0.0.1`) entra directo, sin login — igual que siempre. La contraseña se
-> pide **solo** cuando lo exponés hacia afuera (`--host 0.0.0.0`, lo que
-> necesita un dominio): el gate se enciende automáticamente en ese modo. Para
-> pasar de local a dominio basta cambiar el `--host` del servicio y reiniciar.
+> pide **solo** cuando lo exponés hacia afuera (`--host 0.0.0.0` o el modo
+> dominio de arriba): el gate se enciende automáticamente en esos modos.
 
-Son tres piezas, cada una independiente:
+Son tres piezas, cada una independiente (la vía rápida las hace todas):
 
 1. El **dashboard como servicio** (systemd) — arranca solo, sobrevive reinicios.
 2. El **login** — el gate de autenticación se activa automáticamente al escuchar
-   fuera de loopback; nadie entra sin usuario/contraseña.
+   fuera de loopback (y en modo dominio se fuerza vía
+   `CLAWK_DASHBOARD_FORCE_GATE=1` aunque el bind sea loopback); nadie entra sin
+   usuario/contraseña.
 3. La **ruta pública** — Opción A: Cloudflare Tunnel (recomendada, sin abrir
-   puertos) · Opción B: nginx + certbot (clásica).
+   puertos) · Opción B: nginx + certbot (clásica) · o el Caddy que instala la
+   vía rápida.
 
 ### 1. Dashboard como servicio (systemd)
 
-No hay que correr `clawk dashboard` a mano nunca más. Creá
+La vía rápida equivalente: `sudo clawk dashboard service`. A mano, creá
 `/etc/systemd/system/clawk-dashboard.service`:
 
 ```ini
