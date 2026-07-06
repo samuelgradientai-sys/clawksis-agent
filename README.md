@@ -350,26 +350,25 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 
 ## Self-hosted: acceso por dominio
 
-Objetivo: entrar al dashboard desde `https://panel.tudominio.com` en cualquier
-dispositivo, **sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**.
-
-### La vía rápida: UN comando
+Entrá al dashboard desde `https://panel.tudominio.com` en cualquier dispositivo,
+**sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**. La vía
+rápida es **un solo comando**:
 
 ```bash
 sudo clawk dashboard domain panel.tudominio.com
 ```
 
 Eso hace todo del lado del servidor: instala el dashboard como **servicio
-systemd** (arranca solo al bootear), fuerza el **login** aunque escuche en
-loopback, instala **Caddy** si falta y escribe el reverse proxy con **HTTPS
-automático** (Let's Encrypt). Al final imprime el único paso que queda de tu
-lado: crear el registro DNS `A` de tu dominio apuntando a la IP del servidor.
-En cuanto propague, `https://panel.tudominio.com` anda — la primera visita a
-`/login` crea tu usuario y contraseña.
+systemd** (arranca solo al bootear), fuerza el **login**, instala **Caddy** si
+falta y escribe el reverse proxy con **HTTPS automático** (Let's Encrypt). El
+único paso que queda de tu lado es crear el registro DNS `A` de tu dominio
+apuntando a la IP del servidor; en cuanto propague, `https://panel.tudominio.com`
+anda y la primera visita a `/login` crea tu usuario y contraseña. ¿Solo querés
+el servicio, sin dominio? `sudo clawk dashboard service` (y de tu PC entrás con
+`clawk dashboard --remote user@server`).
 
-¿Solo querés el servicio, sin dominio? `sudo clawk dashboard service` (y de tu
-PC entrás con `clawk dashboard --remote user@server`). Todo lo de abajo sigue
-documentado para quien prefiera armarlo a mano o usar Cloudflare Tunnel/nginx.
+<details>
+<summary><b>📖 Guía completa — montarlo a mano: systemd · login · Cloudflare Tunnel · nginx · troubleshooting</b></summary>
 
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
 > `127.0.0.1`) entra directo, sin login. La contraseña se pide **solo** cuando
@@ -561,6 +560,8 @@ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9119/api/config  # → 4
 - **Actualizar Clawksis** → `clawk update` reconstruye el `web_dist`; el
   servicio sigue sirviendo la versión nueva sin reiniciar (las pestañas
   abiertas se recargan solas al detectar el bundle nuevo).
+
+</details>
 
 ---
 
