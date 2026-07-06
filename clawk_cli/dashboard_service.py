@@ -400,6 +400,36 @@ def _public_ip() -> "str | None":
     return None
 
 
+def _port_holder(port: int) -> "str | None":
+    """Nombre del proceso que escucha en ``port`` (best-effort), o None si libre.
+
+    Es MUY común que 80/443 ya los tenga un reverse proxy (Traefik de EasyPanel/
+    Coolify, nginx, un cloudflared, Docker…). En ese caso Caddy no puede tomar
+    esos puertos y hay que enrutar por el proxy existente en vez de instalar uno
+    nuevo.
+    """
+    try:
+        res = subprocess.run(
+            ["ss", "-tlnpH"], capture_output=True, text=True, timeout=5
+        )
+    except Exception:
+        return None
+    if res.returncode != 0:
+        return None
+    for line in res.stdout.splitlines():
+        # Columna local addr suele ser la 4ta: "0.0.0.0:80" / "[::]:443".
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        local = parts[3]
+        if local.rsplit(":", 1)[-1] != str(port):
+            continue
+        # users:(("traefik",pid=123,fd=7)) → traefik
+        m = re.search(r'users:\(\("([^"]+)"', line)
+        return m.group(1) if m else "otro proceso"
+    return None
+
+
 def cmd_dashboard_domain(args) -> None:
     """Publica el dashboard en https://<dominio> (systemd + Caddy), en un comando."""
 
@@ -433,7 +463,16 @@ def cmd_dashboard_domain(args) -> None:
             "  Log: journalctl -u clawk-dashboard -n 50 --no-pager"
         )
 
-    # 2) Caddy: reverse proxy con HTTPS automático.
+    # 2) Ruta pública. Si 80/443 ya los tiene otro reverse proxy (Traefik de
+    #    EasyPanel/Coolify, nginx, cloudflared, Docker…), Caddy NO puede tomarlos:
+    #    en vez de instalar un proxy que va a chocar, dejamos el servicio listo
+    #    (ya está en modo dominio) y explicamos cómo enrutarlo por el proxy que ya
+    #    corre. Solo instalamos Caddy cuando 80 y 443 están libres.
+    holder = _port_holder(80) or _port_holder(443)
+    if holder:
+        _report_existing_proxy(domain, port, holder)
+        return
+
     print(f"{_P}▸ 2/3 Reverse proxy (Caddy, HTTPS automático){_X}")
     _ensure_caddy()
     _write_caddy_block(domain, port)
@@ -458,5 +497,55 @@ def cmd_dashboard_domain(args) -> None:
     print(
         f"  {_D}El dashboard solo escucha en 127.0.0.1:{port} — lo único expuesto "
         f"es Caddy (80/443). Login activo incluso detrás del proxy.{_X}"
+    )
+    print_dashboard_command_list()
+
+
+def _report_existing_proxy(domain: str, port: int, holder: str) -> None:
+    """Guía cuando ya hay un reverse proxy en 80/443 (no instalamos Caddy)."""
+    # Pistas por proceso conocido para orientar mejor.
+    hint = ""
+    h = holder.lower()
+    if "traefik" in h or "docker" in h:
+        hint = (
+            "  Parece EasyPanel/Coolify/Docker+Traefik. Agregá el dominio en el "
+            "panel apuntando a un proxy/host hacia http://127.0.0.1:%d (o la IP "
+            "del gateway docker, p.ej. 172.17.0.1:%d).\n" % (port, port)
+        )
+    elif "nginx" in h:
+        hint = (
+            "  Agregá un server block para %s con "
+            "`proxy_pass http://127.0.0.1:%d;` y recargá nginx.\n" % (domain, port)
+        )
+    elif "cloudflared" in h:
+        hint = (
+            "  Es un Cloudflare Tunnel: en el panel Zero Trust agregá un Public "
+            "Hostname %s → http://127.0.0.1:%d (o el gateway docker si el tunnel "
+            "corre en un contenedor).\n" % (domain, port)
+        )
+
+    print(
+        f"\n{_P}{_B}▸ Detecté un reverse proxy propio en este server{_X} "
+        f"(los puertos 80/443 los usa {_B}{holder}{_X})."
+    )
+    print(
+        f"  {_D}No instalo Caddy para no chocar con él.{_X} El dashboard YA quedó "
+        f"listo en modo dominio: servicio systemd + login forzado + Host "
+        f"{_B}{domain}{_X} permitido, escuchando en {_B}127.0.0.1:{port}{_X}."
+    )
+    print(f"\n{_G}{_B}✓ Falta un solo paso: enrutá {domain} por tu proxy:{_X}")
+    if hint:
+        print(hint, end="")
+    print(
+        f"  {_D}Regla genérica:{_X} {_B}{domain}{_X}  →  "
+        f"{_B}http://127.0.0.1:{port}{_X}   (tu proxy pone el HTTPS)"
+    )
+    print(
+        f"  {_D}Y el registro DNS de {domain} tiene que apuntar a este server "
+        f"(o a tu tunnel de Cloudflare).{_X}"
+    )
+    print(
+        f"\n  {_D}La primera visita crea tu usuario y contraseña "
+        f"(o corré `clawk dashboard password`).{_X}"
     )
     print_dashboard_command_list()

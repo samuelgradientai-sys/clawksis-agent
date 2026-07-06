@@ -365,6 +365,13 @@ anda y la primera visita a `/login` crea tu usuario y contraseña. ¿Solo queré
 el servicio, sin dominio? `sudo clawk dashboard service` (y de tu PC entrás con
 `clawk dashboard --remote user@server`).
 
+> **¿Ya tenés un reverse proxy en el server?** Si los puertos 80/443 los usa
+> otro proxy (EasyPanel/Coolify con Traefik, nginx, un Cloudflare Tunnel…), el
+> comando lo **detecta** y **no** instala Caddy: deja el dashboard listo en modo
+> dominio (login forzado + Host permitido, escuchando en `127.0.0.1:9119`) y te
+> dice cómo enrutarlo — solo agregás en tu proxy una regla
+> `tudominio → http://127.0.0.1:9119` y el HTTPS lo pone tu proxy.
+
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
 > `127.0.0.1`) entra directo, sin login. La contraseña se pide **solo** cuando
 > lo exponés hacia afuera (`--host 0.0.0.0` o el modo dominio de arriba): el
