@@ -29,7 +29,6 @@
 - [Primeros pasos](#primeros-pasos)
 - [Proveedores soportados](#proveedores-soportados)
 - [Comandos](#comandos)
-- [Self-hosted: acceso por dominio](#self-hosted-acceso-por-dominio)
 - [Mensajería](#mensajería)
 - [Problemas comunes](#problemas-comunes)
 - [Actualizar](#actualizar) · [Desinstalar](#desinstalar) · [Contribuir](#contribuir) · [Licencia](#licencia)
@@ -348,11 +347,10 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 
 ---
 
-## Self-hosted: acceso por dominio
+<details>
+<summary><b>🌐 Self-hosted: acceso por dominio</b> — publicá tu dashboard en <code>https://panel.tudominio.com</code> con HTTPS, en un comando</summary>
 
-Entrá al dashboard desde `https://panel.tudominio.com` en cualquier dispositivo,
-**sin túneles SSH y sin entrar al servidor a correr `clawk dashboard`**. La vía
-rápida es **un solo comando**:
+### La vía rápida: UN comando
 
 ```bash
 sudo clawk dashboard domain panel.tudominio.com
@@ -366,9 +364,6 @@ apuntando a la IP del servidor; en cuanto propague, `https://panel.tudominio.com
 anda y la primera visita a `/login` crea tu usuario y contraseña. ¿Solo querés
 el servicio, sin dominio? `sudo clawk dashboard service` (y de tu PC entrás con
 `clawk dashboard --remote user@server`).
-
-<details>
-<summary><b>📖 Guía completa — montarlo a mano: systemd · login · Cloudflare Tunnel · nginx · troubleshooting</b></summary>
 
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
 > `127.0.0.1`) entra directo, sin login. La contraseña se pide **solo** cuando
