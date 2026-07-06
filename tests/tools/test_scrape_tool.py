@@ -61,7 +61,10 @@ class TestScraplingCmd:
     def test_fallback_python_minus_m(self, monkeypatch):
         monkeypatch.delenv("SCRAPLING_BIN", raising=False)
         monkeypatch.setattr(st.shutil, "which", lambda x: None)
-        monkeypatch.setattr("importlib.util.find_spec", lambda name: True if name == "scrapling" else None)
+        monkeypatch.setattr(
+            "importlib.util.find_spec",
+            lambda name: True if name == "scrapling" else None,
+        )
         assert st._scrapling_cmd()[-2:] == ["-m", "scrapling"]
 
     def test_returns_none_when_not_found(self, monkeypatch):
@@ -124,9 +127,9 @@ class TestResolveProxy:
 # Any padding used in test helpers must be non-whitespace so it survives
 # `.strip()`. We use 'x' for padding.
 
-MIN_FOR_CLASSIFY = st._MIN_USEFUL_CHARS + 1        # 201 — just past empty gate
-SHORT_FOR_WEAK = st._BLOCK_PAGE_MAX_CHARS // 2      # 750 — well under threshold
-LONG_FOR_WEAK = st._BLOCK_PAGE_MAX_CHARS + 500      # 2000 — safely above
+MIN_FOR_CLASSIFY = st._MIN_USEFUL_CHARS + 1  # 201 — just past empty gate
+SHORT_FOR_WEAK = st._BLOCK_PAGE_MAX_CHARS // 2  # 750 — well under threshold
+LONG_FOR_WEAK = st._BLOCK_PAGE_MAX_CHARS + 500  # 2000 — safely above
 
 
 def _small_page(text: str) -> str:
@@ -152,11 +155,17 @@ class TestClassify:
 
     # ── IP block (strong — matches at ANY length) ───────────────────
 
-    @pytest.mark.parametrize("phrase", [
-        "too many requests", "unusual traffic",
-        "rate limit exceeded", "you have been blocked",
-        "verify you are human", "select all squares containing",
-    ])
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "too many requests",
+            "unusual traffic",
+            "rate limit exceeded",
+            "you have been blocked",
+            "verify you are human",
+            "select all squares containing",
+        ],
+    )
     def test_ip_block_strong_short(self, phrase):
         assert st._classify(_small_page(phrase)) == "ip_block"
 
@@ -165,35 +174,48 @@ class TestClassify:
 
     # ── IP block (weak — only on SHORT pages) ───────────────────────
 
-    @pytest.mark.parametrize("phrase", [
-        "captcha", "are you a robot",
-        "access denied", "forbidden",
-        "429", "403",
-    ])
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "captcha",
+            "are you a robot",
+            "access denied",
+            "forbidden",
+            "429",
+            "403",
+        ],
+    )
     def test_ip_block_weak_short(self, phrase):
         assert st._classify(_small_page(phrase)) == "ip_block"
 
     def test_ip_block_weak_long_is_not_block(self):
         """A long page with 'captcha'/'forbidden' in body = real content."""
-        assert st._classify(
-            _large_page("In this article we discuss captcha solving techniques")
-        ) == "ok"
+        assert (
+            st._classify(
+                _large_page("In this article we discuss captcha solving techniques")
+            )
+            == "ok"
+        )
 
     # ── Anti-bot (strong — matches at ANY length) ───────────────────
 
-    @pytest.mark.parametrize("phrase", [
-        "just a moment",
-        "checking your browser before",
-        "cf-browser-verification",
-        "ddos protection by",
-    ])
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "just a moment",
+            "checking your browser before",
+            "cf-browser-verification",
+            "ddos protection by",
+        ],
+    )
     def test_antibot_strong(self, phrase):
         assert st._classify(_small_page(phrase)) == "antibot"
 
     def test_antibot_strong_long(self):
-        assert st._classify(
-            _large_page("Checking your browser before accessing")
-        ) == "antibot"
+        assert (
+            st._classify(_large_page("Checking your browser before accessing"))
+            == "antibot"
+        )
 
     # ── Anti-bot (weak — only on SHORT pages) ───────────────────────
 
@@ -202,9 +224,12 @@ class TestClassify:
         assert st._classify(_small_page(phrase)) == "antibot"
 
     def test_antibot_weak_long_is_not_antibot(self):
-        assert st._classify(
-            _large_page("Please enable JS to view comments on this article")
-        ) == "ok"
+        assert (
+            st._classify(
+                _large_page("Please enable JS to view comments on this article")
+            )
+            == "ok"
+        )
 
     # ── Empty ───────────────────────────────────────────────────────
 
@@ -215,7 +240,9 @@ class TestClassify:
     # ── OK ──────────────────────────────────────────────────────────
 
     def test_normal_content(self):
-        assert st._classify("This is a real article with lots of content. " * 20) == "ok"
+        assert (
+            st._classify("This is a real article with lots of content. " * 20) == "ok"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -265,7 +292,14 @@ class TestRegistration:
 
         assert SCRAPE_SCHEMA["name"] == "scrape"
         props = SCRAPE_SCHEMA["parameters"]["properties"]
-        assert {"url", "mode", "format", "css_selector", "wait_selector", "proxy"} <= set(props)
+        assert {
+            "url",
+            "mode",
+            "format",
+            "css_selector",
+            "wait_selector",
+            "proxy",
+        } <= set(props)
         assert SCRAPE_SCHEMA["parameters"]["required"] == ["url"]
 
 
@@ -278,7 +312,7 @@ class TestRegistration:
 # survive _classify()'s empty-content gate, unless we're explicitly
 # testing the empty path.
 
-OK_CONTENT = "# Hello World\n" * 30   # ~420 chars — passes empty gate
+OK_CONTENT = "# Hello World\n" * 30  # ~420 chars — passes empty gate
 
 
 class TestHandleScrape:
@@ -415,10 +449,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        res = _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "proxy": "http://user:pass@proxy:8080",
-        }))
+        res = _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "proxy": "http://user:pass@proxy:8080",
+            })
+        )
         assert res["ok"] is True
         assert captured["proxy"] == "http://user:pass@proxy:8080"
 
@@ -465,8 +501,7 @@ class TestHandleScrape:
         big_content = "# Big\n" + ("x" * st._MAX_RESULT_CHARS)
 
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
-        monkeypatch.setattr(st, "_run_one",
-                            lambda *a, **k: (True, big_content, ""))
+        monkeypatch.setattr(st, "_run_one", lambda *a, **k: (True, big_content, ""))
 
         res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
         assert res["ok"] is True
@@ -495,8 +530,9 @@ class TestHandleScrape:
 
     def test_stderr_included_in_empty_error(self, monkeypatch):
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
-        monkeypatch.setattr(st, "_run_one",
-                            lambda *a, **k: (False, "", "command not found"))
+        monkeypatch.setattr(
+            st, "_run_one", lambda *a, **k: (False, "", "command not found")
+        )
 
         res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
         assert res["ok"] is False
@@ -513,17 +549,20 @@ class TestHandleScrape:
 
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "format": "html",
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "format": "html",
+            })
+        )
         assert captured["ext"] == ".html"
 
     def test_timeout_on_run_one_handled(self, monkeypatch):
         """A timeout from _run_one should produce an empty/failed result."""
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
-        monkeypatch.setattr(st, "_run_one",
-                            lambda *a, **k: (False, "", "timed out after 45s"))
+        monkeypatch.setattr(
+            st, "_run_one", lambda *a, **k: (False, "", "timed out after 45s")
+        )
 
         res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
         assert res["ok"] is False
