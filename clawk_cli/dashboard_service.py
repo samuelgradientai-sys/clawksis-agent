@@ -12,14 +12,16 @@ subcomandos lo hacen solos:
 
 ``clawk dashboard domain <dominio>``
     Publica el dashboard en ``https://<dominio>``: reescribe la unit en modo
-    reverse-proxy (bind loopback + login gate forzado + Host del dominio
-    permitido — ver CLAWK_DASHBOARD_FORCE_GATE / CLAWK_DASHBOARD_PUBLIC_HOST
-    en web_server.py), instala Caddy si falta, escribe un bloque marcado en
-    /etc/caddy/Caddyfile con el reverse_proxy y recarga Caddy. El HTTPS es
-    automático (Let's Encrypt) en cuanto el DNS del dominio apunta al server.
+    reverse-proxy (login gate forzado + Host del dominio permitido — ver
+    CLAWK_DASHBOARD_FORCE_GATE / CLAWK_DASHBOARD_PUBLIC_HOST en web_server.py).
+    Si 80/443 están LIBRES: instala Caddy y escribe el reverse_proxy con HTTPS
+    automático (Let's Encrypt) — bind loopback. Si ya hay OTRO reverse proxy
+    (Traefik de EasyPanel/Coolify, nginx, cloudflared): NO instala Caddy, deja
+    el servicio listo y explica cómo enrutarlo. Con un proxy en Docker, el bind
+    pasa a 0.0.0.0 (el login gate SIGUE activo — nunca --insecure) para que el
+    contenedor lo alcance por la gateway del bridge (p.ej. 172.17.0.1).
 
-Solo Linux + systemd. El dashboard queda escuchando únicamente en loopback
-en modo dominio: lo único expuesto es Caddy (80/443).
+Solo Linux + systemd.
 """
 
 import os
@@ -445,11 +447,23 @@ def cmd_dashboard_domain(args) -> None:
 
     print(f"{_P}{_B}▸ Publicando el dashboard en https://{domain}{_X}")
 
-    # 1) Servicio en modo reverse-proxy: solo loopback escucha, pero el login
-    #    gate queda FORZADO y el Host del dominio permitido (anti-rebinding).
-    print(f"{_P}▸ 1/3 Servicio systemd (bind loopback + login gate){_X}")
+    # ¿Hay ya un reverse proxy en 80/443? (Traefik de EasyPanel/Coolify, nginx,
+    # cloudflared, Docker…) Lo detectamos ANTES de instalar la unit para elegir
+    # el bind correcto.
+    holder = _port_holder(80) or _port_holder(443)
+    # Un proxy DENTRO de Docker (Traefik/nginx-en-contenedor) NO alcanza el
+    # 127.0.0.1 del host — para ese contenedor, loopback es él mismo. Hay que
+    # escuchar en una interfaz que el contenedor alcance (0.0.0.0). El login
+    # gate SIGUE activo en un bind no-loopback, así que NUNCA usamos --insecure.
+    docker_proxy = bool(holder) and "docker" in holder.lower()
+    bind_host = "0.0.0.0" if docker_proxy else "127.0.0.1"
+
+    # 1) Servicio en modo reverse-proxy: login gate FORZADO + Host del dominio
+    #    permitido (anti-rebinding). Con un proxy en Docker, bind 0.0.0.0 (gate
+    #    igual activo); si no, loopback.
+    print(f"{_P}▸ 1/3 Servicio systemd (bind {bind_host} + login gate){_X}")
     _install_unit(
-        "127.0.0.1",
+        bind_host,
         port,
         {
             "CLAWK_DASHBOARD_FORCE_GATE": "1",
@@ -463,14 +477,11 @@ def cmd_dashboard_domain(args) -> None:
             "  Log: journalctl -u clawk-dashboard -n 50 --no-pager"
         )
 
-    # 2) Ruta pública. Si 80/443 ya los tiene otro reverse proxy (Traefik de
-    #    EasyPanel/Coolify, nginx, cloudflared, Docker…), Caddy NO puede tomarlos:
-    #    en vez de instalar un proxy que va a chocar, dejamos el servicio listo
-    #    (ya está en modo dominio) y explicamos cómo enrutarlo por el proxy que ya
-    #    corre. Solo instalamos Caddy cuando 80 y 443 están libres.
-    holder = _port_holder(80) or _port_holder(443)
+    # 2) Ruta pública. Si 80/443 ya los tiene otro reverse proxy, Caddy NO puede
+    #    tomarlos: en vez de instalar un proxy que va a chocar, dejamos el
+    #    servicio listo y explicamos cómo enrutarlo por el proxy existente.
     if holder:
-        _report_existing_proxy(domain, port, holder)
+        _report_existing_proxy(domain, port, holder, docker_proxy)
         return
 
     print(f"{_P}▸ 2/3 Reverse proxy (Caddy, HTTPS automático){_X}")
@@ -501,51 +512,83 @@ def cmd_dashboard_domain(args) -> None:
     print_dashboard_command_list()
 
 
-def _report_existing_proxy(domain: str, port: int, holder: str) -> None:
+def _docker_gateway_ip() -> str:
+    """IP de la gateway del bridge docker por defecto (para que un proxy en
+    Docker alcance al dashboard del host). docker0 suele ser 172.17.0.1."""
+    try:
+        res = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", "docker0"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", res.stdout)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "172.17.0.1"
+
+
+def _report_existing_proxy(
+    domain: str, port: int, holder: str, docker_proxy: bool
+) -> None:
     """Guía cuando ya hay un reverse proxy en 80/443 (no instalamos Caddy)."""
-    # Pistas por proceso conocido para orientar mejor.
-    hint = ""
     h = holder.lower()
-    if "traefik" in h or "docker" in h:
-        hint = (
-            "  Parece EasyPanel/Coolify/Docker+Traefik. Agregá el dominio en el "
-            "panel apuntando a un proxy/host hacia http://127.0.0.1:%d (o la IP "
-            "del gateway docker, p.ej. 172.17.0.1:%d).\n" % (port, port)
-        )
-    elif "nginx" in h:
-        hint = (
-            "  Agregá un server block para %s con "
-            "`proxy_pass http://127.0.0.1:%d;` y recargá nginx.\n" % (domain, port)
-        )
-    elif "cloudflared" in h:
-        hint = (
-            "  Es un Cloudflare Tunnel: en el panel Zero Trust agregá un Public "
-            "Hostname %s → http://127.0.0.1:%d (o el gateway docker si el tunnel "
-            "corre en un contenedor).\n" % (domain, port)
-        )
+    # A dónde apunta el proxy: un proxy en Docker alcanza al host por la gateway
+    # del bridge (no por 127.0.0.1); uno en el host, por loopback.
+    target = f"{_docker_gateway_ip()}:{port}" if docker_proxy else f"127.0.0.1:{port}"
 
     print(
         f"\n{_P}{_B}▸ Detecté un reverse proxy propio en este server{_X} "
         f"(los puertos 80/443 los usa {_B}{holder}{_X})."
     )
+    if docker_proxy:
+        print(
+            f"  {_D}No instalo Caddy (chocaría). El dashboard quedó escuchando en "
+            f"{_B}0.0.0.0:{port}{_X}{_D} con el login gate ACTIVO — así tu proxy "
+            f"en Docker lo alcanza por la gateway del bridge. NO uses --insecure: "
+            f"el login sigue protegiéndolo.{_X}"
+        )
+    else:
+        print(
+            f"  {_D}No instalo Caddy (chocaría). El dashboard quedó en modo "
+            f"dominio: servicio systemd + login forzado + Host {_B}{domain}{_X}"
+            f"{_D} permitido, escuchando en {_B}127.0.0.1:{port}{_X}{_D}.{_X}"
+        )
+
+    print(f"\n{_G}{_B}✓ Falta enrutar {domain} por tu proxy hacia:{_X}")
     print(
-        f"  {_D}No instalo Caddy para no chocar con él.{_X} El dashboard YA quedó "
-        f"listo en modo dominio: servicio systemd + login forzado + Host "
-        f"{_B}{domain}{_X} permitido, escuchando en {_B}127.0.0.1:{port}{_X}."
+        f"    {_B}{domain}{_X}  →  {_B}http://{target}{_X}   {_D}(tu proxy pone el HTTPS){_X}"
     )
-    print(f"\n{_G}{_B}✓ Falta un solo paso: enrutá {domain} por tu proxy:{_X}")
-    if hint:
-        print(hint, end="")
+
+    if "traefik" in h or ("docker" in h and "cloudflared" not in h):
+        print(
+            f"  {_D}EasyPanel/Coolify/Traefik: agregá un router + service HTTP y "
+            f"HTTPS (Let's Encrypt) apuntando a {_B}http://{target}{_X}{_D} con "
+            f"passHostHeader=true.{_X}"
+        )
+    elif "nginx" in h:
+        print(
+            f"  {_D}nginx: server block para {domain} con "
+            f"`proxy_pass http://{target};` + `proxy_set_header Host $host;`.{_X}"
+        )
+    elif "cloudflared" in h:
+        print(
+            f"  {_D}Cloudflare Tunnel: en Zero Trust agregá un Public Hostname "
+            f"{domain} → http://{target}.{_X}"
+        )
+
+    # Pitfall real (deploy de Samuel): Cloudflare orange + redirect HTTP→HTTPS
+    # del proxy = loop infinito.
     print(
-        f"  {_D}Regla genérica:{_X} {_B}{domain}{_X}  →  "
-        f"{_B}http://127.0.0.1:{port}{_X}   (tu proxy pone el HTTPS)"
+        f"\n  {_R}⚠ Cloudflare (nube naranja):{_X} {_D}Cloudflare ya termina el "
+        f"SSL y manda HTTP al origen. Si tu proxy además redirige HTTP→HTTPS, se "
+        f"arma un loop infinito — QUITÁ el redirect-to-https del router HTTP.{_X}"
     )
     print(
-        f"  {_D}Y el registro DNS de {domain} tiene que apuntar a este server "
-        f"(o a tu tunnel de Cloudflare).{_X}"
-    )
-    print(
-        f"\n  {_D}La primera visita crea tu usuario y contraseña "
-        f"(o corré `clawk dashboard password`).{_X}"
+        f"  {_D}DNS: el registro de {domain} tiene que apuntar a este server "
+        f"(A → IP, o el tunnel). La primera visita crea tu usuario y contraseña "
+        f"(o `clawk dashboard password`).{_X}"
     )
     print_dashboard_command_list()

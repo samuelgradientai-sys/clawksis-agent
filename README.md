@@ -368,9 +368,18 @@ el servicio, sin dominio? `sudo clawk dashboard service` (y de tu PC entrás con
 > **¿Ya tenés un reverse proxy en el server?** Si los puertos 80/443 los usa
 > otro proxy (EasyPanel/Coolify con Traefik, nginx, un Cloudflare Tunnel…), el
 > comando lo **detecta** y **no** instala Caddy: deja el dashboard listo en modo
-> dominio (login forzado + Host permitido, escuchando en `127.0.0.1:9119`) y te
-> dice cómo enrutarlo — solo agregás en tu proxy una regla
-> `tudominio → http://127.0.0.1:9119` y el HTTPS lo pone tu proxy.
+> dominio (login forzado) y te dice cómo enrutarlo. Dos detalles según tu setup:
+>
+> - **Proxy en Docker** (Traefik de EasyPanel/Coolify): un contenedor no alcanza
+>   el `127.0.0.1` del host, así que el comando bindea el dashboard a `0.0.0.0`
+>   (el login **sigue activo** — nunca uses `--insecure`) y apuntás tu proxy a la
+>   gateway del bridge, `http://172.17.0.1:9119`.
+> - **Cloudflare con la nube naranja:** Cloudflare ya pone el HTTPS y manda HTTP
+>   al origen; si tu proxy además redirige HTTP→HTTPS se arma un **loop infinito**
+>   (`ERR_TOO_MANY_REDIRECTS`) — quitá el redirect-to-https del router HTTP.
+>
+> Receta completa (Traefik/nginx/Cloudflare, paso a paso): skill
+> `deploy-dashboard-custom-domain` (`clawk skills`).
 
 > **Uso local = sin contraseña.** `clawk dashboard` a secas (escucha en
 > `127.0.0.1`) entra directo, sin login. La contraseña se pide **solo** cuando
