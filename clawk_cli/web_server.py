@@ -16215,54 +16215,62 @@ def start_server(
         # provider to be registered, else fail closed".
 
         from clawk_cli.dashboard_auth import list_providers
+        from clawk_cli.dashboard_auth.first_run import setup_available
 
         if not list_providers():
-            # Surface the *specific* reason any bundled provider declined
+            # No provider registered yet. If first-run setup is available (no
+            # basic_auth configured), boot ANYWAY: the public /auth/setup page
+            # bootstraps the admin login on first visit. This is the documented
+            # flow for `clawk dashboard domain` — sin esto el gate forzado sobre
+            # un bind loopback quedaba en un deadlock (rehúsa arrancar → nunca se
+            # llega a la página que crearía el login). Solo rehusamos cuando el
+            # setup NO está disponible (credenciales a medio configurar).
+            if setup_available():
+                _log.warning(
+                    "Dashboard binding to %s with the auth gate ON but no login "
+                    "configured yet. The first visit will show the setup page "
+                    "and create the admin login — open the dashboard and set it "
+                    "IMMEDIATELY so nobody else claims it, or set it now with "
+                    "`clawk dashboard password`.",
+                    host,
+                )
+            else:
+                # Surface the *specific* reason any bundled provider declined to
+                # register (e.g. username sin password, o falta el client_id de
+                # OAuth). Cada plugin de auth expone ``LAST_SKIP_REASON``.
+                skip_reasons: list[str] = []
 
-            # to register (e.g. missing CLAWK_DASHBOARD_OAUTH_CLIENT_ID).
+                for _mod_path, _label in (
+                    ("plugins.dashboard_auth.basic", "basic"),
+                    ("plugins.dashboard_auth.nous", "nous"),
+                ):
+                    try:
+                        import importlib
 
-            # Each provider plugin that ships with Clawksis exposes a
+                        _plugin = importlib.import_module(_mod_path)
 
-            # module-level ``LAST_SKIP_REASON`` string for this purpose;
+                        if getattr(_plugin, "LAST_SKIP_REASON", ""):
+                            skip_reasons.append(
+                                f"  • {_label}: {_plugin.LAST_SKIP_REASON}"
+                            )
 
-            # without it the operator would only see "no providers" which
+                    except Exception:
+                        pass
 
-            # is misleading when the provider IS installed but unconfigured.
-
-            skip_reasons: list[str] = []
-
-            try:
-                from plugins.dashboard_auth import nous as _nous_plugin
-
-                if _nous_plugin.LAST_SKIP_REASON:
-                    skip_reasons.append(f"  • nous: {_nous_plugin.LAST_SKIP_REASON}")
-
-            except Exception:
-                pass
-
-            if skip_reasons:
-                raise SystemExit(
-                    f"Refusing to bind dashboard to {host} — the OAuth auth "
-                    f"gate engages on non-loopback binds, but no auth "
-                    f"providers are registered.\n"
-                    f"\n"
-                    f"Bundled providers reported these issues:\n"
-                    + "\n".join(skip_reasons)
-                    + "\n"
-                    f"\n"
-                    f"Or pass --insecure to skip the auth gate (NOT "
-                    f"recommended on untrusted networks)."
+                detail = (
+                    "\n\nLos providers reportaron:\n" + "\n".join(skip_reasons)
+                    if skip_reasons
+                    else ""
                 )
 
-            raise SystemExit(
-                f"Refusing to bind dashboard to {host} — the OAuth auth "
-                f"gate engages on non-loopback binds, but no auth providers "
-                f"are registered and no bundled plugin reported a reason "
-                f"(was the dashboard_auth/nous plugin removed?).\n"
-                f"Install a DashboardAuthProvider plugin, or pass --insecure "
-                f"to skip the auth gate (NOT recommended on untrusted "
-                f"networks)."
-            )
+                raise SystemExit(
+                    f"Refusing to bind dashboard to {host} — the auth gate is "
+                    f"required but no login is configured and the first-run "
+                    f"setup page is unavailable.{detail}\n\n"
+                    f"Set a login with `clawk dashboard password`, or pass "
+                    f"--insecure to skip the gate (NOT recommended on untrusted "
+                    f"networks)."
+                )
 
         _log.info(
             "Dashboard binding to %s with OAuth auth gate enabled. Providers: %s",
