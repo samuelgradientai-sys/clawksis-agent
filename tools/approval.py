@@ -427,6 +427,38 @@ HARDLINE_PATTERNS = [
         "systemctl poweroff/reboot",
     ),
     (_CMDPOS + r"telinit\s+[06]\b", "telinit 0/6 (shutdown/reboot)"),
+    # Self-DoS protection: the agent runs *inside* the clawk-gateway systemd
+    # unit, so a command that stops / restarts / kills / disables / masks that
+    # unit (or a sibling clawk/clawksis service) terminates the very process
+    # executing the command. The turn dies mid-work, and systemd's
+    # StartLimitBurst counts the thrash — a few self-restarts land the unit in
+    # `failed`, where it stays DOWN until an operator intervenes out-of-band.
+    # (Real incident 2026-07-07: the agent ran `systemctl restart clawk-gateway`
+    # to apply an .env change and took Telegram + the dashboard offline for ~3h;
+    # `Restart=always` did not save it because the retry budget was already
+    # spent.) There is no in-turn recovery path — the agent cannot both kill its
+    # host and observe the result — so this is a hardline floor: even --yolo /
+    # approvals.mode=off must not bypass it, exactly like shutdown/reboot. A
+    # genuinely needed gateway restart is an OPERATOR action (real terminal /
+    # SSH / a detached scheduler that outlives the turn), never an agent call.
+    # These are also present in DANGEROUS_PATTERNS, but that tier is bypassed by
+    # this deployment's auto-approve config, which is exactly how the incident
+    # slipped through. Only clawk/clawksis units are matched, so a legitimate
+    # `systemctl restart nginx` is untouched, and read-only verbs (status, show,
+    # is-active, start) and `journalctl -u clawk-gateway` stay allowed.
+    (
+        r"\bsystemctl\b[^;&|\n]*\b(?:stop|restart|kill|disable|mask)\b[^;&|\n]*\bclawk",
+        "stop/restart/kill the agent's own Clawksis gateway service (self-termination)",
+    ),
+    (
+        r"\bservice\s+(?:clawk|clawksis)[a-z0-9._@-]*\s+(?:stop|restart|kill|force-reload)\b",
+        "stop/restart the agent's own Clawksis gateway service (self-termination)",
+    ),
+    (
+        r"\bclawk\s+gateway\s+(?:stop|restart)\b",
+        "stop/restart the Clawksis gateway (self-termination)",
+    ),
+    (r"\bclawk\s+update\b", "clawk update restarts the gateway (self-termination)"),
 ]
 
 
