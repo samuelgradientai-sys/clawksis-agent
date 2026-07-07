@@ -93,6 +93,10 @@ def build_llm_config(*, temperature: float = 0.0) -> dict[str, Any]:
     the model the user already pays for (or a local Ollama). scrapegraphai routes
     ``"openai/<model>"`` + a custom ``base_url`` through langchain's ChatOpenAI,
     which targets any OpenAI-compatible endpoint (OpenRouter / Nous / local).
+
+    If no API key can be found from any source, a warning is logged to help
+    debug authentication failures early rather than failing with a cryptic
+    error from the LLM provider.
     """
     api_key = ""
     base_url: Optional[str] = None
@@ -115,6 +119,13 @@ def build_llm_config(*, temperature: float = 0.0) -> dict[str, Any]:
         )
     if not model:
         model = "gpt-4o-mini"
+
+    if not api_key:
+        logger.warning(
+            "scrapegraph: no API key configured for LLM extraction — "
+            "set OPENAI_API_KEY/OPENROUTER_API_KEY or configure "
+            "auxiliary_text model credentials"
+        )
 
     model_slug = str(model) if "/" in str(model) else f"openai/{model}"
     llm: dict[str, Any] = {

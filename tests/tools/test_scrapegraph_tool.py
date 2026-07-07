@@ -94,6 +94,22 @@ def test_build_llm_config_bare_model_gets_openai_prefix():
     assert "base_url" not in cfg
 
 
+def test_build_llm_config_empty_api_key_logs_warning(caplog):
+    """When no API key is found anywhere, a warning is logged."""
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    with patch(
+        "agent.auxiliary_client.get_text_auxiliary_client",
+        side_effect=ImportError("no aux client"),
+    ):
+        with patch.dict("os.environ", {}, clear=True):
+            cfg = sgc.build_llm_config()
+    assert cfg["api_key"] == ""
+    assert "no API key" in caplog.text
+    assert cfg["model"] == "openai/gpt-4o-mini"
+
+
 # ── Native tool handler ─────────────────────────────────────────────────────
 
 

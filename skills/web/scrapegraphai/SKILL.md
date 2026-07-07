@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.1"
+version: "1.2"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -111,6 +111,8 @@ The LLM config is built from the agent's **auxiliary text client** — the same 
 - Falls back to `OPENAI_API_KEY` or `OPENROUTER_API_KEY` env vars if auxiliary client isn't available
 - Falls back to `gpt-4o-mini` as model if nothing is configured
 
+**⚠️ If no API key is found at all, a warning is logged.** The extraction will fail with an auth error — check `auxiliary_text` model credentials or set `OPENAI_API_KEY`/`OPENROUTER_API_KEY`.
+
 ### 3. LLM cost
 
 Each extraction costs LLM tokens — the model reads the page HTML and produces structured output. For large pages with many data points, this can be significant. For simple text extraction, prefer `web_extract` or `scrape`.
@@ -159,21 +161,23 @@ as clean, actionable messages instead of raw exception dumps:
 📎 See `references/error-classifier.md` for the full classification table and
 test coverage details.
 
-### 7. Narrow `except Exception:` in tool handlers
+### 7. ✅ `except Exception:` narrowing — complete
 
-The tool handler in `scrapegraph_tool.py` and the helpers in `scrapegraph_common.py`
-contain several `except Exception:` patterns from earlier iterations. When improving
-this code, narrow each catch to the specific exception type the operation can raise:
+All broad `except Exception:` patterns in the scraping tools have been narrowed
+to their specific exception types (v1.2):
 
-| Context | Current | Correct |
+| Context | File | Now catches |
 |---|---|---|
-| `_coerce_schema()` — JSON parsing | `except Exception:` | `except (json.JSONDecodeError, TypeError):` |
-| JSON serialization in handler | `except Exception:` | `except (TypeError, ValueError):` |
-| `build_llm_config()` — auxiliary client | `except Exception` with `# noqa: BLE001` | Acceptable (covers unknown module attributes), but prefer `(ImportError, AttributeError)` |
+| `_coerce_schema()` — JSON parsing | `scrapegraph_tool.py` | `(json.JSONDecodeError, TypeError)` ✅ |
+| JSON serialization in handler | `scrapegraph_tool.py` | `(TypeError, ValueError)` ✅ |
+| `build_llm_config()` — auxiliary client | `scrapegraph_common.py` | `(ImportError, AttributeError)` ✅ |
+| `ensure_installed()` — lazy_deps import | `scrapegraph_common.py` | `ImportError` ✅ |
+| `_stringify()` — JSON dump fallback | `provider.py` | `(TypeError, ValueError)` ✅ |
+| `is_available()` — import check | `provider.py` | `ImportError` ✅ |
+| `extract()` — interrupt module import | `provider.py` | `ImportError` ✅ |
 
-**Why:** Broad `except Exception:` silently catches `KeyboardInterrupt`, `SystemExit`,
-and unexpected bugs that should propagate. Narrowing makes failures visible instead
-of silently falling back to `return None` or `str(data)`.
+The only remaining broad catch in `extract()` (per-URL error isolation) is
+intentional — it prevents a single URL failure from aborting the whole batch.
 
 ## Verifying it works
 
@@ -183,13 +187,11 @@ import asyncio
 
 ensure_installed()  # Triggers the ChatOllama patch
 
-result = asyncio.run(
-    extract_structured(
-        "https://example.com",
-        "Extract the main heading and description",
-        headless=True,  # ← MUST be True on headless servers
-    )
-)
+result = asyncio.run(extract_structured(
+    "https://example.com",
+    "Extract the main heading and description",
+    headless=True  # ← MUST be True on headless servers
+))
 print(result)
 ```
 
