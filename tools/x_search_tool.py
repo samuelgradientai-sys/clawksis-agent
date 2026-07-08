@@ -130,7 +130,8 @@ def _load_x_search_config() -> Dict[str, Any]:
 
         return load_config().get("x_search", {}) or {}
 
-    except Exception:
+    except (ImportError, OSError) as exc:
+        logger.debug("x_search: could not load config (%s)", exc)
         return {}
 
 
@@ -150,7 +151,7 @@ def _get_x_search_timeout_seconds() -> int:
     try:
         return max(30, int(raw_value))
 
-    except Exception:
+    except (ValueError, TypeError):
         return DEFAULT_X_SEARCH_TIMEOUT_SECONDS
 
 
@@ -163,7 +164,7 @@ def _get_x_search_retries() -> int:
     try:
         return max(0, int(raw_value))
 
-    except Exception:
+    except (ValueError, TypeError):
         return DEFAULT_X_SEARCH_RETRIES
 
 
@@ -230,7 +231,8 @@ def check_x_search_requirements() -> bool:
 
         return bool(str(creds.get("api_key") or "").strip())
 
-    except Exception:
+    except (RuntimeError, TypeError, ValueError, KeyError) as exc:
+        logger.debug("x_search: credential gate failed (%s)", exc)
         return False
 
 
@@ -391,7 +393,7 @@ def _http_error_message(exc: requests.HTTPError) -> str:
     try:
         payload = response.json()
 
-    except Exception:
+    except (ValueError, TypeError):
         payload = None
 
     if isinstance(payload, dict):
