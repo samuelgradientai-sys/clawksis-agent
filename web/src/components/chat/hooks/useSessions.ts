@@ -12,6 +12,7 @@ export interface ChatProject {
   id: string;
   name: string;
   description: string;
+  instructions: string;
   created_at: number;
   updated_at: number;
   archived: boolean;
@@ -47,10 +48,20 @@ interface UseSessionsResult {
   projectsError: string | null;
   refresh: () => Promise<void>;
   refreshProjects: () => Promise<void>;
-  createSession: () => Promise<string | null>;
+  createSession: (projectId?: string | null) => Promise<string | null>;
   deleteSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<ChatProject | null>;
+  updateProject: (
+    projectId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      instructions?: string;
+      archived?: boolean;
+    },
+  ) => Promise<ChatProject | null>;
+  archiveProject: (projectId: string) => Promise<boolean>;
   moveSessionToProject: (sessionId: string, projectId: string | null) => Promise<void>;
 }
 
@@ -171,16 +182,26 @@ export function useSessions(
     void refreshProjects();
   }, [ready, refresh, refreshProjects]);
 
-  const createSession = useCallback(async (): Promise<string | null> => {
+  const createSession = useCallback(async (projectId: string | null = null): Promise<string | null> => {
     if (!ready) return null;
     try {
-      const res = (await sendRpc("session.create", {
+      const cleanProjectId = projectId?.trim() || null;
+      const params: { source: string; project_id?: string } = {
         source: "dashboard",
-      })) as { session_id?: string };
+      };
+
+      if (cleanProjectId) {
+        params.project_id = cleanProjectId;
+      }
+
+      const res = (await sendRpc("session.create", params)) as { session_id?: string };
       const newId = res?.session_id ?? null;
       if (newId) {
-        await refresh();
-        await refreshProjects();
+        // No bloquear la creación visual del chat esperando refrescos.
+        // ChatModern ya pinta la sesión de forma optimista y hace refresh
+        // después del switch; estos refrescos quedan como reconciliación.
+        void refresh();
+        void refreshProjects();
       }
       return newId;
     } catch (err) {
@@ -259,6 +280,66 @@ export function useSessions(
     [ready, refreshProjects],
   );
 
+  const updateProject = useCallback(
+    async (
+      projectId: string,
+      updates: {
+        name?: string;
+        description?: string;
+        instructions?: string;
+        archived?: boolean;
+      },
+    ): Promise<ChatProject | null> => {
+      try {
+        const project = await fetchJSON<ChatProject>(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+
+        setProjects((prev) =>
+          prev.map((item) => (item.id === project.id ? project : item)),
+        );
+
+        return project;
+      } catch (err) {
+        console.error("[useSessions] update project failed", err);
+        return null;
+      }
+    },
+    [],
+  );
+
+  const archiveProject = useCallback(
+    async (projectId: string): Promise<boolean> => {
+      try {
+        await fetchJSON<{ ok?: boolean }>(`/api/projects/${projectId}`, {
+          method: "DELETE",
+        });
+
+        setProjects((prev) => prev.filter((project) => project.id !== projectId));
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.project_id === projectId
+              ? {
+                  ...session,
+                  project_id: null,
+                  project_name: null,
+                  project_archived: false,
+                }
+              : session,
+          ),
+        );
+
+        return true;
+      } catch (err) {
+        console.error("[useSessions] archive project failed", err);
+        return false;
+      }
+    },
+    [],
+  );
+
   const moveSessionToProject = useCallback(
     async (sessionId: string, projectId: string | null): Promise<void> => {
       if (!ready || !sessionId) return;
@@ -293,8 +374,11 @@ export function useSessions(
           ),
         );
 
-        await refresh();
-        await refreshProjects();
+        // Refresh Slim v1:
+        // La sesión ya fue actualizada de forma optimista. Reconciliar en
+        // segundo plano evita que mover conversaciones se sienta lento.
+        void refresh();
+        void refreshProjects();
       } catch (err) {
         console.error("[useSessions] move session to project failed", err);
         setError(err instanceof Error ? err.message : "No se pudo mover la sesión");
@@ -316,6 +400,8 @@ export function useSessions(
     deleteSession,
     renameSession,
     createProject,
+    updateProject,
+    archiveProject,
     moveSessionToProject,
   };
 }

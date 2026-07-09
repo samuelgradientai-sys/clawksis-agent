@@ -12,7 +12,7 @@
  *   de recargas, cambios de sesión o reinicios del dashboard.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { RpcSender } from "./useSessions";
 
@@ -202,6 +202,11 @@ export function useTokenUsage(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  const usageByModelRef = useRef<UsageByModel | null>(null);
+
+  useEffect(() => {
+    usageByModelRef.current = usageByModel;
+  }, [usageByModel]);
 
   const refresh = useCallback(
     async (sessionId: string | null) => {
@@ -239,22 +244,24 @@ export function useTokenUsage(
             }
 
             const cached = readJson<UsageByModel>(USAGE_BY_MODEL_CACHE_KEY);
+            const previous = usageByModelRef.current;
             setUsageByModel(
               hasRealModelUsage(cached)
                 ? cached
-                : usageByModel && hasRealModelUsage(usageByModel)
-                  ? usageByModel
+                : previous && hasRealModelUsage(previous)
+                  ? previous
                   : EMPTY_USAGE_BY_MODEL,
             );
           },
           (err) => {
             console.warn("[useTokenUsage] usage.by_model failed", err);
             const cached = readJson<UsageByModel>(USAGE_BY_MODEL_CACHE_KEY);
+            const previous = usageByModelRef.current;
             setUsageByModel(
               hasRealModelUsage(cached)
                 ? cached
-                : usageByModel && hasRealModelUsage(usageByModel)
-                  ? usageByModel
+                : previous && hasRealModelUsage(previous)
+                  ? previous
                   : EMPTY_USAGE_BY_MODEL,
             );
           },
@@ -314,7 +321,7 @@ export function useTokenUsage(
         setLoading(false);
       }
     },
-    [sendRpc, ready, usageByModel],
+    [sendRpc, ready],
   );
 
   return {

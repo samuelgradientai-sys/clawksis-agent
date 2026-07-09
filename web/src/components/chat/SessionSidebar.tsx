@@ -57,6 +57,7 @@ interface SessionSidebarProps {
   onNewChat: () => void;
   onNewChatInProject: (projectId: string) => void;
   onCreateProject: () => void;
+  onConfigureProject: (project: ChatProject) => void;
   onDeleteSession: (sessionId: string) => void;
   onMoveSessionToProject: (sessionId: string, projectId: string | null) => void;
   /** Renombrar conversación (persiste vía PATCH + refresca la lista). */
@@ -217,14 +218,19 @@ function ProjectCard({
   count,
   onOpen,
   onNewChat,
+  onConfigure,
 }: {
   project: ChatProject;
   count: number;
   onOpen: () => void;
   onNewChat: () => void;
+  onConfigure: () => void;
 }) {
+  const description = project.description?.trim() ?? "";
+  const hasInstructions = Boolean(project.instructions?.trim());
+
   return (
-    <div className="rounded-md border border-border bg-background/40 p-2 transition-colors hover:bg-muted/20">
+    <div className="clawk-liquid-glass rounded-2xl border border-white/10 bg-background/35 p-3 shadow-sm shadow-black/10 backdrop-blur-sm transition-all hover:border-[#6C4FD6]/30 hover:bg-background/50">
       <button
         type="button"
         onClick={onOpen}
@@ -242,14 +248,40 @@ function ProjectCard({
         <ChevronRight className="size-3.5 text-muted-foreground" />
       </button>
 
-      <button
-        type="button"
-        onClick={onNewChat}
-        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-border bg-muted/10 px-2 py-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
-      >
-        <Plus className="size-3" />
-        Chat en este proyecto
-      </button>
+      {description && (
+        <div
+          className="mt-1 max-h-10 overflow-hidden px-0.5 text-[10px] leading-4 text-muted-foreground/85"
+          title={description}
+        >
+          {description}
+        </div>
+      )}
+
+      {hasInstructions && (
+        <div className="mt-2 inline-flex rounded-full border border-[#6C4FD6]/30 bg-[#6C4FD6]/12 px-2 py-0.5 text-[9px] font-medium text-[#d7ceff] shadow-sm shadow-[#6C4FD6]/10">
+          Instrucciones activas
+        </div>
+      )}
+
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={onNewChat}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-[#6C4FD6]/35 hover:bg-[#6C4FD6]/10 hover:text-foreground"
+        >
+          <Plus className="size-3" />
+          Nuevo chat
+        </button>
+
+        <button
+          type="button"
+          onClick={onConfigure}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-[#6C4FD6]/35 hover:bg-[#6C4FD6]/10 hover:text-foreground"
+        >
+          <Pencil className="size-3" />
+          Configurar
+        </button>
+      </div>
     </div>
   );
 }
@@ -538,6 +570,7 @@ export function SessionSidebar({
   onNewChat,
   onNewChatInProject,
   onCreateProject,
+  onConfigureProject,
   onDeleteSession,
   onMoveSessionToProject,
   onRenameSession,
@@ -741,7 +774,7 @@ export function SessionSidebar({
   };
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col gap-2 border-r border-border bg-muted/10 p-2">
+    <aside className="clawk-liquid-sidebar flex h-full w-64 shrink-0 flex-col gap-3 border-r border-white/10 bg-background/25 p-3 backdrop-blur-xl">
       <button
         type="button"
         onClick={() => {
@@ -750,7 +783,7 @@ export function SessionSidebar({
           setMode("chats");
           setSelectedProjectId(null);
         }}
-        className="flex items-center justify-center gap-1.5 rounded-md bg-[#6C4FD6] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#5a40c2]"
+        className="flex items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-[#6C4FD6] to-[#8B6DFF] px-3 py-2.5 text-xs font-semibold text-white shadow-lg shadow-[#6C4FD6]/20 transition-all hover:brightness-110"
       >
         <Plus className="size-3.5" />
         Nueva conversación
@@ -764,7 +797,7 @@ export function SessionSidebar({
           setSelectedProjectId(null);
           onCreateProject();
         }}
-        className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+        className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-background/45 px-3 py-2.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-[#6C4FD6]/35 hover:bg-muted/25 hover:text-foreground"
       >
         <FolderPlus className="size-3.5" />
         Nuevo proyecto
@@ -969,6 +1002,10 @@ export function SessionSidebar({
                         setSelectedProjectId(project.id);
                         onNewChatInProject(project.id);
                       }}
+                      onConfigure={() => {
+                        setOpenMenuSessionId(null);
+                        onConfigureProject(project);
+                      }}
                     />
                   );
                 })}
@@ -997,13 +1034,37 @@ export function SessionSidebar({
               count={selectedProjectSessions.length}
             />
 
+            {selectedProject.description?.trim() && (
+              <div className="mb-2 px-2 text-[11px] leading-4 text-muted-foreground">
+                {selectedProject.description}
+              </div>
+            )}
+
+            {selectedProject.instructions?.trim() && (
+              <div className="mb-2 rounded border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 px-2 py-1.5 text-[10px] text-[#cfc4ff]">
+                Este proyecto tiene instrucciones propias.
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuSessionId(null);
+                onConfigureProject(selectedProject);
+              }}
+              className="mb-2 mt-1 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:border-[#6C4FD6]/35 hover:bg-[#6C4FD6]/10 hover:text-foreground"
+            >
+              <Pencil className="size-3.5" />
+              Configurar proyecto
+            </button>
+
             <button
               type="button"
               onClick={() => {
                 setOpenMenuSessionId(null);
                 onNewChatInProject(selectedProject.id);
               }}
-              className="mb-2 mt-1 flex w-full items-center justify-center gap-1.5 rounded-md border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-[#6C4FD6]/20"
+              className="mb-2 mt-1 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-2 text-xs font-semibold text-foreground shadow-sm shadow-[#6C4FD6]/10 transition-all hover:bg-[#6C4FD6]/20"
             >
               <Plus className="size-3.5 text-[#6C4FD6]" />
               Chat en este proyecto

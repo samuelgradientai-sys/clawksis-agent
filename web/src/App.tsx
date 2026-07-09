@@ -133,6 +133,7 @@ import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
 
 import { AuthWidget } from "@/components/AuthWidget";
+import { FirstRunOnboarding } from "@/components/onboarding/FirstRunOnboarding";
 
 import { PageHeaderProvider } from "@/contexts/PageHeaderProvider";
 
@@ -1779,7 +1780,8 @@ export default function App() {
 
             </div>
 
-          </PageHeaderProvider>
+                    <FirstRunOnboarding />
+</PageHeaderProvider>
 
         </div>
 
