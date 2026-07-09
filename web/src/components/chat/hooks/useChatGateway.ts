@@ -100,6 +100,7 @@ export function mapHistoryMessages(
 
 export interface SessionInfo {
   sessionId: string | null;
+  sessionKey: string | null;
   model: string | null;
   modelProvider: string | null;
   tokensUsed: number;
@@ -166,11 +167,14 @@ export function useChatGateway(): UseChatGatewayResult {
   // Espejo de `messages` para callbacks estables (editAndResubmit) que no deben
   // recrearse en cada delta de streaming (romperían el memo de las burbujas).
   const messagesRef = useRef<ChatMessage[]>([]);
+  const sessionMessagesCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
   const [session, setSession] = useState<SessionInfo>({
     sessionId: null,
+    sessionKey: null,
     model: null,
     modelProvider: null,
     tokensUsed: 0,
@@ -750,7 +754,11 @@ export function useChatGateway(): UseChatGatewayResult {
             }
 
             liveSidRef.current = sid;
-            setSession((prev) => ({ ...prev, sessionId: sid }));
+            setSession((prev) => ({
+              ...prev,
+              sessionId: sid,
+              sessionKey: selectedKeyRef.current ?? sid,
+            }));
           } catch (err) {
             console.error("[useChatGateway] session init failed", err);
             setErrorMessage(
@@ -937,8 +945,14 @@ export function useChatGateway(): UseChatGatewayResult {
   const switchSession = useCallback(
     async (targetId: string, options?: { assumeLive?: boolean }): Promise<void> => {
       if (!targetId) return;
+      const currentKey = selectedKeyRef.current || liveSidRef.current;
+      if (currentKey && messagesRef.current.length > 0) {
+        sessionMessagesCacheRef.current.set(currentKey, messagesRef.current);
+      }
+
+      const cachedMessages = sessionMessagesCacheRef.current.get(targetId);
       const mySeq = ++switchSeqRef.current;
-      setMessages([]);
+      setMessages(cachedMessages ? [...cachedMessages] : []);
       setBusy(false);
       setResuming(true);
       setErrorMessage(null);
@@ -951,6 +965,7 @@ export function useChatGateway(): UseChatGatewayResult {
       setSession((prev) => ({
         ...prev,
         sessionId: targetId,
+        sessionKey: targetId,
         model: null,
         modelProvider: null,
         tokensUsed: 0,
@@ -981,7 +996,10 @@ export function useChatGateway(): UseChatGatewayResult {
             streaming: false,
             timestamp: Date.now() - 1000 * (1000 - i),
           }));
-        if (fastMsgs.length) setMessages(fastMsgs);
+        if (fastMsgs.length) {
+          sessionMessagesCacheRef.current.set(targetId, fastMsgs);
+          setMessages(fastMsgs);
+        }
       } catch {
         // best-effort: el resume de abajo igual trae los mensajes.
       }
@@ -1012,9 +1030,13 @@ export function useChatGateway(): UseChatGatewayResult {
         const historyMessages = resumeResult?.messages ?? [];
         if (historyMessages.length) {
           // Igual que en el connect inicial: pasos + razonamiento incluidos.
-          setMessages(
-            mapHistoryMessages(historyMessages, "hist-" + Date.now()),
+          const resumedMessages = mapHistoryMessages(
+            historyMessages,
+            "hist-" + Date.now(),
           );
+          sessionMessagesCacheRef.current.set(targetId, resumedMessages);
+          sessionMessagesCacheRef.current.set(liveSid, resumedMessages);
+          setMessages(resumedMessages);
         }
         if (mySeq !== switchSeqRef.current) return;
         // Turno EN VUELO: el history persistido aún no tiene este turno, pero
@@ -1107,19 +1129,10 @@ export function useChatGateway(): UseChatGatewayResult {
           }
         };
 
-        // Para métricas persistidas puede servir targetId; para sesión viva puede
-        // servir liveSid. Probamos ambos, sin romper el switch si usage falla.
-        for (const sid of Array.from(new Set([targetId, liveSid])).filter(Boolean)) {
-          const usage = await tryReadUsageSnapshot(sid);
-          if (usage.ok && (usage.total > 0 || usage.max > 0)) {
-            restoredTokensUsed = usage.total;
-            restoredTokensMax = usage.max;
-            break;
-          }
-        }
         setSession((prev) => ({
           ...prev,
           sessionId: liveSid,
+          sessionKey: targetId,
           model: (info.model as string) ?? null,
           modelProvider: (info.model_provider as string) ?? null,
           tokensUsed: restoredTokensUsed,
@@ -1128,6 +1141,31 @@ export function useChatGateway(): UseChatGatewayResult {
           // del paso inmediato anterior, lo cual está bien.
           title: ((info.title as string) || null) ?? prev.title,
         }));
+
+        // Fast Switch Session v1:
+        // session.usage puede tardar y no debe bloquear el cambio de chat.
+        // Probamos targetId/liveSid en segundo plano y actualizamos el header
+        // solo si el usuario sigue viendo esta misma sesión.
+        void (async () => {
+          for (const sid of Array.from(new Set([targetId, liveSid])).filter(Boolean)) {
+            const usage = await tryReadUsageSnapshot(sid);
+
+            if (mySeq !== switchSeqRef.current) return;
+
+            if (usage.ok && (usage.total > 0 || usage.max > 0)) {
+              setSession((prev) =>
+                prev.sessionId === liveSid || prev.sessionId === targetId
+                  ? {
+                      ...prev,
+                      tokensUsed: usage.total,
+                      tokensMax: usage.max,
+                    }
+                  : prev,
+              );
+              break;
+            }
+          }
+        })();
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
         if (mySeq === switchSeqRef.current) {

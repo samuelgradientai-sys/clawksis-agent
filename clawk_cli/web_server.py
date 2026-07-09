@@ -2940,11 +2940,13 @@ async def get_action_status(name: str, lines: int = 200):
 class ChatProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    instructions: Optional[str] = None
 
 
 class ChatProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    instructions: Optional[str] = None
     archived: Optional[bool] = None
 
 
@@ -2995,12 +2997,20 @@ def _ensure_chat_projects_schema(conn) -> None:
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT,
+            instructions TEXT,
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL,
             archived INTEGER NOT NULL DEFAULT 0
         )
         """
     )
+
+    project_cols = {
+        row["name"] for row in conn.execute("PRAGMA table_info(chat_projects)").fetchall()
+    }
+
+    if "instructions" not in project_cols:
+        conn.execute("ALTER TABLE chat_projects ADD COLUMN instructions TEXT")
 
     session_cols = {
         row["name"] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -3024,6 +3034,7 @@ def _project_row_to_dict(row) -> Dict[str, Any]:
         "id": row["id"],
         "name": row["name"],
         "description": row["description"] or "",
+        "instructions": row["instructions"] or "",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "archived": bool(row["archived"]),
@@ -3107,6 +3118,7 @@ async def list_chat_projects(include_archived: bool = False):
                 p.id,
                 p.name,
                 p.description,
+                p.instructions,
                 p.created_at,
                 p.updated_at,
                 p.archived,
@@ -3137,6 +3149,12 @@ async def create_chat_project(body: ChatProjectCreate):
         max_len=500,
         required=False,
     )
+    instructions = _chat_project_clean_text(
+        body.instructions,
+        field="instructions",
+        max_len=4000,
+        required=False,
+    )
 
     conn = _chat_projects_connect()
     try:
@@ -3156,10 +3174,10 @@ async def create_chat_project(body: ChatProjectCreate):
 
         conn.execute(
             """
-            INSERT INTO chat_projects (id, name, description, created_at, updated_at, archived)
-            VALUES (?, ?, ?, ?, ?, 0)
+            INSERT INTO chat_projects (id, name, description, instructions, created_at, updated_at, archived)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
             """,
-            (project_id, name, description, now, now),
+            (project_id, name, description, instructions, now, now),
         )
         conn.commit()
 
@@ -3169,6 +3187,7 @@ async def create_chat_project(body: ChatProjectCreate):
                 p.id,
                 p.name,
                 p.description,
+                p.instructions,
                 p.created_at,
                 p.updated_at,
                 p.archived,
@@ -3233,6 +3252,16 @@ async def update_chat_project(project_id: str, body: ChatProjectUpdate):
             updates.append("description = ?")
             params.append(description)
 
+        if body.instructions is not None:
+            instructions = _chat_project_clean_text(
+                body.instructions,
+                field="instructions",
+                max_len=4000,
+                required=False,
+            )
+            updates.append("instructions = ?")
+            params.append(instructions)
+
         if body.archived is not None:
             updates.append("archived = ?")
             params.append(1 if body.archived else 0)
@@ -3256,6 +3285,7 @@ async def update_chat_project(project_id: str, body: ChatProjectUpdate):
                 p.id,
                 p.name,
                 p.description,
+                p.instructions,
                 p.created_at,
                 p.updated_at,
                 p.archived,

@@ -13,7 +13,7 @@
  * con la transcripción acumulada en cada update.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 
@@ -79,6 +79,41 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function friendlySpeechError(code?: string): string {
+  switch (code) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Voz: el micrófono está bloqueado por el navegador.";
+    case "audio-capture":
+      return "Voz: no se detectó un micrófono disponible.";
+    case "network":
+      return "Voz: error de red al iniciar el dictado.";
+    case "language-not-supported":
+      return "Voz: idioma de dictado no soportado por el navegador.";
+    case "no-speech":
+    case "aborted":
+      return "";
+    default:
+      return code ? "Voz: " + code : "Error de reconocimiento de voz";
+  }
+}
+
+function friendlyMicError(err: unknown): string {
+  if (err instanceof DOMException) {
+    if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+      return "Voz: el micrófono está bloqueado por el navegador.";
+    }
+
+    if (err.name === "NotFoundError") {
+      return "Voz: no se detectó un micrófono disponible.";
+    }
+  }
+
+  return err instanceof Error
+    ? "Voz: " + err.message
+    : "No se pudo acceder al micrófono";
+}
+
 export function useVoiceInput(): UseVoiceInputResult {
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -88,6 +123,41 @@ export function useVoiceInput(): UseVoiceInputResult {
   const finalRef = useRef("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const errorTimerRef = useRef<number | null>(null);
+
+  const clearVoiceError = useCallback(() => {
+    if (errorTimerRef.current != null && typeof window !== "undefined") {
+      window.clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+    setError(null);
+  }, []);
+
+  const setTransientError = useCallback((message: string) => {
+    if (!message) return;
+
+    if (errorTimerRef.current != null && typeof window !== "undefined") {
+      window.clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+
+    setError(message);
+
+    if (typeof window !== "undefined") {
+      errorTimerRef.current = window.setTimeout(() => {
+        setError(null);
+        errorTimerRef.current = null;
+      }, 5500);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current != null && typeof window !== "undefined") {
+        window.clearTimeout(errorTimerRef.current);
+      }
+    };
+  }, []);
 
   const hasWebSpeech = getSpeechRecognition() != null;
   const hasMedia =
@@ -119,14 +189,25 @@ export function useVoiceInput(): UseVoiceInputResult {
       };
       rec.onerror = (ev) => {
         if (ev?.error === "no-speech" || ev?.error === "aborted") return;
-        setError(ev?.error ? "Voz: " + ev.error : "Error de reconocimiento de voz");
+
+        if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
+          setListening(false);
+          recognitionRef.current = null;
+          try {
+            rec.abort();
+          } catch {
+            /* ignore */
+          }
+        }
+
+        setTransientError(friendlySpeechError(ev?.error));
       };
       rec.onend = () => {
         setListening(false);
         recognitionRef.current = null;
       };
       recognitionRef.current = rec;
-      setError(null);
+      clearVoiceError();
       setListening(true);
       try {
         rec.start();
@@ -134,7 +215,7 @@ export function useVoiceInput(): UseVoiceInputResult {
         /* ya iniciado */
       }
     },
-    [],
+    [clearVoiceError, setTransientError],
   );
 
   const startFallback = useCallback(async (onText: OnText) => {
@@ -157,22 +238,22 @@ export function useVoiceInput(): UseVoiceInputResult {
           const res = await api.transcribeAudio(dataUrl, blob.type);
           if (res?.transcript) onText(res.transcript.trim());
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Falló la transcripción");
+          setTransientError(
+            err instanceof Error ? "Voz: " + err.message : "Falló la transcripción",
+          );
         } finally {
           setTranscribing(false);
         }
       };
       mediaRecorderRef.current = mr;
-      setError(null);
+      clearVoiceError();
       setListening(true);
       mr.start();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "No se pudo acceder al micrófono",
-      );
+      setTransientError(friendlyMicError(err));
       setListening(false);
     }
-  }, []);
+  }, [clearVoiceError, setTransientError]);
 
   const start = useCallback(
     async (onText: OnText) => {
@@ -186,9 +267,9 @@ export function useVoiceInput(): UseVoiceInputResult {
         await startFallback(onText);
         return;
       }
-      setError("Tu navegador no soporta entrada de voz.");
+      setTransientError("Tu navegador no soporta entrada de voz.");
     },
-    [listening, hasMedia, startWebSpeech, startFallback],
+    [listening, hasMedia, startWebSpeech, startFallback, setTransientError],
   );
 
   const stop = useCallback(() => {

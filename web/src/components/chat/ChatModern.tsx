@@ -106,7 +106,7 @@ function ChatHeader({
       : null;
 
   return (
-    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="flex items-center justify-between border-b border-white/10 bg-background/28 px-4 py-3 backdrop-blur-xl">
       <div className="flex min-w-0 items-center gap-2">
         <span className={"size-2 rounded-full shrink-0 " + statusColor} />
         <span className="truncate text-sm font-semibold text-foreground">
@@ -130,7 +130,7 @@ function ChatHeader({
           onClick={onTokensClick}
           disabled={!onTokensClick}
           title={"Ver desglose de uso de tokens · sesión " + shortSession}
-          className="hidden md:flex items-center gap-2 rounded-lg border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:border-[#6C4FD6]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
+          className="clawk-liquid-chip hidden md:flex items-center gap-2 rounded-2xl border border-[#6C4FD6]/35 bg-[#6C4FD6]/10 px-3.5 py-2 text-xs text-foreground shadow-sm shadow-[#6C4FD6]/10 transition-all hover:border-[#8B6DFF]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
           aria-label="Abrir menú de uso de tokens"
         >
           <Brain className="size-3.5 text-[#6C4FD6]" />
@@ -153,6 +153,212 @@ function ChatHeader({
   );
 }
 
+
+
+type ProjectSettingsProject = {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  session_count?: number;
+};
+
+function ProjectSettingsDialog({
+  project,
+  error,
+  onClose,
+  onSave,
+  onArchive,
+}: {
+  project: ProjectSettingsProject | null;
+  error: string | null;
+  onClose: () => void;
+  onSave: (
+    projectId: string,
+    updates: {
+      name: string;
+      description: string;
+      instructions: string;
+    },
+  ) => Promise<boolean>;
+  onArchive: (projectId: string) => Promise<boolean>;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!project) return;
+
+    setName(project.name ?? "");
+    setDescription(project.description ?? "");
+    setInstructions(project.instructions ?? "");
+    setSaving(false);
+    setArchiving(false);
+    setArchiveConfirm(false);
+  }, [project]);
+
+  if (!project) return null;
+
+  const cleanName = name.trim();
+  const canSave = Boolean(cleanName) && !saving && !archiving;
+
+  const submit = async () => {
+    if (!canSave) return;
+
+    setSaving(true);
+    const ok = await onSave(project.id, {
+      name: cleanName,
+      description: description.trim(),
+      instructions: instructions.trim(),
+    });
+    setSaving(false);
+
+    if (ok) onClose();
+  };
+
+  const archive = async () => {
+    if (!archiveConfirm) {
+      setArchiveConfirm(true);
+      return;
+    }
+
+    setArchiving(true);
+    const ok = await onArchive(project.id);
+    setArchiving(false);
+
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#6C4FD6]/40 bg-popover text-popover-foreground shadow-2xl shadow-[#6C4FD6]/20">
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20">
+              <img
+                src="/clawksis-logo-512.png"
+                alt="Clawksis"
+                draggable={false}
+                className="size-6 select-none object-contain"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-foreground">
+                Configurar proyecto
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Define nombre, descripción e instrucciones propias del proyecto.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Nombre del proyecto
+            </label>
+            <input
+              autoFocus
+              value={name}
+              maxLength={80}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void submit();
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder="Ej. Agencia, PYV, Contenido redes..."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Descripción
+            </label>
+            <textarea
+              value={description}
+              maxLength={500}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-h-20 w-full resize-y rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder="Describe para qué sirve este proyecto."
+            />
+            <div className="text-right text-[10px] text-muted-foreground">
+              {description.length}/500
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Instrucciones del proyecto
+            </label>
+            <textarea
+              value={instructions}
+              maxLength={4000}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="min-h-36 w-full resize-y rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder={"Ej. Responde como estratega de contenido. Usa tono profesional. Prioriza acciones concretas."}
+            />
+            <div className="flex items-center justify-between gap-3 text-[10px] text-muted-foreground">
+              <span>
+                Estas instrucciones se guardan en el proyecto. La conexión con el modelo se hará en una fase posterior.
+              </span>
+              <span className="shrink-0">{instructions.length}/4000</span>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="rounded border border-border bg-muted/10 px-3 py-2 text-[11px] text-muted-foreground">
+            Archivar oculta el proyecto y mueve sus conversaciones a Conversaciones. No borra los chats.
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+          <button
+            type="button"
+            onClick={archive}
+            disabled={saving || archiving}
+            className="rounded border border-destructive/40 px-3 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {archiving
+              ? "Archivando..."
+              : archiveConfirm
+                ? "Confirmar archivo"
+                : "Archivar proyecto"}
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving || archiving}
+              className="rounded border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!canSave}
+              className="rounded bg-[#6C4FD6] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#5b3fd0] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ProjectCreateDialog({
   open,
@@ -903,7 +1109,7 @@ const MessageBubble = memo(function MessageBubble({
       setEditing(false);
     };
     return (
-      <div className="group flex flex-col items-end gap-1.5 py-3">
+      <div className="group flex flex-col items-end gap-1.5 py-4">
         {message.images && message.images.length > 0 && (
           <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
             {message.images.map((img, i) => (
@@ -982,7 +1188,7 @@ const MessageBubble = memo(function MessageBubble({
   const showSummary = !message.streaming && hasSteps && !stepsOpen;
 
   return (
-    <div className="group flex gap-3 py-4">
+    <div className="clawk-liquid-message group my-2 flex gap-3 rounded-3xl border border-white/10 bg-background/22 p-4 shadow-sm shadow-black/10 backdrop-blur-sm transition-colors hover:border-[#6C4FD6]/25 hover:bg-background/30">
       <div
         className={
           "flex size-7 shrink-0 items-center justify-center rounded-full " +
@@ -1005,7 +1211,7 @@ const MessageBubble = memo(function MessageBubble({
           !message.reasoning ? (
           <TypingDots />
         ) : (
-          <div className="text-[15px] leading-relaxed text-foreground">
+          <div className="text-[15px] leading-7 text-foreground/95">
             <Markdown content={assistantText} streaming={message.streaming} />
           </div>
         )}
@@ -1369,9 +1575,9 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-border px-4 py-3">
+    <div className="border-t border-white/10 bg-background/35 px-4 py-4 backdrop-blur-xl">
       <div
-        className="relative mx-auto w-full max-w-3xl"
+        className="relative mx-auto w-full max-w-4xl"
         onDragOver={(e) => {
           e.preventDefault();
           if (!dragging) setDragging(true);
@@ -1460,7 +1666,7 @@ function Composer({
       />
 
       {/* Composer principal — layout tipo Claude: textarea arriba, controles abajo */}
-      <div className="relative rounded-2xl border border-foreground/10 bg-background/40 px-3 py-2.5 shadow-lg shadow-black/20 backdrop-blur-xl transition-colors focus-within:border-[#6C4FD6]/50">
+      <div className="clawk-liquid-composer relative rounded-3xl border border-white/10 bg-background/60 px-4 py-3 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur-2xl transition-all duration-200 focus-within:border-[#8B6DFF]/70 focus-within:shadow-[#6C4FD6]/20">
         {/* Autocomplete de slash commands (/) — flota sobre el composer. */}
         <SlashPopover ref={slashRef} input={value} gw={slashGw} onApply={setValue} />
         <textarea
@@ -1481,9 +1687,9 @@ function Composer({
           }
           rows={1}
           disabled={disabled}
-          className="w-full resize-none bg-transparent px-1 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
+          className="w-full resize-none bg-transparent px-1 text-[15px] leading-7 text-foreground placeholder:text-muted-foreground/70 outline-none disabled:opacity-50"
         />
-        <div className="mt-1.5 flex items-center gap-1">
+        <div className="mt-2.5 flex items-center gap-1">
           <button
             type="button"
             onClick={handlePaperclipClick}
@@ -1725,6 +1931,8 @@ export default function ChatModern() {
     deleteSession,
     renameSession,
     createProject,
+    updateProject,
+    archiveProject,
     moveSessionToProject,
     refresh: refreshSessions,
   } = useSessions(sendRpc, readyForRpc);
@@ -1813,15 +2021,16 @@ export default function ChatModern() {
     writeSidebarActivityOverrides(sidebarActivityOverrides);
   }, [sidebarActivityOverrides]);
 
+  const activeSessionKey = session.sessionKey ?? session.sessionId;
   const sessionIdExistsInSidebar =
-    !!session.sessionId && sidebarSessions.some((s) => s.id === session.sessionId);
+    !!activeSessionKey && sidebarSessions.some((s) => s.id === activeSessionKey);
 
   const newestListedSessionId = sidebarSessions[0]?.id ?? null;
 
-  // ID visual para resaltar y consultar métricas persistidas.
+  // ID visual/persistido para resaltar sidebar y consultar métricas.
   // session.sessionId sigue siendo el ID operativo vivo para backend.
   const sidebarActiveSessionId =
-    visualActiveSessionId ?? (sessionIdExistsInSidebar ? session.sessionId : null);
+    visualActiveSessionId ?? (sessionIdExistsInSidebar ? activeSessionKey : null);
 
   // sidebar-auto-open-top-on-boot-v1
   // Si localStorage reordenó el sidebar por actividad reciente, abrimos esa
@@ -1835,7 +2044,7 @@ export default function ChatModern() {
     didAutoOpenSidebarTopRef.current = true;
     setVisualActiveSessionId(newestListedSessionId);
 
-    if (newestListedSessionId !== session.sessionId) {
+    if (newestListedSessionId !== activeSessionKey) {
       void switchSession(newestListedSessionId);
     }
   }, [
@@ -1844,19 +2053,19 @@ export default function ChatModern() {
     resuming,
     busy,
     newestListedSessionId,
-    session.sessionId,
+    activeSessionKey,
     switchSession,
   ]);
 
   useEffect(() => {
     if (
       !visualActiveSessionId &&
-      session.sessionId &&
-      sessions.some((s) => s.id === session.sessionId)
+      activeSessionKey &&
+      sessions.some((s) => s.id === activeSessionKey)
     ) {
-      setVisualActiveSessionId(session.sessionId);
+      setVisualActiveSessionId(activeSessionKey);
     }
-  }, [visualActiveSessionId, session.sessionId, sessions]);
+  }, [visualActiveSessionId, activeSessionKey, sessions]);
 
   useEffect(() => {
     if (optimisticSessions.length === 0) return;
@@ -2022,7 +2231,7 @@ export default function ChatModern() {
 
   const handleNewChat = async (projectId: string | null = null) => {
     queue.clear();
-    const newId = await createSession();
+    const newId = await createSession(projectId);
     if (newId) {
       const project = projectId
         ? projects.find((p) => p.id === projectId) ?? null
@@ -2046,18 +2255,18 @@ export default function ChatModern() {
         ...prev.filter((s) => s.id !== newId),
       ]);
 
-      if (projectId) {
-        await moveSessionToProject(newId, projectId);
-      }
-
+      // projectId is passed to session.create so the gateway can persist it
+      // when the first real prompt creates the DB row. Do not call the REST
+      // move endpoint here: empty live drafts do not have a DB row yet.
       await switchSession(newId, { assumeLive: true });
-      void refreshSessions();
+
+      // Refresh Slim v1:
+      // La sesión ya aparece por render optimista y createSession() reconcilia
+      // en segundo plano. Un único refresh diferido basta para recoger cambios
+      // posteriores como título/modelo cuando ya exista fila persistida.
       window.setTimeout(() => {
         void refreshSessions();
-      }, 800);
-      window.setTimeout(() => {
-        void refreshSessions();
-      }, 2000);
+      }, 1200);
     }
   };
 
@@ -2083,6 +2292,50 @@ export default function ChatModern() {
     await deleteSession(id);
   };
 
+  const [projectSettingsProject, setProjectSettingsProject] =
+    useState<ProjectSettingsProject | null>(null);
+  const [projectSettingsError, setProjectSettingsError] = useState<string | null>(null);
+
+  const handleConfigureProject = (project: ProjectSettingsProject) => {
+    setProjectSettingsError(null);
+    setProjectSettingsProject(project);
+  };
+
+  const handleSaveProjectSettings = async (
+    projectId: string,
+    updates: {
+      name: string;
+      description: string;
+      instructions: string;
+    },
+  ): Promise<boolean> => {
+    const saved = await updateProject(projectId, updates);
+
+    if (!saved) {
+      setProjectSettingsError("No se pudo guardar el proyecto. Revisa el nombre o intenta de nuevo.");
+      return false;
+    }
+
+    setProjectSettingsError(null);
+    setProjectSettingsProject(saved);
+    await refreshSessions();
+    return true;
+  };
+
+  const handleArchiveProjectSettings = async (projectId: string): Promise<boolean> => {
+    const ok = await archiveProject(projectId);
+
+    if (!ok) {
+      setProjectSettingsError("No se pudo archivar el proyecto. Intenta de nuevo.");
+      return false;
+    }
+
+    setProjectSettingsError(null);
+    setProjectSettingsProject(null);
+    await refreshSessions();
+    return true;
+  };
+
   const handleCreateProject = () => {
     setProjectDialogError(null);
     setProjectDialogOpen(true);
@@ -2106,7 +2359,6 @@ export default function ChatModern() {
     projectId: string | null,
   ) => {
     await moveSessionToProject(sessionId, projectId);
-    void refreshSessions();
   };
 
   // Título de la conversación que se está viendo (para el header).
@@ -2174,6 +2426,17 @@ export default function ChatModern() {
         onCreate={handleSubmitProjectCreate}
       />
 
+      <ProjectSettingsDialog
+        project={projectSettingsProject}
+        error={projectSettingsError}
+        onClose={() => {
+          setProjectSettingsError(null);
+          setProjectSettingsProject(null);
+        }}
+        onSave={handleSaveProjectSettings}
+        onArchive={handleArchiveProjectSettings}
+      />
+
       {modelPickerOpen && (
         <ModelPickerDialog
           gw={gwForDialogs}
@@ -2203,7 +2466,7 @@ export default function ChatModern() {
 
       {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
           (backdrop) a través de un velo translúcido que mantiene legibilidad. */}
-      <div className="relative flex h-full min-h-0 flex-row overflow-hidden bg-background/30">
+      <div className="relative flex h-full min-h-0 flex-row overflow-hidden bg-background/25">
       <SessionSidebar
         sessions={sidebarSessions}
         projects={projects}
@@ -2217,6 +2480,7 @@ export default function ChatModern() {
           void handleNewChat(projectId);
         }}
         onCreateProject={handleCreateProject}
+        onConfigureProject={handleConfigureProject}
         onDeleteSession={handleDeleteSession}
         onMoveSessionToProject={handleMoveSessionToProject}
         onRenameSession={renameSession}
@@ -2277,7 +2541,7 @@ export default function ChatModern() {
               queue.queued.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-4 sm:px-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col px-4 py-5 sm:px-6">
                 {messages.map((msg, idx) => {
                   const isLast =
                     idx === messages.length - 1 && msg.role === "assistant";

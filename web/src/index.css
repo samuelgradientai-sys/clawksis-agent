@@ -335,3 +335,81 @@ code { font-size: 0.875rem; }
 .clawk-chat-xterm-host .xterm-viewport {
   background-color: transparent !important;
 }
+
+/* clawksis-liquid-glass-v1 */
+@layer components {
+  .clawk-liquid-glass {
+    background-image:
+      radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.08), transparent 30%),
+      radial-gradient(circle at 90% 12%, rgba(139, 109, 255, 0.07), transparent 34%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012) 50%, rgba(108, 79, 214, 0.035));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.09),
+      0 12px 28px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+  }
+
+  .clawk-liquid-glass:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 14px 34px rgba(0, 0, 0, 0.18),
+      0 0 26px rgba(108, 79, 214, 0.045);
+  }
+
+  .clawk-liquid-message {
+    background-image:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.01) 55%, rgba(0, 0, 0, 0.025));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.055),
+      0 10px 24px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(10px) saturate(115%);
+    -webkit-backdrop-filter: blur(10px) saturate(115%);
+  }
+
+  .clawk-liquid-composer {
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.11), transparent 30%),
+      radial-gradient(circle at 92% 100%, rgba(108, 79, 214, 0.12), transparent 34%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02) 45%, rgba(0, 0, 0, 0.065));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+      0 18px 52px rgba(0, 0, 0, 0.26),
+      0 0 34px rgba(108, 79, 214, 0.06);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+  }
+
+  .clawk-liquid-chip {
+    background-image:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(108, 79, 214, 0.08));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 8px 22px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+  }
+
+  .clawk-liquid-sidebar {
+    background-image:
+      radial-gradient(circle at 0% 14%, rgba(139, 109, 255, 0.075), transparent 34%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008));
+    box-shadow:
+      inset -1px 0 0 rgba(255, 255, 255, 0.04),
+      8px 0 28px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .clawk-liquid-glass,
+    .clawk-liquid-message,
+    .clawk-liquid-composer,
+    .clawk-liquid-chip,
+    .clawk-liquid-sidebar {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+}
