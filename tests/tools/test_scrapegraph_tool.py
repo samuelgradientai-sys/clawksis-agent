@@ -124,7 +124,7 @@ def test_handler_requires_url():
 def test_handler_success_single(monkeypatch):
     from tools.scrapegraph_tool import _handle_scrapegraph
 
-    async def _fake_extract(source, prompt, *, schema=None, headless=True):
+    async def _fake_extract(source, prompt, *, schema=None, headless=True, timeout=None):
         return {"title": "Hi", "price": 9.99}
 
     monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake_extract)
@@ -139,7 +139,7 @@ def test_handler_multi_urls(monkeypatch):
 
     captured = {}
 
-    async def _fake_many(sources, prompt, *, schema=None, headless=True):
+    async def _fake_many(sources, prompt, *, schema=None, headless=True, timeout=None):
         captured["sources"] = list(sources)
         return [{"u": s} for s in sources]
 

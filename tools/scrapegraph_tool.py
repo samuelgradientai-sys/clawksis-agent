@@ -80,16 +80,33 @@ async def _handle_scrapegraph(args, **kw):
     schema = _coerce_schema(args.get("output_schema"))
     render_js = args.get("render_js")
     headless = True if render_js is None else bool(render_js)
+    raw_timeout = args.get("timeout")
+    timeout: int | None = None
+    if raw_timeout is not None:
+        try:
+            timeout = max(10, min(300, int(raw_timeout)))
+        except (ValueError, TypeError):
+            timeout = None
 
     try:
         if len(urls) == 1:
             data = await extract_structured(
-                urls[0], prompt, schema=schema, headless=headless
+                urls[0], prompt, schema=schema, headless=headless, timeout=timeout
             )
         else:
-            data = await extract_many(urls, prompt, schema=schema, headless=headless)
+            data = await extract_many(urls, prompt, schema=schema, headless=headless, timeout=timeout)
     except ScrapegraphUnavailable as exc:
         return tool_result(ok=False, error=str(exc))
+    except TimeoutError as exc:
+        return tool_result(
+            ok=False,
+            urls=urls,
+            error=(
+                "The LLM extraction timed out. This can happen on large pages "
+                "or when the model is slow. Increase the `timeout` parameter "
+                "(current value: {}s, max 300s) or try a simpler prompt."
+            ).format(timeout or "default"),
+        )
     except Exception as exc:  # noqa: BLE001 — classify and surface user-friendly error
         logger.warning("scrapegraph extraction failed: %s", exc)
         exc_msg = str(exc).lower()
@@ -219,6 +236,14 @@ SCRAPEGRAPH_SCHEMA = {
                     "true). ⚠️ On headless servers NEVER set this to false — "
                     "the headed browser mode requires a display server (X11) "
                     "and will crash. Just omit it (defaults to headless=true)."
+                ),
+            },
+            "timeout": {
+                "type": "integer",
+                "description": (
+                    "Max seconds for the LLM extraction (default: no timeout, "
+                    "min 10, max 300). Increase for large pages with many "
+                    "data points; decrease to fail fast on slow models."
                 ),
             },
         },

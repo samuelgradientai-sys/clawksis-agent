@@ -183,15 +183,23 @@ async def extract_structured(
     schema: Any = None,
     headless: bool = True,
     overrides: Optional[dict] = None,
+    timeout: Optional[int] = None,
 ) -> Any:
     """Extract from ONE source (URL or rendered HTML string) per ``prompt``.
 
     ``schema`` (a pydantic model or JSON-schema dict) yields structured output.
     Runs the blocking graph in a worker thread so the event loop is never stalled.
+
+    When ``timeout`` is set (seconds), the extraction is cancelled if it takes
+    longer — useful for slow pages or overloaded models. Pass a value between
+    10 and 300.
     """
     ensure_installed()
     cfg = graph_config(headless=headless, overrides=overrides)
-    return await asyncio.to_thread(_run_smart, source, prompt, schema, cfg)
+    coro = asyncio.to_thread(_run_smart, source, prompt, schema, cfg)
+    if timeout is not None:
+        coro = asyncio.wait_for(coro, timeout=timeout)
+    return await coro
 
 
 async def extract_many(
@@ -201,8 +209,12 @@ async def extract_many(
     schema: Any = None,
     headless: bool = True,
     overrides: Optional[dict] = None,
+    timeout: Optional[int] = None,
 ) -> Any:
     """Extract from MULTIPLE sources with one prompt (SmartScraperMultiGraph)."""
     ensure_installed()
     cfg = graph_config(headless=headless, overrides=overrides)
-    return await asyncio.to_thread(_run_multi, sources, prompt, schema, cfg)
+    coro = asyncio.to_thread(_run_multi, sources, prompt, schema, cfg)
+    if timeout is not None:
+        coro = asyncio.wait_for(coro, timeout=timeout)
+    return await coro
