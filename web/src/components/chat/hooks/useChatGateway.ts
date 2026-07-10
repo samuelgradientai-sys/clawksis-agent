@@ -61,9 +61,34 @@ const IMAGE_INTERNAL_NOTE_RE =
 const IMAGE_INTERNAL_HINT_RE =
   /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
 
-function sanitizeUserHistoryContent(content: string): string {
+const IMAGE_URL_PATH_RE =
+  /image_url:\s*([^\]\n\r]+)/i;
+
+function localImagePreviewUrl(path: string): string {
+  return "/media/local?path=" + encodeURIComponent(path);
+}
+
+function imageNameFromPath(path: string): string {
+  const clean = path.split(/[?#]/)[0] || "";
+  return clean.split("/").filter(Boolean).pop() || "imagen adjunta";
+}
+
+function sanitizeUserHistoryContent(content: string): {
+  content: string;
+  images?: ChatImagePreview[];
+} {
   let next = content.replace(RESUME_NOTE_RE, "");
+  const imageMatch = next.match(IMAGE_URL_PATH_RE);
+  const imagePath = imageMatch?.[1]?.trim();
   const hadImageInternalNote = IMAGE_INTERNAL_NOTE_RE.test(next);
+  const images = imagePath
+    ? [
+        {
+          previewUrl: localImagePreviewUrl(imagePath),
+          name: imageNameFromPath(imagePath),
+        },
+      ]
+    : undefined;
 
   next = next.replace(IMAGE_INTERNAL_NOTE_RE, "");
   next = next.replace(IMAGE_INTERNAL_HINT_RE, "");
@@ -71,10 +96,10 @@ function sanitizeUserHistoryContent(content: string): string {
 
   // Si el turno era solo una imagen sin texto, no dejemos la burbuja vacía.
   if (hadImageInternalNote && !next.trim()) {
-    return "Imagen adjunta";
+    return { content: "Imagen adjunta", images };
   }
 
-  return next;
+  return { content: next, images };
 }
 
 /** Reconstruye ChatMessages COMPLETOS desde session.history: los mensajes
@@ -103,7 +128,9 @@ export function mapHistoryMessages(
     }
     if (role !== "user" && role !== "assistant") return;
     let content = String((m.text as string) ?? (m.content as string) ?? "");
-    if (role === "user") content = sanitizeUserHistoryContent(content);
+    const historyImages =
+      role === "user" ? sanitizeUserHistoryContent(content) : null;
+    if (historyImages) content = historyImages.content;
     const reasoningRaw =
       (typeof m.reasoning === "string" && m.reasoning) ||
       (typeof m.reasoning_content === "string" && m.reasoning_content) ||
@@ -117,6 +144,7 @@ export function mapHistoryMessages(
       toolCalls: role === "assistant" ? pendingTools : [],
       streaming: false,
       timestamp: (m.timestamp as number) ?? base + i * 1000,
+      images: historyImages?.images,
     });
     if (role === "assistant") pendingTools = [];
   });

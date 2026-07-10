@@ -49,6 +49,7 @@ import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
 import { useImageAttachments } from "./hooks/useImageAttachments";
+import { sanitizeSessionLabel } from "./hooks/useSessions";
 import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
@@ -1017,6 +1018,41 @@ function TypingDots() {
   );
 }
 
+function UserImagePreview({
+  image,
+}: {
+  image: { previewUrl: string; name: string };
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !image.previewUrl) {
+    return (
+      <div
+        title={image.name}
+        className="flex min-h-20 w-48 max-w-[12rem] flex-col justify-center rounded-lg border border-border bg-muted/25 px-3 py-2 text-left"
+      >
+        <span className="text-xs font-semibold text-foreground">
+          Imagen adjunta
+        </span>
+        <span className="mt-1 truncate text-[11px] text-muted-foreground">
+          {image.name || "imagen"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={image.previewUrl}
+      alt={image.name}
+      title={image.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
+    />
+  );
+}
+
 // memo: durante el streaming, message.delta crea un nuevo objeto SOLO para el
 // último mensaje (los anteriores conservan su referencia), así que con props
 // estables (onRegenerate/onQuote/canRegenerate) solo re-renderiza el mensaje
@@ -1113,13 +1149,7 @@ const MessageBubble = memo(function MessageBubble({
         {message.images && message.images.length > 0 && (
           <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
             {message.images.map((img, i) => (
-              <img
-                key={i}
-                src={img.previewUrl}
-                alt={img.name}
-                loading="lazy"
-                className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
-              />
+              <UserImagePreview key={i} image={img} />
             ))}
           </div>
         )}
@@ -2509,7 +2539,11 @@ export default function ChatModern() {
             sessionId={session.sessionId}
             tokensUsed={headerTokensUsed}
             tokensMax={headerTokensMax}
-            title={activeTitle ?? undefined}
+            title={
+          activeTitle
+            ? sanitizeSessionLabel(activeTitle) || undefined
+            : undefined
+        }
             onTokensClick={handleTokensClick}
             tokensRef={tokensButtonRef}
           />

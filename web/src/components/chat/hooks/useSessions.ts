@@ -86,30 +86,58 @@ const TOXIC_TITLE_PATTERNS = [
 
 const MAX_TITLE_LENGTH = 50;
 
+const IMAGE_INTERNAL_NOTE_RE =
+  /^\s*\[The user attached an image(?: but analysis failed\.|:\n[\s\S]*?)\]\s*/i;
+
+const IMAGE_INTERNAL_HINT_RE =
+  /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
+
+const IMAGE_URL_PATH_RE = /image_url:\s*([^\]\n\r]+)/i;
+
+export function sanitizeSessionLabel(
+  raw: string | null | undefined,
+  fallbackForImage = "Imagen adjunta",
+): string {
+  let cleaned = String(raw ?? "");
+  const hadImageInternal =
+    IMAGE_INTERNAL_NOTE_RE.test(cleaned) ||
+    IMAGE_INTERNAL_HINT_RE.test(cleaned) ||
+    IMAGE_URL_PATH_RE.test(cleaned);
+
+  cleaned = cleaned
+    .replace(IMAGE_INTERNAL_NOTE_RE, "")
+    .replace(IMAGE_INTERNAL_HINT_RE, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned && hadImageInternal) return fallbackForImage;
+  return cleaned;
+}
+
 function cleanTitle(raw: string): string {
-  const cleaned = raw.replace(/\s+/g, " ").trim();
+  const cleaned = sanitizeSessionLabel(raw);
   if (!cleaned) return "";
   if (cleaned.length <= MAX_TITLE_LENGTH) return cleaned;
   return cleaned.slice(0, MAX_TITLE_LENGTH - 1).trimEnd() + "…";
 }
 
 function isToxic(text: string): boolean {
-  const trimmed = text.trim();
+  const trimmed = sanitizeSessionLabel(text, "").trim();
   if (!trimmed) return true;
   return TOXIC_TITLE_PATTERNS.some((p) => p.test(trimmed));
 }
 
 export function deriveTitle(session: SessionSummary): string {
   const titleRaw = session.title ?? "";
-  if (titleRaw && !isToxic(titleRaw)) {
+  if (titleRaw) {
     const cleaned = cleanTitle(titleRaw);
-    if (cleaned) return cleaned;
+    if (cleaned && !isToxic(cleaned)) return cleaned;
   }
 
   const previewRaw = session.preview ?? "";
-  if (previewRaw && !isToxic(previewRaw)) {
+  if (previewRaw) {
     const cleaned = cleanTitle(previewRaw);
-    if (cleaned) return cleaned;
+    if (cleaned && !isToxic(cleaned)) return cleaned;
   }
 
   const shortId = (session.id ?? "").slice(0, 8) || "?";
