@@ -2217,9 +2217,26 @@ export default function ChatModern() {
     );
 
     setOptimisticSessions((prev) => {
+      const now = Date.now() / 1000;
+      const optimisticGraceSeconds = 90;
+
       const next = prev.filter((item) => {
+        // Si ya existe persistida en REST, la fila optimista sobra.
         if (persistedIds.has(item.id)) return false;
-        return liveIds.has(item.id);
+
+        // Si sigue siendo la sesión activa/viva/visual, conservar.
+        if (liveIds.has(item.id)) return true;
+
+        // optimistic-stored-session-grace-v2
+        // En chats nuevos, el sidebar usa storedSessionId desde session.create,
+        // pero /api/sessions puede tardar unos segundos en devolver esa fila
+        // después del primer prompt. Si cambiamos de chat justo en esa ventana,
+        // no debemos ocultarla: parece que "desapareció" hasta recargar.
+        const startedAt =
+          typeof item.started_at === "number" ? item.started_at : now;
+        const ageSeconds = now - startedAt;
+
+        return ageSeconds < optimisticGraceSeconds;
       });
 
       return next.length === prev.length ? prev : next;
@@ -2402,16 +2419,19 @@ export default function ChatModern() {
 
     try {
       queue.clear();
-      const newId = await createSession(projectId);
-      if (newId) {
+      const created = await createSession(projectId);
+      if (created) {
+        const liveId = created.sessionId;
+        const storedId = created.storedSessionId || liveId;
+
         const project = projectId
           ? projects.find((p) => p.id === projectId) ?? null
           : null;
 
-        setVisualActiveSessionId(newId);
+        setVisualActiveSessionId(storedId);
         setOptimisticSessions((prev) => [
           {
-            id: newId,
+            id: storedId,
             title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
             preview: "",
             source: "dashboard",
@@ -2423,13 +2443,19 @@ export default function ChatModern() {
             project_name: project?.name ?? null,
             project_archived: false,
           } as (typeof sessions)[number],
-          ...prev.filter((s) => s.id !== newId),
+          ...prev.filter((s) => s.id !== storedId),
         ]);
 
         // projectId is passed to session.create so the gateway can persist it
         // when the first real prompt creates the DB row. Do not call the REST
         // move endpoint here: empty live drafts do not have a DB row yet.
-        await switchSession(newId, { assumeLive: true });
+        //
+        // new-chat-stored-session-contract-v1:
+        // liveId es para prompt.submit; storedId es para sidebar/historial.
+        await switchSession(liveId, {
+          assumeLive: true,
+          sessionKey: storedId,
+        });
 
         // Refresh Slim v1:
         // La sesión ya aparece por render optimista y createSession() reconcilia

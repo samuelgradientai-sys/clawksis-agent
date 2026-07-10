@@ -205,7 +205,10 @@ interface UseChatGatewayResult {
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
   readyForRpc: boolean;
   /** Cambiar a otra sesión: muestra el historial al instante y resume en 2do plano. */
-  switchSession: (targetId: string, options?: { assumeLive?: boolean }) => Promise<void>;
+  switchSession: (
+    targetId: string,
+    options?: { assumeLive?: boolean; sessionKey?: string | null },
+  ) => Promise<void>;
   /** true mientras se resume una sesión (el agente se está construyendo). */
   resuming: boolean;
   /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
@@ -334,10 +337,24 @@ export function useChatGateway(): UseChatGatewayResult {
       case "gateway.ready":
         break;
 
-      case "session.info":
+      case "session.info": {
+        const liveId = evtSid || liveSidRef.current || null;
+        const storedId = (payload.session_id as string | undefined) ?? null;
+
+        if (liveId) {
+          liveSidRef.current = liveId;
+        }
+
+        if (storedId && (!selectedKeyRef.current || selectedKeyRef.current === liveId)) {
+          selectedKeyRef.current = storedId;
+        }
+
         setSession((prev) => ({
           ...prev,
-          sessionId: (payload.session_id as string) ?? prev.sessionId,
+          // sessionId es operativo: debe seguir siendo el live sid del gateway.
+          sessionId: liveId ?? prev.sessionId,
+          // sessionKey es visual/persistido: se usa para sidebar/historial.
+          sessionKey: storedId ?? prev.sessionKey,
           model: (payload.model as string) ?? prev.model,
           modelProvider:
             (payload.model_provider as string) ?? prev.modelProvider,
@@ -345,6 +362,7 @@ export function useChatGateway(): UseChatGatewayResult {
           tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
         }));
         break;
+      }
 
       case "message.start": {
         setMessages((prev) => {
@@ -1009,14 +1027,24 @@ export function useChatGateway(): UseChatGatewayResult {
 
   const switchSeqRef = useRef(0);
   const switchSession = useCallback(
-    async (targetId: string, options?: { assumeLive?: boolean }): Promise<void> => {
+    async (
+      targetId: string,
+      options?: { assumeLive?: boolean; sessionKey?: string | null },
+    ): Promise<void> => {
       if (!targetId) return;
+
+      const assumeLive = Boolean(options?.assumeLive);
+      const visualKey = (options?.sessionKey || targetId).trim();
+
       const currentKey = selectedKeyRef.current || liveSidRef.current;
       if (currentKey && messagesRef.current.length > 0) {
         sessionMessagesCacheRef.current.set(currentKey, messagesRef.current);
       }
 
-      const cachedMessages = sessionMessagesCacheRef.current.get(targetId);
+      const cachedMessages =
+        sessionMessagesCacheRef.current.get(visualKey) ??
+        sessionMessagesCacheRef.current.get(targetId);
+
       const mySeq = ++switchSeqRef.current;
       setMessages(cachedMessages ? [...cachedMessages] : []);
       setBusy(false);
@@ -1024,19 +1052,18 @@ export function useChatGateway(): UseChatGatewayResult {
       setErrorMessage(null);
       // Mostrar ya el header/asociación de la sesión; el composer queda
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
-      // Provisional hasta que el resume devuelva el sid vivo: alcanza para que
-      // el filtro de handleEvent descarte los eventos de la conversación anterior.
-      const assumeLive = Boolean(options?.assumeLive);
-      // Para sesiones históricas, targetId es solo la clave visual/persistida.
-      // NO debe usarse como sessionId operativo hasta que session.resume
-      // confirme un liveSid. Si lo usamos antes y resume falla, prompt.submit
-      // termina en 4007 y la UI queda con un pensamiento colgado.
+      //
+      // new-chat-stored-session-contract-v1:
+      // targetId es el ID vivo del gateway cuando assumeLive=true.
+      // visualKey/sessionKey es el ID persistido de SQLite para sidebar/historial.
+      // En sesiones históricas, targetId ya es el ID persistido y session.resume
+      // debe devolver el liveSid antes de habilitar prompt.submit.
       liveSidRef.current = assumeLive ? targetId : "";
-      selectedKeyRef.current = targetId;
+      selectedKeyRef.current = visualKey;
       setSession((prev) => ({
         ...prev,
         sessionId: assumeLive ? targetId : null,
-        sessionKey: targetId,
+        sessionKey: visualKey,
         model: null,
         modelProvider: null,
         tokensUsed: 0,

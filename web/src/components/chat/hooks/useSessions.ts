@@ -39,6 +39,13 @@ export type RpcSender = (
   params?: Record<string, unknown>,
 ) => Promise<unknown>;
 
+export interface CreatedChatSession {
+  /** ID vivo/operativo del gateway. Se usa para prompt.submit. */
+  sessionId: string;
+  /** ID persistido/real de SQLite. Se usa para sidebar/historial. */
+  storedSessionId: string;
+}
+
 interface UseSessionsResult {
   sessions: SessionSummary[];
   projects: ChatProject[];
@@ -48,7 +55,7 @@ interface UseSessionsResult {
   projectsError: string | null;
   refresh: () => Promise<void>;
   refreshProjects: () => Promise<void>;
-  createSession: (projectId?: string | null) => Promise<string | null>;
+  createSession: (projectId?: string | null) => Promise<CreatedChatSession | null>;
   deleteSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<ChatProject | null>;
@@ -210,7 +217,7 @@ export function useSessions(
     void refreshProjects();
   }, [ready, refresh, refreshProjects]);
 
-  const createSession = useCallback(async (projectId: string | null = null): Promise<string | null> => {
+  const createSession = useCallback(async (projectId: string | null = null): Promise<CreatedChatSession | null> => {
     if (!ready) return null;
     try {
       const cleanProjectId = projectId?.trim() || null;
@@ -222,16 +229,27 @@ export function useSessions(
         params.project_id = cleanProjectId;
       }
 
-      const res = (await sendRpc("session.create", params)) as { session_id?: string };
-      const newId = res?.session_id ?? null;
-      if (newId) {
+      const res = (await sendRpc("session.create", params)) as {
+        session_id?: string;
+        stored_session_id?: string;
+      };
+
+      const liveId = res?.session_id ?? null;
+      const storedId = res?.stored_session_id ?? liveId;
+
+      if (liveId && storedId) {
         // No bloquear la creación visual del chat esperando refrescos.
-        // ChatModern ya pinta la sesión de forma optimista y hace refresh
-        // después del switch; estos refrescos quedan como reconciliación.
+        // ChatModern pinta la sesión de forma optimista usando storedId y
+        // switchSession usa liveId como ID operativo del gateway.
         void refresh();
         void refreshProjects();
+        return {
+          sessionId: liveId,
+          storedSessionId: storedId,
+        };
       }
-      return newId;
+
+      return null;
     } catch (err) {
       console.error("[useSessions] session.create failed", err);
       setError(err instanceof Error ? err.message : "Failed to create session");
