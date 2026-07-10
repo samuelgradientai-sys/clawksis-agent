@@ -72,7 +72,7 @@ def has_xai_credentials() -> bool:
 
         return bool(str(access_token or "").strip())
 
-    except Exception:
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
         return False
 
 
@@ -97,7 +97,7 @@ def get_env_value(name: str, default=None):
         if value is not None:
             return value
 
-    except Exception:
+    except (ImportError, OSError, AttributeError):
         pass
 
     return os.environ.get(name, default)
@@ -109,7 +109,7 @@ def clawk_xai_user_agent() -> str:
     try:
         from clawk_cli import __version__
 
-    except Exception:
+    except (ImportError, AttributeError):
         __version__ = "unknown"
 
     return f"Clawksis/{__version__}"
@@ -163,7 +163,7 @@ def resolve_xai_http_credentials(*, force_refresh: bool = False) -> Dict[str, st
                     "base_url": base_url or "https://api.x.ai/v1",
                 }
 
-        except Exception:
+        except (ImportError, AttributeError, KeyError, TypeError):
             pass
 
     try:
@@ -182,7 +182,7 @@ def resolve_xai_http_credentials(*, force_refresh: bool = False) -> Dict[str, st
                 "base_url": base_url or "https://api.x.ai/v1",
             }
 
-    except Exception:
+    except (ImportError, OSError, KeyError, TypeError):
         pass
 
     api_key = str(get_env_value("XAI_API_KEY") or "").strip()
