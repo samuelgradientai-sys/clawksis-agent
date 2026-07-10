@@ -1410,6 +1410,25 @@ function CitationChip({
   );
 }
 
+function modelLikelyNeedsVisionTool(model: string | null): boolean {
+  const normalized = (model ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  // Modelos conocidos como text-only en el routing actual. No bloqueamos el
+  // envío; solo avisamos que, sin vision/OpenRouter o un modelo multimodal, la
+  // imagen puede quedar adjunta pero no analizada.
+  return [
+    "deepseek",
+    "gpt-oss",
+    "glm-5",
+    "glm-4.7",
+    "qwen3-coder",
+    "qwen3-32b",
+    "qwen3-235b",
+    "minimax-m2",
+  ].some((needle) => normalized.includes(needle));
+}
+
 interface ComposerProps {
   busy: boolean;
   disabled: boolean;
@@ -1474,6 +1493,8 @@ function Composer({
     error: imgError,
   } = useImageAttachments(sendRpc, sessionId);
   const [dragging, setDragging] = useState(false);
+  const imageVisionWarning =
+    images.length > 0 && modelLikelyNeedsVisionTool(currentModel);
 
   // Pegar / soltar: imágenes → adjunto de imagen (upload + image.attach);
   // documentos de texto → adjunto inline (useAttachments).
@@ -1687,6 +1708,18 @@ function Composer({
         <div className="mb-2 flex items-center gap-2 rounded border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 px-2 py-1 text-xs text-muted-foreground">
           <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
           <span>Procesando imagen…</span>
+        </div>
+      )}
+
+      {imageVisionWarning && (
+        <div className="mb-2 flex items-start gap-2 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+          <AlertCircle className="mt-0.5 size-3 shrink-0" />
+          <span>
+            El modelo actual{currentModel ? ` (${currentModel})` : ""} puede no
+            analizar imágenes en este chat. La imagen quedará adjunta, pero para
+            verla necesitas activar vision/OpenRouter o cambiar a un modelo con
+            entrada de imagen.
+          </span>
         </div>
       )}
 
