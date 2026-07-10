@@ -1440,6 +1440,7 @@ function Composer({
     addImage,
     removeImage,
     clear: clearImages,
+    uploading: imagesUploading,
     error: imgError,
   } = useImageAttachments(sendRpc, sessionId);
   const [dragging, setDragging] = useState(false);
@@ -1489,6 +1490,7 @@ function Composer({
       citations.length > 0 ||
       images.length > 0) &&
     !disabled &&
+    !imagesUploading &&
     !blockedByImagesWhileBusy;
 
   useEffect(() => {
@@ -1633,6 +1635,11 @@ function Composer({
                 title={img.name}
                 className="size-14 rounded-md border border-border object-cover"
               />
+              {img.status === "uploading" && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-background/70 backdrop-blur-sm">
+                  <Loader2 className="size-4 animate-spin text-[#6C4FD6]" />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
@@ -1643,6 +1650,13 @@ function Composer({
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {imagesUploading && (
+        <div className="mb-2 flex items-center gap-2 rounded border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 px-2 py-1 text-xs text-muted-foreground">
+          <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+          <span>Procesando imagen…</span>
         </div>
       )}
 

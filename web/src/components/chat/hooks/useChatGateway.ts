@@ -52,6 +52,31 @@ export interface ChatMessage {
 const RESUME_NOTE_RE =
   /^\s*\[(?:session resumed|a previous request|please finish)[^\]]*\]\s*/i;
 
+// Bloques internos que el gateway agrega para que el modelo pueda resolver
+// imágenes vía vision_analyze. Son útiles para el modelo, pero NO deben
+// mostrarse como texto visible del usuario al rehidratar session.history.
+const IMAGE_INTERNAL_NOTE_RE =
+  /^\s*\[The user attached an image(?: but analysis failed\.|:\n[\s\S]*?)\]\s*/i;
+
+const IMAGE_INTERNAL_HINT_RE =
+  /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
+
+function sanitizeUserHistoryContent(content: string): string {
+  let next = content.replace(RESUME_NOTE_RE, "");
+  const hadImageInternalNote = IMAGE_INTERNAL_NOTE_RE.test(next);
+
+  next = next.replace(IMAGE_INTERNAL_NOTE_RE, "");
+  next = next.replace(IMAGE_INTERNAL_HINT_RE, "");
+  next = next.trimStart();
+
+  // Si el turno era solo una imagen sin texto, no dejemos la burbuja vacía.
+  if (hadImageInternalNote && !next.trim()) {
+    return "Imagen adjunta";
+  }
+
+  return next;
+}
+
 /** Reconstruye ChatMessages COMPLETOS desde session.history: los mensajes
  *  role:"tool" del gateway se adjuntan como toolCalls (desplegables de pasos)
  *  al assistant de su turno, y el razonamiento persistido viaja en
@@ -78,7 +103,7 @@ export function mapHistoryMessages(
     }
     if (role !== "user" && role !== "assistant") return;
     let content = String((m.text as string) ?? (m.content as string) ?? "");
-    if (role === "user") content = content.replace(RESUME_NOTE_RE, "");
+    if (role === "user") content = sanitizeUserHistoryContent(content);
     const reasoningRaw =
       (typeof m.reasoning === "string" && m.reasoning) ||
       (typeof m.reasoning_content === "string" && m.reasoning_content) ||
