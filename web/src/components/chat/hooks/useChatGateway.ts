@@ -937,8 +937,15 @@ export function useChatGateway(): UseChatGatewayResult {
             text: msg,
           }).catch((err) => {
             console.error("[useChatGateway] prompt.submit failed", err);
+            const raw =
+              err instanceof Error ? err.message : "Failed to send message";
+            const normalized = raw.replace(/^\d+:\s*/, "");
+            setLiveStatus(null);
+            setBusy(false);
             setErrorMessage(
-              err instanceof Error ? err.message : "Failed to send message",
+              /4007|session not found/i.test(raw)
+                ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
+                : normalized,
             );
           });
         };
@@ -975,10 +982,16 @@ export function useChatGateway(): UseChatGatewayResult {
         text,
       }).catch((err) => {
         console.error("[useChatGateway] prompt.submit failed", err);
+        const raw =
+          err instanceof Error ? err.message : "Failed to send message";
+        const normalized = raw.replace(/^\d+:\s*/, "");
         setErrorMessage(
-          err instanceof Error ? err.message : "Failed to send message",
+          /4007|session not found/i.test(raw)
+            ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
+            : normalized,
         );
-        // El submit falló (p.ej. 4009 session busy): liberamos para no colgar.
+        setLiveStatus(null);
+        // El submit falló (p.ej. 4007/4009): liberamos para no colgar.
         setBusy(false);
       });
     },
@@ -1013,11 +1026,16 @@ export function useChatGateway(): UseChatGatewayResult {
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
       // Provisional hasta que el resume devuelva el sid vivo: alcanza para que
       // el filtro de handleEvent descarte los eventos de la conversación anterior.
-      liveSidRef.current = targetId;
+      const assumeLive = Boolean(options?.assumeLive);
+      // Para sesiones históricas, targetId es solo la clave visual/persistida.
+      // NO debe usarse como sessionId operativo hasta que session.resume
+      // confirme un liveSid. Si lo usamos antes y resume falla, prompt.submit
+      // termina en 4007 y la UI queda con un pensamiento colgado.
+      liveSidRef.current = assumeLive ? targetId : "";
       selectedKeyRef.current = targetId;
       setSession((prev) => ({
         ...prev,
-        sessionId: targetId,
+        sessionId: assumeLive ? targetId : null,
         sessionKey: targetId,
         model: null,
         modelProvider: null,
@@ -1222,8 +1240,21 @@ export function useChatGateway(): UseChatGatewayResult {
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
         if (mySeq === switchSeqRef.current) {
+          const raw =
+            err instanceof Error ? err.message : "Failed to switch session";
+          const normalized = raw.replace(/^\d+:\s*/, "");
+          liveSidRef.current = "";
+          setBusy(false);
+          setLiveStatus(null);
+          setSession((prev) => ({
+            ...prev,
+            sessionId: null,
+            sessionKey: targetId,
+          }));
           setErrorMessage(
-            err instanceof Error ? err.message : "Failed to switch session",
+            /4007|session not found/i.test(raw)
+              ? "No se pudo reabrir esta conversación en el gateway. Selecciónala de nuevo o crea una conversación nueva."
+              : normalized,
           );
         }
       } finally {

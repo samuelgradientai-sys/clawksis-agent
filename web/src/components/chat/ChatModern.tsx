@@ -2098,7 +2098,17 @@ export default function ChatModern() {
     writeSidebarActivityOverrides(sidebarActivityOverrides);
   }, [sidebarActivityOverrides]);
 
-  const activeSessionKey = session.sessionKey ?? session.sessionId;
+  // optimistic-id-prefer-persisted-v1
+  // Las conversaciones nuevas pueden nacer con un sessionKey temporal y luego
+  // quedar persistidas con un sessionId real. Si el real ya existe en la lista
+  // REST, debe ganar sobre el temporal para evitar ghosts 4007 en el sidebar.
+  const liveSessionIdIsPersisted =
+    !!session.sessionId && sessions.some((s) => s.id === session.sessionId);
+
+  const activeSessionKey = liveSessionIdIsPersisted
+    ? session.sessionId
+    : session.sessionKey ?? session.sessionId;
+
   const sessionIdExistsInSidebar =
     !!activeSessionKey && sidebarSessions.some((s) => s.id === activeSessionKey);
 
@@ -2143,6 +2153,84 @@ export default function ChatModern() {
       setVisualActiveSessionId(activeSessionKey);
     }
   }, [visualActiveSessionId, activeSessionKey, sessions]);
+
+  // session-key-reconcile-v1
+  // Una conversación nueva nace con un ID vivo/optimista del gateway. Al primer
+  // prompt, el backend puede crear/reanclar una fila persistida con un ID real
+  // distinto. Si dejamos el sidebar apuntando al ID temporal, luego al volver a
+  // esa entrada aparece 4007: session not found.
+  //
+  // Cuando detectamos que activeSessionKey ya existe en la lista persistida y el
+  // visualActiveSessionId todavía apunta a un draft optimista distinto, movemos
+  // el foco visual al ID persistido y migramos el preview/actividad.
+  useEffect(() => {
+    if (!activeSessionKey || !visualActiveSessionId) return;
+    if (visualActiveSessionId === activeSessionKey) return;
+
+    const activeIsPersisted = sessions.some((s) => s.id === activeSessionKey);
+    const visualIsOptimistic = optimisticSessions.some(
+      (s) => s.id === visualActiveSessionId,
+    );
+
+    if (!activeIsPersisted || !visualIsOptimistic) return;
+
+    setVisualActiveSessionId(activeSessionKey);
+
+    setOptimisticSessions((prev) =>
+      prev.filter(
+        (s) => s.id !== visualActiveSessionId && s.id !== activeSessionKey,
+      ),
+    );
+
+    setSidebarActivityOverrides((prev) => {
+      const source = prev[visualActiveSessionId];
+      if (!source) return prev;
+
+      const next = { ...prev };
+      delete next[visualActiveSessionId];
+
+      if (!next[activeSessionKey]) {
+        next[activeSessionKey] = source;
+      }
+
+      return next;
+    });
+  }, [
+    activeSessionKey,
+    visualActiveSessionId,
+    sessions,
+    optimisticSessions,
+  ]);
+
+  // optimistic-ghost-cleanup-v1
+  // Un draft optimista solo debe vivir mientras sea la sesión activa/viva.
+  // Si ya no está activo y tampoco existe como sesión persistida, sacarlo del
+  // sidebar evita que el usuario haga clic en una entrada que termina en 4007.
+  useEffect(() => {
+    if (optimisticSessions.length === 0) return;
+
+    const persistedIds = new Set(sessions.map((s) => s.id));
+    const liveIds = new Set(
+      [session.sessionId, session.sessionKey, visualActiveSessionId]
+        .filter(Boolean)
+        .map(String),
+    );
+
+    setOptimisticSessions((prev) => {
+      const next = prev.filter((item) => {
+        if (persistedIds.has(item.id)) return false;
+        return liveIds.has(item.id);
+      });
+
+      return next.length === prev.length ? prev : next;
+    });
+  }, [
+    optimisticSessions.length,
+    sessions,
+    session.sessionId,
+    session.sessionKey,
+    visualActiveSessionId,
+  ]);
 
   useEffect(() => {
     if (optimisticSessions.length === 0) return;
@@ -2306,44 +2394,53 @@ export default function ChatModern() {
     scrollToBottom();
   };
 
+  const creatingChatRef = useRef(false);
+
   const handleNewChat = async (projectId: string | null = null) => {
-    queue.clear();
-    const newId = await createSession(projectId);
-    if (newId) {
-      const project = projectId
-        ? projects.find((p) => p.id === projectId) ?? null
-        : null;
+    if (creatingChatRef.current) return;
+    creatingChatRef.current = true;
 
-      setVisualActiveSessionId(newId);
-      setOptimisticSessions((prev) => [
-        {
-          id: newId,
-          title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
-          preview: "",
-          source: "dashboard",
-          started_at: Date.now() / 1000,
-          message_count: 0,
-          model: session.model,
-          model_provider: session.modelProvider,
-          project_id: project?.id ?? null,
-          project_name: project?.name ?? null,
-          project_archived: false,
-        } as (typeof sessions)[number],
-        ...prev.filter((s) => s.id !== newId),
-      ]);
+    try {
+      queue.clear();
+      const newId = await createSession(projectId);
+      if (newId) {
+        const project = projectId
+          ? projects.find((p) => p.id === projectId) ?? null
+          : null;
 
-      // projectId is passed to session.create so the gateway can persist it
-      // when the first real prompt creates the DB row. Do not call the REST
-      // move endpoint here: empty live drafts do not have a DB row yet.
-      await switchSession(newId, { assumeLive: true });
+        setVisualActiveSessionId(newId);
+        setOptimisticSessions((prev) => [
+          {
+            id: newId,
+            title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
+            preview: "",
+            source: "dashboard",
+            started_at: Date.now() / 1000,
+            message_count: 0,
+            model: session.model,
+            model_provider: session.modelProvider,
+            project_id: project?.id ?? null,
+            project_name: project?.name ?? null,
+            project_archived: false,
+          } as (typeof sessions)[number],
+          ...prev.filter((s) => s.id !== newId),
+        ]);
 
-      // Refresh Slim v1:
-      // La sesión ya aparece por render optimista y createSession() reconcilia
-      // en segundo plano. Un único refresh diferido basta para recoger cambios
-      // posteriores como título/modelo cuando ya exista fila persistida.
-      window.setTimeout(() => {
-        void refreshSessions();
-      }, 1200);
+        // projectId is passed to session.create so the gateway can persist it
+        // when the first real prompt creates the DB row. Do not call the REST
+        // move endpoint here: empty live drafts do not have a DB row yet.
+        await switchSession(newId, { assumeLive: true });
+
+        // Refresh Slim v1:
+        // La sesión ya aparece por render optimista y createSession() reconcilia
+        // en segundo plano. Un único refresh diferido basta para recoger cambios
+        // posteriores como título/modelo cuando ya exista fila persistida.
+        window.setTimeout(() => {
+          void refreshSessions();
+        }, 1200);
+      }
+    } finally {
+      creatingChatRef.current = false;
     }
   };
 
