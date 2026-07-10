@@ -52,6 +52,56 @@ export interface ChatMessage {
 const RESUME_NOTE_RE =
   /^\s*\[(?:session resumed|a previous request|please finish)[^\]]*\]\s*/i;
 
+// Bloques internos que el gateway agrega para que el modelo pueda resolver
+// imágenes vía vision_analyze. Son útiles para el modelo, pero NO deben
+// mostrarse como texto visible del usuario al rehidratar session.history.
+const IMAGE_INTERNAL_NOTE_RE =
+  /^\s*\[The user attached an image(?: but analysis failed\.|:\n[\s\S]*?)\]\s*/i;
+
+const IMAGE_INTERNAL_HINT_RE =
+  /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
+
+const IMAGE_URL_PATH_RE =
+  /image_url:\s*([^\]\n\r]+)/i;
+
+function localImagePreviewUrl(path: string): string {
+  return "/media/local?path=" + encodeURIComponent(path);
+}
+
+function imageNameFromPath(path: string): string {
+  const clean = path.split(/[?#]/)[0] || "";
+  return clean.split("/").filter(Boolean).pop() || "imagen adjunta";
+}
+
+function sanitizeUserHistoryContent(content: string): {
+  content: string;
+  images?: ChatImagePreview[];
+} {
+  let next = content.replace(RESUME_NOTE_RE, "");
+  const imageMatch = next.match(IMAGE_URL_PATH_RE);
+  const imagePath = imageMatch?.[1]?.trim();
+  const hadImageInternalNote = IMAGE_INTERNAL_NOTE_RE.test(next);
+  const images = imagePath
+    ? [
+        {
+          previewUrl: localImagePreviewUrl(imagePath),
+          name: imageNameFromPath(imagePath),
+        },
+      ]
+    : undefined;
+
+  next = next.replace(IMAGE_INTERNAL_NOTE_RE, "");
+  next = next.replace(IMAGE_INTERNAL_HINT_RE, "");
+  next = next.trimStart();
+
+  // Si el turno era solo una imagen sin texto, no dejemos la burbuja vacía.
+  if (hadImageInternalNote && !next.trim()) {
+    return { content: "Imagen adjunta", images };
+  }
+
+  return { content: next, images };
+}
+
 /** Reconstruye ChatMessages COMPLETOS desde session.history: los mensajes
  *  role:"tool" del gateway se adjuntan como toolCalls (desplegables de pasos)
  *  al assistant de su turno, y el razonamiento persistido viaja en
@@ -78,7 +128,9 @@ export function mapHistoryMessages(
     }
     if (role !== "user" && role !== "assistant") return;
     let content = String((m.text as string) ?? (m.content as string) ?? "");
-    if (role === "user") content = content.replace(RESUME_NOTE_RE, "");
+    const historyImages =
+      role === "user" ? sanitizeUserHistoryContent(content) : null;
+    if (historyImages) content = historyImages.content;
     const reasoningRaw =
       (typeof m.reasoning === "string" && m.reasoning) ||
       (typeof m.reasoning_content === "string" && m.reasoning_content) ||
@@ -92,6 +144,7 @@ export function mapHistoryMessages(
       toolCalls: role === "assistant" ? pendingTools : [],
       streaming: false,
       timestamp: (m.timestamp as number) ?? base + i * 1000,
+      images: historyImages?.images,
     });
     if (role === "assistant") pendingTools = [];
   });
@@ -152,7 +205,10 @@ interface UseChatGatewayResult {
   /** true cuando es seguro usar sendRpc (WebSocket conectado) */
   readyForRpc: boolean;
   /** Cambiar a otra sesión: muestra el historial al instante y resume en 2do plano. */
-  switchSession: (targetId: string, options?: { assumeLive?: boolean }) => Promise<void>;
+  switchSession: (
+    targetId: string,
+    options?: { assumeLive?: boolean; sessionKey?: string | null },
+  ) => Promise<void>;
   /** true mientras se resume una sesión (el agente se está construyendo). */
   resuming: boolean;
   /** Regenera la última respuesta: session.undo (borra último turno user+assistant) + re-submit del último prompt. */
@@ -281,10 +337,24 @@ export function useChatGateway(): UseChatGatewayResult {
       case "gateway.ready":
         break;
 
-      case "session.info":
+      case "session.info": {
+        const liveId = evtSid || liveSidRef.current || null;
+        const storedId = (payload.session_id as string | undefined) ?? null;
+
+        if (liveId) {
+          liveSidRef.current = liveId;
+        }
+
+        if (storedId && (!selectedKeyRef.current || selectedKeyRef.current === liveId)) {
+          selectedKeyRef.current = storedId;
+        }
+
         setSession((prev) => ({
           ...prev,
-          sessionId: (payload.session_id as string) ?? prev.sessionId,
+          // sessionId es operativo: debe seguir siendo el live sid del gateway.
+          sessionId: liveId ?? prev.sessionId,
+          // sessionKey es visual/persistido: se usa para sidebar/historial.
+          sessionKey: storedId ?? prev.sessionKey,
           model: (payload.model as string) ?? prev.model,
           modelProvider:
             (payload.model_provider as string) ?? prev.modelProvider,
@@ -292,6 +362,7 @@ export function useChatGateway(): UseChatGatewayResult {
           tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
         }));
         break;
+      }
 
       case "message.start": {
         setMessages((prev) => {
@@ -884,8 +955,15 @@ export function useChatGateway(): UseChatGatewayResult {
             text: msg,
           }).catch((err) => {
             console.error("[useChatGateway] prompt.submit failed", err);
+            const raw =
+              err instanceof Error ? err.message : "Failed to send message";
+            const normalized = raw.replace(/^\d+:\s*/, "");
+            setLiveStatus(null);
+            setBusy(false);
             setErrorMessage(
-              err instanceof Error ? err.message : "Failed to send message",
+              /4007|session not found/i.test(raw)
+                ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
+                : normalized,
             );
           });
         };
@@ -922,10 +1000,16 @@ export function useChatGateway(): UseChatGatewayResult {
         text,
       }).catch((err) => {
         console.error("[useChatGateway] prompt.submit failed", err);
+        const raw =
+          err instanceof Error ? err.message : "Failed to send message";
+        const normalized = raw.replace(/^\d+:\s*/, "");
         setErrorMessage(
-          err instanceof Error ? err.message : "Failed to send message",
+          /4007|session not found/i.test(raw)
+            ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
+            : normalized,
         );
-        // El submit falló (p.ej. 4009 session busy): liberamos para no colgar.
+        setLiveStatus(null);
+        // El submit falló (p.ej. 4007/4009): liberamos para no colgar.
         setBusy(false);
       });
     },
@@ -943,14 +1027,24 @@ export function useChatGateway(): UseChatGatewayResult {
 
   const switchSeqRef = useRef(0);
   const switchSession = useCallback(
-    async (targetId: string, options?: { assumeLive?: boolean }): Promise<void> => {
+    async (
+      targetId: string,
+      options?: { assumeLive?: boolean; sessionKey?: string | null },
+    ): Promise<void> => {
       if (!targetId) return;
+
+      const assumeLive = Boolean(options?.assumeLive);
+      const visualKey = (options?.sessionKey || targetId).trim();
+
       const currentKey = selectedKeyRef.current || liveSidRef.current;
       if (currentKey && messagesRef.current.length > 0) {
         sessionMessagesCacheRef.current.set(currentKey, messagesRef.current);
       }
 
-      const cachedMessages = sessionMessagesCacheRef.current.get(targetId);
+      const cachedMessages =
+        sessionMessagesCacheRef.current.get(visualKey) ??
+        sessionMessagesCacheRef.current.get(targetId);
+
       const mySeq = ++switchSeqRef.current;
       setMessages(cachedMessages ? [...cachedMessages] : []);
       setBusy(false);
@@ -958,14 +1052,18 @@ export function useChatGateway(): UseChatGatewayResult {
       setErrorMessage(null);
       // Mostrar ya el header/asociación de la sesión; el composer queda
       // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
-      // Provisional hasta que el resume devuelva el sid vivo: alcanza para que
-      // el filtro de handleEvent descarte los eventos de la conversación anterior.
-      liveSidRef.current = targetId;
-      selectedKeyRef.current = targetId;
+      //
+      // new-chat-stored-session-contract-v1:
+      // targetId es el ID vivo del gateway cuando assumeLive=true.
+      // visualKey/sessionKey es el ID persistido de SQLite para sidebar/historial.
+      // En sesiones históricas, targetId ya es el ID persistido y session.resume
+      // debe devolver el liveSid antes de habilitar prompt.submit.
+      liveSidRef.current = assumeLive ? targetId : "";
+      selectedKeyRef.current = visualKey;
       setSession((prev) => ({
         ...prev,
-        sessionId: targetId,
-        sessionKey: targetId,
+        sessionId: assumeLive ? targetId : null,
+        sessionKey: visualKey,
         model: null,
         modelProvider: null,
         tokensUsed: 0,
@@ -1169,8 +1267,21 @@ export function useChatGateway(): UseChatGatewayResult {
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
         if (mySeq === switchSeqRef.current) {
+          const raw =
+            err instanceof Error ? err.message : "Failed to switch session";
+          const normalized = raw.replace(/^\d+:\s*/, "");
+          liveSidRef.current = "";
+          setBusy(false);
+          setLiveStatus(null);
+          setSession((prev) => ({
+            ...prev,
+            sessionId: null,
+            sessionKey: targetId,
+          }));
           setErrorMessage(
-            err instanceof Error ? err.message : "Failed to switch session",
+            /4007|session not found/i.test(raw)
+              ? "No se pudo reabrir esta conversación en el gateway. Selecciónala de nuevo o crea una conversación nueva."
+              : normalized,
           );
         }
       } finally {

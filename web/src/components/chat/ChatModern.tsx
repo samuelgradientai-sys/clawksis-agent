@@ -49,6 +49,7 @@ import { useAttachments, type Attachment } from "./hooks/useAttachments";
 import { useCitations, type Citation } from "./hooks/useCitations";
 import { useVoiceInput } from "./hooks/useVoiceInput";
 import { useImageAttachments } from "./hooks/useImageAttachments";
+import { sanitizeSessionLabel } from "./hooks/useSessions";
 import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
@@ -1017,6 +1018,41 @@ function TypingDots() {
   );
 }
 
+function UserImagePreview({
+  image,
+}: {
+  image: { previewUrl: string; name: string };
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !image.previewUrl) {
+    return (
+      <div
+        title={image.name}
+        className="flex min-h-20 w-48 max-w-[12rem] flex-col justify-center rounded-lg border border-border bg-muted/25 px-3 py-2 text-left"
+      >
+        <span className="text-xs font-semibold text-foreground">
+          Imagen adjunta
+        </span>
+        <span className="mt-1 truncate text-[11px] text-muted-foreground">
+          {image.name || "imagen"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={image.previewUrl}
+      alt={image.name}
+      title={image.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
+    />
+  );
+}
+
 // memo: durante el streaming, message.delta crea un nuevo objeto SOLO para el
 // último mensaje (los anteriores conservan su referencia), así que con props
 // estables (onRegenerate/onQuote/canRegenerate) solo re-renderiza el mensaje
@@ -1113,13 +1149,7 @@ const MessageBubble = memo(function MessageBubble({
         {message.images && message.images.length > 0 && (
           <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
             {message.images.map((img, i) => (
-              <img
-                key={i}
-                src={img.previewUrl}
-                alt={img.name}
-                loading="lazy"
-                className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
-              />
+              <UserImagePreview key={i} image={img} />
             ))}
           </div>
         )}
@@ -1380,6 +1410,25 @@ function CitationChip({
   );
 }
 
+function modelLikelyNeedsVisionTool(model: string | null): boolean {
+  const normalized = (model ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  // Modelos conocidos como text-only en el routing actual. No bloqueamos el
+  // envío; solo avisamos que, sin vision/OpenRouter o un modelo multimodal, la
+  // imagen puede quedar adjunta pero no analizada.
+  return [
+    "deepseek",
+    "gpt-oss",
+    "glm-5",
+    "glm-4.7",
+    "qwen3-coder",
+    "qwen3-32b",
+    "qwen3-235b",
+    "minimax-m2",
+  ].some((needle) => normalized.includes(needle));
+}
+
 interface ComposerProps {
   busy: boolean;
   disabled: boolean;
@@ -1440,9 +1489,12 @@ function Composer({
     addImage,
     removeImage,
     clear: clearImages,
+    uploading: imagesUploading,
     error: imgError,
   } = useImageAttachments(sendRpc, sessionId);
   const [dragging, setDragging] = useState(false);
+  const imageVisionWarning =
+    images.length > 0 && modelLikelyNeedsVisionTool(currentModel);
 
   // Pegar / soltar: imágenes → adjunto de imagen (upload + image.attach);
   // documentos de texto → adjunto inline (useAttachments).
@@ -1489,6 +1541,7 @@ function Composer({
       citations.length > 0 ||
       images.length > 0) &&
     !disabled &&
+    !imagesUploading &&
     !blockedByImagesWhileBusy;
 
   useEffect(() => {
@@ -1633,6 +1686,11 @@ function Composer({
                 title={img.name}
                 className="size-14 rounded-md border border-border object-cover"
               />
+              {img.status === "uploading" && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-background/70 backdrop-blur-sm">
+                  <Loader2 className="size-4 animate-spin text-[#6C4FD6]" />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
@@ -1643,6 +1701,25 @@ function Composer({
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {imagesUploading && (
+        <div className="mb-2 flex items-center gap-2 rounded border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 px-2 py-1 text-xs text-muted-foreground">
+          <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+          <span>Procesando imagen…</span>
+        </div>
+      )}
+
+      {imageVisionWarning && (
+        <div className="mb-2 flex items-start gap-2 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+          <AlertCircle className="mt-0.5 size-3 shrink-0" />
+          <span>
+            El modelo actual{currentModel ? ` (${currentModel})` : ""} puede no
+            analizar imágenes en este chat. La imagen quedará adjunta, pero para
+            verla necesitas activar vision/OpenRouter o cambiar a un modelo con
+            entrada de imagen.
+          </span>
         </div>
       )}
 
@@ -2021,7 +2098,17 @@ export default function ChatModern() {
     writeSidebarActivityOverrides(sidebarActivityOverrides);
   }, [sidebarActivityOverrides]);
 
-  const activeSessionKey = session.sessionKey ?? session.sessionId;
+  // optimistic-id-prefer-persisted-v1
+  // Las conversaciones nuevas pueden nacer con un sessionKey temporal y luego
+  // quedar persistidas con un sessionId real. Si el real ya existe en la lista
+  // REST, debe ganar sobre el temporal para evitar ghosts 4007 en el sidebar.
+  const liveSessionIdIsPersisted =
+    !!session.sessionId && sessions.some((s) => s.id === session.sessionId);
+
+  const activeSessionKey = liveSessionIdIsPersisted
+    ? session.sessionId
+    : session.sessionKey ?? session.sessionId;
+
   const sessionIdExistsInSidebar =
     !!activeSessionKey && sidebarSessions.some((s) => s.id === activeSessionKey);
 
@@ -2066,6 +2153,101 @@ export default function ChatModern() {
       setVisualActiveSessionId(activeSessionKey);
     }
   }, [visualActiveSessionId, activeSessionKey, sessions]);
+
+  // session-key-reconcile-v1
+  // Una conversación nueva nace con un ID vivo/optimista del gateway. Al primer
+  // prompt, el backend puede crear/reanclar una fila persistida con un ID real
+  // distinto. Si dejamos el sidebar apuntando al ID temporal, luego al volver a
+  // esa entrada aparece 4007: session not found.
+  //
+  // Cuando detectamos que activeSessionKey ya existe en la lista persistida y el
+  // visualActiveSessionId todavía apunta a un draft optimista distinto, movemos
+  // el foco visual al ID persistido y migramos el preview/actividad.
+  useEffect(() => {
+    if (!activeSessionKey || !visualActiveSessionId) return;
+    if (visualActiveSessionId === activeSessionKey) return;
+
+    const activeIsPersisted = sessions.some((s) => s.id === activeSessionKey);
+    const visualIsOptimistic = optimisticSessions.some(
+      (s) => s.id === visualActiveSessionId,
+    );
+
+    if (!activeIsPersisted || !visualIsOptimistic) return;
+
+    setVisualActiveSessionId(activeSessionKey);
+
+    setOptimisticSessions((prev) =>
+      prev.filter(
+        (s) => s.id !== visualActiveSessionId && s.id !== activeSessionKey,
+      ),
+    );
+
+    setSidebarActivityOverrides((prev) => {
+      const source = prev[visualActiveSessionId];
+      if (!source) return prev;
+
+      const next = { ...prev };
+      delete next[visualActiveSessionId];
+
+      if (!next[activeSessionKey]) {
+        next[activeSessionKey] = source;
+      }
+
+      return next;
+    });
+  }, [
+    activeSessionKey,
+    visualActiveSessionId,
+    sessions,
+    optimisticSessions,
+  ]);
+
+  // optimistic-ghost-cleanup-v1
+  // Un draft optimista solo debe vivir mientras sea la sesión activa/viva.
+  // Si ya no está activo y tampoco existe como sesión persistida, sacarlo del
+  // sidebar evita que el usuario haga clic en una entrada que termina en 4007.
+  useEffect(() => {
+    if (optimisticSessions.length === 0) return;
+
+    const persistedIds = new Set(sessions.map((s) => s.id));
+    const liveIds = new Set(
+      [session.sessionId, session.sessionKey, visualActiveSessionId]
+        .filter(Boolean)
+        .map(String),
+    );
+
+    setOptimisticSessions((prev) => {
+      const now = Date.now() / 1000;
+      const optimisticGraceSeconds = 90;
+
+      const next = prev.filter((item) => {
+        // Si ya existe persistida en REST, la fila optimista sobra.
+        if (persistedIds.has(item.id)) return false;
+
+        // Si sigue siendo la sesión activa/viva/visual, conservar.
+        if (liveIds.has(item.id)) return true;
+
+        // optimistic-stored-session-grace-v2
+        // En chats nuevos, el sidebar usa storedSessionId desde session.create,
+        // pero /api/sessions puede tardar unos segundos en devolver esa fila
+        // después del primer prompt. Si cambiamos de chat justo en esa ventana,
+        // no debemos ocultarla: parece que "desapareció" hasta recargar.
+        const startedAt =
+          typeof item.started_at === "number" ? item.started_at : now;
+        const ageSeconds = now - startedAt;
+
+        return ageSeconds < optimisticGraceSeconds;
+      });
+
+      return next.length === prev.length ? prev : next;
+    });
+  }, [
+    optimisticSessions.length,
+    sessions,
+    session.sessionId,
+    session.sessionKey,
+    visualActiveSessionId,
+  ]);
 
   useEffect(() => {
     if (optimisticSessions.length === 0) return;
@@ -2229,44 +2411,62 @@ export default function ChatModern() {
     scrollToBottom();
   };
 
+  const creatingChatRef = useRef(false);
+
   const handleNewChat = async (projectId: string | null = null) => {
-    queue.clear();
-    const newId = await createSession(projectId);
-    if (newId) {
-      const project = projectId
-        ? projects.find((p) => p.id === projectId) ?? null
-        : null;
+    if (creatingChatRef.current) return;
+    creatingChatRef.current = true;
 
-      setVisualActiveSessionId(newId);
-      setOptimisticSessions((prev) => [
-        {
-          id: newId,
-          title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
-          preview: "",
-          source: "dashboard",
-          started_at: Date.now() / 1000,
-          message_count: 0,
-          model: session.model,
-          model_provider: session.modelProvider,
-          project_id: project?.id ?? null,
-          project_name: project?.name ?? null,
-          project_archived: false,
-        } as (typeof sessions)[number],
-        ...prev.filter((s) => s.id !== newId),
-      ]);
+    try {
+      queue.clear();
+      const created = await createSession(projectId);
+      if (created) {
+        const liveId = created.sessionId;
+        const storedId = created.storedSessionId || liveId;
 
-      // projectId is passed to session.create so the gateway can persist it
-      // when the first real prompt creates the DB row. Do not call the REST
-      // move endpoint here: empty live drafts do not have a DB row yet.
-      await switchSession(newId, { assumeLive: true });
+        const project = projectId
+          ? projects.find((p) => p.id === projectId) ?? null
+          : null;
 
-      // Refresh Slim v1:
-      // La sesión ya aparece por render optimista y createSession() reconcilia
-      // en segundo plano. Un único refresh diferido basta para recoger cambios
-      // posteriores como título/modelo cuando ya exista fila persistida.
-      window.setTimeout(() => {
-        void refreshSessions();
-      }, 1200);
+        setVisualActiveSessionId(storedId);
+        setOptimisticSessions((prev) => [
+          {
+            id: storedId,
+            title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
+            preview: "",
+            source: "dashboard",
+            started_at: Date.now() / 1000,
+            message_count: 0,
+            model: session.model,
+            model_provider: session.modelProvider,
+            project_id: project?.id ?? null,
+            project_name: project?.name ?? null,
+            project_archived: false,
+          } as (typeof sessions)[number],
+          ...prev.filter((s) => s.id !== storedId),
+        ]);
+
+        // projectId is passed to session.create so the gateway can persist it
+        // when the first real prompt creates the DB row. Do not call the REST
+        // move endpoint here: empty live drafts do not have a DB row yet.
+        //
+        // new-chat-stored-session-contract-v1:
+        // liveId es para prompt.submit; storedId es para sidebar/historial.
+        await switchSession(liveId, {
+          assumeLive: true,
+          sessionKey: storedId,
+        });
+
+        // Refresh Slim v1:
+        // La sesión ya aparece por render optimista y createSession() reconcilia
+        // en segundo plano. Un único refresh diferido basta para recoger cambios
+        // posteriores como título/modelo cuando ya exista fila persistida.
+        window.setTimeout(() => {
+          void refreshSessions();
+        }, 1200);
+      }
+    } finally {
+      creatingChatRef.current = false;
     }
   };
 
@@ -2495,7 +2695,11 @@ export default function ChatModern() {
             sessionId={session.sessionId}
             tokensUsed={headerTokensUsed}
             tokensMax={headerTokensMax}
-            title={activeTitle ?? undefined}
+            title={
+          activeTitle
+            ? sanitizeSessionLabel(activeTitle) || undefined
+            : undefined
+        }
             onTokensClick={handleTokensClick}
             tokensRef={tokensButtonRef}
           />

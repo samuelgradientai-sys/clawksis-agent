@@ -39,6 +39,13 @@ export type RpcSender = (
   params?: Record<string, unknown>,
 ) => Promise<unknown>;
 
+export interface CreatedChatSession {
+  /** ID vivo/operativo del gateway. Se usa para prompt.submit. */
+  sessionId: string;
+  /** ID persistido/real de SQLite. Se usa para sidebar/historial. */
+  storedSessionId: string;
+}
+
 interface UseSessionsResult {
   sessions: SessionSummary[];
   projects: ChatProject[];
@@ -48,7 +55,7 @@ interface UseSessionsResult {
   projectsError: string | null;
   refresh: () => Promise<void>;
   refreshProjects: () => Promise<void>;
-  createSession: (projectId?: string | null) => Promise<string | null>;
+  createSession: (projectId?: string | null) => Promise<CreatedChatSession | null>;
   deleteSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<ChatProject | null>;
@@ -86,30 +93,58 @@ const TOXIC_TITLE_PATTERNS = [
 
 const MAX_TITLE_LENGTH = 50;
 
+const IMAGE_INTERNAL_NOTE_RE =
+  /^\s*\[The user attached an image(?: but analysis failed\.|:\n[\s\S]*?)\]\s*/i;
+
+const IMAGE_INTERNAL_HINT_RE =
+  /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
+
+const IMAGE_URL_PATH_RE = /image_url:\s*([^\]\n\r]+)/i;
+
+export function sanitizeSessionLabel(
+  raw: string | null | undefined,
+  fallbackForImage = "Imagen adjunta",
+): string {
+  let cleaned = String(raw ?? "");
+  const hadImageInternal =
+    IMAGE_INTERNAL_NOTE_RE.test(cleaned) ||
+    IMAGE_INTERNAL_HINT_RE.test(cleaned) ||
+    IMAGE_URL_PATH_RE.test(cleaned);
+
+  cleaned = cleaned
+    .replace(IMAGE_INTERNAL_NOTE_RE, "")
+    .replace(IMAGE_INTERNAL_HINT_RE, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned && hadImageInternal) return fallbackForImage;
+  return cleaned;
+}
+
 function cleanTitle(raw: string): string {
-  const cleaned = raw.replace(/\s+/g, " ").trim();
+  const cleaned = sanitizeSessionLabel(raw);
   if (!cleaned) return "";
   if (cleaned.length <= MAX_TITLE_LENGTH) return cleaned;
   return cleaned.slice(0, MAX_TITLE_LENGTH - 1).trimEnd() + "…";
 }
 
 function isToxic(text: string): boolean {
-  const trimmed = text.trim();
+  const trimmed = sanitizeSessionLabel(text, "").trim();
   if (!trimmed) return true;
   return TOXIC_TITLE_PATTERNS.some((p) => p.test(trimmed));
 }
 
 export function deriveTitle(session: SessionSummary): string {
   const titleRaw = session.title ?? "";
-  if (titleRaw && !isToxic(titleRaw)) {
+  if (titleRaw) {
     const cleaned = cleanTitle(titleRaw);
-    if (cleaned) return cleaned;
+    if (cleaned && !isToxic(cleaned)) return cleaned;
   }
 
   const previewRaw = session.preview ?? "";
-  if (previewRaw && !isToxic(previewRaw)) {
+  if (previewRaw) {
     const cleaned = cleanTitle(previewRaw);
-    if (cleaned) return cleaned;
+    if (cleaned && !isToxic(cleaned)) return cleaned;
   }
 
   const shortId = (session.id ?? "").slice(0, 8) || "?";
@@ -182,7 +217,7 @@ export function useSessions(
     void refreshProjects();
   }, [ready, refresh, refreshProjects]);
 
-  const createSession = useCallback(async (projectId: string | null = null): Promise<string | null> => {
+  const createSession = useCallback(async (projectId: string | null = null): Promise<CreatedChatSession | null> => {
     if (!ready) return null;
     try {
       const cleanProjectId = projectId?.trim() || null;
@@ -194,16 +229,27 @@ export function useSessions(
         params.project_id = cleanProjectId;
       }
 
-      const res = (await sendRpc("session.create", params)) as { session_id?: string };
-      const newId = res?.session_id ?? null;
-      if (newId) {
+      const res = (await sendRpc("session.create", params)) as {
+        session_id?: string;
+        stored_session_id?: string;
+      };
+
+      const liveId = res?.session_id ?? null;
+      const storedId = res?.stored_session_id ?? liveId;
+
+      if (liveId && storedId) {
         // No bloquear la creación visual del chat esperando refrescos.
-        // ChatModern ya pinta la sesión de forma optimista y hace refresh
-        // después del switch; estos refrescos quedan como reconciliación.
+        // ChatModern pinta la sesión de forma optimista usando storedId y
+        // switchSession usa liveId como ID operativo del gateway.
         void refresh();
         void refreshProjects();
+        return {
+          sessionId: liveId,
+          storedSessionId: storedId,
+        };
       }
-      return newId;
+
+      return null;
     } catch (err) {
       console.error("[useSessions] session.create failed", err);
       setError(err instanceof Error ? err.message : "Failed to create session");
