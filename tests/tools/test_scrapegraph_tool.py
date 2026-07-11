@@ -52,7 +52,7 @@ def test_schema_shape():
 
     assert SCRAPEGRAPH_SCHEMA["name"] == "scrapegraph"
     props = SCRAPEGRAPH_SCHEMA["parameters"]["properties"]
-    assert {"url", "urls", "prompt", "output_schema", "render_js"} <= set(props)
+    assert {"url", "urls", "prompt", "output_schema", "render_js", "timeout"} <= set(props)
     assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == ["url"]
 
 
@@ -178,6 +178,198 @@ def test_handler_runtime_error(monkeypatch):
     assert res["ok"] is False
     # Handler classifies errors — "LLM exploded" maps to generic fallback
     assert "model overload" in res["error"] or "extraction failed" in res["error"]
+
+
+# ── URL normalisation ───────────────────────────────────────────────────────
+
+
+def test_normalize_urls_empty():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    assert _normalize_urls({}) == []
+
+
+def test_normalize_urls_scheme_default():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"url": "example.com/page"})
+    assert out == ["https://example.com/page"]
+
+
+def test_normalize_urls_https_preserved():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"url": "https://site.com"})
+    assert out == ["https://site.com"]
+
+
+def test_normalize_urls_dedup():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"url": "https://a.com", "urls": ["https://a.com", "https://b.com"]})
+    assert out == ["https://a.com", "https://b.com"]
+
+
+def test_normalize_urls_order_preserved():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"url": "https://z.com", "urls": ["https://a.com", "https://m.com"]})
+    assert out == ["https://z.com", "https://a.com", "https://m.com"]
+
+
+def test_normalize_urls_empty_strings_in_list():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"urls": ["https://a.com", "", "  ", "https://b.com"]})
+    assert out == ["https://a.com", "https://b.com"]
+
+
+def test_normalize_urls_mixed_scheme():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({"url": "http://old.site.com"})
+    assert out == ["http://old.site.com"]
+
+
+# ── Timeout clamping ─────────────────────────────────────────────────────────
+
+
+def test_timeout_default_when_missing(monkeypatch):
+    """No timeout arg → handler passes timeout=None to extractor."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert captured["timeout"] is None
+
+
+def test_timeout_clamps_to_min_10(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "timeout": 3}))
+    assert captured["timeout"] == 10
+
+
+def test_timeout_clamps_to_max_300(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "timeout": 999}))
+    assert captured["timeout"] == 300
+
+
+def test_timeout_invalid_value_falls_back_to_none(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "timeout": "not-a-number"}))
+    assert captured["timeout"] is None
+
+
+def test_timeout_honors_valid_value(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "timeout": 120}))
+    assert captured["timeout"] == 120
+
+
+# ── Error classification ─────────────────────────────────────────────────────
+
+
+def _fake_extract_raising(msg):
+    """Return a mock extract_structured that raises RuntimeError(msg)."""
+
+    async def _fake(*a, **k):
+        raise RuntimeError(msg)
+
+    return _fake
+
+
+def test_handler_error_x_display(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    monkeypatch.setattr(
+        "tools.scrapegraph_tool.extract_structured",
+        _fake_extract_raising("Missing X server or $DISPLAY"),
+    )
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert "display server" in res["error"] or "render_js=false" in res["error"]
+
+
+def test_handler_error_unauthorized(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    monkeypatch.setattr(
+        "tools.scrapegraph_tool.extract_structured",
+        _fake_extract_raising("401 Unauthorized - no api key"),
+    )
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert "not authenticated" in res["error"] or "credentials" in res["error"]
+
+
+def test_handler_error_rate_limit(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    monkeypatch.setattr(
+        "tools.scrapegraph_tool.extract_structured",
+        _fake_extract_raising("429 Too Many Requests: rate_limit exceeded"),
+    )
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert "rate-limited" in res["error"] or "rate limit" in res["error"]
+
+
+def test_handler_error_invalid_json(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    monkeypatch.setattr(
+        "tools.scrapegraph_tool.extract_structured",
+        _fake_extract_raising("Invalid json output from LLM"),
+    )
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert "malformed" in res["error"] or "specific prompt" in res["error"]
+
+
+def test_handler_error_generic_fallback(monkeypatch):
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    monkeypatch.setattr(
+        "tools.scrapegraph_tool.extract_structured",
+        _fake_extract_raising("Something completely unexpected happened"),
+    )
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert "extraction failed" in res["error"] or "network error" in res["error"]
 
 
 # ── web_extract backend ─────────────────────────────────────────────────────
