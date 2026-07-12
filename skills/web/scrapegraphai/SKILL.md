@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.2"
+version: "1.4"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -53,7 +53,7 @@ python -m playwright install chromium  # only needed for JS-heavy pages
 | `prompt` | string | "Extract main content" | What to extract in plain language |
 | `output_schema` | object | optional | JSON Schema for forcing the output shape |
 | `render_js` | boolean | `true` | Render JavaScript with headless browser. ⚠️ On headless servers, NEVER set `false` — crashes (headed mode needs X server). Omit or set `true`. |
-| `timeout` | integer | `60` | Max seconds for the LLM extraction (min 10, max 300). Increase for large pages. |
+| `timeout` | integer | `none` | Max seconds for the LLM extraction (min 10, max 300, clamped). Increase for large pages with many data points; set it to fail fast on slow models. Without it, extraction runs with no deadline. |
 
 ## ❗ Critical: `render_js` and headless mode
 
@@ -94,7 +94,6 @@ def _patch_langchain_community() -> None:
     except ImportError:
         return
     import langchain_community.chat_models as _lm
-
     if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
         _lm.ChatOllama = _ChatOllama_
 ```
@@ -110,8 +109,6 @@ The LLM config is built from the agent's **auxiliary text client** — the same 
 - The config sends `"openai/<model>"` format + custom `base_url` via langchain's `ChatOpenAI`
 - Falls back to `OPENAI_API_KEY` or `OPENROUTER_API_KEY` env vars if auxiliary client isn't available
 - Falls back to `gpt-4o-mini` as model if nothing is configured
-
-**⚠️ If no API key is found at all, a warning is logged.** The extraction will fail with an auth error — check `auxiliary_text` model credentials or set `OPENAI_API_KEY`/`OPENROUTER_API_KEY`.
 
 ### 3. LLM cost
 
@@ -137,29 +134,42 @@ uv run pytest tests/tools/test_scrapegraph_tool.py -v
 ```
 
 Tests cover:
-- Tool registration + schema shape
+- Tool registration + schema shape (including ``timeout`` parameter)
 - LLM config builder (auxiliary client, env fallback)
 - `_coerce_schema` helper — None, dict, valid/invalid JSON strings, non-string types
-- `_normalize_urls` — scheme normalisation, dedup, empty input
-- Handler success/error/unavailable paths (single + multi-URL)
-- Web extract backend (per-URL error isolation, result shaping)
+- `_normalize_urls` — 7 tests: empty input, scheme default, https preserved,
+  dedup, order preservation, empty-string filtering, mixed scheme
+- Timeout clamping — min 10s, max 300s, invalid → None, valid value passes through
+- Error classification — 5 branches: X server, auth/401, rate-limit/429,
+  invalid-JSON parsing, generic fallback
+- **Shared ``classify_scrapegraph_error()``** — 6 tests: all 5 branches + TimeoutError generic fallback
+- Handler success/error/unavailable paths (single + multi-URL), including
+  TimeoutError handling introduced in v1.3
+- Web extract backend (per-URL error isolation, result shaping, **error classification**,
+  **timeout passthrough + clamping**)
 - Backend prioritisation (scrapegraph vs 3rd-party)
 
-### 6. LLM not available / authentication errors
+### 6. Error classification (shared — tool + backend)
 
-Since commit `cb5a6c7f`, errors are **classified** into 5 categories and surfaced
-as clean, actionable messages instead of raw exception dumps:
+Since commit `cb5a6c7f`, errors are **classified** by the shared function
+``tools.scrapegraph_common.classify_scrapegraph_error()`` into 6 categories
+and surfaced as clean, actionable messages instead of raw exception dumps.
+Both the native ``scrapegraph`` tool **and** the ``web_extract`` backend
+use this classifier (v1.4), so error messages are consistent regardless of
+which surface calls scrapegraphai:
 
 | Error pattern | What the agent sees |
 |---|---|
 | No display server / `render_js=false` | "No display server. Omit `render_js` or set it to `true`." |
 | HTTP 401 / Unauthorized | "Check auxiliary_text model credentials, or set OPENAI_API_KEY." |
 | HTTP 429 / RateLimitError | "Model is rate-limited. Retry later or switch models." |
+| TimeoutError (`asyncio.wait_for`) | "The LLM extraction timed out. Increase the `timeout` parameter or try a simpler prompt." |
 | Invalid JSON output / parse failure | "Try a more specific prompt or use the `scrape` tool." |
 | Any other error | Generic safe message — no paths or exception internals leaked. |
 
-📎 See `references/error-classifier.md` for the full classification table and
-test coverage details.
+The provider also now respects the ``timeout`` parameter from ``web_extract`` kwargs (v1.4).
+If ``web_extract`` passes a ``timeout``, it's clamped to [10, 300] and forwarded to
+``extract_structured()``.
 
 ### 7. ✅ `except Exception:` narrowing — complete
 
@@ -190,7 +200,8 @@ ensure_installed()  # Triggers the ChatOllama patch
 result = asyncio.run(extract_structured(
     "https://example.com",
     "Extract the main heading and description",
-    headless=True  # ← MUST be True on headless servers
+    headless=True,  # ← MUST be True on headless servers
+    timeout=120,    # ← optional, cancels after 120s
 ))
 print(result)
 ```
@@ -200,7 +211,8 @@ Or via the tool itself:
 ```json
 {
   "url": "https://example.com",
-  "prompt": "Extract the main heading and description text"
+  "prompt": "Extract the main heading and description text",
+  "timeout": 120
 }
 ```
 
@@ -216,7 +228,7 @@ Expected output (with `render_js` omitted or `true`):
 
 | File | Purpose |
 |---|---|
-| `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners |
-| `tools/scrapegraph_tool.py` | Agent tool registration + handler |
-| `plugins/web/scrapegraphai/provider.py` | `web_extract` backend |
-| `tests/tools/test_scrapegraph_tool.py` | Tests (18 tests, all pass) |
+| `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners, error classifier |
+| `tools/scrapegraph_tool.py` | Agent tool registration + handler (uses shared classifier) |
+| `plugins/web/scrapegraphai/provider.py` | `web_extract` backend (shared classifier + timeout passthrough) |
+| `tests/tools/test_scrapegraph_tool.py` | Tests (44 tests, all pass) |
