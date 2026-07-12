@@ -81,7 +81,11 @@ class ScrapegraphWebProvider(WebSearchProvider):
         }
 
     async def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
-        from tools.scrapegraph_common import ScrapegraphUnavailable, extract_structured
+        from tools.scrapegraph_common import (
+            ScrapegraphUnavailable,
+            classify_scrapegraph_error,
+            extract_structured,
+        )
 
         try:
             from tools.interrupt import is_interrupted
@@ -90,13 +94,24 @@ class ScrapegraphWebProvider(WebSearchProvider):
             def is_interrupted() -> bool:
                 return False
 
+        # Extract configurable timeout from kwargs (passed by web_extract).
+        raw_timeout = kwargs.get("timeout")
+        timeout: int | None = None
+        if raw_timeout is not None:
+            try:
+                timeout = max(10, min(300, int(raw_timeout)))
+            except (ValueError, TypeError):
+                timeout = None
+
         results: List[Dict[str, Any]] = []
         for url in urls:
             if is_interrupted():
                 results.append({"url": url, "title": "", "error": "Interrupted"})
                 continue
             try:
-                data = await extract_structured(url, _EXTRACT_PROMPT, headless=True)
+                data = await extract_structured(
+                    url, _EXTRACT_PROMPT, headless=True, timeout=timeout
+                )
                 content = _stringify(data)
                 results.append({
                     "url": url,
@@ -118,6 +133,6 @@ class ScrapegraphWebProvider(WebSearchProvider):
                     "url": url,
                     "title": "",
                     "content": "",
-                    "error": str(exc),
+                    "error": classify_scrapegraph_error(exc),
                 })
         return results

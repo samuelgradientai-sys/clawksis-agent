@@ -176,6 +176,73 @@ def _run_multi(sources: Any, prompt: str, schema: Any, config: dict) -> Any:
     return SmartScraperMultiGraph(**kwargs).run()
 
 
+def classify_scrapegraph_error(exc: Exception) -> str:
+    """Return a user-friendly error hint based on the exception type/message.
+
+    Classifies extraction errors into 5 categories (X server, auth, rate-limit,
+    parsing, generic) so callers can surface actionable messages instead of raw
+    exception dumps. Both the native tool handler and the web-extract backend
+    use this for consistent user-facing errors.
+
+    The classification is based on keyword matching of the lowercased exception
+    string — no internal paths or sensitive details are leaked.
+    """
+    exc_msg = str(exc).lower()
+
+    # 1) Browser/headless — no X server or headed mode on headless server
+    if any(
+        kw in exc_msg
+        for kw in (
+            "missing x server",
+            "headed browser",
+            "browsertype.launch",
+            "x display",
+            "xserver",
+        )
+    ):
+        return (
+            "ScrapeGraphAI attempted to launch a headed browser but there "
+            "is no display server. Happens when `render_js=false` on a "
+            "headless server. Omit `render_js` or set it to `true`."
+        )
+    # 2) Auth / credential errors
+    if any(
+        kw in exc_msg
+        for kw in ("401", "authenticationerror", "unauthorized", "no api key")
+    ):
+        return (
+            "The LLM model used by ScrapeGraphAI is not authenticated. "
+            "Check auxiliary_text model credentials, or set "
+            "OPENAI_API_KEY / OPENROUTER_API_KEY in the environment."
+        )
+    # 3) Rate limit
+    if any(
+        kw in exc_msg
+        for kw in ("429", "ratelimiterror", "rate_limit", "too many requests")
+    ):
+        return (
+            "The model is rate-limited. Retry later or configure a "
+            "different model with higher rate limits."
+        )
+    # 4) Output parsing (LLM returned bad JSON)
+    if any(
+        kw in exc_msg
+        for kw in ("invalid json output", "output_parsing_failure", "parsing")
+    ):
+        return (
+            "The LLM returned malformed output. Try a more specific "
+            "prompt with fewer fields, or use the `scrape` tool "
+            "(Scrapling) for raw page content instead."
+        )
+    # 5) Generic fallback — safe, no internal details leaked
+    return (
+        "ScrapeGraphAI extraction failed. Could be a network error, "
+        "model overload, or page issue. Try: using `scrape` "
+        "(Scrapling) for raw content, a different URL, "
+        "or a more specific prompt."
+    )
+
+
 async def extract_structured(
     source: Any,
     prompt: str,

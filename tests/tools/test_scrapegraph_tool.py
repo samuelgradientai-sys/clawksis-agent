@@ -372,6 +372,40 @@ def test_handler_error_generic_fallback(monkeypatch):
     assert "extraction failed" in res["error"] or "network error" in res["error"]
 
 
+# ── Shared error classifier ─────────────────────────────────────────────────
+
+
+def test_classify_x_display():
+    hint = sgc.classify_scrapegraph_error(RuntimeError("Missing X server"))
+    assert "display server" in hint
+
+
+def test_classify_auth():
+    hint = sgc.classify_scrapegraph_error(RuntimeError("401 Unauthorized"))
+    assert "not authenticated" in hint
+
+
+def test_classify_rate_limit():
+    hint = sgc.classify_scrapegraph_error(RuntimeError("429 RateLimitError"))
+    assert "rate-limited" in hint
+
+
+def test_classify_invalid_json():
+    hint = sgc.classify_scrapegraph_error(RuntimeError("Invalid json output from LLM"))
+    assert "malformed" in hint
+
+
+def test_classify_generic():
+    hint = sgc.classify_scrapegraph_error(RuntimeError("Something weird"))
+    assert "extraction failed" in hint
+
+
+def test_classify_timeout_error():
+    """TimeoutError (asyncio.TimeoutError) should fall through to generic."""
+    hint = sgc.classify_scrapegraph_error(TimeoutError("timed out"))
+    assert "extraction failed" in hint
+
+
 # ── web_extract backend ─────────────────────────────────────────────────────
 
 
@@ -386,7 +420,7 @@ def test_backend_is_extract_only():
 def test_backend_extract_shapes_results(monkeypatch):
     p = ScrapegraphWebProvider()
 
-    async def _fake(source, prompt, *, schema=None, headless=True):
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
         return {"content": f"# Page {source}"}
 
     monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _fake)
@@ -397,15 +431,45 @@ def test_backend_extract_shapes_results(monkeypatch):
 
 
 def test_backend_extract_per_url_error(monkeypatch):
+    """Provider errors are classified (not raw str(exc))."""
     p = ScrapegraphWebProvider()
 
     async def _boom(*a, **k):
-        raise RuntimeError("boom")
+        raise RuntimeError("Missing X server or $DISPLAY")
 
     monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _boom)
     out = _run(p.extract(["https://a.com"]))
-    assert out[0]["error"] == "boom"
+    assert "display server" in out[0]["error"]
+    assert "boom" not in out[0]["error"]
     assert out[0]["content"] == ""
+
+
+def test_backend_extract_timeout_passthrough(monkeypatch):
+    """Provider passes timeout from kwargs to extract_structured."""
+    p = ScrapegraphWebProvider()
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"content": "ok"}
+
+    monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _fake)
+    _run(p.extract(["https://a.com"], timeout=120))
+    assert captured["timeout"] == 120
+
+
+def test_backend_extract_timeout_clamps(monkeypatch):
+    """Timeout is clamped to [10, 300] before reaching extract_structured."""
+    p = ScrapegraphWebProvider()
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["timeout"] = timeout
+        return {"content": "ok"}
+
+    monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _fake)
+    _run(p.extract(["https://a.com"], timeout=999))
+    assert captured["timeout"] == 300
 
 
 def test_stringify_prefers_known_keys():
