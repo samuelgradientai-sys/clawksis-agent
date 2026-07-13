@@ -179,13 +179,14 @@ def _run_multi(sources: Any, prompt: str, schema: Any, config: dict) -> Any:
 def classify_scrapegraph_error(exc: Exception) -> str:
     """Return a user-friendly error hint based on the exception type/message.
 
-    Classifies extraction errors into 5 categories (X server, auth, rate-limit,
-    parsing, generic) so callers can surface actionable messages instead of raw
-    exception dumps. Both the native tool handler and the web-extract backend
-    use this for consistent user-facing errors.
+    Classifies extraction errors into 6 categories (X server, auth, rate-limit,
+    timeout, parsing, generic) so callers can surface actionable messages
+    instead of raw exception dumps. Both the native tool handler and the
+    web-extract backend use this for consistent user-facing errors.
 
-    The classification is based on keyword matching of the lowercased exception
-    string — no internal paths or sensitive details are leaked.
+    The classification is based on type checking (isinstance) for built-in
+    exception types and keyword matching of the lowercased exception string
+    for everything else — no internal paths or sensitive details are leaked.
     """
     exc_msg = str(exc).lower()
 
@@ -224,7 +225,14 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "The model is rate-limited. Retry later or configure a "
             "different model with higher rate limits."
         )
-    # 4) Output parsing (LLM returned bad JSON)
+    # 4) TimeoutError — LLM extraction took too long (asyncio.wait_for)
+    if isinstance(exc, TimeoutError):
+        return (
+            "The LLM extraction timed out. This can happen on large pages "
+            "or when the model is slow. Increase the `timeout` parameter "
+            "(max 300s) or try a simpler prompt."
+        )
+    # 5) Output parsing (LLM returned bad JSON)
     if any(
         kw in exc_msg
         for kw in ("invalid json output", "output_parsing_failure", "parsing")
@@ -234,7 +242,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "prompt with fewer fields, or use the `scrape` tool "
             "(Scrapling) for raw page content instead."
         )
-    # 5) Generic fallback — safe, no internal details leaked
+    # 6) Generic fallback — safe, no internal details leaked
     return (
         "ScrapeGraphAI extraction failed. Could be a network error, "
         "model overload, or page issue. Try: using `scrape` "

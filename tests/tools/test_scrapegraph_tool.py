@@ -401,9 +401,12 @@ def test_classify_generic():
 
 
 def test_classify_timeout_error():
-    """TimeoutError (asyncio.TimeoutError) should fall through to generic."""
+    """TimeoutError (asyncio.TimeoutError) is classified specifically now."""
     hint = sgc.classify_scrapegraph_error(TimeoutError("timed out"))
-    assert "extraction failed" in hint
+    assert "timed out" in hint
+    assert "Increase" in hint
+    assert "timeout" in hint.lower()
+    assert "simpler" in hint
 
 
 # ── web_extract backend ─────────────────────────────────────────────────────
