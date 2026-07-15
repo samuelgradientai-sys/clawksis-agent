@@ -183,6 +183,9 @@ def _run_one(
             )
         except subprocess.TimeoutExpired:
             return False, "", f"timed out after {timeout_s}s"
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            logger.warning("scrape: subprocess error for %s (%s)", url, exc)
+            return False, "", f"subprocess error: {exc}"
         content = ""
         try:
             content = Path(out_path).read_text(encoding="utf-8", errors="replace")

@@ -568,6 +568,21 @@ class TestHandleScrape:
         assert res["ok"] is False
         assert "timed" in res["error"]
 
+    def test_subprocess_oserror_handled(self, monkeypatch):
+        """An OSError from subprocess.run should be caught by _run_one."""
+        import subprocess
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+
+        def _raising_run(*a, **k):
+            raise OSError("Permission denied")
+
+        monkeypatch.setattr(subprocess, "run", _raising_run)
+
+        res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
+        assert res["ok"] is False
+        assert "subprocess error" in res["error"] or "Permission" in res["error"]
+
     def test_attempts_tracked_in_result(self, monkeypatch):
         """Result includes attempts list showing each mode+status tried."""
         calls = []
