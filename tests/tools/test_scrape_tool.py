@@ -299,7 +299,13 @@ class TestRegistration:
             "css_selector",
             "wait_selector",
             "proxy",
+            "timeout",
         } <= set(props)
+        # timeout has min/max constraints
+        t = props["timeout"]
+        assert t["type"] == "integer"
+        assert t["minimum"] == 10
+        assert t["maximum"] == 300
         assert SCRAPE_SCHEMA["parameters"]["required"] == ["url"]
 
 
@@ -601,3 +607,126 @@ class TestHandleScrape:
         assert len(res["attempts"]) == 2
         assert "get" in res["attempts"][0]
         assert "fetch" in res["attempts"][1]
+
+    def test_timeout_passed_to_run_one(self, monkeypatch):
+        """User-provided timeout should be forwarded to _run_one."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 120,
+        }))
+        assert captured["timeout"] == 120
+
+    def test_timeout_below_min_uses_default(self, monkeypatch):
+        """timeout < 10 should fall back to per-mode defaults."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 3,  # below minimum
+        }))
+        # Default for 'get' mode is 45
+        assert captured["timeout"] == 45
+
+    def test_timeout_above_max_uses_default(self, monkeypatch):
+        """timeout > 300 should fall back to per-mode defaults."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 999,  # above maximum
+        }))
+        assert captured["timeout"] == 45  # default for 'get'
+
+    def test_timeout_non_int_uses_default(self, monkeypatch):
+        """Non-integer timeout values should fall back to defaults."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": "sixty",  # not an int
+        }))
+        assert captured["timeout"] == 45  # default for 'get'
+
+    def test_timeout_at_min_boundary(self, monkeypatch):
+        """timeout exactly at minimum (10) should be accepted."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 10,
+        }))
+        assert captured["timeout"] == 10
+
+    def test_timeout_at_max_boundary(self, monkeypatch):
+        """timeout exactly at maximum (300) should be accepted."""
+        captured = {"timeout": None}
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured["timeout"] = timeout
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 300,
+        }))
+        assert captured["timeout"] == 300
+
+    def test_timeout_used_across_ladder(self, monkeypatch):
+        """When timeout is set, it applies to ALL ladder modes, not just get."""
+        captured = []
+
+        def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
+            captured.append((subcmd, timeout))
+            return (True, OK_CONTENT, "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", capturing_run)
+
+        # force mode=fetch to skip the 'get' default-time path entirely
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "mode": "fetch",
+            "timeout": 150,
+        }))
+        assert len(captured) == 1
+        assert captured[0] == ("fetch", 150)

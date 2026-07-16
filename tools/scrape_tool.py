@@ -173,6 +173,14 @@ def _run_one(
             cmd += ["--proxy", proxy]
         if wait_selector and subcmd != "get":
             cmd += ["--wait-selector", wait_selector]
+        # Pass the timeout to the scrapling CLI as well. For browser modes
+        # (fetch / stealthy-fetch), the CLI expects milliseconds; for `get`,
+        # the CLI expects seconds (both default to 30s/30000ms).
+        if timeout_s:
+            if subcmd == "get":
+                cmd += ["--timeout", str(timeout_s)]
+            else:
+                cmd += ["--timeout", str(timeout_s * 1000)]
         # stealthy-fetch can auto-solve Cloudflare interstitials, but the flag
         # defaults off — turn it on since this tool exists to beat anti-bot.
         if subcmd == "stealthy-fetch":
@@ -217,6 +225,13 @@ async def _handle_scrape(args, **kw):
     wait_selector = (args.get("wait_selector") or "").strip() or None
     proxy = _resolve_proxy((args.get("proxy") or "").strip() or None)
 
+    # User-provided timeout per-mode override. Clamped to [10, 300].
+    user_timeout = args.get("timeout")
+    if isinstance(user_timeout, int) and 10 <= user_timeout <= 300:
+        pass  # valid, use as-is for both subprocess and per-mode base
+    else:
+        user_timeout = None  # use per-mode defaults
+
     base = _scrapling_cmd()
     if base is None:
         return tool_result(
@@ -238,7 +253,8 @@ async def _handle_scrape(args, **kw):
     for m in ladder:
         subcmd = _MODE_TO_SUBCMD[m]
         # Browser modes get a longer budget than the fast HTTP `get`.
-        timeout_s = 45 if subcmd == "get" else 90
+        # User-provided timeout overrides the per-mode default.
+        timeout_s = user_timeout if user_timeout is not None else (45 if subcmd == "get" else 90)
         ran_ok, content, stderr = await asyncio.to_thread(
             _run_one,
             base,
@@ -353,6 +369,17 @@ SCRAPE_SCHEMA = {
                 "description": (
                     "Optional proxy URL (http://user:pass@host:port). Overrides "
                     "the SCRAPLING_PROXY env var / config for this call."
+                ),
+            },
+            "timeout": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 300,
+                "description": (
+                    "Max seconds for each mode attempt (min 10, max 300). "
+                    "Without this, the tool uses per-mode defaults (45s for "
+                    "HTTP `get`, 90s for browser modes). Increase for slow "
+                    "pages or when the scrapling CLI needs more time."
                 ),
             },
         },
