@@ -398,6 +398,7 @@ You already had a good glimpse of what the library can do. Use the references be
 - `references/spiders` - Everything you need to write spiders, proxy rotation, and advanced features. It follows a Scrapy-like format
 - `references/migrating_from_beautifulsoup.md` - A quick API comparison between scrapling and Beautifulsoup
 - `references/reddit-archives.md` - Using pullpush.io as a Reddit archive proxy when Reddit blocks direct scraping
+- `references/directory-lead-scraping.md` — Scraping Latin American business directories (Páginas Amarillas, Nexdu, etc.) for phone/WhatsApp lead generation. Covers Colombian phone patterns, per-directory quirks, and pitfalls.
 - `https://github.com/D4Vinci/Scrapling/tree/main/docs` - Full official docs in Markdown for quick access (use only if current references do not look up-to-date).
 
 This skill encapsulates almost all the published documentation in Markdown, so don't check external sources or search online without the user's permission.
