@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -730,3 +731,515 @@ class TestHandleScrape:
         }))
         assert len(captured) == 1
         assert captured[0] == ("fetch", 150)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# _run_one — low-level subprocess execution
+# ═══════════════════════════════════════════════════════════════════════
+#
+# _run_one is the bridge between the tool handler and the Scrapling CLI.
+# It assembles the command, runs subprocess, reads the temp-file output,
+# and cleans up. All of these paths are tested here with mocked stdlib so
+# no real scrapling binary is needed.
+
+
+class TestRunOne:
+    """Direct tests for _run_one command assembly and error handling."""
+
+    def test_basic_get_command(self, monkeypatch):
+        """A basic 'get' command includes --ai-targeted and no browser flags."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is True
+        assert content == "# Hello"
+        # Check the actual command that would be executed
+        cmd = calls[0]
+        assert cmd[:3] == ["scrapling", "extract", "get"]
+        assert "https://example.com" in cmd
+        assert "--ai-targeted" in cmd
+        # Cleanup was called
+        assert "unlink:/tmp/fake.md" in calls
+
+    def test_fetch_mode_command(self, monkeypatch):
+        """'fetch' mode builds the right subcommand."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "fetch", "https://example.com",
+                     ".md", None, None, None, 90)
+        cmd = calls[0]
+        assert cmd[2] == "fetch"  # subcommand is 'fetch'
+
+    def test_stealthy_with_cloudflare_solver(self, monkeypatch):
+        """stealthy-fetch should include --solve-cloudflare."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "stealthy-fetch", "https://example.com",
+                     ".md", None, None, None, 90)
+        cmd = calls[0]
+        assert cmd[2] == "stealthy-fetch"
+        assert "--solve-cloudflare" in cmd
+
+    def test_css_selector_included(self, monkeypatch):
+        """--css-selector should be in the command when provided."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".md", "article.main", None, None, 30)
+        cmd = calls[0]
+        assert "--css-selector" in cmd
+        assert cmd[cmd.index("--css-selector") + 1] == "article.main"
+
+    def test_wait_selector_not_in_get_mode(self, monkeypatch):
+        """wait_selector should NOT be added for 'get' mode (no browser)."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".md", None, ".loaded", None, 30)
+        cmd = calls[0]
+        assert "--wait-selector" not in cmd
+
+    def test_wait_selector_in_fetch_mode(self, monkeypatch):
+        """wait_selector SHOULD be added for browser modes (fetch)."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "fetch", "https://example.com",
+                     ".md", None, ".loaded", None, 90)
+        cmd = calls[0]
+        assert "--wait-selector" in cmd
+        assert cmd[cmd.index("--wait-selector") + 1] == ".loaded"
+
+    def test_proxy_in_command(self, monkeypatch):
+        """--proxy flag should be passed when proxy is set."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".md", None, None, "http://user:pass@proxy:8080", 30)
+        cmd = calls[0]
+        assert "--proxy" in cmd
+        assert cmd[cmd.index("--proxy") + 1] == "http://user:pass@proxy:8080"
+
+    def test_timeout_get_mode_seconds(self, monkeypatch):
+        """For 'get' mode, timeout is passed as seconds (integer)."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".md", None, None, None, 45)
+        cmd = calls[0]
+        idx = cmd.index("--timeout")
+        # For 'get' mode, the value is seconds (45)
+        assert cmd[idx + 1] == "45"
+
+    def test_timeout_fetch_mode_milliseconds(self, monkeypatch):
+        """For browser modes, timeout is passed as milliseconds (value * 1000)."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(["scrapling"], "stealthy-fetch", "https://example.com",
+                     ".md", None, None, None, 90)
+        cmd = calls[0]
+        idx = cmd.index("--timeout")
+        # For browser modes, the value is milliseconds (90 * 1000 = 90000)
+        assert cmd[idx + 1] == "90000"
+
+    def test_content_read_error_returns_false(self, monkeypatch):
+        """If the output file can't be read, the result should be (False, '', '')."""
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: None)
+
+        def _fake_run(cmd, **kw):
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+
+        def _read_fail(*a, **k):
+            raise OSError("No such file")
+
+        monkeypatch.setattr(st.Path, "read_text", _read_fail)
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert content == ""
+
+    def test_subprocess_timeout_returns_false(self, monkeypatch):
+        """subprocess.TimeoutExpired should be caught and return (False, '', msg)."""
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: None)
+
+        def _timeout_run(cmd, **kw):
+            raise st.subprocess.TimeoutExpired(cmd=cmd, timeout=30, output="")
+
+        monkeypatch.setattr(st.subprocess, "run", _timeout_run)
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert content == ""
+        assert "timed out" in stderr
+
+    def test_subprocess_oserror_returns_false(self, monkeypatch):
+        """An OSError from subprocess.run should be caught gracefully."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(
+            st.os, "unlink", lambda p: calls.append(f"unlink:{p}")
+        )
+
+        def _boom_run(cmd, **kw):
+            raise OSError("Permission denied")
+
+        monkeypatch.setattr(st.subprocess, "run", _boom_run)
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert content == ""
+        assert "subprocess error" in stderr or "Permission" in stderr
+
+    def test_temp_file_cleaned_up_on_success(self, monkeypatch):
+        """Temp file should be unlinked after successful extraction."""
+        unlinked = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/scrape_test.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(
+            st.os, "unlink", lambda p: unlinked.append(p)
+        )
+
+        def _fake_run(cmd, **kw):
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert "/tmp/scrape_test.md" in unlinked
+
+    def test_temp_file_cleaned_up_on_subprocess_error(self, monkeypatch):
+        """Temp file should be unlinked even when subprocess raises."""
+        unlinked = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/scrape_test.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(
+            st.os, "unlink", lambda p: unlinked.append(p)
+        )
+
+        def _boom_run(cmd, **kw):
+            raise OSError("Broken pipe")
+
+        monkeypatch.setattr(st.subprocess, "run", _boom_run)
+
+        st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert "/tmp/scrape_test.md" in unlinked
+
+    def test_explicit_zero_timeout_omits_flag(self, monkeypatch):
+        """When timeout_s is 0 (falsy), --timeout should NOT be in the command.
+
+        Edge case: if the caller passes 0, the 'if timeout_s:' guard skips
+        the flag entirely. Real callers always pass >= 10, but the guard
+        is a belt-and-suspenders safety net.
+        """
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
+
+        st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 0,
+        )
+        cmd = calls[0]
+        assert "--timeout" not in cmd
+
+    def test_nonzero_exit_code_with_content_is_not_ok(self, monkeypatch):
+        """When scrapling exits nonzero, ran_ok should be False."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            return SimpleNamespace(returncode=1, stderr="something broke")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "partial content")
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert content == "partial content"
+        assert "something broke" in stderr
+
+    def test_empty_content_nonzero_exit(self, monkeypatch):
+        """Empty content + nonzero exit → ran_ok=False."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            return SimpleNamespace(returncode=1, stderr="error msg")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert content == ""
+        assert "error msg" in stderr
+
+    def test_subprocess_valueerror_returns_false(self, monkeypatch):
+        """A ValueError from subprocess.run should be caught gracefully."""
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: None)
+
+        def _boom_run(cmd, **kw):
+            raise ValueError("Invalid mode")
+
+        monkeypatch.setattr(st.subprocess, "run", _boom_run)
+
+        ran_ok, content, stderr = st._run_one(
+            ["scrapling"], "get", "https://example.com",
+            ".md", None, None, None, 30,
+        )
+        assert ran_ok is False
+        assert "subprocess error" in stderr
+
+    def test_text_extension_format(self, monkeypatch):
+        """A .txt extension should be passed through."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.txt")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "plain text")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".txt", None, None, None, 30)
+        cmd = calls[0]
+        # The temp file suffix becomes part of the output path
+        assert any(".txt" in arg for arg in cmd if arg.startswith("/tmp/"))
+
+    def test_html_extension_format(self, monkeypatch):
+        """An .html extension should be passed through."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.html")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "<html></html>")
+
+        st._run_one(["scrapling"], "get", "https://example.com",
+                     ".html", None, None, None, 30)
+        cmd = calls[0]
+        assert any(".html" in arg for arg in cmd if arg.startswith("/tmp/"))
