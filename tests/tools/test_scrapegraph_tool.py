@@ -231,6 +231,49 @@ def test_normalize_urls_mixed_scheme():
     assert out == ["http://old.site.com"]
 
 
+# ── clamp_timeout helper ─────────────────────────────────────────────────────
+
+
+def test_clamp_timeout_none():
+    assert sgc.clamp_timeout(None) is None
+
+
+def test_clamp_timeout_valid():
+    assert sgc.clamp_timeout(120) == 120
+    assert sgc.clamp_timeout(10) == 10
+    assert sgc.clamp_timeout(300) == 300
+
+
+def test_clamp_timeout_clamps_min():
+    assert sgc.clamp_timeout(3) == 10
+    assert sgc.clamp_timeout(0) == 10
+    assert sgc.clamp_timeout(-5) == 10
+
+
+def test_clamp_timeout_clamps_max():
+    assert sgc.clamp_timeout(999) == 300
+    assert sgc.clamp_timeout(500) == 300
+
+
+def test_clamp_timeout_string():
+    assert sgc.clamp_timeout("120") == 120
+    assert sgc.clamp_timeout("3") == 10
+    assert sgc.clamp_timeout("999") == 300
+
+
+def test_clamp_timeout_invalid():
+    assert sgc.clamp_timeout("not-a-number") is None
+    assert sgc.clamp_timeout([]) is None
+    assert sgc.clamp_timeout({}) is None
+
+
+def test_clamp_timeout_float():
+    """Float is truncated to int via int()."""
+    assert sgc.clamp_timeout(45.7) == 45
+    assert sgc.clamp_timeout(12.1) == 12
+    assert sgc.clamp_timeout(9.9) == 10  # clamped up
+
+
 # ── Timeout clamping ─────────────────────────────────────────────────────────
 
 

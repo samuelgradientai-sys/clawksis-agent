@@ -83,6 +83,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
     async def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
         from tools.scrapegraph_common import (
             ScrapegraphUnavailable,
+            clamp_timeout,
             classify_scrapegraph_error,
             extract_structured,
         )
@@ -96,12 +97,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
 
         # Extract configurable timeout from kwargs (passed by web_extract).
         raw_timeout = kwargs.get("timeout")
-        timeout: int | None = None
-        if raw_timeout is not None:
-            try:
-                timeout = max(10, min(300, int(raw_timeout)))
-            except (ValueError, TypeError):
-                timeout = None
+        timeout = clamp_timeout(raw_timeout)
 
         results: List[Dict[str, Any]] = []
         for url in urls:

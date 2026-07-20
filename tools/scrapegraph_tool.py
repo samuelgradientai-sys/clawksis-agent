@@ -25,6 +25,7 @@ from typing import Any
 from tools.registry import registry, tool_result
 from tools.scrapegraph_common import (
     ScrapegraphUnavailable,
+    clamp_timeout,
     classify_scrapegraph_error,
     extract_many,
     extract_structured,
@@ -82,12 +83,7 @@ async def _handle_scrapegraph(args, **kw):
     render_js = args.get("render_js")
     headless = True if render_js is None else bool(render_js)
     raw_timeout = args.get("timeout")
-    timeout: int | None = None
-    if raw_timeout is not None:
-        try:
-            timeout = max(10, min(300, int(raw_timeout)))
-        except (ValueError, TypeError):
-            timeout = None
+    timeout = clamp_timeout(raw_timeout)
 
     try:
         if len(urls) == 1:

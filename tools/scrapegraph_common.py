@@ -176,6 +176,21 @@ def _run_multi(sources: Any, prompt: str, schema: Any, config: dict) -> Any:
     return SmartScraperMultiGraph(**kwargs).run()
 
 
+def clamp_timeout(raw_timeout: Any) -> int | None:
+    """Clamp a raw timeout value to the valid range [10, 300] or return None.
+
+    Accepts int, float, or string. Returns ``None`` when the input is None
+    or cannot be coerced to int. This centralises the clamping logic so both
+    the native tool handler and the web-extract backend stay in sync.
+    """
+    if raw_timeout is None:
+        return None
+    try:
+        return max(10, min(300, int(raw_timeout)))
+    except (ValueError, TypeError):
+        return None
+
+
 def classify_scrapegraph_error(exc: Exception) -> str:
     """Return a user-friendly error hint based on the exception type/message.
 
