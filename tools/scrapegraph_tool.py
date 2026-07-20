@@ -91,7 +91,9 @@ async def _handle_scrapegraph(args, **kw):
                 urls[0], prompt, schema=schema, headless=headless, timeout=timeout
             )
         else:
-            data = await extract_many(urls, prompt, schema=schema, headless=headless, timeout=timeout)
+            data = await extract_many(
+                urls, prompt, schema=schema, headless=headless, timeout=timeout
+            )
     except ScrapegraphUnavailable as exc:
         return tool_result(ok=False, error=str(exc))
     except TimeoutError as exc:

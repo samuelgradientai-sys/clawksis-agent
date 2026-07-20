@@ -53,7 +53,7 @@ jobs:
             if [ -n "$DIGEST" ]; then
               printf '%s\n\n' "$DIGEST"
             fi
-            printf '---\n\n## Cómo traerlo\n\n'
+            printf -- '---\n\n## Cómo traerlo\n\n'
             printf 'Quick wins / cambios puntuales: cherry-pick manual + tests (como Fase A).\n\n'
             printf 'Sync completo file-by-file:\n\n```bash\npython tools/upstream/sync.py --target %s          # dry-run\npython tools/upstream/sync.py --target %s --apply  # aplicar\n```\n\n' "$LATEST" "$LATEST"
             printf 'Para un análisis de fit profundo, correr la auditoría diferencial.\n\n'

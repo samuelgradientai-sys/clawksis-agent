@@ -254,7 +254,11 @@ async def _handle_scrape(args, **kw):
         subcmd = _MODE_TO_SUBCMD[m]
         # Browser modes get a longer budget than the fast HTTP `get`.
         # User-provided timeout overrides the per-mode default.
-        timeout_s = user_timeout if user_timeout is not None else (45 if subcmd == "get" else 90)
+        timeout_s = (
+            user_timeout
+            if user_timeout is not None
+            else (45 if subcmd == "get" else 90)
+        )
         ran_ok, content, stderr = await asyncio.to_thread(
             _run_one,
             base,

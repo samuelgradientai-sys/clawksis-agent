@@ -163,7 +163,7 @@ def resolve_xai_http_credentials(*, force_refresh: bool = False) -> Dict[str, st
                     "base_url": base_url or "https://api.x.ai/v1",
                 }
 
-        except (ImportError, AttributeError, KeyError, TypeError):
+        except (ImportError, AttributeError, KeyError, TypeError, RuntimeError):
             pass
 
     try:
@@ -182,7 +182,7 @@ def resolve_xai_http_credentials(*, force_refresh: bool = False) -> Dict[str, st
                 "base_url": base_url or "https://api.x.ai/v1",
             }
 
-    except (ImportError, OSError, KeyError, TypeError):
+    except (ImportError, OSError, KeyError, TypeError, RuntimeError):
         pass
 
     api_key = str(get_env_value("XAI_API_KEY") or "").strip()

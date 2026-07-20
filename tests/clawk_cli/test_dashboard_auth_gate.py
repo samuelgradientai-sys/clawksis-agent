@@ -251,11 +251,13 @@ def test_start_server_public_without_insecure_records_auth_required(monkeypatch)
 
 
 
-    With no providers registered, this fails closed with SystemExit. The
+    With no providers registered but first-run setup available, the server
 
-    flag-stashing happens BEFORE the exit so the rest of the system can
+    boots ANYWAY — the public /auth/setup page bootstraps the admin login on
 
-    branch on it. (See task 3.5 tests below for the with-provider path.)
+    first visit (the documented `clawk dashboard domain` flow). The gate flag
+
+    is still stashed so the rest of the system can branch on it.
 
     """
 
@@ -267,13 +269,12 @@ def test_start_server_public_without_insecure_records_auth_required(monkeypatch)
 
     web_server.app.state.auth_required = None
 
-    with pytest.raises(SystemExit):
-        web_server.start_server(
-            host="0.0.0.0",
-            port=9119,
-            open_browser=False,
-            allow_public=False,
-        )
+    web_server.start_server(
+        host="0.0.0.0",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
+    )
 
     assert web_server.app.state.auth_required is True
 
@@ -331,17 +332,32 @@ def test_start_server_gate_with_provider_proceeds_and_sets_proxy_headers(monkeyp
 
 
 def test_start_server_gate_without_provider_fails_closed(monkeypatch):
-    """No providers + gate would activate → SystemExit with a clear message."""
+    """No providers + first-run setup unavailable → SystemExit, clear message.
+
+
+
+    When setup IS available the server boots with the /auth/setup page (see
+
+    the with-setup test above); the fail-closed path only survives for the
+
+    half-configured case where no provider registered AND the first-run page
+
+    can't bootstrap a login.
+
+    """
 
     from clawk_cli.dashboard_auth import clear_providers
+    from clawk_cli.dashboard_auth import first_run
 
     clear_providers()
+
+    monkeypatch.setattr(first_run, "setup_available", lambda: False)
 
     _stub_uvicorn_run(monkeypatch)
 
     web_server.app.state.auth_required = None
 
-    with pytest.raises(SystemExit, match=r"no auth providers"):
+    with pytest.raises(SystemExit, match=r"setup page is unavailable"):
         web_server.start_server(
             host="0.0.0.0",
             port=9119,

@@ -16,10 +16,11 @@ Use when the user asks to **find and extract contact data (phone, email, WhatsAp
 
 ```python
 import re
+
 # Mobile: +57 3xx xxx xxxx
-mobile = re.findall(r'\+57\s*3\d{2}\s*\d{3}\s*\d{4}', text)
+mobile = re.findall(r"\+57\s*3\d{2}\s*\d{3}\s*\d{4}", text)
 # Landline
-landline = re.findall(r'\+57\s*[16]\d{2}\s*\d{3}\s*\d{4}', text)
+landline = re.findall(r"\+57\s*[16]\d{2}\s*\d{3}\s*\d{4}", text)
 ```
 
 ## Páginas Amarillas pattern

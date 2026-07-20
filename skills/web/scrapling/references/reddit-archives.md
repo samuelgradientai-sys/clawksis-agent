@@ -39,7 +39,7 @@ import json, urllib.parse
 url = f"https://api.pullpush.io/reddit/search/submission/?subreddit={sub}&q={urllib.parse.quote(q)}&sort=score&size=20"
 page = Fetcher.get(url, stealthy_headers=True)
 data = json.loads(page.body)  # NOT page.text
-posts = data['data']
+posts = data["data"]
 ```
 
 ## Ollama Library (no Reddit, but useful source)
@@ -49,6 +49,7 @@ posts = data['data']
 Parse with:
 ```python
 from scrapling.parser import Selector
+
 sel = Selector(page.body)
 model_links = sel.css('a[href*="/library/"]')
 ```

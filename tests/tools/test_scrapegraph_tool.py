@@ -52,7 +52,9 @@ def test_schema_shape():
 
     assert SCRAPEGRAPH_SCHEMA["name"] == "scrapegraph"
     props = SCRAPEGRAPH_SCHEMA["parameters"]["properties"]
-    assert {"url", "urls", "prompt", "output_schema", "render_js", "timeout"} <= set(props)
+    assert {"url", "urls", "prompt", "output_schema", "render_js", "timeout"} <= set(
+        props
+    )
     assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == ["url"]
 
 
@@ -124,7 +126,9 @@ def test_handler_requires_url():
 def test_handler_success_single(monkeypatch):
     from tools.scrapegraph_tool import _handle_scrapegraph
 
-    async def _fake_extract(source, prompt, *, schema=None, headless=True, timeout=None):
+    async def _fake_extract(
+        source, prompt, *, schema=None, headless=True, timeout=None
+    ):
         return {"title": "Hi", "price": 9.99}
 
     monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake_extract)
@@ -206,14 +210,20 @@ def test_normalize_urls_https_preserved():
 def test_normalize_urls_dedup():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({"url": "https://a.com", "urls": ["https://a.com", "https://b.com"]})
+    out = _normalize_urls({
+        "url": "https://a.com",
+        "urls": ["https://a.com", "https://b.com"],
+    })
     assert out == ["https://a.com", "https://b.com"]
 
 
 def test_normalize_urls_order_preserved():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({"url": "https://z.com", "urls": ["https://a.com", "https://m.com"]})
+    out = _normalize_urls({
+        "url": "https://z.com",
+        "urls": ["https://a.com", "https://m.com"],
+    })
     assert out == ["https://z.com", "https://a.com", "https://m.com"]
 
 

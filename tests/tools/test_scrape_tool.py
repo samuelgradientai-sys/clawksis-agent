@@ -620,10 +620,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 120,
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 120,
+            })
+        )
         assert captured["timeout"] == 120
 
     def test_timeout_below_min_uses_default(self, monkeypatch):
@@ -637,10 +639,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 3,  # below minimum
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 3,  # below minimum
+            })
+        )
         # Default for 'get' mode is 45
         assert captured["timeout"] == 45
 
@@ -655,10 +659,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 999,  # above maximum
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 999,  # above maximum
+            })
+        )
         assert captured["timeout"] == 45  # default for 'get'
 
     def test_timeout_non_int_uses_default(self, monkeypatch):
@@ -672,10 +678,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": "sixty",  # not an int
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": "sixty",  # not an int
+            })
+        )
         assert captured["timeout"] == 45  # default for 'get'
 
     def test_timeout_at_min_boundary(self, monkeypatch):
@@ -689,10 +697,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 10,
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 10,
+            })
+        )
         assert captured["timeout"] == 10
 
     def test_timeout_at_max_boundary(self, monkeypatch):
@@ -706,10 +716,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 300,
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 300,
+            })
+        )
         assert captured["timeout"] == 300
 
     def test_timeout_used_across_ladder(self, monkeypatch):
@@ -724,11 +736,13 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         # force mode=fetch to skip the 'get' default-time path entirely
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "mode": "fetch",
-            "timeout": 150,
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "mode": "fetch",
+                "timeout": 150,
+            })
+        )
         assert len(captured) == 1
         assert captured[0] == ("fetch", 150)
 
@@ -765,8 +779,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is True
         assert content == "# Hello"
@@ -796,8 +816,9 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "fetch", "https://example.com",
-                     ".md", None, None, None, 90)
+        st._run_one(
+            ["scrapling"], "fetch", "https://example.com", ".md", None, None, None, 90
+        )
         cmd = calls[0]
         assert cmd[2] == "fetch"  # subcommand is 'fetch'
 
@@ -819,8 +840,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "stealthy-fetch", "https://example.com",
-                     ".md", None, None, None, 90)
+        st._run_one(
+            ["scrapling"],
+            "stealthy-fetch",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            90,
+        )
         cmd = calls[0]
         assert cmd[2] == "stealthy-fetch"
         assert "--solve-cloudflare" in cmd
@@ -843,8 +872,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".md", "article.main", None, None, 30)
+        st._run_one(
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            "article.main",
+            None,
+            None,
+            30,
+        )
         cmd = calls[0]
         assert "--css-selector" in cmd
         assert cmd[cmd.index("--css-selector") + 1] == "article.main"
@@ -867,8 +904,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".md", None, ".loaded", None, 30)
+        st._run_one(
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            ".loaded",
+            None,
+            30,
+        )
         cmd = calls[0]
         assert "--wait-selector" not in cmd
 
@@ -890,8 +935,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "fetch", "https://example.com",
-                     ".md", None, ".loaded", None, 90)
+        st._run_one(
+            ["scrapling"],
+            "fetch",
+            "https://example.com",
+            ".md",
+            None,
+            ".loaded",
+            None,
+            90,
+        )
         cmd = calls[0]
         assert "--wait-selector" in cmd
         assert cmd[cmd.index("--wait-selector") + 1] == ".loaded"
@@ -914,8 +967,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".md", None, None, "http://user:pass@proxy:8080", 30)
+        st._run_one(
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            "http://user:pass@proxy:8080",
+            30,
+        )
         cmd = calls[0]
         assert "--proxy" in cmd
         assert cmd[cmd.index("--proxy") + 1] == "http://user:pass@proxy:8080"
@@ -938,8 +999,9 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".md", None, None, None, 45)
+        st._run_one(
+            ["scrapling"], "get", "https://example.com", ".md", None, None, None, 45
+        )
         cmd = calls[0]
         idx = cmd.index("--timeout")
         # For 'get' mode, the value is seconds (45)
@@ -963,8 +1025,16 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        st._run_one(["scrapling"], "stealthy-fetch", "https://example.com",
-                     ".md", None, None, None, 90)
+        st._run_one(
+            ["scrapling"],
+            "stealthy-fetch",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            90,
+        )
         cmd = calls[0]
         idx = cmd.index("--timeout")
         # For browser modes, the value is milliseconds (90 * 1000 = 90000)
@@ -991,8 +1061,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", _read_fail)
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert content == ""
@@ -1013,8 +1089,14 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _timeout_run)
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert content == ""
@@ -1029,9 +1111,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
         monkeypatch.setattr(st.os, "close", lambda fd: None)
-        monkeypatch.setattr(
-            st.os, "unlink", lambda p: calls.append(f"unlink:{p}")
-        )
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
 
         def _boom_run(cmd, **kw):
             raise OSError("Permission denied")
@@ -1039,8 +1119,14 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert content == ""
@@ -1055,9 +1141,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
         monkeypatch.setattr(st.os, "close", lambda fd: None)
-        monkeypatch.setattr(
-            st.os, "unlink", lambda p: unlinked.append(p)
-        )
+        monkeypatch.setattr(st.os, "unlink", lambda p: unlinked.append(p))
 
         def _fake_run(cmd, **kw):
             return SimpleNamespace(returncode=0, stderr="")
@@ -1066,8 +1150,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
         st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert "/tmp/scrape_test.md" in unlinked
 
@@ -1080,9 +1170,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
         monkeypatch.setattr(st.os, "close", lambda fd: None)
-        monkeypatch.setattr(
-            st.os, "unlink", lambda p: unlinked.append(p)
-        )
+        monkeypatch.setattr(st.os, "unlink", lambda p: unlinked.append(p))
 
         def _boom_run(cmd, **kw):
             raise OSError("Broken pipe")
@@ -1090,8 +1178,14 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
         st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert "/tmp/scrape_test.md" in unlinked
 
@@ -1119,8 +1213,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
         st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 0,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            0,
         )
         cmd = calls[0]
         assert "--timeout" not in cmd
@@ -1143,8 +1243,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "partial content")
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert content == "partial content"
@@ -1168,8 +1274,14 @@ class TestRunOne:
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert content == ""
@@ -1191,8 +1303,14 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
         ran_ok, content, stderr = st._run_one(
-            ["scrapling"], "get", "https://example.com",
-            ".md", None, None, None, 30,
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
         )
         assert ran_ok is False
         assert "subprocess error" in stderr
@@ -1215,8 +1333,9 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "plain text")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".txt", None, None, None, 30)
+        st._run_one(
+            ["scrapling"], "get", "https://example.com", ".txt", None, None, None, 30
+        )
         cmd = calls[0]
         # The temp file suffix becomes part of the output path
         assert any(".txt" in arg for arg in cmd if arg.startswith("/tmp/"))
@@ -1239,7 +1358,8 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "<html></html>")
 
-        st._run_one(["scrapling"], "get", "https://example.com",
-                     ".html", None, None, None, 30)
+        st._run_one(
+            ["scrapling"], "get", "https://example.com", ".html", None, None, None, 30
+        )
         cmd = calls[0]
         assert any(".html" in arg for arg in cmd if arg.startswith("/tmp/"))

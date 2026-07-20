@@ -218,37 +218,45 @@ HTTP requests with session support
 ```python
 from scrapling.fetchers import Fetcher, FetcherSession
 
-with FetcherSession(impersonate='chrome') as session:  # Use latest version of Chrome's TLS fingerprint
-    page = session.get('https://quotes.toscrape.com/', stealthy_headers=True)
-    quotes = page.css('.quote .text::text').getall()
+with FetcherSession(
+    impersonate="chrome"
+) as session:  # Use latest version of Chrome's TLS fingerprint
+    page = session.get("https://quotes.toscrape.com/", stealthy_headers=True)
+    quotes = page.css(".quote .text::text").getall()
 
 # Or use one-off requests
-page = Fetcher.get('https://quotes.toscrape.com/')
-quotes = page.css('.quote .text::text').getall()
+page = Fetcher.get("https://quotes.toscrape.com/")
+quotes = page.css(".quote .text::text").getall()
 ```
 Advanced stealth mode
 ```python
 from scrapling.fetchers import StealthyFetcher, StealthySession
 
-with StealthySession(headless=True, solve_cloudflare=True) as session:  # Keep the browser open until you finish
-    page = session.fetch('https://nopecha.com/demo/cloudflare', google_search=False)
-    data = page.css('#padded_content a').getall()
+with StealthySession(
+    headless=True, solve_cloudflare=True
+) as session:  # Keep the browser open until you finish
+    page = session.fetch("https://nopecha.com/demo/cloudflare", google_search=False)
+    data = page.css("#padded_content a").getall()
 
 # Or use one-off request style, it opens the browser for this request, then closes it after finishing
-page = StealthyFetcher.fetch('https://nopecha.com/demo/cloudflare')
-data = page.css('#padded_content a').getall()
+page = StealthyFetcher.fetch("https://nopecha.com/demo/cloudflare")
+data = page.css("#padded_content a").getall()
 ```
 Full browser automation
 ```python
 from scrapling.fetchers import DynamicFetcher, DynamicSession
 
-with DynamicSession(headless=True, disable_resources=False, network_idle=True) as session:  # Keep the browser open until you finish
-    page = session.fetch('https://quotes.toscrape.com/', load_dom=False)
-    data = page.xpath('//span[@class="text"]/text()').getall()  # XPath selector if you prefer it
+with DynamicSession(
+    headless=True, disable_resources=False, network_idle=True
+) as session:  # Keep the browser open until you finish
+    page = session.fetch("https://quotes.toscrape.com/", load_dom=False)
+    data = page.xpath(
+        '//span[@class="text"]/text()'
+    ).getall()  # XPath selector if you prefer it
 
 # Or use one-off request style, it opens the browser for this request, then closes it after finishing
-page = DynamicFetcher.fetch('https://quotes.toscrape.com/')
-data = page.css('.quote .text::text').getall()
+page = DynamicFetcher.fetch("https://quotes.toscrape.com/")
+data = page.css(".quote .text::text").getall()
 ```
 
 ### Spiders
@@ -256,22 +264,24 @@ Build full crawlers with concurrent requests, multiple session types, and pause/
 ```python
 from scrapling.spiders import Spider, Request, Response
 
+
 class QuotesSpider(Spider):
     name = "quotes"
     start_urls = ["https://quotes.toscrape.com/"]
     concurrent_requests = 10
     robots_txt_obey = True  # Respect robots.txt rules
-    
+
     async def parse(self, response: Response):
-        for quote in response.css('.quote'):
+        for quote in response.css(".quote"):
             yield {
-                "text": quote.css('.text::text').get(),
-                "author": quote.css('.author::text').get(),
+                "text": quote.css(".text::text").get(),
+                "author": quote.css(".author::text").get(),
             }
-            
-        next_page = response.css('.next a')
+
+        next_page = response.css(".next a")
         if next_page:
-            yield response.follow(next_page[0].attrib['href'])
+            yield response.follow(next_page[0].attrib["href"])
+
 
 result = QuotesSpider().start()
 print(f"Scraped {len(result.items)} quotes")
@@ -282,21 +292,24 @@ Use multiple session types in a single spider:
 from scrapling.spiders import Spider, Request, Response
 from scrapling.fetchers import FetcherSession, AsyncStealthySession
 
+
 class MultiSessionSpider(Spider):
     name = "multi"
     start_urls = ["https://example.com/"]
-    
+
     def configure_sessions(self, manager):
         manager.add("fast", FetcherSession(impersonate="chrome"))
         manager.add("stealth", AsyncStealthySession(headless=True), lazy=True)
-    
+
     async def parse(self, response: Response):
-        for link in response.css('a::attr(href)').getall():
+        for link in response.css("a::attr(href)").getall():
             # Route protected pages through the stealth session
             if "protected" in link:
                 yield Request(link, sid="stealth")
             else:
-                yield Request(link, sid="fast", callback=self.parse)  # explicit callback
+                yield Request(
+                    link, sid="fast", callback=self.parse
+                )  # explicit callback
 ```
 Pause and resume long crawls with checkpoints by running the spider like this:
 ```python
@@ -310,6 +323,7 @@ For rules-based crawls (follow links matching a regex), use `CrawlSpider` instea
 ```python
 from scrapling.spiders import CrawlSpider, CrawlRule, LinkExtractor
 
+
 class BlogCrawler(CrawlSpider):
     name = "blog"
     start_urls = ["https://example.com"]
@@ -317,7 +331,9 @@ class BlogCrawler(CrawlSpider):
     def rules(self):
         return [
             CrawlRule(LinkExtractor(allow=r"/posts/"), callback=self.parse_post),
-            CrawlRule(LinkExtractor(allow=r"/page/\d+/")),  # follow pagination, no callback
+            CrawlRule(
+                LinkExtractor(allow=r"/page/\d+/")
+            ),  # follow pagination, no callback
         ]
 
     async def parse_post(self, response):
@@ -330,24 +346,24 @@ For sitemap-driven crawls, use `SitemapSpider` with the same `rules()` API. It f
 from scrapling.fetchers import Fetcher
 
 # Rich element selection and navigation
-page = Fetcher.get('https://quotes.toscrape.com/')
+page = Fetcher.get("https://quotes.toscrape.com/")
 
 # Get quotes with multiple selection methods
-quotes = page.css('.quote')  # CSS selector
+quotes = page.css(".quote")  # CSS selector
 quotes = page.xpath('//div[@class="quote"]')  # XPath
-quotes = page.find_all('div', {'class': 'quote'})  # BeautifulSoup-style
+quotes = page.find_all("div", {"class": "quote"})  # BeautifulSoup-style
 # Same as
-quotes = page.find_all('div', class_='quote')
-quotes = page.find_all(['div'], class_='quote')
-quotes = page.find_all(class_='quote')  # and so on...
+quotes = page.find_all("div", class_="quote")
+quotes = page.find_all(["div"], class_="quote")
+quotes = page.find_all(class_="quote")  # and so on...
 # Find element by text content
-quotes = page.find_by_text('quote', tag='div')
+quotes = page.find_by_text("quote", tag="div")
 
 # Advanced navigation
-quote_text = page.css('.quote')[0].css('.text::text').get()
-quote_text = page.css('.quote').css('.text::text').getall()  # Chained selectors
-first_quote = page.css('.quote')[0]
-author = first_quote.next_sibling.css('.author::text')
+quote_text = page.css(".quote")[0].css(".text::text").get()
+quote_text = page.css(".quote").css(".text::text").getall()  # Chained selectors
+first_quote = page.css(".quote")[0]
+author = first_quote.next_sibling.css(".author::text")
 parent_container = first_quote.parent
 
 # Element relationships and similarity
@@ -366,26 +382,30 @@ And it works precisely the same way!
 import asyncio
 from scrapling.fetchers import FetcherSession, AsyncStealthySession, AsyncDynamicSession
 
-async with FetcherSession(http3=True) as session:  # `FetcherSession` is context-aware and can work in both sync/async patterns
-    page1 = session.get('https://quotes.toscrape.com/')
-    page2 = session.get('https://quotes.toscrape.com/', impersonate='firefox135')
+async with (
+    FetcherSession(http3=True) as session
+):  # `FetcherSession` is context-aware and can work in both sync/async patterns
+    page1 = session.get("https://quotes.toscrape.com/")
+    page2 = session.get("https://quotes.toscrape.com/", impersonate="firefox135")
 
 # Async session usage
 async with AsyncStealthySession(max_pages=2) as session:
     tasks = []
-    urls = ['https://example.com/page1', 'https://example.com/page2']
+    urls = ["https://example.com/page1", "https://example.com/page2"]
 
     for url in urls:
         task = session.fetch(url)
         tasks.append(task)
 
-    print(session.get_pool_stats())  # Optional - The status of the browser tabs pool (busy/free/error)
+    print(
+        session.get_pool_stats()
+    )  # Optional - The status of the browser tabs pool (busy/free/error)
     results = await asyncio.gather(*tasks)
     print(session.get_pool_stats())
 
 # Capture XHR/fetch API calls during page load
 async with AsyncDynamicSession(capture_xhr=r"https://api\.example\.com/.*") as session:
-    page = await session.fetch('https://example.com')
+    page = await session.fetch("https://example.com")
     for xhr in page.captured_xhr:  # Each is a full Response object
         print(xhr.url, xhr.status, xhr.body)
 ```
@@ -413,7 +433,7 @@ The `Response` object's `.text` attribute returns an empty string when the page 
 content = page.text
 
 # ✅ Works
-content = page.body   # raw bytes (decode as needed)
+content = page.body  # raw bytes (decode as needed)
 ```
 
 ### `--impersonate Chrome` not supported in some versions
@@ -426,10 +446,11 @@ page = Fetcher.get(url, stealthy_headers=True)
 Reddit (www, old, API) returns **403** even with StealthyFetcher. Use **pullpush.io** as an archival proxy:
 ```python
 import json, urllib.parse
+
 url = f"https://api.pullpush.io/reddit/search/submission/?subreddit={sub}&q={urllib.parse.quote(query)}&sort=score&size=20"
 page = Fetcher.get(url, stealthy_headers=True)
 data = json.loads(page.body)  # Returns {data: [...]}
-posts = data['data']
+posts = data["data"]
 ```
 - **Rate limit**: ~15 requests/minute, then starts returning 429
 - **Date range**: Data available only up to ~May 2025

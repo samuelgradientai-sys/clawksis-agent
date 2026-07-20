@@ -1169,8 +1169,6 @@ def _register_session_cwd(session: dict | None) -> None:
         pass
 
 
-
-
 _PROJECT_INSTRUCTIONS_BEGIN = "[BEGIN_CLAWKSIS_PROJECT_INSTRUCTIONS]"
 _PROJECT_INSTRUCTIONS_END = "[END_CLAWKSIS_PROJECT_INSTRUCTIONS]"
 
@@ -1338,7 +1336,6 @@ def _apply_project_instructions_to_session(session: dict | None) -> None:
     parts = [part for part in (base, block) if str(part or "").strip()]
 
     agent.ephemeral_system_prompt = "\n\n".join(parts) if parts else None
-
 
 
 def _ensure_session_db_row(session: dict) -> None:

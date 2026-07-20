@@ -3006,7 +3006,8 @@ def _ensure_chat_projects_schema(conn) -> None:
     )
 
     project_cols = {
-        row["name"] for row in conn.execute("PRAGMA table_info(chat_projects)").fetchall()
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(chat_projects)").fetchall()
     }
 
     if "instructions" not in project_cols:
