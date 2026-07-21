@@ -47,6 +47,7 @@ The test clears all env vars to force the empty-key path:
 ```python
 def test_build_llm_config_empty_api_key_logs_warning(caplog):
     import logging
+
     caplog.set_level(logging.WARNING)
     with patch(
         "agent.auxiliary_client.get_text_auxiliary_client",

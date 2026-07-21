@@ -86,36 +86,46 @@ Add tests for all boundary conditions:
 def test_timeout_passed_to_run_one(self, monkeypatch):
     """User-provided timeout should be forwarded to _run_one."""
     captured = {"timeout": None}
+
     def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
         captured["timeout"] = timeout
         return (True, OK_CONTENT, "")
+
     monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
     monkeypatch.setattr(st, "_run_one", capturing_run)
-    _run_tool(st._handle_scrape({
-        "url": "https://example.com",
-        "timeout": 120,
-    }))
+    _run_tool(
+        st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 120,
+        })
+    )
     assert captured["timeout"] == 120
+
 
 def test_timeout_below_min_uses_default(self, monkeypatch):
     """timeout < min should fall back to per-mode defaults."""
     ...
 
+
 def test_timeout_above_max_uses_default(self, monkeypatch):
     """timeout > max should fall back to per-mode defaults."""
     ...
+
 
 def test_timeout_non_int_uses_default(self, monkeypatch):
     """Non-integer type should fall back to defaults."""
     ...
 
+
 def test_timeout_at_min_boundary(self, monkeypatch):
     """timeout exactly at minimum should be accepted."""
     ...
 
+
 def test_timeout_at_max_boundary(self, monkeypatch):
     """timeout exactly at maximum should be accepted."""
     ...
+
 
 def test_timeout_used_across_ladder(self, monkeypatch):
     """When timeout is set, it applies to ALL ladder modes."""

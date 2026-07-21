@@ -107,6 +107,7 @@ If you added logging or a new code path, also add a test for it. Proven pattern:
 def test_new_warning_is_logged(caplog):
     """Verify the warning fires when expected."""
     import logging
+
     caplog.set_level(logging.WARNING)
     with patch("module.path.dependency", side_effect=SomeError("...")):
         with patch.dict("os.environ", {}, clear=True):  # clear env vars to hit fallback

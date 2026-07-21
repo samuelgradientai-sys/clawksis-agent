@@ -9,9 +9,14 @@ Tools that call blocking code via `asyncio.to_thread()` (e.g. `scrape_tool.py`'s
 ```python
 # ❌ DEADLOCK — StopIteration inside to_thread hangs the event loop
 results = iter([("content_a",), ("content_b",)])
+
+
 def cycling_run(*args):
     return next(results)  # When exhausted → StopIteration → asyncio deadlock
+
+
 monkeypatch.setattr(st, "_run_one", cycling_run)
+
 
 # ✅ Use conditional logic instead
 def tracking_run(*args):
@@ -19,6 +24,8 @@ def tracking_run(*args):
     if args[1] == "get":
         return (True, antibot_content, "")
     return (True, ok_content, "")
+
+
 monkeypatch.setattr(st, "_run_one", tracking_run)
 ```
 
@@ -30,11 +37,16 @@ monkeypatch.setattr(st, "_run_one", tracking_run)
 
 ```python
 # ❌ Too short → classified as "empty", ladder continues
-def tracking_run(*a): return (True, "# Short", "")
+def tracking_run(*a):
+    return (True, "# Short", "")
+
 
 # ✅ Long enough to pass the gate
-OK_CONTENT = "# Hello World\n" * 30   # ~420 chars
-def tracking_run(*a): return (True, OK_CONTENT, "")
+OK_CONTENT = "# Hello World\n" * 30  # ~420 chars
+
+
+def tracking_run(*a):
+    return (True, OK_CONTENT, "")
 ```
 
 ### 3. `_classify` strips whitespace — padding must be non-whitespace
@@ -42,6 +54,7 @@ def tracking_run(*a): return (True, OK_CONTENT, "")
 ```python
 # ❌ .ljust() pads with spaces → .strip() removes them → content is too short
 _small_page("captcha").ljust(200)  # becomes just "captcha" after strip
+
 
 # ✅ Use 'x' (non-strippable character) for padding
 def _small_page(text: str) -> str:
@@ -62,6 +75,7 @@ Don't assert `ok=False` for antibot content — the handler trusts the caller to
 ```python
 def test_escalates_on_antibot(self, monkeypatch):
     calls = []
+
     def tracking_run(base, subcmd, *rest):
         calls.append(subcmd)
         if subcmd == "get":
@@ -82,8 +96,10 @@ For functions that resolve binary paths or proxy settings via env var → config
 ```python
 def test_config_fallback(self, monkeypatch):
     monkeypatch.delenv("SCRAPLING_PROXY", raising=False)
-    with patch("clawk_cli.config.load_config",
-               return_value={"web": {"scrapling_proxy": "http://cfg:3128"}}):
+    with patch(
+        "clawk_cli.config.load_config",
+        return_value={"web": {"scrapling_proxy": "http://cfg:3128"}},
+    ):
         assert st._resolve_proxy(None) == "http://cfg:3128"
 ```
 
@@ -118,9 +134,11 @@ class TestHandleFoo:
     def test_passes_args_downstream(self, monkeypatch):
         """Verify user-supplied args reach the underlying function."""
         captured = {}
+
         def capturing_run(*args):
             captured["key"] = args[2]  # positional arg index
             return (True, default_content, "")
+
         monkeypatch.setattr(module, "_run_one", capturing_run)
         _run_tool(module._handle_foo({"url": "x", "key": "val"}))
         assert captured["key"] == "expected_call_value"
