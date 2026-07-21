@@ -39,6 +39,19 @@ from typing import List, Optional, Tuple
 
 from tools.registry import registry, tool_result
 
+try:
+    from tools.scrapegraph_common import clamp_timeout
+except ImportError:
+    # Fallback when scrapegraph_common is unavailable (unlikely — same package).
+    # Inline minimal clamp to keep the scrape tool self-sufficient.
+    def clamp_timeout(raw_timeout):  # type: ignore[misc]
+        if raw_timeout is None:
+            return None
+        try:
+            return max(10, min(300, int(raw_timeout)))
+        except (ValueError, TypeError):
+            return None
+
 logger = logging.getLogger(__name__)
 
 _MODE_TO_SUBCMD = {
@@ -225,12 +238,9 @@ async def _handle_scrape(args, **kw):
     wait_selector = (args.get("wait_selector") or "").strip() or None
     proxy = _resolve_proxy((args.get("proxy") or "").strip() or None)
 
-    # User-provided timeout per-mode override. Clamped to [10, 300].
-    user_timeout = args.get("timeout")
-    if isinstance(user_timeout, int) and 10 <= user_timeout <= 300:
-        pass  # valid, use as-is for both subprocess and per-mode base
-    else:
-        user_timeout = None  # use per-mode defaults
+    # User-provided timeout per-mode override. Clamped to [10, 300]
+    # by the shared clamp_timeout() helper (reused by scrapegraph tools too).
+    user_timeout = clamp_timeout(args.get("timeout"))
 
     base = _scrapling_cmd()
     if base is None:

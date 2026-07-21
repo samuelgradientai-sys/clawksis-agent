@@ -628,8 +628,8 @@ class TestHandleScrape:
         )
         assert captured["timeout"] == 120
 
-    def test_timeout_below_min_uses_default(self, monkeypatch):
-        """timeout < 10 should fall back to per-mode defaults."""
+    def test_timeout_below_min_clamped(self, monkeypatch):
+        """timeout < 10 should be clamped to 10 by clamp_timeout()."""
         captured = {"timeout": None}
 
         def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
@@ -639,17 +639,15 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 3,  # below minimum
-            })
-        )
-        # Default for 'get' mode is 45
-        assert captured["timeout"] == 45
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 3,  # below minimum → clamped to 10
+        }))
+        # clamp_timeout clamps to [10, 300], so 3 becomes 10
+        assert captured["timeout"] == 10
 
-    def test_timeout_above_max_uses_default(self, monkeypatch):
-        """timeout > 300 should fall back to per-mode defaults."""
+    def test_timeout_above_max_clamped(self, monkeypatch):
+        """timeout > 300 should be clamped to 300 by clamp_timeout()."""
         captured = {"timeout": None}
 
         def capturing_run(base, subcmd, url, ext, css, wait, proxy, timeout):
@@ -659,13 +657,11 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 999,  # above maximum
-            })
-        )
-        assert captured["timeout"] == 45  # default for 'get'
+        _run_tool(st._handle_scrape({
+            "url": "https://example.com",
+            "timeout": 999,  # above maximum → clamped to 300
+        }))
+        assert captured["timeout"] == 300  # clamped to max
 
     def test_timeout_non_int_uses_default(self, monkeypatch):
         """Non-integer timeout values should fall back to defaults."""
