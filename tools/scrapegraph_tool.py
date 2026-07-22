@@ -76,7 +76,7 @@ def _coerce_schema(raw: Any) -> Any:
 async def _handle_scrapegraph(args, **kw):
     urls = _normalize_urls(args)
     if not urls:
-        return tool_result(ok=False, error="`url` (or `urls`) is required.")
+        return tool_result(ok=False, error="Either `url` or `urls` is required.")
 
     prompt = (args.get("prompt") or "").strip() or _DEFAULT_PROMPT
     schema = _coerce_schema(args.get("output_schema"))
@@ -96,15 +96,11 @@ async def _handle_scrapegraph(args, **kw):
             )
     except ScrapegraphUnavailable as exc:
         return tool_result(ok=False, error=str(exc))
-    except TimeoutError as exc:
+    except TimeoutError:
         return tool_result(
             ok=False,
             urls=urls,
-            error=(
-                "The LLM extraction timed out. This can happen on large pages "
-                "or when the model is slow. Increase the `timeout` parameter "
-                "(current value: {}s, max 300s) or try a simpler prompt."
-            ).format(timeout or "default"),
+            error=classify_scrapegraph_error(TimeoutError("timed out")),
         )
     except Exception as exc:  # noqa: BLE001 — classify and surface user-friendly error
         logger.warning("scrapegraph extraction failed: %s", exc)
@@ -148,14 +144,14 @@ SCRAPEGRAPH_SCHEMA = {
         "properties": {
             "url": {
                 "type": "string",
-                "description": "The page URL to extract from.",
+                "description": "The page URL to extract from. Either this or `urls` is required.",
             },
             "urls": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": (
-                    "Optional: extract from several pages with the same prompt "
-                    "(returns one combined result)."
+                    "Extract from several pages with the same prompt "
+                    "(returns one combined result). Either this or `url` is required."
                 ),
             },
             "prompt": {
@@ -191,7 +187,7 @@ SCRAPEGRAPH_SCHEMA = {
                 ),
             },
         },
-        "required": ["url"],
+        "required": [],
     },
 }
 

@@ -55,7 +55,7 @@ def test_schema_shape():
     assert {"url", "urls", "prompt", "output_schema", "render_js", "timeout"} <= set(
         props
     )
-    assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == ["url"]
+    assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == []
 
 
 def test_coerce_schema():
